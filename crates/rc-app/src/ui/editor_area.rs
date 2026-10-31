@@ -200,8 +200,18 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
-    editor_context_menu(app, &out.response);
+    // Shown first, so the frame of the click that opens it does not count as a click outside.
     gutter_menu(app, ui);
+    let opened = out.events.iter().find_map(|e| match e {
+        EditorEvent::GutterIconSecondaryClicked { line, icon, screen } if is_run_icon(*icon) => Some((*line, *screen)),
+        _ => None,
+    });
+    if opened.is_some() {
+        app.gutter_menu = opened;
+    }
+    if app.gutter_menu.is_none() {
+        editor_context_menu(app, &out.response);
+    }
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     // Before the insertion reaches the server, which resolves the item's import on the old text.
@@ -253,7 +263,6 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
-            EditorEvent::GutterIconSecondaryClicked { line, icon, screen } if is_run_icon(icon) => app.gutter_menu = Some((line, screen)),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } => run_binary_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
@@ -351,7 +360,7 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
     let mut chosen = None;
     let area = egui::Area::new(egui::Id::new("gutter_run_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(&ctx, |ui| {
         egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-            ui.set_min_width(140.0);
+            ui.set_width(150.0);
             if theme::menu_entry(ui, Some(ico::RUN), tr("Run"), None, false, true).clicked() {
                 chosen = Some(false);
             }
@@ -378,7 +387,8 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
 
 fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
-    let csharp = app.docs.active_doc().is_some_and(crate::insight::has_insight);
+    let insight = app.docs.active_doc().is_some_and(crate::insight::has_insight);
+    let is_csharp = app.docs.active_doc().is_some_and(|d| d.editor.lang() == rc_syntax::Lang::CSharp);
     let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
@@ -392,7 +402,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
                 ui.close();
             }
         };
-        if csharp {
+        if insight {
             entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
@@ -409,7 +419,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
         ui.separator();
         entry(ui, Some(ico::REFORMAT), tr("Reformat Code"), Action::Reformat);
         entry(ui, None, tr("Comment with Line Comment"), Action::CommentLine);
-        if csharp && theme::menu_item(ui, Some(ico::NAMESPACE), tr("Add Missing Usings"), false).clicked() {
+        if is_csharp && theme::menu_item(ui, Some(ico::NAMESPACE), tr("Add Missing Usings"), false).clicked() {
             usings = true;
             ui.close();
         }

@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 33 |
-| 🚧 Em andamento | 12 |
+| ✅ Pronto | 39 |
+| 🚧 Em andamento | 6 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 14 |
 | ⬜ A fazer | 170 |
@@ -222,7 +222,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-10 | Executar como root | ⬜ | M6 | |
 | B-11 | Múltiplas instâncias e configuração no projeto | ⬜ | M3 | |
 | B-12 | Configurações compostas | 🔁 | M3 | |
-| B-13 | Ícones de run na margem (`fn main`, `#[test]`) | 🚧 | M2 | Ícones de run e teste por runnables do rust-analyzer, testados no app; falta ver na janela |
+| B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ⬜ | M3 | |
 | B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
@@ -237,16 +237,16 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| T-01 | Rodar teste, módulo ou todos pela margem | 🚧 | M2 | Teste, módulo e binário rodam pelo ícone, testado no app; falta ver na janela |
-| T-02 | Árvore de resultados | 🚧 | M2 | Resultados por teste e saída de falha testados; árvore ainda não vista com Rust |
-| T-03 | Marcadores de resultado na margem | 🚧 | M2 | Passou e falhou chegam ao teste e ao módulo, testado no app; falta ver na janela |
+| T-01 | Rodar teste, módulo ou todos pela margem | ✅ | M2 | Teste, módulo e binário pelo ícone, com cliques reais |
+| T-02 | Árvore de resultados | ✅ | M2 | Árvore por módulo vista na janela real |
+| T-03 | Marcadores de resultado na margem | ✅ | M2 | Passou e falhou vistos na margem |
 | T-04 | Rodar novamente os que falharam | ✅ | M2 | Só os que falharam rodam de novo, testado com cargo real |
 | T-05 | Ir do erro do teste para o código | ✅ | M2 | Do resultado para a linha do panic, testado com cargo real |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
 | T-07 | Runner nextest | ⬜ | M3 | |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
-| T-10 | Depurar um teste | 🚧 | M2 | Pelo ícone, para no breakpoint com GDB real, testado no app; menu ainda não visto na janela |
+| T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |
 | T-11 | Benchmarks pela margem | ⬜ | M3 | `cargo bench` |
 | T-12 | Filtrar e ordenar resultados de teste | 🔁 | M2 | |
 | T-13 | Marcar falhas de testes no editor após a execução | ⬜ | M3 | |
@@ -261,7 +261,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-04 | Breakpoints em exceção/panic | 🔁 | M2 | `rust_panic` |
 | D-05 | Step over, into, out e Run to Cursor | 🚧 | M2 | Step over testado; into, out e Run to Cursor falta testar |
 | D-06 | Force Step Into | ⬜ | M4 | |
-| D-07 | Threads e frames | 🚧 | M2 | Threads e frames testados na sessão; janela ainda não vista com Rust |
+| D-07 | Threads e frames | ✅ | M2 | Thread com o nome do teste e pilha vistos na janela real |
 | D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String`; registradores ficam fora da árvore |
 | D-09 | Watches | 🔁 | M2 | |
 | D-10 | Avaliar expressão | 🔁 | M2 | |

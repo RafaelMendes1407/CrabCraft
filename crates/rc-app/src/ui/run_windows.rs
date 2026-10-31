@@ -344,7 +344,7 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
                     TestState::Passed => ico::TEST_PASSED,
                 };
                 let method = last_segment(name);
-                let resp = row(ui, 1, icon, method, &format!("{} ms", dur.as_millis()), t.selected.as_deref() == Some(name.as_str()));
+                let resp = row(ui, 1, icon, method, &duration_text(*dur), t.selected.as_deref() == Some(name.as_str()));
                 if resp.clicked() {
                     select = Some(name.clone());
                 }
@@ -406,6 +406,11 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
     if let Some(name) = open_test {
         app.goto_test(&name);
     }
+}
+
+/// Time of a test. libtest does not report it per test, so it may be unknown.
+fn duration_text(duration: std::time::Duration) -> String {
+    if duration.is_zero() { String::new() } else { format!("{} ms", duration.as_millis()) }
 }
 
 /// The last part of a test or module name: `b` of `a.b` and of `a::b`.
