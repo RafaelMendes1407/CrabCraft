@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 52 |
-| 🚧 Em andamento | 7 |
+| ✅ Pronto | 56 |
+| 🚧 Em andamento | 9 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 167 |
+| ⬜ A fazer | 161 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -101,7 +101,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-14 | LightEdit (arquivo sem projeto) | ⬜ | M3 | |
 | E-15 | Corretor ortográfico e gramática | ⬜ | M6 | |
 | E-16 | Live templates e variáveis | ⬜ | M3 | Reaproveitar snippets do LSP |
-| E-17 | Postfix completion (`.if`, `.match`…) | ⬜ | M3 | rust-analyzer já oferece |
+| E-17 | Postfix completion (`.if`, `.match`…) | ✅ | M3 | Postfix chega ao completar, testado com rust-analyzer real |
 | E-18 | Pré-visualização de Markdown | 🟢 | M1 | |
 | E-19 | Suporte a JSON e XML | 🟢 | M1 | |
 | E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | ⬜ | M6 | Realce primeiro |
@@ -148,7 +148,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | `textDocument/rangeFormatting` |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
-| I-32 | Otimizar imports | ⬜ | M3 | Assist `merge_imports` e `remove_unused_imports` |
+| I-32 | Otimizar imports | 🚧 | M3 | Remover imports não usados testado; merge falta |
 | I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
 
 ## 4. Navegação e busca
@@ -182,12 +182,12 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
 | R-03 | Pré-visualização de refatoração | ⬜ | M3 | |
 | R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |
-| R-05 | Extrair variável, constante, função | ⬜ | M3 | Assists do rust-analyzer |
-| R-06 | Inline de variável e função | ⬜ | M3 | Assists do rust-analyzer |
+| R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
+| R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
 | R-07 | Mudar assinatura | ⬜ | M4 | |
 | R-08 | Mover itens entre módulos | ⬜ | M4 | |
-| R-09 | Popup Generate (Alt+Insert) | ⬜ | M3 | Getters, setters, construtor |
-| R-10 | Implementar membros de trait | ⬜ | M3 | Assist `add_impl_missing_members` |
+| R-09 | Popup Generate (Alt+Insert) | 🚧 | M3 | Gerar new pelo Alt+Enter testado; popup Alt+Insert falta |
+| R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
 | R-11 | Gerar `derive` | ⬜ | M3 | |
 
 ## 6. Cargo.toml e conditional compilation

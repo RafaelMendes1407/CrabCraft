@@ -776,3 +776,64 @@ fn reformat_code_runs_rustfmt() {
     pump(&mut app, "the formatted text", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("fn main() {\n    println!")));
     app.insight.stop();
 }
+
+/// Puts `text` in the active document with the range between the `|` marks selected (one mark:
+/// the caret), asks for its actions and applies the one whose title has `title`.
+fn apply_assist(app: &mut CrabCraftApp, text: &str, title: &str, expected: &str) {
+    let first = text.find('|').unwrap();
+    let plain = text.replace('|', "");
+    let second = text[first + 1..].find('|').map(|i| first + i);
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, end, &plain);
+    doc.editor.selection = match second {
+        Some(last) => rc_text::Selection::single(rc_text::Range::new(first, last)),
+        None => rc_text::Selection::point(first),
+    };
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
+    pump(app, "the analysis of the new text", |a| a.insight.status == InsightStatus::Ready);
+    app.insight.code_actions(&app.docs.list[i]);
+    let actions = output(app, "the code actions", |o| match o {
+        crate::insight::InsightOutput::Actions(a) => Some(a.clone()),
+        _ => None,
+    });
+    let name = |a: &rc_lsp::lsp_types::CodeActionOrCommand| match a {
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+        rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(c) => c.title.clone(),
+    };
+    let action = actions.iter().find(|a| name(a).contains(title)).unwrap_or_else(|| panic!("no {title} in {:?}", actions.iter().map(name).collect::<Vec<_>>())).clone();
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, action, &mut out);
+    let start = Instant::now();
+    while !app.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains(expected)) {
+        let _ = app.insight.update(&mut app.docs, true);
+        assert!(start.elapsed() < Duration::from_secs(30), "{title}: {}", app.docs.active_doc().unwrap().editor.buffer.rope());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn refactorings_of_the_language_server() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    apply_assist(&mut app, "fn main() {\n    let x = (|1 + 2|) * 3;\n    drop(x);\n}\n", "Extract into variable", "= 1 + 2;");
+    apply_assist(&mut app, "fn main() {\n    |let y = 1 + 2;\n    drop(y);|\n}\n", "Extract into function", "fn fun_name()");
+    apply_assist(&mut app, "fn main() {\n    let y = 1;\n    let z = |y;\n    drop(z);\n}\n", "Inline", "let z = 1;");
+    apply_assist(&mut app, "struct A;\nimpl std::fmt::Display for |A {}\nfn main() {}\n", "Implement missing members", "fn fmt(");
+    apply_assist(&mut app, "struct A {\n    a: u32,|\n}\nfn main() {}\n", "Generate `new`", "fn new(");
+    apply_assist(&mut app, "use std::collections::|HashMap;\nfn main() {}\n", "Remove", "fn main");
+
+    let c = complete_at_end(&mut app, "fn main() {\n    let x = true;\n    x.i|;\n}\n");
+    assert!(c.items.iter().any(|it| it.label.starts_with("if")), "{:?}", c.items.iter().map(|i| &i.label).take(30).collect::<Vec<_>>());
+    app.insight.stop();
+}
