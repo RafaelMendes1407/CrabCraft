@@ -596,3 +596,26 @@ fn the_debugger_steps_and_evaluates_a_rust_program() {
     assert_eq!(local(&mut app, "total"), "10");
     app.debugger.session.as_mut().unwrap().stop();
 }
+
+#[test]
+fn the_debugger_stops_a_panic_at_the_code_that_panicked() {
+    const MAIN: &str = "fn main() {\n    let values: Vec<u32> = vec![1];\n    let index = values.len() + 4;\n    let far = values[index];\n    println!(\"{far}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Debug);
+    pump_debugger(&mut app, "the panic");
+    let s = app.debugger.session.as_ref().unwrap();
+    let info = s.stop_info().expect("stopped");
+    assert_eq!(info.reason, rc_dap::StopReason::Panic, "{info:?}");
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(3));
+    assert_eq!(local(&mut app, "index"), "5");
+    app.debugger.session.as_mut().unwrap().stop();
+}

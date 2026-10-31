@@ -642,6 +642,8 @@
     "Rust language server ready": "Serveur de langage Rust prêt",
     "Rust server stopped — Restart": "Serveur Rust arrêté — Redémarrer",
     "Starting Rust language server…": "Démarrage du serveur de langage Rust…",
-    "This file is not part of a runnable target": "Ce fichier ne fait pas partie d'une cible exécutable"
+    "This file is not part of a runnable target": "Ce fichier ne fait pas partie d'une cible exécutable",
+    "Paused on panic": "En pause sur un panic",
+    "The program panicked": "Le programme a paniqué"
   }
 }

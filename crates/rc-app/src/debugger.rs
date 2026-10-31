@@ -291,6 +291,9 @@ impl Debugger {
                     if let Some((path, line)) = session.execution_point() {
                         out.push(DebugOutput::ShowLine(path, line.saturating_sub(1) as usize));
                     }
+                    if info.reason == rc_dap::StopReason::Panic {
+                        out.push(DebugOutput::Notify(tr("The program panicked").into(), true));
+                    }
                     if info.reason == rc_dap::StopReason::Exception {
                         out.push(DebugOutput::Notify(info.description.clone().or(info.text.clone()).unwrap_or_else(|| tr("Exception").into()), true));
                     }

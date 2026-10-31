@@ -27,10 +27,23 @@ pub enum StopReason {
     Breakpoint,
     Step,
     Exception,
+    /// A Rust panic: the stop shows the code that panicked, not the runtime.
+    Panic,
     Pause,
     Entry,
     FunctionBreakpoint,
     Other(String),
+}
+
+/// The function of the Rust runtime every panic passes through.
+const PANIC_FUNCTION: &str = "std::panicking::rust_panic";
+
+/// A frame in the user's source: on disk, and outside the standard library and dependencies.
+fn is_user_code(frame: &StackFrame) -> bool {
+    frame.path().is_some_and(|p| {
+        let text = p.to_string_lossy();
+        p.is_file() && !text.contains("/rustlib/") && !text.contains("/.cargo/registry/") && !text.starts_with("/rustc/")
+    })
 }
 
 impl StopReason {
@@ -52,6 +65,7 @@ impl StopReason {
             StopReason::Breakpoint | StopReason::FunctionBreakpoint => "Paused on breakpoint",
             StopReason::Step => "Paused after step",
             StopReason::Exception => "Paused on exception",
+            StopReason::Panic => "Paused on panic",
             StopReason::Entry => "Paused on entry",
             StopReason::Pause | StopReason::Other(_) => "Paused",
         }
@@ -847,6 +861,7 @@ impl DebugSession {
             self.send_breakpoints(&path, true);
         }
         self.send_exception_filters(true);
+        self.send_panic_breakpoint();
         self.config_answered_check();
     }
 
@@ -900,6 +915,21 @@ impl DebugSession {
         } else {
             self.in_flight.push((p, Purpose::Ignore));
         }
+    }
+
+    /// GDB has no exception filter for Rust: panics all pass through this function.
+    fn send_panic_breakpoint(&mut self) {
+        if !self.is_gdb() {
+            return;
+        }
+        let Some(c) = &self.client else { return };
+        let p = c.request("setFunctionBreakpoints", json!({ "breakpoints": [{ "name": PANIC_FUNCTION }] }));
+        self.hs.config_outstanding += 1;
+        self.in_flight.push((p, Purpose::Config));
+    }
+
+    fn is_gdb(&self) -> bool {
+        self.adapter.origin == crate::netcoredbg::Origin::Gdb
     }
 
     /// Whether breakpoint changes go to the adapter right away.
@@ -980,14 +1010,14 @@ impl DebugSession {
         let parts = parse_log_message(message);
         let index = self.log_evals.len();
         let mut eval = LogPointEval { values: vec![None; parts.len()], outstanding: 0, parts };
+        let context = if self.is_gdb() { EvalContext::Watch } else { EvalContext::Repl };
         for (i, part) in eval.parts.iter().enumerate() {
             match part {
                 LogPart::Text(t) => eval.values[i] = Some(t.clone()),
                 LogPart::Expr(e) => {
                     if let Some(c) = &self.client {
                         eval.outstanding += 1;
-let context = if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalContext::Watch } else { EvalContext::Repl };
-                                                let p = c.request("evaluate", args::evaluate(e, frame_id, context));
+                        let p = c.request("evaluate", args::evaluate(e, frame_id, context));
                         self.in_flight.push((p, Purpose::LogPoint { generation: self.generation, index, part: i }));
                     }
                 }
@@ -1016,11 +1046,12 @@ let context = if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalCon
     fn commit_stop(&mut self, frames: Vec<StackFrame>) {
         let Some(ps) = self.pending_stop.take() else { return };
         let thread_id = ps.thread_id.unwrap_or(0);
-        let top = frames.first();
-        let breakpoints = if ps.event.reason == "breakpoint" { self.breakpoints.at_stop(&ps.event.hit_breakpoint_ids, top.and_then(|f| f.path()), top.map_or(0, |f| f.line)) } else { Vec::new() };
+        let panicked = self.is_gdb() && frames.first().is_some_and(|f| f.name.contains(PANIC_FUNCTION));
+        let top = if panicked { frames.iter().find(|f| is_user_code(f)).or(frames.first()) } else { frames.first() };
+        let breakpoints = if !panicked && ps.event.reason == "breakpoint" { self.breakpoints.at_stop(&ps.event.hit_breakpoint_ids, top.and_then(|f| f.path()), top.map_or(0, |f| f.line)) } else { Vec::new() };
         let info = StopInfo {
             thread_id,
-            reason: StopReason::parse(&ps.event.reason),
+            reason: if panicked { StopReason::Panic } else { StopReason::parse(&ps.event.reason) },
             description: ps.event.description.clone(),
             text: ps.event.text.clone(),
             frame_id: top.map(|f| f.id),
@@ -1437,7 +1468,7 @@ let context = if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalCon
     /// [`DebugEvent::Evaluated`] with the returned id.
     /// GDB runs `repl` text as one of its commands: expressions go as `watch` there.
     pub fn expression_context(&self) -> EvalContext {
-        if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalContext::Watch } else { EvalContext::Repl }
+        if self.is_gdb() { EvalContext::Watch } else { EvalContext::Repl }
     }
 
     pub fn evaluate(&mut self, expression: &str, context: EvalContext) -> u64 {
