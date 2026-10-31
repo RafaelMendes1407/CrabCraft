@@ -1012,9 +1012,21 @@ impl CrabCraftApp {
 
     /// Opens a folder, solution or project as the workspace, and any other file in an editor
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
-    pub fn open_path(&mut self, path: &Path) {
+    fn opens_workspace(&self, path: &Path) -> bool {
         use rc_core::workspace::{is_project, is_solution};
-        if path.is_dir() || is_solution(path) || is_project(path) {
+        path.is_dir() || is_solution(path) || is_project(path)
+    }
+
+    /// The project a `Cargo.toml` opens. Inside the open project it is just a file to edit.
+    fn project_of_manifest(&self, path: &Path) -> Option<PathBuf> {
+        let inside = self.workspace.as_ref().is_some_and(|w| path.starts_with(&w.ws.root));
+        (!inside && path.is_file() && path.file_name().is_some_and(|n| n == "Cargo.toml")).then(|| path.parent().map(Path::to_path_buf)).flatten()
+    }
+
+    pub fn open_path(&mut self, path: &Path) {
+        if let Some(project) = self.project_of_manifest(path) {
+            self.open_workspace(&project);
+        } else if self.opens_workspace(path) {
             self.open_workspace(path);
         } else if path.is_file() {
             self.open_file(path);
@@ -1076,10 +1088,9 @@ impl CrabCraftApp {
     /// Opens the first folder, solution or project among `paths` as the workspace and the other
     /// files in the editor (dropped files, Open…).
     pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
-        use rc_core::workspace::{is_project, is_solution};
-        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| p.is_dir() || is_solution(p) || is_project(p));
+        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| self.opens_workspace(p) || self.project_of_manifest(p).is_some());
         if let Some(ws) = workspaces.first() {
-            self.open_workspace(ws);
+            self.open_path(ws);
         }
         for f in files {
             self.open_path(&f);
@@ -1199,7 +1210,7 @@ impl CrabCraftApp {
 
     /// Changed source files tell the language server to reload them (1 created, 2 changed,
     /// 3 deleted), and a changed `Cargo.toml` reloads the Rust workspace.
-    fn report_fs_to_server(&mut self, events: &[FsEvent]) {
+    pub(crate) fn report_fs_to_server(&mut self, events: &[FsEvent]) {
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf)
             && events.iter().any(|e| e.path().file_name().is_some_and(|n| n == "Cargo.toml"))
         {

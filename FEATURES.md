@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 28 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 31 |
+| 🚧 Em andamento | 11 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 20 |
+| 🔁 Portar | 15 |
 | ⬜ A fazer | 172 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -71,7 +71,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-18 | Executar target com duplo clique | ⬜ | M3 | |
 | P-19 | Executar comando Cargo pela janela Cargo | ⬜ | M3 | |
 | P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
-| P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | 🚧 | M1 | Implementado sem teste: mudar `Cargo.toml` recarrega o workspace |
+| P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
 | P-22 | Botão Load Cargo Changes (manual) | ⬜ | M3 | |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
 | P-24 | Excluir pastas e arquivos da análise | ⬜ | M3 | |
@@ -79,7 +79,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
-| P-29 | Abrir projeto por `Cargo.toml` ou pasta | 🚧 | M1 | Abrir pasta testado e visto no app; abrir `Cargo.toml` sem teste |
+| P-29 | Abrir projeto por `Cargo.toml` ou pasta | ✅ | M1 | Abrir pasta ou Cargo.toml testado; dentro do projeto o Cargo.toml abre para edição |
 
 ## 2. Editor
 
@@ -119,8 +119,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | I-01 | Análise do projeto (índice) | ✅ | M1 | rust-analyzer com estado de análise na barra de status; testado e visto no app |
 | I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
-| I-03 | Completar em `#[derive]`, macros e doctests | 🔁 | M1 | |
-| I-04 | Auto-import ao completar | 🔁 | M1 | |
+| I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Completar em derive e dentro de macro testado com rust-analyzer real; doctests falta |
+| I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
 | I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
 | I-06 | Excluir itens do auto-import | ⬜ | M3 | |
 | I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
@@ -222,7 +222,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-10 | Executar como root | ⬜ | M6 | |
 | B-11 | Múltiplas instâncias e configuração no projeto | ⬜ | M3 | |
 | B-12 | Configurações compostas | 🔁 | M3 | |
-| B-13 | Ícones de run na margem (`fn main`, `#[test]`) | 🔁 | M2 | Runnables do rust-analyzer |
+| B-13 | Ícones de run na margem (`fn main`, `#[test]`) | 🚧 | M2 | Ícones de run e teste por runnables do rust-analyzer, testados no app; falta ver na janela |
 | B-14 | Seletor de perfil Cargo (dev/release) | ⬜ | M3 | |
 | B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
@@ -237,9 +237,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| T-01 | Rodar teste, módulo ou todos pela margem | 🔁 | M2 | |
+| T-01 | Rodar teste, módulo ou todos pela margem | 🚧 | M2 | Teste, módulo e binário rodam pelo ícone, testado no app; falta ver na janela |
 | T-02 | Árvore de resultados | 🚧 | M2 | Resultados por teste e saída de falha testados; árvore ainda não vista com Rust |
-| T-03 | Marcadores de resultado na margem | 🔁 | M2 | |
+| T-03 | Marcadores de resultado na margem | 🚧 | M2 | Passou e falhou chegam ao teste e ao módulo, testado no app; falta ver na janela |
 | T-04 | Rodar novamente os que falharam | ⬜ | M2 | |
 | T-05 | Ir do erro do teste para o código | ⬜ | M2 | |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |

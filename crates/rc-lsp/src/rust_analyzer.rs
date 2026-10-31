@@ -41,6 +41,11 @@ fn capabilities() -> Value {
     if let Some(text) = caps.get_mut("textDocument").and_then(Value::as_object_mut) {
         text.remove("diagnostic");
     }
+    // The text of an item must arrive with it. Its imports stay lazy: the server only offers
+    // items from other modules to clients that resolve `additionalTextEdits`.
+    if let Some(properties) = caps.pointer_mut("/textDocument/completion/completionItem/resolveSupport/properties").and_then(Value::as_array_mut) {
+        properties.retain(|p| p != "textEdit");
+    }
     caps
 }
 
@@ -174,6 +179,9 @@ mod tests {
     fn asks_for_the_status_notification() {
         assert_eq!(capabilities()["experimental"]["serverStatusNotification"], json!(true));
         assert!(capabilities()["textDocument"].get("diagnostic").is_none(), "pull diagnostics would stop the published ones");
+        let lazy = &capabilities()["textDocument"]["completion"]["completionItem"]["resolveSupport"]["properties"];
+        let lazy = lazy.as_array().unwrap();
+        assert!(lazy.contains(&json!("additionalTextEdits")) && !lazy.contains(&json!("textEdit")), "{lazy:?}");
     }
 
     #[test]

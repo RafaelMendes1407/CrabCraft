@@ -115,6 +115,10 @@ pub struct Insight {
     rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
+    /// Imports of an accepted completion: document, and where the inserted text starts.
+    accepted_resolve: Option<(u64, usize, Pending<lsp::CompletionItem>)>,
+    /// Where the last list of items starts.
+    completion_anchor: usize,
     /// Formatting of (document, version).
     format: Option<(u64, Versioned<Option<Vec<lsp::TextEdit>>>)>,
     /// Formatting after typing `;` or `}` (document, version).
@@ -175,6 +179,8 @@ impl Insight {
             rename: None,
             actions: None,
             action_resolve: None,
+            accepted_resolve: None,
+            completion_anchor: 0,
             format: None,
             type_format: None,
             auto_insert: None,
@@ -301,6 +307,7 @@ impl Insight {
         self.rename = None;
         self.actions = None;
         self.action_resolve = None;
+        self.accepted_resolve = None;
         self.format = None;
         self.type_format = None;
         self.auto_insert = None;
@@ -566,10 +573,32 @@ impl Insight {
     }
 
     fn poll_completion(&mut self, docs: &mut Docs) {
+        if let Some((doc, start, p)) = &mut self.accepted_resolve
+            && let Some(r) = p.poll()
+        {
+            let (doc, start) = (*doc, *start);
+            self.accepted_resolve = None;
+            if let (Ok(item), Some(d)) = (r, docs.list.iter_mut().find(|d| d.editor.id == doc)) {
+                let rope = d.editor.buffer.rope().clone();
+                // The offsets describe the text before the insertion, so only edits above it hold.
+                let changes: Vec<_> = item
+                    .additional_text_edits
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|e| (convert::range_chars(&rope, &e.range), e.new_text.replace("\r\n", "\n")))
+                    .filter(|((_, b), _)| *b <= start)
+                    .map(|((a, b), text)| rc_text::Change::new(a, b, text))
+                    .collect();
+                if !changes.is_empty() {
+                    d.editor.apply_text_edits(changes);
+                }
+            }
+        }
         if let Some(req) = &mut self.completion
             && let Some(r) = req.pending.poll()
         {
             let req = self.completion.take().expect("checked");
+            self.completion_anchor = req.anchor;
             self.last_completion_ms = Some(req.pending.started.elapsed().as_millis());
             let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == req.doc) else { return };
             let (items, default_range) = parse_completion(r.unwrap_or(Value::Null));
@@ -594,6 +623,7 @@ impl Insight {
             }
         }
         // Documentation of the selected item.
+        let fence = if self.rust { "rust" } else { "csharp" };
         let Some(i) = docs.active else { return };
         let Some(c) = docs.list[i].editor.popups.completion.as_ref() else { return };
         let Some(&idx) = c.filtered.get(c.selected) else { return };
@@ -607,8 +637,8 @@ impl Insight {
                         let doc = item.documentation.as_ref().map(convert::documentation).map(|d| clean_hover(&d));
                         let detail = item.detail.clone().filter(|d| !d.is_empty());
                         c.doc = match (detail, doc) {
-                            (Some(d), Some(x)) => Some(format!("```csharp\n{d}\n```\n{x}")),
-                            (Some(d), None) => Some(format!("```csharp\n{d}\n```")),
+                            (Some(d), Some(x)) => Some(format!("```{fence}\n{d}\n```\n{x}")),
+                            (Some(d), None) => Some(format!("```{fence}\n{d}\n```")),
                             (None, x) => x,
                         };
                         if let Some(raw) = self.raw_items.get_mut(idx) {
@@ -995,6 +1025,16 @@ impl Insight {
     /// After the editor inserted the chosen item: additional edits (usings) and commands.
     pub fn completion_accepted(&mut self, doc: &mut Doc, index_in_items: usize) {
         let Some(item) = self.raw_items.get(index_in_items).cloned() else { return };
+        // Not resolved yet. The server has not seen the insertion, so it can still resolve the item.
+        if self.rust
+            && item.additional_text_edits.is_none()
+            && item.data.is_some()
+            && let Some(session) = &self.session
+        {
+            let start = doc.editor.buffer.len_chars().min(self.completion_anchor);
+            let p = session.client.request_raw("completionItem/resolve", serde_json::to_value(&item).unwrap_or(Value::Null));
+            self.accepted_resolve = Some((doc.editor.id, start, p));
+        }
         if let Some(extra) = item.additional_text_edits.filter(|e| !e.is_empty()) {
             let rope = doc.editor.buffer.rope().clone();
             let changes = extra

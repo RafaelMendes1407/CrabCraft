@@ -203,6 +203,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     editor_context_menu(app, &out.response);
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
+    // Before the insertion reaches the server, which resolves the item's import on the old text.
+    if let Some(data) = out.accepted_completion {
+        app.insight.completion_accepted(doc, data);
+    }
     if app.debugger.stopped() {
         let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
         app.insight.on_editor_events(doc, &insight_events);
@@ -218,9 +222,6 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
     } else {
         app.insight.on_editor_events(doc, &out.events);
-    }
-    if let Some(data) = out.accepted_completion {
-        app.insight.completion_accepted(doc, data);
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;

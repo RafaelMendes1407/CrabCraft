@@ -340,3 +340,76 @@ fn gutter_icons_run_tests_and_binaries() {
     pump(&mut app, "the program's output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("from the icon")));
     app.insight.stop();
 }
+
+/// Asks for completion at the end of `text` in the active document and returns the server's list.
+fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, end, text);
+    let caret = text.find('|').unwrap();
+    doc.editor.replace(caret, caret + 1, "");
+    doc.editor.selection = rc_text::Selection::point(caret);
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
+    let _ = app.insight.update(&mut app.docs, true);
+    app.insight.complete(&mut app.docs.list[i], None);
+    pump(app, "completion", |a| a.docs.active_doc().and_then(|d| d.editor.popups.completion.as_ref()).is_some_and(|c| !c.loading && !c.items.is_empty()));
+    app.docs.active_doc().unwrap().editor.popups.completion.clone().unwrap()
+}
+
+#[test]
+fn completion_imports_and_works_inside_derives_and_macros() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let c = complete_at_end(&mut app, "#[derive(De|)]\nstruct A;\nfn main() {}\n");
+    assert!(c.items.iter().any(|it| it.label.contains("Debug")), "{:?}", c.items.iter().map(|i| &i.label).take(20).collect::<Vec<_>>());
+
+    let c = complete_at_end(&mut app, "use demo::Greeter;\nfn main() {\n    println!(\"{}\", Greeter.he|);\n}\n");
+    assert!(c.items.iter().any(|it| it.label.starts_with("hello")), "{:?}", c.items.iter().map(|i| &i.label).take(20).collect::<Vec<_>>());
+
+    let c = complete_at_end(&mut app, "fn main() {\n    let _m = HashMa|;\n}\n");
+    let shown = c.filtered.iter().position(|&i| c.items[i].label.starts_with("HashMap")).expect("HashMap");
+    let data = c.items[c.filtered[shown]].data;
+    let i = app.docs.active.unwrap();
+    rc_editor::accept_completion(&mut app.docs.list[i].editor, shown, false);
+    app.insight.completion_accepted(&mut app.docs.list[i], data);
+    pump(&mut app, "the import", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("use std::collections::HashMap;")));
+    let text = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(text.contains("let _m = HashMap"), "{text}");
+    assert_eq!(text.matches("use std::collections::HashMap;").count(), 1, "{text}");
+    app.insight.stop();
+}
+
+#[test]
+fn a_changed_manifest_reloads_the_targets_and_opening_it_opens_the_project() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    let manifest = root.join("Cargo.toml");
+    app.open_path(&manifest);
+    assert_eq!(app.workspace.as_ref().map(|w| w.ws.root.clone()), Some(root.clone()));
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    assert!(!app.runner.configs.iter().any(|c| c.name == "extra"));
+
+    // Inside the open project it is a file to edit.
+    app.open_path(&manifest);
+    assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(manifest.clone()));
+
+    write(&root.join("src/extra.rs"), "fn main() {}\n");
+    let text = std::fs::read_to_string(&manifest).unwrap() + "\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\n";
+    write(&manifest, &text);
+    app.report_fs_to_server(&[rc_core::watch::FsEvent::Changed(manifest.clone())]);
+    pump(&mut app, "the new target", |a| a.runner.configs.iter().any(|c| c.name == "extra"));
+}
