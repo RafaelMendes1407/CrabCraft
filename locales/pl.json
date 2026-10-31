@@ -741,6 +741,7 @@
     "Log message": "Komunikat dziennika",
     "Print this instead of stopping; {expression} shows a value": "Wypisz to zamiast zatrzymywać; {expression} pokazuje wartość",
     "Remove once hit": "Usuń po trafieniu",
-    "Refactor This…": "Refaktoryzuj to…"
+    "Refactor This…": "Refaktoryzuj to…",
+    "Select In…": "Zaznacz w…"
   }
 }

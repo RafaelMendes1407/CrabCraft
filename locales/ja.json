@@ -741,6 +741,7 @@
     "Log message": "ログメッセージ",
     "Print this instead of stopping; {expression} shows a value": "停止せずにこれを出力します。{expression} は値を表示します",
     "Remove once hit": "ヒット時に削除",
-    "Refactor This…": "これをリファクタリング…"
+    "Refactor This…": "これをリファクタリング…",
+    "Select In…": "選択先…"
   }
 }

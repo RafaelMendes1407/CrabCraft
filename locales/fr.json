@@ -741,6 +741,7 @@
     "Log message": "Message de journal",
     "Print this instead of stopping; {expression} shows a value": "Affiche ceci au lieu de s'arrêter ; {expression} montre une valeur",
     "Remove once hit": "Supprimer une fois atteint",
-    "Refactor This…": "Refactoriser ceci…"
+    "Refactor This…": "Refactoriser ceci…",
+    "Select In…": "Sélectionner dans…"
   }
 }

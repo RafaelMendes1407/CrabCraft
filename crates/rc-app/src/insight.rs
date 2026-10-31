@@ -92,6 +92,9 @@ fn generates_code(title: &str) -> bool {
 
 /// The command of the Rename row of the Refactor This popup, run by the IDE.
 pub const RENAME_COMMAND: &str = "crabcraft.rename";
+/// The rows of the Select In popup, run by the IDE.
+pub const SELECT_IN_EXPLORER: &str = "crabcraft.select_in_explorer";
+pub const REVEAL_FILE: &str = "crabcraft.reveal_file";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {

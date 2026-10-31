@@ -741,6 +741,7 @@
     "Log message": "Mensagem de log",
     "Print this instead of stopping; {expression} shows a value": "Imprime isto em vez de parar; {expression} mostra um valor",
     "Remove once hit": "Remover ao atingir",
-    "Refactor This…": "Refatorar isto…"
+    "Refactor This…": "Refatorar isto…",
+    "Select In…": "Selecionar em…"
   }
 }

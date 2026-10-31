@@ -453,6 +453,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::NavigateBack, || tr("Back")),
             &act(Action::NavigateForward, || tr("Forward")),
             &act(Action::RecentFiles, || tr("Recent Files")),
+            &act(Action::SelectIn, || tr("Select In…")),
             &act(Action::RecentLocations, || tr("Recent Locations")),
             &sep(),
             &act(Action::GotoDeclaration, || tr("Go to Declaration")),

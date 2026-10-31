@@ -625,6 +625,16 @@ fn the_action_popup_keeps_its_keys_from_the_editor() {
     h.run_steps(3);
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), "fn main() {\n}\n");
+
+    // Select In: Alt+F1 offers the targets, and Enter picks the Explorer.
+    let ctx = h.ctx.clone();
+    h.state_mut().run_ide_action(&ctx, rc_editor::Action::SelectIn);
+    h.run_steps(2);
+    assert!(matches!(&h.state().dialog, Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) if list.len() == 2));
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert!(h.state().explorer.expanded.iter().any(|e| e.contains("src")), "{:?}", h.state().explorer.expanded);
 }
 
 #[test]

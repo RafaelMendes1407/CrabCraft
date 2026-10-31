@@ -1070,6 +1070,14 @@ impl CrabCraftApp {
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::SelectIn if self.docs.active_doc().is_some() => {
+                let row = |title: &str, command: &str| {
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command { title: title.to_string(), command: command.to_string(), arguments: None })
+                };
+                let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
+                let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
+                self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
+            }
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {

@@ -97,6 +97,7 @@ pub enum Action {
     FindInFiles,
     ReplaceInFiles,
     RecentFiles,
+    SelectIn,
     RecentLocations,
     NavigateBack,
     NavigateForward,
@@ -182,6 +183,7 @@ impl Action {
                 | FindInFiles
                 | ReplaceInFiles
                 | RecentFiles
+                | SelectIn
                 | RecentLocations
                 | NavigateBack
                 | NavigateForward
@@ -421,6 +423,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::P, c, ParameterInfo),
         b(Key::F1, none, QuickDoc),
         b(Key::F1, s, ExternalDocs),
+        b(Key::F1, a, SelectIn),
         b(Key::J, ctrl, QuickDoc),
         b(Key::Enter, a, ShowIntentions),
         b(Key::Insert, a, Generate),
@@ -504,6 +507,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
     let b = |key, mods, action| (Chord { key, mods }, action);
     let mut v = vec![
         b(Key::F1, s, ExternalDocs),
+        b(Key::F1, a, SelectIn),
         b(Key::ArrowLeft, none, Left(false)),
         b(Key::ArrowLeft, s, Left(true)),
         b(Key::ArrowRight, none, Right(false)),

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 96 |
+| ✅ Pronto | 97 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 128 |
+| ⬜ A fazer | 127 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -170,7 +170,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-13 | Navegar entre features e `cfg` | ⬜ | M4 | |
 | N-14 | Navegar para a fonte de dependências | ✅ | M3 | Ctrl+B entra na stdlib e abre somente leitura; teste real, crates do registro pelo mesmo caminho |
 | N-15 | Scopes e cores de arquivo | ⬜ | M4 | |
-| N-16 | Navigation bar e Select In | ⬜ | M3 | |
+| N-16 | Navigation bar e Select In | ✅ | M3 | Barra clicável na parte de baixo (pastas, arquivo e símbolos). Select In (Alt+F1) leva ao Explorador ou ao gerenciador de arquivos; sem outros destinos, como a janela Estrutura. |
 | N-17 | Mostrar contexto do código (Alt+Q) | ⬜ | M4 | |
 | N-18 | Compartilhar no Rust Playground | ⬜ | M4 | Pede confirmação antes de enviar o código |
 
