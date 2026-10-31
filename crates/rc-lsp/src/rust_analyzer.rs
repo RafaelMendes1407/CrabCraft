@@ -37,6 +37,10 @@ fn capabilities() -> Value {
     if let Some(map) = caps.as_object_mut() {
         map.insert("experimental".into(), json!({ "serverStatusNotification": true }));
     }
+    // Without this capability the server pushes its diagnostics, which include `cargo check`'s.
+    if let Some(text) = caps.get_mut("textDocument").and_then(Value::as_object_mut) {
+        text.remove("diagnostic");
+    }
     caps
 }
 
@@ -81,6 +85,7 @@ mod tests {
     #[test]
     fn asks_for_the_status_notification() {
         assert_eq!(capabilities()["experimental"]["serverStatusNotification"], json!(true));
+        assert!(capabilities()["textDocument"].get("diagnostic").is_none(), "pull diagnostics would stop the published ones");
     }
 
     #[test]

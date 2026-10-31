@@ -142,3 +142,64 @@ fn rust_insight_build_run_and_tests_end_to_end() {
     assert!(app.insight.problems.get(&main).is_some_and(|p| p.iter().any(|d| d.severity == rc_editor::Severity::Error)), "no problems for main.rs");
     app.insight.stop();
 }
+
+/// What the language server offers once a file is open, each against the real rust-analyzer.
+#[test]
+fn rust_language_features() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    // Structure of the file and inlay hints arrive with the refresh.
+    let id = app.docs.active_doc().unwrap().editor.id;
+    pump(&mut app, "the structure", |a| a.insight.structure.get(&id).is_some_and(|s| s.iter().any(|n| n.name == "main")));
+
+    // Workspace symbols.
+    let mut symbols = app.insight.workspace_symbols("Greeter").expect("a request");
+    let found = {
+        let start = Instant::now();
+        loop {
+            if let Some(r) = symbols.poll() {
+                break r.expect("symbols");
+            }
+            assert!(start.elapsed() < Duration::from_secs(30), "no symbols");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    assert!(found.to_string().contains("Greeter"), "{found}");
+
+    // Rename across files: the use in main.rs and the definition in lib.rs.
+    let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
+    let i = app.docs.active.unwrap();
+    app.insight.rename(&app.docs.list[i], pos, "greet");
+    pump(&mut app, "the rename", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("Greeter.greet()")));
+    pump(&mut app, "the definition to change", |_| std::fs::read_to_string(root.join("src/lib.rs")).is_ok_and(|t| t.contains("pub fn greet(")));
+
+    // A new error shows while typing, with no build, and marks its range.
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(end, end, "\nfn broken( {\n");
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
+    pump(&mut app, "a live diagnostic", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.severity == rc_editor::Severity::Error)));
+
+    // Saving runs `cargo check`. The wording is rustc's: rust-analyzer's own check says "expected u32".
+    let saved = "use demo::Greeter;\n\nfn main() {\n    let x: u32 = \"text\";\n    println!(\"{} {x}\", Greeter.greet());\n}\n";
+    let doc = app.docs.active_doc_mut().unwrap();
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, end, saved);
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
+    write(&main, saved);
+    app.insight.did_save(&main);
+    pump(&mut app, "the error of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("E0308") && x.message.contains("mismatched types"))));
+    app.insight.stop();
+}

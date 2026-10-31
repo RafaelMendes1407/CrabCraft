@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 18 |
-| 🚧 Em andamento | 10 |
+| ✅ Pronto | 22 |
+| 🚧 Em andamento | 9 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 29 |
+| 🔁 Portar | 26 |
 | ⬜ A fazer | 172 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -130,7 +130,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-11 | Abrir documentação em docs.rs | ⬜ | M3 | |
 | I-12 | Informação de parâmetros | 🔁 | M1 | |
 | I-13 | Inlay hints (tipos, parâmetros, chaining) | 🔁 | M1 | |
-| I-14 | Diagnósticos em tempo real | 🚧 | M1 | Publicação ligada; só o erro do build foi testado até agora |
+| I-14 | Diagnósticos em tempo real | ✅ | M1 | Testado com rust-analyzer real: erro de sintaxe ao digitar e erro do cargo check ao salvar |
 | I-15 | Quick fixes e intention actions (Alt+Enter) | 🔁 | M1 | Code actions |
 | I-16 | Aplicar correção sugerida pelo compilador | ⬜ | M3 | Campo `suggested_replacement` do rustc |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
@@ -156,13 +156,13 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP |
-| N-02 | Ir para arquivo, tipo e símbolo | 🔁 | M1 | `workspace/symbol` |
+| N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
 | N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
 | N-04 | Ir para implementações | 🔁 | M1 | |
 | N-05 | Encontrar usos | 🔁 | M1 | |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
-| N-08 | Estrutura do arquivo | 🔁 | M1 | `documentSymbol` |
+| N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
 | N-09 | Hierarquia de chamadas | ⬜ | M3 | `callHierarchy/*` |
 | N-10 | Hierarquia de tipos e traits | ⬜ | M3 | |
 | N-11 | Ir para o trait / para o `impl` | ⬜ | M3 | |
@@ -179,7 +179,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ⬜ | M3 | |
-| R-02 | Renomear em todo o projeto | 🔁 | M1 | `textDocument/rename` |
+| R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
 | R-03 | Pré-visualização de refatoração | ⬜ | M3 | |
 | R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |
 | R-05 | Extrair variável, constante, função | ⬜ | M3 | Assists do rust-analyzer |
