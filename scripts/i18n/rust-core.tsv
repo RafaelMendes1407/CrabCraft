@@ -108,3 +108,7 @@ No [workspace] here: the crate will not join the project	No hay [workspace] aqu�
 Run Anything	Ejecutar cualquier cosa	Tout exécuter	Executar qualquer coisa	Alles ausführen	Uruchom cokolwiek	运行任意内容	何でも実行
 Run Anything…	Ejecutar cualquier cosa…	Tout exécuter…	Executar qualquer coisa…	Alles ausführen…	Uruchom cokolwiek…	运行任意内容…	何でも実行…
 A Cargo command or a run configuration	Un comando de Cargo o una configuración de ejecución	Une commande Cargo ou une configuration d'exécution	Um comando Cargo ou uma configuração de execução	Ein Cargo-Befehl oder eine Ausführungskonfiguration	Polecenie Cargo lub konfiguracja uruchamiania	Cargo 命令或运行配置	Cargo コマンドまたは実行構成
+Imports optimized	Imports optimizados	Imports optimisés	Imports otimizados	Imports optimiert	Importy zoptymalizowane	已优化导入	インポートを最適化しました
+Nothing to optimize in the imports	Nada que optimizar en los imports	Rien à optimiser dans les imports	Nada a otimizar nos imports	In den Imports gibt es nichts zu optimieren	Nie ma nic do optymalizacji w importach	导入无需优化	最適化するインポートはありません
+The Rust analysis is not running	El análisis de Rust no está en ejecución	L'analyse Rust n'est pas en cours d'exécution	A análise de Rust não está rodando	Die Rust-Analyse läuft nicht	Analiza Rust nie działa	Rust 分析未运行	Rust の解析は実行されていません
+Optimize Imports	Optimizar imports	Optimiser les imports	Otimizar imports	Imports optimieren	Optymalizuj importy	优化导入	インポートを最適化

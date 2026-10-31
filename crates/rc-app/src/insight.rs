@@ -165,6 +165,7 @@ pub struct Insight {
     rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
+    optimizing: Option<Optimizing>,
     /// Imports of an accepted completion: document, and where the inserted text starts.
     accepted_resolve: Option<(u64, usize, Pending<lsp::CompletionItem>)>,
     /// Where the last list of items starts.
@@ -235,6 +236,7 @@ impl Insight {
             rename: None,
             actions: None,
             action_resolve: None,
+            optimizing: None,
             accepted_resolve: None,
             clippy: false,
             format_on_save: None,
@@ -379,6 +381,7 @@ impl Insight {
         self.rename = None;
         self.actions = None;
         self.action_resolve = None;
+        self.optimizing = None;
         self.accepted_resolve = None;
         self.format = None;
         self.type_format = None;
@@ -956,7 +959,9 @@ impl Insight {
         {
             self.actions = None;
             let list = r.ok().flatten().unwrap_or_default();
-            if list.is_empty() {
+            if self.optimizing.is_some() {
+                self.optimize_found(docs, list, out);
+            } else if list.is_empty() {
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
                 if std::mem::take(&mut self.generate_only) {
@@ -975,6 +980,54 @@ impl Insight {
                 Ok(action) => self.run_code_action_now(docs, lsp::CodeActionOrCommand::CodeAction(action), out),
                 Err(e) => out.push(InsightOutput::Message(e.message)),
             }
+            self.optimize_next(docs, out);
+        }
+    }
+
+    /// Ctrl+Alt+O: removes the unused imports of a Rust document and merges the rest.
+    pub fn optimize_imports(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        let Some(id) = docs.active_doc().map(|d| d.editor.id) else { return };
+        if !self.rust || self.session.is_none() {
+            out.push(InsightOutput::Message(tr("The Rust analysis is not running").into()));
+            return;
+        }
+        self.optimizing = Some(Optimizing { doc: id, steps: OPTIMIZE_STEPS.to_vec(), changed: false });
+        self.optimize_next(docs, out);
+    }
+
+    /// Asks the server for the actions of the import block, for the next step.
+    fn optimize_next(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        let Some(id) = self.optimizing.as_ref().map(|o| o.doc) else { return };
+        let done = self.optimizing.as_ref().is_some_and(|o| o.steps.is_empty());
+        let doc = docs.list.iter_mut().find(|d| d.editor.id == id);
+        let block = doc.as_ref().and_then(|d| use_block(&d.editor.buffer.rope().to_string()));
+        let (false, Some(doc), Some((start, end))) = (done, doc, block) else {
+            let changed = self.optimizing.take().is_some_and(|o| o.changed);
+            out.push(InsightOutput::Message(tr(if changed { "Imports optimized" } else { "Nothing to optimize in the imports" }).into()));
+            return;
+        };
+        self.flush(doc);
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let range = lsp::Range { start: convert::lsp_position(rope, start), end: convert::lsp_position(rope, end) };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "range": range, "context": { "diagnostics": [], "triggerKind": 1 } });
+        self.actions = Some(session.client.request_raw("textDocument/codeAction", params));
+    }
+
+    /// Runs the action of the current step, or goes on when the server offers none.
+    fn optimize_found(&mut self, docs: &mut Docs, list: Vec<lsp::CodeActionOrCommand>, out: &mut Vec<InsightOutput>) {
+        let Some(o) = &mut self.optimizing else { return };
+        let step = if o.steps.is_empty() { "" } else { o.steps.remove(0) };
+        match list.into_iter().find(|a| action_title(a) == step) {
+            Some(action) => {
+                o.changed = true;
+                let resolves = matches!(&action, lsp::CodeActionOrCommand::CodeAction(a) if a.edit.is_none() && a.command.is_none());
+                self.run_code_action(docs, action, out);
+                if !resolves {
+                    self.optimize_next(docs, out);
+                }
+            }
+            None => self.optimize_next(docs, out),
         }
     }
 
@@ -1562,6 +1615,34 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
 
 /// Applies a workspace edit: open documents through their editor (one undo step each),
 /// closed files on disk. Returns the number of files changed.
+/// Assists of rust-analyzer that make up Optimize Imports, in order.
+const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"];
+
+/// Optimize Imports in progress.
+struct Optimizing {
+    doc: u64,
+    steps: Vec<&'static str>,
+    changed: bool,
+}
+
+/// The characters from the first top-level `use` to the end of the last one.
+fn use_block(text: &str) -> Option<(usize, usize)> {
+    let is_use = |line: &str| line.starts_with("use ") || line.starts_with("pub use ") || line.starts_with("pub(crate) use ");
+    let (mut first, mut last) = (None, None);
+    let mut at = 0;
+    let mut inside = false;
+    for line in text.split_inclusive('\n') {
+        let chars = line.chars().count();
+        if is_use(line) || inside {
+            first = first.or(Some(at));
+            inside = !line.contains(';');
+            last = Some(at + line.trim_end().chars().count());
+        }
+        at += chars;
+    }
+    first.zip(last)
+}
+
 pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Result<usize, String> {
     let mut per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>> = BTreeMap::new();
     if let Some(changes) = &edit.changes {
@@ -1705,5 +1786,18 @@ mod tests {
         assert_eq!(call_open_paren(&rope, 16), Some(3));
         assert_eq!(call_open_paren(&rope, 12), Some(10));
         assert_eq!(call_open_paren(&rc_text::Rope::from_str("x; y"), 4), None);
+    }
+}
+
+#[cfg(test)]
+mod use_block_tests {
+    use super::use_block;
+
+    #[test]
+    fn the_block_goes_from_the_first_use_to_the_last() {
+        let text = "//! Docs.\nuse a::b;\n\nmod m;\npub use c::{\n    d,\n};\nfn f() {\n    use e;\n}\n";
+        let (start, end) = use_block(text).unwrap();
+        assert_eq!(&text[start..end], "use a::b;\n\nmod m;\npub use c::{\n    d,\n};");
+        assert_eq!(use_block("fn f() {}\n"), None);
     }
 }

@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 88 |
-| 🚧 Em andamento | 3 |
+| ✅ Pronto | 89 |
+| 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
 | ⬜ A fazer | 135 |
@@ -148,7 +148,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | rust-analyzer não formatou trecho na sonda; hoje a IDE avisa que o rustfmt formata o arquivo inteiro |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
-| I-32 | Otimizar imports | 🚧 | M3 | Remover imports não usados testado; merge falta |
+| I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
 | I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
 
 ## 4. Navegação e busca

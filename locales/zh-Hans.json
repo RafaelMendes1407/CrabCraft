@@ -720,6 +720,10 @@
     "No [workspace] here: the crate will not join the project": "此处没有 [workspace]：crate 不会加入项目",
     "Run Anything": "运行任意内容",
     "Run Anything…": "运行任意内容…",
-    "A Cargo command or a run configuration": "Cargo 命令或运行配置"
+    "A Cargo command or a run configuration": "Cargo 命令或运行配置",
+    "Imports optimized": "已优化导入",
+    "Nothing to optimize in the imports": "导入无需优化",
+    "The Rust analysis is not running": "Rust 分析未运行",
+    "Optimize Imports": "优化导入"
   }
 }

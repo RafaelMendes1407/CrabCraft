@@ -84,6 +84,7 @@ pub enum Action {
     // --- IDE (reported to the app)
     SearchEverywhere,
     FindAction,
+    OptimizeImports,
     RunAnything,
     GotoFile,
     GotoSymbol,
@@ -163,6 +164,7 @@ impl Action {
             self,
             SearchEverywhere
                 | FindAction
+                | OptimizeImports
                 | RunAnything
                 | GotoFile
                 | GotoSymbol
@@ -416,6 +418,8 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::B, cs, GotoTypeDeclaration),
         b(Key::U, c, GotoSuperMethod),
         b(Key::H, ca, ShowCallers),
+        // ⌘⌥O opens a folder; JetBrains uses ⌃⌥O for this.
+        b(Key::O, m(false, true, false, true), OptimizeImports),
         b(Key::A, cs, FindAction),
         b(Key::F7, a, FindUsages),
         b(Key::F6, s, Rename),
@@ -620,6 +624,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::B, cs, GotoTypeDeclaration),
             b(Key::U, c, GotoSuperMethod),
             b(Key::H, ca, ShowCallers),
+            b(Key::O, ca, OptimizeImports),
             b(Key::A, cs, FindAction),
             b(Key::F6, s, Rename),
             b(Key::R, cs, Rename),

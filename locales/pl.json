@@ -720,6 +720,10 @@
     "No [workspace] here: the crate will not join the project": "Brak [workspace]: crate nie dołączy do projektu",
     "Run Anything": "Uruchom cokolwiek",
     "Run Anything…": "Uruchom cokolwiek…",
-    "A Cargo command or a run configuration": "Polecenie Cargo lub konfiguracja uruchamiania"
+    "A Cargo command or a run configuration": "Polecenie Cargo lub konfiguracja uruchamiania",
+    "Imports optimized": "Importy zoptymalizowane",
+    "Nothing to optimize in the imports": "Nie ma nic do optymalizacji w importach",
+    "The Rust analysis is not running": "Analiza Rust nie działa",
+    "Optimize Imports": "Optymalizuj importy"
   }
 }

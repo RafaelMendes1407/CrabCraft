@@ -478,6 +478,30 @@ fn run_anything_runs_commands_and_configurations() {
     assert_eq!(app.settings.run_anything_history.len(), 1, "configurations are not commands");
 }
 
+#[test]
+fn optimize_imports_removes_the_unused_and_merges_the_rest() {
+    const MAIN: &str = "use std::collections::HashMap;\nuse std::collections::HashSet;\nuse std::fmt;\n\nfn main() {\n    let _a: HashMap<u32, u32> = HashMap::new();\n    let _b: HashSet<u32> = HashSet::new();\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the symbols", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::OptimizeImports);
+    pump(&mut app, "the imports", |a| {
+        let text = a.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        !text.contains("fmt") && text.contains("use std::collections::{HashMap, HashSet};")
+    });
+    app.insight.stop();
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

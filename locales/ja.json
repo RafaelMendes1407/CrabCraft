@@ -720,6 +720,10 @@
     "No [workspace] here: the crate will not join the project": "ここに [workspace] がないため、crate はプロジェクトに含まれません",
     "Run Anything": "何でも実行",
     "Run Anything…": "何でも実行…",
-    "A Cargo command or a run configuration": "Cargo コマンドまたは実行構成"
+    "A Cargo command or a run configuration": "Cargo コマンドまたは実行構成",
+    "Imports optimized": "インポートを最適化しました",
+    "Nothing to optimize in the imports": "最適化するインポートはありません",
+    "The Rust analysis is not running": "Rust の解析は実行されていません",
+    "Optimize Imports": "インポートを最適化"
   }
 }

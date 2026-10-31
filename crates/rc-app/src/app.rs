@@ -988,6 +988,11 @@ impl CrabCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
+            Action::OptimizeImports => {
+                let mut out = Vec::new();
+                self.insight.optimize_imports(&mut self.docs, &mut out);
+                self.handle_insight(out);
+            }
             Action::RunAnything => self.dialog = Some(Dialog::RunAnything { text: String::new(), selected: 0 }),
             Action::SearchEverywhere | Action::FindAction | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
