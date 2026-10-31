@@ -637,6 +637,10 @@
     "A reusable library with src/lib.rs": "包含 src/lib.rs 的可复用库",
     "Use letters, digits, - and _, starting with a letter": "请使用字母、数字、- 和 _，并以字母开头",
     "The location does not exist": "位置不存在",
-    "That folder already exists": "该文件夹已存在"
+    "That folder already exists": "该文件夹已存在",
+    "Rust language server ready (last completion {ms} ms)": "Rust 语言服务器已就绪（上次补全 {ms} 毫秒）",
+    "Rust language server ready": "Rust 语言服务器已就绪",
+    "Rust server stopped — Restart": "Rust 服务器已停止 — 重新启动",
+    "Starting Rust language server…": "正在启动 Rust 语言服务器…"
   }
 }

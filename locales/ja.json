@@ -637,6 +637,10 @@
     "A reusable library with src/lib.rs": "src/lib.rs を持つ再利用可能なライブラリ",
     "Use letters, digits, - and _, starting with a letter": "文字、数字、- と _ を使用し、文字で始めてください",
     "The location does not exist": "場所が存在しません",
-    "That folder already exists": "そのフォルダーは既に存在します"
+    "That folder already exists": "そのフォルダーは既に存在します",
+    "Rust language server ready (last completion {ms} ms)": "Rust 言語サーバーの準備完了（前回の補完 {ms} ミリ秒）",
+    "Rust language server ready": "Rust 言語サーバーの準備完了",
+    "Rust server stopped — Restart": "Rust サーバーが停止しました — 再起動",
+    "Starting Rust language server…": "Rust 言語サーバーを起動しています…"
   }
 }

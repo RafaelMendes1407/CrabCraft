@@ -637,6 +637,10 @@
     "A reusable library with src/lib.rs": "Uma biblioteca reutilizável com src/lib.rs",
     "Use letters, digits, - and _, starting with a letter": "Use letras, dígitos, - e _, começando com uma letra",
     "The location does not exist": "O local não existe",
-    "That folder already exists": "Essa pasta já existe"
+    "That folder already exists": "Essa pasta já existe",
+    "Rust language server ready (last completion {ms} ms)": "Servidor de linguagem Rust pronto (último autocompletar {ms} ms)",
+    "Rust language server ready": "Servidor de linguagem Rust pronto",
+    "Rust server stopped — Restart": "Servidor Rust parado — Reiniciar",
+    "Starting Rust language server…": "Iniciando o servidor de linguagem Rust…"
   }
 }
