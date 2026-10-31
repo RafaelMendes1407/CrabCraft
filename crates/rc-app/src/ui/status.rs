@@ -163,12 +163,31 @@ fn breadcrumbs(app: &mut CrabCraftApp, ui: &mut Ui) {
     {
         parts.extend(rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()));
     }
+    // The items around the caret, after the file.
+    let files = parts.len();
+    let mut places = Vec::new();
+    if let Some(doc) = app.docs.active_doc()
+        && let Some(tree) = app.insight.structure.get(&doc.editor.id)
+    {
+        for node in crate::insight::symbols_at(tree, doc.editor.caret_line_col().0) {
+            parts.push(node.name.clone());
+            places.push((node.line, node.col));
+        }
+    }
     let n = parts.len();
     for (i, part) in parts.into_iter().enumerate() {
         let color = if i + 1 == n { p.text } else { p.text_muted };
         let resp = ui.add(egui::Label::new(egui::RichText::new(part).color(color).size(12.5)).sense(egui::Sense::click()));
         if resp.clicked() {
-            app.locate_active();
+            match i.checked_sub(files).and_then(|at| places.get(at)) {
+                Some(&(line, col)) => {
+                    if let Some(d) = app.docs.active_doc_mut() {
+                        d.editor.goto(line, col);
+                        app.focus_editor = true;
+                    }
+                }
+                None => app.locate_active(),
+            }
         }
         if i + 1 < n {
             icons::image(ui, ico::CHEVRON_RIGHT, 16.0);

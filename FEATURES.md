@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 89 |
+| ✅ Pronto | 90 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 135 |
+| ⬜ A fazer | 134 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -107,7 +107,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | ⬜ | M6 | Realce primeiro |
 | E-21 | Emmet | 🚫 | - | Depende do suporte web |
 | E-22 | Cabeçalhos de copyright | ⬜ | M6 | |
-| E-23 | Breadcrumbs | ⬜ | M3 | |
+| E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | 🟢 | M1 | Divisão herdada; conferir o restante |

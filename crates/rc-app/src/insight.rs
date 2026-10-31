@@ -117,7 +117,20 @@ pub struct SymbolNode {
     pub kind: lsp::SymbolKind,
     pub line: usize,
     pub col: usize,
+    /// The lines the whole item covers, with its attributes and body.
+    pub lines: std::ops::RangeInclusive<usize>,
     pub children: Vec<SymbolNode>,
+}
+
+/// The chain of symbols around `line`, from the outermost one.
+pub fn symbols_at(nodes: &[SymbolNode], line: usize) -> Vec<&SymbolNode> {
+    let mut path = Vec::new();
+    let mut level = nodes;
+    while let Some(node) = level.iter().find(|n| n.lines.contains(&line)) {
+        path.push(node);
+        level = &node.children;
+    }
+    path
 }
 
 struct CompletionRequest {
@@ -1597,6 +1610,7 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
             kind: s.kind,
             line,
             col: pos - rope.line_to_char(line),
+            lines: rope.char_to_line(convert::char_of(rope, s.range.start))..=rope.char_to_line(convert::char_of(rope, s.range.end)),
             children: s.children.unwrap_or_default().into_iter().map(|c| conv(rope, c)).collect(),
         }
     }
@@ -1607,14 +1621,12 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
             .map(|s| {
                 let pos = convert::char_of(rope, s.location.range.start);
                 let line = rope.char_to_line(pos);
-                SymbolNode { name: s.name, detail: s.container_name.unwrap_or_default(), kind: s.kind, line, col: pos - rope.line_to_char(line), children: Vec::new() }
+                SymbolNode { name: s.name, detail: s.container_name.unwrap_or_default(), kind: s.kind, line, col: pos - rope.line_to_char(line), lines: line..=line, children: Vec::new() }
             })
             .collect(),
     }
 }
 
-/// Applies a workspace edit: open documents through their editor (one undo step each),
-/// closed files on disk. Returns the number of files changed.
 /// Assists of rust-analyzer that make up Optimize Imports, in order.
 const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"];
 
@@ -1643,6 +1655,8 @@ fn use_block(text: &str) -> Option<(usize, usize)> {
     first.zip(last)
 }
 
+/// Applies a workspace edit: open documents through their editor (one undo step each),
+/// closed files on disk. Returns the number of files changed.
 pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Result<usize, String> {
     let mut per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>> = BTreeMap::new();
     if let Some(changes) = &edit.changes {
@@ -1786,6 +1800,25 @@ mod tests {
         assert_eq!(call_open_paren(&rope, 16), Some(3));
         assert_eq!(call_open_paren(&rope, 12), Some(10));
         assert_eq!(call_open_paren(&rc_text::Rope::from_str("x; y"), 4), None);
+    }
+}
+
+#[cfg(test)]
+mod symbols_at_tests {
+    use super::{SymbolNode, symbols_at};
+
+    fn node(name: &str, lines: std::ops::RangeInclusive<usize>, children: Vec<SymbolNode>) -> SymbolNode {
+        SymbolNode { name: name.into(), detail: String::new(), kind: rc_lsp::lsp_types::SymbolKind::FUNCTION, line: *lines.start(), col: 0, lines, children }
+    }
+
+    #[test]
+    fn the_path_follows_the_items_around_the_line() {
+        let tree = [node("a", 0..=1, vec![]), node("impl B", 3..=9, vec![node("f", 4..=5, vec![]), node("g", 7..=8, vec![])])];
+        let names = |line| symbols_at(&tree, line).iter().map(|n| n.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(1), ["a"]);
+        assert_eq!(names(2), [""; 0]);
+        assert_eq!(names(6), ["impl B"]);
+        assert_eq!(names(8), ["impl B", "g"]);
     }
 }
 
