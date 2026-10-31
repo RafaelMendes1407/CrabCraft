@@ -626,6 +626,7 @@
     "Clean Project": "プロジェクトをクリーン",
     "Fetch Dependencies": "依存関係を取得",
     "Language server actions are not available in this file": "このファイルでは言語サーバーの操作を使用できません",
-    "The Rust language server is still analysing the project": "Rust 言語サーバーはプロジェクトを解析中です"
+    "The Rust language server is still analysing the project": "Rust 言語サーバーはプロジェクトを解析中です",
+    "GDB was not found. Install it to debug Rust programs.": "GDB が見つかりません。Rust プログラムをデバッグするにはインストールしてください。"
   }
 }

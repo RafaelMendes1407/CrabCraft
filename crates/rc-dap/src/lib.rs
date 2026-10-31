@@ -9,6 +9,7 @@
 
 pub mod breakpoints;
 pub mod client;
+pub mod gdb;
 pub mod launch;
 pub mod netcoredbg;
 pub mod protocol;

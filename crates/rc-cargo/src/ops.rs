@@ -170,22 +170,30 @@ pub fn start_run(cargo: &Cargo, target: RunTarget, outbox: Outbox<RunEvent>) -> 
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
-async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
-    let (result, executables) = invoke(cargo, &t.manifest, &run_build_args(t), cancel, &mut |e| on_event(RunEvent::Build(e))).await?;
-    on_event(RunEvent::Build(BuildEvent::Finished(result.clone())));
+/// Builds the binary and resolves what to start. `Ok(None)` when cancelled.
+pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<Option<LaunchPlan>> {
+    let (result, executables) = invoke(cargo, &t.manifest, &run_build_args(t), cancel, &mut *on_build).await?;
+    on_build(BuildEvent::Finished(result.clone()));
     if result.cancelled {
-        return Ok(RunEvent::Exited { code: None, cancelled: true, duration: Duration::ZERO });
+        return Ok(None);
     }
-    if !result.success {
-        return Ok(RunEvent::Failed(format!("build failed with {} error(s)", result.errors)));
-    }
+    anyhow::ensure!(result.success, "build failed with {} error(s)", result.errors);
     let Some(program) = executables.into_iter().last() else {
-        return Ok(RunEvent::Failed(format!("cargo did not report an executable for {}", t.bin)));
+        anyhow::bail!("cargo did not report an executable for {}", t.bin);
     };
     let working_dir = t.working_dir.clone().or_else(|| folder(&t.manifest).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
     let mut env = vec![("RUST_BACKTRACE".to_string(), "short".to_string())];
     env.extend(t.env.iter().cloned());
-    let plan = LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None };
+    Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None }))
+}
+
+async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+    let prepared = prepare(cargo, t, cancel, &mut |e| on_event(RunEvent::Build(e))).await;
+    let plan = match prepared {
+        Ok(Some(plan)) => plan,
+        Ok(None) => return Ok(RunEvent::Exited { code: None, cancelled: true, duration: Duration::ZERO }),
+        Err(e) => return Ok(RunEvent::Failed(format!("{e:#}"))),
+    };
 
     let mut cmd = tokio::process::Command::new(&plan.program);
     cmd.args(&plan.args).current_dir(&plan.working_dir);

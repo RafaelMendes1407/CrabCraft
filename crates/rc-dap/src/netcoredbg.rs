@@ -29,13 +29,17 @@ pub enum Origin {
     Downloaded,
     /// Found on `PATH`.
     Path,
+    /// GDB, which speaks DAP natively.
+    Gdb,
 }
 
 impl AdapterCommand {
     /// Arguments that make netcoredbg speak DAP on stdin/stdout.
     pub fn args(&self) -> Vec<String> {
         let mut a = self.prefix.clone();
-        a.push("--interpreter=vscode".to_string());
+        if self.origin != Origin::Gdb {
+            a.push("--interpreter=vscode".to_string());
+        }
         a
     }
 

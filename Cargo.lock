@@ -3580,6 +3580,7 @@ dependencies = [
  "flate2",
  "libc",
  "parking_lot",
+ "rc-cargo",
  "rc-core",
  "rc-dotnet",
  "reqwest",

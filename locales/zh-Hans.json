@@ -626,6 +626,7 @@
     "Clean Project": "清理项目",
     "Fetch Dependencies": "获取依赖项",
     "Language server actions are not available in this file": "此文件不支持语言服务器操作",
-    "The Rust language server is still analysing the project": "Rust 语言服务器仍在分析项目"
+    "The Rust language server is still analysing the project": "Rust 语言服务器仍在分析项目",
+    "GDB was not found. Install it to debug Rust programs.": "未找到 GDB。请安装它以调试 Rust 程序。"
   }
 }

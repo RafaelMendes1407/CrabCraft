@@ -626,6 +626,7 @@
     "Clean Project": "Projekt bereinigen",
     "Fetch Dependencies": "Abhängigkeiten abrufen",
     "Language server actions are not available in this file": "Aktionen des Sprachservers sind in dieser Datei nicht verfügbar",
-    "The Rust language server is still analysing the project": "Der Rust-Sprachserver analysiert das Projekt noch"
+    "The Rust language server is still analysing the project": "Der Rust-Sprachserver analysiert das Projekt noch",
+    "GDB was not found. Install it to debug Rust programs.": "GDB wurde nicht gefunden. Installieren Sie es, um Rust-Programme zu debuggen."
   }
 }

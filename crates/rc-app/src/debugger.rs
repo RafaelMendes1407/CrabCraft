@@ -97,6 +97,30 @@ impl Debugger {
         bps
     }
 
+    /// Starts debugging a Rust binary under GDB.
+    pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
+        if let Some(s) = &mut self.session {
+            s.stop();
+        }
+        let Some(adapter) = rc_dap::gdb::locate() else {
+            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        };
+        target.env.extend(self.env.iter().cloned());
+        self.urls.clear();
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Building {name}…", &[("name", &config.name)]));
+        self.console = Some(console);
+        self.name = config.name.clone();
+        self.expanded.clear();
+        let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
+        let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        for w in watches {
+            session.add_watch(w);
+        }
+        self.session = Some(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
     /// Starts debugging `config` (apps only); downloads netcoredbg first when needed.
     pub fn start(&mut self, config: RunConfig, request: Option<rc_dotnet::RunRequest>, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
         let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {

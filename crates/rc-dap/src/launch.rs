@@ -33,6 +33,8 @@ pub enum DebugTarget {
     Launch(LaunchConfig),
     /// Attach to a running .NET process.
     Attach { pid: u32 },
+    /// Build a Rust binary with Cargo and launch it.
+    Cargo { cargo: rc_cargo::Cargo, target: rc_cargo::RunTarget },
 }
 
 impl DebugTarget {
@@ -83,6 +85,18 @@ pub fn launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Value 
         "stopAtEntry": options.stop_at_entry,
         "justMyCode": options.just_my_code,
         "enableStepFiltering": true,
+    })
+}
+
+/// `launch` arguments for GDB's DAP interpreter. The program's output arrives as `output` events.
+pub fn gdb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Value {
+    let env: Map<String, Value> = config.env.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
+    json!({
+        "program": config.program,
+        "args": config.args,
+        "cwd": config.cwd,
+        "env": env,
+        "stopOnEntry": options.stop_at_entry,
     })
 }
 

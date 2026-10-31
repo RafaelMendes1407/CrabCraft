@@ -362,25 +362,38 @@ impl Runner {
         Some(req)
     }
 
+    /// A binary of the Rust workspace, with the user's edits applied.
+    fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
+        let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
+        let mut target = rc_cargo::RunTarget { manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
+        if let Some(o) = self.options.get(name) {
+            target.args = rc_dotnet::process::split_command_line(&o.args);
+            target.env = o.env_pairs();
+            if !o.working_dir.trim().is_empty() {
+                target.working_dir = Some(PathBuf::from(o.working_dir.trim()));
+            }
+        }
+        Some(target)
+    }
+
+    /// What the debugger needs to start `config`, when it is a Rust binary.
+    pub fn cargo_debug_target(&self, config: &RunConfig) -> Option<Result<(rc_cargo::Cargo, rc_cargo::RunTarget), String>> {
+        let ConfigKind::Cargo { package, bin } = &config.kind else { return None };
+        let target = self.cargo_target(&config.name, package.clone(), bin.clone())?;
+        Some(self.cargo().map(|cargo| (cargo, target)))
+    }
+
     /// Starts a binary of the Rust workspace, with the user's edits applied.
     fn run_cargo(&mut self, cfg: RunConfig, package: String, bin: String) -> Vec<RunnerOutput> {
         let cargo = match self.cargo() {
             Ok(c) => c,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
-        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        let Some(target) = self.cargo_target(&cfg.name, package, bin) else { return Vec::new() };
         if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
             let old = self.runs.remove(i);
             if let Some(h) = old.handle {
                 h.stop();
-            }
-        }
-        let mut target = rc_cargo::RunTarget { manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
-        if let Some(o) = self.options.get(&cfg.name) {
-            target.args = rc_dotnet::process::split_command_line(&o.args);
-            target.env = o.env_pairs();
-            if !o.working_dir.trim().is_empty() {
-                target.working_dir = Some(PathBuf::from(o.working_dir.trim()));
             }
         }
         let inbox = Inbox::new(self.waker.clone());

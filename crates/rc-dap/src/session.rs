@@ -11,7 +11,7 @@
 
 use crate::breakpoints::{BreakpointSpec, Breakpoints, Emulation, LogPart, hit_condition_met, parse_log_message};
 use crate::client::{DapClient, DapError, Incoming, Pending, args};
-use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, launch_arguments, prepare};
+use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, gdb_launch_arguments, launch_arguments, prepare};
 use crate::netcoredbg::AdapterCommand;
 use crate::protocol::*;
 use rc_core::{Inbox, Runtime, Waker};
@@ -404,8 +404,29 @@ impl DebugSession {
                     });
                 });
             }
+            DebugTarget::Cargo { cargo, target } => {
+                s.set_state(SessionState::Preparing);
+                let cancel = CancelToken::new();
+                s.prep_cancel = Some(cancel.clone());
+                let out = s.prep_inbox.sender();
+                Runtime::spawn(async move {
+                    let build_out = out.clone();
+                    let r = rc_cargo::prepare(&cargo, &target, &cancel, &mut |e| {
+                        build_out.send(Prep::Build(e));
+                    })
+                    .await;
+                    out.send(match r {
+                        Ok(Some(plan)) => Prep::Ready(plan),
+                        Ok(None) => Prep::Cancelled,
+                        Err(e) => {
+                            let msg = format!("{e:#}");
+                            if msg.starts_with("build failed") { Prep::Failed(Failure::BuildFailed(msg)) } else { Prep::Failed(Failure::PrepareFailed(msg)) }
+                        }
+                    });
+                });
+            }
             DebugTarget::Launch(config) => {
-                let a = launch_arguments(&config, &s.options);
+                let a = s.launch_arguments(&config);
                 s.spawn_adapter("launch", a);
             }
             DebugTarget::Attach { pid } => {
@@ -416,6 +437,10 @@ impl DebugSession {
             }
         }
         s
+    }
+
+    fn launch_arguments(&self, config: &LaunchConfig) -> Value {
+        if self.adapter.origin == crate::netcoredbg::Origin::Gdb { gdb_launch_arguments(config, &self.options) } else { launch_arguments(config, &self.options) }
     }
 
     fn spawn_adapter(&mut self, command: &'static str, arguments: Value) {
@@ -493,7 +518,7 @@ impl DebugSession {
                 self.prep_cancel = None;
                 let config = LaunchConfig::from(&plan);
                 self.events.push(DebugEvent::Prepared(plan));
-                let a = launch_arguments(&config, &self.options);
+                let a = self.launch_arguments(&config);
                 self.spawn_adapter("launch", a);
             }
             Prep::Failed(f) => self.fail(f),

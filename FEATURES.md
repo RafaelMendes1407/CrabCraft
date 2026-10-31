@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 12 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 16 |
+| 🚧 Em andamento | 11 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 35 |
-| ⬜ A fazer | 173 |
+| 🔁 Portar | 30 |
+| ⬜ A fazer | 172 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -255,14 +255,14 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| D-01 | Sessão de depuração | 🔁 | M2 | `gdb -i=dap` (GDB 14+), depois `lldb-dap` |
-| D-02 | Breakpoints de linha | 🔁 | M2 | |
+| D-01 | Sessão de depuração | ✅ | M2 | `rust-gdb -i=dap`; sessão real testada |
+| D-02 | Breakpoints de linha | ✅ | M2 | Testado com GDB real |
 | D-03 | Breakpoints condicionais | 🔁 | M2 | |
 | D-04 | Breakpoints em exceção/panic | 🔁 | M2 | `rust_panic` |
-| D-05 | Step over, into, out e Run to Cursor | 🔁 | M2 | |
+| D-05 | Step over, into, out e Run to Cursor | 🚧 | M2 | Step over testado; into, out e Run to Cursor falta testar |
 | D-06 | Force Step Into | ⬜ | M4 | |
-| D-07 | Threads e frames | 🔁 | M2 | |
-| D-08 | Árvore de variáveis | 🔁 | M2 | |
+| D-07 | Threads e frames | 🚧 | M2 | Threads e frames testados na sessão; janela ainda não vista com Rust |
+| D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String` |
 | D-09 | Watches | 🔁 | M2 | |
 | D-10 | Avaliar expressão | 🔁 | M2 | |
 | D-11 | Valores inline no editor | 🔁 | M2 | |
@@ -276,7 +276,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-19 | Inteiros em hexadecimal | ⬜ | M4 | |
 | D-20 | Parallel stacks | ⬜ | M4 | |
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
-| D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ⬜ | M2 | Pretty-printers do rustc |
+| D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
 | D-23 | Depurar como root | ⬜ | M6 | |
 | D-24 | Pause, resume, restart e stop | 🔁 | M2 | |
 | D-25 | Mute breakpoints | ⬜ | M2 | |

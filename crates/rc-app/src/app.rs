@@ -732,6 +732,14 @@ impl CrabCraftApp {
             Action::Debug => {
                 self.save_all_docs();
                 match self.runner.selected_config().cloned() {
+                    Some(config) if matches!(config.kind, crate::runner::ConfigKind::Cargo { .. }) => match self.runner.cargo_debug_target(&config) {
+                        Some(Ok((cargo, target))) => {
+                            let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
+                            self.handle_debug(outs);
+                        }
+                        Some(Err(e)) => self.notify(e, true),
+                        None => {}
+                    },
                     Some(config) => {
                         let dotnet = dotnet_path(&self.settings);
                         let request = self.runner.request_for(&config);
