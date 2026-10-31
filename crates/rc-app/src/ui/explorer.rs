@@ -28,6 +28,9 @@ pub enum NodeKind {
     ProjectRef(PathBuf),
     Dir(PathBuf),
     File(PathBuf),
+    /// The node of the dependencies of a Cargo project.
+    Libraries,
+    Library(PathBuf),
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +49,8 @@ pub struct ExplorerState {
     pub expanded: HashSet<String>,
     pub selected: Option<String>,
     pub dir_cache: HashMap<PathBuf, Vec<FileNode>>,
+    /// The dependencies shown under External Libraries; their files are not the user's to change.
+    pub libraries: Vec<rc_cargo::Library>,
     pub projects: HashMap<PathBuf, ProjectInfo>,
     /// Scroll the selected row into view on the next frame.
     pub reveal: bool,
@@ -180,7 +185,31 @@ impl ExplorerState {
             }
             None => self.push_dir(&mut rows, root, 1),
         }
+        self.push_libraries(&mut rows);
         rows
+    }
+
+    fn push_libraries(&mut self, rows: &mut Vec<Row>) {
+        if self.libraries.is_empty() {
+            return;
+        }
+        let key = "libraries";
+        rows.push(Row { key: key.into(), kind: NodeKind::Libraries, depth: 1, label: tr("External Libraries").into(), secondary: String::new(), icon: ico::PACKAGE, expandable: true });
+        if !self.expanded.contains(key) {
+            return;
+        }
+        for library in self.libraries.clone() {
+            let key = format!("dir:{}", library.root.display());
+            rows.push(Row { key: key.clone(), kind: NodeKind::Library(library.root.clone()), depth: 2, label: library.name, secondary: library.version, icon: ico::PACKAGE, expandable: true });
+            if self.expanded.contains(&key) {
+                self.push_dir(rows, &library.root, 3);
+            }
+        }
+    }
+
+    /// Whether `path` belongs to a dependency that Cargo downloaded.
+    pub fn in_library(&self, path: &Path) -> bool {
+        self.libraries.iter().any(|l| l.read_only && path.starts_with(&l.root))
     }
 
     fn push_items(&mut self, rows: &mut Vec<Row>, items: &[SolutionItem], depth: usize, trail: &str) {
@@ -425,9 +454,12 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if resp.secondary_clicked() {
                 context = Some((i, resp.clone()));
             }
-            resp.context_menu(|ui| {
-                context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), &mut actions);
-            });
+            let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
+            if !in_library {
+                resp.context_menu(|ui| {
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), &mut actions);
+                });
+            }
         }
         // Empty space below the rows clears focus to the tree too.
         let rest = ui.available_rect_before_wrap();
@@ -496,6 +528,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             state.expanded.insert(key);
         }
     }
+    actions.retain(|a| !matches!(a, ExplorerAction::Rename(p) | ExplorerAction::Delete(p) if state.in_library(p)));
     if let Some(i) = open_row {
         match &rows[i].kind {
             NodeKind::File(p) => actions.push(ExplorerAction::Open(p.clone())),

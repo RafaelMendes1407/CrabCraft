@@ -93,6 +93,7 @@ pub struct CrabCraftApp {
     cargo_load: Option<Inbox<Result<rc_cargo::CargoWorkspace, String>>>,
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
+    libraries_load: Option<Inbox<Vec<rc_cargo::Library>>>,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
@@ -157,6 +158,7 @@ impl CrabCraftApp {
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
             toolchain: None,
+            libraries_load: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
             split: None,
@@ -280,15 +282,43 @@ impl CrabCraftApp {
     }
 
     pub(crate) fn poll_cargo_workspace(&mut self) {
+        if let Some(libraries) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
+            self.libraries_load = None;
+            self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.clone()).collect();
+            self.explorer.libraries = libraries;
+        }
         let Some(inbox) = &self.cargo_load else { return };
         for result in inbox.drain() {
             match result {
-                Ok(workspace) => self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref()),
+                Ok(workspace) => {
+                    self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
+                    self.load_libraries();
+                }
                 Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
             }
             self.cargo_load = None;
             return;
         }
+    }
+
+    /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
+    /// standard library is known.
+    fn load_libraries(&mut self) {
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
+        let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || {
+            let Some(cargo) = rc_cargo::Cargo::locate() else { return };
+            let mut list = rc_cargo::load_libraries(&cargo, &manifest).unwrap_or_default();
+            let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
+            if let Some(root) = info.stdlib {
+                let version = info.rustc.as_deref().and_then(|v| v.split_whitespace().nth(1)).unwrap_or_default().to_string();
+                list.insert(0, rc_cargo::Library { name: "stdlib".into(), version, root, read_only: true });
+            }
+            out.send(list);
+        });
+        self.libraries_load = Some(inbox);
     }
 
     /// Reads the versions of the toolchain in the background, once.
@@ -452,6 +482,8 @@ impl CrabCraftApp {
         self.docs.list.clear();
         self.docs.active = None;
         self.explorer = ExplorerState::default();
+        self.docs.read_only_roots.clear();
+        self.libraries_load = None;
         self.dock = Dock::default();
         self.nav_back.clear();
         self.nav_forward.clear();
@@ -1416,6 +1448,9 @@ impl CrabCraftApp {
     /// Changed source files tell the language server to reload them (1 created, 2 changed,
     /// 3 deleted), and a changed `Cargo.toml` reloads the Rust workspace.
     pub(crate) fn report_fs_to_server(&mut self, events: &[FsEvent]) {
+        if self.runner.cargo_workspace.is_some() && events.iter().any(|e| e.path().file_name().is_some_and(|n| n == "Cargo.lock")) {
+            self.load_libraries();
+        }
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf)
             && events.iter().any(|e| e.path().file_name().is_some_and(|n| n == "Cargo.toml"))
         {

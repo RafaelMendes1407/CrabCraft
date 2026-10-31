@@ -679,6 +679,7 @@
     "Not found": "見つかりません",
     "Standard library": "標準ライブラリ",
     "Not found. Install it with: rustup component add rust-src": "見つかりません。次のコマンドでインストールしてください: rustup component add rust-src",
-    "rust-analyzer path": "rust-analyzer のパス"
+    "rust-analyzer path": "rust-analyzer のパス",
+    "External Libraries": "外部ライブラリ"
   }
 }

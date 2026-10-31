@@ -61,11 +61,53 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Loads the workspace of `manifest`. This blocks: call it from a background thread.
 pub fn load_workspace(cargo: &Cargo, manifest: &Path) -> anyhow::Result<CargoWorkspace> {
+    parse_metadata(&run_metadata(cargo, manifest, &["--no-deps"])?)
+}
+
+/// A dependency of the workspace, with its sources on disk.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Library {
+    pub name: String,
+    pub version: String,
+    pub root: PathBuf,
+    /// Cargo downloaded it: changing its files would break other projects. Path dependencies are
+    /// the user's own code.
+    pub read_only: bool,
+}
+
+/// The dependencies recorded in `Cargo.lock`, without touching the network or that file. It fails
+/// when the lock file is missing, stale or names a crate that was not downloaded yet.
+pub fn load_libraries(cargo: &Cargo, manifest: &Path) -> anyhow::Result<Vec<Library>> {
+    parse_libraries(&run_metadata(cargo, manifest, &["--offline", "--locked"])?)
+}
+
+/// Every package of the metadata that is not a workspace member, by name.
+pub fn parse_libraries(text: &str) -> anyhow::Result<Vec<Library>> {
+    let v: Value = serde_json::from_str(text).context("cargo metadata printed invalid JSON")?;
+    let members: Vec<&str> = v.get("workspace_members").and_then(Value::as_array).context("metadata without members")?.iter().filter_map(Value::as_str).collect();
+    let mut libraries = Vec::new();
+    for p in v.get("packages").and_then(Value::as_array).context("metadata without packages")? {
+        if p.get("id").and_then(Value::as_str).is_some_and(|id| members.contains(&id)) {
+            continue;
+        }
+        let manifest = path_of(p, "manifest_path")?;
+        let root = manifest.parent().context("a package without a folder")?.to_path_buf();
+        let text = |key: &str| p.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
+        libraries.push(Library { name: text("name"), version: text("version"), root, read_only: p.get("source").is_some_and(|s| !s.is_null()) });
+    }
+    libraries.sort_by(|a, b| (&a.name, &a.version).cmp(&(&b.name, &b.version)));
+    Ok(libraries)
+}
+
+/// Runs `cargo metadata` to its end and returns what it printed.
+fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str]) -> anyhow::Result<String> {
     use std::process::Stdio;
     let dir = manifest.parent().context("the manifest has no folder")?;
     let mut child = cargo
         .std_command()
-        .args(["metadata", "--no-deps", "--format-version", "1", "--manifest-path"])
+        .arg("metadata")
+        .args(options)
+        .args(["--format-version", "1", "--manifest-path"])
         .arg(manifest)
         .current_dir(dir)
         .stdin(Stdio::null())
@@ -102,7 +144,7 @@ pub fn load_workspace(cargo: &Cargo, manifest: &Path) -> anyhow::Result<CargoWor
     if !status.success() {
         anyhow::bail!("{}", String::from_utf8_lossy(&stderr).trim());
     }
-    parse_metadata(&String::from_utf8_lossy(&stdout))
+    Ok(String::from_utf8_lossy(&stdout).into_owned())
 }
 
 fn path_of(v: &Value, key: &str) -> anyhow::Result<PathBuf> {
@@ -180,6 +222,15 @@ mod tests {
 
     #[test]
     fn malformed_metadata_is_an_error() {
+        let text = r#"{"workspace_members":["m"],"packages":[
+            {"id":"m","name":"mine","version":"1.0.0","source":null,"manifest_path":"/w/Cargo.toml"},
+            {"id":"z","name":"zed","version":"2.0.0","source":"registry+https://x","manifest_path":"/r/zed/Cargo.toml"},
+            {"id":"a","name":"near","version":"0.1.0","source":null,"manifest_path":"/n/Cargo.toml"}]}"#;
+        let list = parse_libraries(text).unwrap();
+        assert_eq!(list.iter().map(|l| (l.name.as_str(), l.read_only)).collect::<Vec<_>>(), [("near", false), ("zed", true)]);
+        assert_eq!(list[1].root, Path::new("/r/zed"));
+        assert!(parse_libraries("").is_err());
+        assert!(parse_libraries("{}").is_err());
         assert!(parse_metadata("").is_err());
         assert!(parse_metadata("[]").is_err());
         assert!(parse_metadata(r#"{"workspace_root":"/w"}"#).is_err());

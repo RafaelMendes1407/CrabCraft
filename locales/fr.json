@@ -679,6 +679,7 @@
     "Not found": "Introuvable",
     "Standard library": "Bibliothèque standard",
     "Not found. Install it with: rustup component add rust-src": "Introuvable. Installez-la avec : rustup component add rust-src",
-    "rust-analyzer path": "Chemin de rust-analyzer"
+    "rust-analyzer path": "Chemin de rust-analyzer",
+    "External Libraries": "Bibliothèques externes"
   }
 }

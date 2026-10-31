@@ -859,6 +859,56 @@ fn problems_of_a_closed_file_show_their_real_line() {
 }
 
 #[test]
+fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nnear = { path = \"../near\" }\n\n[workspace]\n");
+    let near = dir.path().join("near");
+    write(&near.join("Cargo.toml"), "[package]\nname = \"near\"\nversion = \"0.2.0\"\nedition = \"2021\"\n");
+    write(&near.join("src/lib.rs"), "pub fn near() {}\n");
+    let root = root.canonicalize().unwrap();
+    let near = near.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+
+    // Without a lock file nothing is resolved, and none is written.
+    app.open_workspace(&root);
+    let stdlib = |a: &mut CrabCraftApp| a.explorer.libraries.iter().any(|l| l.name == "stdlib");
+    pump(&mut app, "the standard library", stdlib);
+    assert_eq!(app.explorer.libraries.len(), 1, "{:?}", app.explorer.libraries);
+    assert!(!root.join("Cargo.lock").exists());
+
+    // Once locked, the dependencies appear and the file is untouched.
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    assert!(cargo.std_command().args(["generate-lockfile", "--offline"]).current_dir(&root).status().unwrap().success());
+    let locked = std::fs::read(root.join("Cargo.lock")).unwrap();
+    app.reload_cargo();
+    pump(&mut app, "the path dependency", |a| a.explorer.libraries.iter().any(|l| l.name == "near"));
+    assert_eq!(std::fs::read(root.join("Cargo.lock")).unwrap(), locked);
+
+    // The tree shows them when expanded.
+    let name = "project".to_string();
+    let rows = app.explorer.rows(None, &root, &name);
+    assert!(rows.iter().any(|r| r.key == "libraries"));
+    assert!(!rows.iter().any(|r| r.label == "near"));
+    app.explorer.expanded.insert("libraries".into());
+    app.explorer.expanded.insert(format!("dir:{}", near.display()));
+    let rows = app.explorer.rows(None, &root, &name);
+    assert!(rows.iter().any(|r| r.label == "near" && r.secondary == "0.2.0"));
+    assert!(rows.iter().any(|r| r.label == "src"));
+
+    // Downloaded sources are protected, a path dependency is the user's.
+    let library = app.explorer.libraries.iter().find(|l| l.name == "stdlib").unwrap().root.clone();
+    assert!(app.explorer.in_library(&library.join("core/src/lib.rs")));
+    assert!(!app.explorer.in_library(&near.join("src/lib.rs")));
+    app.open_file(&library.join("core/src/lib.rs"));
+    assert!(app.docs.active_doc().unwrap().editor.read_only);
+    app.open_file(&near.join("src/lib.rs"));
+    assert!(!app.docs.active_doc().unwrap().editor.read_only);
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

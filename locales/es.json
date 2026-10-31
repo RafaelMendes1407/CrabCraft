@@ -679,6 +679,7 @@
     "Not found": "No encontrado",
     "Standard library": "Biblioteca estándar",
     "Not found. Install it with: rustup component add rust-src": "No encontrada. Instálala con: rustup component add rust-src",
-    "rust-analyzer path": "Ruta de rust-analyzer"
+    "rust-analyzer path": "Ruta de rust-analyzer",
+    "External Libraries": "Bibliotecas externas"
   }
 }

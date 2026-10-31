@@ -52,6 +52,8 @@ pub struct Docs {
     pub pool: ParserPool,
     /// Recently opened files, most recent first (⌘E).
     pub recent: Vec<PathBuf>,
+    /// Folders whose files open read-only: the dependencies Cargo downloaded.
+    pub read_only_roots: Vec<PathBuf>,
 }
 
 /// Reads a text file: (text without BOM, had BOM). Binary files are refused.
@@ -77,7 +79,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new() }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), read_only_roots: Vec::new() }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -113,7 +115,7 @@ impl Docs {
             editor.request_parse(&self.pool);
         }
         // Sources Roslyn decompiled from an assembly (⌘+click on a framework type) are read-only.
-        if path.components().any(|c| c.as_os_str() == "MetadataAsSource") {
+        if path.components().any(|c| c.as_os_str() == "MetadataAsSource") || self.read_only_roots.iter().any(|r| path.starts_with(r)) {
             editor.read_only = true;
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);

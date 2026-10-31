@@ -679,6 +679,7 @@
     "Not found": "未找到",
     "Standard library": "标准库",
     "Not found. Install it with: rustup component add rust-src": "未找到。请使用以下命令安装:rustup component add rust-src",
-    "rust-analyzer path": "rust-analyzer 路径"
+    "rust-analyzer path": "rust-analyzer 路径",
+    "External Libraries": "外部库"
   }
 }

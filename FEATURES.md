@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 66 |
-| 🚧 Em andamento | 6 |
+| ✅ Pronto | 67 |
+| 🚧 Em andamento | 5 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
 | ⬜ A fazer | 154 |
@@ -61,7 +61,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
-| P-11 | Janela Project (árvore de arquivos e crates) | 🚧 | M1 | Árvore de arquivos, sem `target`; membros e targets estão na janela Cargo; faltam as dependências externas |
+| P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde` |
 | P-12 | Dependências externas na árvore do projeto | ⬜ | M3 | |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
