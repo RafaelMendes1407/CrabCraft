@@ -124,6 +124,8 @@ pub struct TestsState {
     pub request: TestRequest,
     pub selected: Option<String>,
     pub show_passed: bool,
+    /// Text typed to narrow the results.
+    pub filter: String,
 }
 
 /// What the runner tells the rest of the UI.
@@ -479,6 +481,7 @@ impl Runner {
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
         let show_passed = self.tests.as_ref().is_none_or(|t| t.show_passed);
+        let filter = self.tests.as_ref().map(|t| t.filter.clone()).unwrap_or_default();
         // Tests about to run show a running icon in the gutter.
         if let Some(TestFilter::Tests(names)) = &req.filter {
             for n in names {
@@ -499,6 +502,7 @@ impl Runner {
             request: req,
             selected: None,
             show_passed,
+            filter,
         });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Tests)]
     }

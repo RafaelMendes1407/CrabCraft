@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 44 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 49 |
+| 🚧 Em andamento | 6 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 8 |
+| 🔁 Portar | 6 |
 | ⬜ A fazer | 168 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -248,7 +248,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
 | T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |
 | T-11 | Benchmarks pela margem | ⬜ | M3 | `cargo bench` |
-| T-12 | Filtrar e ordenar resultados de teste | 🔁 | M2 | |
+| T-12 | Filtrar e ordenar resultados de teste | ✅ | M2 | Filtro por nome e falhas primeiro, vistos na janela |
 | T-13 | Marcar falhas de testes no editor após a execução | ⬜ | M3 | |
 
 ## 9. Depurador
@@ -265,7 +265,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String`; registradores ficam fora da árvore |
 | D-09 | Watches | ✅ | M2 | Watches testados com GDB real |
 | D-10 | Avaliar expressão | ✅ | M2 | Avaliar expressão testado com GDB real |
-| D-11 | Valores inline no editor | 🔁 | M2 | |
+| D-11 | Valores inline no editor | ✅ | M2 | Valores no fim da linha vistos na janela real |
 | D-12 | Definir valor de variável | ⬜ | M4 | |
 | D-13 | Set execution point | ⬜ | M4 | |
 | D-14 | Attach a processo | 🔁 | M2 | |
@@ -278,12 +278,12 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
 | D-23 | Depurar como root | ⬜ | M6 | |
-| D-24 | Pause, resume, restart e stop | 🚧 | M2 | Pausar, retomar, reiniciar e parar testados com GDB real; falta ver na janela |
-| D-25 | Mute breakpoints | 🚧 | M2 | Silenciar testado com GDB real; falta ver o botão na janela |
+| D-24 | Pause, resume, restart e stop | ✅ | M2 | Testado com GDB real; botões vistos na janela |
+| D-25 | Mute breakpoints | ✅ | M2 | Testado com GDB real; botão visto na janela |
 | D-26 | Logpoints e remover ao atingir | ⬜ | M3 | |
 | D-27 | Grupos de breakpoints e lista geral | ⬜ | M4 | |
 | D-28 | Force Step Over e Force Run to Cursor | ⬜ | M4 | |
-| D-29 | Console do depurador | 🚧 | M2 | Console envia comandos ao GDB, testado; falta ver a caixa na janela |
+| D-29 | Console do depurador | ✅ | M2 | Comandos chegam ao GDB, testado; caixa vista na janela |
 | D-30 | Pular a stdlib ao fazer step | ⬜ | M3 | |
 | D-31 | Sessões em paralelo | ⬜ | M4 | |
 

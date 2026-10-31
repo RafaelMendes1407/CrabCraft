@@ -35,6 +35,8 @@ pub struct Debugger {
     pub new_watch: String,
     /// Breakpoints stay in the editors but do not stop the program.
     pub muted: bool,
+    /// The stop and frame whose values the editor shows.
+    inline_frame: Option<(u64, i64)>,
     /// The command being typed in the debugger's console.
     pub console_input: String,
     /// Console commands waiting for their answer.
@@ -73,6 +75,7 @@ impl Debugger {
             hover_result: None,
             conditions: HashMap::new(),
             muted: false,
+            inline_frame: None,
             console_input: String::new(),
             console_commands: Vec::new(),
             show_console: false,
@@ -382,9 +385,21 @@ impl Debugger {
         }
         // Execution point and breakpoint state in the editors.
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
+        if let Some((path, line)) = &exec
+            && let Some(frame) = session.selected_frame().map(|f| f.id)
+            && self.inline_frame != Some((session.generation(), frame))
+            && let Some(vars) = frame_variables(session, frame)
+            && let Some(d) = docs.list.iter_mut().find(|d| d.path == *path)
+        {
+            d.editor.debug_values = inline_values(&d.editor.buffer, line.saturating_sub(1) as usize, &vars);
+            self.inline_frame = Some((session.generation(), frame));
+        }
         let muted = self.muted;
         for d in &mut docs.list {
             d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
+            if exec.is_none() {
+                d.editor.debug_values.clear();
+            }
             for st in session.breakpoints().in_file(&d.path) {
                 let line = st.spec.line.saturating_sub(1) as usize;
                 if temp.as_ref().is_some_and(|(p, l)| *p == d.path && *l == st.spec.line) && !d.editor.breakpoints.contains_key(&line) {
@@ -465,5 +480,96 @@ mod tests {
         let rope = rc_text::Rope::from_str("var t = order.Customer.Name;");
         assert_eq!(super::expression_at(&rope, 25), "order.Customer.Name");
         assert_eq!(super::expression_at(&rope, 9), "order");
+    }
+}
+
+/// The variables of `frame`, asking for what has not arrived yet (`None` until it all has).
+fn frame_variables(session: &mut rc_dap::DebugSession, frame: i64) -> Option<Vec<(String, String)>> {
+    let Some(scopes) = session.scopes(frame) else {
+        session.request_scopes(frame);
+        return None;
+    };
+    let references: Vec<i64> = scopes.iter().map(|s| s.variables_reference).filter(|r| *r != 0).collect();
+    let mut out = Vec::new();
+    let mut complete = true;
+    for reference in references {
+        match session.variables(reference) {
+            Some(vars) => out.extend(vars.iter().map(|v| (v.name.clone(), v.value.clone()))),
+            None => {
+                complete = false;
+                if !session.is_loading_variables(reference) {
+                    session.request_variables(reference);
+                }
+            }
+        }
+    }
+    complete.then_some(out)
+}
+
+/// Longest value shown at the end of a line.
+const INLINE_VALUE_CHARS: usize = 40;
+/// How far back to look for the variables of a function with no `fn` line in sight.
+const INLINE_LINES: usize = 60;
+
+/// `name = value` for each variable, on the lines from the function's start to `line`
+/// that mention it.
+fn inline_values(buffer: &rc_text::Buffer, line: usize, vars: &[(String, String)]) -> std::collections::BTreeMap<usize, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let last = line.min(buffer.len_lines().saturating_sub(1));
+    let first = last.saturating_sub(INLINE_LINES);
+    let start = (first..=last).rev().find(|l| buffer.line_text(*l).contains("fn ")).unwrap_or(first);
+    for l in start..=last {
+        let text = buffer.line_text(l);
+        let shown: Vec<String> = vars
+            .iter()
+            .filter(|(name, _)| !name.is_empty() && mentions(&text, name))
+            .map(|(name, value)| {
+                let short: String = value.chars().take(INLINE_VALUE_CHARS).collect();
+                if short.len() < value.len() { format!("{name} = {short}…") } else { format!("{name} = {short}") }
+            })
+            .collect();
+        if !shown.is_empty() {
+            out.insert(l, shown.join(", "));
+        }
+    }
+    out
+}
+
+/// Whether `word` appears in `text` as a whole identifier.
+fn mentions(text: &str, word: &str) -> bool {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(i, _)| {
+        !text[..i].chars().next_back().is_some_and(is_word) && !text[i + word.len()..].chars().next().is_some_and(is_word)
+    })
+}
+
+#[cfg(test)]
+mod inline_tests {
+    use super::*;
+
+    #[test]
+    fn finds_whole_words_only() {
+        assert!(mentions("total = add(total, i);", "total"));
+        assert!(mentions("x", "x"));
+        assert!(!mentions("subtotal += 1", "total"));
+        assert!(!mentions("total_price", "total"));
+        assert!(!mentions("", "x"));
+    }
+
+    #[test]
+    fn shows_values_from_the_function_start_to_the_line() {
+        let b = rc_text::Buffer::new("let before = 1;\nfn f() {\n    let a = 1;\n    let b = a;\n    let c = 2;\n}\n");
+        let vars = vec![("a".to_string(), "1".to_string()), ("before".to_string(), "9".to_string()), ("c".to_string(), "2".to_string())];
+        let shown = inline_values(&b, 3, &vars);
+        assert_eq!(shown.len(), 2, "{shown:?}");
+        assert_eq!(shown[&2], "a = 1");
+        assert_eq!(shown[&3], "a = 1");
+    }
+
+    #[test]
+    fn cuts_long_values_and_survives_a_line_past_the_end() {
+        let b = rc_text::Buffer::new("fn f() {\n    x\n}\n");
+        let shown = inline_values(&b, 99, &[("x".to_string(), "é".repeat(200))]);
+        assert_eq!(shown[&1].chars().count(), "x = ".len() + INLINE_VALUE_CHARS + 1);
     }
 }

@@ -307,9 +307,13 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
     // Tree on the left (class → tests), details or console on the right.
     let avail = ui.available_rect_before_wrap();
     let left_w = (avail.width() * 0.45).clamp(240.0, 520.0);
-    let left = Rect::from_min_size(avail.min, vec2(left_w, avail.height()));
+    let search = Rect::from_min_size(avail.min + vec2(10.0, 2.0), vec2(left_w - 20.0, 24.0));
+    let left = Rect::from_min_max(pos2(avail.left(), search.bottom() + 4.0), pos2(avail.left() + left_w, avail.bottom()));
     let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
+    let mut filter = t.filter.clone();
+    let mut field = ui.new_child(egui::UiBuilder::new().max_rect(search));
+    field.add(egui::TextEdit::singleline(&mut filter).desired_width(search.width()).hint_text(tr("Filter tests")));
     let mut classes: std::collections::BTreeMap<String, Vec<(String, TestState, std::time::Duration)>> = std::collections::BTreeMap::new();
     for (name, results) in &t.results {
         let state = if results.iter().any(|r| r.outcome == TestOutcome::Failed) {
@@ -322,10 +326,19 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
         if state == TestState::Passed && !t.show_passed {
             continue;
         }
+        if !matches_filter(name, &t.filter) {
+            continue;
+        }
         let class = results.first().map(|r| r.class_name.clone()).unwrap_or_default();
         let dur = results.iter().map(|r| r.duration).sum();
         classes.entry(class).or_default().push((name.clone(), state, dur));
     }
+    // What failed comes first; inside that, the order of the names.
+    let mut classes: Vec<_> = classes.into_iter().collect();
+    for (_, tests) in &mut classes {
+        tests.sort_by_key(|t| t.1 != TestState::Failed);
+    }
+    classes.sort_by_key(|(_, tests)| !tests.iter().any(|t| t.1 == TestState::Failed));
     let mut select = None;
     let mut open_test: Option<String> = None;
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
@@ -400,12 +413,20 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
     {
         t.selected = Some(s);
     }
+    if let Some(t) = &mut app.runner.tests {
+        t.filter = filter;
+    }
     if let Some((f, l)) = open_frame {
         app.open_at(&f, l, 0);
     }
     if let Some(name) = open_test {
         app.goto_test(&name);
     }
+}
+
+/// Whether a test's name fits what is typed in the filter, ignoring case.
+fn matches_filter(name: &str, filter: &str) -> bool {
+    name.to_lowercase().contains(filter.trim().to_lowercase().as_str())
 }
 
 /// Time of a test. libtest does not report it per test, so it may be unknown.
@@ -479,5 +500,22 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         if let rc_term::ViewEvent::LinkClicked(link) = e {
             open_link(app, link, cwd.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_names_and_the_filter() {
+        assert_eq!(last_segment("a::b::c"), "c");
+        assert_eq!(last_segment("Ns.Class.Method"), "Method");
+        assert_eq!(last_segment("plain"), "plain");
+        assert!(matches_filter("checks::Good", " good "));
+        assert!(matches_filter("anything", ""));
+        assert!(!matches_filter("checks::good", "bad"));
+        assert_eq!(duration_text(std::time::Duration::ZERO), "");
+        assert_eq!(duration_text(std::time::Duration::from_millis(12)), "12 ms");
     }
 }

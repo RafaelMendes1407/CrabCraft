@@ -647,6 +647,7 @@
     "The program panicked": "プログラムが panic しました",
     "Unmute Breakpoints": "ブレークポイントのミュートを解除",
     "Debugger command (Enter to send)": "デバッガーコマンド（Enter で送信）",
-    "Mute Breakpoints": "ブレークポイントをミュート"
+    "Mute Breakpoints": "ブレークポイントをミュート",
+    "Filter tests": "テストを絞り込む"
   }
 }

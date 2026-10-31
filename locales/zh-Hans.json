@@ -647,6 +647,7 @@
     "The program panicked": "程序发生了 panic",
     "Unmute Breakpoints": "恢复断点",
     "Debugger command (Enter to send)": "调试器命令（按 Enter 发送）",
-    "Mute Breakpoints": "静音断点"
+    "Mute Breakpoints": "静音断点",
+    "Filter tests": "筛选测试"
   }
 }

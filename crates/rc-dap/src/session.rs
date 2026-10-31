@@ -1466,6 +1466,11 @@ impl DebugSession {
 
     /// Evaluates in the selected frame (console, hover); the answer comes as
     /// [`DebugEvent::Evaluated`] with the returned id.
+    /// Changes on every stop.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// GDB runs `repl` text as one of its commands: expressions go as `watch` there.
     pub fn expression_context(&self) -> EvalContext {
         if self.is_gdb() { EvalContext::Watch } else { EvalContext::Repl }

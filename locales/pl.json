@@ -647,6 +647,7 @@
     "The program panicked": "Program zakończył się przez panic",
     "Unmute Breakpoints": "Włącz punkty przerwania",
     "Debugger command (Enter to send)": "Polecenie debugera (Enter, aby wysłać)",
-    "Mute Breakpoints": "Wycisz punkty przerwania"
+    "Mute Breakpoints": "Wycisz punkty przerwania",
+    "Filter tests": "Filtruj testy"
   }
 }

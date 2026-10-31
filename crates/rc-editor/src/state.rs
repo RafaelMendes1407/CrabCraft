@@ -132,6 +132,8 @@ pub struct EditorState {
     // --- decorations
     pub diagnostics: Vec<Diagnostic>,
     pub inlays: Vec<InlayHint>,
+    /// Debugger values shown at the end of each line while paused.
+    pub debug_values: BTreeMap<usize, String>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -191,6 +193,7 @@ impl EditorState {
             select_stack: Vec::new(),
             diagnostics: Vec::new(),
             inlays: Vec::new(),
+            debug_values: BTreeMap::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),

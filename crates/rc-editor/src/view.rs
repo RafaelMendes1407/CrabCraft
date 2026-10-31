@@ -279,6 +279,9 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
             virtuals.push(Virtual { col: h.pos - line_start, text: label.trim().to_string(), kind: VirtualKind::InlayHint });
         }
     }
+    if let Some(values) = state.debug_values.get(&line) {
+        virtuals.push(Virtual { col: text.chars().count(), text: values.clone(), kind: VirtualKind::InlayHint });
+    }
     let mut suffix: Option<(String, Vec<rc_syntax::Span>)> = None;
     if let Some(f) = state.collapsed_at(line) {
         virtuals.push(Virtual { col: f.start_col.min(text.chars().count()), text: fold_placeholder(f.kind, &text, f.start_col), kind: VirtualKind::FoldPlaceholder });

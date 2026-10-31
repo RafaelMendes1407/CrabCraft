@@ -552,6 +552,17 @@ fn the_debugger_steps_and_evaluates_a_rust_program() {
     assert_eq!(local(&mut app, "i"), "3");
     assert_eq!(local(&mut app, "total"), "3");
 
+    // The values show on the lines that use them.
+    let start = Instant::now();
+    while !app.docs.active_doc().is_some_and(|d| d.editor.debug_values.contains_key(&round)) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(start.elapsed() < Duration::from_secs(30), "no inline values");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let shown = app.docs.active_doc().unwrap().editor.debug_values[&round].clone();
+    assert!(shown.contains("total = 3") && shown.contains("i = 3"), "{shown}");
+
     // Watches and Evaluate.
     app.debugger.session.as_mut().unwrap().add_watch("total + 1");
     app.debugger.evaluate("i * 2".into());

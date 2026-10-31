@@ -647,6 +647,7 @@
     "The program panicked": "O programa entrou em panic",
     "Unmute Breakpoints": "Reativar pontos de interrupção",
     "Debugger command (Enter to send)": "Comando do depurador (Enter para enviar)",
-    "Mute Breakpoints": "Silenciar pontos de interrupção"
+    "Mute Breakpoints": "Silenciar pontos de interrupção",
+    "Filter tests": "Filtrar testes"
   }
 }

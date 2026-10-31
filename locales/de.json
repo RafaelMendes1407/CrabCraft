@@ -647,6 +647,7 @@
     "The program panicked": "Das Programm hat eine Panic ausgelöst",
     "Unmute Breakpoints": "Haltepunkte wieder aktivieren",
     "Debugger command (Enter to send)": "Debugger-Befehl (Eingabe zum Senden)",
-    "Mute Breakpoints": "Haltepunkte stummschalten"
+    "Mute Breakpoints": "Haltepunkte stummschalten",
+    "Filter tests": "Tests filtern"
   }
 }

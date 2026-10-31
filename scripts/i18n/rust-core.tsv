@@ -32,3 +32,4 @@ The program panicked	El programa entró en panic	Le programme a paniqué	O progr
 Unmute Breakpoints	Reactivar puntos de interrupción	Réactiver les points d'arrêt	Reativar pontos de interrupção	Haltepunkte wieder aktivieren	Włącz punkty przerwania	恢复断点	ブレークポイントのミュートを解除
 Debugger command (Enter to send)	Comando del depurador (Enter para enviar)	Commande du débogueur (Entrée pour envoyer)	Comando do depurador (Enter para enviar)	Debugger-Befehl (Eingabe zum Senden)	Polecenie debugera (Enter, aby wysłać)	调试器命令（按 Enter 发送）	デバッガーコマンド（Enter で送信）
 Mute Breakpoints	Silenciar puntos de interrupción	Désactiver les points d'arrêt	Silenciar pontos de interrupção	Haltepunkte stummschalten	Wycisz punkty przerwania	静音断点	ブレークポイントをミュート
+Filter tests	Filtrar pruebas	Filtrer les tests	Filtrar testes	Tests filtern	Filtruj testy	筛选测试	テストを絞り込む
