@@ -594,6 +594,52 @@ fn the_type_hierarchy_lists_implementations() {
     app.insight.stop();
 }
 
+#[test]
+fn step_into_walks_past_the_standard_library() {
+    use rc_editor::{Action, BreakpointKind};
+    const MAIN: &str = "fn own(text: &str) -> usize {\n    text.len()\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let upper = text.to_uppercase();\n    let n = own(&upper);\n    println!(\"{n}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let ctx = egui::Context::default();
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(6, BreakpointKind::Normal);
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    let line = |a: &CrabCraftApp| a.docs.active_doc().and_then(|d| d.path.ends_with("src/main.rs").then_some(d.editor.execution_line).flatten());
+    assert_eq!(line(&app), Some(6));
+
+    // `to_uppercase` is library code; `own` is the project's own, and Step Into enters it.
+    // A line with several calls can stop again on itself after each one is skipped.
+    let step_to = |app: &mut CrabCraftApp, target: usize| {
+        for _ in 0..5 {
+            app.run_ide_action(&ctx, Action::StepInto);
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_millis(600) {
+                let outs = app.debugger.update(&mut app.docs);
+                app.handle_debug(outs);
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            assert!(app.debugger.stopped(), "the step did not end");
+            let now = line(app);
+            assert!(now.is_some(), "stepped out of the project into a library");
+            if now == Some(target) {
+                return;
+            }
+        }
+        panic!("never reached line {target}");
+    };
+    step_to(&mut app, 7);
+    step_to(&mut app, 1);
+    app.run_ide_action(&ctx, Action::StopRun);
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

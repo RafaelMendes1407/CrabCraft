@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 93 |
+| ✅ Pronto | 94 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 131 |
+| ⬜ A fazer | 130 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -284,7 +284,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-27 | Grupos de breakpoints e lista geral | ⬜ | M4 | |
 | D-28 | Force Step Over e Force Run to Cursor | ⬜ | M4 | |
 | D-29 | Console do depurador | ✅ | M2 | Comandos chegam ao GDB, testado; caixa vista na janela |
-| D-30 | Pular a stdlib ao fazer step | ⬜ | M3 | |
+| D-30 | Pular a stdlib ao fazer step | ✅ | M3 | Pula `core`/`alloc`/`std` por nome de função; breakpoints e panics ainda param na biblioteca. Um Step Into pode parar de novo na mesma linha, e closures passadas à biblioteca são puladas. |
 | D-31 | Sessões em paralelo | ⬜ | M4 | |
 
 ## 10. Profiling e REPL

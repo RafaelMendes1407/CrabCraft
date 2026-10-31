@@ -5,7 +5,12 @@ use crate::netcoredbg::{AdapterCommand, Origin};
 use std::path::{Path, PathBuf};
 
 /// The interpreter flag and options that keep GDB from asking anything on start.
-const ARGS: [&str; 4] = ["-i=dap", "-quiet", "-iex", "set debuginfod enabled off"];
+const ARGS: [&str; 6] = ["-i=dap", "-quiet", "-iex", "set debuginfod enabled off", "-iex", SKIP_STD];
+
+/// Step Into walks past the standard library, by function name: GDB's file patterns stop at each
+/// `/`. Trait impls for the project's types keep their own path first, so they are not skipped.
+/// Breakpoints and panics still stop in the library.
+const SKIP_STD: &str = r"skip -rfu ^<?(core|alloc|std)::";
 
 fn in_path(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
     dirs.iter().map(|d| d.join(name)).find(|p| p.is_file())
