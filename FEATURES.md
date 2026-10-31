@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 0 |
+| ✅ Pronto | 4 |
 | 🚧 Em andamento | 0 |
 | 🟢 Herdado | 24 |
-| 🔁 Portar | 50 |
-| ⬜ A fazer | 178 |
+| 🔁 Portar | 47 |
+| ⬜ A fazer | 177 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -86,13 +86,13 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | E-01 | Editor rápido com arquivos grandes | 🟢 | M1 | |
-| E-02 | Realce de sintaxe Rust | 🔁 | M1 | tree-sitter-rust |
-| E-03 | Realce de TOML | ⬜ | M1 | tree-sitter-toml |
+| E-02 | Realce de sintaxe Rust | ✅ | M1 | Consultas próprias sobre tree-sitter-rust; testado e visto no app |
+| E-03 | Realce de TOML | ✅ | M1 | Consultas próprias sobre tree-sitter-toml-ng; testado no parser real |
 | E-04 | Realce semântico (tipos inferidos, macros, `unsafe`) | 🔁 | M1 | Tokens semânticos do rust-analyzer |
-| E-05 | Dobramento de código | 🔁 | M1 | Consultas tree-sitter para Rust |
+| E-05 | Dobramento de código | ✅ | M1 | Itens, `match`, macros e comentários; testado no parser real |
 | E-06 | Múltiplos cursores e seleção | 🟢 | M1 | |
 | E-07 | Colchetes pareados e fechamento automático | 🟢 | M1 | Conferir `'` em lifetimes e `|` em closures |
-| E-08 | Comentar linha/bloco | 🔁 | M1 | Delimitadores de Rust em `Lang` |
+| E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
 | E-09 | Sticky lines | ⬜ | M3 | |
 | E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |

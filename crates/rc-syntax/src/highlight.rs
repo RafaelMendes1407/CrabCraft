@@ -70,6 +70,7 @@ impl Hl {
             "field" => Hl::Field,
             "property" => Hl::Property,
             "event" => Hl::Event,
+            "constant" => Hl::Constant,
             "constant.enum" => Hl::EnumMember,
             "variable.parameter" => Hl::Parameter,
             "operator" => Hl::Operator,
@@ -393,6 +394,43 @@ mod tests {
         assert!(has("who", Hl::Parameter), "{roles:?}");
         assert!(has("\\n", Hl::Escape), "{roles:?}");
         assert!(roles.iter().any(|(t, h)| t.starts_with("///") && *h == Hl::DocComment), "{roles:?}");
+    }
+
+    #[test]
+    fn rust_roles() {
+        let src = "use std::fmt;\n/// Doc\n#[derive(Debug)]\npub struct Point<'a, T> { x: &'a T }\nenum Kind { One }\ntrait Shape { fn area(&self) -> f64; }\nconst MAX: u32 = 1;\nfn main() {\n    let mut p = make(1.5);\n    println!(\"hi\\n\");\n    p.area();\n    // done\n}\n";
+        let roles = roles_of(Lang::Rust, src);
+        let has = |text: &str, hl: Hl| roles.iter().any(|(t, h)| t == text && *h == hl);
+        assert!(has("use", Hl::Keyword), "{roles:?}");
+        assert!(has("std", Hl::Namespace), "{roles:?}");
+        assert!(roles.iter().any(|(t, h)| t.starts_with("/// Doc") && *h == Hl::DocComment), "{roles:?}");
+        assert!(roles.iter().any(|(t, h)| t.starts_with('#') && *h == Hl::Attribute), "{roles:?}");
+        assert!(has("Point", Hl::Struct), "{roles:?}");
+        assert!(has("Kind", Hl::Enum), "{roles:?}");
+        assert!(has("One", Hl::EnumMember), "{roles:?}");
+        assert!(has("Shape", Hl::Interface), "{roles:?}");
+        assert!(has("T", Hl::TypeParam), "{roles:?}");
+        assert!(has("MAX", Hl::Constant), "{roles:?}");
+        assert!(has("main", Hl::Method) && has("make", Hl::Method) && has("area", Hl::Method), "{roles:?}");
+        assert!(has("println!", Hl::Preproc), "{roles:?}");
+        assert!(has("mut", Hl::Keyword), "{roles:?}");
+        assert!(has("1.5", Hl::Number), "{roles:?}");
+        assert!(has("\\n", Hl::Escape), "{roles:?}");
+        assert!(roles.iter().any(|(t, h)| t.starts_with("// done") && *h == Hl::Comment), "{roles:?}");
+    }
+
+    #[test]
+    fn toml_roles() {
+        let src = "# comment\n[package]\nname = \"demo\"\nedition = 2024\n\n[dependencies.serde]\noptional = true\n";
+        let roles = roles_of(Lang::Toml, src);
+        let has = |text: &str, hl: Hl| roles.iter().any(|(t, h)| t == text && *h == hl);
+        assert!(has("# comment", Hl::Comment), "{roles:?}");
+        assert!(has("package", Hl::Struct), "{roles:?}");
+        assert!(has("name", Hl::Field), "{roles:?}");
+        assert!(has("\"demo\"", Hl::String), "{roles:?}");
+        assert!(has("2024", Hl::Number), "{roles:?}");
+        assert!(has("true", Hl::Keyword), "{roles:?}");
+        assert!(has("dependencies", Hl::Struct) && has("serde", Hl::Struct), "{roles:?}");
     }
 
     #[test]

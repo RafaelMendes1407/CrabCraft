@@ -38,6 +38,9 @@ const CS_BLOCKS: &[&str] = &[
     "anonymous_object_creation_expression",
 ];
 
+/// Rust nodes that fold on their own (the body of an item, a match, a macro call...).
+const RUST_BLOCKS: &[&str] = &["block", "declaration_list", "field_declaration_list", "enum_variant_list", "match_block", "token_tree", "use_list", "ordered_field_declaration_list"];
+
 pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
     let mut out = Vec::new();
     match lang {
@@ -90,6 +93,49 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Imports, start_col: c, end_col: line_end(rope, e) });
             }
         }
+        Lang::Rust => {
+            let mut comments: Option<(usize, usize, usize)> = None;
+            let mut lines: Vec<(usize, usize, usize)> = Vec::new();
+            walk(tree.root_node(), &mut |node| {
+                let kind = node.kind();
+                let (sr, er) = (node.start_position().row, node.end_position().row);
+                if RUST_BLOCKS.contains(&kind) && er > sr {
+                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
+                } else if kind == "block_comment" && er > sr {
+                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Comment, start_col: char_col(rope, node), end_col: end_col(rope, node) });
+                } else if kind == "line_comment" {
+                    lines.push((sr, er, char_col(rope, node)));
+                }
+            });
+            // Adjacent line comments (doc comments above an item, for instance) fold as one.
+            lines.sort_unstable();
+            let flush = |run: Option<(usize, usize, usize)>, out: &mut Vec<FoldRange>| {
+                if let Some((first, last, col)) = run.filter(|(first, last, _)| last > first) {
+                    out.push(FoldRange { start_line: first, end_line: last, kind: FoldKind::Comment, start_col: col, end_col: line_end(rope, last) });
+                }
+            };
+            for (sr, _, col) in lines {
+                comments = match comments {
+                    Some((first, last, c)) if sr == last + 1 => Some((first, sr, c)),
+                    run => {
+                        flush(run, &mut out);
+                        Some((sr, sr, col))
+                    }
+                };
+            }
+            flush(comments, &mut out);
+        }
+        Lang::Toml => walk(tree.root_node(), &mut |node| {
+            let (sr, er) = (node.start_position().row, node.end_position().row);
+            if matches!(node.kind(), "table" | "table_array_element" | "array" | "inline_table") && er > sr {
+                // A table ends at the next one, past its blank lines: keep the fold on its content.
+                let end = if node.end_position().column == 0 { er - 1 } else { er };
+                let last = (sr..=end.min(rope.len_lines().saturating_sub(1))).rev().find(|l| rope.line(*l).chars().any(|c| !c.is_whitespace())).unwrap_or(sr);
+                if last > sr {
+                    out.push(FoldRange { start_line: sr, end_line: last, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: line_end(rope, last) });
+                }
+            }
+        }),
         Lang::Xml => walk(tree.root_node(), &mut |node| {
             let (sr, er) = (node.start_position().row, node.end_position().row);
             if (node.kind() == "element" || node.kind() == "Comment") && er > sr {
@@ -218,6 +264,33 @@ mod tests {
         assert!(lines.contains(&(4, 13, FoldKind::Region)), "{lines:?}");
         assert!(lines.contains(&(7, 8, FoldKind::Comment)), "{lines:?}");
         assert!(lines.contains(&(10, 11, FoldKind::Block)), "{lines:?}");
+    }
+
+    #[test]
+    fn rust_folds_items_matches_macros_and_comment_runs() {
+        let src = "/// One\n/// Two\nstruct S {\n    a: u8,\n}\nfn f(x: u8) {\n    match x {\n        _ => {}\n    }\n    vec![\n        1,\n    ];\n}\n/* a\n b */\n// single\n";
+        let rope = Rope::from_str(src);
+        let tree = parse_now(Lang::Rust, &rope, None).unwrap();
+        let folds = folding_ranges(Lang::Rust, &tree, &rope);
+        let has = |s: usize, e: usize, k: FoldKind| folds.iter().any(|f| f.start_line == s && f.end_line == e && f.kind == k);
+        assert!(has(0, 1, FoldKind::Comment), "{folds:?}");
+        assert!(has(2, 4, FoldKind::Block), "{folds:?}");
+        assert!(has(5, 12, FoldKind::Block), "{folds:?}");
+        assert!(has(6, 8, FoldKind::Block), "{folds:?}");
+        assert!(has(9, 11, FoldKind::Block), "{folds:?}");
+        assert!(has(13, 14, FoldKind::Comment), "{folds:?}");
+        assert!(!folds.iter().any(|f| f.start_line == 15), "{folds:?}");
+    }
+
+    #[test]
+    fn toml_tables_fold_without_their_trailing_blank_lines() {
+        let src = "[package]\nname = \"a\"\n\n[dependencies]\nx = \"1\"\ny = [\n  1,\n]\n";
+        let rope = Rope::from_str(src);
+        let tree = parse_now(Lang::Toml, &rope, None).unwrap();
+        let folds = folding_ranges(Lang::Toml, &tree, &rope);
+        assert!(folds.iter().any(|f| f.start_line == 0 && f.end_line == 1), "{folds:?}");
+        assert!(folds.iter().any(|f| f.start_line == 3 && f.end_line == 7), "{folds:?}");
+        assert!(folds.iter().any(|f| f.start_line == 5 && f.end_line == 7), "{folds:?}");
     }
 
     #[test]

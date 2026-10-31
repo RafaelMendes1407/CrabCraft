@@ -20,6 +20,8 @@ tree-sitter-xml = "0.7"
 tree-sitter-json = "0.24"
 tree-sitter-md = "0.5"
 tree-sitter-razor-modern = "0.1"
+tree-sitter-rust = "0.24"
+tree-sitter-toml-ng = "0.7"
 crossbeam-channel = "0.5"
 egui = "0.36"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence"] }

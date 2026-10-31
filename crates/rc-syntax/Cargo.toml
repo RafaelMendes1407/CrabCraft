@@ -12,6 +12,8 @@ tree-sitter-xml.workspace = true
 tree-sitter-json.workspace = true
 tree-sitter-md.workspace = true
 tree-sitter-razor-modern.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-toml-ng.workspace = true
 crossbeam-channel.workspace = true
 streaming-iterator = "0.1"
 

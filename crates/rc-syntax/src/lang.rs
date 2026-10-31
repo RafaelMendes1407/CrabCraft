@@ -6,6 +6,8 @@ use tree_sitter::{Language, Query};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Lang {
+    Rust,
+    Toml,
     CSharp,
     Xml,
     Json,
@@ -21,6 +23,8 @@ impl Lang {
     pub fn from_path(path: &Path) -> Lang {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
         match ext.as_str() {
+            "rs" => Lang::Rust,
+            "toml" => Lang::Toml,
             "cs" | "csx" => Lang::CSharp,
             "csproj" | "props" | "targets" | "xml" | "config" | "resx" | "xaml" | "axaml" | "nuspec" | "slnx" | "fsproj"
             | "vbproj" | "runsettings" | "xsd" | "svg" => Lang::Xml,
@@ -31,7 +35,13 @@ impl Lang {
             "sln" => Lang::Sln,
             _ => {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if name.eq_ignore_ascii_case("Directory.Packages.props") { Lang::Xml } else { Lang::Plain }
+                if name == "Cargo.lock" {
+                    Lang::Toml
+                } else if name.eq_ignore_ascii_case("Directory.Packages.props") {
+                    Lang::Xml
+                } else {
+                    Lang::Plain
+                }
             }
         }
     }
@@ -39,8 +49,8 @@ impl Lang {
     /// Prefix used by "Comment with line comment".
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
-            Lang::CSharp | Lang::Json => Some("//"),
-            Lang::Sln => Some("#"),
+            Lang::Rust | Lang::CSharp | Lang::Json => Some("//"),
+            Lang::Toml | Lang::Sln => Some("#"),
             _ => None,
         }
     }
@@ -48,7 +58,7 @@ impl Lang {
     /// Block comment delimiters (XML has no line comments).
     pub fn block_comment(self) -> Option<(&'static str, &'static str)> {
         match self {
-            Lang::CSharp => Some(("/*", "*/")),
+            Lang::Rust | Lang::CSharp => Some(("/*", "*/")),
             Lang::Xml | Lang::Markdown => Some(("<!--", "-->")),
             Lang::Razor => Some(("@*", "*@")),
             _ => None,
@@ -57,6 +67,8 @@ impl Lang {
 
     pub fn name(self) -> &'static str {
         match self {
+            Lang::Rust => "Rust",
+            Lang::Toml => "TOML",
             Lang::CSharp => "C#",
             Lang::Xml => "XML",
             Lang::Json => "JSON",
@@ -69,6 +81,8 @@ impl Lang {
 
     pub(crate) fn language(self) -> Option<Language> {
         Some(match self {
+            Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
+            Lang::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Lang::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
             Lang::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
@@ -80,6 +94,8 @@ impl Lang {
 
     /// The highlight query, compiled once.
     pub(crate) fn query(self) -> Option<&'static Query> {
+        static RUST: OnceLock<Query> = OnceLock::new();
+        static TOML: OnceLock<Query> = OnceLock::new();
         static CS: OnceLock<Query> = OnceLock::new();
         static XML: OnceLock<Query> = OnceLock::new();
         static JSON: OnceLock<Query> = OnceLock::new();
@@ -88,6 +104,8 @@ impl Lang {
         // Razor's C# uses the C# grammar's node kinds: the C# patterns apply, Razor's come after.
         static RAZOR_SOURCE: OnceLock<String> = OnceLock::new();
         let (cell, source) = match self {
+            Lang::Rust => (&RUST, include_str!("../queries/rust.scm")),
+            Lang::Toml => (&TOML, include_str!("../queries/toml.scm")),
             Lang::CSharp => (&CS, include_str!("../queries/csharp.scm")),
             Lang::Xml => (&XML, include_str!("../queries/xml.scm")),
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
@@ -97,5 +115,21 @@ impl Lang {
         };
         let language = self.language()?;
         Some(cell.get_or_init(|| Query::new(&language, source).unwrap_or_else(|e| panic!("bad {self:?} query: {e}"))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rust_project_files_get_their_language_and_comments() {
+        assert_eq!(Lang::from_path(Path::new("src/main.rs")), Lang::Rust);
+        assert_eq!(Lang::from_path(Path::new("Cargo.toml")), Lang::Toml);
+        assert_eq!(Lang::from_path(Path::new("Cargo.lock")), Lang::Toml);
+        assert_eq!(Lang::Rust.line_comment(), Some("//"));
+        assert_eq!(Lang::Rust.block_comment(), Some(("/*", "*/")));
+        assert_eq!(Lang::Toml.line_comment(), Some("#"));
+        assert_eq!(Lang::Toml.block_comment(), None);
     }
 }
