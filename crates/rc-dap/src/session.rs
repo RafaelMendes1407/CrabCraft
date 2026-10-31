@@ -740,6 +740,8 @@ impl DebugSession {
                 }
                 self.scopes_loading.remove(&frame_id);
                 let scopes = r.ok().and_then(|v| serde_json::from_value::<ScopesResponse>(v).ok()).map(|s| s.scopes).unwrap_or_default();
+                // GDB lists every CPU register as a scope; the variables tree is not the place.
+                let scopes = scopes.into_iter().filter(|s| s.presentation_hint.as_deref() != Some("registers")).collect();
                 self.scopes.insert(frame_id, scopes);
                 self.events.push(DebugEvent::ScopesLoaded { frame_id });
             }

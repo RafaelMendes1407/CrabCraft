@@ -84,6 +84,7 @@ fn debugs_a_rust_program() {
     let locals = run.locals();
     let value = |n: &str| locals.iter().find(|(k, _)| k == n).map(|(_, v)| v.clone()).unwrap_or_else(|| panic!("no {n} in {locals:?}"));
     assert!(value("name").contains("crab"), "{locals:?}");
+    assert!(!locals.iter().any(|(k, _)| k == "rax"), "registers stay out of the variables: {locals:?}");
     assert!(value("items").contains("10") || value("items").contains("size=3") || value("items").contains("len"), "pretty printed Vec: {locals:?}");
 
     // A second breakpoint inside the function shows its parameters.

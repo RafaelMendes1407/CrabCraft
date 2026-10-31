@@ -508,7 +508,6 @@
     "Unit tests with MSTest": "MSTest による単体テスト",
     "Enter a valid project name": "有効なプロジェクト名を入力してください",
     "Enter a valid solution name": "有効なソリューション名を入力してください",
-    "The location does not exist": "場所が存在しません",
     "A folder with that name already exists": "その名前のフォルダーは既に存在します"
   },
   "compound": {
@@ -627,6 +626,17 @@
     "Fetch Dependencies": "依存関係を取得",
     "Language server actions are not available in this file": "このファイルでは言語サーバーの操作を使用できません",
     "The Rust language server is still analysing the project": "Rust 言語サーバーはプロジェクトを解析中です",
-    "GDB was not found. Install it to debug Rust programs.": "GDB が見つかりません。Rust プログラムをデバッグするにはインストールしてください。"
+    "GDB was not found. Install it to debug Rust programs.": "GDB が見つかりません。Rust プログラムをデバッグするにはインストールしてください。",
+    "New Project": "新規プロジェクト",
+    "New Project…": "新規プロジェクト…",
+    "Open Cargo.toml…": "Cargo.toml を開く…",
+    "A lightweight IDE for Rust": "Rust 向けの軽量 IDE",
+    "Binary": "バイナリ",
+    "An executable program with src/main.rs": "src/main.rs を持つ実行可能プログラム",
+    "Library": "ライブラリ",
+    "A reusable library with src/lib.rs": "src/lib.rs を持つ再利用可能なライブラリ",
+    "Use letters, digits, - and _, starting with a letter": "文字、数字、- と _ を使用し、文字で始めてください",
+    "The location does not exist": "場所が存在しません",
+    "That folder already exists": "そのフォルダーは既に存在します"
   }
 }

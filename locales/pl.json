@@ -508,7 +508,6 @@
     "Unit tests with MSTest": "Testy jednostkowe z MSTest",
     "Enter a valid project name": "Wpisz prawidłową nazwę projektu",
     "Enter a valid solution name": "Wpisz prawidłową nazwę rozwiązania",
-    "The location does not exist": "Lokalizacja nie istnieje",
     "A folder with that name already exists": "Folder o tej nazwie już istnieje"
   },
   "compound": {
@@ -627,6 +626,17 @@
     "Fetch Dependencies": "Pobierz zależności",
     "Language server actions are not available in this file": "Działania serwera języka nie są dostępne w tym pliku",
     "The Rust language server is still analysing the project": "Serwer języka Rust nadal analizuje projekt",
-    "GDB was not found. Install it to debug Rust programs.": "Nie znaleziono GDB. Zainstaluj go, aby debugować programy w Rust."
+    "GDB was not found. Install it to debug Rust programs.": "Nie znaleziono GDB. Zainstaluj go, aby debugować programy w Rust.",
+    "New Project": "Nowy projekt",
+    "New Project…": "Nowy projekt…",
+    "Open Cargo.toml…": "Otwórz Cargo.toml…",
+    "A lightweight IDE for Rust": "Lekkie środowisko IDE dla języka Rust",
+    "Binary": "Plik binarny",
+    "An executable program with src/main.rs": "Program wykonywalny z src/main.rs",
+    "Library": "Biblioteka",
+    "A reusable library with src/lib.rs": "Biblioteka wielokrotnego użytku z src/lib.rs",
+    "Use letters, digits, - and _, starting with a letter": "Użyj liter, cyfr, - i _, zaczynając od litery",
+    "The location does not exist": "Lokalizacja nie istnieje",
+    "That folder already exists": "Ten folder już istnieje"
   }
 }

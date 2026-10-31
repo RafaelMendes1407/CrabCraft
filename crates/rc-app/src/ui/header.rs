@@ -244,7 +244,7 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
-        if theme::menu_item(ui, Some(ico::ADD), tr("New Solution…"), false).clicked() {
+        if theme::menu_item(ui, Some(ico::ADD), tr("New Project…"), false).clicked() {
             app.new_project_dialog(None);
             ui.close();
         }
@@ -262,7 +262,7 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.pick_and_open();
             ui.close();
         }
-        if theme::menu_item(ui, Some(ico::SOLUTION), tr("Open Solution or Project…"), false).clicked() {
+        if theme::menu_item(ui, Some(ico::SOLUTION), tr("Open Cargo.toml…"), false).clicked() {
             app.pick_solution();
             ui.close();
         }

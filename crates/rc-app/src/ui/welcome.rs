@@ -17,12 +17,12 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         y = logo.bottom() + 18.0;
         ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, tr("Welcome to CrabCraft"), theme::bold(20.0), p.text);
         y += 34.0;
-        let subtitle = format!("{} · {}", tr("A lightweight IDE for .NET"), trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
+        let subtitle = format!("{} · {}", tr("A lightweight IDE for Rust"), trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
         ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, subtitle, FontId::proportional(13.0), p.text_muted);
         y += 40.0;
 
         // Primary actions.
-        let buttons = [(tr("New Solution…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Solution or Project…"), ico::SOLUTION, 1)];
+        let buttons = [(tr("New Project…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Cargo.toml…"), ico::SOLUTION, 1)];
         let bw = (col_w - 24.0) / 3.0;
         for (i, (label, icon, kind)) in buttons.into_iter().enumerate() {
             let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 72.0));

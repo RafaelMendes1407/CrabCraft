@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 16 |
-| 🚧 Em andamento | 11 |
+| ✅ Pronto | 18 |
+| 🚧 Em andamento | 10 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 30 |
+| 🔁 Portar | 29 |
 | ⬜ A fazer | 172 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -57,7 +57,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
 | P-06 | Variáveis de ambiente do projeto | ⬜ | M3 | Aplicadas a cargo e ao rust-analyzer |
-| P-07 | Novo projeto: Binary e Library | 🔁 | M1 | `cargo new`, substitui `dotnet new` |
+| P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ⬜ | M1 | |
@@ -262,7 +262,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-05 | Step over, into, out e Run to Cursor | 🚧 | M2 | Step over testado; into, out e Run to Cursor falta testar |
 | D-06 | Force Step Into | ⬜ | M4 | |
 | D-07 | Threads e frames | 🚧 | M2 | Threads e frames testados na sessão; janela ainda não vista com Rust |
-| D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String` |
+| D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String`; registradores ficam fora da árvore |
 | D-09 | Watches | 🔁 | M2 | |
 | D-10 | Avaliar expressão | 🔁 | M2 | |
 | D-11 | Valores inline no editor | 🔁 | M2 | |
@@ -358,7 +358,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
-| G-02 | Tela de boas-vindas e projetos recentes | 🚧 | M1 | Abre Cargo; "Nova solução" ainda cria projeto .NET |
+| G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
 | G-03 | Keymaps | 🟢 | M1 | Adicionar o keymap do RustRover: o herdado é o do Rider |
 | G-04 | Configurar atalhos | ⬜ | M3 | |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |

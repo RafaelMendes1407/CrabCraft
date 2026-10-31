@@ -508,7 +508,6 @@
     "Unit tests with MSTest": "使用 MSTest 的单元测试",
     "Enter a valid project name": "请输入有效的项目名称",
     "Enter a valid solution name": "请输入有效的解决方案名称",
-    "The location does not exist": "该位置不存在",
     "A folder with that name already exists": "已存在同名文件夹"
   },
   "compound": {
@@ -627,6 +626,17 @@
     "Fetch Dependencies": "获取依赖项",
     "Language server actions are not available in this file": "此文件不支持语言服务器操作",
     "The Rust language server is still analysing the project": "Rust 语言服务器仍在分析项目",
-    "GDB was not found. Install it to debug Rust programs.": "未找到 GDB。请安装它以调试 Rust 程序。"
+    "GDB was not found. Install it to debug Rust programs.": "未找到 GDB。请安装它以调试 Rust 程序。",
+    "New Project": "新建项目",
+    "New Project…": "新建项目…",
+    "Open Cargo.toml…": "打开 Cargo.toml…",
+    "A lightweight IDE for Rust": "轻量级 Rust IDE",
+    "Binary": "二进制",
+    "An executable program with src/main.rs": "包含 src/main.rs 的可执行程序",
+    "Library": "库",
+    "A reusable library with src/lib.rs": "包含 src/lib.rs 的可复用库",
+    "Use letters, digits, - and _, starting with a letter": "请使用字母、数字、- 和 _，并以字母开头",
+    "The location does not exist": "位置不存在",
+    "That folder already exists": "该文件夹已存在"
   }
 }

@@ -326,8 +326,8 @@ impl CrabCraftApp {
     }
 
     /// New Solution, or Add New Project when `solution` is given.
-    pub fn new_project_dialog(&mut self, solution: Option<PathBuf>) {
-        self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, solution, self.waker.clone()));
+    pub fn new_project_dialog(&mut self, _solution: Option<PathBuf>) {
+        self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, self.waker.clone()));
     }
 
     /// File › Close Project: back to the welcome screen, which is also where the next start
@@ -1029,7 +1029,7 @@ impl CrabCraftApp {
     }
 
     pub fn pick_solution(&mut self) {
-        let dialog = rfd::FileDialog::new().set_title(tr("Open Solution or Project")).add_filter(tr("Solutions and projects"), &["sln", "slnx", "slnf", "csproj", "fsproj"]);
+        let dialog = rfd::FileDialog::new().set_title(tr("Open Cargo.toml…")).add_filter("Cargo.toml", &["toml"]);
         if let Some(path) = dialog.pick_file() {
             self.open_workspace(&path);
         }
