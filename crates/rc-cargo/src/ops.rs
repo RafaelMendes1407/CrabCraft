@@ -141,10 +141,19 @@ pub struct RunTarget {
     pub env: Vec<(String, String)>,
     /// The workspace root when `None`.
     pub working_dir: Option<PathBuf>,
+    /// Cargo arguments of a test executable to build, instead of the binary `bin`.
+    pub test: Option<Vec<String>>,
 }
 
 /// Arguments that build just this binary.
 pub fn run_build_args(t: &RunTarget) -> Vec<String> {
+    if let Some(selection) = &t.test {
+        let mut a: Vec<String> = vec!["test".into(), "--no-run".into()];
+        a.extend(selection.iter().cloned());
+        a.push(MESSAGE_FORMAT.into());
+        a.extend(manifest_arg(&t.manifest));
+        return a;
+    }
     let mut a: Vec<String> = vec!["build".into(), "--package".into(), t.package.clone(), "--bin".into(), t.bin.clone(), MESSAGE_FORMAT.into()];
     a.extend(manifest_arg(&t.manifest));
     a

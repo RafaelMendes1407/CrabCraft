@@ -201,6 +201,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     editor_context_menu(app, &out.response);
+    gutter_menu(app, ui);
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     // Before the insertion reaches the server, which resolves the item's import on the old text.
@@ -252,6 +253,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
+            EditorEvent::GutterIconSecondaryClicked { line, icon, screen } if is_run_icon(icon) => app.gutter_menu = Some((line, screen)),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } => run_binary_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
@@ -335,6 +337,45 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
 }
 
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
+fn is_run_icon(icon: rc_editor::GutterIcon) -> bool {
+    use rc_editor::GutterIcon::*;
+    matches!(icon, RunApp | RunTest | TestPassed | TestFailed)
+}
+
+/// Run and Debug for a gutter icon. Debug is there for what rust-analyzer found in a Rust file.
+fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
+    let Some((line, pos)) = app.gutter_menu else { return };
+    let can_debug = app.docs.active_doc().and_then(|d| app.insight.runnables.get(&d.editor.id)).is_some_and(|(_, list)| list.iter().any(|r| r.line == line));
+    let ctx = ui.ctx().clone();
+    let p = rc_kit::pal(ui);
+    let mut chosen = None;
+    let area = egui::Area::new(egui::Id::new("gutter_run_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(&ctx, |ui| {
+        egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
+            ui.set_min_width(140.0);
+            if theme::menu_entry(ui, Some(ico::RUN), tr("Run"), None, false, true).clicked() {
+                chosen = Some(false);
+            }
+            if can_debug && theme::menu_entry(ui, Some(ico::DEBUG), tr("Debug"), None, false, true).clicked() {
+                chosen = Some(true);
+            }
+        });
+    });
+    match chosen {
+        Some(debug) => {
+            app.gutter_menu = None;
+            if debug {
+                app.debug_runnable_at(&ctx, line);
+            } else if app.run_markers.contains_key(&line) {
+                app.run_binary_at(&ctx, line);
+            } else {
+                app.run_test_at(line);
+            }
+        }
+        None if area.response.clicked_elsewhere() || ctx.input(|i| i.key_pressed(egui::Key::Escape)) => app.gutter_menu = None,
+        None => {}
+    }
+}
+
 fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let csharp = app.docs.active_doc().is_some_and(crate::insight::has_insight);

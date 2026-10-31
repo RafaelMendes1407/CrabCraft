@@ -810,6 +810,22 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
     let (pointer, now, mods) = ui.input(|i| (i.pointer.clone(), i.time, i.modifiers));
     let gutter = Rect::from_min_max(rect.min, pos2(text_rect.left(), rect.bottom()));
 
+    // Right-click on a run icon.
+    if response.secondary_clicked()
+        && let Some(p) = response.interact_pointer_pos()
+        && gutter.contains(p)
+        && p.x >= m.icons_x - 2.0
+        && p.x < m.vcs_x
+    {
+        let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
+        if row < display_row_count(state) {
+            let line = line_of_row(state, row);
+            if let Some(icon) = state.gutter_icons.get(&line) {
+                out.events.push(EditorEvent::GutterIconSecondaryClicked { line, icon: *icon, screen: p });
+            }
+        }
+        return;
+    }
     // Right-click on the line numbers: breakpoint properties.
     if response.secondary_clicked()
         && let Some(p) = response.interact_pointer_pos()

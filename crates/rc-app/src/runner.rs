@@ -215,6 +215,10 @@ impl Runner {
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
+    pub fn cargo_tool(&self) -> Result<rc_cargo::Cargo, String> {
+        self.cargo()
+    }
+
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
         self.cargo.clone().ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
     }
@@ -365,7 +369,7 @@ impl Runner {
     /// A binary of the Rust workspace, with the user's edits applied.
     fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
         let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
-        let mut target = rc_cargo::RunTarget { manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
+        let mut target = rc_cargo::RunTarget { test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
         if let Some(o) = self.options.get(name) {
             target.args = rc_dotnet::process::split_command_line(&o.args);
             target.env = o.env_pairs();

@@ -83,6 +83,8 @@ pub enum EditorEvent {
     GutterClicked { line: usize },
     /// Right-click on a line number (0-based line).
     GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
+    /// Right-click on an icon of the gutter's icon column.
+    GutterIconSecondaryClicked { line: usize, icon: GutterIcon, screen: egui::Pos2 },
     /// Click on an icon of the gutter's icon column.
     GutterIconClicked { line: usize, icon: GutterIcon },
     /// ⌘/Ctrl+click on a char offset.

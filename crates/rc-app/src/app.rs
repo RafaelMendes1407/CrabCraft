@@ -76,6 +76,8 @@ pub struct CrabCraftApp {
     /// Screen position under the active caret (popups that belong to the editor).
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
+    /// The Run/Debug menu of a gutter icon: its line and where it opens.
+    pub gutter_menu: Option<(usize, egui::Pos2)>,
     /// Binary target run by the icon of each line of the active Rust document.
     pub run_markers: std::collections::BTreeMap<usize, String>,
     pub native_menu: Option<NativeMenu>,
@@ -156,6 +158,7 @@ impl CrabCraftApp {
             find_results: None,
             caret_screen: None,
             test_markers: Vec::new(),
+            gutter_menu: None,
             run_markers: std::collections::BTreeMap::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
@@ -1022,6 +1025,42 @@ impl CrabCraftApp {
         self.run_ide_action(ctx, Action::Run);
     }
 
+    /// Debugs what the icon of `line` runs, in the active Rust document.
+    pub fn debug_runnable_at(&mut self, ctx: &Context, line: usize) {
+        use rc_lsp::rust_analyzer::RunnableKind;
+        let Some(id) = self.docs.active_doc().map(|d| d.editor.id) else { return };
+        let Some(runnable) = self.insight.runnables.get(&id).and_then(|(_, list)| list.iter().find(|r| r.line == line)).cloned() else { return };
+        let (name, mut args) = match &runnable.kind {
+            RunnableKind::Binary(name) => {
+                let Some(index) = self.runner.configs.iter().position(|c| c.name == *name) else {
+                    self.notify(tr("This file is not part of a runnable target"), false);
+                    return;
+                };
+                self.runner.selected = index;
+                self.session_dirty = true;
+                self.run_ide_action(ctx, Action::Debug);
+                return;
+            }
+            RunnableKind::Test(name) => (name.clone(), vec![name.clone(), "--exact".to_string()]),
+            RunnableKind::Module(name) => (name.clone(), vec![format!("{name}::")]),
+        };
+        // One thread, so stepping stays in the test being debugged.
+        args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
+        let cargo = match self.runner.cargo_tool() {
+            Ok(cargo) => cargo,
+            Err(e) => {
+                self.notify(e, true);
+                return;
+            }
+        };
+        self.save_all_docs();
+        let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args) };
+        let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
+        let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
+        self.handle_debug(outs);
+    }
+
     /// Click on a test's gutter icon: runs that test (or class) in its project.
     pub fn run_test_at(&mut self, line: usize) {
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
@@ -1495,7 +1534,7 @@ fn module_state(outcomes: &std::collections::BTreeMap<String, crate::runner::Tes
     use crate::runner::TestState;
     let prefix = format!("{module}::");
     let mut found = None;
-    for (name, state) in outcomes.iter().filter(|(n, _)| n.starts_with(&prefix)) {
+    for (_, state) in outcomes.iter().filter(|(n, _)| n.starts_with(&prefix)) {
         match state {
             TestState::Failed => return Some(TestState::Failed),
             TestState::Passed => found = found.or(Some(TestState::Passed)),

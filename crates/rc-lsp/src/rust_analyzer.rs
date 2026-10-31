@@ -94,6 +94,8 @@ pub struct Runnable {
     /// 0-based line of the item's name.
     pub line: usize,
     pub kind: RunnableKind,
+    /// Cargo's arguments that select the item's target, after `test` or `run`.
+    pub cargo_args: Vec<String>,
 }
 
 /// The reply of `experimental/runnables`. Entries with no place in the file (the whole-package
@@ -121,7 +123,7 @@ fn parse_runnable(item: &Value) -> Option<Runnable> {
         }
         _ => return None,
     };
-    Some(Runnable { line, kind })
+    Some(Runnable { line, kind, cargo_args: cargo.iter().skip(1).map(|a| (*a).to_string()).collect() })
 }
 
 #[cfg(test)]
@@ -145,11 +147,13 @@ mod tests {
             entry(3, &["test", "--package", "demo", "--lib"], &["tests::"]),
         ]);
         let found = parse_runnables(&reply);
-        assert_eq!(found, vec![
-            Runnable { line: 1, kind: RunnableKind::Binary("demo".into()) },
-            Runnable { line: 2, kind: RunnableKind::Test("tests::works".into()) },
-            Runnable { line: 3, kind: RunnableKind::Module("tests".into()) },
+        let kinds: Vec<_> = found.iter().map(|r| (r.line, r.kind.clone())).collect();
+        assert_eq!(kinds, vec![
+            (1, RunnableKind::Binary("demo".into())),
+            (2, RunnableKind::Test("tests::works".into())),
+            (3, RunnableKind::Module("tests".into())),
         ]);
+        assert_eq!(found[1].cargo_args, ["--package", "demo", "--lib"]);
     }
 
     #[test]

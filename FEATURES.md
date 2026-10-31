@@ -25,9 +25,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 33 |
-| 🚧 Em andamento | 11 |
+| 🚧 Em andamento | 12 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 15 |
+| 🔁 Portar | 14 |
 | ⬜ A fazer | 170 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -246,7 +246,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-07 | Runner nextest | ⬜ | M3 | |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
-| T-10 | Depurar um teste | 🔁 | M2 | |
+| T-10 | Depurar um teste | 🚧 | M2 | Pelo ícone, para no breakpoint com GDB real, testado no app; menu ainda não visto na janela |
 | T-11 | Benchmarks pela margem | ⬜ | M3 | `cargo bench` |
 | T-12 | Filtrar e ordenar resultados de teste | 🔁 | M2 | |
 | T-13 | Marcar falhas de testes no editor após a execução | ⬜ | M3 | |

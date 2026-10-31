@@ -76,7 +76,7 @@ fn runs_the_binary_and_reports_its_output_and_exit_code() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() {\n    println!(\"hello {}\", std::env::args().nth(1).unwrap());\n    std::process::exit(7);\n}\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None };
     let handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(handle.pid().is_some());
@@ -90,7 +90,7 @@ fn a_build_error_stops_the_run() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() { nope }\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None };
     let _handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(matches!(events.last(), Some(RunEvent::Failed(_))), "{events:?}");

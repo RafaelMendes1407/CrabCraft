@@ -452,3 +452,49 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     assert_eq!((t.passed, t.failed), (0, 1));
     assert!(t.results.keys().eq(["checks::bad"].iter().copied()), "{:?}", t.results.keys());
 }
+
+fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(120) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        if let Some(rc_dap::SessionState::Failed(f)) = app.debugger.session.as_ref().map(|s| s.state()) {
+            panic!("debugging failed waiting for {what}: {f}");
+        }
+        if app.debugger.stopped() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    panic!("timed out waiting for {what}: {}", app.debugger.state_label());
+}
+
+#[test]
+fn a_test_stops_on_a_breakpoint_from_its_gutter_icon() {
+    const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        let value = super::one();\n        assert_eq!(value, 1);\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/lib.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the runnables", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.get(&d.editor.id).is_some_and(|(_, r)| r.iter().any(|x| x.line == 7))));
+
+    // On `assert_eq!`, after `value` got its value.
+    let line = 9;
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, rc_editor::BreakpointKind::Normal);
+    app.debug_runnable_at(&egui::Context::default(), 7);
+    pump_debugger(&mut app, "the breakpoint in the test");
+    let doc = app.docs.active_doc().unwrap();
+    assert!(doc.path.ends_with("src/lib.rs"));
+    assert_eq!(doc.editor.execution_line, Some(line));
+    app.debugger.session.as_mut().unwrap().stop();
+    app.insight.stop();
+}
