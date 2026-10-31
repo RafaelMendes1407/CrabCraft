@@ -409,6 +409,52 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     assert!(app.runner.build.as_ref().unwrap().diagnostics.iter().all(|d| d.fix.is_none()));
 }
 
+#[test]
+fn a_file_outside_the_module_tree_can_be_declared() {
+    let unlinked = |a: &CrabCraftApp, file: &str| a.docs.list.iter().any(|d| d.path.ends_with(file) && a.insight.unlinked.contains(&d.editor.id));
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lone.rs"), "pub fn lone() {}\n");
+    write(&root.join("src/open.rs"), "pub fn open() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/lone.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the unlinked file", |a| unlinked(a, "src/lone.rs"));
+
+    // A declared file is not reported.
+    app.open_file(&root.join("src/main.rs"));
+    app.open_file(&root.join("src/lib.rs"));
+    let settled = Instant::now();
+    pump(&mut app, "the other files", |_| settled.elapsed() > Duration::from_secs(3));
+    assert!(!unlinked(&app, "src/main.rs") && !unlinked(&app, "src/lib.rs"));
+    let i = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    app.close_tab(i);
+
+    // Closed parent: written to disk.
+    app.declare_module(&root.join("src/lib.rs"), "lone", false);
+    assert!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap().starts_with("mod lone;\n"));
+
+    // Open parent: its unsaved text stays and nothing is written yet.
+    app.open_file(&root.join("src/lib.rs"));
+    app.open_file(&root.join("src/open.rs"));
+    let saved = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
+    app.declare_module(&root.join("src/lib.rs"), "open", true);
+    assert_eq!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap(), saved);
+    let i = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    assert!(app.docs.list[i].editor.buffer.rope().to_string().starts_with("mod lone;\npub mod open;\n"));
+
+    // Declaring twice changes nothing.
+    app.declare_module(&root.join("src/lib.rs"), "open", true);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string().matches("mod open;").count(), 1);
+    app.insight.stop();
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

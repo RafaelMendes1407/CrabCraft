@@ -705,6 +705,14 @@
     "Nothing to generate here": "此处没有可生成的内容",
     "Benchmarks cannot be debugged": "无法调试基准测试",
     "Apply fix": "应用修复",
-    "The file changed after the build: build again to apply this fix": "文件在构建后已更改：请重新构建以应用此修复"
+    "The file changed after the build: build again to apply this fix": "文件在构建后已更改：请重新构建以应用此修复",
+    "Rust File": "Rust 文件",
+    "Rust Module": "Rust 模块",
+    "Declare in {file}": "在 {file} 中声明",
+    "Public (pub mod)": "公开 (pub mod)",
+    "No module here declares it: it stays outside the crate": "此处没有模块声明它：它将留在 crate 之外",
+    "This name is not a valid Rust module name": "此名称不是有效的 Rust 模块名称",
+    "Could not declare the module: {error}": "无法声明模块：{error}",
+    "No module declares this file": "没有模块声明此文件"
   }
 }

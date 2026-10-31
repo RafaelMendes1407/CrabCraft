@@ -21,6 +21,8 @@ pub enum ItemKind {
     Json,
     Text,
     Folder,
+    RustFile,
+    RustModule,
 }
 
 impl ItemKind {
@@ -45,6 +47,10 @@ impl ItemKind {
         Some(ItemKind::Folder),
     ];
 
+    /// The Add menu of a Cargo project.
+    pub const RUST_MENU: &[Option<ItemKind>] =
+        &[Some(ItemKind::RustFile), Some(ItemKind::RustModule), None, Some(ItemKind::File), Some(ItemKind::Json), Some(ItemKind::Text), Some(ItemKind::Folder)];
+
     /// English menu text for `tr`.
     pub fn title(self) -> &'static str {
         match self {
@@ -63,6 +69,8 @@ impl ItemKind {
             ItemKind::Json => "JSON File",
             ItemKind::Text => "Text File",
             ItemKind::Folder => "Directory",
+            ItemKind::RustFile => "Rust File",
+            ItemKind::RustModule => "Rust Module",
         }
     }
 
@@ -80,6 +88,8 @@ impl ItemKind {
             ItemKind::Json => ico::FILE_JSON,
             ItemKind::Text => ico::FILE_TEXT,
             ItemKind::Folder => ico::FOLDER,
+            ItemKind::RustFile => ico::NEW_FILE,
+            ItemKind::RustModule => ico::FOLDER,
         }
     }
 
@@ -92,12 +102,24 @@ impl ItemKind {
         matches!(self, ItemKind::File | ItemKind::Json | ItemKind::Text)
     }
 
+    /// Items that are Rust modules, declared with `mod` in their parent.
+    pub fn is_rust(self) -> bool {
+        matches!(self, ItemKind::RustFile | ItemKind::RustModule)
+    }
+
+    /// The module a Rust item names.
+    pub fn module_name(typed: &str) -> &str {
+        let name = typed.trim();
+        name.strip_suffix(".rs").unwrap_or(name)
+    }
+
     fn extension(self) -> &'static str {
         match self {
             ItemKind::RazorComponent => "razor",
             ItemKind::RazorPage | ItemKind::MvcView => "cshtml",
             ItemKind::Json => "json",
             ItemKind::Text => "txt",
+            ItemKind::RustFile | ItemKind::RustModule => "rs",
             ItemKind::File | ItemKind::Folder => "",
             _ => "cs",
         }
@@ -118,6 +140,11 @@ impl ItemKind {
     /// The first one is opened.
     pub fn files(self, dir: &Path, typed: &str) -> Vec<(PathBuf, String)> {
         let name = self.type_name(typed);
+        match self {
+            ItemKind::RustFile => return vec![(dir.join(format!("{}.rs", Self::module_name(typed))), "$0".into())],
+            ItemKind::RustModule => return vec![(dir.join(Self::module_name(typed)).join("mod.rs"), "$0".into())],
+            _ => {}
+        }
         if self.is_folder() || self == ItemKind::File {
             return vec![(dir.join(typed.trim()), if self.is_folder() { String::new() } else { "$0".into() })];
         }
@@ -165,7 +192,7 @@ impl ItemKind {
                 };
                 vec![(path, format!("{using}namespace {ns};\n\n{class_attr}public class {name}\n{{\n    {method_attr}\n    public void Test1()\n    {{\n        $0\n    }}\n}}\n"))]
             }
-            ItemKind::File | ItemKind::Json | ItemKind::Text | ItemKind::Folder => unreachable!("handled above"),
+            ItemKind::File | ItemKind::Json | ItemKind::Text | ItemKind::Folder | ItemKind::RustFile | ItemKind::RustModule => unreachable!("handled above"),
         }
     }
 }
@@ -233,6 +260,15 @@ mod tests {
         assert!(page[0].1.contains("@model Shop.Site.PrivacyModel") && page[1].1.contains("class PrivacyModel : PageModel"));
         assert_eq!(ItemKind::Json.files(&proj, "appsettings.Local.json")[0].0, proj.join("appsettings.Local.json"));
         assert_eq!(ItemKind::Interface.files(&proj, "IClock.cs")[0].0, proj.join("IClock.cs"));
+    }
+
+    #[test]
+    fn rust_items_are_modules() {
+        let dir = Path::new("/p/src");
+        assert_eq!(ItemKind::RustFile.files(dir, "net.rs")[0].0, dir.join("net.rs"));
+        assert_eq!(ItemKind::RustFile.files(dir, " net ")[0].0, dir.join("net.rs"));
+        assert_eq!(ItemKind::RustModule.files(dir, "net")[0].0, dir.join("net/mod.rs"));
+        assert_eq!(ItemKind::module_name("net.rs"), "net");
     }
 
     #[test]

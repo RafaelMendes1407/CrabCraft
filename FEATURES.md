@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 83 |
+| ✅ Pronto | 86 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
-| 🔁 Portar | 3 |
-| ⬜ A fazer | 139 |
+| 🔁 Portar | 2 |
+| ⬜ A fazer | 137 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -63,10 +63,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
 | P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde` |
 | P-12 | Dependências externas na árvore do projeto | ✅ | M3 | Nó Bibliotecas externas, ver P-11 |
-| P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
-| P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
+| P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | ✅ | M3 | Menu Adicionar em projetos Cargo; escreve o `mod` no pai, no editor se estiver aberto; visto na janela nativa |
+| P-14 | Novo módulo (arquivo/diretório, público/privado) | ✅ | M3 | Arquivo Rust ou Módulo Rust (`x/mod.rs`), com opção `pub mod`; `#[path]` não é considerado |
 | P-15 | Novo crate Cargo no workspace | ⬜ | M3 | |
-| P-16 | Aviso de arquivo fora de módulo, com anexar | ⬜ | M3 | |
+| P-16 | Aviso de arquivo fora de módulo, com anexar | ✅ | M3 | Detectado por `experimental/parentModule`; faixa no editor com botão Declarar; visto na janela nativa |
 | P-17 | Janela Cargo: membros e targets | ✅ | M3 | Lê `cargo metadata`, com recarregar; vista na janela nativa |
 | P-18 | Executar target com duplo clique | ✅ | M3 | bin na janela Run; lib, example, test e bench no console de Compilar; `lib` clicado na janela nativa, demais por teste real |
 | P-19 | Executar comando Cargo pela janela Cargo | ✅ | M3 | Campo com Enter; `cargo` no início é opcional; falha mostra o código de saída |

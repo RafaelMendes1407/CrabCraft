@@ -173,6 +173,25 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
         editor_rect.min.y = banner.bottom();
     }
+    // A Rust file no module declares: rust-analyzer knows nothing about its code.
+    if app.insight.unlinked.contains(&app.docs.list[active].editor.id) {
+        let path = app.docs.list[active].path.clone();
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
+        ui.painter().rect_filled(banner, 0.0, rc_kit::theme::blend(p.island_bg, p.warn.gamma_multiply(0.18)));
+        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        icons::image(&mut b, ico::WARNING, 16.0);
+        b.label(tr("No module declares this file"));
+        let name = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let parent = path.parent().and_then(rc_cargo::modules::parent_module).filter(|p| *p != path && rc_cargo::modules::is_module_name(&name));
+        if let Some(parent) = parent {
+            let file = parent.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if b.button(rc_kit::i18n::trf("Declare in {file}", &[("file", &file)])).clicked() {
+                app.declare_module(&parent, &name, false);
+                app.insight.unlinked.remove(&app.docs.list[active].editor.id);
+            }
+        }
+        editor_rect.min.y = banner.bottom();
+    }
     // Markdown: the rendered page beside or instead of the editor.
     let pane = editor_rect;
     let mut preview_clicked = false;

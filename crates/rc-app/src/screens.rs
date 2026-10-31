@@ -134,12 +134,12 @@ fn screens() {
             h.state_mut().dialog = None;
         }
         // Add › API Controller.
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api/Controllers"), name: "Customers".into(), kind: crate::item_templates::ItemKind::ApiController, error: None });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api/Controllers"), name: "Customers".into(), kind: crate::item_templates::ItemKind::ApiController, attach: true, public: false, error: None });
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("add-item-{suffix}.png"))).unwrap();
         h.state_mut().dialog = None;
         // File › New File.
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api"), name: "Properties/notes.md".into(), kind: crate::item_templates::ItemKind::File, error: None });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: fixtures().join("Shop/src/Shop.Api"), name: "Properties/notes.md".into(), kind: crate::item_templates::ItemKind::File, attach: true, public: false, error: None });
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("new-file-{suffix}.png"))).unwrap();
         h.state_mut().dialog = None;

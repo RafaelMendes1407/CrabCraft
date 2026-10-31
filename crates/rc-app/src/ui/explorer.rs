@@ -457,7 +457,8 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
             if !in_library {
                 resp.context_menu(|ui| {
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), &mut actions);
+                    let rust = rc_cargo::find_manifest(root).is_some();
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), rust, &mut actions);
                 });
             }
         }
@@ -552,8 +553,9 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, rust: bool, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
+    ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
         if theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked() {
             actions.push(ExplorerAction::AddProject(sln.to_path_buf()));
@@ -605,7 +607,9 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, actions: &mut V
     // Add › (Rider): types, controllers, Razor, tests, files and folders.
     ui.menu_button(tr("Add"), |ui| {
         ui.set_min_width(220.0);
-        for entry in crate::item_templates::ItemKind::MENU {
+        ui.set_max_width(280.0);
+        use crate::item_templates::ItemKind;
+        for entry in if rust { ItemKind::RUST_MENU } else { ItemKind::MENU } {
             match entry {
                 None => {
                     ui.separator();

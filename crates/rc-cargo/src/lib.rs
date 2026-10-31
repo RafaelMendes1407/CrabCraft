@@ -11,6 +11,7 @@
 pub mod format;
 pub mod messages;
 pub mod metadata;
+pub mod modules;
 pub mod new_project;
 pub mod ops;
 pub mod test_output;

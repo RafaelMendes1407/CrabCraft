@@ -182,6 +182,9 @@ pub struct Insight {
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     runnables_request: HashMap<u64, Versioned<Value>>,
+    parent_request: HashMap<u64, Versioned<Value>>,
+    /// Rust documents no module declares, so the server cannot analyze them.
+    pub unlinked: std::collections::HashSet<u64>,
     /// What can be run in each Rust document, with the text version it describes.
     pub runnables: HashMap<u64, (u64, Vec<rc_lsp::rust_analyzer::Runnable>)>,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
@@ -245,6 +248,8 @@ impl Insight {
             semantic: HashMap::new(),
             inlay: HashMap::new(),
             runnables_request: HashMap::new(),
+            parent_request: HashMap::new(),
+            unlinked: std::collections::HashSet::new(),
             runnables: HashMap::new(),
             diag_pull: HashMap::new(),
             symbols: HashMap::new(),
@@ -383,6 +388,8 @@ impl Insight {
         self.semantic.clear();
         self.inlay.clear();
         self.runnables_request.clear();
+        self.parent_request.clear();
+        self.unlinked.clear();
         self.runnables.clear();
         self.diag_pull.clear();
         self.symbols.clear();
@@ -534,6 +541,8 @@ impl Insight {
         // rust-analyzer publishes its diagnostics, including those of `cargo check`.
         if self.rust {
             self.runnables_request.insert(id, (version, session.client.request_raw("experimental/runnables", json!({ "textDocument": td }))));
+            let start = json!({ "textDocument": td, "position": { "line": 0, "character": 0 } });
+            self.parent_request.insert(id, (version, session.client.request_raw("experimental/parentModule", start)));
         } else {
             self.diag_pull.insert(id, (version, session.client.request_raw("textDocument/diagnostic", json!({ "textDocument": td }))));
         }
@@ -582,6 +591,23 @@ impl Insight {
         }
         for id in finished {
             self.runnables_request.remove(&id);
+        }
+        // Parent modules: no answer means that nothing declares the file.
+        let mut finished = Vec::new();
+        for (&id, (_, p)) in &mut self.parent_request {
+            if let Some(r) = p.poll() {
+                finished.push(id);
+                if let Ok(reply) = r {
+                    if reply.as_array().is_none_or(Vec::is_empty) {
+                        self.unlinked.insert(id);
+                    } else {
+                        self.unlinked.remove(&id);
+                    }
+                }
+            }
+        }
+        for id in finished {
+            self.parent_request.remove(&id);
         }
         // Inlay hints.
         for (&id, (version, p)) in &mut self.inlay {

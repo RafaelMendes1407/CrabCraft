@@ -1038,6 +1038,30 @@ impl CrabCraftApp {
         }
     }
 
+    /// Writes `mod name;` in `parent`: in its editor when it is open, so unsaved text stays.
+    pub fn declare_module(&mut self, parent: &Path, name: &str, public: bool) {
+        use rc_cargo::modules::declaration;
+        if let Some(i) = self.docs.index_of(parent) {
+            let editor = &mut self.docs.list[i].editor;
+            let text = editor.buffer.rope().to_string();
+            if let Some((at, line)) = declaration(&text, name, public) {
+                let at = text[..at].chars().count();
+                editor.replace(at, at, &line);
+            }
+            return;
+        }
+        let written = std::fs::read_to_string(parent).and_then(|mut text| match declaration(&text, name, public) {
+            Some((at, line)) => {
+                text.insert_str(at, &line);
+                std::fs::write(parent, text)
+            }
+            None => Ok(()),
+        });
+        if let Err(e) = written {
+            self.notify(trf("Could not declare the module: {error}", &[("error", &e)]), true);
+        }
+    }
+
     /// Applies the compiler's suggestion to its file, if that is still the text the compiler read.
     pub fn apply_build_fix(&mut self, file: &Path, fix: &rc_dotnet::diagnostics::Fix) {
         let stale = tr("The file changed after the build: build again to apply this fix");
@@ -1378,7 +1402,8 @@ impl CrabCraftApp {
         let active = self.docs.active_doc().and_then(|d| d.path.parent().map(Path::to_path_buf));
         if let Some(root) = root {
             let dir = active.filter(|d| d.starts_with(&root)).unwrap_or(root);
-            self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind: crate::item_templates::ItemKind::File, error: None });
+            let kind = if self.runner.cargo_workspace.is_some() { crate::item_templates::ItemKind::RustFile } else { crate::item_templates::ItemKind::File };
+            self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, attach: true, public: false, error: None });
             return;
         }
         let mut dialog = rfd::FileDialog::new().set_title(tr("New File"));
@@ -1467,7 +1492,7 @@ impl CrabCraftApp {
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
-                ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, error: None }),
+                ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, attach: true, public: false, error: None }),
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     self.dialog = Some(Dialog::Rename { path, name, error: None });

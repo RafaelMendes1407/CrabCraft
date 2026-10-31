@@ -23,7 +23,7 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
-    NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, error: Option<String> },
+    NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
     RecentFiles { selected: usize, filter: String },
@@ -65,7 +65,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
-        Dialog::NewFile { dir, name, kind, error } => new_file(app, ctx, dir, name, *kind, error),
+        Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -637,15 +637,17 @@ fn evaluate(app: &mut CrabCraftApp, ctx: &Context, expression: &mut String, focu
 
 /// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton
 /// in the namespace of its folder.
-fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, error: &mut Option<String>) -> Outcome {
+#[allow(clippy::too_many_arguments)]
+fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, attach: &mut bool, public: &mut bool, error: &mut Option<String>) -> Outcome {
     let heading = trf("New {item}", &[("item", &tr(kind.title()))]);
+    let parent = kind.is_rust().then(|| rc_cargo::modules::parent_module(dir)).flatten();
     let ((ok, cancel), esc) = modal(ctx, "new_file", 380.0, |ui| {
         title(ui, &heading);
         let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Name")).desired_width(f32::INFINITY));
         resp.request_focus();
         if !kind.is_folder() && !name.trim().is_empty() {
             let files = kind.files(dir, name);
-            let detail = if kind.is_plain() {
+            let detail = if kind.is_plain() || kind.is_rust() {
                 // Where it lands, from the solution folder.
                 let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
                 files[0].0.strip_prefix(&root).unwrap_or(&files[0].0).display().to_string()
@@ -655,6 +657,17 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
             };
             ui.add(egui::Label::new(egui::RichText::new(detail).size(12.0).color(rc_kit::pal(ui).muted)).truncate());
         }
+        if kind.is_rust() {
+            match parent.as_ref().and_then(|p| p.file_name()) {
+                Some(file) => {
+                    ui.checkbox(attach, trf("Declare in {file}", &[("file", &file.to_string_lossy())]));
+                    ui.add_enabled(*attach, egui::Checkbox::new(public, tr("Public (pub mod)")));
+                }
+                None => {
+                    ui.label(egui::RichText::new(tr("No module here declares it: it stays outside the crate")).size(12.0).color(rc_kit::pal(ui).muted));
+                }
+            }
+        }
         if let Some(e) = error.as_ref() {
             ui.colored_label(rc_kit::pal(ui).error, e);
         }
@@ -663,6 +676,11 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
         (ok || enter && !name.trim().is_empty(), cancel)
     });
     if ok {
+        let module = crate::item_templates::ItemKind::module_name(name).to_string();
+        if kind.is_rust() && !rc_cargo::modules::is_module_name(&module) {
+            *error = Some(tr("This name is not a valid Rust module name").to_string());
+            return Outcome::Keep;
+        }
         let files = kind.files(dir, name);
         if files.iter().any(|(p, _)| p.exists()) {
             *error = Some(tr("A file or folder with this name already exists").to_string());
@@ -681,6 +699,9 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
             Ok(()) => {
                 let (first, content) = &files[0];
                 app.explorer.invalidate(first);
+                if let Some(parent) = parent.as_ref().filter(|_| *attach) {
+                    app.declare_module(parent, &module, *public);
+                }
                 if !kind.is_folder() {
                     app.open_file(first);
                     // The caret where the template put `$0`.

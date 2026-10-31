@@ -705,6 +705,14 @@
     "Nothing to generate here": "Rien à générer ici",
     "Benchmarks cannot be debugged": "Les benchmarks ne peuvent pas être débogués",
     "Apply fix": "Appliquer le correctif",
-    "The file changed after the build: build again to apply this fix": "Le fichier a changé après la compilation : recompilez pour appliquer ce correctif"
+    "The file changed after the build: build again to apply this fix": "Le fichier a changé après la compilation : recompilez pour appliquer ce correctif",
+    "Rust File": "Fichier Rust",
+    "Rust Module": "Module Rust",
+    "Declare in {file}": "Déclarer dans {file}",
+    "Public (pub mod)": "Public (pub mod)",
+    "No module here declares it: it stays outside the crate": "Aucun module ici ne le déclare : il reste hors du crate",
+    "This name is not a valid Rust module name": "Ce nom n'est pas un nom de module Rust valide",
+    "Could not declare the module: {error}": "Impossible de déclarer le module : {error}",
+    "No module declares this file": "Aucun module ne déclare ce fichier"
   }
 }

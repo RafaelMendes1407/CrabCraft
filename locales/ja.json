@@ -705,6 +705,14 @@
     "Nothing to generate here": "ここで生成できるものはありません",
     "Benchmarks cannot be debugged": "ベンチマークはデバッグできません",
     "Apply fix": "修正を適用",
-    "The file changed after the build: build again to apply this fix": "ビルド後にファイルが変更されました。この修正を適用するには再度ビルドしてください"
+    "The file changed after the build: build again to apply this fix": "ビルド後にファイルが変更されました。この修正を適用するには再度ビルドしてください",
+    "Rust File": "Rust ファイル",
+    "Rust Module": "Rust モジュール",
+    "Declare in {file}": "{file} で宣言",
+    "Public (pub mod)": "公開 (pub mod)",
+    "No module here declares it: it stays outside the crate": "ここには宣言するモジュールがないため、crate の外に置かれます",
+    "This name is not a valid Rust module name": "この名前は有効な Rust モジュール名ではありません",
+    "Could not declare the module: {error}": "モジュールを宣言できませんでした: {error}",
+    "No module declares this file": "このファイルを宣言しているモジュールはありません"
   }
 }
