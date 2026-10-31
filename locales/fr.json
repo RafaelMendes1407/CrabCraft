@@ -690,6 +690,8 @@
     "Features": "Fonctionnalités",
     "Input file": "Fichier d’entrée",
     "The console": "La console",
-    "Choose a file": "Choisir un fichier"
+    "Choose a file": "Choisir un fichier",
+    "Go to Super Method": "Aller à la super-méthode",
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt formate des fichiers entiers. Désélectionnez pour reformater celui-ci."
   }
 }

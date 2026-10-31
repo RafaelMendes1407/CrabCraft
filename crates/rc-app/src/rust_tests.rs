@@ -1011,6 +1011,61 @@ fn run_options_and_required_features_reach_the_target() {
 }
 
 #[test]
+fn navigation_reaches_the_standard_library_and_compiler_fixes_apply() {
+    use crate::insight::{InsightOutput, NavKind};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let text = "trait Speak {\n    fn speak(&self);\n}\nstruct A;\nimpl Speak for A {\n    fn speak(&self) {}\n}\nfn main() {\n    let mut x = Vec::<u32>::new();\n    drop(x);\n    A.speak();\n}\n";
+    write(&root.join("src/main.rs"), text);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the libraries", |a| a.explorer.libraries.iter().any(|l| l.name == "stdlib"));
+    let i = app.docs.active.unwrap();
+
+    // From the implementation of a method to the trait that declares it.
+    let at = text.rfind("fn speak").unwrap() + 4;
+    app.insight.navigate(&app.docs.list[i], at, NavKind::Super);
+    let found = output(&mut app, "the trait", |o| match o {
+        InsightOutput::Navigate(t) => Some(t.line),
+        _ => None,
+    });
+    assert_eq!(found, 1);
+
+    // Into the sources of the standard library, which open read-only.
+    let at = text.find("Vec").unwrap() + 1;
+    app.insight.navigate(&app.docs.list[i], at, NavKind::Declaration);
+    let target = output(&mut app, "the declaration", |o| match o {
+        InsightOutput::Navigate(t) => Some(t.clone()),
+        _ => None,
+    });
+    assert!(target.path.ends_with("alloc/src/vec/mod.rs"), "{:?}", target.path);
+    assert!(target.preview.contains("pub struct Vec"), "{:?}", target.preview);
+    app.open_file(&target.path);
+    assert!(app.docs.active_doc().unwrap().editor.read_only);
+    app.docs.active = Some(i);
+
+    // The suggestion of the compiler is offered and applied.
+    pump(&mut app, "the warning", |a| a.docs.list[i].editor.diagnostics.iter().any(|d| d.message.contains("mutable")));
+    app.docs.list[i].editor.selection = rc_text::Selection::point(text.find("mut x").unwrap() + 1);
+    app.insight.code_actions(&app.docs.list[i]);
+    let actions = output(&mut app, "the fixes", |o| match o {
+        InsightOutput::Actions(a) => Some(a.clone()),
+        _ => None,
+    });
+    let fix = actions.into_iter().find(|a| matches!(a, rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(c) if c.title == "remove this `mut`")).expect("the compiler's fix");
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, fix, &mut out);
+    pump(&mut app, "the fix", |a| a.docs.list[i].editor.buffer.rope().to_string().contains("let x = Vec"));
+    app.insight.stop();
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

@@ -78,3 +78,5 @@ Features	Características	Fonctionnalités	Features	Features	Funkcje	特性	フ�
 Input file	Archivo de entrada	Fichier d’entrée	Arquivo de entrada	Eingabedatei	Plik wejściowy	输入文件	入力ファイル
 The console	La consola	La console	O console	Die Konsole	Konsola	控制台	コンソール
 Choose a file	Elegir un archivo	Choisir un fichier	Escolher um arquivo	Datei auswählen	Wybierz plik	选择文件	ファイルを選択
+Go to Super Method	Ir al método superior	Aller à la super-méthode	Ir para o método do trait	Zur Super-Methode	Przejdź do metody nadrzędnej	转到父方法	スーパーメソッドへ移動
+rustfmt formats whole files. Clear the selection to reformat this one.	rustfmt formatea archivos completos. Quita la selección para reformatear este.	rustfmt formate des fichiers entiers. Désélectionnez pour reformater celui-ci.	O rustfmt formata arquivos inteiros. Limpe a seleção para reformatar este.	rustfmt formatiert ganze Dateien. Heben Sie die Auswahl auf, um diese neu zu formatieren.	rustfmt formatuje całe pliki. Usuń zaznaczenie, aby sformatować ten plik.	rustfmt 只能格式化整个文件。清除选择后再重新格式化此文件。	rustfmt はファイル全体を整形します。このファイルを整形するには選択を解除してください。

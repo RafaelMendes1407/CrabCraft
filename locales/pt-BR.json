@@ -690,6 +690,8 @@
     "Features": "Features",
     "Input file": "Arquivo de entrada",
     "The console": "O console",
-    "Choose a file": "Escolher um arquivo"
+    "Choose a file": "Escolher um arquivo",
+    "Go to Super Method": "Ir para o método do trait",
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "O rustfmt formata arquivos inteiros. Limpe a seleção para reformatar este."
   }
 }

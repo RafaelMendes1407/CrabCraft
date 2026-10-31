@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 75 |
+| ✅ Pronto | 78 |
 | 🚧 Em andamento | 3 |
-| 🟢 Herdado | 23 |
+| 🟢 Herdado | 24 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 148 |
+| ⬜ A fazer | 144 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -108,7 +108,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-21 | Emmet | 🚫 | - | Depende do suporte web |
 | E-22 | Cabeçalhos de copyright | ⬜ | M6 | |
 | E-23 | Breadcrumbs | ⬜ | M3 | |
-| E-24 | Marcas de erro na barra de rolagem | ⬜ | M3 | |
+| E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | 🟢 | M1 | Divisão herdada; conferir o restante |
 | E-27 | Scratch files | ⬜ | M3 | |
@@ -132,7 +132,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-13 | Inlay hints (tipos, parâmetros, chaining) | ✅ | M1 | Tipos e parâmetros testados com rust-analyzer real |
 | I-14 | Diagnósticos em tempo real | ✅ | M1 | Testado com rust-analyzer real: erro de sintaxe ao digitar e erro do cargo check ao salvar |
 | I-15 | Quick fixes e intention actions (Alt+Enter) | ✅ | M1 | Import pelo Alt+Enter testado com rust-analyzer real |
-| I-16 | Aplicar correção sugerida pelo compilador | ⬜ | M3 | Campo `suggested_replacement` do rustc |
+| I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
 | I-19 | Suprimir inspeções (`#[allow]`) | ⬜ | M3 | |
@@ -146,7 +146,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
-| I-30 | Formatador embutido para trechos | ⬜ | M3 | `textDocument/rangeFormatting` |
+| I-30 | Formatador embutido para trechos | ⬜ | M3 | rust-analyzer não formatou trecho na sonda; hoje a IDE avisa que o rustfmt formata o arquivo inteiro |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | 🚧 | M3 | Remover imports não usados testado; merge falta |
 | I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
@@ -165,10 +165,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
 | N-09 | Hierarquia de chamadas | ⬜ | M3 | `callHierarchy/*` |
 | N-10 | Hierarquia de tipos e traits | ⬜ | M3 | |
-| N-11 | Ir para o trait / para o `impl` | ⬜ | M3 | |
+| N-11 | Ir para o trait / para o `impl` | ✅ | M3 | Ctrl+U vai do método do `impl` ao trait; Ctrl+Alt+B vai do trait aos `impl`; teste real |
 | N-12 | Bookmarks | ⬜ | M3 | |
 | N-13 | Navegar entre features e `cfg` | ⬜ | M4 | |
-| N-14 | Navegar para a fonte de dependências | ⬜ | M3 | |
+| N-14 | Navegar para a fonte de dependências | ✅ | M3 | Ctrl+B entra na stdlib e abre somente leitura; teste real, crates do registro pelo mesmo caminho |
 | N-15 | Scopes e cores de arquivo | ⬜ | M4 | |
 | N-16 | Navigation bar e Select In | ⬜ | M3 | |
 | N-17 | Mostrar contexto do código (Alt+Q) | ⬜ | M4 | |

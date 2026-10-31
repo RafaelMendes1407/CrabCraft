@@ -456,6 +456,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::GotoDeclaration, || tr("Go to Declaration")),
             &act(Action::GotoImplementation, || tr("Go to Implementation")),
             &act(Action::GotoTypeDeclaration, || tr("Go to Type Declaration")),
+            &act(Action::GotoSuperMethod, || tr("Go to Super Method")),
             &act(Action::FindUsages, || tr("Find Usages")),
             &act(Action::FileStructure, || tr("File Structure")),
             &sep(),

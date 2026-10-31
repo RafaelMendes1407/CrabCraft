@@ -69,6 +69,8 @@ pub enum NavKind {
     Declaration,
     Implementation,
     TypeDeclaration,
+    /// From an implementation to what it implements.
+    Super,
     Usages,
 }
 
@@ -1127,6 +1129,7 @@ impl Insight {
             NavKind::Declaration => "textDocument/definition",
             NavKind::Implementation => "textDocument/implementation",
             NavKind::TypeDeclaration => "textDocument/typeDefinition",
+            NavKind::Super => "textDocument/declaration",
             NavKind::Usages => "textDocument/references",
         };
         let mut params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });

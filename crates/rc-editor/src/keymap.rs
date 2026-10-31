@@ -65,6 +65,7 @@ pub enum Action {
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
+    GotoSuperMethod,
     FindUsages,
     Rename,
     Reformat,
@@ -131,6 +132,7 @@ impl Action {
                 | GotoDeclaration
                 | GotoImplementation
                 | GotoTypeDeclaration
+                | GotoSuperMethod
                 | FindUsages
                 | Rename
                 | Reformat
@@ -401,6 +403,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::B, c, GotoDeclaration),
         b(Key::B, ca, GotoImplementation),
         b(Key::B, cs, GotoTypeDeclaration),
+        b(Key::U, c, GotoSuperMethod),
         b(Key::F7, a, FindUsages),
         b(Key::F6, s, Rename),
         b(Key::L, ca, Reformat),
@@ -601,6 +604,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::B, c, GotoDeclaration),
             b(Key::B, ca, GotoImplementation),
             b(Key::B, cs, GotoTypeDeclaration),
+            b(Key::U, c, GotoSuperMethod),
             b(Key::F6, s, Rename),
             b(Key::R, cs, Rename),
             b(Key::L, ca, Reformat),

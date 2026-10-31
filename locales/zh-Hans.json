@@ -690,6 +690,8 @@
     "Features": "特性",
     "Input file": "输入文件",
     "The console": "控制台",
-    "Choose a file": "选择文件"
+    "Choose a file": "选择文件",
+    "Go to Super Method": "转到父方法",
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt 只能格式化整个文件。清除选择后再重新格式化此文件。"
   }
 }

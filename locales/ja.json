@@ -690,6 +690,8 @@
     "Features": "フィーチャー",
     "Input file": "入力ファイル",
     "The console": "コンソール",
-    "Choose a file": "ファイルを選択"
+    "Choose a file": "ファイルを選択",
+    "Go to Super Method": "スーパーメソッドへ移動",
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt はファイル全体を整形します。このファイルを整形するには選択を解除してください。"
   }
 }

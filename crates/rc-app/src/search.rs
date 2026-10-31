@@ -320,7 +320,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         UnfoldAll | Unfold => ico::EXPAND_ALL,
         Rename => ico::EDIT,
         FindUsages => ico::TW_FIND,
-        GotoDeclaration | GotoImplementation | GotoTypeDeclaration => ico::ARROW_RIGHT,
+        GotoDeclaration | GotoImplementation | GotoTypeDeclaration | GotoSuperMethod => ico::ARROW_RIGHT,
         ShowIntentions => ico::BULB,
         QuickDoc => ico::INFO,
         Complete => ico::METHOD,

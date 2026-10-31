@@ -705,6 +705,14 @@ impl CrabCraftApp {
             }
             Action::FindUsages => self.insight.navigate(doc, caret, NavKind::Usages),
             Action::Rename => self.insight.prepare_rename(doc),
+            Action::GotoSuperMethod => {
+                self.push_nav();
+                let doc = &self.docs.list[i];
+                self.insight.navigate(doc, caret, NavKind::Super);
+            }
+            Action::Reformat if self.runner.cargo_workspace.is_some() && !doc.editor.selection.primary().is_empty() => {
+                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
+            }
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
             _ => {}
