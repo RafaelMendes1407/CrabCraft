@@ -234,7 +234,7 @@ impl CrabCraftApp {
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
-                self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone());
+                self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
             } else {
                 self.insight.wait_for_trust(&ws.root);
             }
@@ -280,6 +280,13 @@ impl CrabCraftApp {
         }
     }
 
+    /// Switches the linter that runs on save.
+    pub fn toggle_linter(&mut self) {
+        self.settings.use_clippy = !self.settings.use_clippy;
+        let _ = self.settings.save();
+        self.insight.set_clippy(self.settings.use_clippy);
+    }
+
     /// The user trusts the open project: its code may now run for code analysis.
     pub fn trust_project(&mut self) {
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
@@ -287,7 +294,7 @@ impl CrabCraftApp {
             self.settings.trusted_projects.push(root.clone());
             let _ = self.settings.save();
         }
-        self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone());
+        self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -495,6 +502,11 @@ impl CrabCraftApp {
         }
         for p in modified {
             self.insight.did_save(&p);
+            if self.settings.format_on_save
+                && let Some(i) = self.docs.index_of(&p)
+            {
+                self.insight.format_saved(&self.docs.list[i]);
+            }
         }
     }
 
@@ -502,6 +514,11 @@ impl CrabCraftApp {
     pub fn handle_insight(&mut self, outputs: Vec<InsightOutput>) {
         for o in outputs {
             match o {
+                InsightOutput::SaveFormatted => {
+                    for e in self.docs.save_all() {
+                        self.notify(e, true);
+                    }
+                }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {

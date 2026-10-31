@@ -177,6 +177,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                     }
                     SettingsPage::Editor => {
+                        ui.label(tr("Rust"));
+                        ui.checkbox(&mut draft.format_on_save, tr("Reformat with rustfmt on save"));
+                        ui.end_row();
                         ui.label(tr("Font size"));
                         ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
                         ui.end_row();

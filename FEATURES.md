@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 56 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 58 |
+| 🚧 Em andamento | 10 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 161 |
+| ⬜ A fazer | 158 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -136,15 +136,15 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
 | I-19 | Suprimir inspeções (`#[allow]`) | ⬜ | M3 | |
-| I-20 | Linters externos: Cargo Check e Clippy | ⬜ | M3 | `check.command` do rust-analyzer |
-| I-21 | Widget do linter na barra de status | ⬜ | M3 | |
+| I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
+| I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
 | I-24 | Explicações inline de erros | ⬜ | M4 | |
 | I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
-| I-28 | rustfmt ao salvar e ao commitar | ⬜ | M3 | |
+| I-28 | rustfmt ao salvar e ao commitar | 🚧 | M3 | Ao salvar pronto e testado (Configurações > Editor); ao commitar falta |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | `textDocument/rangeFormatting` |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |

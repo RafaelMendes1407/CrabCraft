@@ -54,6 +54,10 @@ pub struct Settings {
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
     pub rust_analyzer_path: Option<PathBuf>,
+    /// Clippy instead of `cargo check` on save.
+    pub use_clippy: bool,
+    /// Reformat Rust files when they are saved.
+    pub format_on_save: bool,
     /// Projects whose `build.rs` and procedural macros may run.
     pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
@@ -86,6 +90,8 @@ impl Default for Settings {
             roslyn_path: None,
             netcoredbg_path: None,
             rust_analyzer_path: None,
+            use_clippy: false,
+            format_on_save: false,
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
             reopen_last: true,

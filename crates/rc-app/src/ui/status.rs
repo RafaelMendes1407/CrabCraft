@@ -36,6 +36,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 insight_widget(app, ui);
                 debugger_widget(app, ui);
+                linter_widget(app, ui);
                 let Some(doc) = app.docs.active_doc() else { return };
                 let e = &doc.editor;
                 let widget = |ui: &mut Ui, text: String, tip: &str| {
@@ -63,6 +64,17 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+/// The linter that runs on save in a Rust project (click: the other one).
+fn linter_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
+    if app.runner.cargo_workspace.is_none() {
+        return;
+    }
+    let name = if app.settings.use_clippy { "Clippy" } else { "Cargo Check" };
+    if theme::flat_button(ui, None, name, FontId::proportional(12.5), false, true).on_hover_text(tr("Linter that runs on save. Click to switch.")).clicked() {
+        app.toggle_linter();
+    }
 }
 
 /// netcoredbg download progress and the state of the debug session (click: Debug window).

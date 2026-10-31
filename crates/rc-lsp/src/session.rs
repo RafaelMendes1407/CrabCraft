@@ -55,6 +55,8 @@ pub struct LanguageSession {
     /// Recent stderr lines, for the error message when the server dies.
     stderr: Vec<String>,
     rust: bool,
+    /// The linter of rust-analyzer: Clippy instead of `cargo check`.
+    clippy: bool,
 }
 
 impl LanguageSession {
@@ -79,15 +81,16 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: false,
+            clippy: false,
         })
     }
 
     /// Starts rust-analyzer for `root`.
-    pub fn start_rust(program: &Path, root: &Path, waker: Waker) -> std::io::Result<Self> {
+    pub fn start_rust(program: &Path, root: &Path, clippy: bool, waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
         let client = crate::rust_analyzer::start(program, root, inbox.sender())?;
-        let init = crate::rust_analyzer::initialize(&client, root);
+        let init = crate::rust_analyzer::initialize(&client, root, clippy);
         Ok(LanguageSession {
             client,
             inbox,
@@ -103,6 +106,7 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: true,
+            clippy,
         })
     }
 
@@ -145,7 +149,7 @@ impl LanguageSession {
             match msg {
                 Incoming::Request { id, method, params } => {
                     if self.rust && method == "workspace/configuration" {
-                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params)));
+                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy)));
                     } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));
@@ -296,6 +300,12 @@ impl LanguageSession {
     }
 
     /// Files created/changed/deleted on disk (so the server reloads closed files).
+    /// Changes the linter of rust-analyzer, which then asks for its settings again.
+    pub fn set_clippy(&mut self, clippy: bool) {
+        self.clippy = clippy;
+        self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
+    }
+
     pub fn did_change_watched(&self, changes: &[(PathBuf, u8)]) {
         let list: Vec<Value> = changes.iter().map(|(p, t)| json!({ "uri": path_to_uri(p).as_str(), "type": t })).collect();
         self.client.notify_raw("workspace/didChangeWatchedFiles", json!({ "changes": list }));

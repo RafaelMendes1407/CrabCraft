@@ -60,6 +60,8 @@ pub enum InsightOutput {
     /// Rename: the symbol's current name (from prepareRename), to ask for the new one.
     AskRename { doc: u64, pos: usize, name: String },
     Message(String),
+    /// Reformatting on save changed a document, which must be written again.
+    SaveFormatted,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +101,11 @@ pub struct Insight {
     dotnet: PathBuf,
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
+    clippy: bool,
+    /// The saved document being reformatted, which is saved again when its edits apply.
+    format_on_save: Option<u64>,
+    /// Reformatted on save, waiting to be written.
+    save_again: Option<u64>,
     configured: Option<PathBuf>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
@@ -180,6 +187,9 @@ impl Insight {
             actions: None,
             action_resolve: None,
             accepted_resolve: None,
+            clippy: false,
+            format_on_save: None,
+            save_again: None,
             completion_anchor: 0,
             format: None,
             type_format: None,
@@ -221,12 +231,21 @@ impl Insight {
     }
 
     /// Starts rust-analyzer for a trusted project.
-    pub fn start_rust(&mut self, root: &Path, configured: Option<PathBuf>) {
+    pub fn start_rust(&mut self, root: &Path, configured: Option<PathBuf>, clippy: bool) {
         self.stop();
         self.root = Some(root.to_path_buf());
         self.rust = true;
+        self.clippy = clippy;
         self.configured = configured;
         self.launch();
+    }
+
+    /// Switches the linter that runs on save between Clippy and `cargo check`.
+    pub fn set_clippy(&mut self, clippy: bool) {
+        self.clippy = clippy;
+        if let Some(s) = &mut self.session {
+            s.set_clippy(clippy);
+        }
     }
 
     /// Stays off until the user trusts `root`.
@@ -244,7 +263,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.waker.clone()) {
+            match LanguageSession::start_rust(&program, &root, self.clippy, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;
@@ -400,6 +419,11 @@ impl Insight {
         }
         self.sync_documents(docs);
         self.poll_requests(docs, show_inlays, &mut out);
+        if let Some(doc) = self.save_again.take()
+            && docs.list.iter().any(|d| d.editor.id == doc && d.is_modified())
+        {
+            out.push(InsightOutput::SaveFormatted);
+        }
         out
     }
 
@@ -717,6 +741,9 @@ impl Insight {
         {
             let (doc, version) = (*doc, *version);
             self.format = None;
+            if self.format_on_save.take() == Some(doc) {
+                self.save_again = Some(doc);
+            }
             if let (Ok(Some(edits)), Some(d)) = (r, docs.list.iter_mut().find(|d| d.editor.id == doc))
                 && d.editor.buffer.version() == version
             {
@@ -1180,6 +1207,14 @@ impl Insight {
     }
 
     /// ⌥⌘L: formats the document, or the selection.
+    /// Reformats a Rust file that was just saved.
+    pub fn format_saved(&mut self, doc: &Doc) {
+        if self.rust && self.session.is_some() && doc.editor.selection.primary().is_empty() {
+            self.format_on_save = Some(doc.editor.id);
+            self.format(doc);
+        }
+    }
+
     pub fn format(&mut self, doc: &Doc) {
         let Some(session) = &self.session else { return };
         let rope = doc.editor.buffer.rope();

@@ -661,6 +661,9 @@
     "rust-analyzer": "rust-analyzer",
     "Open Folder or Project": "打开文件夹或项目",
     "Reformat Code is not available for this file": "此文件无法重新格式化代码",
-    "One NAME=value per line.": "每行一个 NAME=value。"
+    "One NAME=value per line.": "每行一个 NAME=value。",
+    "Linter that runs on save. Click to switch.": "保存时运行的 Linter。点击切换。",
+    "Reformat with rustfmt on save": "保存时使用 rustfmt 格式化",
+    "Rust": "Rust"
   }
 }

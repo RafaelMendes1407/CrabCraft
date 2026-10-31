@@ -661,6 +661,9 @@
     "rust-analyzer": "rust-analyzer",
     "Open Folder or Project": "Abrir carpeta o proyecto",
     "Reformat Code is not available for this file": "Reformatear código no está disponible para este archivo",
-    "One NAME=value per line.": "Un NOMBRE=valor por línea."
+    "One NAME=value per line.": "Un NOMBRE=valor por línea.",
+    "Linter that runs on save. Click to switch.": "Linter que se ejecuta al guardar. Haz clic para cambiar.",
+    "Reformat with rustfmt on save": "Reformatear con rustfmt al guardar",
+    "Rust": "Rust"
   }
 }

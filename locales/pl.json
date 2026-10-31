@@ -661,6 +661,9 @@
     "rust-analyzer": "rust-analyzer",
     "Open Folder or Project": "Otwórz folder lub projekt",
     "Reformat Code is not available for this file": "Formatowanie kodu nie jest dostępne dla tego pliku",
-    "One NAME=value per line.": "Jedno NAZWA=wartość w wierszu."
+    "One NAME=value per line.": "Jedno NAZWA=wartość w wierszu.",
+    "Linter that runs on save. Click to switch.": "Linter uruchamiany przy zapisie. Kliknij, aby zmienić.",
+    "Reformat with rustfmt on save": "Formatuj rustfmt przy zapisie",
+    "Rust": "Rust"
   }
 }

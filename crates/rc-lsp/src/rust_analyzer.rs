@@ -16,10 +16,10 @@ pub fn start(program: &Path, workspace: &Path, incoming: Outbox<Incoming>) -> st
 }
 
 /// The settings sent at start and when the server asks for them.
-pub fn config() -> Value {
+pub fn config(clippy: bool) -> Value {
     json!({
         "checkOnSave": true,
-        "check": { "command": "check" },
+        "check": { "command": if clippy { "clippy" } else { "check" } },
         "cargo": { "buildScripts": { "enable": true } },
         "procMacro": { "enable": true },
         "completion": { "autoimport": { "enable": true }, "postfix": { "enable": true } },
@@ -49,7 +49,7 @@ fn capabilities() -> Value {
     caps
 }
 
-pub fn initialize(client: &Client, root: &Path) -> Pending<lsp_types::InitializeResult> {
+pub fn initialize(client: &Client, root: &Path, clippy: bool) -> Pending<lsp_types::InitializeResult> {
     let uri = path_to_uri(root);
     let name = root.file_name().map_or_else(|| "workspace".to_string(), |n| n.to_string_lossy().into_owned());
     client.request_raw(
@@ -61,15 +61,15 @@ pub fn initialize(client: &Client, root: &Path) -> Pending<lsp_types::Initialize
             "rootUri": uri.as_str(),
             "workspaceFolders": [{ "uri": uri.as_str(), "name": name }],
             "capabilities": capabilities(),
-            "initializationOptions": config()
+            "initializationOptions": config(clippy)
         }),
     )
 }
 
 /// `workspace/configuration` of rust-analyzer: the settings once per requested section.
-pub fn configuration_reply(params: &Value) -> Value {
+pub fn configuration_reply(params: &Value, clippy: bool) -> Value {
     let count = params.get("items").and_then(Value::as_array).map_or(0, Vec::len);
-    Value::Array(vec![config(); count])
+    Value::Array(vec![config(clippy); count])
 }
 
 /// Whether an `experimental/serverStatus` notification means analysis finished.
@@ -175,8 +175,14 @@ mod tests {
 
     #[test]
     fn the_configuration_answers_every_section() {
-        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] })).as_array().map(Vec::len), Some(2));
-        assert_eq!(configuration_reply(&json!({})).as_array().map(Vec::len), Some(0));
+        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false).as_array().map(Vec::len), Some(2));
+        assert_eq!(configuration_reply(&json!({}), false).as_array().map(Vec::len), Some(0));
+    }
+
+    #[test]
+    fn the_linter_is_the_check_command() {
+        assert_eq!(config(false)["check"]["command"], json!("check"));
+        assert_eq!(config(true)["check"]["command"], json!("clippy"));
     }
 
     #[test]

@@ -837,3 +837,39 @@ fn refactorings_of_the_language_server() {
     assert!(c.items.iter().any(|it| it.label.starts_with("if")), "{:?}", c.items.iter().map(|i| &i.label).take(30).collect::<Vec<_>>());
     app.insight.stop();
 }
+
+#[test]
+fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let text = "fn main(){\n    let v = vec![1];\n    if v.len() == 0 {\n        println!(\"empty\");\n    }\n}\n";
+    write(&root.join("src/main.rs"), text);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.settings.format_on_save = true;
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let lint = |a: &mut CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("len_zero")));
+    assert!(!lint(&mut app), "cargo check has no such lint");
+
+    app.toggle_linter();
+    assert!(app.settings.use_clippy);
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "\n");
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(1) {
+        let _ = app.insight.update(&mut app.docs, true);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    app.save_all_docs();
+    pump(&mut app, "rustfmt to change the file on disk", |_| std::fs::read_to_string(&main).is_ok_and(|t| t.starts_with("fn main() {\n")));
+    pump(&mut app, "the lint of Clippy", |a| lint(a));
+    app.insight.stop();
+}

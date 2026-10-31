@@ -661,6 +661,9 @@
     "rust-analyzer": "rust-analyzer",
     "Open Folder or Project": "フォルダーまたはプロジェクトを開く",
     "Reformat Code is not available for this file": "このファイルではコードの再フォーマットを使用できません",
-    "One NAME=value per line.": "1 行に 1 つ NAME=value。"
+    "One NAME=value per line.": "1 行に 1 つ NAME=value。",
+    "Linter that runs on save. Click to switch.": "保存時に実行するリンターです。クリックで切り替えます。",
+    "Reformat with rustfmt on save": "保存時に rustfmt でフォーマット",
+    "Rust": "Rust"
   }
 }
