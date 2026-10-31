@@ -52,7 +52,7 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.vcs.open_diff(&c.path);
         }
     });
-    let list_h = (ui.available_height() - 170.0).max(80.0);
+    let list_h = (ui.available_height() - 198.0).max(80.0);
     let mut open_diff = None;
     let mut open_file = None;
     egui::ScrollArea::vertical().id_salt("commit_changes").max_height(list_h).auto_shrink([false, false]).show(ui, |ui| {
@@ -130,15 +130,16 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
     });
+    if app.runner.cargo_workspace.is_some() && child.checkbox(&mut app.settings.format_on_commit, tr("Reformat with rustfmt")).changed() {
+        let _ = app.settings.save();
+    }
     child.horizontal(|ui| {
         let busy = app.vcs.busy.is_some();
         if ui.add_enabled_ui(!busy, |ui| theme::primary_button(ui, tr("Commit"))).inner.clicked() {
-            app.save_all_docs();
-            app.vcs.commit(false);
+            app.commit_changes(false);
         }
         if ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Commit and Push…"))).inner.clicked() {
-            app.save_all_docs();
-            app.vcs.commit(true);
+            app.commit_changes(true);
         }
         if busy {
             ui.add(egui::Spinner::new().size(14.0));

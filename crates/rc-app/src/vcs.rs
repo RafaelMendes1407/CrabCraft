@@ -202,10 +202,21 @@ impl Vcs {
         });
     }
 
-    /// Commits the included changes (and pushes when `push`).
-    pub fn commit(&mut self, push: bool) {
+    /// The changes that go into the next commit, relative to the repository.
+    pub fn included(&self) -> Vec<String> {
+        self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect()
+    }
+
+    /// The folder of the repository.
+    pub fn root(&self) -> Option<&Path> {
+        self.repo.as_ref().map(|r| r.root())
+    }
+
+    /// Commits the included changes (and pushes when `push`), formatting `format` first; if
+    /// that fails nothing is committed.
+    pub fn commit(&mut self, push: bool, format: Option<(rc_cargo::Cargo, Vec<rc_cargo::FormatFile>)>) {
         let Some(repo) = self.repo.clone() else { return };
-        let only: Vec<String> = self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect();
+        let only = self.included();
         if only.is_empty() && !self.amend {
             self.error = Some(tr("Select the files to commit").into());
             return;
@@ -216,6 +227,9 @@ impl Vcs {
         }
         let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, ..Default::default() };
         self.op(if push { "commit_push" } else { "commit" }, async move {
+            if let Some((cargo, files)) = format {
+                rc_cargo::format_files(&cargo, &files).await.map_err(|e| rc_vcs::GitError::BeforeCommit(format_failure(e)))?;
+            }
             repo.commit(&opts).await?;
             if push {
                 repo.push(&PushOptions::default(), None, None).await?;
@@ -528,5 +542,16 @@ mod tests {
     fn dates() {
         assert_eq!(super::format_date(0), "1970-01-01");
         assert_eq!(super::format_date(1_700_000_000), "2023-11-14");
+    }
+}
+
+fn format_failure(error: rc_cargo::FormatError) -> String {
+    match error {
+        rc_cargo::FormatError::Missing => tr("rustfmt was not found. Install it with: rustup component add rustfmt").to_string(),
+        rc_cargo::FormatError::File { path, message } => {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let first = message.lines().next().unwrap_or_default().to_string();
+            trf("Not committed: rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)])
+        }
     }
 }

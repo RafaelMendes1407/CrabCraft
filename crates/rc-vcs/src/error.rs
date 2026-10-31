@@ -17,6 +17,9 @@ pub enum GitError {
     NotARepository(PathBuf),
     #[error("Nothing to commit")]
     NothingToCommit,
+    /// A step before the commit failed; it carries a message ready to show.
+    #[error("{0}")]
+    BeforeCommit(String),
     #[error("No local changes to stash")]
     NothingToStash,
     #[error("Resolve the merge conflicts first")]
@@ -65,6 +68,7 @@ impl GitError {
             UnsupportedVersion { found, required } => ("Git {found} is too old (CrabCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())]),
             NotARepository(p) => ("{path} is not inside a Git repository", vec![("path", p.display().to_string())]),
             NothingToCommit => ("Nothing to commit", vec![]),
+            BeforeCommit(m) => ("{message}", vec![("message", m.clone())]),
             NothingToStash => ("No local changes to stash", vec![]),
             Conflicts(_) => ("Resolve the merge conflicts first", vec![]),
             AuthenticationRequired(_) => ("Authentication required", vec![]),

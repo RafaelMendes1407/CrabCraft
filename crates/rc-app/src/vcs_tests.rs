@@ -70,7 +70,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
 
     // Commit, then a new branch.
     app.vcs.message = "Second".into();
-    app.vcs.commit(false);
+    app.vcs.commit(false, None);
     pump(&mut app, "commit", |a| a.vcs.busy.is_none() && a.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Committed")));
     pump(&mut app, "clean status", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.is_empty()));
     app.vcs.new_branch("feature/x");

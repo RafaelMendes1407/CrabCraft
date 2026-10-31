@@ -680,6 +680,10 @@
     "Standard library": "Bibliothèque standard",
     "Not found. Install it with: rustup component add rust-src": "Introuvable. Installez-la avec : rustup component add rust-src",
     "rust-analyzer path": "Chemin de rust-analyzer",
-    "External Libraries": "Bibliothèques externes"
+    "External Libraries": "Bibliothèques externes",
+    "Reformat with rustfmt": "Reformater avec rustfmt",
+    "rustfmt was not found. Install it with: rustup component add rustfmt": "rustfmt est introuvable. Installez-le avec : rustup component add rustfmt",
+    "Not committed: rustfmt failed on {file}: {error}": "Non validé : rustfmt a échoué sur {file} : {error}",
+    "{message}": "{message}"
   }
 }

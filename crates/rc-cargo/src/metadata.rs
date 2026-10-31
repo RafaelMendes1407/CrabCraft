@@ -28,6 +28,7 @@ pub struct Target {
 pub struct Package {
     pub name: String,
     pub manifest: PathBuf,
+    pub edition: String,
     pub targets: Vec<Target>,
 }
 
@@ -42,6 +43,12 @@ pub struct CargoWorkspace {
 }
 
 impl CargoWorkspace {
+    /// The edition of the member that owns `path`, the innermost one when members are nested.
+    pub fn edition_of(&self, path: &Path) -> Option<&str> {
+        let folder = |p: &&Package| p.manifest.parent().map(Path::to_path_buf).unwrap_or_default();
+        self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count()).map(|p| p.edition.as_str())
+    }
+
     /// Runnable binaries as `(package, target)`.
     pub fn binaries(&self) -> impl Iterator<Item = (&Package, &Target)> {
         self.packages.iter().flat_map(|p| p.targets.iter().filter(|t| t.kind == TargetKind::Bin).map(move |t| (p, t)))
@@ -169,7 +176,7 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
             let kinds: Vec<&str> = t.get("kind").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).collect();
             targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")? });
         }
-        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, targets });
+        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets });
     }
     Ok(CargoWorkspace { manifest: root.join("Cargo.toml"), root, target_dir, packages })
 }

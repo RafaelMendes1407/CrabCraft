@@ -909,6 +909,79 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
 }
 
 #[test]
+fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/left.rs"), "fn  left( ){}\n");
+    write(&root.join(".gitignore"), "target\n");
+    let root = root.canonicalize().unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git").args(args).current_dir(&root).output().unwrap();
+        assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Test"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "First"]);
+    let (lib, left) = (root.join("src/lib.rs"), root.join("src/left.rs"));
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+
+    let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}; error {:?}", app.vcs.error);
+            app.vcs.update(&mut app.docs, true);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let changed = |app: &mut CrabCraftApp, paths: &'static [&'static str]| {
+        app.vcs.refresh();
+        wait(app, "the changes", &|a| paths.iter().all(|p| a.vcs.changes().iter().any(|c| c.path == *p)));
+    };
+    wait(&mut app, "the status", &|a| a.vcs.status.is_some());
+
+    // Formatting is asked for: the included file is committed formatted, the excluded one stays.
+    app.settings.format_on_commit = true;
+    std::fs::write(&lib, "pub  fn  a( ){}\n").unwrap();
+    std::fs::write(&left, "fn  left( ) {}\n").unwrap();
+    changed(&mut app, &["src/lib.rs", "src/left.rs"]);
+    app.vcs.excluded.insert("src/left.rs".into());
+    app.vcs.message = "Formatted".into();
+    app.commit_changes(false);
+    wait(&mut app, "the commit", &|a| a.vcs.busy.is_none());
+    assert_eq!(app.vcs.error, None);
+    assert_eq!(git(&["show", "HEAD:src/lib.rs"]), "pub fn a() {}\n");
+    assert_eq!(std::fs::read_to_string(&left).unwrap(), "fn  left( ) {}\n");
+    app.vcs.excluded.clear();
+
+    // A file rustfmt cannot read stops the commit and changes nothing.
+    let head = git(&["rev-parse", "HEAD"]);
+    std::fs::write(&lib, "pub fn broken( {\n").unwrap();
+    changed(&mut app, &["src/lib.rs", "src/left.rs"]);
+    app.vcs.message = "Must not exist".into();
+    app.commit_changes(false);
+    wait(&mut app, "the failure", &|a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.as_deref().is_some_and(|e| e.contains("lib.rs")), "{:?}", app.vcs.error);
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(std::fs::read_to_string(&left).unwrap(), "fn  left( ) {}\n");
+    assert_eq!(std::fs::read_to_string(&lib).unwrap(), "pub fn broken( {\n");
+
+    // Not asked for: the text goes in as it is.
+    app.settings.format_on_commit = false;
+    app.vcs.message = "As it is".into();
+    app.commit_changes(false);
+    wait(&mut app, "the plain commit", &|a| a.vcs.busy.is_none());
+    assert_eq!(app.vcs.error, None);
+    assert_eq!(git(&["show", "HEAD:src/lib.rs"]), "pub fn broken( {\n");
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

@@ -321,6 +321,29 @@ impl CrabCraftApp {
         self.libraries_load = Some(inbox);
     }
 
+    /// Saves and commits, with the Rust files of the commit formatted if that was asked for.
+    pub fn commit_changes(&mut self, push: bool) {
+        self.save_all_docs();
+        let format = self.commit_format();
+        self.vcs.commit(push, format);
+    }
+
+    /// The tool and the files to format before a commit.
+    fn commit_format(&self) -> Option<(rc_cargo::Cargo, Vec<rc_cargo::FormatFile>)> {
+        if !self.settings.format_on_commit {
+            return None;
+        }
+        let workspace = self.runner.cargo_workspace.as_ref()?;
+        let root = self.vcs.root()?;
+        let files = self.vcs.included().into_iter().filter_map(|relative| {
+            let path = root.join(relative);
+            let rust = path.extension().is_some_and(|e| e == "rs") && path.is_file();
+            let edition = workspace.edition_of(&path).filter(|_| rust)?.to_string();
+            Some(rc_cargo::FormatFile { path, edition })
+        });
+        Some((self.runner.cargo_tool().ok()?, files.collect()))
+    }
+
     /// Reads the versions of the toolchain in the background, once.
     pub fn load_toolchain(&mut self) {
         if let Some(inbox) = &self.toolchain_load {

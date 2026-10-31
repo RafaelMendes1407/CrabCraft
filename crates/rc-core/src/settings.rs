@@ -58,6 +58,8 @@ pub struct Settings {
     pub use_clippy: bool,
     /// Reformat Rust files when they are saved.
     pub format_on_save: bool,
+    /// Reformat the Rust files of a commit before committing them.
+    pub format_on_commit: bool,
     /// Projects whose `build.rs` and procedural macros may run.
     pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
@@ -92,6 +94,7 @@ impl Default for Settings {
             rust_analyzer_path: None,
             use_clippy: false,
             format_on_save: false,
+            format_on_commit: false,
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
             reopen_last: true,

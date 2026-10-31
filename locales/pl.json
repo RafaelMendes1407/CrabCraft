@@ -680,6 +680,10 @@
     "Standard library": "Biblioteka standardowa",
     "Not found. Install it with: rustup component add rust-src": "Nie znaleziono. Zainstaluj poleceniem: rustup component add rust-src",
     "rust-analyzer path": "Ścieżka rust-analyzer",
-    "External Libraries": "Biblioteki zewnętrzne"
+    "External Libraries": "Biblioteki zewnętrzne",
+    "Reformat with rustfmt": "Sformatuj za pomocą rustfmt",
+    "rustfmt was not found. Install it with: rustup component add rustfmt": "Nie znaleziono rustfmt. Zainstaluj poleceniem: rustup component add rustfmt",
+    "Not committed: rustfmt failed on {file}: {error}": "Nie zatwierdzono: rustfmt nie powiódł się dla {file}: {error}",
+    "{message}": "{message}"
   }
 }

@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 67 |
-| 🚧 Em andamento | 5 |
+| ✅ Pronto | 68 |
+| 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
 | ⬜ A fazer | 154 |
@@ -144,7 +144,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
-| I-28 | rustfmt ao salvar e ao commitar | 🚧 | M3 | Ao salvar pronto e testado (Configurações > Editor); ao commitar falta |
+| I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | `textDocument/rangeFormatting` |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
