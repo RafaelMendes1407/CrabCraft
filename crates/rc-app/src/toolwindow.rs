@@ -21,6 +21,7 @@ pub enum ToolWindow {
     Notifications,
     Nuget,
     Cargo,
+    Hierarchy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +57,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 14] = [
+    pub const ALL: [ToolWindow; 15] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -65,6 +66,7 @@ impl ToolWindow {
         ToolWindow::Tests,
         ToolWindow::Build,
         ToolWindow::Find,
+        ToolWindow::Hierarchy,
         ToolWindow::Problems,
         ToolWindow::Terminal,
         ToolWindow::Git,
@@ -89,6 +91,7 @@ impl ToolWindow {
             ToolWindow::Notifications => "notifications",
             ToolWindow::Nuget => "nuget",
             ToolWindow::Cargo => "cargo",
+            ToolWindow::Hierarchy => "hierarchy",
         }
     }
 
@@ -108,6 +111,7 @@ impl ToolWindow {
             ToolWindow::Notifications => tr("Notifications"),
             ToolWindow::Nuget => "NuGet",
             ToolWindow::Cargo => "Cargo",
+            ToolWindow::Hierarchy => tr("Hierarchy"),
         }
     }
 
@@ -127,6 +131,7 @@ impl ToolWindow {
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
             ToolWindow::Nuget => ico::PACKAGE,
             ToolWindow::Cargo => ico::TW_DEPENDENCIES,
+            ToolWindow::Hierarchy => ico::HIERARCHY,
         }
     }
 

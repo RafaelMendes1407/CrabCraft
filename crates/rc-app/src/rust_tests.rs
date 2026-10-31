@@ -1286,8 +1286,7 @@ fn generate_offers_only_what_writes_code() {
 }
 
 #[test]
-fn the_call_hierarchy_lists_callers_and_callees() {
-    use crate::insight::InsightOutput;
+fn the_call_hierarchy_is_a_tree_of_callers_and_callees() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("project");
@@ -1301,18 +1300,37 @@ fn the_call_hierarchy_lists_callers_and_callees() {
     app.open_file(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
-    let mut ask = |app: &mut CrabCraftApp, name: &str, callers: bool| {
+    // The labels of the open tree, as (depth, name), once `want` lines are loaded.
+    let shown = |app: &CrabCraftApp| app.insight.call_tree.as_ref().map_or(Vec::new(), |t| t.rows().iter().map(|(p, n)| (p.len(), n.name.clone(), n.calls)).collect::<Vec<_>>());
+    let ask = |app: &mut CrabCraftApp, name: &str, callers: bool| {
+        app.insight.call_tree = None;
         app.insight.call_hierarchy(&app.docs.list[i], text.find(name).unwrap() + 3, callers);
-        output(app, "the calls", |o| match o {
-            InsightOutput::Usages { title, targets } => Some(Ok((title.clone(), targets.iter().map(|t| t.line).collect::<Vec<_>>()))),
-            InsightOutput::Message(m) => Some(Err(m.clone())),
-            _ => None,
-        })
+        pump(app, "the first level", |a| a.insight.call_tree.as_ref().is_some_and(|t| t.root.children.is_some()));
     };
-    assert_eq!(ask(&mut app, "fn leaf", true), Ok(("Callers of leaf".to_string(), vec![2, 3])));
-    assert_eq!(ask(&mut app, "fn main", false), Ok(("Calls made by main".to_string(), vec![1, 5])));
-    assert_eq!(ask(&mut app, "fn main", true), Err("No callers found".to_string()));
-    assert_eq!(ask(&mut app, "fn leaf", false), Err("No calls found".to_string()));
+    let row = |depth: usize, name: &str, calls: usize| (depth, name.to_string(), calls);
+
+    ask(&mut app, "fn leaf", true);
+    assert!(app.insight.call_tree.as_ref().unwrap().callers);
+    assert_eq!(shown(&app), [row(0, "leaf", 1), row(1, "middle", 2)]);
+    assert_eq!(app.insight.call_tree.as_ref().unwrap().root.children.as_ref().unwrap()[0].target.as_ref().unwrap().line, 2);
+
+    // Opening a caller loads who calls it, and a closed node hides them again.
+    app.insight.toggle_call(&[0]);
+    pump(&mut app, "the second level", |a| shown(a).len() == 3);
+    assert_eq!(shown(&app)[2], row(2, "main", 1));
+    app.insight.toggle_call(&[0]);
+    assert_eq!(shown(&app).len(), 2);
+
+    ask(&mut app, "fn main", false);
+    assert_eq!(shown(&app), [row(0, "main", 1), row(1, "middle", 1), row(1, "lonely", 1)]);
+
+    // The same function, in the other direction.
+    app.insight.switch_calls();
+    pump(&mut app, "the callers of main", |a| a.insight.call_tree.as_ref().is_some_and(|t| t.callers && t.root.children.is_some()));
+    assert_eq!(shown(&app), [row(0, "main", 1)]);
+
+    ask(&mut app, "fn leaf", false);
+    assert_eq!(shown(&app), [row(0, "leaf", 1)]);
     app.insight.stop();
 }
 

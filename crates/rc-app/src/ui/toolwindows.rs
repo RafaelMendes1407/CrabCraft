@@ -32,6 +32,12 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
+        ToolWindow::Hierarchy => {
+            if header(ui, tw.title()) {
+                app.toggle_tool(tw);
+            }
+            call_hierarchy(app, ui);
+        }
         ToolWindow::Tests => crate::ui::run_windows::tests(app, ui),
         ToolWindow::Terminal => crate::ui::run_windows::terminal(app, ui),
         ToolWindow::Commit => crate::ui::git::commit_window(app, ui),
@@ -158,6 +164,62 @@ fn structure(app: &mut CrabCraftApp, ui: &mut Ui) {
     {
         d.editor.goto(line, col);
         app.focus_editor = true;
+    }
+}
+
+fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let Some(tree) = &app.insight.call_tree else {
+        let (title, hint) = empty_text(ToolWindow::Hierarchy);
+        empty_state(ui, ToolWindow::Hierarchy.icon(), title, hint);
+        return;
+    };
+    let p = rc_kit::pal(ui);
+    let direction = if tree.callers { tr("Callers of {name}") } else { tr("Calls made by {name}") };
+    let switch_label = if tree.callers { tr("Show calls") } else { tr("Show callers") };
+    let heading = direction.replace("{name}", &tree.root.name);
+    let mut switch = false;
+    let mut toggle = None;
+    let mut goto = None;
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new(heading).size(12.5).color(p.muted));
+        switch = ui.button(switch_label).clicked();
+    });
+    egui::ScrollArea::both().id_salt("call_tree").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (path, node) in tree.rows() {
+            let name = if node.calls > 1 { format!("{} ({})", node.name, node.calls) } else { node.name.clone() };
+            let resp = list_row(ui, path.len() + 1, crate::convert::symbol_icon(rc_lsp::lsp_types::SymbolKind::FUNCTION), &name, &node.detail, false);
+            let arrow = Rect::from_min_size(pos2(resp.rect.left() + 8.0 + path.len() as f32 * 16.0, resp.rect.top() + 4.0), vec2(16.0, 16.0));
+            let empty = node.open && node.children.as_ref().is_some_and(Vec::is_empty);
+            if !empty {
+                icons::paint(ui.painter(), arrow, if node.open { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT }, &p, true);
+            }
+            if resp.clicked() {
+                let on_arrow = resp.interact_pointer_pos().is_some_and(|at| arrow.contains(at));
+                if on_arrow {
+                    toggle = Some(path.clone());
+                } else {
+                    goto = node.target.clone();
+                }
+            }
+            if resp.double_clicked() {
+                toggle = Some(path.clone());
+            }
+            if node.open && node.children.as_ref().is_some_and(Vec::is_empty) {
+                let text = if tree.callers { tr("No callers found") } else { tr("No calls found") };
+                list_row(ui, path.len() + 2, rc_kit::ico::INFO, text, "", false);
+            }
+        }
+    });
+    if switch {
+        app.insight.switch_calls();
+    }
+    if let Some(path) = toggle {
+        app.insight.toggle_call(&path);
+    }
+    if let Some(t) = goto {
+        app.open_at(&t.path, t.line, t.col);
     }
 }
 
@@ -330,6 +392,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Cargo => ("Cargo", ""),
+        ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
     }
 }

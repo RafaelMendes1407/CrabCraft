@@ -51,6 +51,8 @@ pub struct Target {
 /// Results the UI shows outside the editor.
 #[derive(Clone, Debug)]
 pub enum InsightOutput {
+    /// The call tree is ready to show.
+    ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
     Navigate(Target),
     /// Several results: show them in a chooser / the Find window.
@@ -84,29 +86,6 @@ fn action_title(action: &lsp::CodeActionOrCommand) -> &str {
 /// Whether a code action belongs in the Generate popup.
 fn generates_code(title: &str) -> bool {
     ["Generate", "Implement", "Add missing"].iter().any(|start| title.starts_with(start))
-}
-
-/// Where a request for the call hierarchy stands.
-enum CallStep {
-    Prepare,
-    /// The name of the function asked about.
-    Calls(String),
-}
-
-/// Turns a reply of `callHierarchy/*` into locations: every call site of a caller, or the
-/// declaration of each function called.
-fn call_locations(reply: &Value, callers: bool) -> Value {
-    let calls = reply.as_array().map_or(&[][..], Vec::as_slice);
-    let mut out = Vec::new();
-    for call in calls {
-        if callers {
-            let (Some(from), Some(ranges)) = (call.get("from"), call.get("fromRanges").and_then(Value::as_array)) else { continue };
-            out.extend(ranges.iter().map(|r| json!({ "uri": from.get("uri"), "range": r })));
-        } else if let Some(to) = call.get("to") {
-            out.push(json!({ "uri": to.get("uri"), "range": to.get("selectionRange") }));
-        }
-    }
-    Value::Array(out)
 }
 
 /// Document structure entry (Structure window, ⌘F12).
@@ -169,7 +148,12 @@ pub struct Insight {
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
-    calls: Option<(bool, CallStep, Pending<Value>)>,
+    /// The first step of a call hierarchy.
+    calls: Option<(bool, Pending<Value>)>,
+    /// The levels being loaded, with the tree they belong to.
+    call_levels: Vec<(u64, Vec<usize>, Pending<Value>)>,
+    call_generation: u64,
+    pub call_tree: Option<crate::call_tree::CallTree>,
     /// The pending code actions are for Alt+Insert.
     generate_only: bool,
     /// A navigation asked for while the projects were still loading: repeated once they are.
@@ -243,6 +227,9 @@ impl Insight {
             signature: None,
             nav: None,
             calls: None,
+            call_levels: Vec::new(),
+            call_generation: 0,
+            call_tree: None,
             generate_only: false,
             nav_retry: None,
             rename_prepare: None,
@@ -379,6 +366,8 @@ impl Insight {
         self.problems.clear();
         self.problem_text.clear();
         self.structure.clear();
+        self.call_tree = None;
+        self.call_levels.clear();
         self.status = InsightStatus::Idle;
     }
 
@@ -859,36 +848,70 @@ impl Insight {
     pub fn call_hierarchy(&mut self, doc: &Doc, pos: usize, callers: bool) {
         let Some(session) = &self.session else { return };
         let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
-        self.calls = Some((callers, CallStep::Prepare, session.client.request_raw("textDocument/prepareCallHierarchy", params)));
+        self.calls = Some((callers, session.client.request_raw("textDocument/prepareCallHierarchy", params)));
     }
 
     fn poll_calls(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
-        let Some((_, _, p)) = &mut self.calls else { return };
-        let Some(reply) = p.poll() else { return };
-        let Some((callers, step, _)) = self.calls.take() else { return };
-        let reply = reply.unwrap_or(Value::Null);
-        match step {
-            CallStep::Prepare => {
-                let item = reply.as_array().and_then(|a| a.first()).cloned();
-                match (item, &self.session) {
-                    (Some(item), Some(session)) => {
-                        let name = item.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-                        let method = if callers { "callHierarchy/incomingCalls" } else { "callHierarchy/outgoingCalls" };
-                        self.calls = Some((callers, CallStep::Calls(name), session.client.request_raw(method, json!({ "item": item }))));
-                    }
-                    _ => out.push(InsightOutput::Message(tr("Place the caret on a function").into())),
+        use crate::call_tree::{CallNode, CallTree, entries};
+        if let Some((_, p)) = &mut self.calls
+            && let Some(reply) = p.poll()
+            && let Some((callers, _)) = self.calls.take()
+        {
+            let reply = reply.unwrap_or(Value::Null);
+            match reply.as_array().and_then(|a| a.first()).cloned() {
+                Some(item) => {
+                    let place = json!([{ "uri": item.get("uri"), "range": item.get("selectionRange") }]);
+                    let target = locations(&place, docs).into_iter().next();
+                    self.call_tree = Some(CallTree { callers, root: CallNode::new(item, target, 1) });
+                    self.call_generation += 1;
+                    self.toggle_call(&[]);
+                    out.push(InsightOutput::ShowCallTree);
                 }
-            }
-            CallStep::Calls(name) => {
-                let targets = locations(&call_locations(&reply, callers), docs);
-                if targets.is_empty() {
-                    out.push(InsightOutput::Message(if callers { tr("No callers found") } else { tr("No calls found") }.into()));
-                } else {
-                    let title = if callers { trf("Callers of {name}", &[("name", &name)]) } else { trf("Calls made by {name}", &[("name", &name)]) };
-                    out.push(InsightOutput::Usages { title, targets });
-                }
+                None => out.push(InsightOutput::Message(tr("Place the caret on a function").into())),
             }
         }
+        let mut finished = Vec::new();
+        for (i, (_, _, p)) in self.call_levels.iter_mut().enumerate() {
+            if let Some(reply) = p.poll() {
+                finished.push((i, reply.unwrap_or(Value::Null)));
+            }
+        }
+        for (i, reply) in finished.into_iter().rev() {
+            let (generation, path, _) = self.call_levels.remove(i);
+            let tree = self.call_tree.as_mut().filter(|_| generation == self.call_generation);
+            let Some(tree) = tree else { continue };
+            let children = entries(&reply, tree.callers).into_iter().map(|(item, range, calls)| {
+                let place = json!([{ "uri": item.get("uri"), "range": range }]);
+                CallNode::new(item, locations(&place, docs).into_iter().next(), calls)
+            });
+            let children = children.collect();
+            if let Some(node) = tree.node_mut(&path) {
+                node.children = Some(children);
+            }
+        }
+    }
+
+    /// Opens or closes a node of the call tree, loading its children the first time.
+    pub fn toggle_call(&mut self, path: &[usize]) {
+        let callers = self.call_tree.as_ref().is_some_and(|t| t.callers);
+        let Some(node) = self.call_tree.as_mut().and_then(|t| t.node_mut(path)) else { return };
+        node.open = !node.open;
+        let loaded = node.children.is_some() || !node.open;
+        let item = node.item.clone();
+        let loading = self.call_levels.iter().any(|(g, p, _)| *g == self.call_generation && p == path);
+        if let (false, false, Some(session)) = (loaded, loading, &self.session) {
+            let method = if callers { "callHierarchy/incomingCalls" } else { "callHierarchy/outgoingCalls" };
+            self.call_levels.push((self.call_generation, path.to_vec(), session.client.request_raw(method, json!({ "item": item }))));
+        }
+    }
+
+    /// Shows the other direction for the same function.
+    pub fn switch_calls(&mut self) {
+        let Some(tree) = self.call_tree.take() else { return };
+        let root = crate::call_tree::CallNode::new(tree.root.item, tree.root.target, 1);
+        self.call_tree = Some(crate::call_tree::CallTree { callers: !tree.callers, root });
+        self.call_generation += 1;
+        self.toggle_call(&[]);
     }
 
     /// Go to Declaration / Implementation / Usages results.

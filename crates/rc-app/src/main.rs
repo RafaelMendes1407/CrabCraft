@@ -4,6 +4,7 @@ mod app;
 mod convert;
 mod debugger;
 mod insight;
+mod call_tree;
 mod item_templates;
 mod run_anything;
 mod runner;

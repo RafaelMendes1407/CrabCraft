@@ -724,6 +724,11 @@
     "Imports optimized": "インポートを最適化しました",
     "Nothing to optimize in the imports": "最適化するインポートはありません",
     "The Rust analysis is not running": "Rust の解析は実行されていません",
-    "Optimize Imports": "インポートを最適化"
+    "Optimize Imports": "インポートを最適化",
+    "Hierarchy": "階層",
+    "No hierarchy": "階層はありません",
+    "Place the caret on a function and press Ctrl+Alt+H.": "関数にカーソルを置いて Ctrl+Alt+H を押してください。",
+    "Show calls": "呼び出しを表示",
+    "Show callers": "呼び出し元を表示"
   }
 }

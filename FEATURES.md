@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 90 |
-| 🚧 Em andamento | 2 |
+| ✅ Pronto | 91 |
+| 🚧 Em andamento | 1 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
 | ⬜ A fazer | 134 |
@@ -163,7 +163,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
-| N-09 | Hierarquia de chamadas | 🚧 | M3 | Ctrl+Alt+H lista quem chama; Mostrar chamadas lista o que é chamado; um nível na janela Find, sem árvore; visto na janela nativa |
+| N-09 | Hierarquia de chamadas | ✅ | M3 | Janela Hierarquia com árvore: Ctrl+Alt+H abre quem chama, botão troca para o que é chamado, cada nível carrega ao abrir; visto na janela nativa |
 | N-10 | Hierarquia de tipos e traits | ⬜ | M3 | |
 | N-11 | Ir para o trait / para o `impl` | ✅ | M3 | Ctrl+U vai do método do `impl` ao trait; Ctrl+Alt+B vai do trait aos `impl`; teste real |
 | N-12 | Bookmarks | ⬜ | M3 | |

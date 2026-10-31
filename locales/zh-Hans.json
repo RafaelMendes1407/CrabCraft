@@ -724,6 +724,11 @@
     "Imports optimized": "已优化导入",
     "Nothing to optimize in the imports": "导入无需优化",
     "The Rust analysis is not running": "Rust 分析未运行",
-    "Optimize Imports": "优化导入"
+    "Optimize Imports": "优化导入",
+    "Hierarchy": "层次结构",
+    "No hierarchy": "没有层次结构",
+    "Place the caret on a function and press Ctrl+Alt+H.": "将光标放在函数上并按 Ctrl+Alt+H。",
+    "Show calls": "显示调用",
+    "Show callers": "显示调用方"
   }
 }

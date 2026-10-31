@@ -704,6 +704,7 @@ impl CrabCraftApp {
                     }
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
+                InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {
                         let t = &targets[0];

@@ -724,6 +724,11 @@
     "Imports optimized": "Importy zoptymalizowane",
     "Nothing to optimize in the imports": "Nie ma nic do optymalizacji w importach",
     "The Rust analysis is not running": "Analiza Rust nie działa",
-    "Optimize Imports": "Optymalizuj importy"
+    "Optimize Imports": "Optymalizuj importy",
+    "Hierarchy": "Hierarchia",
+    "No hierarchy": "Brak hierarchii",
+    "Place the caret on a function and press Ctrl+Alt+H.": "Umieść kursor na funkcji i naciśnij Ctrl+Alt+H.",
+    "Show calls": "Pokaż wywołania",
+    "Show callers": "Pokaż wywołujących"
   }
 }

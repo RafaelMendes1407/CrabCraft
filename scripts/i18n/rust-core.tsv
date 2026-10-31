@@ -112,3 +112,8 @@ Imports optimized	Imports optimizados	Imports optimisés	Imports otimizados	Impo
 Nothing to optimize in the imports	Nada que optimizar en los imports	Rien à optimiser dans les imports	Nada a otimizar nos imports	In den Imports gibt es nichts zu optimieren	Nie ma nic do optymalizacji w importach	导入无需优化	最適化するインポートはありません
 The Rust analysis is not running	El análisis de Rust no está en ejecución	L'analyse Rust n'est pas en cours d'exécution	A análise de Rust não está rodando	Die Rust-Analyse läuft nicht	Analiza Rust nie działa	Rust 分析未运行	Rust の解析は実行されていません
 Optimize Imports	Optimizar imports	Optimiser les imports	Otimizar imports	Imports optimieren	Optymalizuj importy	优化导入	インポートを最適化
+Hierarchy	Jerarquía	Hiérarchie	Hierarquia	Hierarchie	Hierarchia	层次结构	階層
+No hierarchy	Sin jerarquía	Aucune hiérarchie	Nenhuma hierarquia	Keine Hierarchie	Brak hierarchii	没有层次结构	階層はありません
+Place the caret on a function and press Ctrl+Alt+H.	Coloca el cursor en una función y pulsa Ctrl+Alt+H.	Placez le curseur sur une fonction et appuyez sur Ctrl+Alt+H.	Coloque o cursor em uma função e pressione Ctrl+Alt+H.	Setze den Cursor auf eine Funktion und drücke Strg+Alt+H.	Umieść kursor na funkcji i naciśnij Ctrl+Alt+H.	将光标放在函数上并按 Ctrl+Alt+H。	関数にカーソルを置いて Ctrl+Alt+H を押してください。
+Show calls	Mostrar llamadas	Afficher les appels	Mostrar chamadas	Aufrufe anzeigen	Pokaż wywołania	显示调用	呼び出しを表示
+Show callers	Mostrar llamadores	Afficher les appelants	Mostrar quem chama	Aufrufer anzeigen	Pokaż wywołujących	显示调用方	呼び出し元を表示
