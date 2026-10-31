@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 82 |
+| ✅ Pronto | 83 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 140 |
+| ⬜ A fazer | 139 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -212,7 +212,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | B-01 | Build, rebuild e clean | ✅ | M1 | `cargo build` com JSON, rebuild, clean e fetch; build testado com Cargo real |
 | B-02 | Janela Build com erros clicáveis | ✅ | M1 | Erro real de compilação clicado na janela nativa abriu o arquivo na linha e coluna |
-| B-03 | Botão Apply fix em erros do compilador | ⬜ | M3 | |
+| B-03 | Botão Apply fix em erros do compilador | ✅ | M3 | Na lista de Compilar; só aplica se o arquivo ainda for o que o compilador leu; não salva |
 | B-04 | Janela Problems | ✅ | M1 | Vista na janela nativa com erro real, também de arquivo fechado; clique na lista só por código herdado, sem teste |
 | B-05 | Configurações de run automáticas por target | ✅ | M1 | Uma por binário, mais All Tests; testado e visto no app |
 | B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |

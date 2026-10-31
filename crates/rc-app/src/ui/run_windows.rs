@@ -114,6 +114,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     // Diagnostics list (clickable) above the raw output.
     let diags = b.diagnostics.clone();
     let mut open = None;
+    let mut apply = None;
     if !diags.is_empty() {
         let h = (diags.len() as f32 * 24.0 + 4.0).min(ui.available_height() * 0.45);
         egui::ScrollArea::vertical().id_salt("build_diags").max_height(h).auto_shrink([false, true]).show(ui, |ui| {
@@ -134,6 +135,12 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 let g = ui.painter().layout_no_wrap(format!("{} {}", d.code, d.message), FontId::proportional(13.0), p.text);
                 ui.painter().galley(pos2(rr.left() + 46.0, rr.center().y - g.size().y / 2.0), g.clone(), p.text);
                 ui.painter().text(pos2(rr.left() + 54.0 + g.size().x, rr.center().y), Align2::LEFT_CENTER, loc, FontId::proportional(12.0), p.muted);
+                if let (Some(fix), Some(file)) = (&d.fix, &d.file) {
+                    let button = Rect::from_min_size(pos2(rr.right() - 126.0, rr.top() + 2.0), vec2(116.0, 20.0));
+                    if ui.put(button, egui::Button::new(tr("Apply fix")).small()).on_hover_text(&fix.label).clicked() {
+                        apply = Some((file.clone(), fix.clone()));
+                    }
+                }
                 if resp.clicked()
                     && let Some(f) = &d.file
                 {
@@ -147,6 +154,9 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let events = console(ui, &app.runner.build.as_ref().expect("checked").console.term);
     if let Some((f, l, c)) = open {
         app.open_at(&f, l, c);
+    }
+    if let Some((file, fix)) = apply {
+        app.apply_build_fix(&file, &fix);
     }
     for e in events {
         if let rc_term::ViewEvent::LinkClicked(link) = e {

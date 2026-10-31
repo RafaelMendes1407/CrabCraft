@@ -1,5 +1,6 @@
 //! Cargo's `--message-format=json` lines.
 
+use rc_dotnet::diagnostics::{Fix, source_hash};
 use rc_dotnet::{Diagnostic, Severity};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -55,6 +56,7 @@ fn diagnostic(m: &Value, root: &Path) -> Option<Diagnostic> {
         return None;
     }
     let origin = span.and_then(|s| s.get("file_name")).and_then(Value::as_str).unwrap_or_default().to_string();
+    let fix = (!origin.is_empty()).then(|| suggestion(m, &origin, root)).flatten();
     Some(Diagnostic {
         file: (!origin.is_empty()).then(|| root.join(&origin)),
         origin,
@@ -66,12 +68,68 @@ fn diagnostic(m: &Value, root: &Path) -> Option<Diagnostic> {
         code,
         message: m.get("message").and_then(Value::as_str).unwrap_or_default().to_string(),
         project: None,
+        fix,
+    })
+}
+
+/// The first suggestion of a message that edits only `origin`, read against that file as it is now.
+/// Suggestions with placeholders cannot be applied as they are.
+fn suggestion(m: &Value, origin: &str, root: &Path) -> Option<Fix> {
+    let children = m.get("children")?.as_array()?;
+    children.iter().find_map(|child| {
+        let spans = child.get("spans")?.as_array()?;
+        let mut edits = Vec::new();
+        for span in spans {
+            let text = span.get("suggested_replacement")?.as_str()?;
+            let usable = matches!(span.get("suggestion_applicability")?.as_str()?, "MachineApplicable" | "MaybeIncorrect");
+            if !usable || span.get("file_name")?.as_str()? != origin {
+                return None;
+            }
+            let start = usize::try_from(span.get("byte_start")?.as_u64()?).ok()?;
+            let end = usize::try_from(span.get("byte_end")?.as_u64()?).ok()?;
+            edits.push((start, end, text.to_string()));
+        }
+        edits.sort();
+        let ordered = edits.iter().all(|e| e.0 <= e.1) && edits.windows(2).all(|w| w[0].1 <= w[1].0);
+        if edits.is_empty() || !ordered {
+            return None;
+        }
+        let source = source_hash(&std::fs::read(root.join(origin)).ok()?);
+        Some(Fix { label: child.get("message")?.as_str()?.to_string(), source, edits })
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fix_of(children: &str, root: &Path) -> Option<Fix> {
+        let m: Value = serde_json::from_str(&format!(r#"{{"children":{children}}}"#)).unwrap();
+        suggestion(&m, "src/a.rs", root)
+    }
+
+    fn child(file: &str, kind: &str) -> String {
+        format!(r#"{{"message":"use this","spans":[{{"file_name":"{file}","byte_start":4,"byte_end":5,"suggested_replacement":"x","suggestion_applicability":"{kind}"}}]}}"#)
+    }
+
+    #[test]
+    fn only_complete_suggestions_for_the_same_file_become_fixes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/a.rs"), "let y = 1;\n").unwrap();
+        let fix = fix_of(&format!("[{}]", child("src/a.rs", "MachineApplicable")), dir.path()).unwrap();
+        assert_eq!((fix.label.as_str(), fix.edits), ("use this", vec![(4, 5, "x".to_string())]));
+        assert_eq!(fix.source, source_hash(b"let y = 1;\n"));
+
+        assert_eq!(fix_of(&format!("[{}]", child("src/a.rs", "HasPlaceholders")), dir.path()), None);
+        assert_eq!(fix_of(&format!("[{}]", child("src/b.rs", "MachineApplicable")), dir.path()), None);
+        assert_eq!(fix_of(r#"[{"message":"note","spans":[]}]"#, dir.path()), None);
+        // A later child can still offer one.
+        let list = format!("[{},{}]", child("src/a.rs", "Unspecified"), child("src/a.rs", "MaybeIncorrect"));
+        assert!(fix_of(&list, dir.path()).is_some());
+        // A file that cannot be read has nothing to check the offsets against.
+        assert_eq!(fix_of(&format!("[{}]", child("src/a.rs", "MachineApplicable")), &dir.path().join("gone")), None);
+    }
 
     fn compiler(level: &str, spans: &str, code: &str) -> String {
         format!(r#"{{"reason":"compiler-message","message":{{"message":"boom","level":"{level}","code":{code},"spans":{spans},"rendered":"error: boom\n"}}}}"#)

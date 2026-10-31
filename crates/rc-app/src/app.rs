@@ -116,6 +116,13 @@ pub struct CrabCraftApp {
     pub had_focus: bool,
 }
 
+/// The edits of a compiler suggestion in characters of the editor, which reads `\r\n` as `\n`.
+fn fix_changes(text: &str, fix: &rc_dotnet::diagnostics::Fix) -> Option<Vec<rc_text::Change>> {
+    let chars = |byte: usize| text.get(..byte).map(|t| t.chars().count() - t.matches("\r\n").count());
+    let changes = fix.edits.iter().map(|(start, end, new)| Some(rc_text::Change { start: chars(*start)?, end: chars(*end)?, text: new.clone() }));
+    changes.collect()
+}
+
 impl CrabCraftApp {
     pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
         let settings = Settings::load();
@@ -1028,6 +1035,28 @@ impl CrabCraftApp {
         }
         for (file, diags) in per_file {
             self.insight.problems.insert(file, diags);
+        }
+    }
+
+    /// Applies the compiler's suggestion to its file, if that is still the text the compiler read.
+    pub fn apply_build_fix(&mut self, file: &Path, fix: &rc_dotnet::diagnostics::Fix) {
+        let stale = tr("The file changed after the build: build again to apply this fix");
+        let source = std::fs::read(file).unwrap_or_default();
+        let same = rc_dotnet::diagnostics::source_hash(&source) == fix.source;
+        let open_changed = self.docs.index_of(file).is_some_and(|i| self.docs.list[i].is_modified());
+        let changes = String::from_utf8(source).ok().and_then(|text| fix_changes(&text, fix));
+        let (true, false, Some(changes)) = (same, open_changed, changes) else {
+            self.notify(stale, true);
+            return;
+        };
+        self.open_file(file);
+        if let Some(doc) = self.docs.active_doc_mut() {
+            doc.editor.apply_text_edits(changes);
+        }
+        if let Some(b) = &mut self.runner.build {
+            for d in b.diagnostics.iter_mut().filter(|d| d.fix.as_ref() == Some(fix)) {
+                d.fix = None;
+            }
         }
     }
 

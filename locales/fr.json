@@ -703,6 +703,8 @@
     "Calls made by {name}": "Appels de {name}",
     "Generate…": "Générer…",
     "Nothing to generate here": "Rien à générer ici",
-    "Benchmarks cannot be debugged": "Les benchmarks ne peuvent pas être débogués"
+    "Benchmarks cannot be debugged": "Les benchmarks ne peuvent pas être débogués",
+    "Apply fix": "Appliquer le correctif",
+    "The file changed after the build: build again to apply this fix": "Le fichier a changé après la compilation : recompilez pour appliquer ce correctif"
   }
 }

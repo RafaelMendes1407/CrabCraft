@@ -703,6 +703,8 @@
     "Calls made by {name}": "{name} の呼び出し先",
     "Generate…": "生成…",
     "Nothing to generate here": "ここで生成できるものはありません",
-    "Benchmarks cannot be debugged": "ベンチマークはデバッグできません"
+    "Benchmarks cannot be debugged": "ベンチマークはデバッグできません",
+    "Apply fix": "修正を適用",
+    "The file changed after the build: build again to apply this fix": "ビルド後にファイルが変更されました。この修正を適用するには再度ビルドしてください"
   }
 }

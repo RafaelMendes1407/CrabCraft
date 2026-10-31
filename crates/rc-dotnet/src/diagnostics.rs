@@ -27,6 +27,27 @@ pub struct Diagnostic {
     pub message: String,
     /// Project in the trailing `[...]`, when present.
     pub project: Option<PathBuf>,
+    /// The compiler's suggestion, when it can be applied.
+    pub fix: Option<Fix>,
+}
+
+/// Edits proposed by the compiler for the file of a diagnostic.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Fix {
+    /// What the compiler says the change does.
+    pub label: String,
+    /// `source_hash` of the file the byte offsets refer to.
+    pub source: u64,
+    /// `(start byte, end byte, replacement)`, in file order, without overlaps.
+    pub edits: Vec<(usize, usize, String)>,
+}
+
+/// Identifies the exact content of a file.
+pub fn source_hash(bytes: &[u8]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Parses one output line; `None` when it is not a diagnostic. ANSI sequences are ignored.
@@ -112,6 +133,7 @@ fn finish(origin: String, severity: Severity, code: String, rest: &str) -> Diagn
         code,
         message: message.to_string(),
         project,
+        fix: None,
     };
     let (path, pos) = split_position(&origin);
     if let Some([l, c, el, ec]) = pos {

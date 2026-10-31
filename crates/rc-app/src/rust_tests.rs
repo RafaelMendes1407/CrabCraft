@@ -365,6 +365,50 @@ fn a_gutter_icon_runs_a_benchmark() {
     app.insight.stop();
 }
 
+#[test]
+fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
+    const MAIN: &str = "fn main() {\n    let mut total = 1;\n    println!(\"{total}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let build = |app: &mut CrabCraftApp| {
+        app.run_ide_action(&egui::Context::default(), rc_editor::Action::Build);
+        pump(app, "the build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some()));
+        let list = &app.runner.build.as_ref().unwrap().diagnostics;
+        list.iter().find_map(|d| Some((d.file.clone()?, d.fix.clone()?))).expect("a fix")
+    };
+    let (file, fix) = build(&mut app);
+    assert_eq!(file, root.join("src/main.rs"));
+
+    // A file that changed keeps its text.
+    let changed = format!("// a comment\n{MAIN}");
+    write(&file, &changed);
+    app.apply_build_fix(&file, &fix);
+    assert!(app.docs.index_of(&file).is_none());
+    write(&file, MAIN);
+
+    // Unsaved text in the editor is not what the compiler read either.
+    app.open_file(&file);
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "\n");
+    app.apply_build_fix(&file, &fix);
+    assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), format!("\n{MAIN}"));
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 1, "");
+    app.save_all_docs();
+
+    let (file, fix) = build(&mut app);
+    app.apply_build_fix(&file, &fix);
+    let doc = app.docs.active_doc().unwrap();
+    assert_eq!(doc.editor.buffer.rope().to_string(), MAIN.replace("let mut total", "let total"));
+    assert!(doc.is_modified(), "the user decides when to save");
+    assert!(app.runner.build.as_ref().unwrap().diagnostics.iter().all(|d| d.fix.is_none()));
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();
