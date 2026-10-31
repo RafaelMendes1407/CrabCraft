@@ -1,4 +1,4 @@
-//! DotCraft's terminal: sessions on a pseudo-terminal (`portable-pty`) emulated with
+//! CrabCraft's terminal: sessions on a pseudo-terminal (`portable-pty`) emulated with
 //! `alacritty_terminal`, an egui widget that paints and drives them, and the tool window's
 //! tab model.
 //!

@@ -3,7 +3,7 @@
 //! output on `Shop.Cli`; a breakpoint hit by an HTTP request on `Shop.Api` and a clean stop;
 //! exception stops with `exceptionInfo`; attaching to a running process.
 //!
-//! netcoredbg is downloaded once into `target/test-home` (or set `DOTCRAFT_NETCOREDBG`).
+//! netcoredbg is downloaded once into `target/test-home` (or set `CRABCRAFT_NETCOREDBG`).
 //! The tests build inside the fixture, so they run one at a time.
 
 use rc_core::Waker;
@@ -26,8 +26,8 @@ fn test_home() -> PathBuf {
 
 fn adapter() -> AdapterCommand {
     // SAFETY: set before any thread of this test binary reads it (under SERIAL).
-    unsafe { std::env::set_var("DOTCRAFT_HOME", test_home()) };
-    let configured = std::env::var_os("DOTCRAFT_NETCOREDBG").map(PathBuf::from);
+    unsafe { std::env::set_var("CRABCRAFT_HOME", test_home()) };
+    let configured = std::env::var_os("CRABCRAFT_NETCOREDBG").map(PathBuf::from);
     if let Some(cmd) = netcoredbg::locate(configured.as_deref()).filter(|c| c.origin != netcoredbg::Origin::Path) {
         return cmd;
     }

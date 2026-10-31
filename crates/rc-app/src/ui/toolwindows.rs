@@ -1,7 +1,7 @@
 //! Contents of the tool windows. Each window has the New UI header (title on the left,
 //! actions and "hide" on the right) and an empty state that says what will show up there.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::toolwindow::ToolWindow;
 use crate::ui::explorer;
 use egui::{Align2, FontId, Id, Rect, Sense, Ui, pos2, vec2};
@@ -10,7 +10,7 @@ use rc_kit::{Ico, icons, theme};
 
 pub const HEADER_H: f32 = 36.0;
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
     match tw {
         ToolWindow::Explorer => {
             let Some(w) = &app.workspace else { return };
@@ -90,7 +90,7 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     resp
 }
 
-fn problems(app: &mut DotCraftApp, ui: &mut Ui) {
+fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.insight.problems.is_empty() {
         let (title, hint) = empty_text(ToolWindow::Problems);
         empty_state(ui, ToolWindow::Problems.icon(), title, hint);
@@ -128,7 +128,7 @@ fn problems(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
-fn structure(app: &mut DotCraftApp, ui: &mut Ui) {
+fn structure(app: &mut CrabCraftApp, ui: &mut Ui) {
     let Some(doc) = app.docs.active_doc() else {
         let (title, hint) = empty_text(ToolWindow::Structure);
         empty_state(ui, ToolWindow::Structure.icon(), title, hint);
@@ -162,7 +162,7 @@ fn structure(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
-fn find_results(app: &mut DotCraftApp, ui: &mut Ui) {
+fn find_results(app: &mut CrabCraftApp, ui: &mut Ui) {
     let Some((_, targets)) = app.find_results.clone() else { return };
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let mut open = None;
@@ -187,7 +187,7 @@ fn find_results(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
-fn find_in_files(app: &mut DotCraftApp, ui: &mut Ui) {
+fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let Some(mut f) = app.find_in_files.take() else { return };
     f.poll();

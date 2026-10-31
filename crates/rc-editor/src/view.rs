@@ -66,7 +66,7 @@ pub struct EditorView<'a> {
 
 impl<'a> EditorView<'a> {
     pub fn new(state: &'a mut EditorState, config: &'a EditorConfig, keymap: &'a Keymap) -> Self {
-        let id = Id::new(("dotcraft_editor", state.id));
+        let id = Id::new(("crabcraft_editor", state.id));
         EditorView { state, config, keymap, id, focus_on_show: false }
     }
 
@@ -77,7 +77,7 @@ impl<'a> EditorView<'a> {
     }
 
     pub fn id_for(doc: u64) -> Id {
-        Id::new(("dotcraft_editor", doc))
+        Id::new(("crabcraft_editor", doc))
     }
 
     pub fn show(self, ui: &mut Ui) -> EditorOutput {
@@ -1039,7 +1039,7 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
 }
 
 fn hover_popup_hovered(ui: &Ui) -> bool {
-    ui.ctx().data(|d| d.get_temp::<bool>(Id::new("dotcraft_hover_popup_hovered"))).unwrap_or(false)
+    ui.ctx().data(|d| d.get_temp::<bool>(Id::new("crabcraft_hover_popup_hovered"))).unwrap_or(false)
 }
 
 fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keymap: &Keymap, out: &mut EditorOutput) {
@@ -1459,7 +1459,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
 /// Runs an editing action on `state` from outside the widget (native menu, actions popup).
 /// Returns the code-insight actions it could not handle itself.
 pub fn run_action(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action) -> Vec<Action> {
-    let response = ui.interact(Rect::NOTHING, Id::new("dotcraft_editor_action"), Sense::hover());
+    let response = ui.interact(Rect::NOTHING, Id::new("crabcraft_editor_action"), Sense::hover());
     let mut out = EditorOutput { response, actions: Vec::new(), events: Vec::new(), accepted_completion: None, caret_rect: None };
     if action.is_editing() {
         exec(ui, state, config, action, &mut out);

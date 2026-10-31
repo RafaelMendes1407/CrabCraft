@@ -9,7 +9,7 @@ const SAMPLE: &str = r#"using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace DotCraft.Samples;
+namespace CrabCraft.Samples;
 
 /// <summary>Greets people and remembers who it greeted.</summary>
 public sealed class Greeter : IGreeter

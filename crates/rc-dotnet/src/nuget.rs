@@ -74,7 +74,7 @@ impl NugetClient {
 
     pub fn with_source(index_url: &str) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
-            .user_agent(concat!("DotCraft/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("CrabCraft/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
             .build()?;

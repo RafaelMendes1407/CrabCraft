@@ -85,7 +85,7 @@ fn ext(p: &Path) -> String {
 }
 
 /// Folders never shown in the explorer.
-pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", "node_modules", ".dotcraft", "TestResults"];
+pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", "node_modules", ".crabcraft", "TestResults"];
 const HIDDEN_FILES: &[&str] = &[".DS_Store", "Thumbs.db"];
 
 pub fn is_hidden(name: &str, is_dir: bool) -> bool {

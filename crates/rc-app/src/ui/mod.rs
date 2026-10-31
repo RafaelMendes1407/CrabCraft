@@ -17,7 +17,7 @@ pub mod stripes;
 pub mod toolwindows;
 pub mod welcome;
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::toolwindow::Side;
 use egui::{Margin, Ui};
 use rc_editor::Action;
@@ -27,7 +27,7 @@ pub const TITLE_H: f32 = 40.0;
 pub const STRIPE_W: f32 = 40.0;
 pub const STATUS_H: f32 = 30.0;
 
-pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
+pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let ctx = ui.ctx().clone();
     let p = rc_kit::pal(ui);
     let bar = egui::Frame::NONE.fill(p.main_bg);
@@ -72,7 +72,7 @@ pub fn frame(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
 }
 
 /// Stripes and open tool windows; returns the editor island's margin.
-fn tool_windows(app: &mut DotCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette, bar: egui::Frame) -> Margin {
+fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette, bar: egui::Frame) -> Margin {
     let p = *p;
     egui::Panel::left("stripe_left").exact_size(STRIPE_W).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| stripes::show(app, ui, Side::Left));
     egui::Panel::right("stripe_right").exact_size(STRIPE_W).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| stripes::show(app, ui, Side::Right));
@@ -119,7 +119,7 @@ fn tool_windows(app: &mut DotCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette, 
     }
 }
 
-fn remember_size(app: &mut DotCraftApp, tw: crate::toolwindow::ToolWindow, size: f32) {
+fn remember_size(app: &mut CrabCraftApp, tw: crate::toolwindow::ToolWindow, size: f32) {
     let size = size.round();
     if (app.dock.size(tw) - size).abs() >= 1.0 {
         app.dock.sizes.insert(tw, size);

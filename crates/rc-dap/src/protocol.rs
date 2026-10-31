@@ -1,5 +1,5 @@
 //! The Debug Adapter Protocol on the wire: `Content-Length` framing ([`frame`],
-//! [`FrameDecoder`]) and the message bodies DotCraft uses, as serde types.
+//! [`FrameDecoder`]) and the message bodies CrabCraft uses, as serde types.
 //!
 //! Every type tolerates missing optional fields: adapters differ in what they send
 //! (netcoredbg, for example, never sends `hitBreakpointIds`).

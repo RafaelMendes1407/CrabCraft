@@ -1,7 +1,7 @@
 //! netcoredbg (Samsung, MIT): finding it, downloading the pinned release into the tools
 //! folder and the command line that runs it as a DAP adapter over stdio.
 //!
-//! Microsoft's vsdbg is licensed for Microsoft products only, so DotCraft uses netcoredbg.
+//! Microsoft's vsdbg is licensed for Microsoft products only, so CrabCraft uses netcoredbg.
 
 use rc_core::inbox::Outbox;
 use std::io::Read;

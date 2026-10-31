@@ -3,10 +3,10 @@ name = "rc-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "DotCraft: a lightweight native IDE for .NET"
+description = "CrabCraft: a lightweight native IDE for Rust"
 
 [[bin]]
-name = "dotcraft"
+name = "crabcraft"
 path = "src/main.rs"
 
 [dependencies]

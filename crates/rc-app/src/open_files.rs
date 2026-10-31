@@ -1,4 +1,4 @@
-//! Files the system asks DotCraft to open: Finder's "Open With" and double-clicks on
+//! Files the system asks CrabCraft to open: Finder's "Open With" and double-clicks on
 //! associated files (macOS sends them as an Apple Event, not as arguments), queued for the UI.
 //!
 //! winit has no API for it, so `application:openURLs:` is added to `NSObject` before the app

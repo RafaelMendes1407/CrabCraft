@@ -131,7 +131,7 @@ impl LanguageSession {
                             Err(e) => self.client.reply(id, Err(RpcError { code: -32602, message: e.to_string() })),
                         }
                     } else {
-                        self.client.reply(id, Err(RpcError { code: -32601, message: format!("{method} is not supported by DotCraft") }));
+                        self.client.reply(id, Err(RpcError { code: -32601, message: format!("{method} is not supported by CrabCraft") }));
                     }
                 }
                 Incoming::Notification { method, params } => self.notification(&method, params, &mut events),

@@ -211,7 +211,7 @@ fn server_env(dotnet_root: Option<&Path>) -> Vec<(String, String)> {
     env
 }
 
-/// The client capabilities DotCraft implements.
+/// The client capabilities CrabCraft implements.
 pub fn client_capabilities() -> Value {
     json!({
         "workspace": {
@@ -290,7 +290,7 @@ pub fn initialize(client: &Client, root: &Path) -> Pending<lsp_types::Initialize
         "initialize",
         json!({
             "processId": std::process::id(),
-            "clientInfo": { "name": "DotCraft", "version": env!("CARGO_PKG_VERSION") },
+            "clientInfo": { "name": "CrabCraft", "version": env!("CARGO_PKG_VERSION") },
             "locale": "en",
             "rootUri": uri.as_str(),
             "workspaceFolders": [{ "uri": uri.as_str(), "name": name }],

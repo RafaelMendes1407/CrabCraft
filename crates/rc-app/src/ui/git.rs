@@ -1,7 +1,7 @@
 //! Git UI: the Commit tool window (changes, message, commit), the Git tool window (log and
 //! the files of a commit), the branches popup of the toolbar and the side-by-side diff.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::toolwindow::ToolWindow;
 use crate::ui::toolwindows::{empty_state, header};
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
@@ -25,7 +25,7 @@ fn state_color(state: FileState, untracked: bool, dark: bool) -> Color32 {
     }
 }
 
-pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Commit")) {
         app.toggle_tool(ToolWindow::Commit);
     }
@@ -156,7 +156,7 @@ pub fn commit_window(app: &mut DotCraftApp, ui: &mut Ui) {
     }
 }
 
-pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Git")) {
         app.toggle_tool(ToolWindow::Git);
     }
@@ -256,7 +256,7 @@ pub fn git_window(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 /// The branches popup of the toolbar's VCS widget.
-pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn branches_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.set_min_width(280.0);
     let busy = app.vcs.busy.is_some();
     if ui.add_enabled(!busy, egui::Button::new(tr("Update Project…"))).clicked() {
@@ -306,7 +306,7 @@ pub fn branches_menu(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 /// The side-by-side diff in the editor area (two read-only editors scrolled together).
-pub fn diff_view(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let full = ui.max_rect();
     let head = Rect::from_min_size(full.min, vec2(full.width(), 38.0));

@@ -312,7 +312,7 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
         });
     });
     let hovered = resp.response.hovered() || resp.response.contains_pointer();
-    ui.ctx().data_mut(|d| d.insert_temp(Id::new("dotcraft_hover_popup_hovered"), hovered));
+    ui.ctx().data_mut(|d| d.insert_temp(Id::new("crabcraft_hover_popup_hovered"), hovered));
 }
 
 /// Minimal Markdown for documentation: fenced code blocks in monospace, `inline code`,

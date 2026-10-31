@@ -1,4 +1,4 @@
-; C# highlighting for DotCraft, tuned to Rider's colour roles. When captures overlap, the
+; C# highlighting for CrabCraft, tuned to Rider's colour roles. When captures overlap, the
 ; smaller node wins, and for the same node the later pattern wins.
 
 (identifier) @variable

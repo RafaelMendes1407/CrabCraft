@@ -7,7 +7,7 @@
 A file or folder with this name already exists	Ya existe un archivo o carpeta con este nombre	Un fichier ou dossier portant ce nom existe déjà	Já existe um arquivo ou pasta com este nome	Eine Datei oder ein Ordner mit diesem Namen existiert bereits	Plik lub folder o tej nazwie już istnieje	已存在同名的文件或文件夹	この名前のファイルまたはフォルダーは既に存在します
 A lightweight IDE for .NET	Un IDE ligero para .NET	Un IDE léger pour .NET	Uma IDE leve para .NET	Eine schlanke IDE für .NET	Lekkie IDE dla .NET	轻量级 .NET IDE	.NET 向けの軽量 IDE
 A shell in the workspace folder.	Una terminal en la carpeta del proyecto.	Un shell dans le dossier du projet.	Um shell na pasta do projeto.	Eine Shell im Projektordner.	Powłoka w folderze projektu.	位于项目文件夹中的 Shell。	プロジェクトフォルダーのシェル。
-About DotCraft	Acerca de DotCraft	À propos de DotCraft	Sobre o DotCraft	Über DotCraft	O DotCraft	关于 DotCraft	DotCraft について
+About CrabCraft	Acerca de CrabCraft	À propos de CrabCraft	Sobre o CrabCraft	Über CrabCraft	O CrabCraft	关于 CrabCraft	CrabCraft について
 Add Selection for Next Occurrence	Añadir selección a la siguiente coincidencia	Ajouter la sélection pour l'occurrence suivante	Adicionar seleção para a próxima ocorrência	Auswahl für nächstes Vorkommen hinzufügen	Dodaj zaznaczenie następnego wystąpienia	为下一个匹配项添加选区	次の出現箇所を選択に追加
 Appearance	Apariencia	Apparence	Aparência	Darstellung	Wygląd	外观	外観
 Back	Atrás	Précédent	Voltar	Zurück	Wstecz	后退	戻る
@@ -86,7 +86,7 @@ Go to Type…	Ir a tipo…	Aller au type…	Ir para o tipo…	Zu Typ…	Przejdź
 Hard wrap guide	Guía de margen	Guide de retour à la ligne	Guia de margem	Umbruchhilfslinie	Linia marginesu	硬换行参考线	折り返しガイド
 Help	Ayuda	Aide	Ajuda	Hilfe	Pomoc	帮助	ヘルプ
 Hide All Tool Windows	Ocultar todas las ventanas de herramientas	Masquer toutes les fenêtres d'outils	Ocultar todas as janelas de ferramentas	Alle Werkzeugfenster ausblenden	Ukryj wszystkie okna narzędzi	隐藏所有工具窗口	すべてのツールウィンドウを隠す
-Hide DotCraft	Ocultar DotCraft	Masquer DotCraft	Ocultar DotCraft	DotCraft ausblenden	Ukryj DotCraft	隐藏 DotCraft	DotCraft を隠す
+Hide CrabCraft	Ocultar CrabCraft	Masquer CrabCraft	Ocultar CrabCraft	CrabCraft ausblenden	Ukryj CrabCraft	隐藏 CrabCraft	CrabCraft を隠す
 Hide Others	Ocultar otros	Masquer les autres	Ocultar Outros	Andere ausblenden	Ukryj pozostałe	隐藏其他	ほかを隠す
 Hide	Ocultar	Masquer	Ocultar	Ausblenden	Ukryj	隐藏	隠す
 Icons: IntelliJ Platform (Apache 2.0)	Iconos: IntelliJ Platform (Apache 2.0)	Icônes : IntelliJ Platform (Apache 2.0)	Ícones: IntelliJ Platform (Apache 2.0)	Symbole: IntelliJ Platform (Apache 2.0)	Ikony: IntelliJ Platform (Apache 2.0)	图标：IntelliJ Platform（Apache 2.0）	アイコン: IntelliJ Platform (Apache 2.0)
@@ -139,7 +139,7 @@ Problems	Problemas	Problèmes	Problemas	Probleme	Problemy	问题	問題
 Projects you open will be listed here.	Los proyectos que abras aparecerán aquí.	Les projets que vous ouvrez seront listés ici.	Os projetos que você abrir aparecerão aqui.	Geöffnete Projekte werden hier aufgelistet.	Otwierane projekty pojawią się tutaj.	您打开的项目将列在这里。	開いたプロジェクトがここに表示されます。
 Projects	Proyectos	Projets	Projetos	Projekte	Projekty	项目	プロジェクト
 Quick Documentation	Documentación rápida	Documentation rapide	Documentação rápida	Schnelldokumentation	Szybka dokumentacja	快速文档	クイックドキュメント
-Quit DotCraft	Salir de DotCraft	Quitter DotCraft	Encerrar o DotCraft	DotCraft beenden	Zakończ DotCraft	退出 DotCraft	DotCraft を終了
+Quit CrabCraft	Salir de CrabCraft	Quitter CrabCraft	Encerrar o CrabCraft	CrabCraft beenden	Zakończ CrabCraft	退出 CrabCraft	CrabCraft を終了
 Recent Files	Archivos recientes	Fichiers récents	Arquivos recentes	Zuletzt geöffnete Dateien	Ostatnie pliki	最近的文件	最近のファイル
 Recent Locations	Ubicaciones recientes	Emplacements récents	Locais recentes	Zuletzt besuchte Stellen	Ostatnie lokalizacje	最近的位置	最近の場所
 Recent Projects	Proyectos recientes	Projets récents	Projetos recentes	Zuletzt geöffnete Projekte	Ostatnie projekty	最近的项目	最近のプロジェクト
@@ -203,7 +203,7 @@ Unpin Tab	Desfijar pestaña	Désépingler l'onglet	Desafixar aba	Tab lösen	Odep
 Version control	Control de versiones	Gestion de versions	Controle de versão	Versionskontrolle	Kontrola wersji	版本控制	バージョン管理
 Version {version}	Versión {version}	Version {version}	Versão {version}	Version {version}	Wersja {version}	版本 {version}	バージョン {version}
 View	Ver	Affichage	Exibir	Ansicht	Widok	视图	表示
-Welcome to DotCraft	Bienvenido a DotCraft	Bienvenue dans DotCraft	Bem-vindo ao DotCraft	Willkommen bei DotCraft	Witamy w DotCraft	欢迎使用 DotCraft	DotCraft へようこそ
+Welcome to CrabCraft	Bienvenido a CrabCraft	Bienvenue dans CrabCraft	Bem-vindo ao CrabCraft	Willkommen bei CrabCraft	Witamy w CrabCraft	欢迎使用 CrabCraft	CrabCraft へようこそ
 Window	Ventana	Fenêtre	Janela	Fenster	Okno	窗口	ウインドウ
 Zoom In	Acercar	Zoom avant	Ampliar	Vergrößern	Powiększ	放大	拡大
 Zoom Out	Alejar	Zoom arrière	Reduzir	Verkleinern	Pomniejsz	缩小	縮小

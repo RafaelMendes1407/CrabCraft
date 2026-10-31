@@ -1,11 +1,11 @@
 //! Welcome screen (no workspace open): logo, open buttons and recent projects.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     theme::fixed_island(ui, &p, |ui| {
         let rect = ui.max_rect();
@@ -15,7 +15,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
         let logo = Rect::from_min_size(pos2(rect.center().x - 32.0, y), vec2(64.0, 64.0));
         rc_kit::branding::paint(ui, logo);
         y = logo.bottom() + 18.0;
-        ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, tr("Welcome to DotCraft"), theme::bold(20.0), p.text);
+        ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, tr("Welcome to CrabCraft"), theme::bold(20.0), p.text);
         y += 34.0;
         let subtitle = format!("{} · {}", tr("A lightweight IDE for .NET"), trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
         ui.painter().text(pos2(rect.center().x, y), Align2::CENTER_TOP, subtitle, FontId::proportional(13.0), p.text_muted);

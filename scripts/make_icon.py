@@ -1,4 +1,4 @@
-"""Exports every DotCraft application icon from assets/icon-master.png (requires Pillow).
+"""Exports every CrabCraft application icon from assets/icon-master.png (requires Pillow).
 
 The master is assets/icon.svg rendered at 1024 px:
     cargo run -p rc-kit --example render_svg -- assets/icon.svg assets/icon-master.png 1024
@@ -29,7 +29,7 @@ def generate() -> dict[str, bytes]:
         ("icon-32.png", 32, "PNG", {}),
         ("icon-64.png", 64, "PNG", {}),
         ("icon.ico", 256, "ICO", {"sizes": [(s, s) for s in SIZES], "append_images": [draw(s) for s in SIZES[:-1]]}),
-        ("DotCraft.icns", 1024, "ICNS", {}),
+        ("CrabCraft.icns", 1024, "ICNS", {}),
     ]:
         buffer = io.BytesIO()
         draw(size).save(buffer, format=fmt, **options)

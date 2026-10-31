@@ -1,4 +1,4 @@
-//! Core services of DotCraft without UI: the shared async runtime, inboxes that wake the UI,
+//! Core services of CrabCraft without UI: the shared async runtime, inboxes that wake the UI,
 //! settings and per-workspace sessions, the workspace's file tree and file watching.
 
 pub mod inbox;

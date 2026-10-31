@@ -121,7 +121,7 @@ pub fn replace_in_file(path: &Path, query: &Query, replacement: &str) -> Result<
         return Ok(count);
     }
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let mut tmp = tempfile::Builder::new().prefix(".dotcraft-replace").tempfile_in(dir)?;
+    let mut tmp = tempfile::Builder::new().prefix(".crabcraft-replace").tempfile_in(dir)?;
     if bom {
         tmp.write_all(BOM)?;
     }

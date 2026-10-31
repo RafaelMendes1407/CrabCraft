@@ -5,7 +5,7 @@ pub const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon.png");
 
 pub fn icon_data() -> egui::IconData {
     // The asset is generated and validated in the repository, never supplied by a user.
-    eframe::icon_data::from_png_bytes(ICON_PNG).expect("bundled DotCraft icon is a valid PNG")
+    eframe::icon_data::from_png_bytes(ICON_PNG).expect("bundled CrabCraft icon is a valid PNG")
 }
 
 pub fn paint(ui: &Ui, rect: Rect) {
@@ -14,20 +14,20 @@ pub fn paint(ui: &Ui, rect: Rect) {
     } else {
         (64, include_bytes!("../../../assets/icon-64.png"))
     };
-    let id = Id::new(("dotcraft_application_icon", size));
+    let id = Id::new(("crabcraft_application_icon", size));
     let texture = ui
         .ctx()
         .data_mut(|data| data.get_temp::<TextureHandle>(id))
         .unwrap_or_else(|| {
             let icon = eframe::icon_data::from_png_bytes(png)
-                .expect("bundled DotCraft UI icon is a valid PNG");
+                .expect("bundled CrabCraft UI icon is a valid PNG");
             let image = ColorImage::from_rgba_unmultiplied(
                 [icon.width as usize, icon.height as usize],
                 &icon.rgba,
             );
             let texture = ui
                 .ctx()
-                .load_texture("DotCraft", image, TextureOptions::LINEAR);
+                .load_texture("CrabCraft", image, TextureOptions::LINEAR);
             ui.ctx()
                 .data_mut(|data| data.insert_temp(id, texture.clone()));
             texture

@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=DotCraft
+Name=CrabCraft
 GenericName=.NET IDE
-Comment=A lightweight native IDE for .NET and C#
-Exec=dotcraft %F
-Icon=dotcraft
+Comment=A lightweight native IDE for Rust
+Exec=crabcraft %F
+Icon=crabcraft
 Terminal=false
 Categories=Development;IDE;
 MimeType=text/plain;text/x-csharp;application/xml;application/json;
-StartupWMClass=dotcraft
+StartupWMClass=crabcraft

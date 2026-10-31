@@ -54,7 +54,7 @@ struct Key {
 struct Cache(Arc<Mutex<HashMap<Key, Option<TextureHandle>>>>);
 
 fn texture(ctx: &Context, key: Key) -> Option<TextureHandle> {
-    let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Cache>(Id::new("dotcraft_icons")).clone());
+    let cache = ctx.data_mut(|d| d.get_temp_mut_or_default::<Cache>(Id::new("crabcraft_icons")).clone());
     let mut map = cache.0.lock();
     if let Some(t) = map.get(&key) {
         return t.clone();

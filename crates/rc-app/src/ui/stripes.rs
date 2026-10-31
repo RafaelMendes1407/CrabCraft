@@ -1,7 +1,7 @@
 //! Tool window stripes: one icon button per tool window, the open one highlighted. Left
 //! stripe: left tool windows on top and bottom tool windows below (New UI).
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::toolwindow::{Side, ToolWindow};
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use rc_editor::Action;
@@ -21,7 +21,7 @@ fn shortcut_for(tw: ToolWindow) -> Option<Action> {
     }
 }
 
-fn button(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
+fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(at, vec2(BUTTON, BUTTON));
     let resp = ui.interact(r, ui.id().with(tw.id()), Sense::click());
@@ -64,7 +64,7 @@ fn button(app: &mut DotCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     }
 }
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui, side: Side) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, side: Side) {
     let rect = ui.max_rect();
     let x = rect.center().x - BUTTON / 2.0;
     match side {

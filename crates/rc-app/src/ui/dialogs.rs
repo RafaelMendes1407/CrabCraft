@@ -1,7 +1,7 @@
 //! Modal dialogs and small popups: Settings, About, Go to Line, New File/Folder, Rename,
 //! Delete and Recent Files.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{Align2, Context, FontId, Id, Key, Ui, vec2};
 use rc_core::Settings;
 use rc_core::settings::{KeymapChoice, ThemeChoice};
@@ -57,7 +57,7 @@ enum Outcome {
     Close,
 }
 
-pub fn show(app: &mut DotCraftApp, ctx: &Context) {
+pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut dialog) = app.dialog.take() else { return };
     let outcome = match &mut dialog {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
@@ -109,7 +109,7 @@ fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
     res
 }
 
-fn settings(app: &mut DotCraftApp, ctx: &Context, draft: &mut Settings, page: &mut SettingsPage) -> Outcome {
+fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &mut SettingsPage) -> Outcome {
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let ((ok, cancel), esc) = modal(ctx, "settings", 720.0, |ui| {
         title(ui, tr("Settings"));
@@ -271,7 +271,7 @@ fn about(ctx: &Context) -> Outcome {
             let (r, _) = ui.allocate_exact_size(vec2(64.0, 64.0), egui::Sense::hover());
             rc_kit::branding::paint(ui, r);
             ui.add_space(8.0);
-            ui.label(egui::RichText::new("DotCraft").font(theme::bold(18.0)));
+            ui.label(egui::RichText::new("CrabCraft").font(theme::bold(18.0)));
             ui.label(trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tr("A lightweight IDE for .NET")).color(rc_kit::pal(ui).muted));
@@ -285,7 +285,7 @@ fn about(ctx: &Context) -> Outcome {
     if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mut bool) -> Outcome {
+fn goto_line(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, focus: &mut bool) -> Outcome {
     let Some(doc) = app.docs.active_doc() else { return Outcome::Close };
     let lines = doc.editor.buffer.len_lines();
     let ((ok, cancel), esc) = modal(ctx, "goto_line", 340.0, |ui| {
@@ -314,7 +314,7 @@ fn goto_line(app: &mut DotCraftApp, ctx: &Context, text: &mut String, focus: &mu
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
+fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
     let settings_file = project.parent().map(|d| d.join("Properties/launchSettings.json")).filter(|p| p.exists());
     let mut open_settings = false;
     let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
@@ -387,7 +387,7 @@ fn run_options(app: &mut DotCraftApp, ctx: &Context, name: &str, project: &std::
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn compound(app: &mut DotCraftApp, ctx: &Context, old: Option<&str>, name: &mut String, members: &mut [(String, bool)]) -> Outcome {
+fn compound(app: &mut CrabCraftApp, ctx: &Context, old: Option<&str>, name: &mut String, members: &mut [(String, bool)]) -> Outcome {
     let taken = app.runner.configs.iter().any(|c| c.name == name.trim() && Some(c.name.as_str()) != old);
     let chosen = members.iter().filter(|(_, on)| *on).count();
     let valid = !name.trim().is_empty() && !taken && chosen > 0;
@@ -414,7 +414,7 @@ fn compound(app: &mut DotCraftApp, ctx: &Context, old: Option<&str>, name: &mut 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn breakpoint_properties(app: &mut DotCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, enabled: &mut bool, focus: &mut bool) -> Outcome {
+fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, enabled: &mut bool, focus: &mut bool) -> Outcome {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
         title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
@@ -468,7 +468,7 @@ fn breakpoint_properties(app: &mut DotCraftApp, ctx: &Context, path: &std::path:
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn evaluate(app: &mut DotCraftApp, ctx: &Context, expression: &mut String, focus: &mut bool) -> Outcome {
+fn evaluate(app: &mut CrabCraftApp, ctx: &Context, expression: &mut String, focus: &mut bool) -> Outcome {
     let stopped = app.debugger.stopped();
     let mut eval = false;
     let mut watch = false;
@@ -532,7 +532,7 @@ fn evaluate(app: &mut DotCraftApp, ctx: &Context, expression: &mut String, focus
 
 /// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton
 /// in the namespace of its folder.
-fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, error: &mut Option<String>) -> Outcome {
+fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, error: &mut Option<String>) -> Outcome {
     let heading = trf("New {item}", &[("item", &tr(kind.title()))]);
     let ((ok, cancel), esc) = modal(ctx, "new_file", 380.0, |ui| {
         title(ui, &heading);
@@ -595,7 +595,7 @@ fn new_file(app: &mut DotCraftApp, ctx: &Context, dir: &std::path::Path, name: &
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn rename(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut String, error: &mut Option<String>) -> Outcome {
+fn rename(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut String, error: &mut Option<String>) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "rename", 380.0, |ui| {
         title(ui, tr("Rename"));
         let resp = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
@@ -638,7 +638,7 @@ fn rename(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut S
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn confirm_delete(app: &mut DotCraftApp, ctx: &Context, path: &mut PathBuf) -> Outcome {
+fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> Outcome {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let ((ok, cancel), esc) = modal(ctx, "delete", 420.0, |ui| {
         title(ui, tr("Delete"));
@@ -685,7 +685,7 @@ fn trash(path: &std::path::Path) -> std::io::Result<()> {
 }
 
 /// ⌘E: recent files, most recent first (the current one second, so Enter switches back).
-fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filter: &mut String) -> Outcome {
+fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, filter: &mut String) -> Outcome {
     let items: Vec<PathBuf> = app
         .docs
         .recent
@@ -737,7 +737,7 @@ fn recent_files(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize, filt
 }
 
 /// The list of context actions, under the caret like IntelliJ's bulb popup.
-fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
+fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
     use rc_lsp::lsp_types::CodeActionOrCommand as A;
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let pos = app.caret_screen.unwrap_or(egui::pos2(200.0, 200.0));
@@ -793,7 +793,7 @@ fn code_actions(app: &mut DotCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp
     if close { Outcome::Close } else { Outcome::Keep }
 }
 
-fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {
+fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {
     let valid = !name.trim().is_empty() && name.trim().chars().all(|c| c.is_alphanumeric() || c == '_' || c == '@');
     let ((ok, cancel), esc) = modal(ctx, "rename_symbol", 400.0, |ui| {
         title(ui, &trf("Rename '{name}'", &[("name", original)]));
@@ -823,7 +823,7 @@ fn rename_symbol(app: &mut DotCraftApp, ctx: &Context, doc: u64, pos: usize, ori
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn recent_locations(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
+fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
     let items: Vec<(PathBuf, usize, String)> = app
         .nav_back
         .iter()
@@ -877,7 +877,7 @@ fn recent_locations(app: &mut DotCraftApp, ctx: &Context, selected: &mut usize) 
     if esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn rollback(app: &mut DotCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Outcome {
+fn rollback(app: &mut CrabCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "rollback", 440.0, |ui| {
         title(ui, tr("Rollback Changes"));
         ui.label(trf("Discard the changes of {n} files? This cannot be undone.", &[("n", &paths.len())]));
@@ -893,7 +893,7 @@ fn rollback(app: &mut DotCraftApp, ctx: &Context, paths: &mut Vec<String>) -> Ou
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn new_branch(app: &mut DotCraftApp, ctx: &Context, name: &mut String) -> Outcome {
+fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outcome {
     let valid = !name.trim().is_empty() && !name.contains(' ') && !name.contains("..");
     let ((ok, cancel), esc) = modal(ctx, "new_branch", 380.0, |ui| {
         title(ui, tr("New Branch"));
@@ -912,7 +912,7 @@ fn new_branch(app: &mut DotCraftApp, ctx: &Context, name: &mut String) -> Outcom
 }
 
 /// ⌘F12: the members of the active file, filtered by typing.
-fn file_structure(app: &mut DotCraftApp, ctx: &Context, filter: &mut String, selected: &mut usize) -> Outcome {
+fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, selected: &mut usize) -> Outcome {
     let Some(doc) = app.docs.active_doc() else { return Outcome::Close };
     let id = doc.editor.id;
     let Some(tree) = app.insight.structure.get(&id).cloned() else {

@@ -55,9 +55,9 @@ pub struct Settings {
     pub netcoredbg_path: Option<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
-    /// Reopen the project that was open when DotCraft quit (Rider's "Reopen projects on startup").
+    /// Reopen the project that was open when CrabCraft quit (Rider's "Reopen projects on startup").
     pub reopen_last: bool,
-    /// The project open when DotCraft quit; `None` after Close Project.
+    /// The project open when CrabCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
 }
 

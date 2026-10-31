@@ -9,7 +9,7 @@ use rc_term::{SelectKind, SpawnSpec, TermConfig, TermSession, TerminalView};
 use std::time::Duration;
 
 const SCRIPT: &str = r#"
-printf '\033[1mDotCraft terminal\033[0m  \033[3mitalic\033[0m  \033[4munderline\033[0m  \033[2mdim\033[0m  \033[7minverse\033[0m  \033[9mstrike\033[0m  \033[1;3;32mbold italic\033[0m\n'
+printf '\033[1mCrabCraft terminal\033[0m  \033[3mitalic\033[0m  \033[4munderline\033[0m  \033[2mdim\033[0m  \033[7minverse\033[0m  \033[9mstrike\033[0m  \033[1;3;32mbold italic\033[0m\n'
 i=0; while [ $i -lt 8 ]; do printf "\033[3${i}m color$i \033[0m"; i=$((i+1)); done; printf '\n'
 i=0; while [ $i -lt 8 ]; do printf "\033[9${i}m bright$i\033[0m"; i=$((i+1)); done; printf '\n'
 i=0; while [ $i -lt 8 ]; do printf "\033[4${i}m  bg$i  \033[0m"; i=$((i+1)); done; printf '\n'
@@ -19,7 +19,7 @@ i=0; while [ $i -lt 72 ]; do printf "\033[48;2;$((i*3));$((120+i));$((255-i*3))m
 printf '中文 日本語 한국어 | wide: [中] ok  ┌──┬──┐ │ab│cd│ └──┴──┘  λ → ≠ ✓\n'
 printf '/repo/Shop/Program.cs(12,5): \033[31merror\033[0m CS1002: ; expected  https://learn.microsoft.com/dotnet\n'
 printf '\033[32m✓\033[0m Passed!  - Failed: 0, Passed: 42, Skipped: 1 \033[2m(1.2s)\033[0m\n'
-printf '\033[36m~/dotcraft\033[0m \033[35mmain\033[0m $ dotnet build'
+printf '\033[36m~/crabcraft\033[0m \033[35mmain\033[0m $ dotnet build'
 sleep 30
 "#;
 

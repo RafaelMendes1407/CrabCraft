@@ -40,7 +40,7 @@ fn echo_shows_in_the_grid_and_wakes_the_ui() {
 #[test]
 fn environment_is_set() {
     let s = TermSession::spawn(&sh(&["-c", "echo \"$TERM/$COLORTERM/$TERM_PROGRAM/$FOO\""]).env("FOO", "bar"), Waker::noop()).unwrap();
-    assert!(s.wait_for_text("xterm-256color/truecolor/DotCraft/bar", TIMEOUT), "{:#?}", s.screen_lines());
+    assert!(s.wait_for_text("xterm-256color/truecolor/CrabCraft/bar", TIMEOUT), "{:#?}", s.screen_lines());
 }
 
 #[test]

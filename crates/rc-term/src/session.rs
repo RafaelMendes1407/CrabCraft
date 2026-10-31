@@ -284,7 +284,7 @@ impl TermSession {
         }
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERM_PROGRAM", "DotCraft");
+        cmd.env("TERM_PROGRAM", "CrabCraft");
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
         // GUI apps on macOS start without a locale: shells then print UTF-8 as escapes.
         if ["LANG", "LC_ALL", "LC_CTYPE"].iter().all(|k| std::env::var_os(k).is_none()) {

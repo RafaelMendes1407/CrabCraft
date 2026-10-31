@@ -1,7 +1,7 @@
 //! The editor island: the tab strip and the active editor, or the empty state with the most
 //! useful shortcuts when no file is open.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_editor::{Action, EditorEvent, EditorView};
 use rc_kit::i18n::tr;
@@ -25,7 +25,7 @@ enum TabCommand {
     Float(usize),
 }
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let p = rc_kit::pal(ui);
     if app.vcs.diff.is_some() {
         crate::ui::git::diff_view(app, ui);
@@ -56,8 +56,8 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         editor_pane(app, ui, active, body, editor_actions, focus, true);
         return;
     };
-    let id_of = |app: &DotCraftApp, i: usize| app.docs.list[i].editor.id;
-    let index_of = |app: &DotCraftApp, id: u64| app.docs.list.iter().position(|d| d.editor.id == id);
+    let id_of = |app: &CrabCraftApp, i: usize| app.docs.list[i].editor.id;
+    let index_of = |app: &CrabCraftApp, id: u64| app.docs.list.iter().position(|d| d.editor.id == id);
     // A tab chosen in the strip goes to the focused pane.
     let active_id = id_of(app, active);
     if active_id != split.main && active_id != split.other {
@@ -130,7 +130,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
 
 /// The document the main pane shows: the active one, unless it is in its own window (then the
 /// last one shown here).
-fn main_doc(app: &mut DotCraftApp) -> Option<usize> {
+fn main_doc(app: &mut CrabCraftApp) -> Option<usize> {
     let active = app.docs.active?;
     let id = app.docs.list[active].editor.id;
     if !app.floating.contains(&id) {
@@ -144,7 +144,7 @@ fn main_doc(app: &mut DotCraftApp) -> Option<usize> {
 
 /// One editor: conflict banner, find bar (when focused), the editor and its events. Returns
 /// whether it was clicked or got the keyboard (so a split pane becomes the active one).
-pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect, editor_actions: Vec<Action>, focus: bool, focused: bool) -> bool {
+pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rect, editor_actions: Vec<Action>, focus: bool, focused: bool) -> bool {
     let p = rc_kit::pal(ui);
     let editor_rect = rect;
     // Conflict banner: the file changed on disk while it had unsaved edits.
@@ -328,10 +328,10 @@ pub fn editor_pane(app: &mut DotCraftApp, ui: &mut Ui, active: usize, rect: Rect
 }
 
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
-fn editor_context_menu(app: &mut DotCraftApp, resp: &egui::Response) {
+fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);
-    let shortcut = |app: &DotCraftApp, a: Action| app.keymap.shortcut_text(a);
+    let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
     let mut usings = false;
@@ -413,7 +413,7 @@ fn file_color(path: &std::path::Path) -> Option<egui::Color32> {
 
 /// The tab strip: one scrolling row with a list of every tab (Rider's hidden tabs), or several
 /// rows (Settings › Editor). Tabs drag to reorder; returns the strip's bottom.
-fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<TabCommand>) -> f32 {
+fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<TabCommand>) -> f32 {
     let multirow = app.settings.tabs_multirow;
     let colors = app.settings.tab_colors;
     let drag_id = egui::Id::new("tab_drag");
@@ -532,7 +532,7 @@ fn tab_strip(app: &mut DotCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<
     bottom
 }
 
-fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &mut Vec<TabCommand>) {
+fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &mut Vec<TabCommand>) {
     resp.context_menu(|ui| {
         ui.set_min_width(220.0);
         let shortcut = app.keymap.shortcut_text(Action::CloseTab).unwrap_or_default();
@@ -605,7 +605,7 @@ fn tab_menu(app: &mut DotCraftApp, resp: &egui::Response, i: usize, commands: &m
     });
 }
 
-fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
+fn run_tab_commands(app: &mut CrabCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
     for c in commands {
         match c {
             TabCommand::Close(i) => app.close_tab(i),
@@ -685,7 +685,7 @@ fn run_tab_commands(app: &mut DotCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
 }
 
 /// No open file: the most useful shortcuts, like IntelliJ's empty editor.
-fn empty_state(app: &mut DotCraftApp, ui: &mut Ui) {
+fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let rect = ui.max_rect();
     let lines: Vec<(&str, Option<String>)> = vec![
@@ -720,7 +720,7 @@ fn empty_state(app: &mut DotCraftApp, ui: &mut Ui) {
 
 /// Documents in windows of their own ("Open in New Window"): each an OS window with its
 /// editor; closing it brings the tab back to the main window.
-pub fn floating_windows(app: &mut DotCraftApp, ctx: &egui::Context) {
+pub fn floating_windows(app: &mut CrabCraftApp, ctx: &egui::Context) {
     let ids = app.floating.clone();
     for id in ids {
         let Some(idx) = app.docs.list.iter().position(|d| d.editor.id == id) else {
@@ -729,8 +729,8 @@ pub fn floating_windows(app: &mut DotCraftApp, ctx: &egui::Context) {
         };
         let name = app.docs.list[idx].name();
         let modified = if app.docs.list[idx].is_modified() { " *" } else { "" };
-        let builder = egui::ViewportBuilder::default().with_title(format!("{name}{modified} – DotCraft")).with_inner_size([960.0, 720.0]);
-        let closed = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("dotcraft_doc", id)), builder, |ui, _| {
+        let builder = egui::ViewportBuilder::default().with_title(format!("{name}{modified} – CrabCraft")).with_inner_size([960.0, 720.0]);
+        let closed = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("crabcraft_doc", id)), builder, |ui, _| {
             let p = rc_kit::pal(ui);
             let rect = ui.max_rect();
             ui.painter().rect_filled(rect, 0.0, p.island_bg);

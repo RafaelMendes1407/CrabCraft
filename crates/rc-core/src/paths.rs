@@ -1,13 +1,13 @@
-//! Where DotCraft keeps its files: `~/Library/Application Support/DotCraft` on macOS,
-//! `%APPDATA%\DotCraft` on Windows. `DOTCRAFT_HOME` overrides it (tests, portable installs).
+//! Where CrabCraft keeps its files: `~/Library/Application Support/CrabCraft` on macOS,
+//! `%APPDATA%\CrabCraft` on Windows. `CRABCRAFT_HOME` overrides it (tests, portable installs).
 
 use std::path::PathBuf;
 
 pub fn data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("DOTCRAFT_HOME").filter(|v| !v.is_empty()) {
+    if let Some(dir) = std::env::var_os("CRABCRAFT_HOME").filter(|v| !v.is_empty()) {
         return PathBuf::from(dir);
     }
-    dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("DotCraft")
+    dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("CrabCraft")
 }
 
 /// Downloaded tools (the Roslyn language server, netcoredbg).

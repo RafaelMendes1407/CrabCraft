@@ -138,7 +138,7 @@ impl<'a> TerminalView<'a> {
 
     /// Widget id of the view of session `id` (to request focus from outside).
     pub fn id_for(session_id: u64) -> Id {
-        Id::new(("dotcraft_terminal", session_id))
+        Id::new(("crabcraft_terminal", session_id))
     }
 
     /// Requests keyboard focus this frame.

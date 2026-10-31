@@ -2,7 +2,7 @@
 //! installed packages, the ones with updates and the ones to consolidate; a package's details
 //! and, per project, its installed version with Install / Update / Remove.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::toolwindow::ToolWindow;
 use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_core::{Inbox, Runtime, Waker};
@@ -264,7 +264,7 @@ fn common_root(paths: &[PathBuf]) -> Option<PathBuf> {
 }
 
 /// The NuGet tool window.
-pub fn window(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if !app.nuget.loaded {
         let projects = app.solution_projects();
         let dotnet = rc_dotnet::Dotnet::locate(Some(&crate::app::dotnet_path(&app.settings)));

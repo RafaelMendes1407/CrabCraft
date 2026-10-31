@@ -1,4 +1,4 @@
-//! DotCraft's look: the Islands theme and Rider editor schemes, the New UI icon set, the
+//! CrabCraft's look: the Islands theme and Rider editor schemes, the New UI icon set, the
 //! window chrome, the application mark and the interface translations.
 
 pub mod branding;

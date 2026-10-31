@@ -63,7 +63,7 @@ fn copy_tree(from: &Path, to: &Path) {
 }
 
 fn temp_copy() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::Builder::new().prefix("dotcraft-shop-").tempdir().unwrap();
+    let dir = tempfile::Builder::new().prefix("crabcraft-shop-").tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap().join("Shop");
     copy_tree(&shop(), &root);
     (dir, root)
@@ -417,7 +417,7 @@ fn runs_a_blazor_webassembly_app_with_its_dev_server() {
     use std::io::{Read, Write};
     let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
     // Not a hidden folder: Razor skips sources under paths with a `.` segment.
-    let dir = tempfile::Builder::new().prefix("dotcraft-wasm").tempdir().unwrap();
+    let dir = tempfile::Builder::new().prefix("crabcraft-wasm").tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let ok = dotnet.std_command().args(["new", "blazorwasm", "-n", "Wasm", "-o"]).arg(root.join("Wasm")).args(["-f", "net10.0"]).output().unwrap();
     assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stdout));
@@ -463,7 +463,7 @@ fn runs_a_blazor_webassembly_app_with_its_dev_server() {
 fn watch_reloads_a_web_app_after_a_change() {
     use std::io::{Read, Write};
     let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
-    let dir = tempfile::Builder::new().prefix("dotcraft-watch").tempdir().unwrap();
+    let dir = tempfile::Builder::new().prefix("crabcraft-watch").tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let ok = dotnet.std_command().args(["new", "web", "-n", "Hot", "-o"]).arg(root.join("Hot")).args(["-f", "net8.0"]).output().unwrap();
     assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stdout));

@@ -58,7 +58,7 @@ impl ParserPool {
         let (jobs, job_rx) = unbounded::<Job>();
         let (result_tx, results) = unbounded();
         std::thread::Builder::new()
-            .name("dotcraft-parser".into())
+            .name("crabcraft-parser".into())
             .spawn(move || run(job_rx, result_tx, wake))
             .expect("spawn parser thread");
         ParserPool { jobs, results }

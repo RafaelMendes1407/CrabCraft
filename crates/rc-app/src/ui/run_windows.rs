@@ -1,6 +1,6 @@
 //! Build, Run, Tests and Terminal tool windows.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::runner::{RunnerOutput, TestState};
 use crate::toolwindow::ToolWindow;
 use crate::ui::toolwindows::{HEADER_H, empty_state};
@@ -40,7 +40,7 @@ pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEve
     rc_term::TerminalView::new(term, &config).show(ui).events
 }
 
-pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
+pub fn handle_outputs(app: &mut CrabCraftApp, outputs: Vec<RunnerOutput>) {
     for o in outputs {
         match o {
             RunnerOutput::ShowTool(tw) => app.dock.show(tw),
@@ -50,7 +50,7 @@ pub fn handle_outputs(app: &mut DotCraftApp, outputs: Vec<RunnerOutput>) {
     }
 }
 
-pub fn open_link(app: &mut DotCraftApp, link: rc_term::Link, cwd: Option<std::path::PathBuf>) {
+pub fn open_link(app: &mut CrabCraftApp, link: rc_term::Link, cwd: Option<std::path::PathBuf>) {
     match link {
         rc_term::Link::Url(u) => open_url(&u),
         rc_term::Link::File { path, line, column } => {
@@ -74,7 +74,7 @@ pub fn open_url(url: &str) {
 
 // ---------------------------------------------------------------------------------- Build
 
-pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
     let target = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf());
     let actions = [(ico::BUILD, tr("Build Solution"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
@@ -156,7 +156,7 @@ pub fn build(app: &mut DotCraftApp, ui: &mut Ui) {
 
 // ---------------------------------------------------------------------------------- Run
 
-pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let active = app.runner.active_run;
     let running = app.runner.runs.get(active).is_some_and(|r| r.running());
@@ -233,7 +233,7 @@ pub fn run(app: &mut DotCraftApp, ui: &mut Ui) {
 
 // ---------------------------------------------------------------------------------- Tests
 
-pub fn tests(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.tests.as_ref().is_some_and(|t| t.running);
     let has = app.runner.tests.is_some();
     let show_passed = app.runner.tests.as_ref().is_none_or(|t| t.show_passed);
@@ -429,7 +429,7 @@ fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, select
 
 // ---------------------------------------------------------------------------------- Terminal
 
-pub fn terminal(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }

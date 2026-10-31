@@ -3,7 +3,7 @@
 /// A realistic C# file of about `lines` lines: classes with fields, properties, methods,
 /// LINQ, string interpolation, comments and regions.
 pub fn big_csharp(lines: usize) -> String {
-    let mut s = String::from("using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Threading.Tasks;\n\nnamespace DotCraft.Samples.Large;\n\n");
+    let mut s = String::from("using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing System.Threading.Tasks;\n\nnamespace CrabCraft.Samples.Large;\n\n");
     let mut i = 0;
     while s.lines().count() < lines {
         s.push_str(&format!(

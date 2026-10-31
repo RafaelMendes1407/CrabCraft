@@ -3,7 +3,7 @@
 //! evaluation, steps and Run to Cursor; and Shop.Api stopping on a breakpoint in a controller
 //! during an HTTP request.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use rc_core::{Settings, Waker};
 use rc_editor::BreakpointKind;
 use std::io::{Read, Write};
@@ -19,7 +19,7 @@ fn test_home() -> PathBuf {
 /// netcoredbg, downloaded once into `target/test-home` (kept between runs).
 fn netcoredbg() -> PathBuf {
     // SAFETY: serialized by HOME_LOCK.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", test_home()) };
+    unsafe { std::env::set_var("CRABCRAFT_HOME", test_home()) };
     if let Some(cmd) = rc_dap::netcoredbg::locate(None).filter(|c| c.origin != rc_dap::netcoredbg::Origin::Path) {
         return cmd.program;
     }
@@ -34,17 +34,17 @@ fn netcoredbg() -> PathBuf {
 }
 
 /// An app with the Shop solution open, its own (empty) data folder and netcoredbg configured.
-fn app(home: &Path) -> DotCraftApp {
+fn app(home: &Path) -> CrabCraftApp {
     let netcoredbg = netcoredbg();
     // SAFETY: serialized by HOME_LOCK.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", home) };
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home) };
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), netcoredbg_path: Some(netcoredbg), ..Settings::default() };
-    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
     app
 }
 
-fn pump(app: &mut DotCraftApp, what: &str, timeout: Duration, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
+fn pump(app: &mut CrabCraftApp, what: &str, timeout: Duration, mut done: impl FnMut(&mut CrabCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < timeout {
         let outs = app.debugger.update(&mut app.docs);
@@ -60,7 +60,7 @@ fn pump(app: &mut DotCraftApp, what: &str, timeout: Duration, mut done: impl FnM
     panic!("timed out waiting for {what} (state: {})", app.debugger.state_label());
 }
 
-fn until_stopped(app: &mut DotCraftApp, what: &str) {
+fn until_stopped(app: &mut CrabCraftApp, what: &str) {
     pump(app, what, Duration::from_secs(300), |a| a.debugger.stopped() || a.debugger.session.as_ref().is_some_and(|s| s.state().is_ended()));
     assert!(app.debugger.stopped(), "not stopped at {what}: {}", app.debugger.state_label());
 }
@@ -70,7 +70,7 @@ fn line_of(file: &Path, needle: &str) -> usize {
     std::fs::read_to_string(file).unwrap().lines().position(|l| l.contains(needle)).unwrap_or_else(|| panic!("{needle} not in {}", file.display()))
 }
 
-fn locals(app: &mut DotCraftApp) -> Vec<rc_dap::Variable> {
+fn locals(app: &mut CrabCraftApp) -> Vec<rc_dap::Variable> {
     let frame = app.debugger.session.as_ref().unwrap().selected_frame().unwrap().id;
     pump(app, "scopes", Duration::from_secs(30), |a| {
         let s = a.debugger.session.as_mut().unwrap();
@@ -96,7 +96,7 @@ fn value(vars: &[rc_dap::Variable], name: &str) -> String {
     vars.iter().find(|v| v.name == name).unwrap_or_else(|| panic!("no {name} in {vars:?}")).value.clone()
 }
 
-fn select(app: &mut DotCraftApp, prefix: &str) -> crate::runner::RunConfig {
+fn select(app: &mut CrabCraftApp, prefix: &str) -> crate::runner::RunConfig {
     let i = app.runner.configs.iter().position(|c| c.name.starts_with(prefix)).unwrap();
     app.runner.selected = i;
     app.runner.configs[i].clone()

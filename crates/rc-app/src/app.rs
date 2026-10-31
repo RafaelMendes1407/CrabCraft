@@ -43,7 +43,7 @@ pub struct WorkspaceState {
     pub solution: Option<Solution>,
 }
 
-pub struct DotCraftApp {
+pub struct CrabCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
     pub editor_config: EditorConfig,
@@ -98,7 +98,7 @@ pub struct DotCraftApp {
     pub had_focus: bool,
 }
 
-impl DotCraftApp {
+impl CrabCraftApp {
     pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
         let settings = Settings::load();
         i18n::set_lang(settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -124,7 +124,7 @@ impl DotCraftApp {
         let keymap = Keymap::new(keymap_kind(settings.keymap));
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
-        DotCraftApp {
+        CrabCraftApp {
             keymap,
             editor_config,
             workspace: None,
@@ -1146,14 +1146,14 @@ pub fn startup_paths(settings: &Settings, from_system: Vec<PathBuf>) -> Vec<Path
     settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).into_iter().collect()
 }
 
-impl eframe::App for DotCraftApp {
+impl eframe::App for CrabCraftApp {
     fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Window title: active file and workspace (Mission Control, the Window menu).
         let title = match (self.docs.active_doc(), &self.workspace) {
-            (Some(d), Some(w)) => format!("{} – {} – DotCraft", d.name(), w.ws.name()),
-            (Some(d), None) => format!("{} – DotCraft", d.name()),
-            (None, Some(w)) => format!("{} – DotCraft", w.ws.name()),
-            (None, None) => "DotCraft".to_string(),
+            (Some(d), Some(w)) => format!("{} – {} – CrabCraft", d.name(), w.ws.name()),
+            (Some(d), None) => format!("{} – CrabCraft", d.name()),
+            (None, Some(w)) => format!("{} – CrabCraft", w.ws.name()),
+            (None, None) => "CrabCraft".to_string(),
         };
         if self.window_title != title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

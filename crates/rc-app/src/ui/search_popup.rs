@@ -1,7 +1,7 @@
 //! Search Everywhere (⇧⇧) and its Go to File / Type / Symbol tabs: a popup under the toolbar
 //! with tabs, an input and ranked results.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::search::{SeTab, SearchEverywhere, action_items};
 use egui::{Align2, Color32, Context, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::tr;
@@ -18,7 +18,7 @@ enum Hit {
 
 const ROW_H: f32 = 28.0;
 
-fn collect(app: &DotCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str>, Hit)> {
+fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str>, Hit)> {
     let mut out: Vec<(Option<&'static str>, Hit)> = Vec::new();
     let text = se.text.trim();
     let want = |t: SeTab| se.tab == SeTab::All || se.tab == t;
@@ -73,7 +73,7 @@ fn collect(app: &DotCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str
     out
 }
 
-pub fn show(app: &mut DotCraftApp, ctx: &Context) {
+pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut se) = app.search_everywhere.take() else { return };
     se.update_symbols(&app.insight);
     if !se.symbols.is_empty() || !se.text.is_empty() {
@@ -246,7 +246,7 @@ pub fn show(app: &mut DotCraftApp, ctx: &Context) {
 }
 
 /// The find/replace bar at the top of the editor (⌘F / ⌘R). Returns its height.
-pub fn find_bar(app: &mut DotCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
+pub fn find_bar(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
     let Some(mut bar) = app.find_bar.take() else { return 0.0 };
     let Some(doc_i) = app.docs.active else {
         app.find_bar = Some(bar);

@@ -44,7 +44,7 @@ pub enum MenuCommand {
 
 impl MenuCommand {
     fn id(self) -> String {
-        format!("dotcraft.{self:?}")
+        format!("crabcraft.{self:?}")
     }
 
     fn icon(self) -> Option<Ico> {
@@ -354,20 +354,20 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     let sep = PredefinedMenuItem::separator;
 
     let app_menu = Submenu::with_items(
-        "DotCraft",
+        "CrabCraft",
         true,
         &[
-            &item(MenuCommand::About, || tr("About DotCraft"), None),
+            &item(MenuCommand::About, || tr("About CrabCraft"), None),
             &sep(),
             &act(Action::ShowSettings, || tr("Settings…")),
             &sep(),
             &predefined(PredefinedMenuItem::services(Some(tr("Services"))), || tr("Services")),
             &sep(),
-            &predefined(PredefinedMenuItem::hide(Some(tr("Hide DotCraft"))), || tr("Hide DotCraft")),
+            &predefined(PredefinedMenuItem::hide(Some(tr("Hide CrabCraft"))), || tr("Hide CrabCraft")),
             &predefined(PredefinedMenuItem::hide_others(Some(tr("Hide Others"))), || tr("Hide Others")),
             &predefined(PredefinedMenuItem::show_all(Some(tr("Show All"))), || tr("Show All")),
             &sep(),
-            &item(MenuCommand::Quit, || tr("Quit DotCraft"), acc(cmd, Code::KeyQ)),
+            &item(MenuCommand::Quit, || tr("Quit CrabCraft"), acc(cmd, Code::KeyQ)),
         ],
     )?;
     let file_menu = submenu(
@@ -508,7 +508,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     )?;
     #[cfg(target_os = "macos")]
     window_menu.set_as_windows_menu_for_nsapp();
-    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::About, || tr("About DotCraft"), None)])?;
+    let help_menu = submenu(|| tr("Help"), &[&item(MenuCommand::About, || tr("About CrabCraft"), None)])?;
     #[cfg(target_os = "macos")]
     help_menu.set_as_help_menu_for_nsapp();
 
@@ -543,8 +543,8 @@ mod tests {
                 assert!(menu_icon(icon, dark).is_some());
             }
         }
-        // Raw RGBA dumps for a visual check (`DOTCRAFT_DUMP_MENU_ICONS=1`).
-        if std::env::var_os("DOTCRAFT_DUMP_MENU_ICONS").is_some() {
+        // Raw RGBA dumps for a visual check (`CRABCRAFT_DUMP_MENU_ICONS=1`).
+        if std::env::var_os("CRABCRAFT_DUMP_MENU_ICONS").is_some() {
             let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
             std::fs::create_dir_all(&out).unwrap();
             for a in [Action::Run, Action::Debug, Action::StopRun, Action::Build, Action::Commit, Action::FindInFiles, Action::StepOver, Action::ToggleBreakpoint] {

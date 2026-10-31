@@ -1,7 +1,7 @@
 //! Main toolbar (New UI): project widget, VCS widget, run configuration widget, run/debug
 //! buttons, search and settings. It doubles as the window's title bar.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_editor::Action;
 use rc_kit::i18n::{tr, trf};
@@ -66,7 +66,7 @@ fn gradient_rounded_rect(r: Rect, radius: f32, top: Color32, bottom: Color32) ->
     mesh
 }
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
     // The whole bar drags the window (behind the widgets).
     let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
@@ -220,9 +220,9 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
     });
 }
 
-fn project_widget(app: &mut DotCraftApp, ui: &mut Ui) {
+fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
-    let name = app.workspace.as_ref().map_or_else(|| "DotCraft".to_string(), |w| w.ws.name());
+    let name = app.workspace.as_ref().map_or_else(|| "CrabCraft".to_string(), |w| w.ws.name());
     let font = theme::bold(13.0);
     let galley = ui.painter().layout_no_wrap(name.clone(), font, p.text);
     let w = 8.0 + 20.0 + 8.0 + galley.size().x + 4.0 + 16.0 + 6.0;

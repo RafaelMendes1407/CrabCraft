@@ -1,12 +1,12 @@
 //! Status bar (New UI): navigation path on the left; caret position, line ending, encoding,
 //! indentation and read-only state on the right; transient messages in between.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{FontId, Ui};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let now = ui.input(|i| i.time);
     for n in &mut app.notices {
@@ -66,7 +66,7 @@ pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 /// netcoredbg download progress and the state of the debug session (click: Debug window).
-fn debugger_widget(app: &mut DotCraftApp, ui: &mut Ui) {
+fn debugger_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     let (icon, text) = if let Some((done, total)) = app.debugger.downloading {
         let pct = total.map(|t| format!(" {}%", done * 100 / t.max(1))).unwrap_or_default();
         (ico::DEBUG, format!("{}{pct}", tr("Downloading netcoredbg…")))
@@ -82,7 +82,7 @@ fn debugger_widget(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 /// C# language server state: download offer, progress, failures with a restart button.
-fn insight_widget(app: &mut DotCraftApp, ui: &mut Ui) {
+fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     use crate::insight::InsightStatus as S;
     let p = rc_kit::pal(ui);
     match app.insight.status.clone() {
@@ -131,7 +131,7 @@ fn insight_widget(app: &mut DotCraftApp, ui: &mut Ui) {
 }
 
 /// Workspace › folders › file (each part clickable to locate it in the explorer).
-fn breadcrumbs(app: &mut DotCraftApp, ui: &mut Ui) {
+fn breadcrumbs(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let Some(w) = &app.workspace else { return };
     let mut parts: Vec<String> = vec![w.ws.name()];

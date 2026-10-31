@@ -3,7 +3,7 @@
 //! the right members, and a rename edits both projects. Uses the server in `target/test-home`
 //! (downloaded by the rc-lsp tests).
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::insight::InsightStatus;
 use rc_core::{Settings, Waker};
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ fn demo_solution(dir: &Path) -> PathBuf {
 }
 
 /// Runs the app's per-frame logic until `done` holds.
-fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
+fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {
         let out = app.insight.update(&mut app.docs, true);
@@ -48,11 +48,11 @@ fn csharp_insight_end_to_end() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
     // SAFETY: set before the app reads it; other tests use their own temp homes the same way.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", &home) };
+    unsafe { std::env::set_var("CRABCRAFT_HOME", &home) };
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let sln = demo_solution(&root);
-    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace(&sln);
     pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
 
@@ -129,17 +129,17 @@ fn go_to_declaration_and_back() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
     // SAFETY: as above.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", &home) };
+    unsafe { std::env::set_var("CRABCRAFT_HOME", &home) };
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let sln = demo_solution(&root);
     let (program, greeter) = (root.join("App/Program.cs"), root.join("Lib/Greeter.cs"));
-    let mut app = DotCraftApp::with_settings(Settings::default(), Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace(&sln);
     app.open_file(&program);
     // Clicked while the projects still load: it goes there once they have.
     pump(&mut app, "the server", |a| a.insight.ready());
-    let click = |app: &mut DotCraftApp, word: &str| {
+    let click = |app: &mut CrabCraftApp, word: &str| {
         let i = app.docs.active.unwrap();
         let d = &mut app.docs.list[i];
         let pos = d.editor.buffer.rope().to_string().find(word).unwrap() + 2;
@@ -149,7 +149,7 @@ fn go_to_declaration_and_back() {
         app.push_nav_at(path, pos);
         pos
     };
-    let at = |a: &DotCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col()));
+    let at = |a: &CrabCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col()));
 
     // To the method in the other project's file, on its name.
     let from = click(&mut app, "Hello(\"world\")");

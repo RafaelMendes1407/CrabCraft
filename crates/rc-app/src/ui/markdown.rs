@@ -2,7 +2,7 @@
 //! side by side, switched from the buttons at the top right; the preview follows the editor's
 //! scroll and updates as you type.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::docs::MdView;
 use egui::{Rect, Ui, vec2};
 use rc_kit::i18n::tr;
@@ -21,9 +21,9 @@ pub fn layout(view: MdView, rect: Rect) -> (Option<Rect>, Option<Rect>) {
 }
 
 /// The rendered page of document `idx` in `rect`. Returns whether it was clicked.
-pub fn preview(app: &mut DotCraftApp, ui: &mut Ui, idx: usize, rect: Rect) -> bool {
+pub fn preview(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) -> bool {
     let p = rc_kit::pal(ui);
-    let DotCraftApp { docs, md_cache, .. } = app;
+    let CrabCraftApp { docs, md_cache, .. } = app;
     let doc = &docs.list[idx];
     let id = doc.editor.id;
     ui.painter().rect_filled(rect, 0.0, p.editor_bg);
@@ -65,7 +65,7 @@ pub fn preview(app: &mut DotCraftApp, ui: &mut Ui, idx: usize, rect: Rect) -> bo
 }
 
 /// Editor / Editor and Preview / Preview, floating at the top right of the pane.
-pub fn switcher(app: &mut DotCraftApp, ui: &mut Ui, idx: usize, rect: Rect) {
+pub fn switcher(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) {
     let Some(current) = app.docs.list[idx].md_view else { return };
     let p = rc_kit::pal(ui);
     let id = app.docs.list[idx].editor.id;

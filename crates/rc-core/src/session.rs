@@ -121,8 +121,8 @@ mod tests {
     #[test]
     fn sessions_round_trip_per_workspace() {
         let dir = tempfile::tempdir().unwrap();
-        // SAFETY: tests in this crate do not read DOTCRAFT_HOME concurrently with other values.
-        unsafe { std::env::set_var("DOTCRAFT_HOME", dir.path()) };
+        // SAFETY: tests in this crate do not read CRABCRAFT_HOME concurrently with other values.
+        unsafe { std::env::set_var("CRABCRAFT_HOME", dir.path()) };
         let ws = dir.path().join("MySolution");
         std::fs::create_dir_all(&ws).unwrap();
         let mut s = Session::default();

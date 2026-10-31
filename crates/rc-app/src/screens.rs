@@ -2,7 +2,7 @@
 //! visual review and the README. Run with `cargo test -p rc-app screens -- --ignored`;
 //! images go to `target/snapshots/`.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::vec2;
 use egui_kittest::Harness;
 use rc_core::{Settings, Waker};
@@ -12,23 +12,23 @@ pub fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures").canonicalize().unwrap()
 }
 
-/// Tests that point `DOTCRAFT_HOME` somewhere hold this lock: the variable is process-wide.
+/// Tests that point `CRABCRAFT_HOME` somewhere hold this lock: the variable is process-wide.
 pub static HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// An app with its own data folder (never the user's settings or sessions).
-pub fn test_app(home: &Path, dark: bool) -> DotCraftApp {
-    // SAFETY: tests that read DOTCRAFT_HOME set it to the same kind of temp folder first.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", home) };
+pub fn test_app(home: &Path, dark: bool) -> CrabCraftApp {
+    // SAFETY: tests that read CRABCRAFT_HOME set it to the same kind of temp folder first.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home) };
     let mut settings = Settings::default();
     settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
-    DotCraftApp::with_settings(settings, Waker::noop(), None)
+    CrabCraftApp::with_settings(settings, Waker::noop(), None)
 }
 
-pub fn harness(app: DotCraftApp, size: egui::Vec2) -> Harness<'static, DotCraftApp> {
+pub fn harness(app: CrabCraftApp, size: egui::Vec2) -> Harness<'static, CrabCraftApp> {
     let mut first = true;
     let mut frame = eframe::Frame::_new_kittest();
     let mut h = Harness::builder().with_size(size).build_ui_state(
-        move |ui, app: &mut DotCraftApp| {
+        move |ui, app: &mut CrabCraftApp| {
             if std::mem::take(&mut first) {
                 rc_kit::theme::install_fonts(ui.ctx());
                 return;
@@ -79,7 +79,7 @@ fn screens() {
         h.render().unwrap().save(out.join(format!("loose-file-{suffix}.png"))).unwrap();
 
         // Razor and solution files.
-        let samples = tempfile::Builder::new().prefix("dotcraft-razor").tempdir().unwrap();
+        let samples = tempfile::Builder::new().prefix("crabcraft-razor").tempdir().unwrap();
         let razor = samples.path().join("Orders.razor");
         std::fs::write(&razor, "@page \"/orders\"\n@using Shop.Core\n@inject OrderService Orders\n\n<PageTitle>Orders</PageTitle>\n\n<h1 class=\"title\">Orders &amp; quotes</h1>\n\n@if (orders is null)\n{\n    <p><em>Loading…</em></p>\n}\nelse\n{\n    <table class=\"table\">\n        @foreach (var order in orders)\n        {\n            <tr @key=\"order.Id\">\n                <td>@order.Customer</td>\n                <td>@order.Total.ToString(\"0.00\")</td>\n                <td><button class=\"btn\" @onclick=\"() => Remove(order)\">Remove</button></td>\n            </tr>\n        }\n    </table>\n}\n\n@code {\n    private List<Order>? orders;\n\n    protected override async Task OnInitializedAsync()\n    {\n        // Load the sample orders.\n        orders = await Orders.GetAllAsync();\n    }\n\n    private void Remove(Order order) => orders?.Remove(order);\n}\n").unwrap();
         let mut app = test_app(home.path(), dark);
@@ -196,7 +196,7 @@ fn screens() {
         std::fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icon-64.png"), samples.path().join("docs/icon.png")).unwrap();
         std::fs::write(
             &md,
-            "# Shop\n\nSample solution for **DotCraft**: an API, a CLI and *three* test projects.\n\n![icon](docs/icon.png)\n\n## Projects\n\n- `Shop.Core`: orders and prices\n- `Shop.Api`: ASP.NET Core minimal API\n  - Swagger at `/swagger`\n- [ ] Blazor front end\n- [x] Tests\n\n## Run\n\n```bash\ndotnet run --project src/Shop.Api\n```\n\n| Project | Framework |\n| --- | --- |\n| Shop.Core | net8.0 |\n| Shop.Api | net8.0 |\n\n> Prices include VAT.\n\nSee the [.NET docs](https://learn.microsoft.com/dotnet/).\n",
+            "# Shop\n\nSample solution for **CrabCraft**: an API, a CLI and *three* test projects.\n\n![icon](docs/icon.png)\n\n## Projects\n\n- `Shop.Core`: orders and prices\n- `Shop.Api`: ASP.NET Core minimal API\n  - Swagger at `/swagger`\n- [ ] Blazor front end\n- [x] Tests\n\n## Run\n\n```bash\ndotnet run --project src/Shop.Api\n```\n\n| Project | Framework |\n| --- | --- |\n| Shop.Core | net8.0 |\n| Shop.Api | net8.0 |\n\n> Prices include VAT.\n\nSee the [.NET docs](https://learn.microsoft.com/dotnet/).\n",
         )
         .unwrap();
         h.state_mut().open_file(&md);
@@ -335,7 +335,7 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     assert!(app.explorer.expanded.contains("sf:/src"));
 }
 
-fn run_frames(h: &mut Harness<'static, DotCraftApp>, what: &str, mut done: impl FnMut(&DotCraftApp) -> bool) {
+fn run_frames(h: &mut Harness<'static, CrabCraftApp>, what: &str, mut done: impl FnMut(&CrabCraftApp) -> bool) {
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(240) {
         h.run_steps(1);
@@ -482,7 +482,7 @@ fn screens_insight() {
     app.open_file(&program);
     let mut h = harness(app, vec2(1440.0, 900.0));
     run_frames(&mut h, "Roslyn", |a| a.insight.status == crate::insight::InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
-    if std::env::var_os("DOTCRAFT_DEBUG_DIAGS").is_some() {
+    if std::env::var_os("CRABCRAFT_DEBUG_DIAGS").is_some() {
         let d = h.state().docs.active_doc().unwrap();
         for x in &d.editor.diagnostics {
             eprintln!("DIAG {:?} {:?} {} {:?} unnecessary={}", d.editor.buffer.line_col(x.start), x.severity, x.message, x.code, x.unnecessary);

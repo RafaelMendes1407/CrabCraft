@@ -2,7 +2,7 @@
 //! get gutter marks, the diff view aligns both sides, a commit and a new branch work, and
 //! blame annotates every line.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use rc_core::{Settings, Waker};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -12,7 +12,7 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
 }
 
-fn pump(app: &mut DotCraftApp, what: &str, mut done: impl FnMut(&mut DotCraftApp) -> bool) {
+fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(30) {
         let n = app.vcs.update(&mut app.docs, true);
@@ -30,7 +30,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", home.path()) };
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap();
     git(&root, &["init", "-q", "-b", "main"]);
@@ -41,7 +41,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     git(&root, &["commit", "-q", "-m", "First"]);
 
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
-    let mut app = DotCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
     pump(&mut app, "status", |a| a.vcs.status.is_some());
     assert_eq!(app.vcs.branch_name().as_deref(), Some("main"));

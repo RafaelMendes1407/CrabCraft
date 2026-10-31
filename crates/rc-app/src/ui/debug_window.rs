@@ -2,7 +2,7 @@
 //! Variables" (frames on the left; watches and variables of the selected frame on the right)
 //! and "Console" (program output).
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use crate::debugger::Debugger;
 use crate::toolwindow::ToolWindow;
 use crate::ui::run_windows::{console, header, open_link};
@@ -16,7 +16,7 @@ use rc_kit::{Ico, ico, icons, theme};
 const ROW_H: f32 = 22.0;
 const INDENT: f32 = 16.0;
 
-pub fn show(app: &mut DotCraftApp, ui: &mut Ui) {
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let active = app.debugger.active();
     let stopped = app.debugger.stopped();
     let has = app.debugger.session.is_some();

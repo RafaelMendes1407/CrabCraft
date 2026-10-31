@@ -11,7 +11,7 @@ pub type Result<T, E = GitError> = std::result::Result<T, E>;
 pub enum GitError {
     #[error("Git executable not found")]
     GitNotFound,
-    #[error("Git {found} is too old (DotCraft needs {required} or newer)")]
+    #[error("Git {found} is too old (CrabCraft needs {required} or newer)")]
     UnsupportedVersion { found: String, required: String },
     #[error("{0} is not inside a Git repository")]
     NotARepository(PathBuf),
@@ -62,7 +62,7 @@ impl GitError {
         use GitError::*;
         match self {
             GitNotFound => ("Git executable not found", vec![]),
-            UnsupportedVersion { found, required } => ("Git {found} is too old (DotCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())]),
+            UnsupportedVersion { found, required } => ("Git {found} is too old (CrabCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())]),
             NotARepository(p) => ("{path} is not inside a Git repository", vec![("path", p.display().to_string())]),
             NothingToCommit => ("Nothing to commit", vec![]),
             NothingToStash => ("No local changes to stash", vec![]),

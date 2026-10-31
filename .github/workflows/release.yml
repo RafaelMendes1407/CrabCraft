@@ -43,9 +43,9 @@ jobs:
       - name: Build the dmg and the zip
         run: |
           scripts/bundle.sh --universal --dmg --zip
-          dmg=$(ls target/release/DotCraft-*-universal.dmg)
-          zip=$(ls target/release/DotCraft-*-macos-universal.zip)
-          lipo -archs target/release/DotCraft.app/Contents/MacOS/DotCraft
+          dmg=$(ls target/release/CrabCraft-*-universal.dmg)
+          zip=$(ls target/release/CrabCraft-*-macos-universal.zip)
+          lipo -archs target/release/CrabCraft.app/Contents/MacOS/CrabCraft
           hdiutil verify "$dmg"
           echo "DMG=$dmg" >> "$GITHUB_ENV"
           echo "ZIP=$zip" >> "$GITHUB_ENV"
@@ -107,15 +107,15 @@ jobs:
       - name: Package
         run: |
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
-          New-Item -ItemType Directory DotCraft | Out-Null
-          Copy-Item target/${{ matrix.target }}/release/dotcraft.exe DotCraft/DotCraft.exe
-          Copy-Item LICENSE-MIT, LICENSE-APACHE DotCraft/
-          $archive = "DotCraft-$version-windows-${{ matrix.arch }}.zip"
-          Compress-Archive -Path DotCraft -DestinationPath $archive
+          New-Item -ItemType Directory CrabCraft | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/crabcraft.exe CrabCraft/CrabCraft.exe
+          Copy-Item LICENSE-MIT, LICENSE-APACHE CrabCraft/
+          $archive = "CrabCraft-$version-windows-${{ matrix.arch }}.zip"
+          Compress-Archive -Path CrabCraft -DestinationPath $archive
           "ARCHIVE=$archive" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           # The exe must only need system DLLs (the C runtime is linked statically).
           $objdump = Get-ChildItem "$(rustc --print sysroot)/lib/rustlib" -Recurse -Filter llvm-objdump.exe | Select-Object -First 1
-          $dlls = & $objdump.FullName -p DotCraft/DotCraft.exe | Select-String 'DLL Name: (.+)' | ForEach-Object { $_.Matches.Groups[1].Value.Trim() }
+          $dlls = & $objdump.FullName -p CrabCraft/CrabCraft.exe | Select-String 'DLL Name: (.+)' | ForEach-Object { $_.Matches.Groups[1].Value.Trim() }
           $dlls -join ', '
           $bad = $dlls | Where-Object { $_ -match '^(vcruntime|msvcp|libgcc|libstdc|libwinpthread)' }
           if ($bad) { throw "Non-system DLLs: $($bad -join ', ')" }

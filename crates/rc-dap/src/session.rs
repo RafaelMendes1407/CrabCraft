@@ -424,8 +424,8 @@ impl DebugSession {
         match DapClient::spawn(&self.adapter.program, &self.adapter.args(), None, &[], self.dap.sender(), self.waker.clone()) {
             Ok(client) => {
                 let init = json!({
-                    "clientID": "dotcraft",
-                    "clientName": "DotCraft",
+                    "clientID": "crabcraft",
+                    "clientName": "CrabCraft",
                     "adapterID": "coreclr",
                     "locale": "en-US",
                     "pathFormat": "path",
@@ -506,7 +506,7 @@ impl DebugSession {
             Incoming::Event { event, body } => self.on_event(&event, body),
             Incoming::Request { seq, command, .. } => {
                 let answer = match command.as_str() {
-                    "runInTerminal" => Err("DotCraft runs the program inside the debugger (internalConsole)".to_string()),
+                    "runInTerminal" => Err("CrabCraft runs the program inside the debugger (internalConsole)".to_string()),
                     "startDebugging" => Err("child debug sessions are not supported".to_string()),
                     _ => Err(format!("unsupported request '{command}'")),
                 };

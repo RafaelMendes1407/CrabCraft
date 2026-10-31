@@ -200,7 +200,7 @@ pub async fn run_tests(dotnet: &Dotnet, req: &TestRequest, cancel: &CancelToken,
             std::fs::create_dir_all(d)?;
             d.clone()
         }
-        None => tempfile::Builder::new().prefix("dotcraft-tests-").tempdir()?.keep(),
+        None => tempfile::Builder::new().prefix("crabcraft-tests-").tempdir()?.keep(),
     };
     let mut result = TestRunResult { results_dir: results_dir.clone(), ..Default::default() };
 
@@ -326,7 +326,7 @@ pub async fn discover_tests(dotnet: &Dotnet, target: &Path, configuration: &str,
             anyhow::bail!("build failed ({} errors) {first}", r.errors);
         }
     }
-    let tmp = tempfile::Builder::new().prefix("dotcraft-discovery-").tempdir()?;
+    let tmp = tempfile::Builder::new().prefix("crabcraft-discovery-").tempdir()?;
     let mut out = Vec::new();
     for (i, project) in test_projects(target)?.into_iter().enumerate() {
         if cancel.is_cancelled() {

@@ -9,7 +9,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-/// Oldest git DotCraft supports (`switch`/`restore`, porcelain v2, `blame --contents -`).
+/// Oldest git CrabCraft supports (`switch`/`restore`, porcelain v2, `blame --contents -`).
 pub const MIN_VERSION: GitVersion = GitVersion { major: 2, minor: 25, patch: 0 };
 
 /// A git version as printed by `git --version`.

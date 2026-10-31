@@ -1,6 +1,6 @@
 //! Phase 2 closure against the real Roslyn server and .NET SDK: a two-project solution loads,
 //! completion answers in under 150 ms, rename spans both projects, diagnostics arrive.
-//! The server is downloaded once into `target/test-home` (or set `DOTCRAFT_ROSLYN`).
+//! The server is downloaded once into `target/test-home` (or set `CRABCRAFT_ROSLYN`).
 
 use lsp_types::{CompletionResponse, Position, WorkspaceEdit};
 use rc_core::Waker;
@@ -18,8 +18,8 @@ fn test_home() -> PathBuf {
 
 fn server() -> ServerCommand {
     // SAFETY: set before any thread of this test reads it.
-    unsafe { std::env::set_var("DOTCRAFT_HOME", test_home()) };
-    let configured = std::env::var_os("DOTCRAFT_ROSLYN").map(PathBuf::from);
+    unsafe { std::env::set_var("CRABCRAFT_HOME", test_home()) };
+    let configured = std::env::var_os("CRABCRAFT_ROSLYN").map(PathBuf::from);
     if let Some(cmd) = roslyn::locate(configured.as_deref(), Path::new("dotnet")).filter(|c| c.origin != roslyn::Origin::VsCodeExtension) {
         return cmd;
     }

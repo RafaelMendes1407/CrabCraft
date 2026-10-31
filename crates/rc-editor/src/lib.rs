@@ -1,4 +1,4 @@
-//! DotCraft's code editor widget for egui: per-line galley layout of the visible lines only,
+//! CrabCraft's code editor widget for egui: per-line galley layout of the visible lines only,
 //! a Rider-style gutter, multi-caret editing, folding, syntax and semantic colours, inlay
 //! hints, diagnostics and the code-insight popups.
 

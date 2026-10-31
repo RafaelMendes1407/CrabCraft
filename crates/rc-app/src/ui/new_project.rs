@@ -1,7 +1,7 @@
 //! New Solution / Add New Project (Rider): templates on the left, names, location, framework
 //! and Git on the right; `rc_dotnet::new_project` runs `dotnet new` in the background.
 
-use crate::app::DotCraftApp;
+use crate::app::CrabCraftApp;
 use egui::{Align2, Context, FontId, Id, Rect, Sense, pos2, vec2};
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::new_project::{NewProject, TEMPLATES, Target, Template};
@@ -46,7 +46,7 @@ fn template_icon(t: &Template) -> Ico {
 }
 
 /// The folder new solutions go to: the parent of the last opened workspace, or ~/Projects.
-fn default_location(app: &DotCraftApp) -> PathBuf {
+fn default_location(app: &CrabCraftApp) -> PathBuf {
     if let Some(p) = app.settings.new_project_location.clone().filter(|p| p.is_dir()) {
         return p;
     }
@@ -58,7 +58,7 @@ fn default_location(app: &DotCraftApp) -> PathBuf {
 }
 
 impl NewProjectDialog {
-    pub fn new(app: &DotCraftApp, add_to: Option<PathBuf>, waker: Waker) -> Self {
+    pub fn new(app: &CrabCraftApp, add_to: Option<PathBuf>, waker: Waker) -> Self {
         let frameworks = rc_dotnet::Dotnet::locate(Some(&crate::app::dotnet_path(&app.settings))).map(|d| rc_dotnet::new_project::frameworks(&d)).unwrap_or_default();
         let location = match &add_to {
             Some(s) => s.parent().unwrap_or(s).to_path_buf(),
@@ -95,7 +95,7 @@ impl NewProjectDialog {
 }
 
 /// Shows the dialog; returns false when it closed.
-pub fn show(app: &mut DotCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> bool {
+pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> bool {
     let mut open = true;
     for ev in d.inbox.drain() {
         match ev {

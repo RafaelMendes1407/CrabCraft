@@ -5,7 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // llvm-rc (cargo xwin) resolves paths from the preprocessed copy in OUT_DIR, not the
         // project root, so the resource script names the icon by its absolute path.
         let icon = icon.canonicalize()?.to_string_lossy().replace('\\', "/");
-        let rc = std::path::Path::new(&std::env::var("OUT_DIR")?).join("dotcraft.rc");
+        let rc = std::path::Path::new(&std::env::var("OUT_DIR")?).join("crabcraft.rc");
         std::fs::write(&rc, format!("1 ICON \"{icon}\"\n"))?;
         embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     }

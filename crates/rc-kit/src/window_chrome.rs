@@ -6,7 +6,7 @@ use egui::{Color32, CursorIcon, Id, Rect, Sense, Stroke, Ui, Vec2, ViewportComma
 
 pub fn viewport() -> egui::ViewportBuilder {
     egui::ViewportBuilder::default()
-        .with_title("DotCraft")
+        .with_title("CrabCraft")
         .with_inner_size([1400.0, 900.0])
         .with_min_inner_size([900.0, 560.0])
         .with_resizable(true)

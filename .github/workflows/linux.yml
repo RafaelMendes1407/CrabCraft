@@ -1,6 +1,6 @@
 # Linux builds for the releases. Publishing a release starts this workflow (and release.yml, which
-# builds the macOS and Windows files), which builds DotCraft on Ubuntu (x64 and ARM64) and uploads
-# DotCraft-<version>-linux-<arch>.tar.gz to it.
+# builds the macOS and Windows files), which builds CrabCraft on Ubuntu (x64 and ARM64) and uploads
+# CrabCraft-<version>-linux-<arch>.tar.gz to it.
 # A pull request that touches this file builds without uploading, and "Run workflow" rebuilds
 # the archives of an existing release.
 name: Linux release build
@@ -16,7 +16,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/linux.yml
-      - assets/dotcraft.desktop
+      - assets/crabcraft.desktop
       - crates/rc-app/Cargo.toml
 
 permissions:
@@ -61,15 +61,15 @@ jobs:
       - name: Package
         run: |
           version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          dir=DotCraft
+          dir=CrabCraft
           mkdir -p "$dir"
-          install -m 755 target/release/dotcraft "$dir/dotcraft"
-          install -m 644 assets/icon.png "$dir/dotcraft.png"
-          install -m 644 assets/dotcraft.desktop LICENSE-MIT LICENSE-APACHE "$dir/"
-          archive="DotCraft-$version-linux-${{ matrix.arch }}.tar.gz"
+          install -m 755 target/release/crabcraft "$dir/crabcraft"
+          install -m 644 assets/icon.png "$dir/crabcraft.png"
+          install -m 644 assets/crabcraft.desktop LICENSE-MIT LICENSE-APACHE "$dir/"
+          archive="CrabCraft-$version-linux-${{ matrix.arch }}.tar.gz"
           tar -czf "$archive" "$dir"
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
-          ldd "$dir/dotcraft"
+          ldd "$dir/crabcraft"
 
       - uses: actions/upload-artifact@v4
         with:

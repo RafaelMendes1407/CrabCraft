@@ -1,4 +1,4 @@
-//! Text model of the DotCraft editor: a rope with versions, change sets, multi-cursor
+//! Text model of the CrabCraft editor: a rope with versions, change sets, multi-cursor
 //! selections, grouped undo/redo, line endings and UTF-8 ↔ UTF-16 conversion for LSP.
 //! No UI code lives here.
 

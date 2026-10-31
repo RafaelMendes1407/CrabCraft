@@ -1,12 +1,12 @@
-# DotCraft architecture
+# CrabCraft architecture
 
-DotCraft is a Cargo workspace (`crates/*`, Rust edition 2024) for a native .NET IDE built
+CrabCraft is a Cargo workspace (`crates/*`, Rust edition 2024) for a native Rust IDE built
 with eframe/egui 0.36 + wgpu 30. The UI thread never blocks: background work runs on threads
 or on the shared tokio runtime and reports back through channels that wake the UI.
 
 | Crate | Role |
 | --- | --- |
-| `rc-app` (bin `dotcraft`) | Window, tool windows, editor tabs, keymaps, session. Only crate that wires everything together. |
+| `rc-app` (bin `crabcraft`) | Window, tool windows, editor tabs, keymaps, session. Only crate that wires everything together. |
 | `rc-kit` | Islands theme (`theme`), New UI icons (`icons`, SVGs in `assets/icons`), window chrome, branding, i18n (`i18n::tr`). |
 | `rc-core` | Shared tokio `Runtime`, `Inbox`/`Outbox`/`Waker`, settings, per-workspace session, workspace file tree, file watcher. |
 | `rc-text` | Rope buffer, change sets, multi-cursor selections, grouped undo, UTF-16 positions. No UI. |
@@ -46,7 +46,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 ## Packaging
 
 Everything the app needs (fonts, icons, translations) is embedded in the binary.
-`scripts/bundle.sh` builds `DotCraft.app` (`--universal`, `--dmg`, `--zip`) and the Windows
+`scripts/bundle.sh` builds `CrabCraft.app` (`--universal`, `--dmg`, `--zip`) and the Windows
 x64/ARM64 executables with cargo-xwin (`--windows`, DirectX 12, statically linked C runtime,
 icon from `assets/icon.ico` via `crates/rc-app/build.rs`). Application icons are generated
 from `assets/icon.svg` by `scripts/make_icon.py`. The Roslyn language server and netcoredbg
