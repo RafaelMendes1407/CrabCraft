@@ -119,21 +119,21 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
-                        if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Solution"), false).clicked() {
+                        if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
                                 crate::ui::run_windows::handle_outputs(app, outs);
                             }
                             ui.close();
                         }
-                        if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Solution"), false).clicked() {
+                        if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Clean);
                                 crate::ui::run_windows::handle_outputs(app, outs);
                             }
                             ui.close();
                         }
-                        if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Restore NuGet Packages"), false).clicked() {
+                        if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Fetch Dependencies"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Restore);
                                 crate::ui::run_windows::handle_outputs(app, outs);
@@ -150,7 +150,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     if theme::icon_button_sized(ui, ico::RUN, true, &format!("{}{}", tr("Run"), shortcut(Action::Run)), 30.0).clicked() {
                         app.pending.push(Action::Run);
                     }
-                    if theme::icon_button_sized(ui, ico::BUILD, true, &format!("{}{}", tr("Build Solution"), shortcut(Action::Build)), 30.0).clicked() {
+                    if theme::icon_button_sized(ui, ico::BUILD, true, &format!("{}{}", tr("Build Project"), shortcut(Action::Build)), 30.0).clicked() {
                         app.pending.push(Action::Build);
                     }
                     ui.add_space(2.0);

@@ -10,6 +10,8 @@ pub enum WorkspaceKind {
     Solution(PathBuf),
     /// A lone project file.
     Project(PathBuf),
+    /// A folder with a `Cargo.toml`, the path of that manifest.
+    Cargo(PathBuf),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,14 +32,18 @@ impl Workspace {
                 .map(|e| e.path())
                 .filter(|p| p.is_file() && is_solution(p))
                 .collect();
+            let manifest = path.join("Cargo.toml");
             let kind = match solutions.as_slice() {
+                _ if manifest.is_file() => WorkspaceKind::Cargo(manifest),
                 [only] => WorkspaceKind::Solution(only.clone()),
                 _ => WorkspaceKind::Folder,
             };
             return Ok(Workspace { root: path, kind });
         }
         let root = path.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
-        let kind = if is_solution(&path) {
+        let kind = if path.file_name().is_some_and(|n| n == "Cargo.toml") {
+            WorkspaceKind::Cargo(path)
+        } else if is_solution(&path) {
             WorkspaceKind::Solution(path)
         } else if is_project(&path) {
             WorkspaceKind::Project(path)
@@ -50,7 +56,7 @@ impl Workspace {
     /// Display name: the solution / project name or the folder name.
     pub fn name(&self) -> String {
         let p = match &self.kind {
-            WorkspaceKind::Folder => &self.root,
+            WorkspaceKind::Folder | WorkspaceKind::Cargo(_) => &self.root,
             WorkspaceKind::Solution(p) | WorkspaceKind::Project(p) => p,
         };
         p.file_stem().or_else(|| p.file_name()).map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned())
@@ -59,8 +65,15 @@ impl Workspace {
     /// The path the session and the recent list are keyed by.
     pub fn key_path(&self) -> &Path {
         match &self.kind {
-            WorkspaceKind::Folder => &self.root,
+            WorkspaceKind::Folder | WorkspaceKind::Cargo(_) => &self.root,
             WorkspaceKind::Solution(p) | WorkspaceKind::Project(p) => p,
+        }
+    }
+
+    pub fn cargo_manifest(&self) -> Option<&Path> {
+        match &self.kind {
+            WorkspaceKind::Cargo(m) => Some(m),
+            _ => None,
         }
     }
 
@@ -85,7 +98,7 @@ fn ext(p: &Path) -> String {
 }
 
 /// Folders never shown in the explorer.
-pub const HIDDEN_DIRS: &[&str] = &["bin", "obj", ".git", ".vs", ".idea", "node_modules", ".crabcraft", "TestResults"];
+pub const HIDDEN_DIRS: &[&str] = &["target", "bin", "obj", ".git", ".vs", ".idea", "node_modules", ".crabcraft", "TestResults"];
 const HIDDEN_FILES: &[&str] = &[".DS_Store", "Thumbs.db"];
 
 pub fn is_hidden(name: &str, is_dir: bool) -> bool {

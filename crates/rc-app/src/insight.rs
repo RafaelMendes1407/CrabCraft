@@ -24,6 +24,10 @@ pub enum InsightStatus {
     Idle,
     /// No server installed: the status bar offers the download.
     NotInstalled,
+    /// The project is not trusted yet, so its code must not run.
+    Untrusted,
+    /// rust-analyzer is missing; it comes with the toolchain.
+    RustAnalyzerMissing,
     Downloading { done: u64, total: Option<u64> },
     Starting,
     Loading(String),
@@ -93,6 +97,8 @@ pub struct Insight {
     solution: Option<PathBuf>,
     projects: Vec<PathBuf>,
     dotnet: PathBuf,
+    /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
+    rust: bool,
     configured: Option<PathBuf>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
@@ -152,6 +158,7 @@ impl Insight {
             solution: None,
             projects: Vec::new(),
             dotnet: PathBuf::from("dotnet"),
+            rust: false,
             configured: None,
             problems: BTreeMap::new(),
             raw_items: Vec::new(),
@@ -189,6 +196,7 @@ impl Insight {
     /// Starts C# support for a workspace (does nothing without C# projects).
     pub fn start(&mut self, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, dotnet: PathBuf, configured: Option<PathBuf>) {
         self.stop();
+        self.rust = false;
         self.root = Some(root.to_path_buf());
         self.solution = solution.map(Path::to_path_buf);
         self.projects = projects;
@@ -201,8 +209,39 @@ impl Insight {
         self.launch();
     }
 
+    /// Starts rust-analyzer for a trusted project.
+    pub fn start_rust(&mut self, root: &Path, configured: Option<PathBuf>) {
+        self.stop();
+        self.root = Some(root.to_path_buf());
+        self.rust = true;
+        self.configured = configured;
+        self.launch();
+    }
+
+    /// Stays off until the user trusts `root`.
+    pub fn wait_for_trust(&mut self, root: &Path) {
+        self.stop();
+        self.root = Some(root.to_path_buf());
+        self.rust = true;
+        self.status = InsightStatus::Untrusted;
+    }
+
     fn launch(&mut self) {
         let Some(root) = self.root.clone() else { return };
+        if self.rust {
+            let Some(program) = rc_cargo::toolchain::locate_rust_analyzer(self.configured.as_deref()) else {
+                self.status = InsightStatus::RustAnalyzerMissing;
+                return;
+            };
+            match LanguageSession::start_rust(&program, &root, self.waker.clone()) {
+                Ok(s) => {
+                    self.session = Some(s);
+                    self.status = InsightStatus::Starting;
+                }
+                Err(e) => self.status = InsightStatus::Failed(e.to_string()),
+            }
+            return;
+        }
         match roslyn::locate(self.configured.as_deref(), &self.dotnet) {
             None => self.status = InsightStatus::NotInstalled,
             Some(cmd) => {
@@ -362,16 +401,17 @@ impl Insight {
     fn sync_documents(&mut self, docs: &mut Docs) {
         let Some(session) = &mut self.session else { return };
         let now = Instant::now();
-        let open: Vec<PathBuf> = docs.list.iter().filter(|d| is_csharp(d)).map(|d| d.path.clone()).collect();
+        let open: Vec<PathBuf> = docs.list.iter().filter(|d| has_insight(d)).map(|d| d.path.clone()).collect();
         for path in session.docs.paths() {
             if !open.contains(&path) {
                 session.did_close(&path);
             }
         }
-        for d in docs.list.iter_mut().filter(|d| is_csharp(d)) {
+        for d in docs.list.iter_mut().filter(|d| has_insight(d)) {
             if !session.docs.is_open(&d.path) {
                 d.editor.take_edits();
-                session.did_open(&d.path, "csharp", &d.editor.buffer.rope().to_string());
+                let language = if d.editor.lang() == rc_syntax::Lang::Rust { "rust" } else { "csharp" };
+                session.did_open(&d.path, language, &d.editor.buffer.rope().to_string());
                 self.dirty.insert(d.editor.id, now - REFRESH_DELAY);
                 continue;
             }
@@ -397,7 +437,10 @@ impl Insight {
         let uri = path_to_uri(&doc.path);
         let td = json!({ "uri": uri.as_str() });
         self.semantic.insert(id, (version, session.client.request_raw("textDocument/semanticTokens/full", json!({ "textDocument": td }))));
-        self.diag_pull.insert(id, (version, session.client.request_raw("textDocument/diagnostic", json!({ "textDocument": td }))));
+        // rust-analyzer publishes its diagnostics, including those of `cargo check`.
+        if !self.rust {
+            self.diag_pull.insert(id, (version, session.client.request_raw("textDocument/diagnostic", json!({ "textDocument": td }))));
+        }
         self.symbols.insert(id, (version, session.client.request_raw("textDocument/documentSymbol", json!({ "textDocument": td }))));
         if show_inlays {
             let end = convert::lsp_position(doc.editor.buffer.rope(), doc.editor.buffer.len_chars());
@@ -409,7 +452,7 @@ impl Insight {
     fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, out: &mut Vec<InsightOutput>) {
         // Refreshes for the visible document (and any other open C# document once).
         if let Some(i) = docs.active
-            && is_csharp(&docs.list[i])
+            && has_insight(&docs.list[i])
         {
             self.refresh(&docs.list[i], show_inlays);
         }
@@ -749,7 +792,7 @@ impl Insight {
 
     /// Reacts to what the active editor did this frame.
     pub fn on_editor_events(&mut self, doc: &mut Doc, events: &[EditorEvent]) {
-        if !self.ready() || !is_csharp(doc) {
+        if !self.ready() || !has_insight(doc) {
             return;
         }
         if !events.is_empty() {
@@ -1144,8 +1187,9 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
     (items, range)
 }
 
-pub fn is_csharp(d: &Doc) -> bool {
-    d.editor.lang() == rc_syntax::Lang::CSharp
+/// Whether the language server covers this document.
+pub fn has_insight(d: &Doc) -> bool {
+    matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.

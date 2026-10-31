@@ -330,7 +330,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
 /// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
 fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
-    let csharp = app.docs.active_doc().is_some_and(crate::insight::is_csharp);
+    let csharp = app.docs.active_doc().is_some_and(crate::insight::has_insight);
     let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;

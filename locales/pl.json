@@ -613,5 +613,19 @@
     "Editor Only": "Tylko edytor",
     "Editor and Preview": "Edytor i podgląd",
     "Preview Only": "Tylko podgląd"
+  },
+  "rust-core": {
+    "Cargo was not found. Install Rust with rustup.": "Nie znaleziono Cargo. Zainstaluj Rust za pomocą rustup.",
+    "Could not read the Cargo project: {error}": "Nie można odczytać projektu Cargo: {error}",
+    "Trust this project": "Zaufaj temu projektowi",
+    "Code analysis runs the project's build scripts and procedural macros": "Analiza kodu uruchamia skrypty budowania i makra proceduralne projektu",
+    "rust-analyzer not found": "Nie znaleziono rust-analyzer",
+    "Install it with: rustup component add rust-analyzer": "Zainstaluj poleceniem: rustup component add rust-analyzer",
+    "Build Project": "Zbuduj projekt",
+    "Rebuild Project": "Przebuduj projekt",
+    "Clean Project": "Wyczyść projekt",
+    "Fetch Dependencies": "Pobierz zależności",
+    "Language server actions are not available in this file": "Działania serwera języka nie są dostępne w tym pliku",
+    "The Rust language server is still analysing the project": "Serwer języka Rust nadal analizuje projekt"
   }
 }

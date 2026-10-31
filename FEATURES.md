@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 4 |
-| 🚧 Em andamento | 0 |
-| 🟢 Herdado | 24 |
-| 🔁 Portar | 47 |
-| ⬜ A fazer | 177 |
+| ✅ Pronto | 12 |
+| 🚧 Em andamento | 9 |
+| 🟢 Herdado | 23 |
+| 🔁 Portar | 35 |
+| ⬜ A fazer | 173 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -51,7 +51,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | ⬜ | M1 | `rustup`/`rustc -vV`, substitui a detecção do SDK .NET |
+| P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | 🚧 | M1 | Localiza cargo e rust-analyzer; falta mostrar versões e a stdlib |
 | P-02 | Instalar rustup e stdlib pela IDE | ⬜ | M3 | Executar o instalador oficial com confirmação |
 | P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
@@ -61,7 +61,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ⬜ | M1 | |
-| P-11 | Janela Project (árvore de arquivos e crates) | 🔁 | M1 | Trocar a árvore de solução por `cargo metadata` |
+| P-11 | Janela Project (árvore de arquivos e crates) | 🚧 | M1 | Mostra a árvore de arquivos, sem `target`; faltam crates e targets |
 | P-12 | Dependências externas na árvore do projeto | ⬜ | M3 | |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
@@ -71,15 +71,15 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-18 | Executar target com duplo clique | ⬜ | M3 | |
 | P-19 | Executar comando Cargo pela janela Cargo | ⬜ | M3 | |
 | P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
-| P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ⬜ | M1 | Watcher + `cargo metadata` |
+| P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | 🚧 | M1 | Implementado sem teste: mudar `Cargo.toml` recarrega o workspace |
 | P-22 | Botão Load Cargo Changes (manual) | ⬜ | M3 | |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
 | P-24 | Excluir pastas e arquivos da análise | ⬜ | M3 | |
 | P-25 | Invalidar caches | ⬜ | M3 | |
-| P-26 | Segurança: projeto confiável antes de rodar build scripts | ⬜ | M1 | rust-analyzer executa `build.rs` e proc-macros |
+| P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
-| P-29 | Abrir projeto por `Cargo.toml` ou pasta | 🔁 | M1 | |
+| P-29 | Abrir projeto por `Cargo.toml` ou pasta | 🚧 | M1 | Abrir pasta testado e visto no app; abrir `Cargo.toml` sem teste |
 
 ## 2. Editor
 
@@ -88,7 +88,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-01 | Editor rápido com arquivos grandes | 🟢 | M1 | |
 | E-02 | Realce de sintaxe Rust | ✅ | M1 | Consultas próprias sobre tree-sitter-rust; testado e visto no app |
 | E-03 | Realce de TOML | ✅ | M1 | Consultas próprias sobre tree-sitter-toml-ng; testado no parser real |
-| E-04 | Realce semântico (tipos inferidos, macros, `unsafe`) | 🔁 | M1 | Tokens semânticos do rust-analyzer |
+| E-04 | Realce semântico (tipos inferidos, macros, `unsafe`) | ✅ | M1 | Tokens semânticos do rust-analyzer; testado |
 | E-05 | Dobramento de código | ✅ | M1 | Itens, `match`, macros e comentários; testado no parser real |
 | E-06 | Múltiplos cursores e seleção | 🟢 | M1 | |
 | E-07 | Colchetes pareados e fechamento automático | 🟢 | M1 | Conferir `'` em lifetimes e `|` em closures |
@@ -117,8 +117,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| I-01 | Análise do projeto (índice) | 🔁 | M1 | rust-analyzer no lugar do Roslyn |
-| I-02 | Autocompletar com documentação | 🔁 | M1 | |
+| I-01 | Análise do projeto (índice) | ✅ | M1 | rust-analyzer com estado de análise na barra de status; testado e visto no app |
+| I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
 | I-03 | Completar em `#[derive]`, macros e doctests | 🔁 | M1 | |
 | I-04 | Auto-import ao completar | 🔁 | M1 | |
 | I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
@@ -130,7 +130,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-11 | Abrir documentação em docs.rs | ⬜ | M3 | |
 | I-12 | Informação de parâmetros | 🔁 | M1 | |
 | I-13 | Inlay hints (tipos, parâmetros, chaining) | 🔁 | M1 | |
-| I-14 | Diagnósticos em tempo real | 🔁 | M1 | |
+| I-14 | Diagnósticos em tempo real | 🚧 | M1 | Publicação ligada; só o erro do build foi testado até agora |
 | I-15 | Quick fixes e intention actions (Alt+Enter) | 🔁 | M1 | Code actions |
 | I-16 | Aplicar correção sugerida pelo compilador | ⬜ | M3 | Campo `suggested_replacement` do rustc |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
@@ -157,7 +157,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP |
 | N-02 | Ir para arquivo, tipo e símbolo | 🔁 | M1 | `workspace/symbol` |
-| N-03 | Ir para definição | 🔁 | M1 | |
+| N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
 | N-04 | Ir para implementações | 🔁 | M1 | |
 | N-05 | Encontrar usos | 🔁 | M1 | |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
@@ -210,11 +210,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| B-01 | Build, rebuild e clean | 🔁 | M1 | `cargo build --message-format=json` |
-| B-02 | Janela Build com erros clicáveis | 🔁 | M1 | |
+| B-01 | Build, rebuild e clean | ✅ | M1 | `cargo build` com JSON, rebuild, clean e fetch; build testado com Cargo real |
+| B-02 | Janela Build com erros clicáveis | 🚧 | M1 | Erros e posição testados; falta ver a janela e o clique no app |
 | B-03 | Botão Apply fix em erros do compilador | ⬜ | M3 | |
-| B-04 | Janela Problems | 🔁 | M1 | |
-| B-05 | Configurações de run automáticas por target | 🔁 | M1 | Do `cargo metadata` |
+| B-04 | Janela Problems | 🚧 | M1 | Lista recebe os erros (testado); janela ainda não vista com Rust |
+| B-05 | Configurações de run automáticas por target | ✅ | M1 | Uma por binário, mais All Tests; testado e visto no app |
 | B-06 | Editor de configurações de run | 🔁 | M3 | |
 | B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | 🔁 | M3 | |
 | B-08 | Features automáticas (`required-features`) | ⬜ | M3 | |
@@ -238,11 +238,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | T-01 | Rodar teste, módulo ou todos pela margem | 🔁 | M2 | |
-| T-02 | Árvore de resultados | 🔁 | M2 | Interpretar a saída do libtest |
+| T-02 | Árvore de resultados | 🚧 | M2 | Resultados por teste e saída de falha testados; árvore ainda não vista com Rust |
 | T-03 | Marcadores de resultado na margem | 🔁 | M2 | |
 | T-04 | Rodar novamente os que falharam | ⬜ | M2 | |
 | T-05 | Ir do erro do teste para o código | ⬜ | M2 | |
-| T-06 | Doctests | ⬜ | M2 | `cargo test --doc` |
+| T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
 | T-07 | Runner nextest | ⬜ | M3 | |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
@@ -358,7 +358,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
-| G-02 | Tela de boas-vindas e projetos recentes | 🟢 | M1 | Trocar a detecção de `.sln` por `Cargo.toml` |
+| G-02 | Tela de boas-vindas e projetos recentes | 🚧 | M1 | Abre Cargo; "Nova solução" ainda cria projeto .NET |
 | G-03 | Keymaps | 🟢 | M1 | Adicionar o keymap do RustRover: o herdado é o do Rider |
 | G-04 | Configurar atalhos | ⬜ | M3 | |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |

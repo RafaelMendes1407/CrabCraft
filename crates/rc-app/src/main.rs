@@ -17,6 +17,8 @@ mod debugger_tests;
 #[cfg(test)]
 mod insight_tests;
 #[cfg(test)]
+mod rust_tests;
+#[cfg(test)]
 mod screens;
 mod docs;
 mod native_menu;

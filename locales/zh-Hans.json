@@ -613,5 +613,19 @@
     "Editor Only": "仅编辑器",
     "Editor and Preview": "编辑器和预览",
     "Preview Only": "仅预览"
+  },
+  "rust-core": {
+    "Cargo was not found. Install Rust with rustup.": "未找到 Cargo。请使用 rustup 安装 Rust。",
+    "Could not read the Cargo project: {error}": "无法读取 Cargo 项目：{error}",
+    "Trust this project": "信任此项目",
+    "Code analysis runs the project's build scripts and procedural macros": "代码分析会运行项目的构建脚本和过程宏",
+    "rust-analyzer not found": "未找到 rust-analyzer",
+    "Install it with: rustup component add rust-analyzer": "使用以下命令安装：rustup component add rust-analyzer",
+    "Build Project": "构建项目",
+    "Rebuild Project": "重新构建项目",
+    "Clean Project": "清理项目",
+    "Fetch Dependencies": "获取依赖项",
+    "Language server actions are not available in this file": "此文件不支持语言服务器操作",
+    "The Rust language server is still analysing the project": "Rust 语言服务器仍在分析项目"
   }
 }

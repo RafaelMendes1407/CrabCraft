@@ -54,6 +54,7 @@ pub struct LanguageSession {
     pub started: Instant,
     /// Recent stderr lines, for the error message when the server dies.
     stderr: Vec<String>,
+    rust: bool,
 }
 
 impl LanguageSession {
@@ -77,6 +78,31 @@ impl LanguageSession {
             progress: HashMap::new(),
             started: Instant::now(),
             stderr: Vec::new(),
+            rust: false,
+        })
+    }
+
+    /// Starts rust-analyzer for `root`.
+    pub fn start_rust(program: &Path, root: &Path, waker: Waker) -> std::io::Result<Self> {
+        let inbox = Inbox::new(waker);
+        let _rt = rc_core::Runtime::handle().enter();
+        let client = crate::rust_analyzer::start(program, root, inbox.sender())?;
+        let init = crate::rust_analyzer::initialize(&client, root);
+        Ok(LanguageSession {
+            client,
+            inbox,
+            state: ServerState::Starting,
+            capabilities: None,
+            docs: OpenDocs::default(),
+            semantic_legend: Vec::new(),
+            init: Some(init),
+            root: root.to_path_buf(),
+            solution: None,
+            projects: Vec::new(),
+            progress: HashMap::new(),
+            started: Instant::now(),
+            stderr: Vec::new(),
+            rust: true,
         })
     }
 
@@ -107,7 +133,9 @@ impl LanguageSession {
                     }
                     self.capabilities = Some(res.capabilities);
                     self.client.notify_raw("initialized", json!({}));
-                    roslyn::open_solution(&self.client, self.solution.as_deref(), &self.projects);
+                    if !self.rust {
+                        roslyn::open_solution(&self.client, self.solution.as_deref(), &self.projects);
+                    }
                     self.set_state(ServerState::LoadingProjects, &mut events);
                 }
                 Err(e) => self.set_state(ServerState::Failed(e.to_string()), &mut events),
@@ -116,7 +144,9 @@ impl LanguageSession {
         for msg in self.inbox.drain() {
             match msg {
                 Incoming::Request { id, method, params } => {
-                    if let Some(answer) = roslyn::default_reply(&method, &params) {
+                    if self.rust && method == "workspace/configuration" {
+                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params)));
+                    } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));
                         } else if method == "workspace/inlayHint/refresh" {
@@ -196,6 +226,8 @@ impl LanguageSession {
             }
             // Roslyn: every project of the solution finished loading.
             "workspace/projectInitializationComplete" => self.set_state(ServerState::Ready, events),
+            // rust-analyzer: nothing is left to analyse for now.
+            "experimental/serverStatus" if crate::rust_analyzer::is_quiescent(&params) => self.set_state(ServerState::Ready, events),
             "window/logMessage" => {
                 if let Some(m) = params.get("message").and_then(Value::as_str) {
                     events.push(LspEvent::Log(m.to_string()));

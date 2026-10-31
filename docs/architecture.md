@@ -14,6 +14,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
 | `rc-lsp` | JSON-RPC/LSP client and the Roslyn adapter. |
 | `rc-dap` | DAP client and netcoredbg session. |
+| `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
 | `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
 | `rc-vcs` | Git through the `git` CLI. |
 | `rc-search` | File index, fuzzy search, find/replace in files. |

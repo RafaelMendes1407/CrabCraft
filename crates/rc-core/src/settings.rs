@@ -53,6 +53,9 @@ pub struct Settings {
     /// Explicit path to the Roslyn language server DLL or executable.
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
+    pub rust_analyzer_path: Option<PathBuf>,
+    /// Projects whose `build.rs` and procedural macros may run.
+    pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
     /// Reopen the project that was open when CrabCraft quit (Rider's "Reopen projects on startup").
@@ -82,6 +85,8 @@ impl Default for Settings {
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,
+            rust_analyzer_path: None,
+            trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
             reopen_last: true,
             last_workspace: None,

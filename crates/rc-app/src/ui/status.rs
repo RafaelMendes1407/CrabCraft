@@ -89,10 +89,10 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
         S::Idle => {}
         S::Ready => {
             let tip = match app.insight.last_completion_ms {
-                Some(ms) => trf("C# language server ready (last completion {ms} ms)", &[("ms", &ms)]),
-                None => tr("C# language server ready").to_string(),
+                Some(ms) => trf("Rust language server ready (last completion {ms} ms)", &[("ms", &ms)]),
+                None => tr("Rust language server ready").to_string(),
             };
-            theme::flat_button(ui, Some(ico::CHECKMARK), "C#", FontId::proportional(12.5), false, true).on_hover_text(tip);
+            theme::flat_button(ui, Some(ico::CHECKMARK), "Rust", FontId::proportional(12.5), false, true).on_hover_text(tip);
         }
         S::NotInstalled => {
             if theme::flat_button(ui, Some(ico::DOWNLOAD), tr("Download C# language server"), FontId::proportional(12.5), false, true)
@@ -115,15 +115,26 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
         S::Starting | S::Loading(_) => {
             let text = match &app.insight.status {
                 S::Loading(t) => t.clone(),
-                _ => tr("Starting C# language server…").to_string(),
+                _ => tr("Starting Rust language server…").to_string(),
             };
             ui.add(egui::Spinner::new().size(12.0).color(p.muted));
             ui.add_space(6.0);
             ui.label(egui::RichText::new(text).size(12.5).color(p.text_muted));
             ui.add_space(8.0);
         }
+        S::Untrusted => {
+            if theme::flat_button(ui, Some(ico::WARNING), tr("Trust this project"), FontId::proportional(12.5), false, true)
+                .on_hover_text(tr("Code analysis runs the project's build scripts and procedural macros"))
+                .clicked()
+            {
+                app.trust_project();
+            }
+        }
+        S::RustAnalyzerMissing => {
+            theme::flat_button(ui, Some(ico::WARNING), tr("rust-analyzer not found"), FontId::proportional(12.5), false, true).on_hover_text(tr("Install it with: rustup component add rust-analyzer"));
+        }
         S::Failed(why) => {
-            if theme::flat_button(ui, Some(ico::ERROR), tr("C# server stopped — Restart"), FontId::proportional(12.5), false, true).on_hover_text(why).clicked() {
+            if theme::flat_button(ui, Some(ico::ERROR), tr("Rust server stopped — Restart"), FontId::proportional(12.5), false, true).on_hover_text(why).clicked() {
                 app.insight.restart();
             }
         }

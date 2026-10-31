@@ -3,6 +3,7 @@
 
 pub mod roslyn;
 pub mod rpc;
+pub mod rust_analyzer;
 pub mod semantic;
 pub mod session;
 pub mod sync;

@@ -613,5 +613,19 @@
     "Editor Only": "エディターのみ",
     "Editor and Preview": "エディターとプレビュー",
     "Preview Only": "プレビューのみ"
+  },
+  "rust-core": {
+    "Cargo was not found. Install Rust with rustup.": "Cargo が見つかりません。rustup で Rust をインストールしてください。",
+    "Could not read the Cargo project: {error}": "Cargo プロジェクトを読み込めません: {error}",
+    "Trust this project": "このプロジェクトを信頼",
+    "Code analysis runs the project's build scripts and procedural macros": "コード解析はプロジェクトのビルドスクリプトと手続きマクロを実行します",
+    "rust-analyzer not found": "rust-analyzer が見つかりません",
+    "Install it with: rustup component add rust-analyzer": "次のコマンドでインストール: rustup component add rust-analyzer",
+    "Build Project": "プロジェクトをビルド",
+    "Rebuild Project": "プロジェクトをリビルド",
+    "Clean Project": "プロジェクトをクリーン",
+    "Fetch Dependencies": "依存関係を取得",
+    "Language server actions are not available in this file": "このファイルでは言語サーバーの操作を使用できません",
+    "The Rust language server is still analysing the project": "Rust 言語サーバーはプロジェクトを解析中です"
   }
 }

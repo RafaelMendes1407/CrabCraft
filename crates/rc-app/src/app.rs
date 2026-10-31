@@ -80,6 +80,8 @@ pub struct CrabCraftApp {
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
+    cargo_load: Option<Inbox<Result<rc_cargo::CargoWorkspace, String>>>,
+    cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
     /// Give the editor keyboard focus on the next frame.
@@ -156,6 +158,8 @@ impl CrabCraftApp {
             fs_inbox: Inbox::new(waker.clone()),
             waker,
             _watcher: None,
+            cargo_load: None,
+            cargo_remembered: None,
             pending: Vec::new(),
             focus_editor: false,
             nav_back: Vec::new(),
@@ -216,15 +220,65 @@ impl CrabCraftApp {
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
             rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
-            rc_core::WorkspaceKind::Solution(_) => Vec::new(),
+            rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
-        self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        if ws.cargo_manifest().is_some() {
+            if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
+                self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone());
+            } else {
+                self.insight.wait_for_trust(&ws.root);
+            }
+        } else {
+            self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        }
         self.runner.compounds = session.compounds.clone();
         self.runner.options = session.run_options.clone();
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
+        self.cargo_remembered = session.run_configuration.clone();
+        let manifest = ws.cargo_manifest().map(Path::to_path_buf);
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+        if let Some(manifest) = manifest {
+            self.load_cargo_workspace(manifest);
+        }
+    }
+
+    /// Reads the Rust workspace in the background; `cargo metadata` compiles nothing, so this is
+    /// safe on a project that is not trusted.
+    fn load_cargo_workspace(&mut self, manifest: PathBuf) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || {
+            let result = match rc_cargo::Cargo::locate() {
+                Some(cargo) => rc_cargo::load_workspace(&cargo, &manifest).map_err(|e| e.to_string()),
+                None => Err(tr("Cargo was not found. Install Rust with rustup.").to_string()),
+            };
+            out.send(result);
+        });
+        self.cargo_load = Some(inbox);
+    }
+
+    pub(crate) fn poll_cargo_workspace(&mut self) {
+        let Some(inbox) = &self.cargo_load else { return };
+        for result in inbox.drain() {
+            match result {
+                Ok(workspace) => self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref()),
+                Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
+            }
+            self.cargo_load = None;
+            return;
+        }
+    }
+
+    /// The user trusts the open project: its code may now run for code analysis.
+    pub fn trust_project(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        if !self.settings.trusted_projects.contains(&root) {
+            self.settings.trusted_projects.push(root.clone());
+            let _ = self.settings.save();
+        }
+        self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone());
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -455,16 +509,16 @@ impl CrabCraftApp {
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
         // JSON and XML are formatted here; C# by the server.
-        if action == Action::Reformat && !crate::insight::is_csharp(&self.docs.list[i]) {
+        if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);
             return;
         }
-        if !self.insight.ready() || !crate::insight::is_csharp(&self.docs.list[i]) {
+        if !self.insight.ready() || !crate::insight::has_insight(&self.docs.list[i]) {
             let msg = match &self.insight.status {
                 crate::insight::InsightStatus::NotInstalled => tr("Download the C# language server from the status bar to use this action"),
                 crate::insight::InsightStatus::Failed(_) => tr("The C# language server stopped; restart it from the status bar"),
-                _ if !crate::insight::is_csharp(&self.docs.list[i]) => tr("This action is available in C# files"),
-                _ => tr("The C# language server is still loading the solution"),
+                _ if !crate::insight::has_insight(&self.docs.list[i]) => tr("Language server actions are not available in this file"),
+                _ => tr("The Rust language server is still analysing the project"),
             };
             self.notify(msg, false);
             return;
@@ -844,7 +898,7 @@ impl CrabCraftApp {
     fn update_test_markers(&mut self) {
         let Some(i) = self.docs.active else { return };
         let doc = &mut self.docs.list[i];
-        if !crate::insight::is_csharp(doc) {
+        if doc.editor.lang() != rc_syntax::Lang::CSharp {
             return;
         }
         let Some(tree) = doc.editor.syntax.tree() else { return };
@@ -1041,6 +1095,7 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        self.poll_cargo_workspace();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
@@ -1076,11 +1131,17 @@ impl CrabCraftApp {
         self.docs.poll_parses();
     }
 
-    /// Changed C# files tell the language server to reload them (1 created, 2 changed, 3 deleted).
-    fn report_fs_to_server(&self, events: &[FsEvent]) {
+    /// Changed source files tell the language server to reload them (1 created, 2 changed,
+    /// 3 deleted), and a changed `Cargo.toml` reloads the Rust workspace.
+    fn report_fs_to_server(&mut self, events: &[FsEvent]) {
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf)
+            && events.iter().any(|e| e.path().file_name().is_some_and(|n| n == "Cargo.toml"))
+        {
+            self.load_cargo_workspace(manifest);
+        }
         let changes: Vec<(PathBuf, u8)> = events
             .iter()
-            .filter(|e| e.path().extension().is_some_and(|x| x == "cs" || x == "csproj" || x == "props" || x == "targets"))
+            .filter(|e| e.path().extension().is_some_and(|x| x == "rs" || x == "toml" || x == "cs" || x == "csproj" || x == "props" || x == "targets"))
             .map(|e| match e {
                 FsEvent::Created(p) => (p.clone(), 1),
                 FsEvent::Changed(p) => (p.clone(), 2),

@@ -17,6 +17,8 @@ pub enum ConfigKind {
     Tests { target: PathBuf },
     /// Several application configurations started together (by name).
     Compound { members: Vec<String> },
+    /// A binary of a Cargo package.
+    Cargo { package: String, bin: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,7 +31,7 @@ impl RunConfig {
     pub fn icon(&self) -> rc_kit::Ico {
         match &self.kind {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
-            ConfigKind::App { .. } => rc_kit::ico::CONFIG_APP,
+            ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
         }
@@ -143,6 +145,9 @@ pub struct Runner {
     pub test_outcomes: BTreeMap<String, TestState>,
     waker: Waker,
     dotnet: Option<Dotnet>,
+    cargo: Option<rc_cargo::Cargo>,
+    /// The open Rust workspace.
+    pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name (kept in the session).
@@ -151,7 +156,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -199,7 +204,23 @@ impl Runner {
         self.selected = remembered.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
+    /// Builds the run configurations of a Rust workspace: its binaries, then all its tests.
+    pub fn set_cargo_workspace(&mut self, workspace: rc_cargo::CargoWorkspace, remembered: Option<&str>) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        self.cargo = rc_cargo::Cargo::locate();
+        self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
+        self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
+        self.cargo_workspace = Some(workspace);
+        let wanted = selected.as_deref().or(remembered);
+        self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
+    }
+
+    fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
+        self.cargo.clone().ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+    }
+
     pub fn clear(&mut self) {
+        self.cargo_workspace = None;
         self.configs.clear();
         self.build = None;
         self.runs.clear();
@@ -222,10 +243,6 @@ impl Runner {
     // ------------------------------------------------------------------ build
 
     pub fn build(&mut self, target: &Path, action: BuildAction) -> Vec<RunnerOutput> {
-        let dotnet = match self.dotnet() {
-            Ok(d) => d,
-            Err(e) => return vec![RunnerOutput::Notify(e, true)],
-        };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let title = match action {
@@ -235,7 +252,17 @@ impl Runner {
             BuildAction::Build => tr("Build"),
         }
         .to_string();
-        let handle = rc_dotnet::start_build(&dotnet, BuildRequest::new(target, action), inbox.sender());
+        let handle = if let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
+            match self.cargo() {
+                Ok(cargo) => rc_cargo::start_build(&cargo, &manifest, action, inbox.sender()),
+                Err(e) => return vec![RunnerOutput::Notify(e, true)],
+            }
+        } else {
+            match self.dotnet() {
+                Ok(dotnet) => rc_dotnet::start_build(&dotnet, BuildRequest::new(target, action), inbox.sender()),
+                Err(e) => return vec![RunnerOutput::Notify(e, true)],
+            }
+        };
         self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
@@ -257,6 +284,7 @@ impl Runner {
         };
         match cfg.kind.clone() {
             ConfigKind::App { .. } => self.run_app(cfg),
+            ConfigKind::Cargo { package, bin } => self.run_cargo(cfg, package, bin),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
             ConfigKind::Compound { members } => {
                 let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
@@ -334,6 +362,36 @@ impl Runner {
         Some(req)
     }
 
+    /// Starts a binary of the Rust workspace, with the user's edits applied.
+    fn run_cargo(&mut self, cfg: RunConfig, package: String, bin: String) -> Vec<RunnerOutput> {
+        let cargo = match self.cargo() {
+            Ok(c) => c,
+            Err(e) => return vec![RunnerOutput::Notify(e, true)],
+        };
+        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
+            let old = self.runs.remove(i);
+            if let Some(h) = old.handle {
+                h.stop();
+            }
+        }
+        let mut target = rc_cargo::RunTarget { manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
+        if let Some(o) = self.options.get(&cfg.name) {
+            target.args = rc_dotnet::process::split_command_line(&o.args);
+            target.env = o.env_pairs();
+            if !o.working_dir.trim().is_empty() {
+                target.working_dir = Some(PathBuf::from(o.working_dir.trim()));
+            }
+        }
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
+        let handle = rc_cargo::start_run(&cargo, target, inbox.sender());
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
     fn run_app(&mut self, cfg: RunConfig) -> Vec<RunnerOutput> {
         let dotnet = match self.dotnet() {
             Ok(d) => d,
@@ -383,10 +441,8 @@ impl Runner {
     // ------------------------------------------------------------------ tests
 
     pub fn run_tests(&mut self, target: &Path, filter: Option<TestFilter>) -> Vec<RunnerOutput> {
-        let dotnet = match self.dotnet() {
-            Ok(d) => d,
-            Err(e) => return vec![RunnerOutput::Notify(e, true)],
-        };
+        let manifest = self.cargo_workspace.as_ref().map(|w| w.manifest.clone());
+        let target = manifest.as_deref().unwrap_or(target);
         if let Some(t) = &mut self.tests
             && let Some(h) = t.handle.take()
         {
@@ -396,7 +452,15 @@ impl Runner {
         req.filter = filter;
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
-        let handle = rc_dotnet::start_tests(&dotnet, req.clone(), inbox.sender());
+        let started = if manifest.is_some() {
+            self.cargo().map(|cargo| rc_cargo::start_tests(&cargo, req.clone(), inbox.sender()))
+        } else {
+            self.dotnet().map(|dotnet| rc_dotnet::start_tests(&dotnet, req.clone(), inbox.sender()))
+        };
+        let handle = match started {
+            Ok(h) => h,
+            Err(e) => return vec![RunnerOutput::Notify(e, true)],
+        };
         let show_passed = self.tests.as_ref().is_none_or(|t| t.show_passed);
         // Tests about to run show a running icon in the gutter.
         if let Some(TestFilter::Tests(names)) = &req.filter {
