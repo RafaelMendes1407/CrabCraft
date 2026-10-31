@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 44 |
-| 🚧 Em andamento | 5 |
+| 🚧 Em andamento | 9 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 10 |
-| ⬜ A fazer | 170 |
+| 🔁 Portar | 8 |
+| ⬜ A fazer | 168 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -227,7 +227,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ⬜ | M3 | |
-| B-18 | Links clicáveis em stack traces | ⬜ | M2 | |
+| B-18 | Links clicáveis em stack traces | 🚧 | M2 | Formato de panic e backtrace reconhecido, testado; falta clicar na janela |
 | B-19 | Tarefas antes do launch | ⬜ | M3 | |
 | B-20 | Configurações temporárias e salvar como permanente | ⬜ | M3 | |
 | B-21 | Pastas de configurações | ⬜ | M4 | |
@@ -278,12 +278,12 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
 | D-23 | Depurar como root | ⬜ | M6 | |
-| D-24 | Pause, resume, restart e stop | 🔁 | M2 | |
-| D-25 | Mute breakpoints | ⬜ | M2 | |
+| D-24 | Pause, resume, restart e stop | 🚧 | M2 | Pausar, retomar, reiniciar e parar testados com GDB real; falta ver na janela |
+| D-25 | Mute breakpoints | 🚧 | M2 | Silenciar testado com GDB real; falta ver o botão na janela |
 | D-26 | Logpoints e remover ao atingir | ⬜ | M3 | |
 | D-27 | Grupos de breakpoints e lista geral | ⬜ | M4 | |
 | D-28 | Force Step Over e Force Run to Cursor | ⬜ | M4 | |
-| D-29 | Console do depurador | 🔁 | M2 | Comandos diretos ao GDB/LLDB |
+| D-29 | Console do depurador | 🚧 | M2 | Console envia comandos ao GDB, testado; falta ver a caixa na janela |
 | D-30 | Pular a stdlib ao fazer step | ⬜ | M3 | |
 | D-31 | Sessões em paralelo | ⬜ | M4 | |
 

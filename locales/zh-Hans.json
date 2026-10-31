@@ -644,6 +644,9 @@
     "Starting Rust language server…": "正在启动 Rust 语言服务器…",
     "This file is not part of a runnable target": "此文件不属于可运行的目标",
     "Paused on panic": "已在 panic 处暂停",
-    "The program panicked": "程序发生了 panic"
+    "The program panicked": "程序发生了 panic",
+    "Unmute Breakpoints": "恢复断点",
+    "Debugger command (Enter to send)": "调试器命令（按 Enter 发送）",
+    "Mute Breakpoints": "静音断点"
   }
 }

@@ -36,7 +36,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         tip(Action::StopRun, tr("Stop")),
         tr("Restart").to_string(),
     );
-    let actions: [(Ico, &str, bool); 9] = [
+    let t_mute = if app.debugger.muted { tr("Unmute Breakpoints") } else { tr("Mute Breakpoints") };
+    let mute_icon = if app.debugger.muted { ico::BREAKPOINT_MUTED } else { ico::MUTE_BREAKPOINTS };
+    let actions: [(Ico, &str, bool); 10] = [
         (ico::RERUN, &t_restart, has),
         (ico::RESUME, &t_resume, stopped),
         (ico::PAUSE, &t_pause, active && !stopped),
@@ -46,12 +48,13 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         (ico::STEP_OUT, &t_out, stopped),
         (ico::RUN_TO_CURSOR, &t_cursor, stopped),
         (ico::EVALUATE, &t_eval, stopped),
+        (mute_icon, t_mute, true),
     ];
     let title = if app.debugger.name.is_empty() { tr("Debug").to_string() } else { format!("{}: {}", tr("Debug"), app.debugger.name) };
     let clicked = header(ui, &title, &actions);
     let ctx = ui.ctx().clone();
     match clicked {
-        Some(0) => app.run_ide_action(&ctx, Action::Debug),
+        Some(0) => app.restart_debugging(),
         Some(1) => app.run_ide_action(&ctx, Action::Resume),
         Some(2) => {
             if let Some(s) = &mut app.debugger.session {
@@ -64,6 +67,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(6) => app.run_ide_action(&ctx, Action::StepOut),
         Some(7) => app.run_ide_action(&ctx, Action::RunToCursor),
         Some(8) => app.run_ide_action(&ctx, Action::Evaluate),
+        Some(9) => app.debugger.muted = !app.debugger.muted,
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Debug),
         _ => {}
     }
@@ -96,13 +100,28 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     });
     ui.add_space(2.0);
     if app.debugger.show_console {
+        let avail = ui.available_rect_before_wrap();
+        let input = Rect::from_min_max(pos2(avail.left() + 8.0, avail.bottom() - 30.0), pos2(avail.right() - 8.0, avail.bottom() - 4.0));
+        let output = Rect::from_min_max(avail.min, pos2(avail.right(), input.top() - 4.0));
+        let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
         let Some(c) = &app.debugger.console else { return };
-        let events = console(ui, &c.term);
+        let mut area = ui.new_child(egui::UiBuilder::new().max_rect(output));
+        let events = console(&mut area, &c.term);
         for e in events {
             if let rc_term::ViewEvent::LinkClicked(link) = e {
-                open_link(app, link, None);
+                open_link(app, link, root.clone());
             }
         }
+        let mut line = ui.new_child(egui::UiBuilder::new().max_rect(input));
+        let field = line.add_enabled(
+            stopped,
+            egui::TextEdit::singleline(&mut app.debugger.console_input).desired_width(input.width()).hint_text(tr("Debugger command (Enter to send)")).font(egui::FontId::monospace(12.5)),
+        );
+        if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            app.debugger.send_console_command();
+            field.request_focus();
+        }
+        ui.advance_cursor_after_rect(avail);
         return;
     }
     let avail = ui.available_rect_before_wrap();

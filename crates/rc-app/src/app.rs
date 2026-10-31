@@ -76,6 +76,8 @@ pub struct CrabCraftApp {
     /// Screen position under the active caret (popups that belong to the editor).
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
+    /// The Rust test being debugged, for Restart.
+    debug_test: Option<(crate::runner::RunConfig, rc_cargo::RunTarget)>,
     /// The Run/Debug menu of a gutter icon: its line and where it opens.
     pub gutter_menu: Option<(usize, egui::Pos2)>,
     /// Binary target run by the icon of each line of the active Rust document.
@@ -159,6 +161,7 @@ impl CrabCraftApp {
             caret_screen: None,
             test_markers: Vec::new(),
             gutter_menu: None,
+            debug_test: None,
             run_markers: std::collections::BTreeMap::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
@@ -735,26 +738,7 @@ impl CrabCraftApp {
                     s.continue_();
                 }
             }
-            Action::Debug => {
-                self.save_all_docs();
-                match self.runner.selected_config().cloned() {
-                    Some(config) if matches!(config.kind, crate::runner::ConfigKind::Cargo { .. }) => match self.runner.cargo_debug_target(&config) {
-                        Some(Ok((cargo, target))) => {
-                            let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
-                            self.handle_debug(outs);
-                        }
-                        Some(Err(e)) => self.notify(e, true),
-                        None => {}
-                    },
-                    Some(config) => {
-                        let dotnet = dotnet_path(&self.settings);
-                        let request = self.runner.request_for(&config);
-                        let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
-                        self.handle_debug(outs);
-                    }
-                    None => self.notify(tr("There is no run configuration to debug"), false),
-                }
-            }
+            Action::Debug => self.start_debugging(),
             Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut => {
                 if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
                     match action {
@@ -1025,6 +1009,52 @@ impl CrabCraftApp {
         self.run_ide_action(ctx, Action::Run);
     }
 
+    /// Starts the selected configuration under the debugger.
+    fn start_debugging(&mut self) {
+        self.debug_test = None;
+        self.save_all_docs();
+        match self.runner.selected_config().cloned() {
+            Some(config) if matches!(config.kind, crate::runner::ConfigKind::Cargo { .. }) => match self.runner.cargo_debug_target(&config) {
+                Some(Ok((cargo, target))) => {
+                    let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
+                    self.handle_debug(outs);
+                }
+                Some(Err(e)) => self.notify(e, true),
+                None => {}
+            },
+            Some(config) => {
+                let dotnet = dotnet_path(&self.settings);
+                let request = self.runner.request_for(&config);
+                let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
+                self.handle_debug(outs);
+            }
+            None => self.notify(tr("There is no run configuration to debug"), false),
+        }
+    }
+
+    /// The debugger's Restart: what is being debugged, from the beginning.
+    pub fn restart_debugging(&mut self) {
+        self.debugger.stop();
+        match self.debug_test.clone() {
+            Some((config, target)) => self.debug_rust_test(config, target),
+            None => self.start_debugging(),
+        }
+    }
+
+    fn debug_rust_test(&mut self, config: crate::runner::RunConfig, target: rc_cargo::RunTarget) {
+        let cargo = match self.runner.cargo_tool() {
+            Ok(cargo) => cargo,
+            Err(e) => {
+                self.notify(e, true);
+                return;
+            }
+        };
+        self.save_all_docs();
+        self.debug_test = Some((config.clone(), target.clone()));
+        let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
+        self.handle_debug(outs);
+    }
+
     /// Debugs what the icon of `line` runs, in the active Rust document.
     pub fn debug_runnable_at(&mut self, ctx: &Context, line: usize) {
         use rc_lsp::rust_analyzer::RunnableKind;
@@ -1047,18 +1077,9 @@ impl CrabCraftApp {
         // One thread, so stepping stays in the test being debugged.
         args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
-        let cargo = match self.runner.cargo_tool() {
-            Ok(cargo) => cargo,
-            Err(e) => {
-                self.notify(e, true);
-                return;
-            }
-        };
-        self.save_all_docs();
         let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args) };
         let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
-        let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
-        self.handle_debug(outs);
+        self.debug_rust_test(config, target);
     }
 
     /// Click on a test's gutter icon: runs that test (or class) in its project.

@@ -619,3 +619,69 @@ fn the_debugger_stops_a_panic_at_the_code_that_panicked() {
     assert_eq!(local(&mut app, "index"), "5");
     app.debugger.session.as_mut().unwrap().stop();
 }
+
+#[test]
+fn the_debugger_pauses_mutes_and_takes_console_commands() {
+    use rc_editor::{Action, BreakpointKind};
+    const MAIN: &str = "use std::time::Duration;\n\nfn main() {\n    let mut rounds = 0u64;\n    loop {\n        rounds += 1;\n        std::thread::sleep(Duration::from_millis(5));\n        if std::path::Path::new(\"stop\").exists() {\n            break;\n        }\n    }\n    println!(\"{rounds}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let ctx = egui::Context::default();
+    let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            assert!(start.elapsed() < Duration::from_secs(90), "timed out waiting for {what}: {}", app.debugger.state_label());
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+
+    // A breakpoint in the loop.
+    let round = 5;
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(round, BreakpointKind::Normal);
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+
+    // The console reaches GDB itself, and answers.
+    app.debugger.show_console = true;
+    app.debugger.console_input = "print 40 + 2".to_string();
+    app.debugger.send_console_command();
+    let answered = |a: &CrabCraftApp| a.debugger.console.as_ref().is_some_and(|c| c.term.screen_lines().join("\n").contains("= 42"));
+    wait(&mut app, "the console's answer", &answered);
+
+    // Muted, the breakpoint no longer stops it; Pause does.
+    app.debugger.muted = true;
+    let _ = app.debugger.update(&mut app.docs);
+    app.run_ide_action(&ctx, Action::Resume);
+    wait(&mut app, "the program to run", &|a| !a.debugger.stopped());
+    std::thread::sleep(Duration::from_millis(400));
+    let _ = app.debugger.update(&mut app.docs);
+    assert!(!app.debugger.stopped(), "a muted breakpoint stopped the program");
+    app.debugger.session.as_mut().unwrap().pause();
+    pump_debugger(&mut app, "the pause");
+    assert_eq!(app.debugger.session.as_ref().unwrap().stop_info().unwrap().reason, rc_dap::StopReason::Pause);
+
+    // Unmuted, it stops again.
+    app.debugger.muted = false;
+    let _ = app.debugger.update(&mut app.docs);
+    app.run_ide_action(&ctx, Action::Resume);
+    wait(&mut app, "the program to run", &|a| !a.debugger.stopped());
+    pump_debugger(&mut app, "the breakpoint again");
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(round));
+
+    // Restart: a new session stops at the same place, with `rounds` from the start.
+    app.restart_debugging();
+    wait(&mut app, "the old session to go", &|a| !a.debugger.stopped());
+    pump_debugger(&mut app, "the breakpoint after the restart");
+    assert_eq!(local(&mut app, "rounds"), "0");
+    app.debugger.stop();
+}

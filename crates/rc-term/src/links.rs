@@ -161,6 +161,14 @@ mod tests {
     }
 
     #[test]
+    fn rust_panics_and_backtraces() {
+        let panic = "thread 'main' (4242) panicked at src/main.rs:14:9:";
+        let at = panic.find("src").unwrap() + 2;
+        assert_eq!(link_at(panic, at).unwrap().1, file("src/main.rs", Some(14), Some(9)));
+        assert_eq!(link_at("             at ./src/lib.rs:3:5", 17).unwrap().1, file("./src/lib.rs", Some(3), Some(5)));
+    }
+
+    #[test]
     fn file_positions() {
         assert_eq!(link_at("src/main.rs:12:5: warning", 3).unwrap().1, file("src/main.rs", Some(12), Some(5)));
         assert_eq!(link_at("at Program.cs:42", 5).unwrap().1, file("Program.cs", Some(42), None));

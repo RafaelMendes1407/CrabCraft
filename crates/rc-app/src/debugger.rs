@@ -33,6 +33,12 @@ pub struct Debugger {
     /// Expanded rows of the Variables tree, by path of names (kept across steps).
     pub expanded: BTreeSet<String>,
     pub new_watch: String,
+    /// Breakpoints stay in the editors but do not stop the program.
+    pub muted: bool,
+    /// The command being typed in the debugger's console.
+    pub console_input: String,
+    /// Console commands waiting for their answer.
+    console_commands: Vec<u64>,
     /// Evaluate dialog: (request id, expression, result).
     pub eval: Option<Evaluation>,
     /// Hover evaluation: (request id, doc, pos, screen, expression).
@@ -66,6 +72,9 @@ impl Debugger {
             hover: None,
             hover_result: None,
             conditions: HashMap::new(),
+            muted: false,
+            console_input: String::new(),
+            console_commands: Vec::new(),
             show_console: false,
             temp: None,
             urls: Vec::new(),
@@ -90,7 +99,7 @@ impl Debugger {
                 if let Some(c) = self.conditions.get(&(d.path.clone(), line)) {
                     spec = spec.with_condition(c.clone());
                 }
-                spec.enabled = *kind != rc_editor::BreakpointKind::Disabled;
+                spec.enabled = !self.muted && *kind != rc_editor::BreakpointKind::Disabled;
                 bps.set(spec);
             }
         }
@@ -176,7 +185,7 @@ impl Debugger {
                 .editor
                 .breakpoints
                 .iter()
-                .map(|(&l, k)| (l as u32 + 1, self.conditions.get(&(d.path.clone(), l)).cloned(), *k != rc_editor::BreakpointKind::Disabled))
+                .map(|(&l, k)| (l as u32 + 1, self.conditions.get(&(d.path.clone(), l)).cloned(), !self.muted && *k != rc_editor::BreakpointKind::Disabled))
                 .chain(self.temp.iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, true)))
                 .collect();
             let same = current.len() == wanted.len() && wanted.iter().all(|w| current.contains(w));
@@ -223,6 +232,20 @@ impl Debugger {
             let context = s.expression_context();
             let id = s.evaluate(&expression, context);
             self.eval = Some((id, expression, None));
+        }
+    }
+
+    /// Sends the console's line to the debugger as one of its commands.
+    pub fn send_console_command(&mut self) {
+        let text = std::mem::take(&mut self.console_input);
+        if text.trim().is_empty() {
+            return;
+        }
+        if let Some(c) = &self.console {
+            c.note(&format!("> {text}"));
+        }
+        if let Some(s) = &mut self.session {
+            self.console_commands.push(s.evaluate(&text, EvalContext::Repl));
         }
     }
 
@@ -327,6 +350,15 @@ impl Debugger {
                     out.push(DebugOutput::Notify(msg, true));
                 }
                 DebugEvent::Evaluated { id, result, .. } => {
+                    if let Some(i) = self.console_commands.iter().position(|c| *c == id) {
+                        self.console_commands.swap_remove(i);
+                        if let Some(c) = &self.console {
+                            match &result {
+                                Ok(v) => c.term.feed(format!("{}\r\n", v.result.replace('\n', "\r\n")).as_bytes()),
+                                Err(e) => c.note(&e.to_string()),
+                            }
+                        }
+                    }
                     if let Some((eid, _, slot)) = &mut self.eval
                         && *eid == id
                     {
@@ -350,11 +382,16 @@ impl Debugger {
         }
         // Execution point and breakpoint state in the editors.
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
+        let muted = self.muted;
         for d in &mut docs.list {
             d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
             for st in session.breakpoints().in_file(&d.path) {
                 let line = st.spec.line.saturating_sub(1) as usize;
                 if temp.as_ref().is_some_and(|(p, l)| *p == d.path && *l == st.spec.line) && !d.editor.breakpoints.contains_key(&line) {
+                    continue;
+                }
+                // Muting is not the user disabling these breakpoints: the editors keep them.
+                if muted {
                     continue;
                 }
                 if let Some(kind) = d.editor.breakpoints.get_mut(&line) {

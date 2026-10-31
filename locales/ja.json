@@ -644,6 +644,9 @@
     "Starting Rust language server…": "Rust 言語サーバーを起動しています…",
     "This file is not part of a runnable target": "このファイルは実行可能なターゲットに含まれていません",
     "Paused on panic": "panic で一時停止しました",
-    "The program panicked": "プログラムが panic しました"
+    "The program panicked": "プログラムが panic しました",
+    "Unmute Breakpoints": "ブレークポイントのミュートを解除",
+    "Debugger command (Enter to send)": "デバッガーコマンド（Enter で送信）",
+    "Mute Breakpoints": "ブレークポイントをミュート"
   }
 }

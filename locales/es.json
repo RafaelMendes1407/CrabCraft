@@ -644,6 +644,9 @@
     "Starting Rust language server…": "Iniciando el servidor de lenguaje Rust…",
     "This file is not part of a runnable target": "Este archivo no forma parte de un destino ejecutable",
     "Paused on panic": "En pausa por un panic",
-    "The program panicked": "El programa entró en panic"
+    "The program panicked": "El programa entró en panic",
+    "Unmute Breakpoints": "Reactivar puntos de interrupción",
+    "Debugger command (Enter to send)": "Comando del depurador (Enter para enviar)",
+    "Mute Breakpoints": "Silenciar puntos de interrupción"
   }
 }
