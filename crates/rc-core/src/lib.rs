@@ -6,6 +6,7 @@ pub mod paths;
 pub mod runtime;
 pub mod session;
 pub mod settings;
+pub mod processes;
 pub mod watch;
 pub mod workspace;
 

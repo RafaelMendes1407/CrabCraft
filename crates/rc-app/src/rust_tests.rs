@@ -696,3 +696,43 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
     assert_eq!(local(&mut app, "rounds"), "0");
     app.debugger.stop();
 }
+
+#[test]
+fn the_debugger_attaches_to_a_running_program() {
+    use rc_editor::BreakpointKind;
+    // Yama allows a debugger that is not the parent only when the program says so.
+    const MAIN: &str = "extern \"C\" {\n    fn prctl(option: i32, arg: u64, ...) -> i32;\n}\n\nfn main() {\n    unsafe { prctl(0x59616d61, u64::MAX) };\n    let mut rounds = 0u64;\n    loop {\n        rounds += 1;\n        std::thread::sleep(std::time::Duration::from_millis(5));\n        if rounds == u64::MAX {\n            break;\n        }\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let built = std::process::Command::new("cargo").arg("build").arg("-q").current_dir(&root).status().unwrap();
+    assert!(built.success());
+    struct Running(std::process::Child);
+    impl Drop for Running {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let program = Running(std::process::Command::new(root.join("target/debug/demo")).spawn().unwrap());
+    std::thread::sleep(Duration::from_millis(300));
+    let found = rc_core::processes::list().into_iter().find(|p| p.pid == program.0.id());
+    let pid = found.expect("the program in the list").pid;
+
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
+    let outs = app.debugger.attach_gdb(pid, "demo", &app.docs);
+    app.handle_debug(outs);
+    pump_debugger(&mut app, "the breakpoint after attaching");
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(8));
+    let rounds: u64 = local(&mut app, "rounds").parse().expect("a number");
+    assert!(rounds > 0, "it was already running");
+    app.debugger.stop();
+    drop(program);
+}

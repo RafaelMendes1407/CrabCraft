@@ -648,6 +648,12 @@
     "Unmute Breakpoints": "ブレークポイントのミュートを解除",
     "Debugger command (Enter to send)": "デバッガーコマンド（Enter で送信）",
     "Mute Breakpoints": "ブレークポイントをミュート",
-    "Filter tests": "テストを絞り込む"
+    "Filter tests": "テストを絞り込む",
+    "Attach to Process…": "プロセスにアタッチ…",
+    "Attach to Process": "プロセスにアタッチ",
+    "Filter by name or PID": "名前または PID で絞り込む",
+    "Attaching needs an open Rust project": "アタッチするには Rust プロジェクトを開いてください",
+    "Attaching to {name}…": "{name} にアタッチしています…",
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux がアタッチをブロックしました。許可するには: sudo sysctl kernel.yama.ptrace_scope=0"
   }
 }

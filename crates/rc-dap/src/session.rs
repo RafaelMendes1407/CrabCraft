@@ -11,7 +11,7 @@
 
 use crate::breakpoints::{BreakpointSpec, Breakpoints, Emulation, LogPart, hit_condition_met, parse_log_message};
 use crate::client::{DapClient, DapError, Incoming, Pending, args};
-use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, gdb_launch_arguments, launch_arguments, prepare};
+use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, gdb_attach_arguments, gdb_launch_arguments, launch_arguments, prepare};
 use crate::netcoredbg::AdapterCommand;
 use crate::protocol::*;
 use rc_core::{Inbox, Runtime, Waker};
@@ -328,6 +328,8 @@ pub struct DebugSession {
     /// Bumped on every stop and resume: answers of an older generation are stale.
     generation: u64,
     pending_stop: Option<PendingStop>,
+    /// The stop that attaching causes was passed.
+    attach_resumed: bool,
     threads: Vec<Thread>,
     frames: HashMap<i64, ThreadFrames>,
     scopes: HashMap<i64, Vec<Scope>>,
@@ -377,6 +379,7 @@ impl DebugSession {
             in_flight: Vec::new(),
             generation: 0,
             pending_stop: None,
+            attach_resumed: false,
             threads: Vec::new(),
             frames: HashMap::new(),
             scopes: HashMap::new(),
@@ -446,7 +449,7 @@ impl DebugSession {
             DebugTarget::Attach { pid } => {
                 s.attach_pid = Some(pid);
                 s.debuggee_pid = Some(pid);
-                let a = attach_arguments(pid, &s.options);
+                let a = if s.is_gdb() { gdb_attach_arguments(pid) } else { attach_arguments(pid, &s.options) };
                 s.spawn_adapter("attach", a);
             }
         }
@@ -941,6 +944,15 @@ impl DebugSession {
 
     fn on_stopped(&mut self, ev: StoppedEvent) {
         if self.state.is_ended() {
+            return;
+        }
+        // GDB stops a process to attach to it, wherever it happened to be: nothing to show.
+        if self.is_gdb() && self.attach_pid.is_some() && !self.attach_resumed {
+            self.attach_resumed = true;
+            if let Some(c) = &self.client {
+                let p = c.request("continue", json!({ "threadId": ev.thread_id.unwrap_or(1) }));
+                self.in_flight.push((p, Purpose::Ignore));
+            }
             return;
         }
         self.invalidate();

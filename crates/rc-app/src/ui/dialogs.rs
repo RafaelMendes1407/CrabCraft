@@ -18,6 +18,8 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    /// Picks a running process for the debugger.
+    Attach { filter: String, processes: Vec<rc_core::processes::Process> },
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
@@ -75,6 +77,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
+        Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
     };
@@ -409,6 +412,37 @@ fn compound(app: &mut CrabCraftApp, ctx: &Context, old: Option<&str>, name: &mut
         let list = members.iter().filter(|(_, on)| *on).map(|(n, _)| n.clone()).collect();
         app.runner.save_compound(old, name.trim().to_string(), list);
         app.session_dirty = true;
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes: &[rc_core::processes::Process]) -> Outcome {
+    let (chosen, cancel, esc) = {
+        let ((chosen, cancel), esc) = modal(ctx, "attach_process", 560.0, |ui| {
+            title(ui, tr("Attach to Process"));
+            let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Filter by name or PID")).desired_width(f32::INFINITY));
+            resp.request_focus();
+            ui.add_space(6.0);
+            let needle = filter.trim().to_lowercase();
+            let mut chosen = None;
+            egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                for p in processes.iter().filter(|p| needle.is_empty() || p.name.to_lowercase().contains(&needle) || p.pid.to_string().contains(&needle)) {
+                    let text = format!("{}  {}  {}", p.pid, p.name, p.command);
+                    if ui.add(egui::Button::new(egui::RichText::new(text).font(egui::FontId::monospace(12.0))).truncate().frame(false)).clicked() {
+                        chosen = Some((p.pid, p.name.clone()));
+                    }
+                }
+            });
+            ui.add_space(10.0);
+            let cancel = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| theme::secondary_button(ui, tr("Cancel")).clicked()).inner;
+            (chosen, cancel)
+        });
+        (chosen, cancel, esc)
+    };
+    if let Some((pid, name)) = chosen {
+        let outs = app.debugger.attach_gdb(pid, &name, &app.docs);
+        app.handle_debug(outs);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

@@ -648,6 +648,12 @@
     "Unmute Breakpoints": "Reactivar puntos de interrupción",
     "Debugger command (Enter to send)": "Comando del depurador (Enter para enviar)",
     "Mute Breakpoints": "Silenciar puntos de interrupción",
-    "Filter tests": "Filtrar pruebas"
+    "Filter tests": "Filtrar pruebas",
+    "Attach to Process…": "Adjuntar a un proceso…",
+    "Attach to Process": "Adjuntar a un proceso",
+    "Filter by name or PID": "Filtrar por nombre o PID",
+    "Attaching needs an open Rust project": "Para adjuntar hay que abrir un proyecto Rust",
+    "Attaching to {name}…": "Adjuntando a {name}…",
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux bloqueó la conexión. Permítela con: sudo sysctl kernel.yama.ptrace_scope=0"
   }
 }

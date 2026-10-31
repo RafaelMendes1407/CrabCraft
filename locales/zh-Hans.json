@@ -648,6 +648,12 @@
     "Unmute Breakpoints": "恢复断点",
     "Debugger command (Enter to send)": "调试器命令（按 Enter 发送）",
     "Mute Breakpoints": "静音断点",
-    "Filter tests": "筛选测试"
+    "Filter tests": "筛选测试",
+    "Attach to Process…": "附加到进程…",
+    "Attach to Process": "附加到进程",
+    "Filter by name or PID": "按名称或 PID 筛选",
+    "Attaching needs an open Rust project": "附加需要打开一个 Rust 项目",
+    "Attaching to {name}…": "正在附加到 {name}…",
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux 阻止了附加。可用此命令允许：sudo sysctl kernel.yama.ptrace_scope=0"
   }
 }

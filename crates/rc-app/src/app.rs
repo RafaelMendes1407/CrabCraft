@@ -749,6 +749,13 @@ impl CrabCraftApp {
                     }
                 }
             }
+            Action::AttachToProcess => {
+                if self.runner.cargo_workspace.is_some() {
+                    self.dialog = Some(crate::ui::dialogs::Dialog::Attach { filter: String::new(), processes: rc_core::processes::list() });
+                } else {
+                    self.notify(tr("Attaching needs an open Rust project"), false);
+                }
+            }
             Action::RunToCursor => {
                 if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
                     self.debugger.run_to_cursor(&path, line);

@@ -103,6 +103,7 @@ pub enum Action {
     StepOut,
     Resume,
     RunToCursor,
+    AttachToProcess,
     Evaluate,
     ShowSettings,
     ToggleProjectWindow,
@@ -175,6 +176,7 @@ impl Action {
                 | StepOut
                 | Resume
                 | RunToCursor
+                | AttachToProcess
                 | Evaluate
                 | ShowSettings
                 | ToggleProjectWindow

@@ -109,6 +109,24 @@ impl Debugger {
         bps
     }
 
+    /// Attaches GDB to a running process.
+    pub fn attach_gdb(&mut self, pid: u32, name: &str, docs: &Docs) -> Vec<DebugOutput> {
+        if let Some(s) = &mut self.session {
+            s.stop();
+        }
+        let Some(adapter) = rc_dap::gdb::locate() else {
+            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        };
+        self.urls.clear();
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&trf("Attaching to {name}…", &[("name", &name)]));
+        self.console = Some(console);
+        self.name = name.to_string();
+        self.expanded.clear();
+        self.session = Some(DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone()));
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
     /// Starts debugging a Rust binary under GDB.
     pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
         if let Some(s) = &mut self.session {
@@ -346,7 +364,10 @@ impl Debugger {
                 DebugEvent::Failed(f) => {
                     let (tpl, args) = f.user_message();
                     let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
-                    let msg = trf(tpl, &args);
+                    let mut msg = trf(tpl, &args);
+                    if matches!(&f, rc_dap::session::Failure::AttachFailed { error, .. } if error.contains("not permitted")) {
+                        msg = format!("{msg}\n{}", tr("Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0"));
+                    }
                     if let Some(c) = &self.console {
                         c.note(&msg);
                     }

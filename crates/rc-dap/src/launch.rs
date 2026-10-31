@@ -100,6 +100,11 @@ pub fn gdb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Va
     })
 }
 
+/// `attach` arguments of GDB's adapter.
+pub fn gdb_attach_arguments(pid: u32) -> Value {
+    json!({ "pid": pid })
+}
+
 pub fn attach_arguments(pid: u32, options: &DebugOptions) -> Value {
     json!({
         "name": ".NET Attach",

@@ -25,9 +25,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 49 |
-| 🚧 Em andamento | 6 |
+| 🚧 Em andamento | 7 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 6 |
+| 🔁 Portar | 5 |
 | ⬜ A fazer | 168 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -268,7 +268,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-11 | Valores inline no editor | ✅ | M2 | Valores no fim da linha vistos na janela real |
 | D-12 | Definir valor de variável | ⬜ | M4 | |
 | D-13 | Set execution point | ⬜ | M4 | |
-| D-14 | Attach a processo | 🔁 | M2 | |
+| D-14 | Attach a processo | 🚧 | M2 | Attach com GDB real testado, com ptrace_scope 1 só se o programa permitir; falta ver o diálogo |
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
 | D-17 | Memory view | ⬜ | M4 | |

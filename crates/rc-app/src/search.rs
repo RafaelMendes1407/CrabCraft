@@ -290,6 +290,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         StepInto => ico::STEP_INTO,
         StepOut => ico::STEP_OUT,
         RunToCursor => ico::RUN_TO_CURSOR,
+        AttachToProcess => ico::DEBUG,
         Resume => ico::RESUME,
         Evaluate => ico::EVALUATE,
         ToggleBreakpoint => ico::BREAKPOINT,
