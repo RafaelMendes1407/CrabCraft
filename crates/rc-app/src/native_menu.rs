@@ -481,6 +481,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ShowIntentions, || tr("Show Context Actions")),
             &sep(),
             &act(Action::Rename, || tr("Rename…")),
+            &act(Action::RefactorThis, || tr("Refactor This…")),
             &act(Action::Reformat, || tr("Reformat Code")),
             &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],

@@ -740,6 +740,7 @@
     "No implementations found": "No se encontraron implementaciones",
     "Log message": "Mensaje de registro",
     "Print this instead of stopping; {expression} shows a value": "Imprime esto en lugar de detenerse; {expression} muestra un valor",
-    "Remove once hit": "Quitar al alcanzarlo"
+    "Remove once hit": "Quitar al alcanzarlo",
+    "Refactor This…": "Refactorizar esto…"
   }
 }

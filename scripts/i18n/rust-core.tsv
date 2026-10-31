@@ -129,3 +129,4 @@ No implementations found	No se encontraron implementaciones	Aucune implémentati
 Log message	Mensaje de registro	Message de journal	Mensagem de log	Protokollnachricht	Komunikat dziennika	日志消息	ログメッセージ
 Print this instead of stopping; {expression} shows a value	Imprime esto en lugar de detenerse; {expression} muestra un valor	Affiche ceci au lieu de s'arrêter ; {expression} montre une valeur	Imprime isto em vez de parar; {expression} mostra um valor	Gibt dies aus, statt anzuhalten; {expression} zeigt einen Wert	Wypisz to zamiast zatrzymywać; {expression} pokazuje wartość	打印此内容而不停止；{expression} 显示值	停止せずにこれを出力します。{expression} は値を表示します
 Remove once hit	Quitar al alcanzarlo	Supprimer une fois atteint	Remover ao atingir	Nach Erreichen entfernen	Usuń po trafieniu	命中后移除	ヒット時に削除
+Refactor This…	Refactorizar esto…	Refactoriser ceci…	Refatorar isto…	Dies refaktorisieren…	Refaktoryzuj to…	重构此项…	これをリファクタリング…

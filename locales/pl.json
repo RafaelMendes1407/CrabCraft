@@ -740,6 +740,7 @@
     "No implementations found": "Nie znaleziono implementacji",
     "Log message": "Komunikat dziennika",
     "Print this instead of stopping; {expression} shows a value": "Wypisz to zamiast zatrzymywać; {expression} pokazuje wartość",
-    "Remove once hit": "Usuń po trafieniu"
+    "Remove once hit": "Usuń po trafieniu",
+    "Refactor This…": "Refaktoryzuj to…"
   }
 }

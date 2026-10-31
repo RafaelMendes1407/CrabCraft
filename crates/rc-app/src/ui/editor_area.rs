@@ -217,6 +217,14 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     for a in &editor_actions {
         from_menu.extend(rc_editor::run_action(&ed_ui, &mut doc.editor, &app.editor_config, *a));
     }
+    // The context actions popup reads the keys itself, so the editor must not act on them too.
+    if matches!(app.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })) {
+        ui.memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+    }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     // Shown first, so the frame of the click that opens it does not count as a click outside.
@@ -436,6 +444,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
             entry(ui, None, tr("Go to Implementation"), Action::GotoImplementation);
             entry(ui, Some(ico::TW_FIND), tr("Find Usages"), Action::FindUsages);
             entry(ui, Some(ico::EDIT), tr("Rename…"), Action::Rename);
+            entry(ui, Some(ico::BULB), tr("Refactor This…"), Action::RefactorThis);
             ui.separator();
         }
         for (icon, text, cmd) in [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)] {

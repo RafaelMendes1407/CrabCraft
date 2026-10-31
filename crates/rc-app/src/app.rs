@@ -789,6 +789,7 @@ impl CrabCraftApp {
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
+            Action::RefactorThis => self.insight.refactor_actions(doc),
             Action::GotoDeclaration => {
                 self.push_nav();
                 let doc = &self.docs.list[i];

@@ -740,6 +740,7 @@
     "No implementations found": "未找到实现",
     "Log message": "日志消息",
     "Print this instead of stopping; {expression} shows a value": "打印此内容而不停止；{expression} 显示值",
-    "Remove once hit": "命中后移除"
+    "Remove once hit": "命中后移除",
+    "Refactor This…": "重构此项…"
   }
 }

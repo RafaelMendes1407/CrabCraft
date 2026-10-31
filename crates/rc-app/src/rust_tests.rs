@@ -595,6 +595,39 @@ fn the_type_hierarchy_lists_implementations() {
 }
 
 #[test]
+fn the_action_popup_keeps_its_keys_from_the_editor() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), "fn main() {\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    app.focus_editor = true;
+    let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
+    h.run_steps(3);
+    let command = |title: &str| {
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command {
+            title: title.to_string(),
+            command: crate::insight::RENAME_COMMAND.to_string(),
+            arguments: None,
+        })
+    };
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CodeActions { list: vec![command("One"), command("Two")], selected: 0 });
+    h.run_steps(2);
+    h.key_press(egui::Key::ArrowDown);
+    h.run_steps(2);
+    assert!(matches!(h.state().dialog, Some(crate::ui::dialogs::Dialog::CodeActions { selected: 1, .. })));
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.caret_line_col().0, 0, "the caret moved");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), "fn main() {\n}\n");
+}
+
+#[test]
 fn logpoints_print_and_a_breakpoint_can_remove_itself() {
     use rc_editor::{Action, BreakpointKind};
     if rc_dap::gdb::locate().is_none() {
@@ -1458,6 +1491,18 @@ fn generate_offers_only_what_writes_code() {
     });
     assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
     assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+
+    // Refactor This offers Rename and the refactorings, and no generators.
+    let at = text.find("1 + 2").unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::single(rc_text::Range::new(at, at + 5));
+    app.insight.refactor_actions(&app.docs.list[i]);
+    let found = output(&mut app, "the refactorings", |o| match o {
+        InsightOutput::Actions(a) => Some(a.iter().map(title).collect::<Vec<_>>()),
+        _ => None,
+    });
+    assert_eq!(found[0], "Rename…", "{found:?}");
+    assert!(found.iter().any(|t| t == "Extract into variable"), "{found:?}");
+    assert!(!found.iter().any(|t| t.starts_with("Generate")), "{found:?}");
 
     // Inside a body nothing is generated, and that is said.
     app.docs.list[i].editor.selection = rc_text::Selection::point(text.find("drop").unwrap());

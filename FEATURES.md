@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 95 |
+| ✅ Pronto | 96 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 129 |
+| ⬜ A fazer | 128 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -178,7 +178,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ⬜ | M3 | |
+| R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ✅ | M3 | Popup com Renomear e as refatorações do rust-analyzer (tipo `refactor*`); também no menu de contexto e no menu Refatorar. |
 | R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
 | R-03 | Pré-visualização de refatoração | ⬜ | M3 | |
 | R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |

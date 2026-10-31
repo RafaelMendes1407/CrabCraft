@@ -64,6 +64,7 @@ pub enum Action {
     ExternalDocs,
     ShowIntentions,
     Generate,
+    RefactorThis,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -141,6 +142,7 @@ impl Action {
                 | ExternalDocs
                 | ShowIntentions
                 | Generate
+                | RefactorThis
                 | GotoDeclaration
                 | GotoImplementation
                 | GotoTypeDeclaration
@@ -428,6 +430,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::U, c, GotoSuperMethod),
         b(Key::H, ca, ShowCallers),
         b(Key::H, cas, TypeHierarchy),
+        b(Key::T, cas, RefactorThis),
         // ⌘⌥O opens a folder; JetBrains uses ⌃⌥O for this.
         b(Key::O, m(false, true, false, true), OptimizeImports),
         b(Key::A, cs, FindAction),
@@ -640,6 +643,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::U, c, GotoSuperMethod),
             b(Key::H, ca, ShowCallers),
             b(Key::H, cas, TypeHierarchy),
+            b(Key::T, cas, RefactorThis),
             b(Key::O, ca, OptimizeImports),
             b(Key::A, cs, FindAction),
             b(Key::F6, s, Rename),

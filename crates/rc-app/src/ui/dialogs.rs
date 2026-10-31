@@ -1030,6 +1030,10 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
+        if matches!(&action, rc_lsp::lsp_types::CodeActionOrCommand::Command(c) if c.command == crate::insight::RENAME_COMMAND) {
+            app.run_insight_action(rc_editor::Action::Rename, pos);
+            return Outcome::Close;
+        }
         let mut out = Vec::new();
         app.insight.run_code_action(&mut app.docs, action, &mut out);
         app.handle_insight(out);

@@ -90,6 +90,16 @@ fn generates_code(title: &str) -> bool {
     ["Generate", "Implement", "Add missing"].iter().any(|start| title.starts_with(start))
 }
 
+/// The command of the Rename row of the Refactor This popup, run by the IDE.
+pub const RENAME_COMMAND: &str = "crabcraft.rename";
+
+/// The Refactor This popup: Rename first, then the server's refactorings.
+fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
+    let rename = lsp::Command { title: tr("Rename…").to_string(), command: RENAME_COMMAND.to_string(), arguments: None };
+    let found = list.into_iter().filter(|a| matches!(a, lsp::CodeActionOrCommand::CodeAction(c) if c.kind.as_ref().is_some_and(|k| k.as_str().starts_with("refactor"))));
+    std::iter::once(lsp::CodeActionOrCommand::Command(rename)).chain(found).collect()
+}
+
 /// Document structure entry (Structure window, ⌘F12).
 #[derive(Clone, Debug)]
 pub struct SymbolNode {
@@ -160,6 +170,7 @@ pub struct Insight {
     pub call_tree: Option<crate::call_tree::CallTree>,
     /// The pending code actions are for Alt+Insert.
     generate_only: bool,
+    refactor_only: bool,
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
@@ -237,6 +248,7 @@ impl Insight {
             call_generation: 0,
             call_tree: None,
             generate_only: false,
+            refactor_only: false,
             nav_retry: None,
             rename_prepare: None,
             rename: None,
@@ -1046,6 +1058,8 @@ impl Insight {
             let list = r.ok().flatten().unwrap_or_default();
             if self.optimizing.is_some() {
                 self.optimize_found(docs, list, out);
+            } else if std::mem::take(&mut self.refactor_only) {
+                out.push(InsightOutput::Actions(refactorings(list)));
             } else if list.is_empty() {
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
@@ -1424,8 +1438,15 @@ impl Insight {
         self.generate_only = true;
     }
 
+    /// Rename and the server's refactorings (Ctrl+Alt+Shift+T).
+    pub fn refactor_actions(&mut self, doc: &Doc) {
+        self.code_actions(doc);
+        self.refactor_only = true;
+    }
+
     pub fn code_actions(&mut self, doc: &Doc) {
         self.generate_only = false;
+        self.refactor_only = false;
         let Some(session) = &self.session else { return };
         let rope = doc.editor.buffer.rope();
         let sel = doc.editor.selection.primary();
