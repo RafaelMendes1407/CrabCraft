@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 39 |
-| 🚧 Em andamento | 6 |
+| ✅ Pronto | 43 |
+| 🚧 Em andamento | 5 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 14 |
+| 🔁 Portar | 11 |
 | ⬜ A fazer | 170 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -257,14 +257,14 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | D-01 | Sessão de depuração | ✅ | M2 | `rust-gdb -i=dap`; sessão real testada |
 | D-02 | Breakpoints de linha | ✅ | M2 | Testado com GDB real |
-| D-03 | Breakpoints condicionais | 🔁 | M2 | |
+| D-03 | Breakpoints condicionais | ✅ | M2 | Condição testada com GDB real |
 | D-04 | Breakpoints em exceção/panic | 🔁 | M2 | `rust_panic` |
-| D-05 | Step over, into, out e Run to Cursor | 🚧 | M2 | Step over testado; into, out e Run to Cursor falta testar |
+| D-05 | Step over, into, out e Run to Cursor | ✅ | M2 | Over, into, out e Run to Cursor testados com GDB real |
 | D-06 | Force Step Into | ⬜ | M4 | |
 | D-07 | Threads e frames | ✅ | M2 | Thread com o nome do teste e pilha vistos na janela real |
 | D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String`; registradores ficam fora da árvore |
-| D-09 | Watches | 🔁 | M2 | |
-| D-10 | Avaliar expressão | 🔁 | M2 | |
+| D-09 | Watches | ✅ | M2 | Watches testados com GDB real |
+| D-10 | Avaliar expressão | ✅ | M2 | Avaliar expressão testado com GDB real |
 | D-11 | Valores inline no editor | 🔁 | M2 | |
 | D-12 | Definir valor de variável | ⬜ | M4 | |
 | D-13 | Set execution point | ⬜ | M4 | |

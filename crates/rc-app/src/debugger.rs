@@ -220,7 +220,8 @@ impl Debugger {
 
     pub fn evaluate(&mut self, expression: String) {
         if let Some(s) = &mut self.session {
-            let id = s.evaluate(&expression, EvalContext::Repl);
+            let context = s.expression_context();
+            let id = s.evaluate(&expression, context);
             self.eval = Some((id, expression, None));
         }
     }

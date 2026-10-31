@@ -498,3 +498,101 @@ fn a_test_stops_on_a_breakpoint_from_its_gutter_icon() {
     app.debugger.session.as_mut().unwrap().stop();
     app.insight.stop();
 }
+
+fn locals(app: &mut CrabCraftApp) -> Vec<rc_dap::Variable> {
+    let start = Instant::now();
+    loop {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        let s = app.debugger.session.as_mut().unwrap();
+        if let Some(frame) = s.selected_frame().map(|f| f.id) {
+            match s.scopes(frame).and_then(|sc| sc.first()).map(|sc| sc.variables_reference) {
+                Some(r) => match s.variables(r) {
+                    Some(v) => return v.to_vec(),
+                    None => s.request_variables(r),
+                },
+                None => s.request_scopes(frame),
+            }
+        }
+        assert!(start.elapsed() < Duration::from_secs(30), "no locals");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn local(app: &mut CrabCraftApp, name: &str) -> String {
+    let vars = locals(app);
+    vars.iter().find(|v| v.name == name).unwrap_or_else(|| panic!("no {name} in {vars:?}")).value.clone()
+}
+
+#[test]
+fn the_debugger_steps_and_evaluates_a_rust_program() {
+    use rc_editor::{Action, BreakpointKind};
+    const MAIN: &str = "fn add(a: u32, b: u32) -> u32 {\n    let sum = a + b;\n    sum\n}\n\nfn main() {\n    let mut total = 0;\n    for i in 0..5 {\n        total = add(total, i);\n    }\n    println!(\"{total}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let ctx = egui::Context::default();
+    let line = |a: &CrabCraftApp| a.docs.active_doc().and_then(|d| d.editor.execution_line);
+
+    // A conditional breakpoint stops only on the fourth round.
+    let round = 8;
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(round, BreakpointKind::Conditional);
+    app.debugger.conditions.insert((main.clone(), round), "i == 3".to_string());
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the conditional breakpoint");
+    assert_eq!(line(&app), Some(round));
+    assert_eq!(local(&mut app, "i"), "3");
+    assert_eq!(local(&mut app, "total"), "3");
+
+    // Watches and Evaluate.
+    app.debugger.session.as_mut().unwrap().add_watch("total + 1");
+    app.debugger.evaluate("i * 2".into());
+    let start = Instant::now();
+    loop {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        let w = &app.debugger.session.as_ref().unwrap().watches()[0];
+        if matches!(app.debugger.eval, Some((_, _, Some(_)))) && !matches!(w.value, rc_dap::WatchValue::Evaluating | rc_dap::WatchValue::NotEvaluated) {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(30), "no evaluation");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    match &app.debugger.eval {
+        Some((_, _, Some(Ok(v)))) => assert_eq!(v.result, "6"),
+        other => panic!("{other:?}"),
+    }
+    match &app.debugger.session.as_ref().unwrap().watches()[0].value {
+        rc_dap::WatchValue::Value(v) => assert_eq!(v.result, "4"),
+        other => panic!("{other:?}"),
+    }
+
+    // Into the function, a step inside it, and back out.
+    app.run_ide_action(&ctx, Action::StepInto);
+    pump_debugger(&mut app, "the step into add");
+    assert_eq!(line(&app), Some(1));
+    assert_eq!(local(&mut app, "a"), "3");
+    app.run_ide_action(&ctx, Action::StepOver);
+    pump_debugger(&mut app, "the step over");
+    // The compiler may give the last expression no line of its own.
+    assert!(matches!(line(&app), Some(2 | 3)), "{:?}", line(&app));
+    app.run_ide_action(&ctx, Action::StepOut);
+    pump_debugger(&mut app, "the step out");
+    assert_eq!(line(&app), Some(round));
+
+    // Run to Cursor leaves the loop, past the conditional breakpoint.
+    app.docs.active_doc_mut().unwrap().editor.goto(10, 0);
+    app.run_ide_action(&ctx, Action::RunToCursor);
+    pump_debugger(&mut app, "the cursor");
+    assert_eq!(line(&app), Some(10));
+    assert_eq!(local(&mut app, "total"), "10");
+    app.debugger.session.as_mut().unwrap().stop();
+}

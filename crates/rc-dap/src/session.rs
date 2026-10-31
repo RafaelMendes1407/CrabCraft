@@ -986,7 +986,8 @@ impl DebugSession {
                 LogPart::Expr(e) => {
                     if let Some(c) = &self.client {
                         eval.outstanding += 1;
-                        let p = c.request("evaluate", args::evaluate(e, frame_id, EvalContext::Repl));
+let context = if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalContext::Watch } else { EvalContext::Repl };
+                                                let p = c.request("evaluate", args::evaluate(e, frame_id, context));
                         self.in_flight.push((p, Purpose::LogPoint { generation: self.generation, index, part: i }));
                     }
                 }
@@ -1434,6 +1435,11 @@ impl DebugSession {
 
     /// Evaluates in the selected frame (console, hover); the answer comes as
     /// [`DebugEvent::Evaluated`] with the returned id.
+    /// GDB runs `repl` text as one of its commands: expressions go as `watch` there.
+    pub fn expression_context(&self) -> EvalContext {
+        if self.adapter.origin == crate::netcoredbg::Origin::Gdb { EvalContext::Watch } else { EvalContext::Repl }
+    }
+
     pub fn evaluate(&mut self, expression: &str, context: EvalContext) -> u64 {
         let id = self.next_id();
         match &self.client {
