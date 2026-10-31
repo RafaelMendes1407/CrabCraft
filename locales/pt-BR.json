@@ -702,6 +702,7 @@
     "Callers of {name}": "Quem chama {name}",
     "Calls made by {name}": "Chamadas feitas por {name}",
     "Generate…": "Gerar…",
-    "Nothing to generate here": "Nada para gerar aqui"
+    "Nothing to generate here": "Nada para gerar aqui",
+    "Benchmarks cannot be debugged": "Benchmarks não podem ser depurados"
   }
 }

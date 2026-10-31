@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 80 |
+| ✅ Pronto | 82 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 142 |
+| ⬜ A fazer | 140 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -247,9 +247,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
 | T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |
-| T-11 | Benchmarks pela margem | ⬜ | M3 | `cargo bench` |
+| T-11 | Benchmarks pela margem | ✅ | M3 | Ícone na margem roda `cargo bench`, verificado com `harness = false`; benchmarks não são depurados |
 | T-12 | Filtrar e ordenar resultados de teste | ✅ | M2 | Filtro por nome e falhas primeiro, vistos na janela |
-| T-13 | Marcar falhas de testes no editor após a execução | ⬜ | M3 | |
+| T-13 | Marcar falhas de testes no editor após a execução | ✅ | M3 | A mensagem do panic aparece em vermelho na linha da falha e some quando o texto muda |
 
 ## 9. Depurador
 

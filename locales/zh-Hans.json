@@ -702,6 +702,7 @@
     "Callers of {name}": "{name} 的调用方",
     "Calls made by {name}": "{name} 发出的调用",
     "Generate…": "生成…",
-    "Nothing to generate here": "此处没有可生成的内容"
+    "Nothing to generate here": "此处没有可生成的内容",
+    "Benchmarks cannot be debugged": "无法调试基准测试"
   }
 }

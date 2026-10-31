@@ -341,6 +341,30 @@ fn gutter_icons_run_tests_and_binaries() {
     app.insight.stop();
 }
 
+#[test]
+fn a_gutter_icon_runs_a_benchmark() {
+    use rc_editor::GutterIcon;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bench]]\nname = \"plain\"\nharness = false\n\n[workspace]\n");
+    write(&root.join("benches/plain.rs"), "fn main() {\n    println!(\"measured here\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("benches/plain.rs"));
+    pump(&mut app, "the benchmark's icon", |a| {
+        a.update_test_markers();
+        a.docs.active_doc().is_some_and(|d| d.editor.gutter_icons.get(&0) == Some(&GutterIcon::RunApp))
+    });
+    app.run_binary_at(&egui::Context::default(), 0);
+    pump(&mut app, "the benchmark's output", |a| a.runner.build.as_ref().is_some_and(|b| b.console.term.screen_lines().join("\n").contains("measured here")));
+    app.insight.stop();
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();
@@ -439,6 +463,16 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     let doc = app.docs.active_doc().unwrap();
     assert!(doc.path.ends_with("src/lib.rs"));
     assert_eq!(doc.editor.caret_line_col().0, 13);
+
+    // The editor shows why on that line, until the text changes.
+    app.update_test_markers();
+    let note = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.failure_notes.get(&13).cloned();
+    let text = note(&app).expect("a note on the failed line");
+    assert!(text.contains("assertion") && text.contains("left: 1") && text.contains("right: 2"), "{text}");
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "\n");
+    app.update_test_markers();
+    assert_eq!(note(&app), None);
 
     // A test that passed has no failure: it opens at its declaration.
     app.goto_test("checks::good");

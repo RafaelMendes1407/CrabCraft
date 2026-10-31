@@ -90,3 +90,4 @@ Callers of {name}	Llamadores de {name}	Appelants de {name}	Quem chama {name}	Auf
 Calls made by {name}	Llamadas de {name}	Appels de {name}	Chamadas feitas por {name}	Aufrufe von {name}	Wywołania z {name}	{name} 发出的调用	{name} の呼び出し先
 Generate…	Generar…	Générer…	Gerar…	Generieren…	Generuj…	生成…	生成…
 Nothing to generate here	Nada que generar aquí	Rien à générer ici	Nada para gerar aqui	Hier gibt es nichts zu generieren	Nie ma tu nic do wygenerowania	此处没有可生成的内容	ここで生成できるものはありません
+Benchmarks cannot be debugged	Los benchmarks no se pueden depurar	Les benchmarks ne peuvent pas être débogués	Benchmarks não podem ser depurados	Benchmarks können nicht debuggt werden	Benchmarków nie można debugować	无法调试基准测试	ベンチマークはデバッグできません

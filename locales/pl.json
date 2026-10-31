@@ -702,6 +702,7 @@
     "Callers of {name}": "Wywołujący {name}",
     "Calls made by {name}": "Wywołania z {name}",
     "Generate…": "Generuj…",
-    "Nothing to generate here": "Nie ma tu nic do wygenerowania"
+    "Nothing to generate here": "Nie ma tu nic do wygenerowania",
+    "Benchmarks cannot be debugged": "Benchmarków nie można debugować"
   }
 }

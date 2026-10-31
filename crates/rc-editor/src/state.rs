@@ -134,6 +134,8 @@ pub struct EditorState {
     pub inlays: Vec<InlayHint>,
     /// Debugger values shown at the end of each line while paused.
     pub debug_values: BTreeMap<usize, String>,
+    /// Why a test failed on this line, shown after its text.
+    pub failure_notes: BTreeMap<usize, String>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -194,6 +196,7 @@ impl EditorState {
             diagnostics: Vec::new(),
             inlays: Vec::new(),
             debug_values: BTreeMap::new(),
+            failure_notes: BTreeMap::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),

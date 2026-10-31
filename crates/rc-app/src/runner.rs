@@ -147,6 +147,8 @@ pub struct Runner {
     pub tests: Option<TestsState>,
     /// Last outcome per test (fully qualified name), for gutter icons.
     pub test_outcomes: BTreeMap<String, TestState>,
+    /// The lines where tests failed in the last run, with why.
+    pub test_failures: BTreeMap<PathBuf, BTreeMap<usize, String>>,
     waker: Waker,
     dotnet: Option<Dotnet>,
     cargo: Option<rc_cargo::Cargo>,
@@ -160,7 +162,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -702,6 +704,13 @@ impl Runner {
             }
             if !t.running {
                 // The gutter remembers the last outcome of every test that ran.
+                self.test_failures.clear();
+                for result in t.results.values().flatten().filter(|r| r.outcome == TestOutcome::Failed) {
+                    let frame = result.stack_trace.iter().find_map(|f| Some((f.file.clone()?, f.line?)));
+                    if let Some(((file, line), message)) = frame.zip(result.error_message.as_deref()) {
+                        self.test_failures.entry(file).or_default().insert(line.saturating_sub(1) as usize, failure_note(message));
+                    }
+                }
                 for (name, results) in &t.results {
                     let state = if results.iter().any(|r| r.outcome == TestOutcome::Failed) {
                         TestState::Failed
@@ -717,6 +726,16 @@ impl Runner {
         }
         out
     }
+}
+
+/// The sentence of a test's failure: what follows `thread 'x' panicked at src/lib.rs:1:2:`.
+fn failure_note(message: &str) -> String {
+    let after = message.lines().skip_while(|l| !l.contains(" panicked at ")).skip(1);
+    let mut words: Vec<&str> = after.take_while(|l| !l.is_empty() && !l.starts_with("note:")).map(str::trim).collect();
+    if words.is_empty() {
+        words.extend(message.lines().next());
+    }
+    words.join("  ").chars().take(160).collect()
 }
 
 /// How a command of the Cargo window ended.

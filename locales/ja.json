@@ -702,6 +702,7 @@
     "Callers of {name}": "{name} の呼び出し元",
     "Calls made by {name}": "{name} の呼び出し先",
     "Generate…": "生成…",
-    "Nothing to generate here": "ここで生成できるものはありません"
+    "Nothing to generate here": "ここで生成できるものはありません",
+    "Benchmarks cannot be debugged": "ベンチマークはデバッグできません"
   }
 }

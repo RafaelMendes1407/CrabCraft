@@ -86,6 +86,8 @@ pub struct CrabCraftApp {
     pub gutter_menu: Option<(usize, egui::Pos2)>,
     /// Binary target run by the icon of each line of the active Rust document.
     pub run_markers: std::collections::BTreeMap<usize, String>,
+    /// Lines of the active document that run a benchmark, with the `cargo` arguments.
+    pub bench_markers: std::collections::BTreeMap<usize, Vec<String>>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
@@ -176,6 +178,7 @@ impl CrabCraftApp {
             gutter_menu: None,
             debug_test: None,
             run_markers: std::collections::BTreeMap::new(),
+            bench_markers: std::collections::BTreeMap::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
@@ -627,6 +630,7 @@ impl CrabCraftApp {
             self.notify(e, true);
         }
         for p in modified {
+            self.runner.test_failures.remove(&p);
             self.insight.did_save(&p);
             if self.settings.format_on_save
                 && let Some(i) = self.docs.index_of(&p)
@@ -1109,6 +1113,11 @@ impl CrabCraftApp {
         let Some(i) = self.docs.active else { return };
         let doc = &mut self.docs.list[i];
         if doc.editor.lang() == rc_syntax::Lang::Rust {
+            // Line numbers of the last run mean nothing once the text changes.
+            let notes = self.runner.test_failures.get(&doc.path).filter(|_| !doc.is_modified());
+            if notes.map_or(!doc.editor.failure_notes.is_empty(), |n| *n != doc.editor.failure_notes) {
+                doc.editor.failure_notes = notes.cloned().unwrap_or_default();
+            }
             self.update_rust_markers(i);
             return;
         }
@@ -1142,11 +1151,17 @@ impl CrabCraftApp {
         doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::RunTest | GutterIcon::TestPassed | GutterIcon::TestFailed | GutterIcon::RunApp));
         self.test_markers.clear();
         self.run_markers.clear();
+        self.bench_markers.clear();
         for r in runnables {
             let state = match &r.kind {
                 RunnableKind::Binary(name) => {
                     doc.editor.gutter_icons.insert(r.line, GutterIcon::RunApp);
                     self.run_markers.insert(r.line, name.clone());
+                    continue;
+                }
+                RunnableKind::Bench(args) => {
+                    doc.editor.gutter_icons.insert(r.line, GutterIcon::RunApp);
+                    self.bench_markers.insert(r.line, args.clone());
                     continue;
                 }
                 RunnableKind::Test(name) => {
@@ -1169,6 +1184,10 @@ impl CrabCraftApp {
 
     /// Click on the run icon of a `fn main`: selects its configuration and runs it.
     pub fn run_binary_at(&mut self, ctx: &Context, line: usize) {
+        if let Some(args) = self.bench_markers.get(&line).cloned() {
+            self.run_cargo_args(args);
+            return;
+        }
         let Some(name) = self.run_markers.get(&line) else { return };
         let Some(index) = self.runner.configs.iter().position(|c| c.name == *name) else {
             self.notify(tr("This file is not part of a runnable target"), false);
@@ -1239,6 +1258,10 @@ impl CrabCraftApp {
                 self.runner.selected = index;
                 self.session_dirty = true;
                 self.run_ide_action(ctx, Action::Debug);
+                return;
+            }
+            RunnableKind::Bench(_) => {
+                self.notify(tr("Benchmarks cannot be debugged"), false);
                 return;
             }
             RunnableKind::Test(name) => (name.clone(), vec![name.clone(), "--exact".to_string()]),

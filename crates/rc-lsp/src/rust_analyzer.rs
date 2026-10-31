@@ -86,6 +86,8 @@ pub enum RunnableKind {
     Module(String),
     /// A binary target, by name.
     Binary(String),
+    /// A benchmark: everything to pass to `cargo`.
+    Bench(Vec<String>),
 }
 
 /// A place in a file that can be run, from `experimental/runnables`.
@@ -116,6 +118,14 @@ fn parse_runnable(item: &Value) -> Option<Runnable> {
     let executable = strings("executableArgs");
     let kind = match *cargo.first()? {
         "run" => RunnableKind::Binary((*cargo.iter().skip_while(|a| **a != "--bin").nth(1)?).to_string()),
+        "bench" => {
+            let mut all: Vec<String> = cargo.iter().map(|a| (*a).to_string()).collect();
+            if !executable.is_empty() {
+                all.push("--".to_string());
+                all.extend(executable.iter().map(|a| (*a).to_string()));
+            }
+            RunnableKind::Bench(all)
+        }
         "test" if cargo.contains(&"--doc") => return None,
         "test" => {
             let name = (*executable.first().filter(|n| !n.starts_with('-'))?).to_string();
@@ -129,6 +139,13 @@ fn parse_runnable(item: &Value) -> Option<Runnable> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn benchmarks_keep_their_whole_command() {
+        let list = parse_runnables(&json!([entry(1, &["bench", "--package", "p", "--bench", "b"], &[]), entry(2, &["bench", "--package", "p"], &["fast", "--exact"])]));
+        assert_eq!(list[0].kind, RunnableKind::Bench(["bench", "--package", "p", "--bench", "b"].map(String::from).to_vec()));
+        assert_eq!(list[1].kind, RunnableKind::Bench(["bench", "--package", "p", "--", "fast", "--exact"].map(String::from).to_vec()));
+    }
 
     fn entry(line: u64, cargo: &[&str], executable: &[&str]) -> Value {
         json!({
