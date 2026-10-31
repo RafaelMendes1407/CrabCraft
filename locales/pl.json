@@ -630,7 +630,7 @@
     "New Project": "Nowy projekt",
     "New Project…": "Nowy projekt…",
     "Open Cargo.toml…": "Otwórz Cargo.toml…",
-    "A lightweight IDE for Rust": "Lekkie środowisko IDE dla języka Rust",
+    "A lightweight IDE for Rust": "Lekkie IDE dla Rusta",
     "Binary": "Plik binarny",
     "An executable program with src/main.rs": "Program wykonywalny z src/main.rs",
     "Library": "Biblioteka",
@@ -654,6 +654,13 @@
     "Filter by name or PID": "Filtruj według nazwy lub PID",
     "Attaching needs an open Rust project": "Dołączanie wymaga otwartego projektu Rust",
     "Attaching to {name}…": "Dołączanie do {name}…",
-    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux zablokował dołączanie. Zezwól poleceniem: sudo sysctl kernel.yama.ptrace_scope=0"
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux zablokował dołączanie. Zezwól poleceniem: sudo sysctl kernel.yama.ptrace_scope=0",
+    "Build the project to see errors and warnings.": "Zbuduj projekt, aby zobaczyć błędy i ostrzeżenia.",
+    "Open a source file to see its items.": "Otwórz plik źródłowy, aby zobaczyć jego elementy.",
+    "Stop only when this expression is true": "Zatrzymaj tylko, gdy to wyrażenie jest prawdziwe",
+    "rust-analyzer": "rust-analyzer",
+    "Open Folder or Project": "Otwórz folder lub projekt",
+    "Reformat Code is not available for this file": "Formatowanie kodu nie jest dostępne dla tego pliku",
+    "One NAME=value per line.": "Jedno NAZWA=wartość w wierszu."
   }
 }

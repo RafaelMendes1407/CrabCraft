@@ -175,10 +175,17 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                             app.runner.selected = i;
                             app.session_dirty = true;
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } }) = app.runner.selected_config().cloned() {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
+                                ui.close();
+                            }
+                        }
+                        if app.runner.cargo_workspace.is_some() {
+                            ui.separator();
+                            if theme::menu_item(ui, Some(ico::DEBUG), tr("Attach to Process…"), false).clicked() {
+                                app.pending.push(rc_editor::Action::AttachToProcess);
                                 ui.close();
                             }
                         }

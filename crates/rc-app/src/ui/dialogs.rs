@@ -223,6 +223,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     }
                     SettingsPage::Tools => {
                         for (label, value) in [
+                            (tr("rust-analyzer"), &mut draft.rust_analyzer_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
                             (tr("Roslyn language server"), &mut draft.roslyn_path),
                             (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
@@ -277,7 +278,7 @@ fn about(ctx: &Context) -> Outcome {
             ui.label(egui::RichText::new("CrabCraft").font(theme::bold(18.0)));
             ui.label(trf("Version {version}", &[("version", &env!("CARGO_PKG_VERSION"))]));
             ui.add_space(6.0);
-            ui.label(egui::RichText::new(tr("A lightweight IDE for .NET")).color(rc_kit::pal(ui).muted));
+            ui.label(egui::RichText::new(tr("A lightweight IDE for Rust")).color(rc_kit::pal(ui).muted));
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tr("Icons: IntelliJ Platform (Apache 2.0)")).size(11.5).color(rc_kit::pal(ui).muted));
             ui.add_space(12.0);
@@ -320,10 +321,13 @@ fn goto_line(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, focus: &m
 fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std::path::Path, profiles: &[String], o: &mut rc_core::session::RunOptions, web: bool) -> Outcome {
     let settings_file = project.parent().map(|d| d.join("Properties/launchSettings.json")).filter(|p| p.exists());
     let mut open_settings = false;
+    // Cargo has no launch profiles or hot reload, and always builds before running.
+    let rust = project.file_name().is_some_and(|n| n == "Cargo.toml");
     let ((ok, cancel), esc) = modal(ctx, "run_options", 560.0, |ui| {
         title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
         let p = rc_kit::pal(ui);
         egui::Grid::new("run_options_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+            if !rust {
             ui.label(tr("Launch profile"));
             let label = |v: &Option<String>| match v.as_deref() {
                 None => tr("Default").to_string(),
@@ -338,11 +342,12 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                 ui.selectable_value(&mut o.profile, Some(String::new()), tr("None (ignore launchSettings.json)"));
             });
             ui.end_row();
+            }
             ui.label(tr("Program arguments"));
-            ui.add(egui::TextEdit::singleline(&mut o.args).hint_text(tr("The profile's arguments")).font(egui::TextStyle::Monospace).desired_width(380.0));
+            ui.add(egui::TextEdit::singleline(&mut o.args).hint_text(if rust { "" } else { tr("The profile's arguments") }).font(egui::TextStyle::Monospace).desired_width(380.0));
             ui.end_row();
             ui.label(tr("Environment variables"));
-            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text("ASPNETCORE_ENVIRONMENT=Development\nASPNETCORE_URLS=http://localhost:5000").font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
+            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text(if rust { "RUST_LOG=debug\nRUST_BACKTRACE=1" } else { "ASPNETCORE_ENVIRONMENT=Development\nASPNETCORE_URLS=http://localhost:5000" }).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
             ui.end_row();
             ui.label(tr("Working directory"));
             ui.horizontal(|ui| {
@@ -354,6 +359,7 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                 }
             });
             ui.end_row();
+            if !rust {
             ui.label("");
             let mut watch = o.hot_reload.unwrap_or(web);
             if ui.checkbox(&mut watch, tr("Hot Reload: apply saved changes and refresh the browser (dotnet watch)")).changed() {
@@ -363,9 +369,10 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             ui.label("");
             ui.add_enabled(!watch, egui::Checkbox::new(&mut o.build_first, tr("Build before running")));
             ui.end_row();
+            }
         });
         ui.add_space(6.0);
-        ui.label(egui::RichText::new(tr("Variables here are added to the profile's; one NAME=value per line.")).size(12.0).color(p.muted));
+        ui.label(egui::RichText::new(if rust { tr("One NAME=value per line.") } else { tr("Variables here are added to the profile's; one NAME=value per line.") }).size(12.0).color(p.muted));
         if settings_file.is_some() {
             ui.add_space(4.0);
             if ui.link(tr("Open launchSettings.json")).clicked() {
@@ -455,7 +462,7 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
         ui.checkbox(enabled, tr("Enabled"));
         ui.add_space(6.0);
         ui.label(tr("Condition"));
-        let resp = ui.add(egui::TextEdit::singleline(condition).hint_text(tr("Stop only when this C# expression is true")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        let resp = ui.add(egui::TextEdit::singleline(condition).hint_text(tr("Stop only when this expression is true")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
         if std::mem::take(focus) {
             resp.request_focus();
         }

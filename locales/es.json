@@ -654,6 +654,13 @@
     "Filter by name or PID": "Filtrar por nombre o PID",
     "Attaching needs an open Rust project": "Para adjuntar hay que abrir un proyecto Rust",
     "Attaching to {name}…": "Adjuntando a {name}…",
-    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux bloqueó la conexión. Permítela con: sudo sysctl kernel.yama.ptrace_scope=0"
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux bloqueó la conexión. Permítela con: sudo sysctl kernel.yama.ptrace_scope=0",
+    "Build the project to see errors and warnings.": "Compila el proyecto para ver errores y advertencias.",
+    "Open a source file to see its items.": "Abre un archivo de código para ver sus elementos.",
+    "Stop only when this expression is true": "Parar solo cuando esta expresión sea verdadera",
+    "rust-analyzer": "rust-analyzer",
+    "Open Folder or Project": "Abrir carpeta o proyecto",
+    "Reformat Code is not available for this file": "Reformatear código no está disponible para este archivo",
+    "One NAME=value per line.": "Un NOMBRE=valor por línea."
   }
 }

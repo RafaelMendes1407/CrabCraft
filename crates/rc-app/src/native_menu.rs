@@ -373,7 +373,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     let file_menu = submenu(
         || tr("File"),
         &[
-            &item(MenuCommand::NewSolution, || tr("New Solution…"), None),
+            &item(MenuCommand::NewSolution, || tr("New Project…"), None),
             &item(MenuCommand::NewFile, || tr("New File…"), None),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
@@ -476,7 +476,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;
-    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Solution"))])?;
+    let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Project"))])?;
     let run_menu = submenu(
         || tr("Run"),
         &[

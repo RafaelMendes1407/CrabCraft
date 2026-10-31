@@ -318,12 +318,12 @@ pub fn header(ui: &mut Ui, title: &str) -> bool {
 
 fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
     match tw {
-        ToolWindow::Structure => (tr("No structure"), tr("Open a C# file to see its types and members.")),
+        ToolWindow::Structure => (tr("No structure"), tr("Open a source file to see its items.")),
         ToolWindow::Commit => (tr("No changes"), tr("Changed files will show up here, ready to commit.")),
         ToolWindow::Run => (tr("Nothing is running"), tr("Run a project to see its output here.")),
         ToolWindow::Debug => (tr("No debug session"), tr("Start debugging to see frames, variables and watches.")),
         ToolWindow::Tests => (tr("No tests run yet"), tr("Run the tests of a project or file to see the results.")),
-        ToolWindow::Build => (tr("No build output"), tr("Build the solution to see errors and warnings.")),
+        ToolWindow::Build => (tr("No build output"), tr("Build the project to see errors and warnings.")),
         ToolWindow::Terminal => (tr("Terminal"), tr("A shell in the workspace folder.")),
         ToolWindow::Problems => (tr("No problems"), tr("Errors and warnings of the open files show up here.")),
         ToolWindow::Git => (tr("Git"), tr("Branches, history and changes of the repository.")),

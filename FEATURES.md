@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 49 |
+| ✅ Pronto | 52 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 5 |
-| ⬜ A fazer | 168 |
+| 🔁 Portar | 3 |
+| ⬜ A fazer | 167 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -143,7 +143,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-24 | Explicações inline de erros | ⬜ | M4 | |
 | I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
-| I-27 | Reformatar com rustfmt | ⬜ | M3 | |
+| I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ⬜ | M3 | |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | `textDocument/rangeFormatting` |
@@ -215,8 +215,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-03 | Botão Apply fix em erros do compilador | ⬜ | M3 | |
 | B-04 | Janela Problems | 🚧 | M1 | Lista recebe os erros (testado); janela ainda não vista com Rust |
 | B-05 | Configurações de run automáticas por target | ✅ | M1 | Uma por binário, mais All Tests; testado e visto no app |
-| B-06 | Editor de configurações de run | 🔁 | M3 | |
-| B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | 🔁 | M3 | |
+| B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |
+| B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | 🚧 | M3 | Argumentos, ambiente e pasta testados; falta comando, canal e stdin |
 | B-08 | Features automáticas (`required-features`) | ⬜ | M3 | |
 | B-09 | Emular terminal na saída | ⬜ | M3 | `rc-term` já suporta |
 | B-10 | Executar como root | ⬜ | M6 | |
@@ -268,7 +268,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-11 | Valores inline no editor | ✅ | M2 | Valores no fim da linha vistos na janela real |
 | D-12 | Definir valor de variável | ⬜ | M4 | |
 | D-13 | Set execution point | ⬜ | M4 | |
-| D-14 | Attach a processo | 🚧 | M2 | Attach com GDB real testado, com ptrace_scope 1 só se o programa permitir; falta ver o diálogo |
+| D-14 | Attach a processo | ✅ | M2 | Attach com GDB real e diálogo visto; com ptrace_scope 1 o Linux bloqueia e o app explica |
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
 | D-17 | Memory view | ⬜ | M4 | |

@@ -736,3 +736,43 @@ fn the_debugger_attaches_to_a_running_program() {
     app.debugger.stop();
     drop(program);
 }
+
+#[test]
+fn a_rust_run_configuration_takes_arguments_and_environment() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "fn main() {\n    let args: Vec<String> = std::env::args().skip(1).collect();\n    println!(\"[{}] {}\", args.join(\",\"), std::env::var(\"CRAB\").unwrap_or_default());\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let name = app.runner.selected_config().unwrap().name.clone();
+    app.edit_run_config(Some(name.clone()));
+    assert!(matches!(&app.dialog, Some(crate::ui::dialogs::Dialog::RunOptions { project, .. }) if project.ends_with("Cargo.toml")));
+    let mut options = rc_core::session::RunOptions { args: "one \"two words\"".to_string(), ..Default::default() };
+    options.env = "CRAB=rust".to_string();
+    app.runner.options.insert(name, options);
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("[one,two words] rust")));
+}
+
+#[test]
+fn reformat_code_runs_rustfmt() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "fn main(){\nprintln!(\"x\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    app.insight.format(&app.docs.list[i]);
+    pump(&mut app, "the formatted text", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("fn main() {\n    println!")));
+    app.insight.stop();
+}

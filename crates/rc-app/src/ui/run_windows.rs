@@ -77,7 +77,7 @@ pub fn open_url(url: &str) {
 pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
     let target = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf());
-    let actions = [(ico::BUILD, tr("Build Solution"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
+    let actions = [(ico::BUILD, tr("Build Project"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
     match header(ui, tr("Build"), &actions) {
         Some(0) => app.pending.push(rc_editor::Action::Build),
         Some(1) => {
@@ -91,7 +91,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
         _ => {}
     }
     let Some(b) = &app.runner.build else {
-        empty_state(ui, ToolWindow::Build.icon(), tr("No build output"), tr("Build the solution to see errors and warnings."));
+        empty_state(ui, ToolWindow::Build.icon(), tr("No build output"), tr("Build the project to see errors and warnings."));
         return;
     };
     let p = rc_kit::pal(ui);

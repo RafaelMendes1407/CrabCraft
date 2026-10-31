@@ -654,6 +654,13 @@
     "Filter by name or PID": "按名称或 PID 筛选",
     "Attaching needs an open Rust project": "附加需要打开一个 Rust 项目",
     "Attaching to {name}…": "正在附加到 {name}…",
-    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux 阻止了附加。可用此命令允许：sudo sysctl kernel.yama.ptrace_scope=0"
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux 阻止了附加。可用此命令允许：sudo sysctl kernel.yama.ptrace_scope=0",
+    "Build the project to see errors and warnings.": "构建项目以查看错误和警告。",
+    "Open a source file to see its items.": "打开源文件以查看其项目。",
+    "Stop only when this expression is true": "仅当此表达式为真时停止",
+    "rust-analyzer": "rust-analyzer",
+    "Open Folder or Project": "打开文件夹或项目",
+    "Reformat Code is not available for this file": "此文件无法重新格式化代码",
+    "One NAME=value per line.": "每行一个 NAME=value。"
   }
 }

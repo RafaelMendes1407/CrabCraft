@@ -317,6 +317,11 @@ impl CrabCraftApp {
             None => self.runner.selected_config().cloned(),
         };
         match cfg {
+            Some(RunConfig { name, kind: ConfigKind::Cargo { .. } }) => {
+                let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
+                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
+                self.dialog = Some(Dialog::RunOptions { name, project, profiles: Vec::new(), options, web: false });
+            }
             Some(RunConfig { name, kind: ConfigKind::App { project, web, .. } }) => {
                 let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
@@ -575,7 +580,7 @@ impl CrabCraftApp {
             _ => None,
         };
         if !matches!(lang, Lang::Json | Lang::Xml) {
-            self.notify(tr("Reformat Code is available for C#, JSON and XML files"), false);
+            self.notify(tr("Reformat Code is not available for this file"), false);
             return;
         }
         let rope = d.editor.buffer.rope().clone();
@@ -1188,7 +1193,7 @@ impl CrabCraftApp {
         #[cfg(target_os = "macos")]
         let picked = dialog.pick_files_or_folders();
         #[cfg(not(target_os = "macos"))]
-        let picked = dialog.set_title(tr("Open Folder, Solution or Project")).pick_folder().map(|p| vec![p]);
+        let picked = dialog.set_title(tr("Open Folder or Project")).pick_folder().map(|p| vec![p]);
         if let Some(paths) = picked {
             self.open_paths(paths);
         }

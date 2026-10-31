@@ -628,9 +628,9 @@
     "The Rust language server is still analysing the project": "Rust 言語サーバーはプロジェクトを解析中です",
     "GDB was not found. Install it to debug Rust programs.": "GDB が見つかりません。Rust プログラムをデバッグするにはインストールしてください。",
     "New Project": "新規プロジェクト",
-    "New Project…": "新規プロジェクト…",
+    "New Project…": "新しいプロジェクト…",
     "Open Cargo.toml…": "Cargo.toml を開く…",
-    "A lightweight IDE for Rust": "Rust 向けの軽量 IDE",
+    "A lightweight IDE for Rust": "軽量な Rust IDE",
     "Binary": "バイナリ",
     "An executable program with src/main.rs": "src/main.rs を持つ実行可能プログラム",
     "Library": "ライブラリ",
@@ -654,6 +654,13 @@
     "Filter by name or PID": "名前または PID で絞り込む",
     "Attaching needs an open Rust project": "アタッチするには Rust プロジェクトを開いてください",
     "Attaching to {name}…": "{name} にアタッチしています…",
-    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux がアタッチをブロックしました。許可するには: sudo sysctl kernel.yama.ptrace_scope=0"
+    "Linux blocked the attach. Allow it with: sudo sysctl kernel.yama.ptrace_scope=0": "Linux がアタッチをブロックしました。許可するには: sudo sysctl kernel.yama.ptrace_scope=0",
+    "Build the project to see errors and warnings.": "プロジェクトをビルドするとエラーと警告が表示されます。",
+    "Open a source file to see its items.": "ソースファイルを開くと項目が表示されます。",
+    "Stop only when this expression is true": "この式が true のときだけ停止",
+    "rust-analyzer": "rust-analyzer",
+    "Open Folder or Project": "フォルダーまたはプロジェクトを開く",
+    "Reformat Code is not available for this file": "このファイルではコードの再フォーマットを使用できません",
+    "One NAME=value per line.": "1 行に 1 つ NAME=value。"
   }
 }

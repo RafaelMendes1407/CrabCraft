@@ -107,11 +107,12 @@ fn parse_symbols(v: &Value) -> Vec<SymbolHit> {
 pub fn action_items() -> Vec<(&'static str, Action)> {
     use Action::*;
     vec![
-        (tr("Build Solution"), Build),
+        (tr("Build Project"), Build),
         (tr("Run"), Run),
         (tr("Debug"), Debug),
         (tr("Stop"), StopRun),
         (tr("Run Tests"), RunTests),
+        (tr("Attach to Process…"), AttachToProcess),
         (tr("Settings…"), ShowSettings),
         (tr("Find in Files…"), FindInFiles),
         (tr("Replace in Files…"), ReplaceInFiles),
