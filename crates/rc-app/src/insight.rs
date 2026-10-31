@@ -74,6 +74,41 @@ pub enum NavKind {
     Usages,
 }
 
+fn action_title(action: &lsp::CodeActionOrCommand) -> &str {
+    match action {
+        lsp::CodeActionOrCommand::Command(c) => &c.title,
+        lsp::CodeActionOrCommand::CodeAction(c) => &c.title,
+    }
+}
+
+/// Whether a code action belongs in the Generate popup.
+fn generates_code(title: &str) -> bool {
+    ["Generate", "Implement", "Add missing"].iter().any(|start| title.starts_with(start))
+}
+
+/// Where a request for the call hierarchy stands.
+enum CallStep {
+    Prepare,
+    /// The name of the function asked about.
+    Calls(String),
+}
+
+/// Turns a reply of `callHierarchy/*` into locations: every call site of a caller, or the
+/// declaration of each function called.
+fn call_locations(reply: &Value, callers: bool) -> Value {
+    let calls = reply.as_array().map_or(&[][..], Vec::as_slice);
+    let mut out = Vec::new();
+    for call in calls {
+        if callers {
+            let (Some(from), Some(ranges)) = (call.get("from"), call.get("fromRanges").and_then(Value::as_array)) else { continue };
+            out.extend(ranges.iter().map(|r| json!({ "uri": from.get("uri"), "range": r })));
+        } else if let Some(to) = call.get("to") {
+            out.push(json!({ "uri": to.get("uri"), "range": to.get("selectionRange") }));
+        }
+    }
+    Value::Array(out)
+}
+
 /// Document structure entry (Structure window, ⌘F12).
 #[derive(Clone, Debug)]
 pub struct SymbolNode {
@@ -120,6 +155,10 @@ pub struct Insight {
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
+    /// Callers (`true`) or callees of what is under the caret, in two requests.
+    calls: Option<(bool, CallStep, Pending<Value>)>,
+    /// The pending code actions are for Alt+Insert.
+    generate_only: bool,
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
@@ -186,6 +225,8 @@ impl Insight {
             hover: None,
             signature: None,
             nav: None,
+            calls: None,
+            generate_only: false,
             nav_retry: None,
             rename_prepare: None,
             rename: None,
@@ -327,6 +368,7 @@ impl Insight {
         self.hover = None;
         self.signature = None;
         self.nav = None;
+        self.calls = None;
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
@@ -771,6 +813,42 @@ impl Insight {
         }
     }
 
+    /// Asks who calls what is at `pos`, or (`callers` false) what it calls.
+    pub fn call_hierarchy(&mut self, doc: &Doc, pos: usize, callers: bool) {
+        let Some(session) = &self.session else { return };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        self.calls = Some((callers, CallStep::Prepare, session.client.request_raw("textDocument/prepareCallHierarchy", params)));
+    }
+
+    fn poll_calls(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
+        let Some((_, _, p)) = &mut self.calls else { return };
+        let Some(reply) = p.poll() else { return };
+        let Some((callers, step, _)) = self.calls.take() else { return };
+        let reply = reply.unwrap_or(Value::Null);
+        match step {
+            CallStep::Prepare => {
+                let item = reply.as_array().and_then(|a| a.first()).cloned();
+                match (item, &self.session) {
+                    (Some(item), Some(session)) => {
+                        let name = item.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+                        let method = if callers { "callHierarchy/incomingCalls" } else { "callHierarchy/outgoingCalls" };
+                        self.calls = Some((callers, CallStep::Calls(name), session.client.request_raw(method, json!({ "item": item }))));
+                    }
+                    _ => out.push(InsightOutput::Message(tr("Place the caret on a function").into())),
+                }
+            }
+            CallStep::Calls(name) => {
+                let targets = locations(&call_locations(&reply, callers), docs);
+                if targets.is_empty() {
+                    out.push(InsightOutput::Message(if callers { tr("No callers found") } else { tr("No calls found") }.into()));
+                } else {
+                    let title = if callers { trf("Callers of {name}", &[("name", &name)]) } else { trf("Calls made by {name}", &[("name", &name)]) };
+                    out.push(InsightOutput::Usages { title, targets });
+                }
+            }
+        }
+    }
+
     /// Go to Declaration / Implementation / Usages results.
     fn poll_goto(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         let Some((_, _, p)) = &mut self.nav else { return };
@@ -811,6 +889,7 @@ impl Insight {
 
     fn poll_navigation(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
         self.poll_goto(docs, out);
+        self.poll_calls(docs, out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -854,7 +933,12 @@ impl Insight {
             if list.is_empty() {
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
-                out.push(InsightOutput::Actions(list));
+                if std::mem::take(&mut self.generate_only) {
+                    let list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
+                    out.push(if list.is_empty() { InsightOutput::Message(tr("Nothing to generate here").into()) } else { InsightOutput::Actions(list) });
+                } else {
+                    out.push(InsightOutput::Actions(list));
+                }
             }
         }
         if let Some(p) = &mut self.action_resolve
@@ -1163,7 +1247,14 @@ impl Insight {
     }
 
     /// ⌥⏎: quick fixes and refactorings at the caret / selection.
+    /// The context actions that write code (Alt+Insert).
+    pub fn generate_actions(&mut self, doc: &Doc) {
+        self.code_actions(doc);
+        self.generate_only = true;
+    }
+
     pub fn code_actions(&mut self, doc: &Doc) {
+        self.generate_only = false;
         let Some(session) = &self.session else { return };
         let rope = doc.editor.buffer.rope();
         let sel = doc.editor.selection.primary();

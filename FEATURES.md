@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 78 |
+| ✅ Pronto | 80 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 144 |
+| ⬜ A fazer | 142 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -163,7 +163,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
-| N-09 | Hierarquia de chamadas | ⬜ | M3 | `callHierarchy/*` |
+| N-09 | Hierarquia de chamadas | 🚧 | M3 | Ctrl+Alt+H lista quem chama; Mostrar chamadas lista o que é chamado; um nível na janela Find, sem árvore; visto na janela nativa |
 | N-10 | Hierarquia de tipos e traits | ⬜ | M3 | |
 | N-11 | Ir para o trait / para o `impl` | ✅ | M3 | Ctrl+U vai do método do `impl` ao trait; Ctrl+Alt+B vai do trait aos `impl`; teste real |
 | N-12 | Bookmarks | ⬜ | M3 | |
@@ -186,7 +186,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
 | R-07 | Mudar assinatura | ⬜ | M4 | |
 | R-08 | Mover itens entre módulos | ⬜ | M4 | |
-| R-09 | Popup Generate (Alt+Insert) | 🚧 | M3 | Gerar new pelo Alt+Enter testado; popup Alt+Insert falta |
+| R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
 | R-11 | Gerar `derive` | ⬜ | M3 | |
 
@@ -363,7 +363,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-04 | Configurar atalhos | ⬜ | M3 | |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |
 | G-06 | Backup e sincronização de configurações | ⬜ | M6 | Exportar/importar arquivo |
-| G-07 | Find Action (Ctrl+Shift+A) | ⬜ | M3 | |
+| G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |
 | G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |
 | G-09 | Plugins | ⬜ | M6 | |
 | G-10 | Migração a partir do VS Code e do RustRover | ⬜ | M6 | |

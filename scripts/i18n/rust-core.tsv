@@ -80,3 +80,13 @@ The console	La consola	La console	O console	Die Konsole	Konsola	控制台	コン
 Choose a file	Elegir un archivo	Choisir un fichier	Escolher um arquivo	Datei auswählen	Wybierz plik	选择文件	ファイルを選択
 Go to Super Method	Ir al método superior	Aller à la super-méthode	Ir para o método do trait	Zur Super-Methode	Przejdź do metody nadrzędnej	转到父方法	スーパーメソッドへ移動
 rustfmt formats whole files. Clear the selection to reformat this one.	rustfmt formatea archivos completos. Quita la selección para reformatear este.	rustfmt formate des fichiers entiers. Désélectionnez pour reformater celui-ci.	O rustfmt formata arquivos inteiros. Limpe a seleção para reformatar este.	rustfmt formatiert ganze Dateien. Heben Sie die Auswahl auf, um diese neu zu formatieren.	rustfmt formatuje całe pliki. Usuń zaznaczenie, aby sformatować ten plik.	rustfmt 只能格式化整个文件。清除选择后再重新格式化此文件。	rustfmt はファイル全体を整形します。このファイルを整形するには選択を解除してください。
+Find Action…	Buscar acción…	Rechercher une action…	Localizar ação…	Aktion suchen…	Znajdź akcję…	查找操作…	アクションを検索…
+Show Callers	Mostrar llamadores	Afficher les appelants	Mostrar quem chama	Aufrufer anzeigen	Pokaż wywołujących	显示调用方	呼び出し元を表示
+Show Callees	Mostrar llamadas	Afficher les appelés	Mostrar chamadas	Aufgerufene anzeigen	Pokaż wywoływane	显示被调用方	呼び出し先を表示
+Place the caret on a function	Coloca el cursor en una función	Placez le curseur sur une fonction	Coloque o cursor em uma função	Setzen Sie den Cursor auf eine Funktion	Umieść kursor na funkcji	请将光标放在函数上	カーソルを関数に置いてください
+No callers found	No se encontraron llamadores	Aucun appelant trouvé	Nenhuma chamada a esta função	Keine Aufrufer gefunden	Nie znaleziono wywołujących	未找到调用方	呼び出し元が見つかりません
+No calls found	No se encontraron llamadas	Aucun appel trouvé	Nenhuma chamada encontrada	Keine Aufrufe gefunden	Nie znaleziono wywołań	未找到调用	呼び出しが見つかりません
+Callers of {name}	Llamadores de {name}	Appelants de {name}	Quem chama {name}	Aufrufer von {name}	Wywołujący {name}	{name} 的调用方	{name} の呼び出し元
+Calls made by {name}	Llamadas de {name}	Appels de {name}	Chamadas feitas por {name}	Aufrufe von {name}	Wywołania z {name}	{name} 发出的调用	{name} の呼び出し先
+Generate…	Generar…	Générer…	Gerar…	Generieren…	Generuj…	生成…	生成…
+Nothing to generate here	Nada que generar aquí	Rien à générer ici	Nada para gerar aqui	Hier gibt es nichts zu generieren	Nie ma tu nic do wygenerowania	此处没有可生成的内容	ここで生成できるものはありません

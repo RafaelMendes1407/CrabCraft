@@ -443,6 +443,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         || tr("Navigate"),
         &[
             &act(Action::SearchEverywhere, || tr("Search Everywhere")),
+            &act(Action::FindAction, || tr("Find Action…")),
             &act(Action::GotoFile, || tr("Go to File…")),
             &act(Action::GotoClass, || tr("Go to Type…")),
             &act(Action::GotoSymbol, || tr("Go to Symbol…")),
@@ -457,6 +458,9 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::GotoImplementation, || tr("Go to Implementation")),
             &act(Action::GotoTypeDeclaration, || tr("Go to Type Declaration")),
             &act(Action::GotoSuperMethod, || tr("Go to Super Method")),
+            &act(Action::Generate, || tr("Generate…")),
+            &act(Action::ShowCallers, || tr("Show Callers")),
+            &act(Action::ShowCallees, || tr("Show Callees")),
             &act(Action::FindUsages, || tr("Find Usages")),
             &act(Action::FileStructure, || tr("File Structure")),
             &sep(),

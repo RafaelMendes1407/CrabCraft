@@ -688,6 +688,7 @@ impl CrabCraftApp {
             Action::ParameterInfo => self.insight.parameter_info(doc),
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ShowIntentions => self.insight.code_actions(doc),
+            Action::Generate => self.insight.generate_actions(doc),
             Action::GotoDeclaration => {
                 self.push_nav();
                 let doc = &self.docs.list[i];
@@ -705,6 +706,8 @@ impl CrabCraftApp {
             }
             Action::FindUsages => self.insight.navigate(doc, caret, NavKind::Usages),
             Action::Rename => self.insight.prepare_rename(doc),
+            Action::ShowCallers => self.insight.call_hierarchy(doc, caret, true),
+            Action::ShowCallees => self.insight.call_hierarchy(doc, caret, false),
             Action::GotoSuperMethod => {
                 self.push_nav();
                 let doc = &self.docs.list[i];
@@ -927,12 +930,13 @@ impl CrabCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
-            Action::SearchEverywhere | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
+            Action::SearchEverywhere | Action::FindAction | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
                     let tab = match action {
                         Action::GotoFile => crate::search::SeTab::Files,
                         Action::GotoClass => crate::search::SeTab::Types,
                         Action::GotoSymbol => crate::search::SeTab::Symbols,
+                        Action::FindAction => crate::search::SeTab::Actions,
                         _ => crate::search::SeTab::All,
                     };
                     // The selected text (or the word at the caret) pre-fills the search.

@@ -62,10 +62,13 @@ pub enum Action {
     ParameterInfo,
     QuickDoc,
     ShowIntentions,
+    Generate,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
     GotoSuperMethod,
+    ShowCallers,
+    ShowCallees,
     FindUsages,
     Rename,
     Reformat,
@@ -80,6 +83,7 @@ pub enum Action {
     ToggleBreakpoint,
     // --- IDE (reported to the app)
     SearchEverywhere,
+    FindAction,
     GotoFile,
     GotoSymbol,
     GotoClass,
@@ -129,10 +133,13 @@ impl Action {
                 | ParameterInfo
                 | QuickDoc
                 | ShowIntentions
+                | Generate
                 | GotoDeclaration
                 | GotoImplementation
                 | GotoTypeDeclaration
                 | GotoSuperMethod
+                | ShowCallers
+                | ShowCallees
                 | FindUsages
                 | Rename
                 | Reformat
@@ -154,6 +161,7 @@ impl Action {
         matches!(
             self,
             SearchEverywhere
+                | FindAction
                 | GotoFile
                 | GotoSymbol
                 | GotoClass
@@ -400,10 +408,13 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F1, none, QuickDoc),
         b(Key::J, ctrl, QuickDoc),
         b(Key::Enter, a, ShowIntentions),
+        b(Key::Insert, a, Generate),
         b(Key::B, c, GotoDeclaration),
         b(Key::B, ca, GotoImplementation),
         b(Key::B, cs, GotoTypeDeclaration),
         b(Key::U, c, GotoSuperMethod),
+        b(Key::H, ca, ShowCallers),
+        b(Key::A, cs, FindAction),
         b(Key::F7, a, FindUsages),
         b(Key::F6, s, Rename),
         b(Key::L, ca, Reformat),
@@ -522,6 +533,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::Space, c, Complete),
         b(Key::P, c, ParameterInfo),
         b(Key::Enter, a, ShowIntentions),
+        b(Key::Insert, a, Generate),
         b(Key::F7, a, FindUsages),
         b(Key::G, c, GotoLine),
         b(Key::F, c, Find),
@@ -605,6 +617,8 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::B, ca, GotoImplementation),
             b(Key::B, cs, GotoTypeDeclaration),
             b(Key::U, c, GotoSuperMethod),
+            b(Key::H, ca, ShowCallers),
+            b(Key::A, cs, FindAction),
             b(Key::F6, s, Rename),
             b(Key::R, cs, Rename),
             b(Key::L, ca, Reformat),

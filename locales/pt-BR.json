@@ -692,6 +692,16 @@
     "The console": "O console",
     "Choose a file": "Escolher um arquivo",
     "Go to Super Method": "Ir para o método do trait",
-    "rustfmt formats whole files. Clear the selection to reformat this one.": "O rustfmt formata arquivos inteiros. Limpe a seleção para reformatar este."
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "O rustfmt formata arquivos inteiros. Limpe a seleção para reformatar este.",
+    "Find Action…": "Localizar ação…",
+    "Show Callers": "Mostrar quem chama",
+    "Show Callees": "Mostrar chamadas",
+    "Place the caret on a function": "Coloque o cursor em uma função",
+    "No callers found": "Nenhuma chamada a esta função",
+    "No calls found": "Nenhuma chamada encontrada",
+    "Callers of {name}": "Quem chama {name}",
+    "Calls made by {name}": "Chamadas feitas por {name}",
+    "Generate…": "Gerar…",
+    "Nothing to generate here": "Nada para gerar aqui"
   }
 }

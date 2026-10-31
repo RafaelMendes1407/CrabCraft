@@ -692,6 +692,16 @@
     "The console": "La consola",
     "Choose a file": "Elegir un archivo",
     "Go to Super Method": "Ir al método superior",
-    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt formatea archivos completos. Quita la selección para reformatear este."
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt formatea archivos completos. Quita la selección para reformatear este.",
+    "Find Action…": "Buscar acción…",
+    "Show Callers": "Mostrar llamadores",
+    "Show Callees": "Mostrar llamadas",
+    "Place the caret on a function": "Coloca el cursor en una función",
+    "No callers found": "No se encontraron llamadores",
+    "No calls found": "No se encontraron llamadas",
+    "Callers of {name}": "Llamadores de {name}",
+    "Calls made by {name}": "Llamadas de {name}",
+    "Generate…": "Generar…",
+    "Nothing to generate here": "Nada que generar aquí"
   }
 }

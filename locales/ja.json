@@ -692,6 +692,16 @@
     "The console": "コンソール",
     "Choose a file": "ファイルを選択",
     "Go to Super Method": "スーパーメソッドへ移動",
-    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt はファイル全体を整形します。このファイルを整形するには選択を解除してください。"
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt はファイル全体を整形します。このファイルを整形するには選択を解除してください。",
+    "Find Action…": "アクションを検索…",
+    "Show Callers": "呼び出し元を表示",
+    "Show Callees": "呼び出し先を表示",
+    "Place the caret on a function": "カーソルを関数に置いてください",
+    "No callers found": "呼び出し元が見つかりません",
+    "No calls found": "呼び出しが見つかりません",
+    "Callers of {name}": "{name} の呼び出し元",
+    "Calls made by {name}": "{name} の呼び出し先",
+    "Generate…": "生成…",
+    "Nothing to generate here": "ここで生成できるものはありません"
   }
 }

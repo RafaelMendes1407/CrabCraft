@@ -1066,6 +1066,86 @@ fn navigation_reaches_the_standard_library_and_compiler_fixes_apply() {
 }
 
 #[test]
+fn generate_offers_only_what_writes_code() {
+    use crate::insight::InsightOutput;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let text = "struct A {\n    a: u32,\n}\nfn main() {\n    let n = 1 + 2;\n    drop(n);\n}\n";
+    write(&root.join("src/main.rs"), text);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    let title = |a: &rc_lsp::lsp_types::CodeActionOrCommand| match a {
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+        rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(c) => c.title.clone(),
+    };
+    app.docs.list[i].editor.selection = rc_text::Selection::point(text.find("a: u32").unwrap());
+    app.insight.generate_actions(&app.docs.list[i]);
+    let found = output(&mut app, "the generators", |o| match o {
+        InsightOutput::Actions(a) => Some(a.iter().map(title).collect::<Vec<_>>()),
+        _ => None,
+    });
+    assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
+    assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+
+    // Inside a body nothing is generated, and that is said.
+    app.docs.list[i].editor.selection = rc_text::Selection::point(text.find("drop").unwrap());
+    app.insight.generate_actions(&app.docs.list[i]);
+    let said = output(&mut app, "the answer", |o| match o {
+        InsightOutput::Message(m) => Some(m.clone()),
+        InsightOutput::Actions(a) => Some(format!("{:?}", a.iter().map(title).collect::<Vec<_>>())),
+        _ => None,
+    });
+    assert_eq!(said, "Nothing to generate here");
+
+    // Alt+Enter is not filtered.
+    app.insight.code_actions(&app.docs.list[i]);
+    let all = output(&mut app, "the context actions", |o| match o {
+        InsightOutput::Actions(a) => Some(a.len()),
+        _ => None,
+    });
+    assert!(all > 0);
+    app.insight.stop();
+}
+
+#[test]
+fn the_call_hierarchy_lists_callers_and_callees() {
+    use crate::insight::InsightOutput;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let text = "fn leaf() {}\nfn middle() {\n    leaf();\n    leaf();\n}\nfn lonely() {}\nfn main() {\n    middle();\n    lonely();\n}\n";
+    write(&root.join("src/main.rs"), text);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    let mut ask = |app: &mut CrabCraftApp, name: &str, callers: bool| {
+        app.insight.call_hierarchy(&app.docs.list[i], text.find(name).unwrap() + 3, callers);
+        output(app, "the calls", |o| match o {
+            InsightOutput::Usages { title, targets } => Some(Ok((title.clone(), targets.iter().map(|t| t.line).collect::<Vec<_>>()))),
+            InsightOutput::Message(m) => Some(Err(m.clone())),
+            _ => None,
+        })
+    };
+    assert_eq!(ask(&mut app, "fn leaf", true), Ok(("Callers of leaf".to_string(), vec![2, 3])));
+    assert_eq!(ask(&mut app, "fn main", false), Ok(("Calls made by main".to_string(), vec![1, 5])));
+    assert_eq!(ask(&mut app, "fn main", true), Err("No callers found".to_string()));
+    assert_eq!(ask(&mut app, "fn leaf", false), Err("No calls found".to_string()));
+    app.insight.stop();
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

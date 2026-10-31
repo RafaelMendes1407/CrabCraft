@@ -692,6 +692,16 @@
     "The console": "控制台",
     "Choose a file": "选择文件",
     "Go to Super Method": "转到父方法",
-    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt 只能格式化整个文件。清除选择后再重新格式化此文件。"
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt 只能格式化整个文件。清除选择后再重新格式化此文件。",
+    "Find Action…": "查找操作…",
+    "Show Callers": "显示调用方",
+    "Show Callees": "显示被调用方",
+    "Place the caret on a function": "请将光标放在函数上",
+    "No callers found": "未找到调用方",
+    "No calls found": "未找到调用",
+    "Callers of {name}": "{name} 的调用方",
+    "Calls made by {name}": "{name} 发出的调用",
+    "Generate…": "生成…",
+    "Nothing to generate here": "此处没有可生成的内容"
   }
 }

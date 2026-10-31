@@ -692,6 +692,16 @@
     "The console": "La console",
     "Choose a file": "Choisir un fichier",
     "Go to Super Method": "Aller à la super-méthode",
-    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt formate des fichiers entiers. Désélectionnez pour reformater celui-ci."
+    "rustfmt formats whole files. Clear the selection to reformat this one.": "rustfmt formate des fichiers entiers. Désélectionnez pour reformater celui-ci.",
+    "Find Action…": "Rechercher une action…",
+    "Show Callers": "Afficher les appelants",
+    "Show Callees": "Afficher les appelés",
+    "Place the caret on a function": "Placez le curseur sur une fonction",
+    "No callers found": "Aucun appelant trouvé",
+    "No calls found": "Aucun appel trouvé",
+    "Callers of {name}": "Appelants de {name}",
+    "Calls made by {name}": "Appels de {name}",
+    "Generate…": "Générer…",
+    "Nothing to generate here": "Rien à générer ici"
   }
 }
