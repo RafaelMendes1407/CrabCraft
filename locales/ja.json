@@ -713,6 +713,10 @@
     "No module here declares it: it stays outside the crate": "ここには宣言するモジュールがないため、crate の外に置かれます",
     "This name is not a valid Rust module name": "この名前は有効な Rust モジュール名ではありません",
     "Could not declare the module: {error}": "モジュールを宣言できませんでした: {error}",
-    "No module declares this file": "このファイルを宣言しているモジュールはありません"
+    "No module declares this file": "このファイルを宣言しているモジュールはありません",
+    "New Crate": "新しい crate",
+    "Crate name": "crate 名",
+    "Cargo Crate": "Cargo crate",
+    "No [workspace] here: the crate will not join the project": "ここに [workspace] がないため、crate はプロジェクトに含まれません"
   }
 }

@@ -713,6 +713,10 @@
     "No module here declares it: it stays outside the crate": "Ningún módulo aquí lo declara: queda fuera del crate",
     "This name is not a valid Rust module name": "Este nombre no es un nombre de módulo Rust válido",
     "Could not declare the module: {error}": "No se pudo declarar el módulo: {error}",
-    "No module declares this file": "Ningún módulo declara este archivo"
+    "No module declares this file": "Ningún módulo declara este archivo",
+    "New Crate": "Nuevo crate",
+    "Crate name": "Nombre del crate",
+    "Cargo Crate": "Crate de Cargo",
+    "No [workspace] here: the crate will not join the project": "No hay [workspace] aquí: el crate no se unirá al proyecto"
   }
 }

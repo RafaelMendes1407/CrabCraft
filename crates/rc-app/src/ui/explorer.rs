@@ -67,6 +67,7 @@ pub enum ExplorerAction {
     Preview(PathBuf),
     /// Add › item in this folder.
     NewItem(PathBuf, crate::item_templates::ItemKind),
+    NewCrate(PathBuf),
     Rename(PathBuf),
     Delete(PathBuf),
     Reveal(PathBuf),
@@ -458,7 +459,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if !in_library {
                 resp.context_menu(|ui| {
                     let rust = rc_cargo::find_manifest(root).is_some();
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), rust, &mut actions);
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, &mut actions);
                 });
             }
         }
@@ -553,7 +554,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, rust: bool, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
@@ -588,6 +589,8 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, rust: bool, act
         NodeKind::File(p) => (p.clone(), false),
         NodeKind::Dir(p) => (p.clone(), true),
         NodeKind::Project(p) => (p.clone(), false),
+        // The folder of the open project; it cannot be renamed or deleted from inside.
+        NodeKind::Solution if solution.is_none() => (root.to_path_buf(), true),
         NodeKind::Packages(_) | NodeKind::Dependencies(_) => return,
         _ => {
             ui.label(egui::RichText::new(tr("No actions for this item")).color(rc_kit::pal(ui).muted));
@@ -623,7 +626,17 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, rust: bool, act
                 }
             }
         }
+        if rust {
+            ui.separator();
+            if theme::menu_item(ui, Some(ico::LIBRARY), &format!("{}…", tr("Cargo Crate")), false).clicked() {
+                actions.push(ExplorerAction::NewCrate(target_dir.clone()));
+                ui.close();
+            }
+        }
     });
+    if matches!(row.kind, NodeKind::Solution) {
+        return;
+    }
     ui.separator();
     if theme::menu_item(ui, Some(ico::EDIT), tr("Rename…"), false).clicked() {
         actions.push(ExplorerAction::Rename(path.clone()));

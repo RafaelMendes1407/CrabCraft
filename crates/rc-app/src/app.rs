@@ -1492,6 +1492,7 @@ impl CrabCraftApp {
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
+                ExplorerAction::NewCrate(dir) => self.new_project = Some(crate::ui::new_project::NewProjectDialog::member(&dir, self.waker.clone())),
                 ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, attach: true, public: false, error: None }),
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());

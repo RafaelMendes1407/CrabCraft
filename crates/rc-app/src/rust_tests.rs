@@ -1289,6 +1289,29 @@ fn a_new_project_opens_with_its_run_configuration() {
 }
 
 #[test]
+fn a_new_crate_joins_the_open_workspace() {
+    use rc_cargo::new_project::{NewProject, Template};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let packages = |a: &CrabCraftApp| a.runner.cargo_workspace.as_ref().map_or(0, |w| w.packages.len());
+    assert_eq!(packages(&app), 1);
+
+    assert!(rc_cargo::modules::in_workspace(&root));
+    let request = NewProject { template: Template::Library, name: "member".into(), location: root.clone(), git: false };
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    rc_core::Runtime::block_on(request.create(&cargo)).unwrap();
+    assert!(std::fs::read_to_string(root.join("Cargo.toml")).unwrap().contains("member"));
+    app.reload_workspace();
+    pump(&mut app, "the new crate", |a| packages(a) == 2);
+}
+
+#[test]
 fn the_cargo_window_runs_targets_and_typed_commands() {
     use rc_cargo::{Target, TargetKind};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

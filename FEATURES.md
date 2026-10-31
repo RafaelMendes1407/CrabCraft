@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 86 |
+| ✅ Pronto | 87 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 137 |
+| ⬜ A fazer | 136 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -65,7 +65,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-12 | Dependências externas na árvore do projeto | ✅ | M3 | Nó Bibliotecas externas, ver P-11 |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | ✅ | M3 | Menu Adicionar em projetos Cargo; escreve o `mod` no pai, no editor se estiver aberto; visto na janela nativa |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ✅ | M3 | Arquivo Rust ou Módulo Rust (`x/mod.rs`), com opção `pub mod`; `#[path]` não é considerado |
-| P-15 | Novo crate Cargo no workspace | ⬜ | M3 | |
+| P-15 | Novo crate Cargo no workspace | ✅ | M3 | Adicionar > Crate Cargo roda `cargo new` e recarrega o projeto; sem `[workspace]` o diálogo avisa que o crate fica de fora; visto na janela nativa |
 | P-16 | Aviso de arquivo fora de módulo, com anexar | ✅ | M3 | Detectado por `experimental/parentModule`; faixa no editor com botão Declarar; visto na janela nativa |
 | P-17 | Janela Cargo: membros e targets | ✅ | M3 | Lê `cargo metadata`, com recarregar; vista na janela nativa |
 | P-18 | Executar target com duplo clique | ✅ | M3 | bin na janela Run; lib, example, test e bench no console de Compilar; `lib` clicado na janela nativa, demais por teste real |

@@ -20,6 +20,12 @@ pub fn parent_module(dir: &Path) -> Option<PathBuf> {
     [Some(dir.join("mod.rs")), beside, Some(dir.join("lib.rs")), Some(dir.join("main.rs"))].into_iter().flatten().find(|p| p.is_file())
 }
 
+/// Whether a crate created in `dir` joins a workspace: `cargo new` only adds it to one.
+pub fn in_workspace(dir: &Path) -> bool {
+    let declares = |d: &Path| std::fs::read_to_string(d.join("Cargo.toml")).is_ok_and(|t| t.lines().any(|l| l.trim() == "[workspace]"));
+    dir.ancestors().any(declares)
+}
+
 /// Where to insert the declaration of `name` in `text` and what, as a byte offset and a line;
 /// `None` when it is already declared. It goes after the last `mod` of the file, else after the
 /// inner attributes and documentation that have to stay first.
@@ -119,6 +125,18 @@ mod tests {
         assert_eq!(declaration("mod a;\n", "a", false), None);
         assert_eq!(declaration("pub mod a;\n", "a", false), None);
         assert_eq!(declaration("    mod a;\n", "a", false).map(|d| d.0), Some(0), "nested in another item");
+    }
+
+    #[test]
+    fn a_workspace_is_found_upwards() {
+        let dir = tempfile::tempdir().unwrap();
+        let inner = dir.path().join("a/b");
+        std::fs::create_dir_all(&inner).unwrap();
+        assert!(!in_workspace(&inner));
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        assert!(!in_workspace(&inner));
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        assert!(in_workspace(&inner));
     }
 
     #[test]

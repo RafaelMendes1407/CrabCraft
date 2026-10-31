@@ -20,6 +20,8 @@ pub struct NewProjectDialog {
     name: String,
     location: String,
     git: bool,
+    /// Adding a crate to the open project instead of opening a new one.
+    member: bool,
     busy: bool,
     error: Option<String>,
     inbox: Inbox<Result<PathBuf, String>>,
@@ -42,7 +44,13 @@ impl NewProjectDialog {
     pub fn new(app: &CrabCraftApp, waker: Waker) -> Self {
         let location = default_location(app);
         let name = (1..).map(|i| format!("project{i}")).find(|n| !location.join(n).exists()).unwrap_or_default();
-        NewProjectDialog { template: 0, name, location: location.display().to_string(), git: true, busy: false, error: None, inbox: Inbox::new(waker), focus: true }
+        NewProjectDialog { template: 0, name, location: location.display().to_string(), git: true, member: false, busy: false, error: None, inbox: Inbox::new(waker), focus: true }
+    }
+
+    /// A new crate in `location`, inside the open project.
+    pub fn member(location: &std::path::Path, waker: Waker) -> Self {
+        let name = (1..).map(|i| format!("crate{i}")).find(|n| !location.join(n).exists()).unwrap_or_default();
+        NewProjectDialog { template: 1, name, location: location.display().to_string(), git: false, member: true, busy: false, error: None, inbox: Inbox::new(waker.clone()), focus: true }
     }
 
     fn request(&self) -> NewProject {
@@ -57,8 +65,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         d.busy = false;
         match result {
             Ok(dir) => {
-                app.settings.new_project_location = Some(PathBuf::from(d.location.trim()));
-                app.open_workspace(&dir);
+                if d.member {
+                    app.reload_workspace();
+                } else {
+                    app.settings.new_project_location = Some(PathBuf::from(d.location.trim()));
+                    app.open_workspace(&dir);
+                }
                 let main = ["src/main.rs", "src/lib.rs"].iter().map(|f| dir.join(f)).find(|p| p.exists());
                 if let Some(f) = main {
                     app.open_file(&f);
@@ -79,7 +91,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     let resp = egui::Modal::new(Id::new("new_project")).show(ctx, |ui| {
         ui.set_width(700.0);
         ui.set_height(330.0);
-        ui.label(egui::RichText::new(tr("New Project")).font(theme::bold(15.0)));
+        ui.label(egui::RichText::new(tr(if d.member { "New Crate" } else { "New Project" })).font(theme::bold(15.0)));
         ui.add_space(10.0);
         let avail = ui.available_rect_before_wrap();
         let left = Rect::from_min_size(avail.min, vec2(200.0, avail.height() - 44.0));
@@ -108,7 +120,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         ru.add_space(12.0);
         egui::Grid::new("new_project_grid").num_columns(2).spacing([12.0, 10.0]).show(&mut ru, |ui| {
             let w = 330.0;
-            ui.label(tr("Project name"));
+            ui.label(tr(if d.member { "Crate name" } else { "Project name" }));
             let te = ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(w));
             if std::mem::take(&mut d.focus) {
                 te.request_focus();
@@ -124,11 +136,16 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
                 }
             });
             ui.end_row();
-            ui.label("");
-            ui.checkbox(&mut d.git, tr("Create Git repository"));
-            ui.end_row();
+            if !d.member {
+                ui.label("");
+                ui.checkbox(&mut d.git, tr("Create Git repository"));
+                ui.end_row();
+            }
         });
         ru.add_space(14.0);
+        if d.member && !rc_cargo::modules::in_workspace(std::path::Path::new(d.location.trim())) {
+            ru.label(egui::RichText::new(tr("No [workspace] here: the crate will not join the project")).size(12.0).color(p.warn));
+        }
         ru.label(egui::RichText::new(trf("The project will be created in {path}", &[("path", &req.project_dir().display())])).size(12.0).color(p.muted));
         if let Some(e) = d.error.as_deref().or(problem) {
             ru.add_space(6.0);

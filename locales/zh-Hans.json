@@ -713,6 +713,10 @@
     "No module here declares it: it stays outside the crate": "此处没有模块声明它：它将留在 crate 之外",
     "This name is not a valid Rust module name": "此名称不是有效的 Rust 模块名称",
     "Could not declare the module: {error}": "无法声明模块：{error}",
-    "No module declares this file": "没有模块声明此文件"
+    "No module declares this file": "没有模块声明此文件",
+    "New Crate": "新建 crate",
+    "Crate name": "crate 名称",
+    "Cargo Crate": "Cargo crate",
+    "No [workspace] here: the crate will not join the project": "此处没有 [workspace]：crate 不会加入项目"
   }
 }
