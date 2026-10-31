@@ -203,3 +203,91 @@ fn rust_language_features() {
     pump(&mut app, "the error of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("E0308") && x.message.contains("mismatched types"))));
     app.insight.stop();
 }
+
+/// Runs the insight loop until `want` takes one of its outputs.
+fn output<T>(app: &mut CrabCraftApp, what: &str, mut want: impl FnMut(&crate::insight::InsightOutput) -> Option<T>) -> T {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(60) {
+        let out = app.insight.update(&mut app.docs, true);
+        if let Some(found) = out.iter().find_map(&mut want) {
+            return found;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    panic!("timed out waiting for {what}; status {:?}", app.insight.status);
+}
+
+#[test]
+fn rust_navigation_and_hints() {
+    use crate::insight::{InsightOutput, NavKind};
+    const SOURCE: &str = "use demo::Greeter;\n\ntrait Speak {\n    fn speak(&self) -> u32;\n}\nstruct A;\nstruct B;\nimpl Speak for A {\n    fn speak(&self) -> u32 { 1 }\n}\nimpl Speak for B {\n    fn speak(&self) -> u32 { 2 }\n}\n\nfn twice(amount: u32) -> u32 {\n    amount * 2\n}\n\nfn main() {\n    let total = twice(A.speak());\n    println!(\"{} {} {}\", total, twice(B.speak()), Greeter.hello());\n    let map = HashMap::<u32, u32>::new();\n    drop(map);\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let main = root.join("src/main.rs");
+    write(&main, SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    // Inlay hints: the inferred type and the parameter name.
+    pump(&mut app, "the inlay hints", |a| {
+        a.docs.active_doc().is_some_and(|d| {
+            d.editor.inlays.iter().any(|h| h.label.contains("u32")) && d.editor.inlays.iter().any(|h| h.label.contains("amount"))
+        })
+    });
+
+    // Hover.
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("twice(A").unwrap() + 1);
+    app.insight.quick_doc(&app.docs.list[i], egui::Pos2::ZERO);
+    pump(&mut app, "the hover", |a| {
+        a.docs.active_doc().and_then(|d| d.editor.popups.hover.as_ref()).is_some_and(|h| h.text.contains("fn twice(amount: u32) -> u32"))
+    });
+
+    // Parameter info.
+    let inside = SOURCE.find("twice(A").unwrap() + "twice(".len();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(inside);
+    app.insight.request_signature(&app.docs.list[i], inside);
+    pump(&mut app, "the signature", |a| a.docs.active_doc().is_some_and(|d| d.editor.popups.signature.is_some()));
+
+    // Usages: both calls, whatever else the server adds.
+    let at = SOURCE.find("twice(A").unwrap() + 1;
+    app.insight.navigate(&app.docs.list[i], at, NavKind::Usages);
+    let lines = output(&mut app, "the usages", |o| match o {
+        InsightOutput::Usages { targets, .. } => Some(targets.iter().map(|t| t.line).collect::<Vec<_>>()),
+        _ => None,
+    });
+    assert!(lines.contains(&19) && lines.contains(&20), "{lines:?}");
+
+    // Implementations of the trait.
+    let at = SOURCE.find("Speak").unwrap() + 1;
+    app.insight.navigate(&app.docs.list[i], at, NavKind::Implementation);
+    let lines = output(&mut app, "the implementations", |o| match o {
+        InsightOutput::Usages { targets, .. } => Some(targets.iter().map(|t| t.line).collect::<Vec<_>>()),
+        _ => None,
+    });
+    assert_eq!(lines.len(), 2, "{lines:?}");
+
+    // Alt+Enter: importing the missing name changes the buffer.
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("HashMap").unwrap() + 1);
+    app.insight.code_actions(&app.docs.list[i]);
+    let actions = output(&mut app, "the code actions", |o| match o {
+        InsightOutput::Actions(a) => Some(a.clone()),
+        _ => None,
+    });
+    let title = |a: &rc_lsp::lsp_types::CodeActionOrCommand| match a {
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+        rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(c) => c.title.clone(),
+    };
+    let import = actions.iter().find(|a| title(a).contains("Import")).unwrap_or_else(|| panic!("{:?}", actions.iter().map(title).collect::<Vec<_>>())).clone();
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, import, &mut out);
+    pump(&mut app, "the import", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("use std::collections::HashMap;")));
+    app.insight.stop();
+}

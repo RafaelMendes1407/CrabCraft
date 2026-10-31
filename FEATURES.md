@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 22 |
+| ✅ Pronto | 28 |
 | 🚧 Em andamento | 9 |
 | 🟢 Herdado | 23 |
-| 🔁 Portar | 26 |
+| 🔁 Portar | 20 |
 | ⬜ A fazer | 172 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
@@ -126,12 +126,12 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
 | I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |
 | I-09 | Ordenação de completar por ML | 🚫 | - | Sem modelo próprio; rust-analyzer ordena |
-| I-10 | Hover e documentação rápida | 🔁 | M1 | |
+| I-10 | Hover e documentação rápida | ✅ | M1 | Hover testado com rust-analyzer real |
 | I-11 | Abrir documentação em docs.rs | ⬜ | M3 | |
-| I-12 | Informação de parâmetros | 🔁 | M1 | |
-| I-13 | Inlay hints (tipos, parâmetros, chaining) | 🔁 | M1 | |
+| I-12 | Informação de parâmetros | ✅ | M1 | Assinatura testada com rust-analyzer real |
+| I-13 | Inlay hints (tipos, parâmetros, chaining) | ✅ | M1 | Tipos e parâmetros testados com rust-analyzer real |
 | I-14 | Diagnósticos em tempo real | ✅ | M1 | Testado com rust-analyzer real: erro de sintaxe ao digitar e erro do cargo check ao salvar |
-| I-15 | Quick fixes e intention actions (Alt+Enter) | 🔁 | M1 | Code actions |
+| I-15 | Quick fixes e intention actions (Alt+Enter) | ✅ | M1 | Import pelo Alt+Enter testado com rust-analyzer real |
 | I-16 | Aplicar correção sugerida pelo compilador | ⬜ | M3 | Campo `suggested_replacement` do rustc |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
@@ -158,8 +158,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
 | N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
-| N-04 | Ir para implementações | 🔁 | M1 | |
-| N-05 | Encontrar usos | 🔁 | M1 | |
+| N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
+| N-05 | Encontrar usos | ✅ | M1 | Usos testados com rust-analyzer real |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
