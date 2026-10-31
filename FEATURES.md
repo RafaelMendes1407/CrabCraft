@@ -60,7 +60,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
-| P-10 | Configuração de run criada junto com o projeto | ⬜ | M1 | |
+| P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
 | P-11 | Janela Project (árvore de arquivos e crates) | 🚧 | M1 | Mostra a árvore de arquivos, sem `target`; faltam crates e targets |
 | P-12 | Dependências externas na árvore do projeto | ⬜ | M3 | |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
@@ -227,7 +227,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ⬜ | M3 | |
-| B-18 | Links clicáveis em stack traces | 🚧 | M2 | Formato de panic e backtrace reconhecido, testado; falta clicar na janela |
+| B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |
 | B-19 | Tarefas antes do launch | ⬜ | M3 | |
 | B-20 | Configurações temporárias e salvar como permanente | ⬜ | M3 | |
 | B-21 | Pastas de configurações | ⬜ | M4 | |

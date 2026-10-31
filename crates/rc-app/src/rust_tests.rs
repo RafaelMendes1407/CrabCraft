@@ -839,6 +839,25 @@ fn refactorings_of_the_language_server() {
 }
 
 #[test]
+fn a_new_project_opens_with_its_run_configuration() {
+    use rc_cargo::new_project::{NewProject, Template};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let request = NewProject { template: Template::Binary, name: "fresh".into(), location: dir.path().to_path_buf(), git: false };
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    let root = rc_core::Runtime::block_on(request.create(&cargo)).unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let config = app.runner.selected_config().unwrap();
+    assert_eq!(config.name, "fresh");
+    assert!(matches!(&config.kind, ConfigKind::Cargo { package, bin } if package == "fresh" && bin == "fresh"));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program", |a| a.runner.runs.first().is_some_and(|r| !r.running()));
+    pump(&mut app, "its output", |a| a.runner.runs[0].console.term.screen_lines().join("\n").contains("Hello, world!"));
+}
+
+#[test]
 fn the_cargo_window_runs_targets_and_typed_commands() {
     use rc_cargo::{Target, TargetKind};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

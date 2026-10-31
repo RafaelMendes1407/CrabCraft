@@ -649,7 +649,7 @@ fn handle_mouse(
     let text_rect = Rect::from_min_max(rect.min, pos2(rect.right() - SCROLLBAR_W, rect.bottom()));
     let mode = st.mode();
     let reporting = mode.intersects(TermMode::MOUSE_MODE) && !mods.shift;
-    let link_mod = if mac { mods.mac_cmd } else { mods.ctrl };
+    let link_mod = session.is_output_only() || if mac { mods.mac_cmd } else { mods.ctrl };
     let offset = st.term.grid().display_offset();
     let to_point = |row: usize, col: usize| Point::new(Line(row as i32 - offset as i32), Column(col));
     let over = |p: Pos2| text_rect.contains(p) && response.contains_pointer();

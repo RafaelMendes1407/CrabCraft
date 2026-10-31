@@ -262,6 +262,8 @@ pub struct TermSession {
     cwd: Option<PathBuf>,
     pid: Option<u32>,
     exited: Arc<AtomicBool>,
+    /// No shell reads the clicks, so links open without a modifier.
+    output_only: bool,
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -368,7 +370,14 @@ impl TermSession {
     /// tests). Input written to it is dropped.
     pub fn output_only(cols: u16, rows: u16, waker: Waker) -> Self {
         let (writer, _) = mpsc::channel();
-        Self::build(cols.max(2), rows.max(1), 10_000, waker, writer, String::new(), None)
+        let mut session = Self::build(cols.max(2), rows.max(1), 10_000, waker, writer, String::new(), None);
+        session.output_only = true;
+        session
+    }
+
+    /// Whether this console only shows output, with no shell behind it.
+    pub fn is_output_only(&self) -> bool {
+        self.output_only
     }
 
     fn build(cols: u16, rows: u16, scrollback: usize, waker: Waker, writer: mpsc::Sender<Vec<u8>>, name: String, cwd: Option<PathBuf>) -> Self {
@@ -392,6 +401,7 @@ impl TermSession {
             cwd,
             pid: None,
             exited: Arc::new(AtomicBool::new(false)),
+            output_only: false,
         }
     }
 
@@ -632,4 +642,14 @@ fn windows_shell() -> String {
         }
     }
     std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into())
+}
+
+#[cfg(test)]
+mod output_only_tests {
+    use super::*;
+
+    #[test]
+    fn only_consoles_without_a_shell_are_output_only() {
+        assert!(TermSession::output_only(20, 5, Waker::noop()).is_output_only());
+    }
 }
