@@ -95,6 +95,10 @@ pub struct Session {
     pub breakpoints: BTreeMap<PathBuf, Vec<(usize, Option<String>)>>,
     /// Breakpoints that are disabled: file → 0-based lines.
     pub disabled_breakpoints: BTreeMap<PathBuf, Vec<usize>>,
+    /// Logpoints: file → 0-based lines and their messages.
+    pub logpoints: BTreeMap<PathBuf, Vec<(usize, String)>>,
+    /// Breakpoints removed by their first stop: file → 0-based lines.
+    pub remove_once_hit: BTreeMap<PathBuf, Vec<usize>>,
     /// Bookmarks: file → 0-based lines.
     pub bookmarks: BTreeMap<PathBuf, Vec<usize>>,
     /// Compound run configurations: name and the configurations they start.

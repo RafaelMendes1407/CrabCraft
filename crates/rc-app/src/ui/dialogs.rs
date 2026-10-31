@@ -41,7 +41,7 @@ pub enum Dialog {
     /// ⌘F12 file structure popup.
     FileStructure { filter: String, selected: usize },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
-    BreakpointProperties { path: PathBuf, line: usize, condition: String, enabled: bool, focus: bool },
+    BreakpointProperties { path: PathBuf, line: usize, condition: String, log: String, once: bool, enabled: bool, focus: bool },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
@@ -79,7 +79,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
         Dialog::NewBranch { name } => new_branch(app, ctx, name),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
-        Dialog::BreakpointProperties { path, line, condition, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, enabled, focus),
+        Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
@@ -618,7 +618,8 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, enabled: &mut bool, focus: &mut bool) -> Outcome {
+#[allow(clippy::too_many_arguments)]
+fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, log: &mut String, once: &mut bool, enabled: &mut bool, focus: &mut bool) -> Outcome {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
         title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
@@ -629,7 +630,14 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
         if std::mem::take(focus) {
             resp.request_focus();
         }
-        let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let mut enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        ui.add_space(6.0);
+        ui.label(tr("Log message"));
+        let resp = ui.add(egui::TextEdit::singleline(log).hint_text(tr("Print this instead of stopping; {expression} shows a value")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        enter |= resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        ui.add_space(6.0);
+        // A logpoint never stops, so the IDE cannot see it being hit.
+        ui.add_enabled(log.is_empty(), egui::Checkbox::new(once, tr("Remove once hit")));
         let mut remove = false;
         ui.add_space(14.0);
         let mut res = (false, false);
@@ -649,10 +657,12 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
             let bps = &mut app.docs.list[i].editor.breakpoints;
             if remove {
                 bps.remove(&line);
-                app.debugger.conditions.remove(&key);
+                app.debugger.forget_breakpoint(path, line);
             } else {
                 let kind = if !*enabled {
                     rc_editor::BreakpointKind::Disabled
+                } else if !log.is_empty() {
+                    rc_editor::BreakpointKind::Log
                 } else if cond.is_empty() {
                     rc_editor::BreakpointKind::Normal
                 } else {
@@ -662,7 +672,17 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
                 if cond.is_empty() {
                     app.debugger.conditions.remove(&key);
                 } else {
-                    app.debugger.conditions.insert(key, cond);
+                    app.debugger.conditions.insert(key.clone(), cond);
+                }
+                if log.is_empty() {
+                    app.debugger.logs.remove(&key);
+                } else {
+                    app.debugger.logs.insert(key.clone(), log.clone());
+                }
+                if *once && log.is_empty() {
+                    app.debugger.once.insert(key);
+                } else {
+                    app.debugger.once.remove(&key);
                 }
             }
             app.session_dirty = true;

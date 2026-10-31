@@ -264,11 +264,13 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::GutterClicked { line } => {
                 doc.editor.toggle_breakpoint(line);
                 if !doc.editor.breakpoints.contains_key(&line) {
-                    app.debugger.conditions.remove(&(doc.path.clone(), line));
+                    app.debugger.forget_breakpoint(&doc.path, line);
                 }
                 app.session_dirty = true;
             }
             EditorEvent::GutterSecondaryClicked { line, .. } => {
+                // The editor's context menu opened on the same click: the dialog replaces it.
+                egui::Popup::close_all(ui.ctx());
                 let path = doc.path.clone();
                 let present = doc.editor.breakpoints.get(&line).copied();
                 if present.is_none() {
@@ -276,7 +278,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
                 }
                 let condition = app.debugger.conditions.get(&(path.clone(), line)).cloned().unwrap_or_default();
                 let enabled = present != Some(rc_editor::BreakpointKind::Disabled);
-                app.dialog = Some(crate::ui::dialogs::Dialog::BreakpointProperties { path, line, condition, enabled, focus: true });
+                let log = app.debugger.logs.get(&(path.clone(), line)).cloned().unwrap_or_default();
+                let once = app.debugger.once.contains(&(path.clone(), line));
+                app.dialog = Some(crate::ui::dialogs::Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus: true });
                 app.session_dirty = true;
             }
             EditorEvent::CaretMoved => app.session_dirty = true,
@@ -310,7 +314,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
                 let line = doc.editor.caret_line_col().0;
                 doc.editor.toggle_breakpoint(line);
                 if !doc.editor.breakpoints.contains_key(&line) {
-                    app.debugger.conditions.remove(&(doc.path.clone(), line));
+                    app.debugger.forget_breakpoint(&doc.path, line);
                 }
                 app.session_dirty = true;
             }

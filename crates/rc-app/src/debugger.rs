@@ -7,7 +7,7 @@ use crate::runner::{ConfigKind, RunConfig};
 use rc_core::{Inbox, Waker};
 use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, DownloadEvent, EvalContext, EvalValue, OutputCategory, SessionState};
 use rc_kit::i18n::{tr, trf};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// What the debugger asks the rest of the UI to do.
@@ -16,7 +16,12 @@ pub enum DebugOutput {
     /// Show the execution point: open the file at this 0-based line.
     ShowLine(PathBuf, usize),
     ShowDebugWindow,
+    /// A breakpoint removed itself: the session must save.
+    BreakpointsChanged,
 }
+
+/// A breakpoint as the session should have it: line, condition, log message, enabled.
+type WantedBreakpoint = (u32, Option<String>, Option<String>, bool);
 
 /// An Evaluate request: id, expression and its result once it arrives.
 pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
@@ -48,6 +53,10 @@ pub struct Debugger {
     pub hover_result: Option<(u64, usize, egui::Pos2, String)>,
     /// Breakpoint conditions by (file, 0-based line).
     pub conditions: HashMap<(PathBuf, usize), String>,
+    /// Logpoint messages by (file, 0-based line).
+    pub logs: HashMap<(PathBuf, usize), String>,
+    /// Breakpoints that remove themselves at their first stop, by (file, 0-based line).
+    pub once: HashSet<(PathBuf, usize)>,
     pub show_console: bool,
     /// Breakpoint set by Run to Cursor, removed at the next stop (file, 1-based line).
     temp: Option<(PathBuf, u32)>,
@@ -74,6 +83,8 @@ impl Debugger {
             hover: None,
             hover_result: None,
             conditions: HashMap::new(),
+            logs: HashMap::new(),
+            once: HashSet::new(),
             muted: false,
             inline_frame: None,
             console_input: String::new(),
@@ -93,6 +104,14 @@ impl Debugger {
         self.session.as_ref().is_some_and(|s| s.state().is_stopped())
     }
 
+    /// Drops what a removed breakpoint had set.
+    pub fn forget_breakpoint(&mut self, path: &Path, line: usize) {
+        let key = (path.to_path_buf(), line);
+        self.conditions.remove(&key);
+        self.logs.remove(&key);
+        self.once.remove(&key);
+    }
+
     /// Breakpoints of every open editor (1-based lines for the adapter).
     fn breakpoints(&self, docs: &Docs) -> Breakpoints {
         let mut bps = Breakpoints::new();
@@ -101,6 +120,9 @@ impl Debugger {
                 let mut spec = BreakpointSpec::new(d.path.clone(), line as u32 + 1);
                 if let Some(c) = self.conditions.get(&(d.path.clone(), line)) {
                     spec = spec.with_condition(c.clone());
+                }
+                if let Some(m) = self.logs.get(&(d.path.clone(), line)) {
+                    spec = spec.with_log_message(m.clone());
                 }
                 spec.enabled = !self.muted && *kind != rc_editor::BreakpointKind::Disabled;
                 bps.set(spec);
@@ -201,21 +223,25 @@ impl Debugger {
             return;
         }
         for d in &docs.list {
-            let current: Vec<(u32, Option<String>, bool)> = s.breakpoints().in_file(&d.path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.enabled)).collect();
-            let wanted: Vec<(u32, Option<String>, bool)> = d
+            let current: Vec<WantedBreakpoint> = s.breakpoints().in_file(&d.path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.log_message.clone(), b.spec.enabled)).collect();
+            let wanted: Vec<WantedBreakpoint> = d
                 .editor
                 .breakpoints
                 .iter()
-                .map(|(&l, k)| (l as u32 + 1, self.conditions.get(&(d.path.clone(), l)).cloned(), !self.muted && *k != rc_editor::BreakpointKind::Disabled))
-                .chain(self.temp.iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, true)))
+                .map(|(&l, k)| {
+                    let key = (d.path.clone(), l);
+                    (l as u32 + 1, self.conditions.get(&key).cloned(), self.logs.get(&key).cloned(), !self.muted && *k != rc_editor::BreakpointKind::Disabled)
+                })
+                .chain(self.temp.iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, None, true)))
                 .collect();
             let same = current.len() == wanted.len() && wanted.iter().all(|w| current.contains(w));
             if !same {
                 let specs = wanted
                     .into_iter()
-                    .map(|(line, cond, enabled)| {
+                    .map(|(line, cond, log, enabled)| {
                         let mut spec = BreakpointSpec::new(d.path.clone(), line);
                         spec.condition = cond;
+                        spec.log_message = log;
                         spec.enabled = enabled;
                         spec
                     })
@@ -332,6 +358,17 @@ impl Debugger {
                         }
                         self.temp = None;
                     }
+                    for (path, line) in &info.breakpoints {
+                        let key = (path.clone(), (*line as usize).saturating_sub(1));
+                        if self.once.remove(&key) {
+                            self.conditions.remove(&key);
+                            session.remove_breakpoint(path, *line);
+                            if let Some(i) = docs.index_of(path) {
+                                docs.list[i].editor.breakpoints.remove(&key.1);
+                            }
+                            out.push(DebugOutput::BreakpointsChanged);
+                        }
+                    }
                     if let Some((path, line)) = session.execution_point() {
                         out.push(DebugOutput::ShowLine(path, line.saturating_sub(1) as usize));
                     }
@@ -433,6 +470,8 @@ impl Debugger {
                 if let Some(kind) = d.editor.breakpoints.get_mut(&line) {
                     *kind = if !st.spec.enabled {
                         rc_editor::BreakpointKind::Disabled
+                    } else if st.spec.log_message.is_some() {
+                        rc_editor::BreakpointKind::Log
                     } else if st.spec.condition.is_some() {
                         rc_editor::BreakpointKind::Conditional
                     } else if st.verified {

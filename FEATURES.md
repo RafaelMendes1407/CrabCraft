@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 94 |
+| ✅ Pronto | 95 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 130 |
+| ⬜ A fazer | 129 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -280,7 +280,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-23 | Depurar como root | ⬜ | M6 | |
 | D-24 | Pause, resume, restart e stop | ✅ | M2 | Testado com GDB real; botões vistos na janela |
 | D-25 | Mute breakpoints | ✅ | M2 | Testado com GDB real; botão visto na janela |
-| D-26 | Logpoints e remover ao atingir | ⬜ | M3 | |
+| D-26 | Logpoints e remover ao atingir | ✅ | M3 | Mensagem com `{expressão}` e "Remover ao atingir" nas propriedades do breakpoint; salvos na sessão. Remover ao atingir vale só para breakpoints que param: logpoint não para, então a IDE não vê o acerto. |
 | D-27 | Grupos de breakpoints e lista geral | ⬜ | M4 | |
 | D-28 | Force Step Over e Force Run to Cursor | ⬜ | M4 | |
 | D-29 | Console do depurador | ✅ | M2 | Comandos chegam ao GDB, testado; caixa vista na janela |

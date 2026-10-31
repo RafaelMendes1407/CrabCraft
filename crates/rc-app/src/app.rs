@@ -639,6 +639,16 @@ impl CrabCraftApp {
                         self.debugger.conditions.insert((path.clone(), *line), c.clone());
                     }
                 }
+                for (line, message) in s.logpoints.get(path).into_iter().flatten() {
+                    if self.docs.list[i].editor.breakpoints.insert(*line, rc_editor::BreakpointKind::Log).is_some() {
+                        self.debugger.logs.insert((path.clone(), *line), message.clone());
+                    } else {
+                        self.docs.list[i].editor.breakpoints.remove(line);
+                    }
+                }
+                for line in s.remove_once_hit.get(path).into_iter().flatten() {
+                    self.debugger.once.insert((path.clone(), *line));
+                }
                 for line in s.disabled_breakpoints.get(path).into_iter().flatten() {
                     if let Some(k) = self.docs.list[i].editor.breakpoints.get_mut(line) {
                         *k = rc_editor::BreakpointKind::Disabled;
@@ -680,6 +690,8 @@ impl CrabCraftApp {
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
             breakpoints,
+            logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
+            remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
             bookmarks: self.docs.bookmarks().into_iter().map(|(path, lines)| (path, lines.into_iter().collect())).collect(),
             disabled_breakpoints: self
                 .docs
@@ -1082,6 +1094,7 @@ impl CrabCraftApp {
         for o in outs {
             match o {
                 DebugOutput::Notify(m, err) => self.notify(m, err),
+                DebugOutput::BreakpointsChanged => self.session_dirty = true,
                 DebugOutput::ShowDebugWindow => self.dock.show(ToolWindow::Debug),
                 DebugOutput::ShowLine(path, line) => {
                     if self.docs.active_doc().is_none_or(|d| d.path != path) || self.docs.active_doc().is_some_and(|d| d.editor.caret_line_col().0 != line) {
@@ -1896,6 +1909,16 @@ fn module_state(outcomes: &std::collections::BTreeMap<String, crate::runner::Tes
         }
     }
     found
+}
+
+/// Groups per-file entries into the sorted form the session saves.
+fn group_lines<T: Ord>(entries: impl Iterator<Item = (PathBuf, T)>) -> std::collections::BTreeMap<PathBuf, Vec<T>> {
+    let mut map = std::collections::BTreeMap::<PathBuf, Vec<T>>::new();
+    for (path, entry) in entries {
+        map.entry(path).or_default().push(entry);
+    }
+    map.values_mut().for_each(|v| v.sort());
+    map
 }
 
 #[cfg(test)]

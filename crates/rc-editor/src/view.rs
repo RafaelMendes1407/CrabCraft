@@ -623,7 +623,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         if let Some(kind) = state.breakpoints.get(&l) {
             let icon = match kind {
                 BreakpointKind::Normal => ico::BREAKPOINT,
-                BreakpointKind::Conditional => ico::BREAKPOINT,
+                BreakpointKind::Conditional | BreakpointKind::Log => ico::BREAKPOINT,
                 BreakpointKind::Disabled => ico::BREAKPOINT_DISABLED,
                 BreakpointKind::Verified => ico::BREAKPOINT_VALID,
                 BreakpointKind::Invalid => ico::BREAKPOINT_INVALID,
@@ -634,6 +634,9 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 // The "?" badge sits on the top-right corner, as in IntelliJ.
                 let badge = Rect::from_min_size(pos2(r.right() - 7.0, r.top() - 1.0), vec2(7.0, 10.0));
                 icons::paint_sized(&painter, badge, ico::QUESTION_BADGE, pal, true, 16.0);
+            }
+            if *kind == BreakpointKind::Log {
+                painter.circle_filled(r.center(), 2.5, egui::Color32::WHITE);
             }
         } else {
             let color = if l == caret_line { pal.gutter_fg_caret } else { pal.gutter_fg };

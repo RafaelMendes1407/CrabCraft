@@ -57,6 +57,8 @@ pub enum GutterIcon {
 pub enum BreakpointKind {
     Normal,
     Conditional,
+    /// Prints a message instead of stopping.
+    Log,
     Disabled,
     /// Bound by the debugger.
     Verified,

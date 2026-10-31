@@ -737,6 +737,9 @@
     "No online documentation for this item": "この項目のオンラインドキュメントはありません",
     "Type Hierarchy": "型階層",
     "Implementations of {name}": "{name} の実装",
-    "No implementations found": "実装が見つかりません"
+    "No implementations found": "実装が見つかりません",
+    "Log message": "ログメッセージ",
+    "Print this instead of stopping; {expression} shows a value": "停止せずにこれを出力します。{expression} は値を表示します",
+    "Remove once hit": "ヒット時に削除"
   }
 }

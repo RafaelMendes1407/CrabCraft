@@ -21,7 +21,7 @@ pub fn items(text: &str, history: &[String], configs: &[String]) -> Vec<Item> {
     let needle = typed.to_lowercase();
     let matches = |candidate: &str| candidate.to_lowercase().contains(&needle);
     let mut out: Vec<Item> = Vec::new();
-    let mut push = |item: Item, out: &mut Vec<Item>| {
+    let push = |item: Item, out: &mut Vec<Item>| {
         if !out.contains(&item) {
             out.push(item);
         }

@@ -595,6 +595,62 @@ fn the_type_hierarchy_lists_implementations() {
 }
 
 #[test]
+fn logpoints_print_and_a_breakpoint_can_remove_itself() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    const MAIN: &str = "fn main() {\n    let mut total = 0;\n    for i in 0..3 {\n        total += i;\n        std::hint::black_box(total);\n    }\n    println!(\"{total}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let ctx = egui::Context::default();
+
+    let (log, once) = (3, 4);
+    let editor = &mut app.docs.active_doc_mut().unwrap().editor;
+    editor.breakpoints.insert(log, BreakpointKind::Log);
+    editor.breakpoints.insert(once, BreakpointKind::Normal);
+    app.debugger.logs.insert((main.clone(), log), "seen i={i}".to_string());
+    app.debugger.once.insert((main.clone(), once));
+
+    // The session keeps both.
+    let saved = app.session();
+    assert_eq!(saved.logpoints[&main], [(log, "seen i={i}".to_string())]);
+    assert_eq!(saved.remove_once_hit[&main], [once]);
+
+    // The logpoint does not stop; the other breakpoint stops once and goes away.
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(once));
+    let editor = &app.docs.active_doc().unwrap().editor;
+    assert!(!editor.breakpoints.contains_key(&once), "the breakpoint stayed");
+    assert_eq!(editor.breakpoints.get(&log), Some(&BreakpointKind::Log));
+    assert!(!app.debugger.once.contains(&(main.clone(), once)));
+
+    app.run_ide_action(&ctx, Action::Resume);
+    let start = Instant::now();
+    while app.debugger.active() {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(!app.debugger.stopped(), "stopped again");
+        assert!(start.elapsed() < Duration::from_secs(30), "the program did not end");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let console = app.debugger.console.as_ref().unwrap().term.screen_lines().join("\n");
+    for i in 0..3 {
+        assert!(console.contains(&format!("seen i={i}")), "{console}");
+    }
+}
+
+#[test]
 fn step_into_walks_past_the_standard_library() {
     use rc_editor::{Action, BreakpointKind};
     const MAIN: &str = "fn own(text: &str) -> usize {\n    text.len()\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let upper = text.to_uppercase();\n    let n = own(&upper);\n    println!(\"{n}\");\n}\n";

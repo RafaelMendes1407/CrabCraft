@@ -737,6 +737,9 @@
     "No online documentation for this item": "No hay documentación en línea para este elemento",
     "Type Hierarchy": "Jerarquía de tipos",
     "Implementations of {name}": "Implementaciones de {name}",
-    "No implementations found": "No se encontraron implementaciones"
+    "No implementations found": "No se encontraron implementaciones",
+    "Log message": "Mensaje de registro",
+    "Print this instead of stopping; {expression} shows a value": "Imprime esto en lugar de detenerse; {expression} muestra un valor",
+    "Remove once hit": "Quitar al alcanzarlo"
   }
 }
