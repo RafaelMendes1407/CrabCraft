@@ -872,6 +872,10 @@ impl CrabCraftApp {
 
     /// Opens the declaration of a test from its fully qualified name (Tests window).
     pub fn goto_test(&mut self, name: &str) {
+        if self.runner.cargo_workspace.is_some() {
+            self.goto_rust_test(name);
+            return;
+        }
         let parts: Vec<&str> = name.rsplitn(3, '.').collect();
         let (method, class) = (parts.first().copied().unwrap_or(""), parts.get(1).copied().unwrap_or(""));
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
@@ -890,6 +894,44 @@ impl CrabCraftApp {
                     return;
                 }
             }
+        }
+    }
+
+    /// Opens the Rust test `module::name`: the failure's place when it panicked in the project,
+    /// else the first `fn name` in a file that fits the module.
+    fn goto_rust_test(&mut self, name: &str) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let panicked = self.runner.tests.as_ref().and_then(|t| t.results.get(name)).and_then(|r| {
+            r.iter().flat_map(|x| &x.stack_trace).find_map(|f| Some((f.file.clone().filter(|p| p.is_file() && p.starts_with(&root))?, f.line?)))
+        });
+        if let Some((file, line)) = panicked {
+            self.open_at(&file, line.saturating_sub(1) as usize, 0);
+            return;
+        }
+        let (module, method) = name.rsplit_once("::").unwrap_or(("", name));
+        let last_module = module.rsplit("::").next().unwrap_or("");
+        let declared = format!("fn {method}(");
+        let mut found: Option<(PathBuf, usize)> = None;
+        let mut stack = vec![root];
+        while let Some(dir) = stack.pop() {
+            for n in rc_core::workspace::list_dir(&dir) {
+                if n.is_dir {
+                    stack.push(n.path);
+                } else if n.name.ends_with(".rs")
+                    && let Ok(text) = std::fs::read_to_string(&n.path)
+                    && let Some(line) = text.lines().position(|l| l.contains(&declared))
+                {
+                    let fits = !last_module.is_empty() && (text.contains(&format!("mod {last_module}")) || n.path.file_stem().is_some_and(|s| s == last_module));
+                    if fits {
+                        self.open_at(&n.path, line, 0);
+                        return;
+                    }
+                    found.get_or_insert((n.path, line));
+                }
+            }
+        }
+        if let Some((file, line)) = found {
+            self.open_at(&file, line, 0);
         }
     }
 

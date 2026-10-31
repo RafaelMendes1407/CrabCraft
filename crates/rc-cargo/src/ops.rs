@@ -288,7 +288,7 @@ async fn tests(cargo: &Cargo, req: &TestRequest, cancel: &CancelToken, on_event:
         };
         run_streaming(cmd, cancel, StreamOpts::default(), &mut |_| {}, &mut on_line).await?
     };
-    let results = parser.finish();
+    let results = parser.finish(&root);
     let count = |o: TestOutcome| results.iter().filter(|r| r.outcome == o).count();
     let (passed, failed, skipped) = (count(TestOutcome::Passed), count(TestOutcome::Failed), count(TestOutcome::Skipped));
     let (build, _) = collected.result(outcome.code, outcome.cancelled, started.elapsed());

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 31 |
+| ✅ Pronto | 33 |
 | 🚧 Em andamento | 11 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 15 |
-| ⬜ A fazer | 172 |
+| ⬜ A fazer | 170 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -240,8 +240,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-01 | Rodar teste, módulo ou todos pela margem | 🚧 | M2 | Teste, módulo e binário rodam pelo ícone, testado no app; falta ver na janela |
 | T-02 | Árvore de resultados | 🚧 | M2 | Resultados por teste e saída de falha testados; árvore ainda não vista com Rust |
 | T-03 | Marcadores de resultado na margem | 🚧 | M2 | Passou e falhou chegam ao teste e ao módulo, testado no app; falta ver na janela |
-| T-04 | Rodar novamente os que falharam | ⬜ | M2 | |
-| T-05 | Ir do erro do teste para o código | ⬜ | M2 | |
+| T-04 | Rodar novamente os que falharam | ✅ | M2 | Só os que falharam rodam de novo, testado com cargo real |
+| T-05 | Ir do erro do teste para o código | ✅ | M2 | Do resultado para a linha do panic, testado com cargo real |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
 | T-07 | Runner nextest | ⬜ | M3 | |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |

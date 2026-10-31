@@ -413,3 +413,42 @@ fn a_changed_manifest_reloads_the_targets_and_opening_it_opens_the_project() {
     app.report_fs_to_server(&[rc_core::watch::FsEvent::Changed(manifest.clone())]);
     pump(&mut app, "the new target", |a| a.runner.configs.iter().any(|c| c.name == "extra"));
 }
+
+#[test]
+fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
+    const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    assert_eq!(app.runner.tests.as_ref().map(|t| (t.passed, t.failed)), Some((1, 1)));
+
+    // The panic's place opens from the result, on the assertion's line.
+    let t = app.runner.tests.as_ref().unwrap();
+    let frame = t.results["checks::bad"][0].stack_trace.first().cloned().expect("a frame");
+    assert_eq!((frame.file.as_deref(), frame.line), (Some(root.join("src/lib.rs").as_path()), Some(14)));
+    app.goto_test("checks::bad");
+    let doc = app.docs.active_doc().unwrap();
+    assert!(doc.path.ends_with("src/lib.rs"));
+    assert_eq!(doc.editor.caret_line_col().0, 13);
+
+    // A test that passed has no failure: it opens at its declaration.
+    app.goto_test("checks::good");
+    assert_eq!(app.docs.active_doc().unwrap().editor.caret_line_col().0, 7);
+
+    // Only the failed test runs again.
+    let outs = app.runner.rerun_failed();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the second run", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (0, 1));
+    assert!(t.results.keys().eq(["checks::bad"].iter().copied()), "{:?}", t.results.keys());
+}

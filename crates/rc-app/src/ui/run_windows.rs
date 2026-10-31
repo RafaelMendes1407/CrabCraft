@@ -334,8 +334,8 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.y = 0.0;
         for (class, tests) in &classes {
             let failed = tests.iter().any(|t| t.1 == TestState::Failed);
-            let short = class.rsplit('.').next().unwrap_or(class);
-            row(ui, 0, if failed { ico::TEST_FAILED } else { ico::TEST_PASSED }, short, class[..class.len() - short.len()].trim_end_matches('.'), false);
+            let short = last_segment(class);
+            row(ui, 0, if failed { ico::TEST_FAILED } else { ico::TEST_PASSED }, short, class[..class.len() - short.len()].trim_end_matches(['.', ':']), false);
             for (name, state, dur) in tests {
                 let icon = match state {
                     TestState::Failed => ico::TEST_FAILED,
@@ -343,7 +343,7 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
                     TestState::Running => ico::TEST_PAUSED,
                     TestState::Passed => ico::TEST_PASSED,
                 };
-                let method = name.rsplit('.').next().unwrap_or(name);
+                let method = last_segment(name);
                 let resp = row(ui, 1, icon, method, &format!("{} ms", dur.as_millis()), t.selected.as_deref() == Some(name.as_str()));
                 if resp.clicked() {
                     select = Some(name.clone());
@@ -406,6 +406,11 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
     if let Some(name) = open_test {
         app.goto_test(&name);
     }
+}
+
+/// The last part of a test or module name: `b` of `a.b` and of `a::b`.
+fn last_segment(name: &str) -> &str {
+    name.rsplit(['.', ':']).next().unwrap_or(name)
 }
 
 fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, selected: bool) -> egui::Response {
