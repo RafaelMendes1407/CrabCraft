@@ -502,6 +502,40 @@ fn optimize_imports_removes_the_unused_and_merges_the_rest() {
     app.insight.stop();
 }
 
+#[test]
+fn bookmarks_follow_their_lines_and_outlive_the_tab() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let line = MAIN.lines().position(|l| l.contains("println")).unwrap();
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.toggle_bookmark(line);
+
+    // A line added above moves it.
+    doc.editor.replace(0, 0, "// new\n");
+    let moved = line + 1;
+    assert_eq!(app.bookmark_list().iter().map(|m| (m.line, m.preview.contains("println"))).collect::<Vec<_>>(), [(moved, true)]);
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 7, "");
+
+    // Closing the tab keeps it, and it comes back with the file.
+    let i = app.docs.index_of(&main).unwrap();
+    app.close_tab(i);
+    assert!(app.docs.index_of(&main).is_none());
+    assert_eq!(app.bookmark_list().len(), 1);
+    app.open_file(&main);
+    assert!(app.docs.active_doc().unwrap().editor.bookmarks.contains(&line));
+
+    // The list removes it, open or closed.
+    app.docs.remove_bookmark(&main, line);
+    assert!(app.bookmark_list().is_empty());
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

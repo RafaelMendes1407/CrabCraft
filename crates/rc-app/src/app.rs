@@ -445,6 +445,23 @@ impl CrabCraftApp {
         crate::ui::run_windows::handle_outputs(self, outs);
     }
 
+    /// The bookmarks for the list, with the text of their lines.
+    pub fn bookmark_list(&self) -> Vec<crate::insight::Target> {
+        let mut out = Vec::new();
+        for (path, lines) in self.docs.bookmarks() {
+            let text = match self.docs.index_of(&path) {
+                Some(i) => self.docs.list[i].editor.buffer.rope().to_string(),
+                None => std::fs::read_to_string(&path).unwrap_or_default(),
+            };
+            let source: Vec<&str> = text.lines().collect();
+            for line in lines {
+                let preview = source.get(line).map_or(String::new(), |l| l.trim().to_string());
+                out.push(crate::insight::Target { path: path.clone(), line, col: 0, preview });
+            }
+        }
+        out
+    }
+
     /// Runs what Run Anything offered.
     pub fn run_anything(&mut self, ctx: &Context, item: crate::run_anything::Item) {
         match item {
@@ -603,6 +620,15 @@ impl CrabCraftApp {
             }
         }
         self.docs.active = s.active.filter(|&a| a < self.docs.list.len()).or(if self.docs.list.is_empty() { None } else { Some(0) });
+        for (path, lines) in &s.bookmarks {
+            let lines: std::collections::BTreeSet<usize> = lines.iter().copied().collect();
+            match self.docs.index_of(path) {
+                Some(i) => self.docs.list[i].editor.bookmarks = lines,
+                None => {
+                    self.docs.closed_bookmarks.insert(path.clone(), lines);
+                }
+            }
+        }
         for (path, bps) in &s.breakpoints {
             if let Some(i) = self.docs.index_of(path) {
                 for (line, cond) in bps {
@@ -654,6 +680,7 @@ impl CrabCraftApp {
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
             breakpoints,
+            bookmarks: self.docs.bookmarks().into_iter().map(|(path, lines)| (path, lines.into_iter().collect())).collect(),
             disabled_breakpoints: self
                 .docs
                 .list
@@ -994,6 +1021,7 @@ impl CrabCraftApp {
                 self.insight.optimize_imports(&mut self.docs, &mut out);
                 self.handle_insight(out);
             }
+            Action::ShowBookmarks => self.dialog = Some(Dialog::Bookmarks { list: self.bookmark_list(), selected: 0 }),
             Action::RunAnything => self.dialog = Some(Dialog::RunAnything { text: String::new(), selected: 0 }),
             Action::SearchEverywhere | Action::FindAction | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {

@@ -299,6 +299,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         Resume => ico::RESUME,
         Evaluate => ico::EVALUATE,
         ToggleBreakpoint => ico::BREAKPOINT,
+        ToggleBookmark | ShowBookmarks => ico::BOOKMARK,
         ShowSettings => ico::SETTINGS,
         Find | SearchEverywhere => ico::SEARCH,
         Replace | ReplaceInFiles => ico::REPLACE,

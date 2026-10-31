@@ -729,6 +729,10 @@
     "No hierarchy": "Brak hierarchii",
     "Place the caret on a function and press Ctrl+Alt+H.": "Umieść kursor na funkcji i naciśnij Ctrl+Alt+H.",
     "Show calls": "Pokaż wywołania",
-    "Show callers": "Pokaż wywołujących"
+    "Show callers": "Pokaż wywołujących",
+    "Toggle Bookmark": "Przełącz zakładkę",
+    "Show Bookmarks": "Pokaż zakładki",
+    "Bookmarks": "Zakładki",
+    "No bookmarks. Ctrl+F11 marks the current line.": "Brak zakładek. Ctrl+F11 oznacza bieżący wiersz."
   }
 }

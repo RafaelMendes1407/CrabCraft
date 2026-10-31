@@ -729,6 +729,10 @@
     "No hierarchy": "階層はありません",
     "Place the caret on a function and press Ctrl+Alt+H.": "関数にカーソルを置いて Ctrl+Alt+H を押してください。",
     "Show calls": "呼び出しを表示",
-    "Show callers": "呼び出し元を表示"
+    "Show callers": "呼び出し元を表示",
+    "Toggle Bookmark": "ブックマークの切り替え",
+    "Show Bookmarks": "ブックマークを表示",
+    "Bookmarks": "ブックマーク",
+    "No bookmarks. Ctrl+F11 marks the current line.": "ブックマークはありません。Ctrl+F11 で現在の行をマークします。"
   }
 }

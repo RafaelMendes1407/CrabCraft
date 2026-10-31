@@ -4,6 +4,7 @@
 use rc_editor::EditorState;
 use rc_kit::i18n::trf;
 use rc_syntax::ParserPool;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -50,6 +51,8 @@ pub struct Docs {
     pub active: Option<usize>,
     next_id: u64,
     pub pool: ParserPool,
+    /// Bookmarks of files that are not open.
+    pub closed_bookmarks: BTreeMap<PathBuf, BTreeSet<usize>>,
     /// Recently opened files, most recent first (⌘E).
     pub recent: Vec<PathBuf>,
     /// Folders whose files open read-only: the dependencies Cargo downloaded.
@@ -79,7 +82,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, recent: Vec::new(), read_only_roots: Vec::new() }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new() }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -119,6 +122,7 @@ impl Docs {
             editor.read_only = true;
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
+        editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
         self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
         let i = self.list.len() - 1;
         self.activate(i);
@@ -138,7 +142,8 @@ impl Docs {
         match old {
             Some(o) => {
                 let doc = self.list.remove(i);
-                self.list[o] = doc;
+                let replaced = std::mem::replace(&mut self.list[o], doc);
+                self.keep_bookmarks(&replaced);
                 self.activate(o);
                 Ok(o)
             }
@@ -167,12 +172,38 @@ impl Docs {
         }
     }
 
+    fn keep_bookmarks(&mut self, doc: &Doc) {
+        if !doc.editor.bookmarks.is_empty() {
+            self.closed_bookmarks.insert(doc.path.clone(), doc.editor.bookmarks.clone());
+        }
+    }
+
+    /// Every bookmark, open file or not, by file.
+    pub fn bookmarks(&self) -> BTreeMap<PathBuf, BTreeSet<usize>> {
+        let mut all = self.closed_bookmarks.clone();
+        all.extend(self.list.iter().filter(|d| !d.editor.bookmarks.is_empty()).map(|d| (d.path.clone(), d.editor.bookmarks.clone())));
+        all
+    }
+
+    /// Removes a bookmark, in a closed file too.
+    pub fn remove_bookmark(&mut self, path: &Path, line: usize) {
+        if let Some(i) = self.index_of(path) {
+            self.list[i].editor.bookmarks.remove(&line);
+        } else if let Some(lines) = self.closed_bookmarks.get_mut(path) {
+            lines.remove(&line);
+            if lines.is_empty() {
+                self.closed_bookmarks.remove(path);
+            }
+        }
+    }
+
     /// Closes tab `i`; the tab to its left (or the new first) becomes active, like Rider.
     pub fn close(&mut self, i: usize) -> Option<Doc> {
         if i >= self.list.len() {
             return None;
         }
         let doc = self.list.remove(i);
+        self.keep_bookmarks(&doc);
         self.active = match self.active {
             _ if self.list.is_empty() => None,
             Some(a) if a > i => Some(a - 1),

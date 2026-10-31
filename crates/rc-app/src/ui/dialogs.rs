@@ -23,6 +23,7 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
+    Bookmarks { list: Vec<crate::insight::Target>, selected: usize },
     RunAnything { text: String, selected: usize },
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
@@ -66,6 +67,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
+        Dialog::Bookmarks { list, selected } => bookmarks(app, ctx, list, selected),
         Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
@@ -324,6 +326,55 @@ fn about(ctx: &Context) -> Outcome {
         .inner
     });
     if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn bookmarks(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<crate::insight::Target>, selected: &mut usize) -> Outcome {
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
+    let mut open = None;
+    let mut remove = false;
+    let (_, esc) = modal(ctx, "bookmarks", 560.0, |ui| {
+        title(ui, tr("Bookmarks"));
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(list.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) {
+            open = list.get(*selected).cloned();
+        }
+        remove = ui.input(|i| i.key_pressed(Key::Delete));
+        if list.is_empty() {
+            ui.label(egui::RichText::new(tr("No bookmarks. Ctrl+F11 marks the current line.")).color(p.muted));
+        }
+        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            for (i, mark) in list.iter().enumerate() {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+                if i == *selected {
+                    ui.painter().rect_filled(r, 4.0, p.selection);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, 4.0, p.row_hover);
+                }
+                let file = mark.path.strip_prefix(&root).unwrap_or(&mark.path).display();
+                ui.painter().text(r.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, format!("{file}:{}", mark.line + 1), FontId::proportional(13.0), p.text);
+                ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, mark.preview.chars().take(44).collect::<String>(), FontId::monospace(11.5), p.muted);
+                if resp.clicked() {
+                    open = Some(mark.clone());
+                }
+            }
+        });
+    });
+    if remove && *selected < list.len() {
+        let mark = list.remove(*selected);
+        app.docs.remove_bookmark(&mark.path, mark.line);
+        app.session_dirty = true;
+    }
+    if let Some(mark) = open {
+        app.open_at(&mark.path, mark.line, mark.col);
+        return Outcome::Close;
+    }
+    if esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn run_anything(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, selected: &mut usize) -> Outcome {

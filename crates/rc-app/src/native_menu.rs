@@ -502,6 +502,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::AttachToProcess, || tr("Attach to Process…")),
             &sep(),
             &act(Action::ToggleBreakpoint, || tr("Toggle Line Breakpoint")),
+            &act(Action::ToggleBookmark, || tr("Toggle Bookmark")),
+            &act(Action::ShowBookmarks, || tr("Show Bookmarks")),
         ],
     )?;
     let git_menu = submenu(|| tr("Git"), &[&act(Action::Commit, || tr("Commit…"))])?;

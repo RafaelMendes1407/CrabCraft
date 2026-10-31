@@ -729,6 +729,10 @@
     "No hierarchy": "Nenhuma hierarquia",
     "Place the caret on a function and press Ctrl+Alt+H.": "Coloque o cursor em uma função e pressione Ctrl+Alt+H.",
     "Show calls": "Mostrar chamadas",
-    "Show callers": "Mostrar quem chama"
+    "Show callers": "Mostrar quem chama",
+    "Toggle Bookmark": "Alternar marcador",
+    "Show Bookmarks": "Mostrar marcadores",
+    "Bookmarks": "Marcadores",
+    "No bookmarks. Ctrl+F11 marks the current line.": "Nenhum marcador. Ctrl+F11 marca a linha atual."
   }
 }

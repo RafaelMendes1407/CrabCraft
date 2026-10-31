@@ -729,6 +729,10 @@
     "No hierarchy": "没有层次结构",
     "Place the caret on a function and press Ctrl+Alt+H.": "将光标放在函数上并按 Ctrl+Alt+H。",
     "Show calls": "显示调用",
-    "Show callers": "显示调用方"
+    "Show callers": "显示调用方",
+    "Toggle Bookmark": "切换书签",
+    "Show Bookmarks": "显示书签",
+    "Bookmarks": "书签",
+    "No bookmarks. Ctrl+F11 marks the current line.": "没有书签。Ctrl+F11 可标记当前行。"
   }
 }

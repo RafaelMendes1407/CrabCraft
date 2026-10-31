@@ -81,6 +81,8 @@ pub enum Action {
     NextError,
     PreviousError,
     ToggleBreakpoint,
+    ToggleBookmark,
+    ShowBookmarks,
     // --- IDE (reported to the app)
     SearchEverywhere,
     FindAction,
@@ -154,6 +156,7 @@ impl Action {
                 | NextError
                 | PreviousError
                 | ToggleBreakpoint
+                | ToggleBookmark
         ) && !self.is_ide()
     }
 
@@ -164,6 +167,7 @@ impl Action {
             self,
             SearchEverywhere
                 | FindAction
+                | ShowBookmarks
                 | OptimizeImports
                 | RunAnything
                 | GotoFile
@@ -435,6 +439,8 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
         b(Key::F8, c, ToggleBreakpoint),
+        b(Key::F11, c, ToggleBookmark),
+        b(Key::F11, cs, ShowBookmarks),
         b(Key::O, cs, GotoFile),
         b(Key::O, cas, GotoSymbol),
         b(Key::O, c, GotoClass),
@@ -549,6 +555,8 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
         b(Key::F9, none, ToggleBreakpoint),
+        b(Key::F11, c, ToggleBookmark),
+        b(Key::F11, cs, ShowBookmarks),
         b(Key::F, cs, FindInFiles),
         b(Key::H, cs, ReplaceInFiles),
         b(Key::Minus, ca, NavigateBack),

@@ -140,6 +140,7 @@ pub struct EditorState {
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
     pub gutter_icons: BTreeMap<usize, GutterIcon>,
+    pub bookmarks: BTreeSet<usize>,
     pub line_changes: BTreeMap<usize, LineChange>,
     pub search_matches: Vec<(usize, usize)>,
     pub current_match: Option<usize>,
@@ -200,6 +201,7 @@ impl EditorState {
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
+            bookmarks: BTreeSet::new(),
             line_changes: BTreeMap::new(),
             search_matches: Vec::new(),
             current_match: None,
@@ -397,6 +399,7 @@ impl EditorState {
             let row = e.start_point.row;
             shift_lines(&mut self.breakpoints, row, added);
             shift_lines(&mut self.gutter_icons, row, added);
+            shift_line_set(&mut self.bookmarks, row, added);
             shift_line_set(&mut self.folded, row, added);
             if added != 0 && row < self.semantic.len() {
                 if added > 0 {
@@ -584,6 +587,12 @@ impl EditorState {
             true
         } else {
             false
+        }
+    }
+
+    pub fn toggle_bookmark(&mut self, line: usize) {
+        if !self.bookmarks.remove(&line) {
+            self.bookmarks.insert(line);
         }
     }
 

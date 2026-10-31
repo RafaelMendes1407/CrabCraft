@@ -645,6 +645,10 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
             let gy = (center_y - g.size().y / 2.0).round();
             painter.galley(pos2(m.num_right - g.size().x, gy), g, color);
         }
+        if state.bookmarks.contains(&l) && !state.breakpoints.contains_key(&l) {
+            let r = Rect::from_center_size(pos2(m.num_right - 7.0, center_y), Vec2::splat(16.0));
+            icons::paint(&painter, r, ico::GUTTER_BOOKMARK, pal, true);
+        }
         // Execution point arrow.
         if Some(l) == state.execution_line {
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));

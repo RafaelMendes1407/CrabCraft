@@ -117,3 +117,7 @@ No hierarchy	Sin jerarquía	Aucune hiérarchie	Nenhuma hierarquia	Keine Hierarch
 Place the caret on a function and press Ctrl+Alt+H.	Coloca el cursor en una función y pulsa Ctrl+Alt+H.	Placez le curseur sur une fonction et appuyez sur Ctrl+Alt+H.	Coloque o cursor em uma função e pressione Ctrl+Alt+H.	Setze den Cursor auf eine Funktion und drücke Strg+Alt+H.	Umieść kursor na funkcji i naciśnij Ctrl+Alt+H.	将光标放在函数上并按 Ctrl+Alt+H。	関数にカーソルを置いて Ctrl+Alt+H を押してください。
 Show calls	Mostrar llamadas	Afficher les appels	Mostrar chamadas	Aufrufe anzeigen	Pokaż wywołania	显示调用	呼び出しを表示
 Show callers	Mostrar llamadores	Afficher les appelants	Mostrar quem chama	Aufrufer anzeigen	Pokaż wywołujących	显示调用方	呼び出し元を表示
+Toggle Bookmark	Alternar marcador	Basculer le signet	Alternar marcador	Lesezeichen umschalten	Przełącz zakładkę	切换书签	ブックマークの切り替え
+Show Bookmarks	Mostrar marcadores	Afficher les signets	Mostrar marcadores	Lesezeichen anzeigen	Pokaż zakładki	显示书签	ブックマークを表示
+Bookmarks	Marcadores	Signets	Marcadores	Lesezeichen	Zakładki	书签	ブックマーク
+No bookmarks. Ctrl+F11 marks the current line.	Sin marcadores. Ctrl+F11 marca la línea actual.	Aucun signet. Ctrl+F11 marque la ligne actuelle.	Nenhum marcador. Ctrl+F11 marca a linha atual.	Keine Lesezeichen. Strg+F11 markiert die aktuelle Zeile.	Brak zakładek. Ctrl+F11 oznacza bieżący wiersz.	没有书签。Ctrl+F11 可标记当前行。	ブックマークはありません。Ctrl+F11 で現在の行をマークします。

@@ -301,6 +301,11 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let mut insight_actions = Vec::new();
     for a in out.actions {
         match a {
+            Action::ToggleBookmark => {
+                let line = doc.editor.caret_line_col().0;
+                doc.editor.toggle_bookmark(line);
+                app.session_dirty = true;
+            }
             Action::ToggleBreakpoint => {
                 let line = doc.editor.caret_line_col().0;
                 doc.editor.toggle_breakpoint(line);
