@@ -72,9 +72,97 @@ pub fn is_quiescent(params: &Value) -> bool {
     params.get("quiescent").and_then(Value::as_bool).unwrap_or(false)
 }
 
+/// What a gutter icon of a Rust file starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RunnableKind {
+    /// One test, by its name for libtest.
+    Test(String),
+    /// Every test of a module.
+    Module(String),
+    /// A binary target, by name.
+    Binary(String),
+}
+
+/// A place in a file that can be run, from `experimental/runnables`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Runnable {
+    /// 0-based line of the item's name.
+    pub line: usize,
+    pub kind: RunnableKind,
+}
+
+/// The reply of `experimental/runnables`. Entries with no place in the file (the whole-package
+/// `cargo check` and `cargo test`) and doctests, which libtest cannot select by these names, are left out.
+pub fn parse_runnables(reply: &Value) -> Vec<Runnable> {
+    reply.as_array().map(|list| list.iter().filter_map(parse_runnable).collect()).unwrap_or_default()
+}
+
+fn parse_runnable(item: &Value) -> Option<Runnable> {
+    let location = item.get("location")?;
+    let range = location.get("targetSelectionRange").or_else(|| location.get("targetRange"))?;
+    let line = usize::try_from(range.pointer("/start/line")?.as_u64()?).ok()?;
+    let args = item.get("args")?;
+    let strings = |key: &str| -> Vec<&str> {
+        args.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default()
+    };
+    let cargo = strings("cargoArgs");
+    let executable = strings("executableArgs");
+    let kind = match *cargo.first()? {
+        "run" => RunnableKind::Binary((*cargo.iter().skip_while(|a| **a != "--bin").nth(1)?).to_string()),
+        "test" if cargo.contains(&"--doc") => return None,
+        "test" => {
+            let name = (*executable.first().filter(|n| !n.starts_with('-'))?).to_string();
+            if executable.contains(&"--exact") { RunnableKind::Test(name) } else { RunnableKind::Module(name.trim_end_matches("::").to_string()) }
+        }
+        _ => return None,
+    };
+    Some(Runnable { line, kind })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn entry(line: u64, cargo: &[&str], executable: &[&str]) -> Value {
+        json!({
+            "label": "x",
+            "kind": "cargo",
+            "location": { "targetUri": "file:///a.rs", "targetSelectionRange": { "start": { "line": line, "character": 3 }, "end": { "line": line, "character": 6 } } },
+            "args": { "cargoArgs": cargo, "executableArgs": executable }
+        })
+    }
+
+    #[test]
+    fn reads_tests_modules_and_binaries() {
+        let reply = json!([
+            entry(1, &["run", "--package", "demo", "--bin", "demo"], &[]),
+            entry(2, &["test", "--package", "demo", "--lib"], &["tests::works", "--exact", "--show-output"]),
+            entry(3, &["test", "--package", "demo", "--lib"], &["tests::"]),
+        ]);
+        let found = parse_runnables(&reply);
+        assert_eq!(found, vec![
+            Runnable { line: 1, kind: RunnableKind::Binary("demo".into()) },
+            Runnable { line: 2, kind: RunnableKind::Test("tests::works".into()) },
+            Runnable { line: 3, kind: RunnableKind::Module("tests".into()) },
+        ]);
+    }
+
+    #[test]
+    fn leaves_out_what_has_no_place_or_cannot_be_selected() {
+        let mut whole_package = entry(0, &["test", "--package", "demo"], &[]);
+        whole_package.as_object_mut().unwrap().remove("location");
+        let reply = json!([
+            whole_package,
+            entry(4, &["test", "--doc"], &["Greeter::hello", "--exact"]),
+            entry(5, &["test", "--lib"], &[]),
+            entry(6, &["check"], &[]),
+            entry(7, &["run"], &[]),
+            json!({ "location": 3 }),
+            7,
+        ]);
+        assert!(parse_runnables(&reply).is_empty());
+        assert!(parse_runnables(&json!(null)).is_empty());
+    }
 
     #[test]
     fn the_configuration_answers_every_section() {

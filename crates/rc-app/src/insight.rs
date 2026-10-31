@@ -127,6 +127,9 @@ pub struct Insight {
     auto_usings: HashMap<u64, u64>,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
+    runnables_request: HashMap<u64, Versioned<Value>>,
+    /// What can be run in each Rust document, with the text version it describes.
+    pub runnables: HashMap<u64, (u64, Vec<rc_lsp::rust_analyzer::Runnable>)>,
     diag_pull: HashMap<u64, (u64, Pending<Value>)>,
     symbols: HashMap<u64, (u64, Pending<Option<lsp::DocumentSymbolResponse>>)>,
     /// Document structure of each open document.
@@ -179,6 +182,8 @@ impl Insight {
             auto_usings: HashMap::new(),
             semantic: HashMap::new(),
             inlay: HashMap::new(),
+            runnables_request: HashMap::new(),
+            runnables: HashMap::new(),
             diag_pull: HashMap::new(),
             symbols: HashMap::new(),
             structure: HashMap::new(),
@@ -303,6 +308,8 @@ impl Insight {
         self.auto_usings.clear();
         self.semantic.clear();
         self.inlay.clear();
+        self.runnables_request.clear();
+        self.runnables.clear();
         self.diag_pull.clear();
         self.symbols.clear();
         self.refreshed.clear();
@@ -438,7 +445,9 @@ impl Insight {
         let td = json!({ "uri": uri.as_str() });
         self.semantic.insert(id, (version, session.client.request_raw("textDocument/semanticTokens/full", json!({ "textDocument": td }))));
         // rust-analyzer publishes its diagnostics, including those of `cargo check`.
-        if !self.rust {
+        if self.rust {
+            self.runnables_request.insert(id, (version, session.client.request_raw("experimental/runnables", json!({ "textDocument": td }))));
+        } else {
             self.diag_pull.insert(id, (version, session.client.request_raw("textDocument/diagnostic", json!({ "textDocument": td }))));
         }
         self.symbols.insert(id, (version, session.client.request_raw("textDocument/documentSymbol", json!({ "textDocument": td }))));
@@ -473,6 +482,19 @@ impl Insight {
         }
         for id in done.drain(..) {
             self.semantic.remove(&id);
+        }
+        // Runnables.
+        let mut finished = Vec::new();
+        for (&id, (version, p)) in &mut self.runnables_request {
+            if let Some(r) = p.poll() {
+                finished.push(id);
+                if let Ok(reply) = r {
+                    self.runnables.insert(id, (*version, rc_lsp::rust_analyzer::parse_runnables(&reply)));
+                }
+            }
+        }
+        for id in finished {
+            self.runnables_request.remove(&id);
         }
         // Inlay hints.
         for (&id, (version, p)) in &mut self.inlay {

@@ -641,6 +641,7 @@
     "Rust language server ready (last completion {ms} ms)": "Rust 言語サーバーの準備完了（前回の補完 {ms} ミリ秒）",
     "Rust language server ready": "Rust 言語サーバーの準備完了",
     "Rust server stopped — Restart": "Rust サーバーが停止しました — 再起動",
-    "Starting Rust language server…": "Rust 言語サーバーを起動しています…"
+    "Starting Rust language server…": "Rust 言語サーバーを起動しています…",
+    "This file is not part of a runnable target": "このファイルは実行可能なターゲットに含まれていません"
   }
 }

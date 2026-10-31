@@ -641,6 +641,7 @@
     "Rust language server ready (last completion {ms} ms)": "Servidor de lenguaje Rust listo (último autocompletado {ms} ms)",
     "Rust language server ready": "Servidor de lenguaje Rust listo",
     "Rust server stopped — Restart": "Servidor Rust detenido — Reiniciar",
-    "Starting Rust language server…": "Iniciando el servidor de lenguaje Rust…"
+    "Starting Rust language server…": "Iniciando el servidor de lenguaje Rust…",
+    "This file is not part of a runnable target": "Este archivo no forma parte de un destino ejecutable"
   }
 }

@@ -291,3 +291,52 @@ fn rust_navigation_and_hints() {
     pump(&mut app, "the import", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("use std::collections::HashMap;")));
     app.insight.stop();
 }
+
+#[test]
+fn gutter_icons_run_tests_and_binaries() {
+    use rc_editor::GutterIcon;
+    const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    write(&root.join("src/main.rs"), "fn main() {\n    println!(\"from the icon\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/lib.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let icon = |a: &mut CrabCraftApp, line: usize| {
+        a.update_test_markers();
+        a.docs.active_doc().and_then(|d| d.editor.gutter_icons.get(&line).copied())
+    };
+    // 0-based lines of `mod checks`, `fn good` and `fn bad`.
+    let (module, good, bad) = (5, 7, 12);
+    pump(&mut app, "the icons", |a| icon(a, good) == Some(GutterIcon::RunTest) && icon(a, bad) == Some(GutterIcon::RunTest) && icon(a, module) == Some(GutterIcon::RunTest));
+
+    // One test: only that test runs, and only its icon changes.
+    app.run_test_at(good);
+    pump(&mut app, "the passed icon", |a| icon(a, good) == Some(GutterIcon::TestPassed));
+    pump(&mut app, "the end of the run", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    assert_eq!(icon(&mut app, bad), Some(GutterIcon::RunTest));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 0));
+
+    // The whole module: the failure reaches the test and the module.
+    app.run_test_at(module);
+    pump(&mut app, "the failed icons", |a| icon(a, bad) == Some(GutterIcon::TestFailed) && icon(a, module) == Some(GutterIcon::TestFailed));
+    pump(&mut app, "the end of the run", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 1));
+
+    // The icon of `fn main` runs its binary.
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the icon of main", |a| icon(a, 0) == Some(GutterIcon::RunApp));
+    app.run_binary_at(&egui::Context::default(), 0);
+    pump(&mut app, "the program's output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("from the icon")));
+    app.insight.stop();
+}

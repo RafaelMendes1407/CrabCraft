@@ -641,6 +641,7 @@
     "Rust language server ready (last completion {ms} ms)": "Rust 语言服务器已就绪（上次补全 {ms} 毫秒）",
     "Rust language server ready": "Rust 语言服务器已就绪",
     "Rust server stopped — Restart": "Rust 服务器已停止 — 重新启动",
-    "Starting Rust language server…": "正在启动 Rust 语言服务器…"
+    "Starting Rust language server…": "正在启动 Rust 语言服务器…",
+    "This file is not part of a runnable target": "此文件不属于可运行的目标"
   }
 }

@@ -76,6 +76,8 @@ pub struct CrabCraftApp {
     /// Screen position under the active caret (popups that belong to the editor).
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
+    /// Binary target run by the icon of each line of the active Rust document.
+    pub run_markers: std::collections::BTreeMap<usize, String>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
@@ -154,6 +156,7 @@ impl CrabCraftApp {
             find_results: None,
             caret_screen: None,
             test_markers: Vec::new(),
+            run_markers: std::collections::BTreeMap::new(),
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
@@ -903,9 +906,13 @@ impl CrabCraftApp {
     }
 
     /// Run icons next to test classes and methods, with their last outcome.
-    fn update_test_markers(&mut self) {
+    pub(crate) fn update_test_markers(&mut self) {
         let Some(i) = self.docs.active else { return };
         let doc = &mut self.docs.list[i];
+        if doc.editor.lang() == rc_syntax::Lang::Rust {
+            self.update_rust_markers(i);
+            return;
+        }
         if doc.editor.lang() != rc_syntax::Lang::CSharp {
             return;
         }
@@ -923,11 +930,62 @@ impl CrabCraftApp {
         self.test_markers = markers;
     }
 
+    /// Run icons of a Rust document, from the server. An older reply is left alone: the editor
+    /// keeps the icons on their lines while the text changes.
+    fn update_rust_markers(&mut self, i: usize) {
+        use rc_editor::GutterIcon;
+        use rc_lsp::rust_analyzer::RunnableKind;
+        let doc = &mut self.docs.list[i];
+        let Some((version, runnables)) = self.insight.runnables.get(&doc.editor.id) else { return };
+        if *version != doc.editor.buffer.version() {
+            return;
+        }
+        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::RunTest | GutterIcon::TestPassed | GutterIcon::TestFailed | GutterIcon::RunApp));
+        self.test_markers.clear();
+        self.run_markers.clear();
+        for r in runnables {
+            let state = match &r.kind {
+                RunnableKind::Binary(name) => {
+                    doc.editor.gutter_icons.insert(r.line, GutterIcon::RunApp);
+                    self.run_markers.insert(r.line, name.clone());
+                    continue;
+                }
+                RunnableKind::Test(name) => {
+                    self.test_markers.push(crate::runner::TestMarker { line: r.line, name: name.clone(), is_class: false });
+                    self.runner.test_outcomes.get(name).copied()
+                }
+                RunnableKind::Module(name) => {
+                    self.test_markers.push(crate::runner::TestMarker { line: r.line, name: name.clone(), is_class: true });
+                    module_state(&self.runner.test_outcomes, name)
+                }
+            };
+            let icon = match state {
+                Some(crate::runner::TestState::Passed) => GutterIcon::TestPassed,
+                Some(crate::runner::TestState::Failed) => GutterIcon::TestFailed,
+                _ => GutterIcon::RunTest,
+            };
+            doc.editor.gutter_icons.insert(r.line, icon);
+        }
+    }
+
+    /// Click on the run icon of a `fn main`: selects its configuration and runs it.
+    pub fn run_binary_at(&mut self, ctx: &Context, line: usize) {
+        let Some(name) = self.run_markers.get(&line) else { return };
+        let Some(index) = self.runner.configs.iter().position(|c| c.name == *name) else {
+            self.notify(tr("This file is not part of a runnable target"), false);
+            return;
+        };
+        self.runner.selected = index;
+        self.session_dirty = true;
+        self.run_ide_action(ctx, Action::Run);
+    }
+
     /// Click on a test's gutter icon: runs that test (or class) in its project.
     pub fn run_test_at(&mut self, line: usize) {
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
         let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
-        let Some(project) = crate::runner::project_of(&path, &self.runner.configs) else {
+        let manifest = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone());
+        let Some(project) = manifest.or_else(|| crate::runner::project_of(&path, &self.runner.configs)) else {
             self.notify(tr("This file is not part of a test project"), false);
             return;
         };
@@ -1377,4 +1435,20 @@ pub fn reveal_in_file_manager(path: &Path) {
     let _ = std::process::Command::new("explorer").arg(format!("/select,{}", path.display())).spawn();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let _ = std::process::Command::new("xdg-open").arg(path.parent().unwrap_or(path)).spawn();
+}
+
+/// The outcome of a module's tests: failed if any failed, passed once some ran and none failed.
+fn module_state(outcomes: &std::collections::BTreeMap<String, crate::runner::TestState>, module: &str) -> Option<crate::runner::TestState> {
+    use crate::runner::TestState;
+    let prefix = format!("{module}::");
+    let mut found = None;
+    for (name, state) in outcomes.iter().filter(|(n, _)| n.starts_with(&prefix)) {
+        match state {
+            TestState::Failed => return Some(TestState::Failed),
+            TestState::Passed => found = found.or(Some(TestState::Passed)),
+            TestState::Running => found = Some(TestState::Running),
+            TestState::Skipped => {}
+        }
+    }
+    found
 }

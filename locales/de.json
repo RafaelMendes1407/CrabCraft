@@ -641,6 +641,7 @@
     "Rust language server ready (last completion {ms} ms)": "Rust-Sprachserver bereit (letzte Vervollständigung {ms} ms)",
     "Rust language server ready": "Rust-Sprachserver bereit",
     "Rust server stopped — Restart": "Rust-Server angehalten — Neu starten",
-    "Starting Rust language server…": "Rust-Sprachserver wird gestartet…"
+    "Starting Rust language server…": "Rust-Sprachserver wird gestartet…",
+    "This file is not part of a runnable target": "Diese Datei gehört zu keinem ausführbaren Ziel"
   }
 }
