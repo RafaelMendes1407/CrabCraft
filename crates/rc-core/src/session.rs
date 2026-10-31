@@ -34,11 +34,21 @@ pub struct RunOptions {
     pub build_first: bool,
     /// Run with `dotnet watch` (Hot Reload and browser refresh); `None`: on for web projects.
     pub hot_reload: Option<bool>,
+    /// Rust: toolchain (`cargo +channel`); empty: the default one.
+    pub channel: String,
+    /// Rust: Cargo profile; empty: `dev`.
+    pub cargo_profile: String,
+    /// Rust: features, separated by commas or spaces.
+    pub features: String,
+    /// Rust: `RUST_BACKTRACE`; empty: `short`.
+    pub backtrace: String,
+    /// Rust: a file to read as the program's input.
+    pub stdin_file: String,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new() }
     }
 }
 

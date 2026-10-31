@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 68 |
-| 🚧 Em andamento | 4 |
+| ✅ Pronto | 75 |
+| 🚧 Em andamento | 3 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 154 |
+| ⬜ A fazer | 148 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -62,7 +62,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
 | P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde` |
-| P-12 | Dependências externas na árvore do projeto | ⬜ | M3 | |
+| P-12 | Dependências externas na árvore do projeto | ✅ | M3 | Nó Bibliotecas externas, ver P-11 |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
 | P-15 | Novo crate Cargo no workspace | ⬜ | M3 | |
@@ -72,7 +72,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-19 | Executar comando Cargo pela janela Cargo | ✅ | M3 | Campo com Enter; `cargo` no início é opcional; falha mostra o código de saída |
 | P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
 | P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
-| P-22 | Botão Load Cargo Changes (manual) | ⬜ | M3 | |
+| P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
 | P-24 | Excluir pastas e arquivos da análise | ⬜ | M3 | |
 | P-25 | Invalidar caches | ⬜ | M3 | |
@@ -216,22 +216,22 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-04 | Janela Problems | ✅ | M1 | Vista na janela nativa com erro real, também de arquivo fechado; clique na lista só por código herdado, sem teste |
 | B-05 | Configurações de run automáticas por target | ✅ | M1 | Uma por binário, mais All Tests; testado e visto no app |
 | B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |
-| B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | 🚧 | M3 | Argumentos, ambiente e pasta testados; falta comando, canal e stdin |
-| B-08 | Features automáticas (`required-features`) | ⬜ | M3 | |
+| B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | ✅ | M3 | Editar configuração: perfil, toolchain, features, ambiente, pasta e arquivo de entrada, testados no toolchain real, exceto a troca de toolchain (só os argumentos); outros comandos pela janela Cargo |
+| B-08 | Features automáticas (`required-features`) | ✅ | M3 | `required-features` lidas do metadata e aplicadas sozinhas; teste real |
 | B-09 | Emular terminal na saída | ⬜ | M3 | `rc-term` já suporta |
 | B-10 | Executar como root | ⬜ | M6 | |
 | B-11 | Múltiplas instâncias e configuração no projeto | ⬜ | M3 | |
 | B-12 | Configurações compostas | 🔁 | M3 | |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
-| B-14 | Seletor de perfil Cargo (dev/release) | ⬜ | M3 | |
+| B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |
 | B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
-| B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ⬜ | M3 | |
+| B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ✅ | M3 | short, full ou 0 na configuração; o ambiente da configuração tem prioridade |
 | B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |
 | B-19 | Tarefas antes do launch | ⬜ | M3 | |
 | B-20 | Configurações temporárias e salvar como permanente | ⬜ | M3 | |
 | B-21 | Pastas de configurações | ⬜ | M4 | |
-| B-22 | Argumentos após `--` e redirecionar stdin | ⬜ | M3 | |
+| B-22 | Argumentos após `--` e redirecionar stdin | ✅ | M3 | Argumentos vão direto ao programa; arquivo de entrada testado, ignorado ao depurar |
 
 ## 8. Testes e cobertura
 

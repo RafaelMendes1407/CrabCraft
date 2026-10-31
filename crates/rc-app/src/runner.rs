@@ -391,12 +391,27 @@ impl Runner {
     /// A binary of the Rust workspace, with the user's edits applied.
     fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
         let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
-        let mut target = rc_cargo::RunTarget { test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None };
+        let mut target = rc_cargo::RunTarget { test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
         if let Some(o) = self.options.get(name) {
             target.args = rc_dotnet::process::split_command_line(&o.args);
             target.env = o.env_pairs();
             if !o.working_dir.trim().is_empty() {
                 target.working_dir = Some(PathBuf::from(o.working_dir.trim()));
+            }
+            target.options = rc_cargo::CargoOptions {
+                channel: o.channel.trim().to_string(),
+                profile: o.cargo_profile.trim().to_string(),
+                features: o.features.split([',', ' ']).filter(|f| !f.is_empty()).map(str::to_string).collect(),
+                backtrace: o.backtrace.clone(),
+                stdin_file: (!o.stdin_file.trim().is_empty()).then(|| PathBuf::from(o.stdin_file.trim())),
+            };
+        }
+        // What the binary cannot be built without.
+        let packages = self.cargo_workspace.as_ref().map_or(&[][..], |w| &w.packages);
+        let required = packages.iter().filter(|p| p.name == target.package).flat_map(|p| &p.targets).find(|t| t.kind == rc_cargo::TargetKind::Bin && t.name == target.bin).map_or(&[][..], |t| &t.required_features);
+        for feature in required {
+            if !target.options.features.contains(feature) {
+                target.options.features.push(feature.clone());
             }
         }
         Some(target)

@@ -22,6 +22,8 @@ pub struct Target {
     pub name: String,
     pub kind: TargetKind,
     pub src: PathBuf,
+    /// Features Cargo needs before it builds this target.
+    pub required_features: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -174,7 +176,8 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
         for t in p.get("targets").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
             let Some(name) = t.get("name").and_then(Value::as_str) else { continue };
             let kinds: Vec<&str> = t.get("kind").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).collect();
-            targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")? });
+            let required_features = t.get("required-features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect();
+            targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")?, required_features });
         }
         packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets });
     }

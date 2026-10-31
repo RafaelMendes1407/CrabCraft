@@ -684,6 +684,12 @@
     "Reformat with rustfmt": "Sformatuj za pomocą rustfmt",
     "rustfmt was not found. Install it with: rustup component add rustfmt": "Nie znaleziono rustfmt. Zainstaluj poleceniem: rustup component add rustfmt",
     "Not committed: rustfmt failed on {file}: {error}": "Nie zatwierdzono: rustfmt nie powiódł się dla {file}: {error}",
-    "{message}": "{message}"
+    "{message}": "{message}",
+    "Cargo profile": "Profil Cargo",
+    "The default one (stable, nightly…)": "Domyślny (stable, nightly…)",
+    "Features": "Funkcje",
+    "Input file": "Plik wejściowy",
+    "The console": "Konsola",
+    "Choose a file": "Wybierz plik"
   }
 }

@@ -684,6 +684,12 @@
     "Reformat with rustfmt": "使用 rustfmt 重新格式化",
     "rustfmt was not found. Install it with: rustup component add rustfmt": "未找到 rustfmt。请使用以下命令安装:rustup component add rustfmt",
     "Not committed: rustfmt failed on {file}: {error}": "未提交:rustfmt 处理 {file} 失败:{error}",
-    "{message}": "{message}"
+    "{message}": "{message}",
+    "Cargo profile": "Cargo 配置文件",
+    "The default one (stable, nightly…)": "默认(stable、nightly…)",
+    "Features": "特性",
+    "Input file": "输入文件",
+    "The console": "控制台",
+    "Choose a file": "选择文件"
   }
 }

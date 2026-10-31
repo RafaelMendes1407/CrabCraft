@@ -1235,7 +1235,7 @@ impl CrabCraftApp {
         // One thread, so stepping stays in the test being debugged.
         args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
-        let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args) };
+        let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
         let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
         self.debug_rust_test(config, target);
     }

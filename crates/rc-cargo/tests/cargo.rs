@@ -1,6 +1,6 @@
 //! Runs against the real toolchain with a tiny generated project.
 
-use rc_cargo::{Cargo, RunTarget, TargetKind, load_workspace, start_build, start_run, start_tests};
+use rc_cargo::{Cargo, CargoOptions, RunTarget, TargetKind, load_workspace, start_build, start_run, start_tests};
 use rc_core::inbox::Inbox;
 use rc_core::Waker;
 use rc_dotnet::{BuildAction, BuildEvent, RunEvent, Severity, TestEvent, TestOutcome, TestRequest};
@@ -76,7 +76,7 @@ fn runs_the_binary_and_reports_its_output_and_exit_code() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() {\n    println!(\"hello {}\", std::env::args().nth(1).unwrap());\n    std::process::exit(7);\n}\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None, options: Default::default() };
     let handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(handle.pid().is_some());
@@ -86,11 +86,56 @@ fn runs_the_binary_and_reports_its_output_and_exit_code() {
 }
 
 #[test]
+fn options_reach_the_build_and_the_program() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = "use std::io::Read;\nfn main() {\n    let mut text = String::new();\n    std::io::stdin().read_to_string(&mut text).unwrap();\n    println!(\"got {} {}\", text.trim(), std::env::var(\"RUST_BACKTRACE\").unwrap());\n}\n";
+    project(dir.path(), main, "");
+    let input = dir.path().join("input.txt");
+    std::fs::write(&input, "from the file\n").unwrap();
+    let options = CargoOptions { profile: "release".into(), backtrace: "full".into(), stdin_file: Some(input), ..Default::default() };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options };
+    let inbox = Inbox::new(Waker::noop());
+    let _handle = start_run(&cargo(), target.clone(), inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(events.iter().any(|e| matches!(e, RunEvent::Started { plan, .. } if plan.program.ends_with("release/crabby"))), "{events:?}");
+    assert!(events.iter().any(|e| matches!(e, RunEvent::Output(l) if l.text.contains("got from the file full"))), "{events:?}");
+    assert!(matches!(events.last(), Some(RunEvent::Exited { code: Some(0), .. })), "{events:?}");
+
+    // A missing input file and a bad option report a failure instead of starting anything.
+    let missing = RunTarget { options: CargoOptions { stdin_file: Some(dir.path().join("none")), ..Default::default() }, ..target.clone() };
+    let inbox = Inbox::new(Waker::noop());
+    let _handle = start_run(&cargo(), missing, inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(matches!(events.last(), Some(RunEvent::Failed(m)) if m.contains("none")), "{events:?}");
+    let bad = RunTarget { options: CargoOptions { channel: "--config=x".into(), ..Default::default() }, ..target };
+    let inbox = Inbox::new(Waker::noop());
+    let _handle = start_run(&cargo(), bad, inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(matches!(events.last(), Some(RunEvent::Failed(m)) if m.contains("toolchain")), "{events:?}");
+}
+
+#[test]
+fn a_binary_with_required_features_builds_through_its_run_configuration() {
+    let dir = tempfile::tempdir().unwrap();
+    project(dir.path(), "fn main() {}\n", "");
+    std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"crabby\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nextra = []\n\n[[bin]]\nname = \"crabby\"\npath = \"src/main.rs\"\nrequired-features = [\"extra\"]\n\n[workspace]\n").unwrap();
+    let workspace = load_workspace(&cargo(), &dir.path().join("Cargo.toml")).unwrap();
+    let bin = workspace.packages[0].targets.iter().find(|t| t.kind == TargetKind::Bin).unwrap();
+    assert_eq!(bin.required_features, ["extra"]);
+    let features = CargoOptions { features: bin.required_features.clone(), ..Default::default() };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: features };
+    let inbox = Inbox::new(Waker::noop());
+    let _handle = start_run(&cargo(), target, inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
+    assert!(matches!(events.last(), Some(RunEvent::Exited { code: Some(0), .. })), "{events:?}");
+}
+
+#[test]
 fn a_build_error_stops_the_run() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() { nope }\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None };
+    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
     let _handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(matches!(events.last(), Some(RunEvent::Failed(_))), "{events:?}");

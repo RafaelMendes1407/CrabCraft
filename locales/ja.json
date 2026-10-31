@@ -684,6 +684,12 @@
     "Reformat with rustfmt": "rustfmt で再フォーマット",
     "rustfmt was not found. Install it with: rustup component add rustfmt": "rustfmt が見つかりません。次のコマンドでインストールしてください: rustup component add rustfmt",
     "Not committed: rustfmt failed on {file}: {error}": "コミットしていません: {file} で rustfmt が失敗しました: {error}",
-    "{message}": "{message}"
+    "{message}": "{message}",
+    "Cargo profile": "Cargo プロファイル",
+    "The default one (stable, nightly…)": "既定 (stable、nightly…)",
+    "Features": "フィーチャー",
+    "Input file": "入力ファイル",
+    "The console": "コンソール",
+    "Choose a file": "ファイルを選択"
   }
 }

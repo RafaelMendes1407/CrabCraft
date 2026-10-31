@@ -72,7 +72,7 @@ fn debugs_a_rust_program() {
     project(dir.path());
     let root = dir.path().canonicalize().unwrap();
     let main = root.join("src/main.rs");
-    let target = RunTarget { test: None, manifest: root.join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None };
+    let target = RunTarget { test: None, manifest: root.join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
     let mut bps = Breakpoints::default();
     bps.set(BreakpointSpec::new(main.clone(), line_of("let total")));
     bps.set(BreakpointSpec::new(main.clone(), line_of("let sum")));

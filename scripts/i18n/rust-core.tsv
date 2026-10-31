@@ -72,3 +72,9 @@ Reformat with rustfmt	Reformatear con rustfmt	Reformater avec rustfmt	Reformatar
 rustfmt was not found. Install it with: rustup component add rustfmt	No se encontró rustfmt. Instálalo con: rustup component add rustfmt	rustfmt est introuvable. Installez-le avec : rustup component add rustfmt	O rustfmt não foi encontrado. Instale com: rustup component add rustfmt	rustfmt wurde nicht gefunden. Installieren mit: rustup component add rustfmt	Nie znaleziono rustfmt. Zainstaluj poleceniem: rustup component add rustfmt	未找到 rustfmt。请使用以下命令安装:rustup component add rustfmt	rustfmt が見つかりません。次のコマンドでインストールしてください: rustup component add rustfmt
 Not committed: rustfmt failed on {file}: {error}	No se confirmó: rustfmt falló en {file}: {error}	Non validé : rustfmt a échoué sur {file} : {error}	Commit não feito: o rustfmt falhou em {file}: {error}	Nicht committet: rustfmt ist bei {file} fehlgeschlagen: {error}	Nie zatwierdzono: rustfmt nie powiódł się dla {file}: {error}	未提交:rustfmt 处理 {file} 失败:{error}	コミットしていません: {file} で rustfmt が失敗しました: {error}
 {message}	{message}	{message}	{message}	{message}	{message}	{message}	{message}
+Cargo profile	Perfil de Cargo	Profil Cargo	Perfil do Cargo	Cargo-Profil	Profil Cargo	Cargo 配置文件	Cargo プロファイル
+The default one (stable, nightly…)	El predeterminado (stable, nightly…)	Celle par défaut (stable, nightly…)	A padrão (stable, nightly…)	Standard (stable, nightly…)	Domyślny (stable, nightly…)	默认(stable、nightly…)	既定 (stable、nightly…)
+Features	Características	Fonctionnalités	Features	Features	Funkcje	特性	フィーチャー
+Input file	Archivo de entrada	Fichier d’entrée	Arquivo de entrada	Eingabedatei	Plik wejściowy	输入文件	入力ファイル
+The console	La consola	La console	O console	Die Konsole	Konsola	控制台	コンソール
+Choose a file	Elegir un archivo	Choisir un fichier	Escolher um arquivo	Datei auswählen	Wybierz plik	选择文件	ファイルを選択

@@ -382,7 +382,7 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             ui.add(egui::TextEdit::singleline(&mut o.args).hint_text(if rust { "" } else { tr("The profile's arguments") }).font(egui::TextStyle::Monospace).desired_width(380.0));
             ui.end_row();
             ui.label(tr("Environment variables"));
-            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text(if rust { "RUST_LOG=debug\nRUST_BACKTRACE=1" } else { "ASPNETCORE_ENVIRONMENT=Development\nASPNETCORE_URLS=http://localhost:5000" }).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
+            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text(if rust { "RUST_LOG=debug\nAPP_MODE=test" } else { "ASPNETCORE_ENVIRONMENT=Development\nASPNETCORE_URLS=http://localhost:5000" }).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
             ui.end_row();
             ui.label(tr("Working directory"));
             ui.horizontal(|ui| {
@@ -394,6 +394,35 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                 }
             });
             ui.end_row();
+            if rust {
+                ui.label(tr("Cargo profile"));
+                ui.add(egui::TextEdit::singleline(&mut o.cargo_profile).hint_text("dev, release").desired_width(380.0));
+                ui.end_row();
+                ui.label(tr("Toolchain"));
+                ui.add(egui::TextEdit::singleline(&mut o.channel).hint_text(tr("The default one (stable, nightly…)")).desired_width(380.0));
+                ui.end_row();
+                ui.label(tr("Features"));
+                ui.add(egui::TextEdit::singleline(&mut o.features).hint_text("serde,logging").desired_width(380.0));
+                ui.end_row();
+                ui.label("RUST_BACKTRACE");
+                let shown = if o.backtrace.is_empty() { "short" } else { o.backtrace.as_str() }.to_string();
+                egui::ComboBox::from_id_salt("run_backtrace").selected_text(shown).width(120.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut o.backtrace, String::new(), "short");
+                    ui.selectable_value(&mut o.backtrace, "full".to_string(), "full");
+                    ui.selectable_value(&mut o.backtrace, "0".to_string(), "0");
+                });
+                ui.end_row();
+                ui.label(tr("Input file"));
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut o.stdin_file).hint_text(tr("The console")).desired_width(346.0));
+                    if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a file")).clicked()
+                        && let Some(f) = rfd::FileDialog::new().set_directory(project.parent().unwrap_or(project)).pick_file()
+                    {
+                        o.stdin_file = f.display().to_string();
+                    }
+                });
+                ui.end_row();
+            }
             if !rust {
             ui.label("");
             let mut watch = o.hot_reload.unwrap_or(web);

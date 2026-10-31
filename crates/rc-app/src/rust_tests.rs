@@ -982,6 +982,35 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
 }
 
 #[test]
+fn run_options_and_required_features_reach_the_target() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nextra = []\nmore = []\n\n[[bin]]\nname = \"demo\"\npath = \"src/main.rs\"\nrequired-features = [\"extra\"]\n\n[workspace]\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let config = app.runner.configs.iter().find(|c| c.name == "demo").unwrap().clone();
+
+    // Nothing was chosen: what the binary needs is still there.
+    let (_, target) = app.runner.cargo_debug_target(&config).unwrap().unwrap();
+    assert_eq!(target.options.features, ["extra"]);
+
+    let options = rc_core::session::RunOptions { cargo_profile: " release ".into(), channel: "stable".into(), features: "more, extra".into(), backtrace: "full".into(), stdin_file: "in.txt".into(), ..Default::default() };
+    app.runner.options.insert("demo".into(), options);
+    let (_, target) = app.runner.cargo_debug_target(&config).unwrap().unwrap();
+    assert_eq!(target.options, rc_cargo::CargoOptions { channel: "stable".into(), profile: "release".into(), features: vec!["more".into(), "extra".into()], backtrace: "full".into(), stdin_file: Some("in.txt".into()) });
+
+    // It runs for real through the configuration.
+    app.runner.options.clear();
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program", |a| a.runner.runs.first().is_some_and(|r| !r.running()));
+    pump(&mut app, "its output", |a| a.runner.runs[0].console.term.screen_lines().join("\n").contains("hello"));
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

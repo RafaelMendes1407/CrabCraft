@@ -684,6 +684,12 @@
     "Reformat with rustfmt": "Reformatear con rustfmt",
     "rustfmt was not found. Install it with: rustup component add rustfmt": "No se encontró rustfmt. Instálalo con: rustup component add rustfmt",
     "Not committed: rustfmt failed on {file}: {error}": "No se confirmó: rustfmt falló en {file}: {error}",
-    "{message}": "{message}"
+    "{message}": "{message}",
+    "Cargo profile": "Perfil de Cargo",
+    "The default one (stable, nightly…)": "El predeterminado (stable, nightly…)",
+    "Features": "Características",
+    "Input file": "Archivo de entrada",
+    "The console": "La consola",
+    "Choose a file": "Elegir un archivo"
   }
 }

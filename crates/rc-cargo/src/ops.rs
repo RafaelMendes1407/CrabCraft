@@ -148,6 +148,9 @@ pub fn target_command(package: &str, target: &Target) -> Option<Vec<String>> {
         a.extend(selection.iter().map(|s| s.to_string()));
         a.push(target.name.clone());
     }
+    if !target.required_features.is_empty() {
+        a.extend(["--features".into(), target.required_features.join(",")]);
+    }
     Some(a)
 }
 
@@ -178,6 +181,52 @@ pub fn start_command(cargo: &Cargo, manifest: &Path, args: Vec<String>, outbox: 
     OpHandle::new(cancel, task)
 }
 
+/// How Cargo builds a binary and how it is started; empty text means Cargo's default.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CargoOptions {
+    /// Toolchain, as in `cargo +nightly`.
+    pub channel: String,
+    /// `--profile`: `dev`, `release` or one from `Cargo.toml`.
+    pub profile: String,
+    /// `--features`.
+    pub features: Vec<String>,
+    /// `RUST_BACKTRACE`.
+    pub backtrace: String,
+    /// A file the program reads as its input instead of the console.
+    pub stdin_file: Option<PathBuf>,
+}
+
+impl CargoOptions {
+    /// Rejects what Cargo would read as another option, before anything is built.
+    pub fn check(&self) -> Result<(), String> {
+        let name = |s: &str| !s.starts_with('-') && s.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+        if !name(&self.channel) {
+            return Err(format!("invalid toolchain: {}", self.channel));
+        }
+        if !name(&self.profile) {
+            return Err(format!("invalid profile: {}", self.profile));
+        }
+        match self.features.iter().find(|f| f.is_empty() || f.starts_with('-') || f.contains(char::is_whitespace)) {
+            Some(feature) => Err(format!("invalid feature: {feature}")),
+            None => Ok(()),
+        }
+    }
+
+    /// Adds these options around the arguments of a build: the toolchain goes first.
+    fn apply(&self, mut args: Vec<String>) -> Vec<String> {
+        if !self.profile.is_empty() {
+            args.extend(["--profile".into(), self.profile.clone()]);
+        }
+        if !self.features.is_empty() {
+            args.extend(["--features".into(), self.features.join(",")]);
+        }
+        if !self.channel.is_empty() {
+            args.insert(0, format!("+{}", self.channel));
+        }
+        args
+    }
+}
+
 /// A binary to run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunTarget {
@@ -191,6 +240,7 @@ pub struct RunTarget {
     pub working_dir: Option<PathBuf>,
     /// Cargo arguments of a test executable to build, instead of the binary `bin`.
     pub test: Option<Vec<String>>,
+    pub options: CargoOptions,
 }
 
 /// Arguments that build just this binary.
@@ -200,11 +250,11 @@ pub fn run_build_args(t: &RunTarget) -> Vec<String> {
         a.extend(selection.iter().cloned());
         a.push(MESSAGE_FORMAT.into());
         a.extend(manifest_arg(&t.manifest));
-        return a;
+        return t.options.apply(a);
     }
     let mut a: Vec<String> = vec!["build".into(), "--package".into(), t.package.clone(), "--bin".into(), t.bin.clone(), MESSAGE_FORMAT.into()];
     a.extend(manifest_arg(&t.manifest));
-    a
+    t.options.apply(a)
 }
 
 /// Builds the binary and starts it directly (not through `cargo run`), so its process id, program
@@ -229,6 +279,7 @@ pub fn start_run(cargo: &Cargo, target: RunTarget, outbox: Outbox<RunEvent>) -> 
 
 /// Builds the binary and resolves what to start. `Ok(None)` when cancelled.
 pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<Option<LaunchPlan>> {
+    t.options.check().map_err(anyhow::Error::msg)?;
     let (result, executables) = invoke(cargo, &t.manifest, &run_build_args(t), cancel, &mut *on_build).await?;
     on_build(BuildEvent::Finished(result.clone()));
     if result.cancelled {
@@ -239,12 +290,13 @@ pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_buil
         anyhow::bail!("cargo did not report an executable for {}", t.bin);
     };
     let working_dir = t.working_dir.clone().or_else(|| folder(&t.manifest).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
-    let mut env = vec![("RUST_BACKTRACE".to_string(), "short".to_string())];
+    let backtrace = if t.options.backtrace.is_empty() { "short" } else { t.options.backtrace.as_str() };
+    let mut env = vec![("RUST_BACKTRACE".to_string(), backtrace.to_string())];
     env.extend(t.env.iter().cloned());
     Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None }))
 }
 
-async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, mut input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
     let prepared = prepare(cargo, t, cancel, &mut |e| on_event(RunEvent::Build(e))).await;
     let plan = match prepared {
         Ok(Some(plan)) => plan,
@@ -252,6 +304,16 @@ async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, input: mpsc::Un
         Err(e) => return Ok(RunEvent::Failed(format!("{e:#}"))),
     };
 
+    // A file replaces the console; closing the channel is the end of the input.
+    if let Some(file) = &t.options.stdin_file {
+        let bytes = match std::fs::read(file) {
+            Ok(bytes) => bytes,
+            Err(e) => return Ok(RunEvent::Failed(format!("{}: {e}", file.display()))),
+        };
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let _ = sender.send(bytes);
+        input = receiver;
+    }
     let mut cmd = tokio::process::Command::new(&plan.program);
     cmd.args(&plan.args).current_dir(&plan.working_dir);
     for (k, v) in &plan.env {
@@ -383,13 +445,29 @@ mod tests_args {
 
     #[test]
     fn each_kind_of_target_has_its_command() {
-        let target = |kind| Target { name: "t".into(), kind, src: "/w/src/t.rs".into() };
+        let target = |kind| Target { name: "t".into(), kind, src: "/w/src/t.rs".into(), required_features: Vec::new() };
         assert_eq!(target_command("p", &target(TargetKind::Bin)).unwrap(), ["run", "--package", "p", "--bin", "t"]);
         assert_eq!(target_command("p", &target(TargetKind::Example)).unwrap(), ["run", "--package", "p", "--example", "t"]);
         assert_eq!(target_command("p", &target(TargetKind::Test)).unwrap(), ["test", "--package", "p", "--test", "t"]);
         assert_eq!(target_command("p", &target(TargetKind::Bench)).unwrap(), ["bench", "--package", "p", "--bench", "t"]);
         assert_eq!(target_command("p", &target(TargetKind::Lib)).unwrap(), ["test", "--package", "p", "--lib"]);
         assert_eq!(target_command("p", &target(TargetKind::Other)), None);
+        let needs = Target { required_features: vec!["a".into(), "b".into()], ..target(TargetKind::Example) };
+        assert_eq!(target_command("p", &needs).unwrap().last().unwrap(), "a,b");
+    }
+
+    #[test]
+    fn options_change_the_build_and_bad_values_are_refused() {
+        let options = CargoOptions { channel: "nightly".into(), profile: "release".into(), features: vec!["a".into(), "b".into()], ..Default::default() };
+        let t = RunTarget { manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
+        let args = run_build_args(&t);
+        assert_eq!(args[..2], ["+nightly", "build"]);
+        assert!(args.ends_with(&["--profile".into(), "release".into(), "--features".into(), "a,b".into()]), "{args:?}");
+        assert_eq!(CargoOptions::default().check(), Ok(()));
+        assert!(t.options.check().is_ok());
+        assert!(CargoOptions { channel: "--config=x".into(), ..Default::default() }.check().is_err());
+        assert!(CargoOptions { profile: "a b".into(), ..Default::default() }.check().is_err());
+        assert!(CargoOptions { features: vec!["--all".into()], ..Default::default() }.check().is_err());
     }
 
     #[test]
