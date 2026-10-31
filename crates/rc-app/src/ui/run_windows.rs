@@ -98,6 +98,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     // Summary line.
     let (icon, text) = match (&b.result, &b.failed) {
         (_, Some(e)) => (ico::ERROR, e.clone()),
+        (Some(r), _) if b.command => (if r.success { ico::SUCCESS } else if r.cancelled { ico::WARNING } else { ico::ERROR }, crate::runner::command_summary(&b.title, r)),
         (Some(r), _) if r.cancelled => (ico::WARNING, tr("Build cancelled").to_string()),
         (Some(r), _) if r.success => (ico::SUCCESS, trf("Build succeeded with {warnings} warnings in {secs} s", &[("warnings", &r.warnings), ("secs", &format!("{:.1}", r.duration.as_secs_f32()))])),
         (Some(r), _) => (ico::ERROR, trf("Build failed: {errors} errors, {warnings} warnings", &[("errors", &r.errors), ("warnings", &r.warnings)])),

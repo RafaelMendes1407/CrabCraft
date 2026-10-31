@@ -60,6 +60,10 @@ pub struct CrabCraftApp {
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: crate::ui::nuget::NugetManager,
+    /// What is typed in the Cargo window.
+    pub cargo_input: String,
+    /// Members folded in the Cargo window.
+    pub cargo_folded: std::collections::BTreeSet<String>,
     pub split: Option<Split>,
     /// Documents shown in windows of their own (editor ids).
     pub floating: Vec<u64>,
@@ -148,6 +152,8 @@ impl CrabCraftApp {
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
+            cargo_input: String::new(),
+            cargo_folded: Default::default(),
             split: None,
             floating: Vec::new(),
             last_main: None,
@@ -278,6 +284,43 @@ impl CrabCraftApp {
             self.cargo_load = None;
             return;
         }
+    }
+
+    /// Reads the Cargo project again.
+    pub fn reload_cargo(&mut self) {
+        if let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
+            self.load_cargo_workspace(manifest);
+        }
+    }
+
+    /// Runs a target of the Cargo window: binaries go through their run configuration.
+    pub fn run_cargo_target(&mut self, ctx: &Context, package: &str, target: &rc_cargo::Target) {
+        use crate::runner::ConfigKind;
+        let config = self.runner.configs.iter().position(|c| matches!(&c.kind, ConfigKind::Cargo { package: p, bin } if p == package && *bin == target.name));
+        if let (rc_cargo::TargetKind::Bin, Some(index)) = (target.kind, config) {
+            self.runner.selected = index;
+            self.session_dirty = true;
+            self.run_ide_action(ctx, Action::Run);
+            return;
+        }
+        match rc_cargo::target_command(package, target) {
+            Some(args) => self.run_cargo_args(args),
+            None => self.notify(tr("Cargo cannot run this target"), false),
+        }
+    }
+
+    /// Runs what the user typed in the Cargo window.
+    pub fn run_cargo_command(&mut self, text: &str) {
+        let args = rc_cargo::command_line(text);
+        if !args.is_empty() {
+            self.run_cargo_args(args);
+        }
+    }
+
+    fn run_cargo_args(&mut self, args: Vec<String>) {
+        self.save_all_docs();
+        let outs = self.runner.cargo_command(args);
+        crate::ui::run_windows::handle_outputs(self, outs);
     }
 
     /// Switches the linter that runs on save.

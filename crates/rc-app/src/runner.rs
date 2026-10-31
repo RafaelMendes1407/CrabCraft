@@ -83,6 +83,8 @@ pub struct BuildState {
     pub failed: Option<String>,
     pub started: Instant,
     pub title: String,
+    /// A command of the Cargo window: its exit code, not a compile result, tells how it went.
+    pub command: bool,
 }
 
 pub struct RunTab {
@@ -269,7 +271,25 @@ impl Runner {
                 Err(e) => return vec![RunnerOutput::Notify(e, true)],
             }
         };
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title });
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, command: false });
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
+    }
+
+    /// Runs a Cargo command in the workspace, shown in the Build window.
+    pub fn cargo_command(&mut self, args: Vec<String>) -> Vec<RunnerOutput> {
+        if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
+            return vec![RunnerOutput::Notify(tr("Wait for the running build to finish").into(), false)];
+        }
+        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        let cargo = match self.cargo() {
+            Ok(cargo) => cargo,
+            Err(e) => return vec![RunnerOutput::Notify(e, true)],
+        };
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let title = format!("cargo {}", args.first().map(String::as_str).unwrap_or_default());
+        let handle = rc_cargo::start_command(&cargo, &manifest, args, inbox.sender());
+        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, command: true });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 
@@ -555,7 +575,7 @@ impl Runner {
                     BuildEvent::Diagnostic(d) => b.diagnostics.push(d),
                     BuildEvent::Finished(r) => {
                         b.handle = None;
-                        let msg = build_summary(&r);
+                        let msg = if b.command { command_summary(&b.title, &r) } else { build_summary(&r) };
                         b.console.note(&msg);
                         out.push(RunnerOutput::Notify(msg, !r.success && !r.cancelled));
                         out.push(RunnerOutput::BuildDiagnostics(r.diagnostics.clone()));
@@ -681,6 +701,19 @@ impl Runner {
             }
         }
         out
+    }
+}
+
+/// How a command of the Cargo window ended.
+pub fn command_summary(title: &str, r: &BuildResult) -> String {
+    let secs = format!("{:.1}", r.duration.as_secs_f32());
+    if r.cancelled {
+        trf("{title} cancelled", &[("title", &title)])
+    } else if r.success {
+        trf("{title} finished in {secs} s", &[("title", &title), ("secs", &secs)])
+    } else {
+        let code = r.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
+        trf("{title} failed with exit code {code}", &[("title", &title), ("code", &code)])
     }
 }
 

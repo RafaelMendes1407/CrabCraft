@@ -67,9 +67,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
 | P-15 | Novo crate Cargo no workspace | ⬜ | M3 | |
 | P-16 | Aviso de arquivo fora de módulo, com anexar | ⬜ | M3 | |
-| P-17 | Janela Cargo: membros e targets | ⬜ | M3 | |
-| P-18 | Executar target com duplo clique | ⬜ | M3 | |
-| P-19 | Executar comando Cargo pela janela Cargo | ⬜ | M3 | |
+| P-17 | Janela Cargo: membros e targets | ✅ | M3 | Lê `cargo metadata`, com recarregar; vista na janela nativa |
+| P-18 | Executar target com duplo clique | ✅ | M3 | bin na janela Run; lib, example, test e bench no console de Compilar; `lib` clicado na janela nativa, demais por teste real |
+| P-19 | Executar comando Cargo pela janela Cargo | ✅ | M3 | Campo com Enter; `cargo` no início é opcional; falha mostra o código de saída |
 | P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
 | P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
 | P-22 | Botão Load Cargo Changes (manual) | ⬜ | M3 | |

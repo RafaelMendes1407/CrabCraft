@@ -1,6 +1,7 @@
 //! Window layout (New UI with Islands): main toolbar on top, tool window stripes on the
 //! sides, tool windows and the editor as rounded islands, status bar at the bottom.
 
+pub mod cargo_window;
 pub mod debug_window;
 pub mod dialogs;
 pub mod editor_area;

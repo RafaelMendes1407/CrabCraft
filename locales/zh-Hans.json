@@ -664,6 +664,16 @@
     "One NAME=value per line.": "每行一个 NAME=value。",
     "Linter that runs on save. Click to switch.": "保存时运行的 Linter。点击切换。",
     "Reformat with rustfmt on save": "保存时使用 rustfmt 格式化",
-    "Rust": "Rust"
+    "Rust": "Rust",
+    "Reload Cargo Project": "重新加载 Cargo 项目",
+    "No Cargo project": "没有 Cargo 项目",
+    "Open a folder with a Cargo.toml to see its members and targets.": "打开包含 Cargo.toml 的文件夹以查看其成员和目标。",
+    "Cargo command, then Enter": "Cargo 命令,然后按 Enter",
+    "Cargo cannot run this target": "Cargo 无法运行此目标",
+    "Double-click to run": "双击运行",
+    "Wait for the running build to finish": "请等待正在运行的构建完成",
+    "{title} cancelled": "{title} 已取消",
+    "{title} finished in {secs} s": "{title} 在 {secs} 秒内完成",
+    "{title} failed with exit code {code}": "{title} 失败,退出代码 {code}"
   }
 }

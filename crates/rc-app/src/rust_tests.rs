@@ -839,6 +839,79 @@ fn refactorings_of_the_language_server() {
 }
 
 #[test]
+fn the_cargo_window_runs_targets_and_typed_commands() {
+    use rc_cargo::{Target, TargetKind};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("examples/sample.rs"), "fn main() {\n    println!(\"from the example\");\n}\n");
+    write(&root.join("tests/fails.rs"), "#[test]\nfn no() {\n    panic!();\n}\n");
+    write(&root.join("build.rs"), "fn main() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let ctx = egui::Context::default();
+    let target = |a: &CrabCraftApp, kind| -> Target { a.runner.cargo_workspace.as_ref().unwrap().packages[0].targets.iter().find(|t| t.kind == kind).unwrap().clone() };
+    let finished = |a: &mut CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.result.is_some() || b.failed.is_some());
+    let console = |a: &CrabCraftApp| a.runner.build.as_ref().unwrap().console.term.screen_lines().join("\n");
+
+    // Nothing is typed: nothing starts.
+    app.run_cargo_command("   ");
+    assert!(app.runner.build.is_none());
+
+    // What Cargo cannot run directly is refused.
+    let script = target(&app, TargetKind::Other);
+    app.run_cargo_target(&ctx, "demo", &script);
+    assert!(app.runner.build.is_none());
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Cargo cannot run this target")));
+
+    // An example goes through `cargo run`.
+    let example = target(&app, TargetKind::Example);
+    app.run_cargo_target(&ctx, "demo", &example);
+    pump(&mut app, "the example", finished);
+    let build = app.runner.build.as_ref().unwrap();
+    assert!(build.result.as_ref().unwrap().success, "{}", console(&app));
+    pump(&mut app, "the output", |a| console(a).contains("from the example"));
+
+    // A failing command reports its exit code, not a compile error.
+    let failing = target(&app, TargetKind::Test);
+    app.run_cargo_target(&ctx, "demo", &failing);
+    pump(&mut app, "the failing test", finished);
+    let build = app.runner.build.as_ref().unwrap();
+    let result = build.result.as_ref().unwrap();
+    assert!(!result.success);
+    assert_eq!(crate::runner::command_summary(&build.title, result), "cargo test failed with exit code 101");
+    pump(&mut app, "the test result", |a| console(a).contains("test result: FAILED"));
+
+    // A typed command runs in the workspace, with or without `cargo`.
+    app.run_cargo_command("cargo tree --depth 0");
+    pump(&mut app, "the typed command", finished);
+    assert!(app.runner.build.as_ref().unwrap().result.as_ref().unwrap().success, "{}", console(&app));
+    pump(&mut app, "the output", |a| console(a).contains("demo v0.1.0"));
+    app.run_cargo_command("no-such-command");
+    pump(&mut app, "the unknown command", finished);
+    assert!(!app.runner.build.as_ref().unwrap().result.as_ref().unwrap().success);
+
+    // A second command waits for the first.
+    app.run_cargo_command("tree");
+    app.run_cargo_command("metadata");
+    assert_eq!(app.runner.build.as_ref().unwrap().title, "cargo tree");
+    pump(&mut app, "the command", finished);
+
+    // A binary uses its run configuration, in the Run window.
+    let bin = target(&app, TargetKind::Bin);
+    app.run_cargo_target(&ctx, "demo", &bin);
+    pump(&mut app, "the binary", |a| a.runner.runs.first().is_some_and(|r| !r.running()));
+
+    // New targets appear after a reload.
+    write(&root.join("examples/other.rs"), "fn main() {}\n");
+    app.reload_cargo();
+    pump(&mut app, "the reload", |a| a.runner.cargo_workspace.as_ref().unwrap().packages[0].targets.iter().any(|t| t.name == "other"));
+}
+
+#[test]
 fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();

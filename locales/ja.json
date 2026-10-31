@@ -664,6 +664,16 @@
     "One NAME=value per line.": "1 行に 1 つ NAME=value。",
     "Linter that runs on save. Click to switch.": "保存時に実行するリンターです。クリックで切り替えます。",
     "Reformat with rustfmt on save": "保存時に rustfmt でフォーマット",
-    "Rust": "Rust"
+    "Rust": "Rust",
+    "Reload Cargo Project": "Cargo プロジェクトを再読み込み",
+    "No Cargo project": "Cargo プロジェクトがありません",
+    "Open a folder with a Cargo.toml to see its members and targets.": "Cargo.toml のあるフォルダーを開くと、メンバーとターゲットが表示されます。",
+    "Cargo command, then Enter": "Cargo コマンドを入力して Enter",
+    "Cargo cannot run this target": "Cargo はこのターゲットを実行できません",
+    "Double-click to run": "ダブルクリックで実行",
+    "Wait for the running build to finish": "実行中のビルドが終わるまでお待ちください",
+    "{title} cancelled": "{title} をキャンセルしました",
+    "{title} finished in {secs} s": "{title} は {secs} 秒で完了しました",
+    "{title} failed with exit code {code}": "{title} は終了コード {code} で失敗しました"
   }
 }

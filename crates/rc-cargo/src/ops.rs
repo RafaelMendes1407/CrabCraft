@@ -1,11 +1,12 @@
 //! Build, run and test through Cargo, reported with the events of the Build, Run and Tests windows.
 
 use crate::messages::{Message, parse_message};
+use crate::metadata::{Target, TargetKind};
 use crate::test_output::TestParser;
 use crate::toolchain::Cargo;
 use rc_core::Runtime;
 use rc_core::inbox::Outbox;
-use rc_dotnet::process::{StreamOpts, run_streaming};
+use rc_dotnet::process::{StreamOpts, run_streaming, split_command_line};
 use rc_dotnet::run::STOP_GRACE;
 use rc_dotnet::test::TestProgress;
 use rc_dotnet::{BuildAction, BuildEvent, BuildResult, CancelToken, Diagnostic, LaunchPlan, OpHandle, OutputLine, RunEvent, RunHandle, Severity, Stream, TestEvent, TestFilter, TestOutcome, TestRequest, TestRunResult};
@@ -123,6 +124,53 @@ pub fn start_build(cargo: &Cargo, manifest: &Path, action: BuildAction, outbox: 
             }
         }
         match invoke(&cargo, &manifest, &build_args(&manifest, action), &token, &mut report).await {
+            Ok((r, _)) => outbox.send(BuildEvent::Finished(r)),
+            Err(e) => outbox.send(BuildEvent::Failed(format!("{e:#}"))),
+        };
+    });
+    OpHandle::new(cancel, task)
+}
+
+/// The Cargo command that runs `target` of `package`; `None` when Cargo cannot run it directly.
+pub fn target_command(package: &str, target: &Target) -> Option<Vec<String>> {
+    let (command, selection): (&str, &[&str]) = match target.kind {
+        TargetKind::Bin => ("run", &["--bin"]),
+        TargetKind::Example => ("run", &["--example"]),
+        TargetKind::Test => ("test", &["--test"]),
+        TargetKind::Bench => ("bench", &["--bench"]),
+        TargetKind::Lib => ("test", &[]),
+        TargetKind::Other => return None,
+    };
+    let mut a: Vec<String> = vec![command.into(), "--package".into(), package.into()];
+    if selection.is_empty() {
+        a.push("--lib".into());
+    } else {
+        a.extend(selection.iter().map(|s| s.to_string()));
+        a.push(target.name.clone());
+    }
+    Some(a)
+}
+
+/// The arguments of a command typed by the user, who may or may not start it with `cargo`.
+pub fn command_line(text: &str) -> Vec<String> {
+    let mut args = split_command_line(text);
+    if args.first().is_some_and(|a| a == "cargo") {
+        args.remove(0);
+    }
+    args
+}
+
+/// Runs a Cargo command in the workspace of `manifest`, reported like a build.
+pub fn start_command(cargo: &Cargo, manifest: &Path, args: Vec<String>, outbox: Outbox<BuildEvent>) -> OpHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let (cargo, manifest) = (cargo.clone(), manifest.to_path_buf());
+    let task = Runtime::spawn(async move {
+        let out = outbox.clone();
+        let mut report = |e| {
+            out.send(e);
+        };
+        match invoke(&cargo, &manifest, &args, &token, &mut report).await {
             Ok((r, _)) => outbox.send(BuildEvent::Finished(r)),
             Err(e) => outbox.send(BuildEvent::Failed(format!("{e:#}"))),
         };
@@ -331,6 +379,26 @@ mod tests_args {
         assert_eq!(&build_args(m, BuildAction::Build)[..3], ["build", "--workspace", "--all-targets"]);
         assert_eq!(build_args(m, BuildAction::Clean), ["clean", "--manifest-path", "/w/Cargo.toml"]);
         assert_eq!(build_args(m, BuildAction::Restore)[0], "fetch");
+    }
+
+    #[test]
+    fn each_kind_of_target_has_its_command() {
+        let target = |kind| Target { name: "t".into(), kind, src: "/w/src/t.rs".into() };
+        assert_eq!(target_command("p", &target(TargetKind::Bin)).unwrap(), ["run", "--package", "p", "--bin", "t"]);
+        assert_eq!(target_command("p", &target(TargetKind::Example)).unwrap(), ["run", "--package", "p", "--example", "t"]);
+        assert_eq!(target_command("p", &target(TargetKind::Test)).unwrap(), ["test", "--package", "p", "--test", "t"]);
+        assert_eq!(target_command("p", &target(TargetKind::Bench)).unwrap(), ["bench", "--package", "p", "--bench", "t"]);
+        assert_eq!(target_command("p", &target(TargetKind::Lib)).unwrap(), ["test", "--package", "p", "--lib"]);
+        assert_eq!(target_command("p", &target(TargetKind::Other)), None);
+    }
+
+    #[test]
+    fn typed_commands_may_start_with_cargo() {
+        assert_eq!(command_line("cargo tree --depth 1"), ["tree", "--depth", "1"]);
+        assert_eq!(command_line("  add \"a b\" "), ["add", "a b"]);
+        assert!(command_line("").is_empty());
+        assert!(command_line("   ").is_empty());
+        assert!(command_line("cargo").is_empty());
     }
 
     #[test]

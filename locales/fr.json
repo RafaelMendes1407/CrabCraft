@@ -664,6 +664,16 @@
     "One NAME=value per line.": "Un NOM=valeur par ligne.",
     "Linter that runs on save. Click to switch.": "Linter exécuté à l'enregistrement. Cliquez pour changer.",
     "Reformat with rustfmt on save": "Reformater avec rustfmt à l'enregistrement",
-    "Rust": "Rust"
+    "Rust": "Rust",
+    "Reload Cargo Project": "Recharger le projet Cargo",
+    "No Cargo project": "Aucun projet Cargo",
+    "Open a folder with a Cargo.toml to see its members and targets.": "Ouvrez un dossier contenant un Cargo.toml pour voir ses membres et ses cibles.",
+    "Cargo command, then Enter": "Commande Cargo, puis Entrée",
+    "Cargo cannot run this target": "Cargo ne peut pas exécuter cette cible",
+    "Double-click to run": "Double-cliquez pour exécuter",
+    "Wait for the running build to finish": "Attendez la fin de la compilation en cours",
+    "{title} cancelled": "{title} annulé",
+    "{title} finished in {secs} s": "{title} terminé en {secs} s",
+    "{title} failed with exit code {code}": "{title} a échoué avec le code de sortie {code}"
   }
 }
