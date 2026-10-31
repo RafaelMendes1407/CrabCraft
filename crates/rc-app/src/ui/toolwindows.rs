@@ -109,14 +109,12 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
             list_row(ui, 0, rc_kit::icons::for_file(&name), &name, &format!("{dir}  {count}"), false);
             for d in diags {
                 let icon = if d.severity == rc_editor::Severity::Error { rc_kit::ico::ERROR } else { rc_kit::ico::WARNING };
-                // The line:column is read from the open editor or the file.
-                let (line, col) = app.docs.list.iter().find(|x| &x.path == path).map(|x| x.editor.buffer.line_col(d.start)).unwrap_or((0, 0));
+                let line = app.insight.problem_line(&app.docs, path, d.start);
                 let code = d.code.clone().unwrap_or_default();
                 let resp = list_row(ui, 1, icon, &d.message, &format!("{code} :{}", line + 1), false);
                 if resp.double_clicked() || resp.clicked() {
                     open = Some((path.clone(), d.start));
                 }
-                let _ = col;
             }
         }
     });

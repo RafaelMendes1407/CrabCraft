@@ -109,6 +109,8 @@ pub struct Insight {
     configured: Option<PathBuf>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
+    /// The text the positions of `problems` refer to, for files that are not open.
+    pub problem_text: BTreeMap<PathBuf, rc_text::Rope>,
     raw_items: Vec<lsp::CompletionItem>,
     completion: Option<CompletionRequest>,
     /// The completion item whose documentation was asked for (`None` pending: resolved).
@@ -175,6 +177,7 @@ impl Insight {
             rust: false,
             configured: None,
             problems: BTreeMap::new(),
+            problem_text: BTreeMap::new(),
             raw_items: Vec::new(),
             completion: None,
             resolve: None,
@@ -311,6 +314,7 @@ impl Insight {
         }
         self.reset_requests();
         self.problems.clear();
+        self.problem_text.clear();
         self.structure.clear();
         self.status = InsightStatus::Idle;
     }
@@ -385,7 +389,9 @@ impl Insight {
                         None => match std::fs::read_to_string(&path) {
                             Ok(text) => {
                                 let rope = rc_text::Rope::from_str(&text.replace("\r\n", "\n"));
-                                diagnostics.iter().map(|x| convert::diagnostic(&rope, x)).collect()
+                                let list = diagnostics.iter().map(|x| convert::diagnostic(&rope, x)).collect();
+                                self.problem_text.insert(path.clone(), rope);
+                                list
                             }
                             Err(_) => Vec::new(),
                         },
@@ -425,6 +431,12 @@ impl Insight {
             out.push(InsightOutput::SaveFormatted);
         }
         out
+    }
+
+    /// The line of a problem, read from the open editor or from the text it was found in.
+    pub fn problem_line(&self, docs: &Docs, path: &std::path::Path, start: usize) -> usize {
+        let line = |rope: &rc_text::Rope| rope.char_to_line(start.min(rope.len_chars()));
+        docs.list.iter().find(|d| d.path == path).map(|d| line(d.editor.buffer.rope())).or_else(|| self.problem_text.get(path).map(line)).unwrap_or(0)
     }
 
     fn store_problems(&mut self, path: PathBuf, list: Vec<rc_editor::Diagnostic>) {
