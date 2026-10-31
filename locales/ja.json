@@ -733,6 +733,8 @@
     "Toggle Bookmark": "ブックマークの切り替え",
     "Show Bookmarks": "ブックマークを表示",
     "Bookmarks": "ブックマーク",
-    "No bookmarks. Ctrl+F11 marks the current line.": "ブックマークはありません。Ctrl+F11 で現在の行をマークします。"
+    "No bookmarks. Ctrl+F11 marks the current line.": "ブックマークはありません。Ctrl+F11 で現在の行をマークします。",
+    "External Documentation": "外部ドキュメント",
+    "No online documentation for this item": "この項目のオンラインドキュメントはありません"
   }
 }

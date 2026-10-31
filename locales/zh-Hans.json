@@ -733,6 +733,8 @@
     "Toggle Bookmark": "切换书签",
     "Show Bookmarks": "显示书签",
     "Bookmarks": "书签",
-    "No bookmarks. Ctrl+F11 marks the current line.": "没有书签。Ctrl+F11 可标记当前行。"
+    "No bookmarks. Ctrl+F11 marks the current line.": "没有书签。Ctrl+F11 可标记当前行。",
+    "External Documentation": "外部文档",
+    "No online documentation for this item": "此项没有在线文档"
   }
 }

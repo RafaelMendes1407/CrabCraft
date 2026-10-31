@@ -733,6 +733,8 @@
     "Toggle Bookmark": "Alternar marcador",
     "Show Bookmarks": "Mostrar marcadores",
     "Bookmarks": "Marcadores",
-    "No bookmarks. Ctrl+F11 marks the current line.": "Sin marcadores. Ctrl+F11 marca la línea actual."
+    "No bookmarks. Ctrl+F11 marks the current line.": "Sin marcadores. Ctrl+F11 marca la línea actual.",
+    "External Documentation": "Documentación externa",
+    "No online documentation for this item": "No hay documentación en línea para este elemento"
   }
 }

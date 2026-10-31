@@ -731,6 +731,7 @@ impl CrabCraftApp {
                     }
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
+                InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {
@@ -773,6 +774,7 @@ impl CrabCraftApp {
             Action::Complete => self.insight.complete(doc, None),
             Action::ParameterInfo => self.insight.parameter_info(doc),
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
+            Action::ExternalDocs => self.insight.external_docs(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::GotoDeclaration => {

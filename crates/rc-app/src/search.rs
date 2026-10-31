@@ -327,7 +327,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         FindUsages => ico::TW_FIND,
         GotoDeclaration | GotoImplementation | GotoTypeDeclaration | GotoSuperMethod | ShowCallers | ShowCallees => ico::ARROW_RIGHT,
         ShowIntentions | Generate => ico::BULB,
-        QuickDoc => ico::INFO,
+        QuickDoc | ExternalDocs => ico::INFO,
         Complete => ico::METHOD,
         CommentLine | CommentBlock => ico::EDIT,
         DuplicateLine => ico::COPY,

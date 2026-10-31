@@ -536,6 +536,33 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     assert!(app.bookmark_list().is_empty());
 }
 
+#[test]
+fn external_documentation_finds_the_page_of_an_item() {
+    use crate::insight::InsightOutput;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let text = "use std::collections::HashMap;\nfn main() {\n    let _a: HashMap<u32, u32> = HashMap::new();\n}\n";
+    write(&root.join("src/main.rs"), text);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
+    let i = app.docs.active.unwrap();
+    app.insight.external_docs(&app.docs.list[i], text.find("HashMap<").unwrap() + 1);
+    let url = output(&mut app, "the page", |o| match o {
+        InsightOutput::OpenUrl(url) => Some(url.clone()),
+        InsightOutput::Message(m) => panic!("{m}"),
+        _ => None,
+    });
+    assert!(url.starts_with("https://") && url.contains("HashMap"), "{url}");
+    app.insight.stop();
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

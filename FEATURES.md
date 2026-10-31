@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 92 |
+| ✅ Pronto | 93 |
 | 🚧 Em andamento | 1 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 133 |
+| ⬜ A fazer | 132 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -127,7 +127,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |
 | I-09 | Ordenação de completar por ML | 🚫 | - | Sem modelo próprio; rust-analyzer ordena |
 | I-10 | Hover e documentação rápida | ✅ | M1 | Hover testado com rust-analyzer real |
-| I-11 | Abrir documentação em docs.rs | ⬜ | M3 | |
+| I-11 | Abrir documentação em docs.rs | ✅ | M3 | Shift+F1 pede a página a `experimental/externalDocs` e abre no navegador; endereço testado com rust-analyzer real, abertura do navegador não exercitada |
 | I-12 | Informação de parâmetros | ✅ | M1 | Assinatura testada com rust-analyzer real |
 | I-13 | Inlay hints (tipos, parâmetros, chaining) | ✅ | M1 | Tipos e parâmetros testados com rust-analyzer real |
 | I-14 | Diagnósticos em tempo real | ✅ | M1 | Testado com rust-analyzer real: erro de sintaxe ao digitar e erro do cargo check ao salvar |

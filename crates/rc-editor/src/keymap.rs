@@ -61,6 +61,7 @@ pub enum Action {
     Complete,
     ParameterInfo,
     QuickDoc,
+    ExternalDocs,
     ShowIntentions,
     Generate,
     GotoDeclaration,
@@ -136,6 +137,7 @@ impl Action {
             Complete
                 | ParameterInfo
                 | QuickDoc
+                | ExternalDocs
                 | ShowIntentions
                 | Generate
                 | GotoDeclaration
@@ -414,6 +416,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::Space, ctrl, Complete),
         b(Key::P, c, ParameterInfo),
         b(Key::F1, none, QuickDoc),
+        b(Key::F1, s, ExternalDocs),
         b(Key::J, ctrl, QuickDoc),
         b(Key::Enter, a, ShowIntentions),
         b(Key::Insert, a, Generate),
@@ -494,6 +497,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
     let cas = m(true, true, true, false);
     let b = |key, mods, action| (Chord { key, mods }, action);
     let mut v = vec![
+        b(Key::F1, s, ExternalDocs),
         b(Key::ArrowLeft, none, Left(false)),
         b(Key::ArrowLeft, s, Left(true)),
         b(Key::ArrowRight, none, Right(false)),

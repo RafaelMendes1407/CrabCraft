@@ -733,6 +733,8 @@
     "Toggle Bookmark": "Przełącz zakładkę",
     "Show Bookmarks": "Pokaż zakładki",
     "Bookmarks": "Zakładki",
-    "No bookmarks. Ctrl+F11 marks the current line.": "Brak zakładek. Ctrl+F11 oznacza bieżący wiersz."
+    "No bookmarks. Ctrl+F11 marks the current line.": "Brak zakładek. Ctrl+F11 oznacza bieżący wiersz.",
+    "External Documentation": "Dokumentacja zewnętrzna",
+    "No online documentation for this item": "Brak dokumentacji online dla tego elementu"
   }
 }

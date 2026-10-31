@@ -733,6 +733,8 @@
     "Toggle Bookmark": "Lesezeichen umschalten",
     "Show Bookmarks": "Lesezeichen anzeigen",
     "Bookmarks": "Lesezeichen",
-    "No bookmarks. Ctrl+F11 marks the current line.": "Keine Lesezeichen. Strg+F11 markiert die aktuelle Zeile."
+    "No bookmarks. Ctrl+F11 marks the current line.": "Keine Lesezeichen. Strg+F11 markiert die aktuelle Zeile.",
+    "External Documentation": "Externe Dokumentation",
+    "No online documentation for this item": "Keine Online-Dokumentation für dieses Element"
   }
 }

@@ -51,6 +51,8 @@ pub struct Target {
 /// Results the UI shows outside the editor.
 #[derive(Clone, Debug)]
 pub enum InsightOutput {
+    /// A web page to open.
+    OpenUrl(String),
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
@@ -148,6 +150,7 @@ pub struct Insight {
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
+    external_docs: Option<Pending<Value>>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
     /// The levels being loaded, with the tree they belong to.
@@ -227,6 +230,7 @@ impl Insight {
             signature: None,
             nav: None,
             calls: None,
+            external_docs: None,
             call_levels: Vec::new(),
             call_generation: 0,
             call_tree: None,
@@ -851,6 +855,18 @@ impl Insight {
         self.calls = Some((callers, session.client.request_raw("textDocument/prepareCallHierarchy", params)));
     }
 
+    fn poll_external_docs(&mut self, out: &mut Vec<InsightOutput>) {
+        if let Some(p) = &mut self.external_docs
+            && let Some(reply) = p.poll()
+        {
+            self.external_docs = None;
+            out.push(match reply.ok().as_ref().and_then(web_docs) {
+                Some(url) => InsightOutput::OpenUrl(url),
+                None => InsightOutput::Message(tr("No online documentation for this item").into()),
+            });
+        }
+    }
+
     fn poll_calls(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree, entries};
         if let Some((_, p)) = &mut self.calls
@@ -955,6 +971,7 @@ impl Insight {
     fn poll_navigation(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
         self.poll_goto(docs, out);
         self.poll_calls(docs, out);
+        self.poll_external_docs(out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -1362,6 +1379,13 @@ impl Insight {
     }
 
     /// ⌥⏎: quick fixes and refactorings at the caret / selection.
+    /// Shift+F1: asks for the web page of the documentation of the item at `pos`.
+    pub fn external_docs(&mut self, doc: &Doc, pos: usize) {
+        let Some(session) = self.session.as_ref().filter(|_| self.rust) else { return };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        self.external_docs = Some(session.client.request_raw("experimental/externalDocs", params));
+    }
+
     /// The context actions that write code (Alt+Insert).
     pub fn generate_actions(&mut self, doc: &Doc) {
         self.code_actions(doc);
@@ -1653,6 +1677,12 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
 /// Assists of rust-analyzer that make up Optimize Imports, in order.
 const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"];
 
+/// The address in an `experimental/externalDocs` reply: a string, or `{ web, local }`.
+fn web_docs(reply: &Value) -> Option<String> {
+    let url = reply.as_str().or_else(|| reply.get("web")?.as_str())?;
+    (url.starts_with("https://") || url.starts_with("http://")).then(|| url.to_string())
+}
+
 /// Optimize Imports in progress.
 struct Optimizing {
     doc: u64,
@@ -1842,6 +1872,20 @@ mod symbols_at_tests {
         assert_eq!(names(2), [""; 0]);
         assert_eq!(names(6), ["impl B"]);
         assert_eq!(names(8), ["impl B", "g"]);
+    }
+}
+
+#[cfg(test)]
+mod web_docs_tests {
+    use super::web_docs;
+    use serde_json::json;
+
+    #[test]
+    fn only_web_addresses_are_opened() {
+        assert_eq!(web_docs(&json!("https://docs.rs/a")).as_deref(), Some("https://docs.rs/a"));
+        assert_eq!(web_docs(&json!({ "web": "https://docs.rs/b", "local": "file:///x" })).as_deref(), Some("https://docs.rs/b"));
+        assert_eq!(web_docs(&json!("file:///etc/passwd")), None);
+        assert_eq!(web_docs(&json!(null)), None);
     }
 }
 

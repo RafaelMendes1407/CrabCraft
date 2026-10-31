@@ -733,6 +733,8 @@
     "Toggle Bookmark": "Basculer le signet",
     "Show Bookmarks": "Afficher les signets",
     "Bookmarks": "Signets",
-    "No bookmarks. Ctrl+F11 marks the current line.": "Aucun signet. Ctrl+F11 marque la ligne actuelle."
+    "No bookmarks. Ctrl+F11 marks the current line.": "Aucun signet. Ctrl+F11 marque la ligne actuelle.",
+    "External Documentation": "Documentation externe",
+    "No online documentation for this item": "Pas de documentation en ligne pour cet élément"
   }
 }
