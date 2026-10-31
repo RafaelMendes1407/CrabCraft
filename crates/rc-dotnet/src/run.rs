@@ -212,6 +212,11 @@ pub struct RunHandle {
 }
 
 impl RunHandle {
+    /// Wraps a program started by another backend (Cargo).
+    pub fn new(op: OpHandle, input: mpsc::UnboundedSender<Vec<u8>>, pid: Arc<AtomicU32>) -> Self {
+        RunHandle { op, input, pid }
+    }
+
     /// Stops the program (graceful first, then killed after a few seconds).
     pub fn stop(&self) {
         self.op.cancel();

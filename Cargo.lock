@@ -3526,6 +3526,7 @@ dependencies = [
  "muda",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
+ "rc-cargo",
  "rc-core",
  "rc-dap",
  "rc-dotnet",
@@ -3542,6 +3543,18 @@ dependencies = [
  "serde_json",
  "tempfile",
  "wgpu",
+]
+
+[[package]]
+name = "rc-cargo"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "rc-core",
+ "rc-dotnet",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

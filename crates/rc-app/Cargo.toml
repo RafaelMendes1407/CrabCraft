@@ -23,6 +23,7 @@ rc-editor.workspace = true
 rc-kit.workspace = true
 rc-core.workspace = true
 rc-dotnet.workspace = true
+rc-cargo.workspace = true
 rc-lsp.workspace = true
 rc-term.workspace = true
 rc-search.workspace = true

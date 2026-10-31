@@ -84,7 +84,7 @@ pub struct OpHandle {
 }
 
 impl OpHandle {
-    pub(crate) fn new(cancel: CancelToken, task: JoinHandle<()>) -> Self {
+    pub fn new(cancel: CancelToken, task: JoinHandle<()>) -> Self {
         OpHandle { cancel, task: Some(task) }
     }
 
@@ -123,7 +123,7 @@ pub struct ExitOutcome {
 }
 
 /// Options for [`run_streaming`].
-pub(crate) struct StreamOpts {
+pub struct StreamOpts {
     /// Flush partial lines after a short pause (interactive programs).
     pub partial_lines: bool,
     /// Time given to the process to exit after SIGTERM before it is killed.
@@ -140,7 +140,7 @@ impl Default for StreamOpts {
 
 /// Spawns `cmd` in its own process group, calls `on_start(pid)`, streams its output to
 /// `on_line` and waits for it; cancelling kills the whole tree.
-pub(crate) async fn run_streaming(
+pub async fn run_streaming(
     mut cmd: Command,
     cancel: &CancelToken,
     mut opts: StreamOpts,

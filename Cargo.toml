@@ -39,6 +39,7 @@ rc-core = { path = "crates/rc-core" }
 rc-lsp = { path = "crates/rc-lsp" }
 rc-dap = { path = "crates/rc-dap" }
 rc-dotnet = { path = "crates/rc-dotnet" }
+rc-cargo = { path = "crates/rc-cargo" }
 rc-vcs = { path = "crates/rc-vcs" }
 rc-search = { path = "crates/rc-search" }
 rc-term = { path = "crates/rc-term" }
