@@ -674,6 +674,11 @@
     "Wait for the running build to finish": "実行中のビルドが終わるまでお待ちください",
     "{title} cancelled": "{title} をキャンセルしました",
     "{title} finished in {secs} s": "{title} は {secs} 秒で完了しました",
-    "{title} failed with exit code {code}": "{title} は終了コード {code} で失敗しました"
+    "{title} failed with exit code {code}": "{title} は終了コード {code} で失敗しました",
+    "Toolchain": "ツールチェーン",
+    "Not found": "見つかりません",
+    "Standard library": "標準ライブラリ",
+    "Not found. Install it with: rustup component add rust-src": "見つかりません。次のコマンドでインストールしてください: rustup component add rust-src",
+    "rust-analyzer path": "rust-analyzer のパス"
   }
 }

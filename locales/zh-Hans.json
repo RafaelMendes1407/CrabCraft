@@ -674,6 +674,11 @@
     "Wait for the running build to finish": "请等待正在运行的构建完成",
     "{title} cancelled": "{title} 已取消",
     "{title} finished in {secs} s": "{title} 在 {secs} 秒内完成",
-    "{title} failed with exit code {code}": "{title} 失败,退出代码 {code}"
+    "{title} failed with exit code {code}": "{title} 失败,退出代码 {code}",
+    "Toolchain": "工具链",
+    "Not found": "未找到",
+    "Standard library": "标准库",
+    "Not found. Install it with: rustup component add rust-src": "未找到。请使用以下命令安装:rustup component add rust-src",
+    "rust-analyzer path": "rust-analyzer 路径"
   }
 }

@@ -674,6 +674,11 @@
     "Wait for the running build to finish": "Warten Sie, bis der laufende Build beendet ist",
     "{title} cancelled": "{title} abgebrochen",
     "{title} finished in {secs} s": "{title} in {secs} s beendet",
-    "{title} failed with exit code {code}": "{title} mit Exit-Code {code} fehlgeschlagen"
+    "{title} failed with exit code {code}": "{title} mit Exit-Code {code} fehlgeschlagen",
+    "Toolchain": "Toolchain",
+    "Not found": "Nicht gefunden",
+    "Standard library": "Standardbibliothek",
+    "Not found. Install it with: rustup component add rust-src": "Nicht gefunden. Installieren mit: rustup component add rust-src",
+    "rust-analyzer path": "rust-analyzer-Pfad"
   }
 }

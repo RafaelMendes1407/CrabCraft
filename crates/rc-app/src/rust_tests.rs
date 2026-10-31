@@ -839,6 +839,26 @@ fn refactorings_of_the_language_server() {
 }
 
 #[test]
+fn problems_of_a_closed_file_show_their_real_line() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("examples/bad.rs"), "fn main() {\n    let _a = 1;\n    let _n: u32 = \"text\";\n}\n");
+    let root = root.canonicalize().unwrap();
+    let bad = root.join("examples/bad.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Build);
+    pump(&mut app, "the build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some()));
+    let start = app.insight.problems[&bad][0].start;
+    assert_eq!(app.insight.problem_line(&app.docs, &bad, start), 2);
+    app.open_file(&bad);
+    assert_eq!(app.insight.problem_line(&app.docs, &bad, start), 2);
+}
+
+#[test]
 fn a_new_project_opens_with_its_run_configuration() {
     use rc_cargo::new_project::{NewProject, Template};
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

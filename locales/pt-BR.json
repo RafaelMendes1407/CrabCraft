@@ -674,6 +674,11 @@
     "Wait for the running build to finish": "Aguarde o build em andamento terminar",
     "{title} cancelled": "{title} cancelado",
     "{title} finished in {secs} s": "{title} terminou em {secs} s",
-    "{title} failed with exit code {code}": "{title} falhou com código de saída {code}"
+    "{title} failed with exit code {code}": "{title} falhou com código de saída {code}",
+    "Toolchain": "Toolchain",
+    "Not found": "Não encontrado",
+    "Standard library": "Biblioteca padrão",
+    "Not found. Install it with: rustup component add rust-src": "Não encontrada. Instale com: rustup component add rust-src",
+    "rust-analyzer path": "Caminho do rust-analyzer"
   }
 }

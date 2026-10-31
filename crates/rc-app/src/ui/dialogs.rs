@@ -225,8 +225,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                     }
                     SettingsPage::Tools => {
+                        app.load_toolchain();
+                        toolchain_rows(ui, app.toolchain.as_ref());
                         for (label, value) in [
-                            (tr("rust-analyzer"), &mut draft.rust_analyzer_path),
+                            (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
                             (tr("Roslyn language server"), &mut draft.roslyn_path),
                             (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
@@ -257,6 +259,36 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The versions in use, read from the tools themselves.
+fn toolchain_rows(ui: &mut Ui, info: Option<&rc_cargo::ToolchainInfo>) {
+    let Some(info) = info else {
+        ui.label(tr("Toolchain"));
+        ui.spinner();
+        ui.end_row();
+        return;
+    };
+    let missing = tr("Not found");
+    for (label, value) in [("Cargo", info.cargo.as_deref()), ("rustc", info.rustc.as_deref()), (tr("rust-analyzer"), info.rust_analyzer.as_deref())] {
+        ui.label(label);
+        ui.label(value.unwrap_or(missing));
+        ui.end_row();
+    }
+    ui.label(tr("Standard library"));
+    match &info.stdlib {
+        Some(path) => {
+            let text = path.display().to_string();
+            ui.scope(|ui| {
+                ui.set_max_width(420.0);
+                ui.add(egui::Label::new(&text).truncate()).on_hover_text(&text);
+            });
+        }
+        None => {
+            ui.label(tr("Not found. Install it with: rustup component add rust-src"));
+        }
+    }
+    ui.end_row();
 }
 
 fn lang_code(l: Lang) -> &'static str {

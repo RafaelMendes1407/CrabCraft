@@ -91,6 +91,9 @@ pub struct CrabCraftApp {
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
     cargo_load: Option<Inbox<Result<rc_cargo::CargoWorkspace, String>>>,
+    /// What Settings › Tools shows, read once it is needed.
+    pub toolchain: Option<rc_cargo::ToolchainInfo>,
+    toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
@@ -153,6 +156,8 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            toolchain: None,
+            toolchain_load: None,
             cargo_folded: Default::default(),
             split: None,
             floating: Vec::new(),
@@ -284,6 +289,29 @@ impl CrabCraftApp {
             self.cargo_load = None;
             return;
         }
+    }
+
+    /// Reads the versions of the toolchain in the background, once.
+    pub fn load_toolchain(&mut self) {
+        if let Some(inbox) = &self.toolchain_load {
+            if let Some(info) = inbox.drain().into_iter().last() {
+                self.toolchain = Some(info);
+                self.toolchain_load = None;
+            }
+            return;
+        }
+        if self.toolchain.is_some() {
+            return;
+        }
+        let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
+        let configured = self.settings.rust_analyzer_path.clone();
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || {
+            let analyzer = rc_cargo::locate_rust_analyzer(configured.as_deref());
+            out.send(rc_cargo::detect_toolchain(rc_cargo::Cargo::locate().as_ref(), analyzer.as_deref(), project.as_deref()));
+        });
+        self.toolchain_load = Some(inbox);
     }
 
     /// Reads the Cargo project again.
@@ -914,6 +942,9 @@ impl CrabCraftApp {
             let line = line.min(text.len_lines().saturating_sub(1));
             let start = text.line_to_char(line) + d.column.unwrap_or(1).saturating_sub(1) as usize;
             let start = start.min(text.len_chars());
+            if self.docs.index_of(&file).is_none() {
+                self.insight.problem_text.insert(file.clone(), text);
+            }
             per_file.entry(file).or_default().push(rc_editor::Diagnostic {
                 start,
                 end: start,

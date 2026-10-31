@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 58 |
-| 🚧 Em andamento | 10 |
+| ✅ Pronto | 66 |
+| 🚧 Em andamento | 6 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 3 |
-| ⬜ A fazer | 158 |
+| ⬜ A fazer | 154 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -51,7 +51,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | 🚧 | M1 | Localiza cargo e rust-analyzer; falta mostrar versões e a stdlib |
+| P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | ✅ | M1 | Configurações > Ferramentas mostra versões reais e a stdlib, ou como instalá-la; vista na janela nativa |
 | P-02 | Instalar rustup e stdlib pela IDE | ⬜ | M3 | Executar o instalador oficial com confirmação |
 | P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
@@ -61,7 +61,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
-| P-11 | Janela Project (árvore de arquivos e crates) | 🚧 | M1 | Mostra a árvore de arquivos, sem `target`; faltam crates e targets |
+| P-11 | Janela Project (árvore de arquivos e crates) | 🚧 | M1 | Árvore de arquivos, sem `target`; membros e targets estão na janela Cargo; faltam as dependências externas |
 | P-12 | Dependências externas na árvore do projeto | ⬜ | M3 | |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | 🔁 | M3 | Substitui `item_templates` |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ⬜ | M3 | |
@@ -119,7 +119,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | I-01 | Análise do projeto (índice) | ✅ | M1 | rust-analyzer com estado de análise na barra de status; testado e visto no app |
 | I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
-| I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Completar em derive e dentro de macro testado com rust-analyzer real; doctests falta |
+| I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Derive e macro testados com rust-analyzer real; em doctest ele não trouxe sugestões na sonda, exige solução própria |
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
 | I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
 | I-06 | Excluir itens do auto-import | ⬜ | M3 | |
@@ -211,9 +211,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | B-01 | Build, rebuild e clean | ✅ | M1 | `cargo build` com JSON, rebuild, clean e fetch; build testado com Cargo real |
-| B-02 | Janela Build com erros clicáveis | 🚧 | M1 | Erros e posição testados; falta ver a janela e o clique no app |
+| B-02 | Janela Build com erros clicáveis | ✅ | M1 | Erro real de compilação clicado na janela nativa abriu o arquivo na linha e coluna |
 | B-03 | Botão Apply fix em erros do compilador | ⬜ | M3 | |
-| B-04 | Janela Problems | 🚧 | M1 | Lista recebe os erros (testado); janela ainda não vista com Rust |
+| B-04 | Janela Problems | ✅ | M1 | Vista na janela nativa com erro real, também de arquivo fechado; clique na lista só por código herdado, sem teste |
 | B-05 | Configurações de run automáticas por target | ✅ | M1 | Uma por binário, mais All Tests; testado e visto no app |
 | B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |
 | B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | 🚧 | M3 | Argumentos, ambiente e pasta testados; falta comando, canal e stdin |
