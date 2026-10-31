@@ -30,6 +30,8 @@ impl CallNode {
 #[derive(Clone, Debug)]
 pub struct CallTree {
     pub callers: bool,
+    /// Implementations of a type or trait instead of calls: all loaded at once, one level.
+    pub types: bool,
     pub root: CallNode,
 }
 
@@ -91,7 +93,7 @@ mod tests {
     #[test]
     fn closed_nodes_hide_their_children() {
         let inner = node("c", Some(vec![node("d", None, false)]), false);
-        let mut tree = CallTree { callers: true, root: node("a", Some(vec![node("b", None, false), inner]), true) };
+        let mut tree = CallTree { callers: true, types: false, root: node("a", Some(vec![node("b", None, false), inner]), true) };
         let names = |t: &CallTree| t.rows().iter().map(|(p, n)| (p.len(), n.name.clone())).collect::<Vec<_>>();
         assert_eq!(names(&tree), [(0, "a".to_string()), (1, "b".to_string()), (1, "c".to_string())]);
         tree.node_mut(&[1]).unwrap().open = true;

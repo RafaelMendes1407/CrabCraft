@@ -174,7 +174,11 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
         return;
     };
     let p = rc_kit::pal(ui);
-    let direction = if tree.callers { tr("Callers of {name}") } else { tr("Calls made by {name}") };
+    let direction = match (tree.types, tree.callers) {
+        (true, _) => tr("Implementations of {name}"),
+        (false, true) => tr("Callers of {name}"),
+        (false, false) => tr("Calls made by {name}"),
+    };
     let switch_label = if tree.callers { tr("Show calls") } else { tr("Show callers") };
     let heading = direction.replace("{name}", &tree.root.name);
     let mut switch = false;
@@ -183,7 +187,7 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.add_space(12.0);
         ui.label(egui::RichText::new(heading).size(12.5).color(p.muted));
-        switch = ui.button(switch_label).clicked();
+        switch = !tree.types && ui.button(switch_label).clicked();
     });
     egui::ScrollArea::both().id_salt("call_tree").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -191,7 +195,7 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
             let name = if node.calls > 1 { format!("{} ({})", node.name, node.calls) } else { node.name.clone() };
             let resp = list_row(ui, path.len() + 1, crate::convert::symbol_icon(rc_lsp::lsp_types::SymbolKind::FUNCTION), &name, &node.detail, false);
             let arrow = Rect::from_min_size(pos2(resp.rect.left() + 8.0 + path.len() as f32 * 16.0, resp.rect.top() + 4.0), vec2(16.0, 16.0));
-            let empty = node.open && node.children.as_ref().is_some_and(Vec::is_empty);
+            let empty = node.children.as_ref().is_some_and(Vec::is_empty);
             if !empty {
                 icons::paint(ui.painter(), arrow, if node.open { rc_kit::ico::CHEVRON_DOWN } else { rc_kit::ico::CHEVRON_RIGHT }, &p, true);
             }
@@ -206,8 +210,12 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
             if resp.double_clicked() {
                 toggle = Some(path.clone());
             }
-            if node.open && node.children.as_ref().is_some_and(Vec::is_empty) {
-                let text = if tree.callers { tr("No callers found") } else { tr("No calls found") };
+            if node.open && empty {
+                let text = match (tree.types, tree.callers) {
+                    (true, _) => tr("No implementations found"),
+                    (false, true) => tr("No callers found"),
+                    (false, false) => tr("No calls found"),
+                };
                 list_row(ui, path.len() + 2, rc_kit::ico::INFO, text, "", false);
             }
         }

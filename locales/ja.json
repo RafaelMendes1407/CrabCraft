@@ -260,7 +260,6 @@
     "Implementations": "実装",
     "Loading projects…": "プロジェクトを読み込み中…",
     "No context actions here": "ここにはコンテキストアクションがありません",
-    "No implementations found": "実装が見つかりません",
     "No usages found": "使用箇所が見つかりません",
     "Nothing to rename": "名前を変更するものがありません",
     "Rename '{name}'": "「{name}」の名前を変更",
@@ -735,6 +734,9 @@
     "Bookmarks": "ブックマーク",
     "No bookmarks. Ctrl+F11 marks the current line.": "ブックマークはありません。Ctrl+F11 で現在の行をマークします。",
     "External Documentation": "外部ドキュメント",
-    "No online documentation for this item": "この項目のオンラインドキュメントはありません"
+    "No online documentation for this item": "この項目のオンラインドキュメントはありません",
+    "Type Hierarchy": "型階層",
+    "Implementations of {name}": "{name} の実装",
+    "No implementations found": "実装が見つかりません"
   }
 }

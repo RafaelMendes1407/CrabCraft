@@ -563,6 +563,37 @@ fn external_documentation_finds_the_page_of_an_item() {
     app.insight.stop();
 }
 
+#[test]
+fn the_type_hierarchy_lists_implementations() {
+    const SOURCE: &str = "trait Speak {\n    fn speak(&self);\n}\nstruct A;\nstruct B;\nimpl Speak for A {\n    fn speak(&self) {}\n}\nimpl Speak for B {\n    fn speak(&self) {}\n}\nimpl A {\n    fn own(&self) {}\n}\ntrait Lonely {}\nfn main() {}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
+    let i = app.docs.active.unwrap();
+    let ask = |app: &mut CrabCraftApp, word: &str| {
+        app.insight.call_tree = None;
+        app.insight.type_hierarchy(&app.docs.list[i], SOURCE.find(word).unwrap() + word.len() - 1);
+        pump(app, "the hierarchy", |a| a.insight.call_tree.is_some());
+        let tree = app.insight.call_tree.as_ref().unwrap();
+        let mut names: Vec<String> = tree.rows().iter().map(|(_, n)| n.name.clone()).collect();
+        names[1..].sort();
+        names
+    };
+    assert_eq!(ask(&mut app, "trait Speak"), ["Speak", "impl Speak for A", "impl Speak for B"]);
+    assert_eq!(ask(&mut app, "struct A"), ["A", "impl A", "impl Speak for A"]);
+    assert_eq!(ask(&mut app, "trait Lonely"), ["Lonely"]);
+    app.insight.stop();
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

@@ -260,7 +260,6 @@
     "Implementations": "实现",
     "Loading projects…": "正在加载项目…",
     "No context actions here": "此处没有上下文操作",
-    "No implementations found": "未找到实现",
     "No usages found": "未找到用法",
     "Nothing to rename": "没有可重命名的内容",
     "Rename '{name}'": "重命名“{name}”",
@@ -735,6 +734,9 @@
     "Bookmarks": "书签",
     "No bookmarks. Ctrl+F11 marks the current line.": "没有书签。Ctrl+F11 可标记当前行。",
     "External Documentation": "外部文档",
-    "No online documentation for this item": "此项没有在线文档"
+    "No online documentation for this item": "此项没有在线文档",
+    "Type Hierarchy": "类型层次结构",
+    "Implementations of {name}": "{name} 的实现",
+    "No implementations found": "未找到实现"
   }
 }

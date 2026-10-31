@@ -69,6 +69,7 @@ pub enum Action {
     GotoTypeDeclaration,
     GotoSuperMethod,
     ShowCallers,
+    TypeHierarchy,
     ShowCallees,
     FindUsages,
     Rename,
@@ -145,6 +146,7 @@ impl Action {
                 | GotoTypeDeclaration
                 | GotoSuperMethod
                 | ShowCallers
+                | TypeHierarchy
                 | ShowCallees
                 | FindUsages
                 | Rename
@@ -425,6 +427,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::B, cs, GotoTypeDeclaration),
         b(Key::U, c, GotoSuperMethod),
         b(Key::H, ca, ShowCallers),
+        b(Key::H, cas, TypeHierarchy),
         // ⌘⌥O opens a folder; JetBrains uses ⌃⌥O for this.
         b(Key::O, m(false, true, false, true), OptimizeImports),
         b(Key::A, cs, FindAction),
@@ -636,6 +639,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::B, cs, GotoTypeDeclaration),
             b(Key::U, c, GotoSuperMethod),
             b(Key::H, ca, ShowCallers),
+            b(Key::H, cas, TypeHierarchy),
             b(Key::O, ca, OptimizeImports),
             b(Key::A, cs, FindAction),
             b(Key::F6, s, Rename),

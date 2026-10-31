@@ -151,6 +151,7 @@ pub struct Insight {
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
+    types: Option<(Target, Pending<Value>)>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
     /// The levels being loaded, with the tree they belong to.
@@ -230,6 +231,7 @@ impl Insight {
             signature: None,
             nav: None,
             calls: None,
+            types: None,
             external_docs: None,
             call_levels: Vec::new(),
             call_generation: 0,
@@ -878,7 +880,7 @@ impl Insight {
                 Some(item) => {
                     let place = json!([{ "uri": item.get("uri"), "range": item.get("selectionRange") }]);
                     let target = locations(&place, docs).into_iter().next();
-                    self.call_tree = Some(CallTree { callers, root: CallNode::new(item, target, 1) });
+                    self.call_tree = Some(CallTree { callers, types: false, root: CallNode::new(item, target, 1) });
                     self.call_generation += 1;
                     self.toggle_call(&[]);
                     out.push(InsightOutput::ShowCallTree);
@@ -907,6 +909,35 @@ impl Insight {
         }
     }
 
+    /// What implements the trait, or is implemented for the type, at `pos`.
+    pub fn type_hierarchy(&mut self, doc: &Doc, pos: usize) {
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, pos) });
+        let (line, col) = doc.editor.buffer.line_col(pos);
+        let root = Target { path: doc.path.clone(), line, col, preview: word_at(&doc.editor.buffer.line_text(line), col) };
+        self.types = Some((root, session.client.request_raw("textDocument/implementation", params)));
+    }
+
+    fn poll_types(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
+        use crate::call_tree::{CallNode, CallTree};
+        let Some((_, p)) = &mut self.types else { return };
+        let Some(reply) = p.poll() else { return };
+        let Some((root, _)) = self.types.take() else { return };
+        let children = locations(&reply.unwrap_or(Value::Null), docs).into_iter().map(|t| {
+            let file = t.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let mut node = CallNode::new(json!({ "name": impl_title(&t.preview), "detail": format!("{file}:{}", t.line + 1) }), Some(t), 1);
+            node.children = Some(Vec::new());
+            node
+        });
+        let mut node = CallNode::new(json!({ "name": root.preview }), Some(root), 1);
+        node.children = Some(children.collect());
+        node.open = true;
+        self.call_generation += 1;
+        self.call_tree = Some(CallTree { callers: false, types: true, root: node });
+        out.push(InsightOutput::ShowCallTree);
+    }
+
     /// Opens or closes a node of the call tree, loading its children the first time.
     pub fn toggle_call(&mut self, path: &[usize]) {
         let callers = self.call_tree.as_ref().is_some_and(|t| t.callers);
@@ -925,7 +956,7 @@ impl Insight {
     pub fn switch_calls(&mut self) {
         let Some(tree) = self.call_tree.take() else { return };
         let root = crate::call_tree::CallNode::new(tree.root.item, tree.root.target, 1);
-        self.call_tree = Some(crate::call_tree::CallTree { callers: !tree.callers, root });
+        self.call_tree = Some(crate::call_tree::CallTree { callers: !tree.callers, types: false, root });
         self.call_generation += 1;
         self.toggle_call(&[]);
     }
@@ -971,6 +1002,7 @@ impl Insight {
     fn poll_navigation(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
         self.poll_goto(docs, out);
         self.poll_calls(docs, out);
+        self.poll_types(docs, out);
         self.poll_external_docs(out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
@@ -1683,6 +1715,21 @@ fn web_docs(reply: &Value) -> Option<String> {
     (url.starts_with("https://") || url.starts_with("http://")).then(|| url.to_string())
 }
 
+/// The word of `line` around the character `col`.
+fn word_at(line: &str, col: usize) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let is_word = |c: &char| c.is_alphanumeric() || *c == '_';
+    let col = col.min(chars.len());
+    let start = chars[..col].iter().rev().take_while(|c| is_word(c)).count();
+    let end = chars[col..].iter().take_while(|c| is_word(c)).count();
+    chars[col - start..col + end].iter().collect()
+}
+
+/// `impl Speak for A {` as a title.
+fn impl_title(line: &str) -> String {
+    line.trim().trim_end_matches('{').trim().to_string()
+}
+
 /// Optimize Imports in progress.
 struct Optimizing {
     doc: u64,
@@ -1886,6 +1933,20 @@ mod web_docs_tests {
         assert_eq!(web_docs(&json!({ "web": "https://docs.rs/b", "local": "file:///x" })).as_deref(), Some("https://docs.rs/b"));
         assert_eq!(web_docs(&json!("file:///etc/passwd")), None);
         assert_eq!(web_docs(&json!(null)), None);
+    }
+}
+
+#[cfg(test)]
+mod type_text_tests {
+    use super::{impl_title, word_at};
+
+    #[test]
+    fn titles_and_words_come_from_the_line() {
+        assert_eq!(impl_title("    impl Speak for A {"), "impl Speak for A");
+        assert_eq!(word_at("trait Speak {", 8), "Speak");
+        assert_eq!(word_at("trait Speak {", 11), "Speak");
+        assert_eq!(word_at("a b", 99), "b");
+        assert_eq!(word_at("", 0), "");
     }
 }
 

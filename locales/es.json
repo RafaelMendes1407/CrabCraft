@@ -260,7 +260,6 @@
     "Implementations": "Implementaciones",
     "Loading projects…": "Cargando proyectos…",
     "No context actions here": "No hay acciones de contexto aquí",
-    "No implementations found": "No se encontraron implementaciones",
     "No usages found": "No se encontraron usos",
     "Nothing to rename": "Nada que renombrar",
     "Rename '{name}'": "Renombrar «{name}»",
@@ -735,6 +734,9 @@
     "Bookmarks": "Marcadores",
     "No bookmarks. Ctrl+F11 marks the current line.": "Sin marcadores. Ctrl+F11 marca la línea actual.",
     "External Documentation": "Documentación externa",
-    "No online documentation for this item": "No hay documentación en línea para este elemento"
+    "No online documentation for this item": "No hay documentación en línea para este elemento",
+    "Type Hierarchy": "Jerarquía de tipos",
+    "Implementations of {name}": "Implementaciones de {name}",
+    "No implementations found": "No se encontraron implementaciones"
   }
 }

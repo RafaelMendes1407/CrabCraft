@@ -461,6 +461,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::GotoSuperMethod, || tr("Go to Super Method")),
             &act(Action::Generate, || tr("Generate…")),
             &act(Action::ShowCallers, || tr("Show Callers")),
+            &act(Action::TypeHierarchy, || tr("Type Hierarchy")),
             &act(Action::OptimizeImports, || tr("Optimize Imports")),
             &act(Action::ShowCallees, || tr("Show Callees")),
             &act(Action::FindUsages, || tr("Find Usages")),

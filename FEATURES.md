@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 93 |
-| 🚧 Em andamento | 1 |
+| 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 132 |
+| ⬜ A fazer | 131 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -164,7 +164,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
 | N-09 | Hierarquia de chamadas | ✅ | M3 | Janela Hierarquia com árvore: Ctrl+Alt+H abre quem chama, botão troca para o que é chamado, cada nível carrega ao abrir; visto na janela nativa |
-| N-10 | Hierarquia de tipos e traits | ⬜ | M3 | |
+| N-10 | Hierarquia de tipos e traits | 🚧 | M3 | Ctrl+Alt+Shift+H lista os `impl` de um trait ou tipo na janela Hierarquia, via `textDocument/implementation`, um nível; supertraits e subtraits faltam, o rust-analyzer não tem hierarquia de tipos |
 | N-11 | Ir para o trait / para o `impl` | ✅ | M3 | Ctrl+U vai do método do `impl` ao trait; Ctrl+Alt+B vai do trait aos `impl`; teste real |
 | N-12 | Bookmarks | ✅ | M3 | Ctrl+F11 marca a linha, Ctrl+Shift+F11 lista; acompanham edições e sobrevivem ao fechar a aba; sem atalho F11 porque ele é Step Into |
 | N-13 | Navegar entre features e `cfg` | ⬜ | M4 | |

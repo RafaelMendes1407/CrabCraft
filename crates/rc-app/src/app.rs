@@ -795,6 +795,7 @@ impl CrabCraftApp {
             Action::FindUsages => self.insight.navigate(doc, caret, NavKind::Usages),
             Action::Rename => self.insight.prepare_rename(doc),
             Action::ShowCallers => self.insight.call_hierarchy(doc, caret, true),
+            Action::TypeHierarchy => self.insight.type_hierarchy(doc, caret),
             Action::ShowCallees => self.insight.call_hierarchy(doc, caret, false),
             Action::GotoSuperMethod => {
                 self.push_nav();
