@@ -110,6 +110,7 @@ pub struct CrabCraftApp {
     applied_dark: Option<bool>,
     applied_zoom: Option<f32>,
     pub shift_taps: (f64, u8, bool),
+    pub ctrl_taps: (f64, u8, bool),
     pub session_dirty: bool,
     pub last_session_save: f64,
     /// Editor keeps the focus when the window regains it.
@@ -121,6 +122,35 @@ fn fix_changes(text: &str, fix: &rc_dotnet::diagnostics::Fix) -> Option<Vec<rc_t
     let chars = |byte: usize| text.get(..byte).map(|t| t.chars().count() - t.matches("\r\n").count());
     let changes = fix.edits.iter().map(|(start, end, new)| Some(rc_text::Change { start: chars(*start)?, end: chars(*end)?, text: new.clone() }));
     changes.collect()
+}
+
+/// Text or a key other than the modifiers, which egui also reports as keys.
+fn interrupts_tap(event: &egui::Event) -> bool {
+    use egui::Key::{AltLeft, AltRight, ControlLeft, ControlRight, ShiftLeft, ShiftRight};
+    match event {
+        egui::Event::Key { key, .. } => !matches!(key, AltLeft | AltRight | ControlLeft | ControlRight | ShiftLeft | ShiftRight),
+        egui::Event::Text(_) => true,
+        _ => false,
+    }
+}
+
+/// Follows a modifier: `(time of the last press, presses in a row, whether it is down)`. Anything
+/// else pressed meanwhile cancels the count. True on the second press.
+fn double_tap(state: &mut (f64, u8, bool), down: bool, interrupted: bool, now: f64) -> bool {
+    let (last, taps, was_down) = *state;
+    if interrupted {
+        *state = (0.0, 0, down);
+    } else if down && !was_down {
+        let taps = if now - last < 0.4 { taps + 1 } else { 1 };
+        *state = (now, taps, true);
+        if taps >= 2 {
+            *state = (0.0, 0, true);
+            return true;
+        }
+    } else if !down && was_down {
+        state.2 = false;
+    }
+    false
 }
 
 impl CrabCraftApp {
@@ -200,6 +230,7 @@ impl CrabCraftApp {
             applied_dark: None,
             applied_zoom: None,
             shift_taps: (0.0, 0, false),
+            ctrl_taps: (0.0, 0, false),
             session_dirty: false,
             last_session_save: 0.0,
             had_focus: true,
@@ -412,6 +443,22 @@ impl CrabCraftApp {
         self.save_all_docs();
         let outs = self.runner.cargo_command(args);
         crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Runs what Run Anything offered.
+    pub fn run_anything(&mut self, ctx: &Context, item: crate::run_anything::Item) {
+        match item {
+            crate::run_anything::Item::Config(index) => {
+                self.runner.selected = index;
+                self.session_dirty = true;
+                self.run_ide_action(ctx, Action::Run);
+            }
+            crate::run_anything::Item::Command(text) => {
+                crate::run_anything::remember(&mut self.settings.run_anything_history, &text);
+                let _ = self.settings.save();
+                self.run_cargo_command(&text);
+            }
+        }
     }
 
     /// Switches the linter that runs on save.
@@ -941,6 +988,7 @@ impl CrabCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
+            Action::RunAnything => self.dialog = Some(Dialog::RunAnything { text: String::new(), selected: 0 }),
             Action::SearchEverywhere | Action::FindAction | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
                 if self.workspace.is_some() {
                     let tab = match action {
@@ -1589,19 +1637,15 @@ impl CrabCraftApp {
         let now = ctx.input(|i| i.time);
         // Shift, Shift: Search Everywhere.
         let shift = ctx.input(|i| i.modifiers.shift_only());
-        let any_key = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { .. } | egui::Event::Text(_))));
-        let (last, taps, was_down) = self.shift_taps;
-        if any_key {
-            self.shift_taps = (0.0, 0, shift);
-        } else if shift && !was_down {
-            let taps = if now - last < 0.4 { taps + 1 } else { 1 };
-            self.shift_taps = (now, taps, true);
-            if taps >= 2 {
-                self.shift_taps = (0.0, 0, true);
-                self.pending.push(Action::SearchEverywhere);
-            }
-        } else if !shift && was_down {
-            self.shift_taps.2 = false;
+        // Ctrl, Ctrl: Run Anything. Ctrl also goes with clicks and the wheel.
+        let ctrl = ctx.input(|i| i.modifiers.matches_exact(egui::Modifiers::CTRL));
+        let any_key = ctx.input(|i| i.events.iter().any(interrupts_tap));
+        let any_input = any_key || ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::MouseWheel { .. })));
+        if double_tap(&mut self.shift_taps, shift, any_key, now) {
+            self.pending.push(Action::SearchEverywhere);
+        }
+        if double_tap(&mut self.ctrl_taps, ctrl, any_input, now) {
+            self.pending.push(Action::RunAnything);
         }
         let keymap = &self.keymap;
         let mut found = Vec::new();
@@ -1815,4 +1859,36 @@ fn module_state(outcomes: &std::collections::BTreeMap<String, crate::runner::Tes
         }
     }
     found
+}
+
+#[cfg(test)]
+mod double_tap_tests {
+    use super::{double_tap, interrupts_tap};
+
+    #[test]
+    fn modifiers_do_not_interrupt_their_own_taps() {
+        let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        assert!(!interrupts_tap(&key(egui::Key::ControlLeft)));
+        assert!(!interrupts_tap(&key(egui::Key::ShiftRight)));
+        assert!(interrupts_tap(&key(egui::Key::A)));
+        assert!(interrupts_tap(&egui::Event::Text("a".into())));
+    }
+
+    fn run(steps: &[(bool, bool, f64)]) -> Vec<bool> {
+        let mut state = (0.0, 0, false);
+        steps.iter().map(|(down, other, now)| double_tap(&mut state, *down, *other, *now)).collect()
+    }
+
+    #[test]
+    fn two_quick_presses_count_once() {
+        let fired = run(&[(true, false, 1.0), (false, false, 1.1), (true, false, 1.2), (true, false, 1.3)]);
+        assert_eq!(fired, [false, false, true, false]);
+    }
+
+    #[test]
+    fn slow_presses_and_chords_do_not_count() {
+        assert!(!run(&[(true, false, 1.0), (false, false, 1.1), (true, false, 2.0)]).contains(&true));
+        // Ctrl+click, then Ctrl alone.
+        assert!(!run(&[(true, false, 1.0), (true, true, 1.05), (false, false, 1.1), (true, false, 1.2)]).contains(&true));
+    }
 }

@@ -717,6 +717,9 @@
     "New Crate": "新しい crate",
     "Crate name": "crate 名",
     "Cargo Crate": "Cargo crate",
-    "No [workspace] here: the crate will not join the project": "ここに [workspace] がないため、crate はプロジェクトに含まれません"
+    "No [workspace] here: the crate will not join the project": "ここに [workspace] がないため、crate はプロジェクトに含まれません",
+    "Run Anything": "何でも実行",
+    "Run Anything…": "何でも実行…",
+    "A Cargo command or a run configuration": "Cargo コマンドまたは実行構成"
   }
 }

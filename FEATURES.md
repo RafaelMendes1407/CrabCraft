@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 87 |
+| ✅ Pronto | 88 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 136 |
+| ⬜ A fazer | 135 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -155,7 +155,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP |
+| N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP; Shift duplo corrigido, antes nunca abria com egui 0.36 |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
 | N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
@@ -224,7 +224,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-12 | Configurações compostas | 🔁 | M3 | |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |
-| B-15 | Run Anything (Ctrl duplo) | ⬜ | M3 | |
+| B-15 | Run Anything (Ctrl duplo) | ✅ | M3 | Comandos Cargo, configurações de execução e histórico; só roda Cargo, não comandos do sistema; visto na janela nativa |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ✅ | M3 | short, full ou 0 na configuração; o ambiente da configuração tem prioridade |
 | B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |

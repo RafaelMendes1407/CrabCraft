@@ -5,6 +5,7 @@ mod convert;
 mod debugger;
 mod insight;
 mod item_templates;
+mod run_anything;
 mod runner;
 mod search;
 mod vcs;

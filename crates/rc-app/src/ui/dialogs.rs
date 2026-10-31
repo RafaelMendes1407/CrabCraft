@@ -23,6 +23,7 @@ pub enum Dialog {
     Settings { draft: Box<Settings>, page: SettingsPage },
     About,
     GotoLine { text: String, focus: bool },
+    RunAnything { text: String, selected: usize },
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
@@ -65,6 +66,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
+        Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
@@ -322,6 +324,52 @@ fn about(ctx: &Context) -> Outcome {
         .inner
     });
     if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn run_anything(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, selected: &mut usize) -> Outcome {
+    use crate::run_anything::{Item, items};
+    let names: Vec<String> = app.runner.configs.iter().map(|c| c.name.clone()).collect();
+    let list = items(text, &app.settings.run_anything_history, &names);
+    *selected = (*selected).min(list.len().saturating_sub(1));
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut chosen = None;
+    let (_, esc) = modal(ctx, "run_anything", 520.0, |ui| {
+        title(ui, tr("Run Anything"));
+        let field = ui.add(egui::TextEdit::singleline(text).hint_text(tr("A Cargo command or a run configuration")).desired_width(f32::INFINITY));
+        field.request_focus();
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(list.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) {
+            chosen = list.get(*selected).cloned();
+        }
+        ui.add_space(6.0);
+        for (i, item) in list.iter().enumerate().take(12) {
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+            if i == *selected {
+                ui.painter().rect_filled(r, 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 4.0, p.row_hover);
+            }
+            let (icon, label) = match item {
+                Item::Config(index) => (rc_kit::ico::RUN, names[*index].as_str()),
+                Item::Command(command) => (rc_kit::ico::BUILD, command.as_str()),
+            };
+            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
+            ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
+            if resp.clicked() {
+                chosen = Some(item.clone());
+            }
+        }
+    });
+    if let Some(item) = chosen {
+        app.run_anything(ctx, item);
+        return Outcome::Close;
+    }
+    if esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn goto_line(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, focus: &mut bool) -> Outcome {

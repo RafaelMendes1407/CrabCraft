@@ -455,6 +455,29 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     app.insight.stop();
 }
 
+#[test]
+fn run_anything_runs_commands_and_configurations() {
+    use crate::run_anything::Item;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let ctx = egui::Context::default();
+
+    app.run_anything(&ctx, Item::Command("cargo tree --depth 0".to_string()));
+    pump(&mut app, "the command", |a| a.runner.build.as_ref().is_some_and(|b| b.console.term.screen_lines().join("\n").contains("demo v0.1.0")));
+    assert_eq!(app.settings.run_anything_history, ["cargo tree --depth 0"]);
+
+    pump(&mut app, "the end of the command", |a| a.runner.build.as_ref().is_some_and(|b| b.handle.is_none()));
+    app.run_anything(&ctx, Item::Config(0));
+    pump(&mut app, "the program", |a| a.runner.runs.first().is_some_and(|r| r.console.term.screen_lines().join("\n").contains("hello")));
+    assert_eq!(app.settings.run_anything_history.len(), 1, "configurations are not commands");
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();

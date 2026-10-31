@@ -717,6 +717,9 @@
     "New Crate": "新建 crate",
     "Crate name": "crate 名称",
     "Cargo Crate": "Cargo crate",
-    "No [workspace] here: the crate will not join the project": "此处没有 [workspace]：crate 不会加入项目"
+    "No [workspace] here: the crate will not join the project": "此处没有 [workspace]：crate 不会加入项目",
+    "Run Anything": "运行任意内容",
+    "Run Anything…": "运行任意内容…",
+    "A Cargo command or a run configuration": "Cargo 命令或运行配置"
   }
 }

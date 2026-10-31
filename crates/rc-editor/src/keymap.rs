@@ -84,6 +84,7 @@ pub enum Action {
     // --- IDE (reported to the app)
     SearchEverywhere,
     FindAction,
+    RunAnything,
     GotoFile,
     GotoSymbol,
     GotoClass,
@@ -162,6 +163,7 @@ impl Action {
             self,
             SearchEverywhere
                 | FindAction
+                | RunAnything
                 | GotoFile
                 | GotoSymbol
                 | GotoClass

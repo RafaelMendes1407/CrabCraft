@@ -105,3 +105,6 @@ New Crate	Nuevo crate	Nouveau crate	Novo crate	Neues Crate	Nowy crate	新建 cra
 Crate name	Nombre del crate	Nom du crate	Nome do crate	Crate-Name	Nazwa crate'a	crate 名称	crate 名
 Cargo Crate	Crate de Cargo	Crate Cargo	Crate Cargo	Cargo-Crate	Crate Cargo	Cargo crate	Cargo crate
 No [workspace] here: the crate will not join the project	No hay [workspace] aquí: el crate no se unirá al proyecto	Pas de [workspace] ici : le crate ne rejoindra pas le projet	Não há [workspace] aqui: o crate não entrará no projeto	Kein [workspace] hier: Das Crate wird nicht Teil des Projekts	Brak [workspace]: crate nie dołączy do projektu	此处没有 [workspace]：crate 不会加入项目	ここに [workspace] がないため、crate はプロジェクトに含まれません
+Run Anything	Ejecutar cualquier cosa	Tout exécuter	Executar qualquer coisa	Alles ausführen	Uruchom cokolwiek	运行任意内容	何でも実行
+Run Anything…	Ejecutar cualquier cosa…	Tout exécuter…	Executar qualquer coisa…	Alles ausführen…	Uruchom cokolwiek…	运行任意内容…	何でも実行…
+A Cargo command or a run configuration	Un comando de Cargo o una configuración de ejecución	Une commande Cargo ou une configuration d'exécution	Um comando Cargo ou uma configuração de execução	Ein Cargo-Befehl oder eine Ausführungskonfiguration	Polecenie Cargo lub konfiguracja uruchamiania	Cargo 命令或运行配置	Cargo コマンドまたは実行構成

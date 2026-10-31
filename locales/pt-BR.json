@@ -717,6 +717,9 @@
     "New Crate": "Novo crate",
     "Crate name": "Nome do crate",
     "Cargo Crate": "Crate Cargo",
-    "No [workspace] here: the crate will not join the project": "Não há [workspace] aqui: o crate não entrará no projeto"
+    "No [workspace] here: the crate will not join the project": "Não há [workspace] aqui: o crate não entrará no projeto",
+    "Run Anything": "Executar qualquer coisa",
+    "Run Anything…": "Executar qualquer coisa…",
+    "A Cargo command or a run configuration": "Um comando Cargo ou uma configuração de execução"
   }
 }

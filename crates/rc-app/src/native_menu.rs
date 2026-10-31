@@ -444,6 +444,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         &[
             &act(Action::SearchEverywhere, || tr("Search Everywhere")),
             &act(Action::FindAction, || tr("Find Action…")),
+            &act(Action::RunAnything, || tr("Run Anything…")),
             &act(Action::GotoFile, || tr("Go to File…")),
             &act(Action::GotoClass, || tr("Go to Type…")),
             &act(Action::GotoSymbol, || tr("Go to Symbol…")),

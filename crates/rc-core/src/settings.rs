@@ -60,6 +60,8 @@ pub struct Settings {
     pub format_on_save: bool,
     /// Reformat the Rust files of a commit before committing them.
     pub format_on_commit: bool,
+    /// Latest commands of Run Anything, newest first.
+    pub run_anything_history: Vec<String>,
     /// Projects whose `build.rs` and procedural macros may run.
     pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
@@ -95,6 +97,7 @@ impl Default for Settings {
             use_clippy: false,
             format_on_save: false,
             format_on_commit: false,
+            run_anything_history: Vec::new(),
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
             reopen_last: true,
