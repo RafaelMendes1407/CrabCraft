@@ -82,7 +82,7 @@ fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette,
     if let Some(tw) = app.dock.left {
         let resp = egui::Panel::left("tw_left")
             .resizable(true)
-            .default_size(app.dock.size(tw))
+            .default_size(app.dock.size(tw) + gap as f32)
             .size_range(180.0..=800.0)
             .show_separator_line(false)
             .frame(bar.inner_margin(Margin { right: gap, ..Margin::ZERO }))
@@ -92,7 +92,7 @@ fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette,
     if let Some(tw) = app.dock.right {
         let resp = egui::Panel::right("tw_right")
             .resizable(true)
-            .default_size(app.dock.size(tw))
+            .default_size(app.dock.size(tw) + gap as f32)
             .size_range(200.0..=800.0)
             .show_separator_line(false)
             .frame(bar.inner_margin(Margin { left: gap, ..Margin::ZERO }))
@@ -105,7 +105,7 @@ fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette,
         let _ = (left, right);
         let resp = egui::Panel::bottom("tw_bottom")
             .resizable(true)
-            .default_size(app.dock.size(tw))
+            .default_size(app.dock.size(tw) + gap as f32)
             .size_range(100.0..=900.0)
             .show_separator_line(false)
             .frame(bar.inner_margin(Margin { top: gap, left: if app.dock.left.is_some() { gap } else { 0 }, right: if app.dock.right.is_some() { gap } else { 0 }, bottom: 0 }))
