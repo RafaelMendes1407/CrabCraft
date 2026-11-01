@@ -3511,7 +3511,7 @@ dependencies = [
 
 [[package]]
 name = "rc-app"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3547,7 +3547,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cargo"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "rc-core",
@@ -3559,7 +3559,7 @@ dependencies = [
 
 [[package]]
 name = "rc-core"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -3574,7 +3574,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dap"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "flate2",
@@ -3594,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dotnet"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "rc-editor"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "egui",
@@ -3623,7 +3623,7 @@ dependencies = [
 
 [[package]]
 name = "rc-kit"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
@@ -3639,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "rc-lsp"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -3658,7 +3658,7 @@ dependencies = [
 
 [[package]]
 name = "rc-search"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -3676,7 +3676,7 @@ dependencies = [
 
 [[package]]
 name = "rc-syntax"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -3694,7 +3694,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -3709,7 +3709,7 @@ dependencies = [
 
 [[package]]
 name = "rc-text"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "proptest",
  "ropey",
@@ -3719,7 +3719,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vcs"
-version = "0.3.1"
+version = "0.1.0"
 dependencies = [
  "criterion",
  "proptest",
