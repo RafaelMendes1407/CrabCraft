@@ -175,3 +175,30 @@ fn command_click_navigates() {
     h.run_steps(2);
     assert_eq!(h.state().0.link(), None);
 }
+
+#[test]
+fn the_text_cursor_shows_only_over_the_text() {
+    let config = EditorConfig::default();
+    let keymap = Keymap::new(KeymapKind::RiderMac);
+    let mut first = true;
+    let mut h = Harness::builder().with_size(vec2(600.0, 200.0)).build_ui_state(
+        move |ui, st: &mut EditorState| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            let rect = ui.ctx().content_rect();
+            let mut root = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+            EditorView::new(st, &config, &keymap).show(&mut root);
+        },
+        state(),
+    );
+    h.run_steps(3);
+    let cursor_at = |h: &mut Harness<'_, EditorState>, at| {
+        h.event(egui::Event::PointerMoved(at));
+        h.run_steps(2);
+        h.output().platform_output.cursor_icon
+    };
+    assert_eq!(cursor_at(&mut h, egui::pos2(10.0, 10.0)), egui::CursorIcon::Default, "line numbers");
+    assert_eq!(cursor_at(&mut h, egui::pos2(300.0, 10.0)), egui::CursorIcon::Text, "text");
+}

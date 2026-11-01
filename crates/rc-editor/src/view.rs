@@ -173,7 +173,9 @@ impl<'a> EditorView<'a> {
             out.accepted_completion = Some(i);
         }
 
-        if (response.hovered() || response.dragged()) && state.link.is_none() {
+        // The gutter and the scrollbars keep the normal pointer.
+        let over_text = response.hover_pos().is_some_and(|p| text_rect.contains(p));
+        if (over_text || response.dragged()) && state.link.is_none() {
             ui.ctx().set_cursor_icon(CursorIcon::Text);
         }
         out
