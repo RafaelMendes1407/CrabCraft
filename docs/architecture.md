@@ -12,8 +12,8 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-text` | Rope buffer, change sets, multi-cursor selections, grouped undo, UTF-16 positions. No UI. |
 | `rc-syntax` | tree-sitter parsing on a background thread, highlighting, folding, bracket matching. |
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
-| `rc-lsp` | JSON-RPC/LSP client and the Roslyn adapter. |
-| `rc-dap` | DAP client and netcoredbg session. |
+| `rc-lsp` | JSON-RPC/LSP client and the rust-analyzer and Roslyn adapters. |
+| `rc-dap` | DAP client and the GDB and netcoredbg sessions. |
 | `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
 | `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
 | `rc-vcs` | Git through the `git` CLI. |

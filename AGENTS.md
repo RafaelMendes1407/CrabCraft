@@ -16,4 +16,4 @@
   Record the source and license of any distributed asset.
 - Keep the DotCraft copyright and license notices. Keep the `rc-*` crate names so upstream changes
   can still be merged.
-- Do not publish, make the repository public or create releases without the user's request.
+- Do not create releases or change the repository's visibility without the user's request.
