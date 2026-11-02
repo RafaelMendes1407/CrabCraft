@@ -277,7 +277,10 @@
     "The C# server is still loading the solution; navigation continues when it is ready": "C# 服务器仍在加载解决方案；准备就绪后将继续导航",
     "Derive…": "Derive…",
     "Derive for {name}": "为 {name} 派生",
-    "Other traits, separated by commas": "其他 trait，用逗号分隔"
+    "Other traits, separated by commas": "其他 trait，用逗号分隔",
+    "Suppress `{lint}` for the statement": "对该语句抑制 `{lint}`",
+    "Suppress `{lint}` for {name}": "对 {name} 抑制 `{lint}`",
+    "Suppress `{lint}` for the file": "对该文件抑制 `{lint}`"
   },
   "runner": {
     "All Tests": "所有测试",

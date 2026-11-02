@@ -277,7 +277,10 @@
     "The C# server is still loading the solution; navigation continues when it is ready": "El servidor de C# aún está cargando la solución; la navegación seguirá cuando termine",
     "Derive…": "Derive…",
     "Derive for {name}": "Derive para {name}",
-    "Other traits, separated by commas": "Otros traits, separados por comas"
+    "Other traits, separated by commas": "Otros traits, separados por comas",
+    "Suppress `{lint}` for the statement": "Suprimir `{lint}` en la sentencia",
+    "Suppress `{lint}` for {name}": "Suprimir `{lint}` en {name}",
+    "Suppress `{lint}` for the file": "Suprimir `{lint}` en el archivo"
   },
   "runner": {
     "All Tests": "Todas las pruebas",
