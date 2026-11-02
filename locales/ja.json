@@ -274,7 +274,11 @@
     "This element cannot be renamed": "この要素の名前は変更できません",
     "Usages": "使用箇所",
     "{n} problems": "{n} 件の問題",
-    "The C# server is still loading the solution; navigation continues when it is ready": "C# サーバーはまだソリューションを読み込んでいます。準備ができ次第ナビゲーションを続行します"
+    "The C# server is still loading the solution; navigation continues when it is ready": "C# サーバーはまだソリューションを読み込んでいます。準備ができ次第ナビゲーションを続行します",
+    "Expand Macro Recursively": "マクロを再帰的に展開",
+    "No macro call at the caret": "キャレット位置にマクロ呼び出しがありません",
+    "Recursive expansion of {name}!": "{name}! の再帰的展開",
+    "Could not show the expansion: {error}": "展開結果を表示できませんでした: {error}"
   },
   "runner": {
     "All Tests": "すべてのテスト",

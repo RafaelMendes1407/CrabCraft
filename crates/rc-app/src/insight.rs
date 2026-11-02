@@ -53,6 +53,8 @@ pub struct Target {
 pub enum InsightOutput {
     /// A web page to open.
     OpenUrl(String),
+    /// The expansion of the macro call under the caret.
+    MacroExpansion { name: String, text: String },
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
@@ -164,6 +166,7 @@ pub struct Insight {
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
+    expand_macro: Option<Pending<Value>>,
     types: Option<(Target, Pending<Value>)>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
@@ -247,6 +250,7 @@ impl Insight {
             calls: None,
             types: None,
             external_docs: None,
+            expand_macro: None,
             call_levels: Vec::new(),
             call_generation: 0,
             call_tree: None,
@@ -884,6 +888,18 @@ impl Insight {
         }
     }
 
+    fn poll_expand_macro(&mut self, out: &mut Vec<InsightOutput>) {
+        if let Some(p) = &mut self.expand_macro
+            && let Some(reply) = p.poll()
+        {
+            self.expand_macro = None;
+            out.push(match reply.ok().as_ref().and_then(macro_expansion) {
+                Some((name, text)) => InsightOutput::MacroExpansion { name, text },
+                None => InsightOutput::Message(tr("No macro call at the caret").into()),
+            });
+        }
+    }
+
     fn poll_calls(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree, entries};
         if let Some((_, p)) = &mut self.calls
@@ -1019,6 +1035,7 @@ impl Insight {
         self.poll_calls(docs, out);
         self.poll_types(docs, out);
         self.poll_external_docs(out);
+        self.poll_expand_macro(out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -1435,6 +1452,13 @@ impl Insight {
         self.external_docs = Some(session.client.request_raw("experimental/externalDocs", params));
     }
 
+    /// The recursive expansion of the macro call at `pos` (rust-analyzer only expands fully).
+    pub fn expand_macro(&mut self, doc: &Doc, pos: usize) {
+        let Some(session) = self.session.as_ref().filter(|_| self.rust) else { return };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        self.expand_macro = Some(session.client.request_raw("rust-analyzer/expandMacro", params));
+    }
+
     /// The context actions that write code (Alt+Insert).
     pub fn generate_actions(&mut self, doc: &Doc) {
         self.code_actions(doc);
@@ -1587,7 +1611,7 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
 
 /// Whether the language server covers this document.
 pub fn has_insight(d: &Doc) -> bool {
-    matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
+    !d.generated && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.
@@ -1732,6 +1756,16 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
 
 /// Assists of rust-analyzer that make up Optimize Imports, in order.
 const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"];
+
+/// The macro's name and its expansion in a `rust-analyzer/expandMacro` reply (`null` when the
+/// caret is not on a macro call).
+fn macro_expansion(v: &Value) -> Option<(String, String)> {
+    // rust-analyzer writes the name with its `!`.
+    let name = v.get("name")?.as_str()?.trim_end_matches('!').to_string();
+    // On Windows the expansion comes with `\r\n`, and with blank lines around it.
+    let text = v.get("expansion")?.as_str()?.replace("\r\n", "\n").trim_matches('\n').to_string();
+    Some((name, text))
+}
 
 /// The address in an `experimental/externalDocs` reply: a string, or `{ web, local }`.
 fn web_docs(reply: &Value) -> Option<String> {
