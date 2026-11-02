@@ -602,7 +602,11 @@
     "Open in New Window": "Abrir em uma nova janela",
     "Split Down": "Dividir para baixo",
     "Split Right": "Dividir à direita",
-    "Unsplit": "Desfazer divisão"
+    "Unsplit": "Desfazer divisão",
+    "Split and Move Right": "Dividir e mover para a direita",
+    "Split and Move Down": "Dividir e mover para baixo",
+    "Unsplit All": "Desfazer todas as divisões",
+    "Move to Main Window": "Mover para a janela principal"
   },
   "settings": {
     "Reopen the last project on startup": "Reabrir o último projeto ao iniciar"

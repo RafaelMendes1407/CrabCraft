@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 97 |
+| ✅ Pronto | 98 |
 | 🚧 Em andamento | 2 |
-| 🟢 Herdado | 24 |
+| 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
 | ⬜ A fazer | 127 |
 | 🚫 Fora do escopo | 5 |
@@ -110,7 +110,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
-| E-26 | Abas: fixar, dividir, destacar, pré-visualização | 🟢 | M1 | Divisão herdada; conferir o restante |
+| E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
 | E-27 | Scratch files | ⬜ | M3 | |
 
 ## 3. Inteligência de código
