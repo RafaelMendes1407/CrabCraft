@@ -1,0 +1,3 @@
+# Sticky lines. Import: python3 scripts/i18n_tsv.py app scripts/i18n/sticky-lines.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show sticky lines while scrolling	Mostrar líneas fijas al desplazarse	Afficher les lignes épinglées pendant le défilement	Mostrar linhas fixas ao rolar	Fixierte Zeilen beim Scrollen anzeigen	Pokazuj przypięte wiersze podczas przewijania	滚动时显示粘性行	スクロール中に固定行を表示

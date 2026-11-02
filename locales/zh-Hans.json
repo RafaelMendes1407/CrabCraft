@@ -214,7 +214,8 @@
     "netcoredbg debugger": "netcoredbg 调试器",
     "not found": "未找到",
     "{line}:{col} ({n} chars)": "{line}:{col}（{n} 个字符）",
-    "{n} spaces": "{n} 个空格"
+    "{n} spaces": "{n} 个空格",
+    "Show sticky lines while scrolling": "滚动时显示粘性行"
   },
   "terminal": {
     "Local": "本地",
