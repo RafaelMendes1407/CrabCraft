@@ -92,6 +92,11 @@ pub struct CrabCraftApp {
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
+    /// What the last `rustup check` said (Settings › Tools).
+    pub toolchain_updates: Option<Result<Vec<rc_cargo::ToolchainUpdate>, String>>,
+    toolchain_updates_load: Option<Inbox<Result<Vec<rc_cargo::ToolchainUpdate>, String>>>,
+    /// The Run tab of a rustup command: when it ends, the toolchain is read again.
+    rustup_run: Option<String>,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
@@ -202,6 +207,9 @@ impl CrabCraftApp {
             toolchain: None,
             libraries_load: None,
             rustfmt_jobs: Default::default(),
+            toolchain_updates: None,
+            toolchain_updates_load: None,
+            rustup_run: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
             layout: Default::default(),
@@ -484,6 +492,54 @@ impl CrabCraftApp {
             out.send(rc_cargo::detect_toolchain(rc_cargo::Cargo::locate().as_ref(), analyzer.as_deref(), project.as_deref()));
         });
         self.toolchain_load = Some(inbox);
+    }
+
+    /// `rustup`, if Rust was installed with it.
+    pub fn rustup(&self) -> Option<PathBuf> {
+        rc_cargo::Cargo::locate().and_then(|c| rc_cargo::rustup_path(&c))
+    }
+
+    /// Asks rustup for toolchain updates in the background (it reads the network).
+    pub fn check_toolchain_updates(&mut self) {
+        let Some(rustup) = self.rustup() else {
+            self.toolchain_updates = Some(Err(tr("rustup was not found: this toolchain was not installed with it").to_string()));
+            return;
+        };
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || out.send(rc_cargo::rustup_check(&rustup).map_err(|e| e.to_string())));
+        self.toolchain_updates = None;
+        self.toolchain_updates_load = Some(inbox);
+    }
+
+    pub fn checking_toolchain_updates(&self) -> bool {
+        self.toolchain_updates_load.is_some()
+    }
+
+    /// Runs `rustup <args>` in the Run window; the versions are read again when it ends.
+    pub fn run_rustup(&mut self, args: &[&str]) {
+        let Some(rustup) = self.rustup() else {
+            self.notify(tr("rustup was not found: this toolchain was not installed with it"), true);
+            return;
+        };
+        let outs = self.runner.run_command(rustup, args.iter().map(|a| a.to_string()).collect());
+        self.rustup_run = self.runner.runs.last().map(|r| r.name.clone());
+        crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Picks up `rustup check` results and the end of rustup commands.
+    pub(crate) fn poll_toolchain_updates(&mut self) {
+        if let Some(result) = self.toolchain_updates_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.toolchain_updates = Some(result);
+            self.toolchain_updates_load = None;
+        }
+        if let Some(name) = &self.rustup_run
+            && self.runner.runs.iter().find(|r| &r.name == name).is_none_or(|r| r.exit.is_some())
+        {
+            self.rustup_run = None;
+            self.toolchain = None;
+            self.toolchain_updates = None;
+        }
     }
 
     /// Changes the project's environment: rust-analyzer restarts with it and the Cargo project
@@ -2072,6 +2128,7 @@ impl eframe::App for CrabCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.window_title = title;
         }
+        self.poll_toolchain_updates();
         for request in crate::open_files::take() {
             self.open_request(&request);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);

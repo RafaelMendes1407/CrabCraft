@@ -895,5 +895,14 @@
     "the tool has no program": "la herramienta no tiene programa",
     "the arguments have an unclosed quote": "los argumentos tienen una comilla sin cerrar",
     "the folder {path} does not exist": "la carpeta {path} no existe"
+  },
+  "rustup": {
+    "Updates": "Actualizaciones",
+    "Checking with rustup…": "Consultando a rustup…",
+    "Check for Updates": "Buscar actualizaciones",
+    "Check Again": "Volver a comprobar",
+    "{name}: {current} → {new}": "{name}: {current} → {new}",
+    "{name}: {current}, up to date": "{name}: {current}, actualizado",
+    "rustup was not found: this toolchain was not installed with it": "No se encontró rustup: esta toolchain no se instaló con él"
   }
 }

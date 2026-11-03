@@ -895,5 +895,14 @@
     "the tool has no program": "ツールにプログラムが設定されていません",
     "the arguments have an unclosed quote": "引数に閉じていない引用符があります",
     "the folder {path} does not exist": "フォルダー {path} は存在しません"
+  },
+  "rustup": {
+    "Updates": "アップデート",
+    "Checking with rustup…": "rustup で確認中…",
+    "Check for Updates": "アップデートを確認",
+    "Check Again": "再確認",
+    "{name}: {current} → {new}": "{name}: {current} → {new}",
+    "{name}: {current}, up to date": "{name}: {current}、最新です",
+    "rustup was not found: this toolchain was not installed with it": "rustup が見つかりません: このツールチェーンは rustup でインストールされていません"
   }
 }

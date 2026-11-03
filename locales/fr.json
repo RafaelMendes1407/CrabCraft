@@ -895,5 +895,14 @@
     "the tool has no program": "l'outil n'a pas de programme",
     "the arguments have an unclosed quote": "les arguments ont un guillemet non fermé",
     "the folder {path} does not exist": "le dossier {path} n'existe pas"
+  },
+  "rustup": {
+    "Updates": "Mises à jour",
+    "Checking with rustup…": "Vérification avec rustup…",
+    "Check for Updates": "Rechercher des mises à jour",
+    "Check Again": "Vérifier à nouveau",
+    "{name}: {current} → {new}": "{name} : {current} → {new}",
+    "{name}: {current}, up to date": "{name} : {current}, à jour",
+    "rustup was not found: this toolchain was not installed with it": "rustup est introuvable : cette toolchain n'a pas été installée avec lui"
   }
 }

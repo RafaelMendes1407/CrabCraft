@@ -90,6 +90,52 @@ pub fn stdlib_sources(sysroot: &Path) -> Option<PathBuf> {
     Some(sysroot.join("lib/rustlib/src/rust/library")).filter(|p| p.is_dir())
 }
 
+/// `rustup`, next to `cargo` (where rustup installs its proxies).
+pub fn rustup_path(cargo: &Cargo) -> Option<PathBuf> {
+    Some(cargo.path().with_file_name(exe("rustup"))).filter(|p| p.is_file())
+}
+
+/// One line of `rustup check`: a toolchain (or rustup itself) and its newer version, if any.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolchainUpdate {
+    pub name: String,
+    pub current: String,
+    /// The version an update would install; `None` when it is up to date.
+    pub available: Option<String>,
+}
+
+/// Reads `rustup check`: `stable-x86_64-unknown-linux-gnu - up to date: 1.99.1 (…)` and
+/// `rustup - update available : 1.29.2 -> 1.29.3`. Other lines are skipped.
+pub fn parse_rustup_check(text: &str) -> Vec<ToolchainUpdate> {
+    let version = |s: &str| s.split_whitespace().next().unwrap_or_default().to_string();
+    text.lines()
+        .filter_map(|line| {
+            let (name, status) = line.split_once(" - ")?;
+            let (state, versions) = status.split_once(':')?;
+            let state = state.trim().to_ascii_lowercase();
+            let name = name.trim().to_string();
+            if state == "up to date" {
+                Some(ToolchainUpdate { name, current: version(versions), available: None })
+            } else if state == "update available" {
+                let (current, new) = versions.split_once("->")?;
+                Some(ToolchainUpdate { name, current: version(current), available: Some(version(new)) })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Asks rustup which toolchains have updates. It reads the network: run it on a thread, and
+/// only when the user asks.
+pub fn rustup_check(rustup: &Path) -> anyhow::Result<Vec<ToolchainUpdate>> {
+    let out = std::process::Command::new(rustup).arg("check").stdin(std::process::Stdio::null()).output()?;
+    let list = parse_rustup_check(&String::from_utf8_lossy(&out.stdout));
+    // rustup exits with 100 when there are updates.
+    anyhow::ensure!(!list.is_empty() || out.status.success(), "{}", String::from_utf8_lossy(&out.stderr).trim());
+    Ok(list)
+}
+
 fn home() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }
@@ -120,6 +166,17 @@ pub fn locate_rust_analyzer(configured: Option<&Path>) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_rustup_check() {
+        let text = "stable-x86_64-unknown-linux-gnu - up to date: 1.99.1 (58cf8f9c3 2026-10-13)\nnightly-x86_64-unknown-linux-gnu - Update available : 1.100.0-nightly (aaa 2026-10-01) -> 1.100.0-nightly (bbb 2026-11-02)\nrustup - update available : 1.29.2 -> 1.29.3\ninfo: noise\n";
+        let list = parse_rustup_check(text);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list[0], ToolchainUpdate { name: "stable-x86_64-unknown-linux-gnu".into(), current: "1.99.1".into(), available: None });
+        assert_eq!(list[1].available.as_deref(), Some("1.100.0-nightly"));
+        assert_eq!(list[2], ToolchainUpdate { name: "rustup".into(), current: "1.29.2".into(), available: Some("1.29.3".into()) });
+        assert!(parse_rustup_check("error: no network").is_empty());
+    }
 
     #[test]
     fn path_comes_before_the_cargo_home() {

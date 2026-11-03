@@ -1409,3 +1409,19 @@ fn external_tools_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("external-tools-settings.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU, rustup and the network; writes target/snapshots/toolchain-updates.png"]
+fn toolchain_updates_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.check_toolchain_updates();
+    app.open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "rustup check and the toolchain", |a| a.toolchain_updates.is_some() && a.toolchain.is_some());
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("toolchain-updates.png")).unwrap();
+}

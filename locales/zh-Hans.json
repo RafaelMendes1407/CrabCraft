@@ -895,5 +895,14 @@
     "the tool has no program": "该工具没有程序",
     "the arguments have an unclosed quote": "参数中有未闭合的引号",
     "the folder {path} does not exist": "文件夹 {path} 不存在"
+  },
+  "rustup": {
+    "Updates": "更新",
+    "Checking with rustup…": "正在通过 rustup 检查…",
+    "Check for Updates": "检查更新",
+    "Check Again": "再次检查",
+    "{name}: {current} → {new}": "{name}：{current} → {new}",
+    "{name}: {current}, up to date": "{name}：{current}，已是最新",
+    "rustup was not found: this toolchain was not installed with it": "未找到 rustup：此工具链不是用它安装的"
   }
 }

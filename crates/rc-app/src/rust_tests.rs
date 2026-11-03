@@ -2572,3 +2572,36 @@ fn an_external_tool_runs_on_the_active_file() {
     assert_eq!(app.runner.runs.len(), 1);
     assert!(app.notices.last().is_some_and(|n| n.text.contains("$FileRelativePath$")), "{:?}", app.notices.last().map(|n| &n.text));
 }
+
+/// Settings › Tools asks rustup for updates and runs rustup commands in the Run window; the
+/// toolchain versions are read again when a command ends.
+#[test]
+fn rustup_checks_updates_and_runs_commands() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = new_app(dir.path());
+    if app.rustup().is_none() {
+        eprintln!("rustup is not installed: skipped");
+        return;
+    }
+    app.check_toolchain_updates();
+    pump(&mut app, "rustup check", |a| {
+        a.poll_toolchain_updates();
+        !a.checking_toolchain_updates()
+    });
+    match app.toolchain_updates.as_ref().unwrap() {
+        Ok(list) => assert!(list.iter().any(|u| u.name == "rustup"), "{list:?}"),
+        // Offline machines get rustup's own error.
+        Err(e) => assert!(!e.is_empty()),
+    }
+
+    app.toolchain = Some(Default::default());
+    app.run_rustup(&["component", "list", "--installed"]);
+    pump(&mut app, "the rustup command", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let run = &app.runner.runs[0];
+    assert_eq!(run.name, "rustup component list --installed");
+    assert_eq!(run.exit, Some(Some(0)));
+    assert!(run.console.term.screen_lines().join("\n").contains("cargo"));
+    app.poll_toolchain_updates();
+    assert!(app.toolchain.is_none(), "read again after a rustup command");
+}

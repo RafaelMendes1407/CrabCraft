@@ -21,6 +21,8 @@ pub enum ConfigKind {
     Cargo { package: String, bin: String },
     /// An external tool of the settings, started as it is (never listed as a configuration).
     External { tool: String },
+    /// A command the IDE runs for the user (`rustup update`…), started again by Rerun.
+    Command { program: PathBuf, args: Vec<String> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,7 +38,7 @@ impl RunConfig {
             ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
-            ConfigKind::External { .. } => rc_kit::ico::RUN_ANYTHING,
+            ConfigKind::External { .. } | ConfigKind::Command { .. } => rc_kit::ico::RUN_ANYTHING,
         }
     }
 }
@@ -334,6 +336,10 @@ impl Runner {
             ConfigKind::Tests { target } => self.run_tests(&target, None),
             // Tools start from their menu, with the file and caret of that moment.
             ConfigKind::External { .. } => Vec::new(),
+            ConfigKind::Command { program, args } => {
+                let plan = self.command_plan(program, args);
+                self.run_process(cfg, plan)
+            }
             ConfigKind::Compound { members } => {
                 let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
                 if apps.is_empty() {
@@ -492,7 +498,24 @@ impl Runner {
 
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
     pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
-        let cfg = RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } };
+        self.run_process(RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } }, plan)
+    }
+
+    /// Runs a command of the IDE (`rustup update`…) in a tab of the Run window.
+    pub fn run_command(&mut self, program: PathBuf, args: Vec<String>) -> Vec<RunnerOutput> {
+        let name = std::iter::once(program.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ");
+        let plan = self.command_plan(program.clone(), args.clone());
+        self.run_process(RunConfig { name, kind: ConfigKind::Command { program, args } }, plan)
+    }
+
+    /// IDE commands run in the home folder: a project's `rust-toolchain` file must not change
+    /// which toolchain `rustup update` sees.
+    fn command_plan(&self, program: PathBuf, args: Vec<String>) -> rc_dotnet::LaunchPlan {
+        let dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        rc_dotnet::LaunchPlan { program, args, env: self.project_env_pairs(), working_dir: dir, urls: Vec::new(), profile: None, browser_url: None }
+    }
+
+    fn run_process(&mut self, cfg: RunConfig, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
         if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
             let old = self.runs.remove(i);
             if let Some(h) = old.handle {

@@ -258,7 +258,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     }
                     SettingsPage::Tools => {
                         app.load_toolchain();
-                        toolchain_rows(ui, app.toolchain.as_ref());
+                        toolchain_rows(ui, app);
                         for (label, value) in [
                             (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
@@ -350,20 +350,36 @@ fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui
     ui.end_row();
 }
 
-/// The versions in use, read from the tools themselves.
-fn toolchain_rows(ui: &mut Ui, info: Option<&rc_cargo::ToolchainInfo>) {
-    let Some(info) = info else {
+/// The versions in use, read from the tools themselves, with rustup's installs and updates.
+fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
+    let Some(info) = app.toolchain.clone() else {
         ui.label(tr("Toolchain"));
         ui.spinner();
         ui.end_row();
         return;
     };
+    let has_rustup = app.rustup().is_some();
     let missing = tr("Not found");
-    for (label, value) in [("Cargo", info.cargo.as_deref()), ("rustc", info.rustc.as_deref()), (tr("rust-analyzer"), info.rust_analyzer.as_deref())] {
+    for (label, value) in [("Cargo", info.cargo.as_deref()), ("rustc", info.rustc.as_deref())] {
         ui.label(label);
         ui.label(value.unwrap_or(missing));
         ui.end_row();
     }
+    ui.label(tr("rust-analyzer"));
+    match info.rust_analyzer.as_deref() {
+        Some(v) => {
+            ui.label(v);
+        }
+        None => {
+            ui.horizontal(|ui| {
+                ui.label(missing);
+                if has_rustup && ui.button(tr("Install")).on_hover_text("rustup component add rust-analyzer").clicked() {
+                    app.run_rustup(&["component", "add", "rust-analyzer"]);
+                }
+            });
+        }
+    }
+    ui.end_row();
     ui.label(tr("Standard library"));
     match &info.stdlib {
         Some(path) => {
@@ -373,10 +389,62 @@ fn toolchain_rows(ui: &mut Ui, info: Option<&rc_cargo::ToolchainInfo>) {
                 ui.add(egui::Label::new(&text).truncate()).on_hover_text(&text);
             });
         }
+        None if has_rustup => {
+            ui.horizontal(|ui| {
+                ui.label(missing);
+                if ui.button(tr("Install")).on_hover_text("rustup component add rust-src").clicked() {
+                    app.run_rustup(&["component", "add", "rust-src"]);
+                }
+            });
+        }
         None => {
             ui.label(tr("Not found. Install it with: rustup component add rust-src"));
         }
     }
+    ui.end_row();
+    if !has_rustup {
+        return;
+    }
+    ui.label(tr("Updates"));
+    ui.vertical(|ui| {
+        if app.checking_toolchain_updates() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(tr("Checking with rustup…"));
+            });
+            return;
+        }
+        match app.toolchain_updates.clone() {
+            None => {
+                if ui.button(tr("Check for Updates")).on_hover_text("rustup check").clicked() {
+                    app.check_toolchain_updates();
+                }
+            }
+            Some(Err(e)) => {
+                ui.label(egui::RichText::new(e).color(rc_kit::pal(ui).error));
+                if ui.button(tr("Check Again")).clicked() {
+                    app.check_toolchain_updates();
+                }
+            }
+            Some(Ok(list)) => {
+                for u in &list {
+                    let text = match &u.available {
+                        Some(new) => trf("{name}: {current} → {new}", &[("name", &u.name), ("current", &u.current), ("new", new)]),
+                        None => trf("{name}: {current}, up to date", &[("name", &u.name), ("current", &u.current)]),
+                    };
+                    ui.label(text);
+                }
+                ui.horizontal(|ui| {
+                    if list.iter().any(|u| u.available.is_some()) && ui.button(tr("Update")).on_hover_text("rustup update").clicked() {
+                        app.run_rustup(&["update"]);
+                    }
+                    if ui.button(tr("Check Again")).clicked() {
+                        app.check_toolchain_updates();
+                    }
+                });
+            }
+        }
+    });
     ui.end_row();
 }
 

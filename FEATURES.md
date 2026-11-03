@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 114 |
-| 🚧 Em andamento | 4 |
+| ✅ Pronto | 115 |
+| 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 111 |
+| ⬜ A fazer | 109 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -52,8 +52,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | ✅ | M1 | Configurações > Ferramentas mostra versões reais e a stdlib, ou como instalá-la; vista na janela nativa |
-| P-02 | Instalar rustup e stdlib pela IDE | ⬜ | M3 | Executar o instalador oficial com confirmação |
-| P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
+| P-02 | Instalar rustup e stdlib pela IDE | 🚧 | M3 | Feito: com rustup, botões Instalar para `rust-src` e `rust-analyzer` em Configurações › Ferramentas (`rustup component add` na janela Run, testado com rustup real). Falta: instalar o próprio rustup pela IDE, com confirmação |
+| P-03 | Avisar e aplicar atualização da toolchain | ✅ | M3 | Configurações › Ferramentas › Atualizações: Procurar atualizações roda `rustup check` em segundo plano só quando pedido (usa a rede) e lista cada toolchain e o rustup; Atualizar roda `rustup update` na janela Run (Rerun e Stop) e as versões são relidas ao terminar. Testado com rustup real (1.29.2 → 1.29.3 listado); captura conferida |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
 | P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |

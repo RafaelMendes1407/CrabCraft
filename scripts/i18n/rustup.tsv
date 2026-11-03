@@ -1,0 +1,9 @@
+# Toolchain updates and components through rustup. Import: python3 scripts/i18n_tsv.py rustup scripts/i18n/rustup.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Updates	Actualizaciones	Mises à jour	Atualizações	Updates	Aktualizacje	更新	アップデート
+Checking with rustup…	Consultando a rustup…	Vérification avec rustup…	Verificando com o rustup…	Prüfe mit rustup…	Sprawdzanie przez rustup…	正在通过 rustup 检查…	rustup で確認中…
+Check for Updates	Buscar actualizaciones	Rechercher des mises à jour	Procurar atualizações	Nach Updates suchen	Sprawdź aktualizacje	检查更新	アップデートを確認
+Check Again	Volver a comprobar	Vérifier à nouveau	Verificar de novo	Erneut prüfen	Sprawdź ponownie	再次检查	再確認
+{name}: {current} → {new}	{name}: {current} → {new}	{name} : {current} → {new}	{name}: {current} → {new}	{name}: {current} → {new}	{name}: {current} → {new}	{name}：{current} → {new}	{name}: {current} → {new}
+{name}: {current}, up to date	{name}: {current}, actualizado	{name} : {current}, à jour	{name}: {current}, atualizado	{name}: {current}, aktuell	{name}: {current}, aktualne	{name}：{current}，已是最新	{name}: {current}、最新です
+rustup was not found: this toolchain was not installed with it	No se encontró rustup: esta toolchain no se instaló con él	rustup est introuvable : cette toolchain n'a pas été installée avec lui	O rustup não foi encontrado: esta toolchain não foi instalada com ele	rustup wurde nicht gefunden: Diese Toolchain wurde nicht damit installiert	Nie znaleziono rustup: ten toolchain nie został nim zainstalowany	未找到 rustup：此工具链不是用它安装的	rustup が見つかりません: このツールチェーンは rustup でインストールされていません
