@@ -83,7 +83,13 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
     }
     if want(SeTab::Actions) && !(se.tab == SeTab::All && text.is_empty()) {
         let items = action_items();
-        let mut ranked: Vec<(i32, &'static str, rc_editor::Action)> = items.into_iter().filter_map(|(l, a)| rc_editor::popup::fuzzy_score(l, text).map(|s| (s, l, a))).collect();
+        let mut ranked: Vec<(i32, &'static str, rc_editor::Action)> = items
+            .into_iter()
+            .filter_map(|(l, a)| {
+                let synonym = crate::search::action_synonym(a).and_then(|n| rc_editor::popup::fuzzy_score(n, text));
+                rc_editor::popup::fuzzy_score(l, text).max(synonym).map(|s| (s, l, a))
+            })
+            .collect();
         ranked.sort_by_key(|r| std::cmp::Reverse(r.0));
         for (i, (_, l, a)) in ranked.into_iter().take(if se.tab == SeTab::All { 5 } else { 40 }).enumerate() {
             out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Actions")), Hit::Action(l, a)));

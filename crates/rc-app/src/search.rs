@@ -380,7 +380,11 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Reformat Code"), Reformat),
         (tr("Generate…"), Generate),
         (tr("Refactor This…"), RefactorThis),
+        (tr("Go to Declaration"), GotoDeclaration),
+        (tr("Go to Implementation"), GotoImplementation),
+        (tr("Go to Type Declaration"), GotoTypeDeclaration),
         (tr("Go to Super Method"), GotoSuperMethod),
+        (tr("Find Usages"), FindUsages),
         (tr("Show Callers"), ShowCallers),
         (tr("Show Callees"), ShowCallees),
         (tr("File Structure"), FileStructure),
@@ -398,6 +402,14 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Collapse All"), FoldAll),
         (tr("Expand All"), UnfoldAll),
     ]
+}
+
+/// Another name an action is found by: what other editors call it.
+pub fn action_synonym(action: Action) -> Option<&'static str> {
+    match action {
+        Action::GotoDeclaration => Some(tr("Go to Definition")),
+        _ => None,
+    }
 }
 
 /// The workspace file index and its background scan.

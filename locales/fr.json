@@ -785,7 +785,8 @@
     "Type a struct, enum or trait name": "Saisissez le nom d’une struct, d’un enum ou d’un trait",
     "Type the text to find in the files": "Saisissez le texte à chercher dans les fichiers",
     "Workspace": "Espace de travail",
-    "Workspace and Dependencies": "Espace de travail et dépendances"
+    "Workspace and Dependencies": "Espace de travail et dépendances",
+    "Go to Definition": "Aller à la définition"
   },
   "settings": {
     "Reopen the last project on startup": "Rouvrir le dernier projet au démarrage"

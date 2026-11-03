@@ -785,7 +785,8 @@
     "Type a struct, enum or trait name": "输入结构体、枚举或 trait 的名称",
     "Type the text to find in the files": "输入要在文件中查找的文本",
     "Workspace": "工作区",
-    "Workspace and Dependencies": "工作区和依赖项"
+    "Workspace and Dependencies": "工作区和依赖项",
+    "Go to Definition": "转到定义"
   },
   "settings": {
     "Reopen the last project on startup": "启动时重新打开上一个项目"
