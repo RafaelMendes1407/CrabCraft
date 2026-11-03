@@ -379,6 +379,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &act(Action::InvalidateCaches, || tr("Invalidate Caches…")),
+            &act(Action::InspectCode, || tr("Inspect Code")),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
             &sep(),
             &act(Action::ProjectEnvironment, || tr("Project Environment Variables…")),

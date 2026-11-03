@@ -845,5 +845,144 @@
   },
   "search-results": {
     "… more": "… さらに表示"
+  },
+  "cli": {
+    "Usage:": "使い方:",
+    "Options:": "オプション:",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "フォルダー、Cargo プロジェクト、ファイルを開きます。ファイルはすでに開いている CrabCraft ウィンドウに送られます。フォルダーまたは Cargo.toml は新しいウィンドウで開きます。",
+    "Put the caret on line N of the next file": "次のファイルの N 行目にキャレットを置く",
+    "Put the caret on column N of the next file": "次のファイルの N 列目にキャレットを置く",
+    "Show this help": "このヘルプを表示",
+    "Show the version": "バージョンを表示",
+    "Unknown option: {option}": "不明なオプション: {option}",
+    "--line and --column must come before a file": "--line と --column はファイルの前に指定してください",
+    "{option} needs a number": "{option} には数値が必要です",
+    "{option} needs a number from 1 up, not {value}": "{option} には 1 以上の数値が必要です（{value} ではなく）"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "インデント（プロジェクトのコードスタイル: {files}）"
+  },
+  "sync-log": {
+    "Cargo project": "Cargo プロジェクト",
+    "Output": "出力",
+    "Sync": "同期",
+    "{name} (failed)": "{name}（失敗）",
+    "How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed": "CrabCraft が Cargo プロジェクトを読み込んだ方法: cargo metadata の各実行とその出力",
+    "No sync yet": "まだ同期していません",
+    "The Cargo project is being loaded.": "Cargo プロジェクトを読み込んでいます。",
+    "(Cargo printed nothing)": "（Cargo の出力はありません）",
+    "Finished in {time}": "{time} で完了",
+    "Failed after {time}": "{time} 後に失敗"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "プロジェクトなしで開いたファイル: 編集のみで、コード解析はありません",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit: このファイルは Cargo プロジェクト {name} に属しています。コード解析、実行、ビルドにはプロジェクトが必要です。",
+    "Open Project": "プロジェクトを開く"
+  },
+  "external-tools": {
+    "External Tools": "外部ツール",
+    "Configure External Tools…": "外部ツールを設定…",
+    "Program": "プログラム",
+    "Arguments": "引数",
+    "Working folder": "作業フォルダー",
+    "Add Tool": "ツールを追加",
+    "Tool {n}": "ツール {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "「その他の操作 › 外部ツール」または「アクションを検索」から実行します。マクロ: {list}",
+    "There is no external tool called {name}": "{name} という外部ツールはありません",
+    "Could not run {name}: {error}": "{name} を実行できませんでした: {error}",
+    "{macro} has no value here (open a file or a project)": "{macro} にはここで値がありません（ファイルかプロジェクトを開いてください）",
+    "the tool has no program": "ツールにプログラムが設定されていません",
+    "the arguments have an unclosed quote": "引数に閉じていない引用符があります",
+    "the folder {path} does not exist": "フォルダー {path} は存在しません"
+  },
+  "rustup": {
+    "Updates": "アップデート",
+    "Checking with rustup…": "rustup で確認中…",
+    "Check for Updates": "アップデートを確認",
+    "Check Again": "再確認",
+    "{name}: {current} → {new}": "{name}: {current} → {new}",
+    "{name}: {current}, up to date": "{name}: {current}、最新です",
+    "rustup was not found: this toolchain was not installed with it": "rustup が見つかりません: このツールチェーンは rustup でインストールされていません"
+  },
+  "before-launch": {
+    "Before launch": "起動前",
+    "{name} (missing)": "{name}（見つかりません）",
+    "Add external tools in Settings › External Tools to run them before the build": "ビルド前に実行するには、設定 › 外部ツールで外部ツールを追加してください"
+  },
+  "run-instances": {
+    "Allow multiple instances": "複数インスタンスを許可",
+    "Running it again starts another instance instead of restarting it": "再実行すると再起動せずに別のインスタンスを起動します",
+    "Store as project file": "プロジェクトファイルとして保存",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "コミットして共有できるよう .crabcraft/runConfigurations に保存されます",
+    "Could not save the run configuration in the project: {error}": "実行構成をプロジェクトに保存できませんでした: {error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name}（一時）",
+    "Save “{name}” Configuration": "構成「{name}」を保存",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "テスト構成はまだデバッグできません。テストの横の「デバッグ」を使ってください"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "出力コンソールで端末をエミュレート",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "疑似端末でプログラムを実行します。色、端末判定、キーボード入力が端末と同じように動作します"
+  },
+  "live-templates": {
+    "Live Templates": "ライブテンプレート",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "Rust ファイルで略語を入力して Tab を押します。本文の $1、${2:default} は Tab で移動する位置、$0 はキャレットの最終位置です。",
+    "Templates": "テンプレート",
+    "Abbreviation": "略語",
+    "Description": "説明",
+    "Add Template": "テンプレートを追加",
+    "Restore Defaults": "既定値に戻す"
+  },
+  "refactor-preview": {
+    "Preview": "プレビュー",
+    "List the changes first and pick the ones to make": "先に変更を一覧にし、適用するものを選びます",
+    "Listing the changes…": "変更を一覧にしています…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 個のファイルに {n} 件の変更があります。除外するものはチェックを外してください。",
+    "Refactor": "リファクタリング"
+  },
+  "inspect-code": {
+    "Inspect Code": "コードを検査",
+    "Open a Cargo project to inspect its code": "コードを検査するには Cargo プロジェクトを開いてください",
+    "Inspection cancelled": "検査をキャンセルしました",
+    "Current Files": "現在のファイル",
+    "Inspection": "検査",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "コードを検査: Cargo プロジェクトのすべてのメンバーとターゲットに Clippy を実行",
+    "No inspection yet": "まだ検査していません",
+    "Inspect Code runs Clippy over the whole project.": "「コードを検査」はプロジェクト全体に Clippy を実行します。",
+    "Inspecting with Clippy…": "Clippy で検査中…",
+    "No problems found": "問題は見つかりませんでした",
+    "Clippy found nothing to report.": "Clippy が報告する問題はありませんでした。",
+    "Other": "その他"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "Cargo プロジェクトをアタッチ",
+    "Detach Cargo Project": "Cargo プロジェクトをデタッチ",
+    "Analyse this Cargo project with the workspace, though it is not a member": "メンバーでなくても、この Cargo プロジェクトをワークスペースと一緒に解析します",
+    "Attached the Cargo project {name}": "Cargo プロジェクト {name} をアタッチしました",
+    "Detached the Cargo project {name}": "Cargo プロジェクト {name} をデタッチしました",
+    "Attached project": "アタッチしたプロジェクト",
+    "attached": "アタッチ済み"
+  },
+  "autoimport-exclude": {
+    "Never import": "インポートしない",
+    "Items or modules completion never offers to import, one path per line": "補完でインポートを提案しない項目やモジュール（1 行に 1 パス）"
+  },
+  "paste-imports": {
+    "Imported {list}": "{list} をインポートしました",
+    "Several imports fit {names}: choose one with Show Context Actions": "{names} に合うインポートが複数あります。コンテキストアクションで選んでください",
+    "Add the imports pasted Rust code needs (when only one fits)": "貼り付けた Rust コードに必要なインポートを追加（候補が 1 つの場合）"
+  },
+  "scratch-analysis": {
+    "Scratch file: analysed on its own, outside the project's crates": "スクラッチファイル: プロジェクトのクレートとは別に単独で解析されます",
+    "Scratch file: open a project to have it analysed": "スクラッチファイル: 解析するにはプロジェクトを開いてください",
+    "Build it with rustc and run it": "rustc でビルドして実行"
+  },
+  "shortcuts": {
+    "Shortcuts": "ショートカット",
+    "Press a shortcut…": "ショートカットを押してください…",
+    "Record Shortcut": "ショートカットを記録",
+    "Reset": "リセット"
   }
 }

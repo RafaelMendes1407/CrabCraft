@@ -1,0 +1,6 @@
+# Configurable shortcuts. Import: python3 scripts/i18n_tsv.py shortcuts scripts/i18n/shortcuts.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Shortcuts	Atajos	Raccourcis	Atalhos	Tastenkürzel	Skróty	快捷键	ショートカット
+Press a shortcut…	Pulsa un atajo…	Appuyez sur un raccourci…	Pressione um atalho…	Tastenkürzel drücken…	Naciśnij skrót…	请按快捷键…	ショートカットを押してください…
+Record Shortcut	Grabar atajo	Enregistrer le raccourci	Gravar atalho	Tastenkürzel aufnehmen	Nagraj skrót	录制快捷键	ショートカットを記録
+Reset	Restablecer	Réinitialiser	Restaurar	Zurücksetzen	Przywróć	重置	リセット

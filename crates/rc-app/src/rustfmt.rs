@@ -9,6 +9,9 @@ struct Job {
     doc: u64,
     version: u64,
     save: bool,
+    /// Only the changes touching these lines (0-based, inclusive) are applied: Reformat Code
+    /// with a selection.
+    lines: Option<(usize, usize)>,
     job: FormatJob,
 }
 
@@ -24,11 +27,12 @@ pub enum Done {
 pub struct Jobs(Vec<Job>);
 
 impl Jobs {
-    /// A newer request replaces the one running on the same document.
-    pub fn push(&mut self, doc: u64, version: u64, save: bool, job: FormatJob) {
+    /// A newer request replaces the one running on the same document. With `lines`, only
+    /// the changes touching them are kept.
+    pub fn push_lines(&mut self, doc: u64, version: u64, save: bool, lines: Option<(usize, usize)>, job: FormatJob) {
         let save = save || self.0.iter().any(|j| j.doc == doc && j.save);
         self.0.retain(|j| j.doc != doc);
-        self.0.push(Job { doc, version, save, job });
+        self.0.push(Job { doc, version, save, lines, job });
     }
 
     pub fn is_empty(&self) -> bool {
@@ -51,7 +55,12 @@ impl Jobs {
                 // Typed into meanwhile: the text no longer matches.
                 Ok(_) if d.editor.buffer.version() != job.version => {}
                 Ok(text) => {
-                    let changes = line_edits(&d.editor.buffer.rope().to_string(), &text.replace("\r\n", "\n"));
+                    let old = d.editor.buffer.rope().to_string();
+                    let new = text.replace("\r\n", "\n");
+                    let changes = match job.lines {
+                        Some(lines) => line_edits_within(&old, &new, lines),
+                        None => line_edits(&old, &new),
+                    };
                     if !changes.is_empty() {
                         d.editor.apply_text_edits(changes);
                     }
@@ -66,6 +75,16 @@ impl Jobs {
 /// The changes, in characters of `old`, that turn it into `new` line by line, so the caret and
 /// the undo history only see the lines rustfmt changed.
 pub fn line_edits(old: &str, new: &str) -> Vec<rc_text::Change> {
+    line_edits_filtered(old, new, |_| true)
+}
+
+/// Only the blocks of changes that touch `old`'s lines `first..=last` (a block that crosses
+/// the edge is taken whole, so the code stays consistent).
+pub fn line_edits_within(old: &str, new: &str, (first, last): (usize, usize)) -> Vec<rc_text::Change> {
+    line_edits_filtered(old, new, |old_lines| if old_lines.is_empty() { (first..=last + 1).contains(&old_lines.start) } else { old_lines.start <= last && old_lines.end > first })
+}
+
+fn line_edits_filtered(old: &str, new: &str, keep: impl Fn(std::ops::Range<usize>) -> bool) -> Vec<rc_text::Change> {
     let a: Vec<&str> = old.split_inclusive('\n').collect();
     let b: Vec<&str> = new.split_inclusive('\n').collect();
     let mut starts = Vec::with_capacity(a.len() + 1);
@@ -75,12 +94,12 @@ pub fn line_edits(old: &str, new: &str) -> Vec<rc_text::Change> {
         at += line.chars().count();
         starts.push(at);
     }
-    rc_vcs::textdiff::diff(&a, &b).into_iter().map(|c| rc_text::Change::new(starts[c.old.start], starts[c.old.end], b[c.new].concat())).collect()
+    rc_vcs::textdiff::diff(&a, &b).into_iter().filter(|c| keep(c.old.clone())).map(|c| rc_text::Change::new(starts[c.old.start], starts[c.old.end], b[c.new].concat())).collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::line_edits;
+    use super::{line_edits, line_edits_within};
 
     fn apply(old: &str, new: &str) -> String {
         let mut editor = rc_editor::EditorState::new(1, None, old);
@@ -98,5 +117,15 @@ mod tests {
         for (old, new) in [("", "fn x() {}\n"), ("a\nb", "a\n"), ("é\nx\nñ\n", "é\ny\nñ\nz\n"), ("x\n\n\n", "x\n")] {
             assert_eq!(apply(old, new), new);
         }
+    }
+
+    #[test]
+    fn a_selection_keeps_the_changes_outside_it() {
+        let old = "fn a(){1}\n\nfn b(){2}\n\nfn c(){3}\n";
+        let new = "fn a() {\n    1\n}\n\nfn b() {\n    2\n}\n\nfn c() {\n    3\n}\n";
+        let mut editor = rc_editor::EditorState::new(1, None, old);
+        editor.apply_text_edits(line_edits_within(old, new, (2, 2)));
+        assert_eq!(editor.buffer.rope().to_string(), "fn a(){1}\n\nfn b() {\n    2\n}\n\nfn c(){3}\n");
+        assert!(line_edits_within(old, old, (0, 4)).is_empty());
     }
 }

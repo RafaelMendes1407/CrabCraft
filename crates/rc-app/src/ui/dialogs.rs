@@ -15,6 +15,8 @@ pub enum SettingsPage {
     Editor,
     Keymap,
     Tools,
+    ExternalTools,
+    LiveTemplates,
 }
 
 pub enum Dialog {
@@ -29,6 +31,8 @@ pub enum Dialog {
     Rename { path: PathBuf, name: String, error: Option<String> },
     /// After the new name of a file: the other changes the rename brings.
     RenameFile(Box<crate::file_rename::FileRename>),
+    /// The edits of a refactoring, to review before applying them.
+    RefactorPreview(Box<crate::refactor_preview::RefactorPreview>),
     ConfirmDelete { path: PathBuf },
     /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
     InvalidateCaches { clean: bool },
@@ -84,6 +88,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::RenameFile(r) => rename_file(app, ctx, r),
+        Dialog::RefactorPreview(r) => refactor_preview(app, ctx, r),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -146,6 +151,8 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::Editor, tr("Editor")),
                     (SettingsPage::Keymap, tr("Keymap")),
                     (SettingsPage::Tools, tr("Tools")),
+                    (SettingsPage::ExternalTools, tr("External Tools")),
+                    (SettingsPage::LiveTemplates, tr("Live Templates")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -164,6 +171,11 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
             ui.vertical(|ui| {
                 ui.set_min_height(320.0);
                 ui.set_width(500.0);
+                // A list of its own, outside the two-column grid of the other pages.
+                if *page == SettingsPage::LiveTemplates {
+                    live_templates_page(ui, &mut draft.live_templates, p.text_muted);
+                    return;
+                }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
                     SettingsPage::Appearance => {
                         ui.label(tr("Theme"));
@@ -238,6 +250,18 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label("");
                         ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.imports_on_paste, tr("Add the imports pasted Rust code needs (when only one fits)"));
+                        ui.end_row();
+                        ui.label(tr("Never import"));
+                        ui.vertical(|ui| {
+                            let mut text = draft.autoimport_exclude.join("\n");
+                            if ui.add(egui::TextEdit::multiline(&mut text).hint_text("std::sync::atomic::Ordering").font(egui::TextStyle::Monospace).desired_rows(3).desired_width(300.0)).changed() {
+                                draft.autoimport_exclude = text.lines().map(str::to_string).collect();
+                            }
+                            ui.label(egui::RichText::new(tr("Items or modules completion never offers to import, one path per line")).size(12.0).color(p.text_muted));
+                        });
+                        ui.end_row();
                     }
                     SettingsPage::Keymap => {
                         ui.label(tr("Keymap"));
@@ -245,16 +269,19 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                             .selected_text(match draft.keymap {
                                 KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
                                 KeymapChoice::VisualStudio => "Visual Studio",
+                                KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
                             })
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::Rider, if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" });
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::VisualStudio, "Visual Studio");
+                                ui.selectable_value(&mut draft.keymap, KeymapChoice::VsCode, if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" });
                             });
                         ui.end_row();
+                        shortcut_rows(ui, draft);
                     }
                     SettingsPage::Tools => {
                         app.load_toolchain();
-                        toolchain_rows(ui, app.toolchain.as_ref());
+                        toolchain_rows(ui, app);
                         for (label, value) in [
                             (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
@@ -278,6 +305,8 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         }
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
+                    SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
+                    SettingsPage::LiveTemplates => {}
                 });
             });
         });
@@ -288,6 +317,130 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
+/// again (the next key pressed with its modifiers) or removed.
+fn shortcut_rows(ui: &mut Ui, draft: &mut Settings) {
+    let keymap = crate::app::build_keymap(draft);
+    let mac = keymap.kind.is_mac();
+    let recording_id = egui::Id::new("recording_shortcut");
+    let recording: Option<String> = ui.ctx().data(|d| d.get_temp(recording_id));
+    // The key pressed while recording: Escape cancels.
+    if let Some(id) = &recording {
+        let pressed = ui.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                _ => None,
+            })
+        });
+        if let Some((key, mods)) = pressed {
+            if key != Key::Escape {
+                let chord = rc_editor::keymap::Chord { key, mods: egui::Modifiers { command: mods.ctrl || mods.mac_cmd, ..mods } };
+                draft.shortcuts.insert(id.clone(), rc_editor::keymap::chord_id(chord));
+            }
+            ui.ctx().data_mut(|d| d.remove::<String>(recording_id));
+        }
+    }
+    ui.label(tr("Shortcuts"));
+    egui::ScrollArea::vertical().id_salt("shortcuts").max_height(260.0).show(ui, |ui| {
+        egui::Grid::new("shortcuts_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
+            let mut items = crate::search::action_items();
+            items.sort_by_key(|(label, _)| label.to_lowercase());
+            for (label, action) in items {
+                let id = format!("{action:?}");
+                ui.label(label);
+                let text = if recording.as_deref() == Some(id.as_str()) {
+                    tr("Press a shortcut…").to_string()
+                } else {
+                    keymap.chord(action).map(|c| rc_editor::keymap::format_chord(c, mac)).unwrap_or_else(|| "—".into())
+                };
+                let changed = draft.shortcuts.contains_key(&id);
+                ui.label(if changed { egui::RichText::new(text).strong() } else { egui::RichText::new(text) });
+                ui.horizontal(|ui| {
+                    if ui.small_button(tr("Record Shortcut")).clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(recording_id, id.clone()));
+                    }
+                    if ui.small_button(tr("Remove")).clicked() {
+                        draft.shortcuts.insert(id.clone(), String::new());
+                    }
+                    if changed && ui.small_button(tr("Reset")).clicked() {
+                        draft.shortcuts.remove(&id);
+                    }
+                });
+                ui.end_row();
+            }
+        });
+    });
+    ui.end_row();
+}
+
+/// Settings › Live Templates: abbreviation, description and body of each template.
+fn live_templates_page(ui: &mut Ui, templates: &mut Vec<rc_core::live_templates::LiveTemplate>, muted: egui::Color32) {
+    ui.add(egui::Label::new(egui::RichText::new(tr("Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.")).color(muted)).wrap());
+    ui.add_space(8.0);
+    let mut remove = None;
+    egui::ScrollArea::vertical().id_salt("live_templates").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
+        for (i, t) in templates.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut t.abbreviation).hint_text(tr("Abbreviation")).font(egui::TextStyle::Monospace).desired_width(90.0));
+                ui.add(egui::TextEdit::singleline(&mut t.description).hint_text(tr("Description")).desired_width(330.0));
+                if theme::icon_button(ui, rc_kit::ico::DELETE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.add(egui::TextEdit::multiline(&mut t.body).font(egui::TextStyle::Monospace).desired_rows(2).desired_width(450.0));
+            ui.add_space(8.0);
+        }
+    });
+    if let Some(i) = remove {
+        templates.remove(i);
+    }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        if ui.button(tr("Add Template")).clicked() {
+            templates.push(rc_core::live_templates::LiveTemplate { abbreviation: String::new(), description: String::new(), body: "$0".into() });
+        }
+        if ui.button(tr("Restore Defaults")).clicked() {
+            *templates = rc_core::live_templates::defaults();
+        }
+    });
+}
+
+/// Settings › External Tools: each tool's name, program, arguments and folder.
+fn external_tools_rows(ui: &mut Ui, tools: &mut Vec<rc_core::external_tools::ExternalTool>, muted: egui::Color32) {
+    let mut remove = None;
+    for (i, tool) in tools.iter_mut().enumerate() {
+        for (label, value, hint) in [
+            (tr("Name"), &mut tool.name, "clippy pedantic"),
+            (tr("Program"), &mut tool.program, "cargo"),
+            (tr("Arguments"), &mut tool.args, "clippy -- -W clippy::pedantic"),
+            (tr("Working folder"), &mut tool.working_dir, "$ProjectFileDir$"),
+        ] {
+            ui.label(label);
+            ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(300.0));
+            ui.end_row();
+        }
+        ui.label("");
+        if ui.button(tr("Remove")).clicked() {
+            remove = Some(i);
+        }
+        ui.end_row();
+    }
+    if let Some(i) = remove {
+        tools.remove(i);
+    }
+    ui.label("");
+    if ui.button(tr("Add Tool")).clicked() {
+        tools.push(rc_core::external_tools::ExternalTool { name: trf("Tool {n}", &[("n", &(tools.len() + 1))]), ..Default::default() });
+    }
+    ui.end_row();
+    ui.label("");
+    ui.scope(|ui| {
+        ui.set_max_width(300.0);
+        ui.add(egui::Label::new(egui::RichText::new(trf("Run them from More Actions › External Tools or Find Action. Macros: {list}", &[("list", &rc_core::external_tools::MACROS.join(" "))])).color(muted)).wrap());
+    });
+    ui.end_row();
 }
 
 /// How rustfmt runs for Reformat Code, on save and at commit.
@@ -309,20 +462,36 @@ fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui
     ui.end_row();
 }
 
-/// The versions in use, read from the tools themselves.
-fn toolchain_rows(ui: &mut Ui, info: Option<&rc_cargo::ToolchainInfo>) {
-    let Some(info) = info else {
+/// The versions in use, read from the tools themselves, with rustup's installs and updates.
+fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
+    let Some(info) = app.toolchain.clone() else {
         ui.label(tr("Toolchain"));
         ui.spinner();
         ui.end_row();
         return;
     };
+    let has_rustup = app.rustup().is_some();
     let missing = tr("Not found");
-    for (label, value) in [("Cargo", info.cargo.as_deref()), ("rustc", info.rustc.as_deref()), (tr("rust-analyzer"), info.rust_analyzer.as_deref())] {
+    for (label, value) in [("Cargo", info.cargo.as_deref()), ("rustc", info.rustc.as_deref())] {
         ui.label(label);
         ui.label(value.unwrap_or(missing));
         ui.end_row();
     }
+    ui.label(tr("rust-analyzer"));
+    match info.rust_analyzer.as_deref() {
+        Some(v) => {
+            ui.label(v);
+        }
+        None => {
+            ui.horizontal(|ui| {
+                ui.label(missing);
+                if has_rustup && ui.button(tr("Install")).on_hover_text("rustup component add rust-analyzer").clicked() {
+                    app.run_rustup(&["component", "add", "rust-analyzer"]);
+                }
+            });
+        }
+    }
+    ui.end_row();
     ui.label(tr("Standard library"));
     match &info.stdlib {
         Some(path) => {
@@ -332,10 +501,62 @@ fn toolchain_rows(ui: &mut Ui, info: Option<&rc_cargo::ToolchainInfo>) {
                 ui.add(egui::Label::new(&text).truncate()).on_hover_text(&text);
             });
         }
+        None if has_rustup => {
+            ui.horizontal(|ui| {
+                ui.label(missing);
+                if ui.button(tr("Install")).on_hover_text("rustup component add rust-src").clicked() {
+                    app.run_rustup(&["component", "add", "rust-src"]);
+                }
+            });
+        }
         None => {
             ui.label(tr("Not found. Install it with: rustup component add rust-src"));
         }
     }
+    ui.end_row();
+    if !has_rustup {
+        return;
+    }
+    ui.label(tr("Updates"));
+    ui.vertical(|ui| {
+        if app.checking_toolchain_updates() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(tr("Checking with rustup…"));
+            });
+            return;
+        }
+        match app.toolchain_updates.clone() {
+            None => {
+                if ui.button(tr("Check for Updates")).on_hover_text("rustup check").clicked() {
+                    app.check_toolchain_updates();
+                }
+            }
+            Some(Err(e)) => {
+                ui.label(egui::RichText::new(e).color(rc_kit::pal(ui).error));
+                if ui.button(tr("Check Again")).clicked() {
+                    app.check_toolchain_updates();
+                }
+            }
+            Some(Ok(list)) => {
+                for u in &list {
+                    let text = match &u.available {
+                        Some(new) => trf("{name}: {current} → {new}", &[("name", &u.name), ("current", &u.current), ("new", new)]),
+                        None => trf("{name}: {current}, up to date", &[("name", &u.name), ("current", &u.current)]),
+                    };
+                    ui.label(text);
+                }
+                ui.horizontal(|ui| {
+                    if list.iter().any(|u| u.available.is_some()) && ui.button(tr("Update")).on_hover_text("rustup update").clicked() {
+                        app.run_rustup(&["update"]);
+                    }
+                    if ui.button(tr("Check Again")).clicked() {
+                        app.check_toolchain_updates();
+                    }
+                });
+            }
+        }
+    });
     ui.end_row();
 }
 
@@ -586,6 +807,30 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                     }
                 });
                 ui.end_row();
+                ui.label("");
+                ui.checkbox(&mut o.emulate_terminal, tr("Emulate terminal in the output console")).on_hover_text(tr("Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal"));
+                ui.end_row();
+                ui.label(tr("Before launch"));
+                ui.vertical(|ui| {
+                    let tools: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
+                    // Tools that no longer exist stay listed, so they can be unchecked.
+                    let gone: Vec<String> = o.before_launch.iter().filter(|n| !tools.contains(n)).cloned().collect();
+                    for name in tools.iter().chain(&gone) {
+                        let mut on = o.before_launch.contains(name);
+                        let label = if gone.contains(name) { trf("{name} (missing)", &[("name", name)]) } else { name.clone() };
+                        if ui.checkbox(&mut on, label).changed() {
+                            if on {
+                                o.before_launch.push(name.clone());
+                            } else {
+                                o.before_launch.retain(|n| n != name);
+                            }
+                        }
+                    }
+                    if tools.is_empty() && gone.is_empty() {
+                        ui.label(egui::RichText::new(tr("Add external tools in Settings › External Tools to run them before the build")).color(p.muted));
+                    }
+                });
+                ui.end_row();
             }
             if !rust {
             ui.label("");
@@ -598,6 +843,12 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             ui.add_enabled(!watch, egui::Checkbox::new(&mut o.build_first, tr("Build before running")));
             ui.end_row();
             }
+            ui.label("");
+            ui.checkbox(&mut o.allow_parallel, tr("Allow multiple instances")).on_hover_text(tr("Running it again starts another instance instead of restarting it"));
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut o.in_project, tr("Store as project file")).on_hover_text(tr("Saved in .crabcraft/runConfigurations to be committed and shared"));
+            ui.end_row();
         });
         ui.add_space(6.0);
         ui.label(egui::RichText::new(if rust { tr("One NAME=value per line.") } else { tr("Variables here are added to the profile's; one NAME=value per line.") }).size(12.0).color(p.muted));
@@ -618,6 +869,12 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             app.runner.options.remove(name);
         } else {
             app.runner.options.insert(name.to_string(), o.clone());
+        }
+        if let Some(root) = app.workspace.as_ref().map(|w| w.ws.root.clone()) {
+            let written = if o.in_project { rc_core::run_files::save(&root, name, o).map(|_| ()) } else { rc_core::run_files::remove(&root, name) };
+            if let Err(e) = written {
+                app.notify(trf("Could not save the run configuration in the project: {error}", &[("error", &e)]), true);
+            }
         }
         app.session_dirty = true;
         return Outcome::Close;
@@ -973,30 +1230,7 @@ fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename
                 ui.label(egui::RichText::new(trf("The language server could not list the references: {error}", &[("error", e)])).size(12.0).color(p.warn));
             }
             ui.add_space(6.0);
-            egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
-                let mut i = 0;
-                while i < r.changes.len() {
-                    let path = r.changes[i].path.clone();
-                    let end = (i..r.changes.len()).find(|&j| r.changes[j].path != path).unwrap_or(r.changes.len());
-                    let shown = root.as_ref().and_then(|root| path.strip_prefix(root).ok()).unwrap_or(&path).display().to_string();
-                    let mut all = r.changes[i..end].iter().all(|c| c.checked);
-                    if ui.checkbox(&mut all, egui::RichText::new(&shown).strong()).changed() {
-                        for c in &mut r.changes[i..end] {
-                            c.checked = all;
-                        }
-                    }
-                    for c in &mut r.changes[i..end] {
-                        ui.horizontal(|ui| {
-                            ui.add_space(22.0);
-                            let kind = if c.from_server { tr("code reference") } else { tr("text match") };
-                            let label = format!("{}: {} \u{2192} {}", c.line + 1, clip(c.before.trim()), clip(c.after.trim()));
-                            ui.checkbox(&mut c.checked, egui::RichText::new(label).monospace().size(12.0));
-                            ui.label(egui::RichText::new(kind).size(11.0).color(p.muted));
-                        });
-                    }
-                    i = end;
-                }
-            });
+            change_list(ui, &mut r.changes, root.as_deref(), p.muted, true);
         }
         if let Some(e) = &r.error {
             ui.colored_label(p.error, e);
@@ -1015,6 +1249,81 @@ fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename
         return finish_rename(app, r, update);
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The refactoring's changes, grouped by file, each with a checkbox; Refactor applies the
+/// checked ones.
+fn refactor_preview(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refactor_preview::RefactorPreview) -> Outcome {
+    r.update();
+    let loading = r.loading();
+    if loading {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let title_text = r.title.clone();
+    let ((apply, cancel), esc) = modal(ctx, "refactor_preview", 680.0, |ui| {
+        title(ui, &title_text);
+        if loading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(tr("Listing the changes…"));
+            });
+        } else {
+            let mut files: Vec<&PathBuf> = r.changes.iter().map(|c| &c.path).collect();
+            files.dedup();
+            ui.label(trf("{n} changes in {files} files. Uncheck the ones to leave out.", &[("n", &r.changes.len()), ("files", &files.len())]));
+            ui.add_space(6.0);
+            change_list(ui, &mut r.changes, root.as_deref(), p.muted, false);
+        }
+        if let Some(e) = &r.error {
+            ui.colored_label(p.error, e);
+        }
+        buttons(ui, tr("Refactor"), !loading && r.changes.iter().any(|c| c.checked))
+    });
+    if apply {
+        return match crate::insight::apply_file_edits(&mut app.docs, r.checked()) {
+            Ok(n) => {
+                app.notify(trf("Renamed in {n} files", &[("n", &n)]), false);
+                Outcome::Close
+            }
+            Err(e) => {
+                r.error = Some(e);
+                Outcome::Keep
+            }
+        };
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Changes grouped by file, with a checkbox per file and per change.
+fn change_list(ui: &mut Ui, changes: &mut [crate::file_rename::Change], root: Option<&std::path::Path>, muted: egui::Color32, kinds: bool) {
+    egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+        let mut i = 0;
+        while i < changes.len() {
+            let path = changes[i].path.clone();
+            let end = (i..changes.len()).find(|&j| changes[j].path != path).unwrap_or(changes.len());
+            let shown = root.and_then(|root| path.strip_prefix(root).ok()).unwrap_or(&path).display().to_string();
+            let mut all = changes[i..end].iter().all(|c| c.checked);
+            if ui.checkbox(&mut all, egui::RichText::new(&shown).strong()).changed() {
+                for c in &mut changes[i..end] {
+                    c.checked = all;
+                }
+            }
+            for c in &mut changes[i..end] {
+                ui.horizontal(|ui| {
+                    ui.add_space(22.0);
+                    let label = format!("{}: {} \u{2192} {}", c.line + 1, clip(c.before.trim()), clip(c.after.trim()));
+                    ui.checkbox(&mut c.checked, egui::RichText::new(label).monospace().size(12.0));
+                    if kinds {
+                        let kind = if c.from_server { tr("code reference") } else { tr("text match") };
+                        ui.label(egui::RichText::new(kind).size(11.0).color(muted));
+                    }
+                });
+            }
+            i = end;
+        }
+    });
 }
 
 /// Renames on disk with the picked changes (`update`) or none.
@@ -1353,14 +1662,22 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
         }
         ui.label(egui::RichText::new(tr("Renames the symbol and its usages in every project.")).size(12.0).color(rc_kit::pal(ui).muted));
         let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        let (ok, cancel) = buttons(ui, tr("Rename"), valid);
-        (ok || enter && valid, cancel)
+        ui.add_space(14.0);
+        let mut res = (false, false, false);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            res.0 = ui.add_enabled_ui(valid, |ui| theme::primary_button(ui, tr("Rename"))).inner.clicked();
+            res.2 = ui.add_enabled_ui(valid, |ui| theme::secondary_button(ui, tr("Preview"))).inner.on_hover_text(tr("List the changes first and pick the ones to make")).clicked();
+            res.1 = theme::secondary_button(ui, tr("Cancel")).clicked();
+        });
+        ((res.0 || enter && valid, res.2), res.1)
     });
-    if ok {
+    let (ok, preview) = ok;
+    if ok || preview {
         if *name != *original
             && let Some(d) = app.docs.list.iter().find(|d| d.editor.id == doc)
         {
-            app.insight.rename(d, pos, name.trim());
+            let title = preview.then(|| trf("Rename '{old}' to '{new}'", &[("old", original), ("new", &name.trim())]));
+            app.insight.rename(d, pos, name.trim(), title);
         }
         return Outcome::Close;
     }
@@ -1582,7 +1899,7 @@ impl LocalHistoryView {
 }
 
 /// "3 min ago", or the date for old versions.
-fn history_age(now_ms: u64, time_ms: u64) -> String {
+pub(crate) fn history_age(now_ms: u64, time_ms: u64) -> String {
     let secs = now_ms.saturating_sub(time_ms) / 1000;
     match secs {
         0..60 => tr("just now").to_string(),

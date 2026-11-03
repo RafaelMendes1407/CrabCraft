@@ -293,13 +293,41 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
         editor_rect.min.y = banner.bottom();
     }
+    // LightEdit: a file opened without its project; offer to open the whole project.
+    if app.workspace.is_none()
+        && let Some(project) = app.docs.list[active].light_project.clone()
+    {
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
+        ui.painter().rect_filled(banner, 0.0, rc_kit::theme::blend(p.island_bg, p.accent.gamma_multiply(0.12)));
+        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        icons::image(&mut b, ico::INFO, 16.0);
+        let name = project.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        b.label(rc_kit::i18n::trf("LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.", &[("name", &name)]));
+        if b.button(tr("Open Project")).clicked() {
+            app.open_workspace(&project);
+            return false;
+        }
+        editor_rect.min.y = banner.bottom();
+    }
     // A Rust scratch file is outside every Cargo package: say that code insight is missing.
     if app.docs.list[active].scratch && app.docs.list[active].editor.lang() == rc_syntax::Lang::Rust {
         let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
         ui.painter().rect_filled(banner, 0.0, rc_kit::theme::blend(p.island_bg, p.warn.gamma_multiply(0.18)));
         let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
-        icons::image(&mut b, ico::WARNING, 16.0);
-        b.label(tr("Scratch file: rust-analyzer does not analyze it yet"));
+        // With a project open, rust-analyzer analyses it on its own; without one nothing does.
+        if app.workspace.is_some() {
+            icons::image(&mut b, ico::INFO, 16.0);
+            b.label(tr("Scratch file: analysed on its own, outside the project's crates"));
+        } else {
+            icons::image(&mut b, ico::WARNING, 16.0);
+            b.label(tr("Scratch file: open a project to have it analysed"));
+        }
+        if b.button(tr("Run")).on_hover_text(tr("Build it with rustc and run it")).clicked() {
+            let path = app.docs.list[active].path.clone();
+            app.save_all_docs();
+            let outs = app.runner.run_scratch(&path);
+            crate::ui::run_windows::handle_outputs(app, outs);
+        }
         editor_rect.min.y = banner.bottom();
     }
     // A Rust file no module declares: rust-analyzer knows nothing about its code.

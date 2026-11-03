@@ -239,7 +239,7 @@ fn occurrences(text: &str, needle: &str) -> Vec<(usize, usize)> {
 }
 
 /// The change of `edit`: its lines before and after.
-fn change(rope: &Rope, path: &Path, edit: lsp::TextEdit, from_server: bool) -> Change {
+pub(crate) fn change(rope: &Rope, path: &Path, edit: lsp::TextEdit, from_server: bool) -> Change {
     let (a, b) = convert::range_chars(rope, &edit.range);
     let (a, b) = (a.min(b), a.max(b));
     let line = rope.char_to_line(a);

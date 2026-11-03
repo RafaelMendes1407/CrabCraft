@@ -103,7 +103,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 }
                 ui.add_space(6.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
-                let keymap = rc_editor::Keymap::new(app.keymap.kind);
+                let keymap = app.keymap.clone();
                 let shortcut = |a: Action| keymap.shortcut_text(a).map(|s| format!(" ({s})")).unwrap_or_default();
                 if theme::icon_button_sized(ui, ico::SETTINGS, true, &format!("{}{}", tr("Settings"), shortcut(Action::ShowSettings)), 30.0).clicked() {
                     app.pending.push(Action::ShowSettings);
@@ -119,6 +119,23 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
+                        // The user's external tools, then the settings that list them.
+                        ui.menu_button(tr("External Tools"), |ui| {
+                            let names: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
+                            for name in names {
+                                if theme::menu_item(ui, Some(ico::RUN_ANYTHING), &name, false).clicked() {
+                                    app.run_external_tool(&name);
+                                    ui.close();
+                                }
+                            }
+                            if !app.settings.external_tools.is_empty() {
+                                ui.separator();
+                            }
+                            if theme::menu_item(ui, Some(ico::SETTINGS), tr("Configure External Tools…"), false).clicked() {
+                                app.open_settings(crate::ui::dialogs::SettingsPage::ExternalTools);
+                                ui.close();
+                            }
+                        });
                         if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
@@ -166,7 +183,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                         }
                         let mut chosen = None;
                         for (i, c) in app.runner.configs.iter().enumerate() {
-                            if theme::menu_item(ui, Some(c.icon()), &c.name, i == app.runner.selected).clicked() {
+                            // Temporary configurations are told apart, as in RustRover.
+                            let temporary = app.runner.is_temporary(&c.name);
+                            let label = if temporary { trf("{name} (temporary)", &[("name", &c.name)]) } else { c.name.clone() };
+                            if theme::menu_item(ui, Some(c.icon()), &label, i == app.runner.selected).clicked() {
                                 chosen = Some(i);
                                 ui.close();
                             }
@@ -179,6 +199,19 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
+                                ui.close();
+                            }
+                        }
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::TestSelection { .. } }) = app.runner.selected_config().cloned() {
+                            ui.separator();
+                            if app.runner.is_temporary(&name) && theme::menu_item(ui, Some(ico::SAVE), &trf("Save “{name}” Configuration", &[("name", &name)]), false).clicked() {
+                                app.runner.save_temporary(&name);
+                                app.session_dirty = true;
+                                ui.close();
+                            }
+                            if theme::menu_item(ui, Some(ico::DELETE), &trf("Delete “{name}”", &[("name", &name)]), false).clicked() {
+                                app.runner.remove_test_config(&name);
+                                app.session_dirty = true;
                                 ui.close();
                             }
                         }

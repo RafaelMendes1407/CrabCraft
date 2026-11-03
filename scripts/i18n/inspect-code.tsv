@@ -1,0 +1,14 @@
+# Inspect Code. Import: python3 scripts/i18n_tsv.py inspect-code scripts/i18n/inspect-code.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Inspect Code	Inspeccionar código	Inspecter le code	Inspecionar código	Code inspizieren	Sprawdź kod	检查代码	コードを検査
+Open a Cargo project to inspect its code	Abre un proyecto Cargo para inspeccionar su código	Ouvrez un projet Cargo pour inspecter son code	Abra um projeto Cargo para inspecionar o código	Öffne ein Cargo-Projekt, um seinen Code zu inspizieren	Otwórz projekt Cargo, aby sprawdzić jego kod	打开 Cargo 项目以检查其代码	コードを検査するには Cargo プロジェクトを開いてください
+Inspection cancelled	Inspección cancelada	Inspection annulée	Inspeção cancelada	Inspektion abgebrochen	Sprawdzanie anulowane	检查已取消	検査をキャンセルしました
+Current Files	Archivos actuales	Fichiers actuels	Arquivos atuais	Aktuelle Dateien	Bieżące pliki	当前文件	現在のファイル
+Inspection	Inspección	Inspection	Inspeção	Inspektion	Sprawdzanie	检查	検査
+Inspect Code: Clippy over every member and target of the Cargo project	Inspeccionar código: Clippy en todos los miembros y destinos del proyecto Cargo	Inspecter le code : Clippy sur chaque membre et cible du projet Cargo	Inspecionar código: Clippy em todos os membros e alvos do projeto Cargo	Code inspizieren: Clippy über alle Mitglieder und Ziele des Cargo-Projekts	Sprawdź kod: Clippy na wszystkich członkach i celach projektu Cargo	检查代码：对 Cargo 项目的所有成员和目标运行 Clippy	コードを検査: Cargo プロジェクトのすべてのメンバーとターゲットに Clippy を実行
+No inspection yet	Aún no hay inspección	Aucune inspection pour l'instant	Nenhuma inspeção ainda	Noch keine Inspektion	Brak sprawdzania	尚未检查	まだ検査していません
+Inspect Code runs Clippy over the whole project.	Inspeccionar código ejecuta Clippy en todo el proyecto.	Inspecter le code lance Clippy sur tout le projet.	Inspecionar código roda o Clippy no projeto inteiro.	Code inspizieren führt Clippy über das ganze Projekt aus.	Sprawdź kod uruchamia Clippy na całym projekcie.	“检查代码”会对整个项目运行 Clippy。	「コードを検査」はプロジェクト全体に Clippy を実行します。
+Inspecting with Clippy…	Inspeccionando con Clippy…	Inspection avec Clippy…	Inspecionando com o Clippy…	Inspiziere mit Clippy…	Sprawdzanie przez Clippy…	正在用 Clippy 检查…	Clippy で検査中…
+No problems found	No se encontraron problemas	Aucun problème trouvé	Nenhum problema encontrado	Keine Probleme gefunden	Nie znaleziono problemów	未发现问题	問題は見つかりませんでした
+Clippy found nothing to report.	Clippy no encontró nada que señalar.	Clippy n'a rien trouvé à signaler.	O Clippy não encontrou nada a relatar.	Clippy hat nichts zu melden.	Clippy nie znalazł nic do zgłoszenia.	Clippy 没有发现需要报告的问题。	Clippy が報告する問題はありませんでした。
+Other	Otros	Autres	Outros	Sonstige	Inne	其他	その他

@@ -20,6 +20,14 @@ use std::path::{Path, PathBuf};
 
 /// A message in the status bar / notification balloon.
 #[derive(Clone, Debug)]
+/// The findings of Inspect Code (Clippy over the workspace).
+pub struct Inspection {
+    pub running: bool,
+    pub diagnostics: Vec<rc_dotnet::Diagnostic>,
+    /// Why it did not finish (Clippy missing, cancelled).
+    pub failed: Option<String>,
+}
+
 pub struct Notice {
     pub text: String,
     pub error: bool,
@@ -83,13 +91,26 @@ pub struct CrabCraftApp {
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
-    cargo_load: Option<Inbox<Result<rc_cargo::CargoWorkspace, String>>>,
+    cargo_load: Option<Inbox<(Result<rc_cargo::CargoWorkspace, String>, Option<rc_cargo::LoadLog>)>>,
+    /// Every load of the Cargo model, newest last (the Build window's Sync tab).
+    pub sync_log: crate::sync_log::SyncLog,
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
-    libraries_load: Option<Inbox<Vec<rc_cargo::Library>>>,
+    libraries_load: Option<Inbox<(Vec<rc_cargo::Library>, Option<rc_cargo::LoadLog>)>>,
+    /// The attached Cargo projects being read.
+    attached_load: Option<Inbox<Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>>>,
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
+    /// What the last `rustup check` said (Settings › Tools).
+    pub toolchain_updates: Option<Result<Vec<rc_cargo::ToolchainUpdate>, String>>,
+    toolchain_updates_load: Option<Inbox<Result<Vec<rc_cargo::ToolchainUpdate>, String>>>,
+    /// The Run tab of a rustup command: when it ends, the toolchain is read again.
+    rustup_run: Option<String>,
+    /// The last Inspect Code run.
+    pub inspection: Option<Inspection>,
+    /// The Problems window shows the inspection instead of the open files' problems.
+    pub problems_tab_inspection: bool,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
@@ -147,13 +168,13 @@ fn double_tap(state: &mut (f64, u8, bool), down: bool, interrupted: bool, now: f
 }
 
 impl CrabCraftApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, open: Vec<crate::cli::OpenRequest>) -> Self {
         let settings = Settings::load();
         i18n::set_lang(settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
         rc_kit::theme::install_fonts(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
         let waker = Waker::new(move || ctx.request_repaint());
-        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let keymap = build_keymap(&settings);
         let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
         let mut app = Self::with_settings(settings, waker, native_menu);
         crate::open_files::set_context(&cc.egui_ctx);
@@ -161,15 +182,15 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        for path in startup_paths(&app.settings, from_system) {
-            app.open_path(&path);
+        for request in startup_paths(&app.settings, from_system) {
+            app.open_request(&request);
         }
         app
     }
 
     /// Builds the app without a window (tests and headless captures).
     pub fn with_settings(settings: Settings, waker: Waker, native_menu: Option<NativeMenu>) -> Self {
-        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let keymap = build_keymap(&settings);
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
@@ -185,10 +206,16 @@ impl CrabCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
-            insight: Insight::new(waker.clone()),
+            insight: {
+                let mut insight = Insight::new(waker.clone());
+                insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
+                insight.imports_on_paste = settings.imports_on_paste;
+                insight
+            },
             runner: {
                 let mut runner = Runner::new(waker.clone());
                 runner.nextest = settings.use_nextest;
+                runner.external_tools = settings.external_tools.clone();
                 runner
             },
             debugger: crate::debugger::Debugger::new(waker.clone()),
@@ -198,8 +225,14 @@ impl CrabCraftApp {
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
             toolchain: None,
+            attached_load: None,
             libraries_load: None,
             rustfmt_jobs: Default::default(),
+            inspection: None,
+            problems_tab_inspection: false,
+            toolchain_updates: None,
+            toolchain_updates_load: None,
+            rustup_run: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
             layout: Default::default(),
@@ -224,6 +257,7 @@ impl CrabCraftApp {
             waker,
             _watcher: None,
             cargo_load: None,
+            sync_log: Default::default(),
             cargo_remembered: None,
             pending: Vec::new(),
             focus_editor: false,
@@ -284,6 +318,9 @@ impl CrabCraftApp {
         // The user's exclusions come first: the index, the analysis and the explorer follow them.
         self.explorer.excluded = rc_core::workspace::clean_excluded(&session.excluded);
         self.insight.set_exclude(self.explorer.excluded.clone());
+        // Attached Cargo projects that still exist (the session is from an earlier run).
+        self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
+        self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root);
         let projects = match &ws.kind {
@@ -304,12 +341,18 @@ impl CrabCraftApp {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.runner.compounds = session.compounds.clone();
+        self.runner.test_configs = session.test_configs.clone();
         self.runner.options = session.run_options.clone();
+        // Configurations stored in the project win over the session's copy.
+        self.runner.options.extend(rc_core::run_files::load(&ws.root));
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
+        self.docs.style_root = Some(ws.root.canonicalize().unwrap_or_else(|_| ws.root.clone()));
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+        // Scratches reopened with the session are analysed too.
+        self.update_linked();
         if let Some(manifest) = manifest {
             self.load_cargo_workspace(manifest);
         }
@@ -323,8 +366,11 @@ impl CrabCraftApp {
         let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
             let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
-                Some(cargo) => rc_cargo::load_workspace(&cargo, &manifest).map_err(|e| e.to_string()),
-                None => Err(tr("Cargo was not found. Install Rust with rustup.").to_string()),
+                Some(cargo) => {
+                    let (result, log) = rc_cargo::load_workspace_logged(&cargo, &manifest);
+                    (result.map_err(|e| e.to_string()), Some(log))
+                }
+                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
             };
             out.send(result);
         });
@@ -332,24 +378,65 @@ impl CrabCraftApp {
     }
 
     pub(crate) fn poll_cargo_workspace(&mut self) {
-        if let Some(libraries) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
+        if let Some((libraries, log)) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
             self.libraries_load = None;
+            if let Some(log) = log {
+                self.sync_log.push(crate::sync_log::SyncKind::Dependencies, log);
+            }
             // Canonical like the documents' paths (`\\?\C:\…` on Windows).
             self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.canonicalize().unwrap_or_else(|_| l.root.clone())).collect();
             self.explorer.libraries = libraries;
         }
+        if let Some(loaded) = self.attached_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
+            self.attached_load = None;
+            let mut workspaces = Vec::new();
+            for (result, log) in loaded {
+                self.sync_log.push(crate::sync_log::SyncKind::Attached, log);
+                match result {
+                    Ok(w) => workspaces.push(w),
+                    Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
+                }
+            }
+            self.runner.set_attached(workspaces);
+        }
         let Some(inbox) = &self.cargo_load else { return };
-        for result in inbox.drain() {
+        for (result, log) in inbox.drain() {
+            if let Some(log) = log {
+                self.sync_log.push(crate::sync_log::SyncKind::Project, log);
+            }
             match result {
                 Ok(workspace) => {
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
                     self.load_libraries();
+                    self.load_attached();
                 }
                 Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
             }
             self.cargo_load = None;
             return;
         }
+    }
+
+    /// Reads the attached Cargo projects in the background (their binaries become run
+    /// configurations).
+    fn load_attached(&mut self) {
+        let manifests = self.explorer.attached.clone();
+        if manifests.is_empty() {
+            self.attached_load = None;
+            self.runner.set_attached(Vec::new());
+            return;
+        }
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
+        std::thread::spawn(move || {
+            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
+            out.send(manifests.iter().map(|m| {
+                let (result, log) = rc_cargo::load_workspace_logged(&cargo, m);
+                (result.map_err(|e| e.to_string()), log)
+            }).collect());
+        });
+        self.attached_load = Some(inbox);
     }
 
     /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
@@ -362,13 +449,14 @@ impl CrabCraftApp {
         let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
             let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
-            let mut list = rc_cargo::load_libraries(&cargo, &manifest).unwrap_or_default();
+            let (list, log) = rc_cargo::load_libraries_logged(&cargo, &manifest);
+            let mut list = list.unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
             if let Some(root) = info.stdlib {
                 let version = info.rustc.as_deref().and_then(|v| v.split_whitespace().nth(1)).unwrap_or_default().to_string();
                 list.insert(0, rc_cargo::Library { name: "stdlib".into(), version, root, read_only: true });
             }
-            out.send(list);
+            out.send((list, Some(log)));
         });
         self.libraries_load = Some(inbox);
     }
@@ -413,7 +501,15 @@ impl CrabCraftApp {
             Ok(rustfmt) => {
                 let doc = &self.docs.list[i];
                 let job = rustfmt.start(doc.path.clone(), edition, doc.editor.buffer.rope().to_string(), self.waker.clone());
-                self.rustfmt_jobs.push(doc.editor.id, doc.editor.buffer.version(), save, job);
+                // Reformat Code with a selection: rustfmt formats the file and only the changes
+                // touching the selected lines are kept.
+                let sel = doc.editor.selection.primary();
+                let lines = (!save && !sel.is_empty()).then(|| {
+                    let rope = doc.editor.buffer.rope();
+                    let last = if sel.end() > sel.start() && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start()) && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end() { rope.char_to_line(sel.end()) - 1 } else { rope.char_to_line(sel.end()) };
+                    (rope.char_to_line(sel.start()), last)
+                });
+                self.rustfmt_jobs.push_lines(doc.editor.id, doc.editor.buffer.version(), save, lines, job);
             }
             Err(e) => self.notify(e, true),
         }
@@ -472,6 +568,54 @@ impl CrabCraftApp {
         self.toolchain_load = Some(inbox);
     }
 
+    /// `rustup`, if Rust was installed with it.
+    pub fn rustup(&self) -> Option<PathBuf> {
+        rc_cargo::Cargo::locate().and_then(|c| rc_cargo::rustup_path(&c))
+    }
+
+    /// Asks rustup for toolchain updates in the background (it reads the network).
+    pub fn check_toolchain_updates(&mut self) {
+        let Some(rustup) = self.rustup() else {
+            self.toolchain_updates = Some(Err(tr("rustup was not found: this toolchain was not installed with it").to_string()));
+            return;
+        };
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || out.send(rc_cargo::rustup_check(&rustup).map_err(|e| e.to_string())));
+        self.toolchain_updates = None;
+        self.toolchain_updates_load = Some(inbox);
+    }
+
+    pub fn checking_toolchain_updates(&self) -> bool {
+        self.toolchain_updates_load.is_some()
+    }
+
+    /// Runs `rustup <args>` in the Run window; the versions are read again when it ends.
+    pub fn run_rustup(&mut self, args: &[&str]) {
+        let Some(rustup) = self.rustup() else {
+            self.notify(tr("rustup was not found: this toolchain was not installed with it"), true);
+            return;
+        };
+        let outs = self.runner.run_command(rustup, args.iter().map(|a| a.to_string()).collect());
+        self.rustup_run = self.runner.runs.last().map(|r| r.name.clone());
+        crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Picks up `rustup check` results and the end of rustup commands.
+    pub(crate) fn poll_toolchain_updates(&mut self) {
+        if let Some(result) = self.toolchain_updates_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.toolchain_updates = Some(result);
+            self.toolchain_updates_load = None;
+        }
+        if let Some(name) = &self.rustup_run
+            && self.runner.runs.iter().find(|r| &r.name == name).is_none_or(|r| r.exit.is_some())
+        {
+            self.rustup_run = None;
+            self.toolchain = None;
+            self.toolchain_updates = None;
+        }
+    }
+
     /// Changes the project's environment: rust-analyzer restarts with it and the Cargo project
     /// is read again (nothing restarts when it did not change).
     pub fn set_project_env(&mut self, text: String) {
@@ -503,6 +647,29 @@ impl CrabCraftApp {
         }
         match rc_cargo::target_command(package, target) {
             Some(args) => self.run_cargo_args(args),
+            None => self.notify(tr("Cargo cannot run this target"), false),
+        }
+    }
+
+    /// Runs a target of an attached Cargo project: a binary through its run configuration,
+    /// the rest with Cargo and the project's own manifest.
+    pub fn run_attached_target(&mut self, ctx: &Context, manifest: &Path, package: &str, target: &rc_cargo::Target) {
+        let folder = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = format!("{} ({folder})", target.name);
+        if target.kind == rc_cargo::TargetKind::Bin
+            && let Some(index) = self.runner.configs.iter().position(|c| c.name == name)
+        {
+            self.runner.selected = index;
+            self.session_dirty = true;
+            self.run_ide_action(ctx, Action::Run);
+            return;
+        }
+        match rc_cargo::target_command(package, target) {
+            Some(args) => {
+                self.save_all_docs();
+                let outs = self.runner.cargo_command_in(manifest, args);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
             None => self.notify(tr("Cargo cannot run this target"), false),
         }
     }
@@ -683,6 +850,9 @@ impl CrabCraftApp {
         self.tab_drag = None;
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
+        self.docs.style_root = None;
+        self.sync_log.clear();
+        self.inspection = None;
         self.libraries_load = None;
         self.rustfmt_jobs = Default::default();
         self.dock = Dock::default();
@@ -803,8 +973,10 @@ impl CrabCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
+            test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),
+            attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
@@ -883,6 +1055,11 @@ impl CrabCraftApp {
                     self.dock.show(ToolWindow::Find);
                 }
                 InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
+                InsightOutput::RefactorPreview { title, edit } => {
+                    let open = self.docs.list.iter().map(|d| (d.path.clone(), d.editor.buffer.rope().clone())).collect();
+                    let preview = crate::refactor_preview::RefactorPreview::start(title, &edit, open, self.waker.clone());
+                    self.dialog = Some(Dialog::RefactorPreview(Box::new(preview)));
+                }
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
             }
@@ -894,10 +1071,6 @@ impl CrabCraftApp {
         let Some(i) = self.docs.active else { return };
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
         if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
-            if !self.docs.list[i].editor.selection.primary().is_empty() {
-                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
-                return;
-            }
             if self.rustfmt_document(i, false) {
                 return;
             }
@@ -954,9 +1127,6 @@ impl CrabCraftApp {
                 let doc = &self.docs.list[i];
                 self.insight.navigate(doc, caret, NavKind::Super);
             }
-            Action::Reformat if self.runner.cargo_workspace.is_some() && !doc.editor.selection.primary().is_empty() => {
-                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
-            }
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
             _ => {}
@@ -1010,7 +1180,11 @@ impl CrabCraftApp {
     pub fn open_file(&mut self, path: &Path) {
         self.push_nav();
         match self.docs.open(path) {
-            Ok(_) => {
+            Ok(i) => {
+                // A Rust scratch gets analysed on its own.
+                if self.docs.list.get(i).is_some_and(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust) {
+                    self.update_linked();
+                }
                 self.focus_editor = true;
                 self.session_dirty = true;
             }
@@ -1100,7 +1274,11 @@ impl CrabCraftApp {
         // The tab beside it in the same group takes its place.
         let id = self.docs.list.get(i).map(|d| d.editor.id);
         let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
+        let scratch = self.docs.list.get(i).is_some_and(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust);
         self.docs.close(i);
+        if scratch {
+            self.update_linked();
+        }
         if let Some(n) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
             self.docs.active = Some(n);
         }
@@ -1119,6 +1297,11 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if matches!(action, Action::Run | Action::Debug) {
+            // "Before launch" tools see the file and caret of this moment.
+            self.runner.macro_context = self.macro_context();
+            self.runner.external_tools = self.settings.external_tools.clone();
+        }
         match action {
             Action::SaveAll | Action::Save => {
                 self.save_all_docs();
@@ -1284,6 +1467,7 @@ impl CrabCraftApp {
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
+            Action::InspectCode => self.inspect_code(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
@@ -1579,6 +1763,9 @@ impl CrabCraftApp {
                 Some(Err(e)) => self.notify(e, true),
                 None => {}
             },
+            Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::TestSelection { .. }, .. }) => {
+                self.notify(tr("Test configurations cannot be debugged yet: use Debug in the gutter of the test"), false);
+            }
             Some(config) => {
                 let dotnet = dotnet_path(&self.settings);
                 let request = self.runner.request_for(&config);
@@ -1638,7 +1825,7 @@ impl CrabCraftApp {
         // One thread, so stepping stays in the test being debugged.
         args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
-        let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
+        let target = rc_cargo::RunTarget { before: Vec::new(), manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
         let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
         self.debug_rust_test(config, target);
     }
@@ -1654,6 +1841,10 @@ impl CrabCraftApp {
         };
         self.save_all_docs();
         let filter = if m.is_class { rc_dotnet::TestFilter::Class(m.name.clone()) } else { rc_dotnet::TestFilter::Tests(vec![m.name.clone()]) };
+        // The run becomes a temporary configuration: Run and Debug start it again.
+        let short = m.name.rsplit("::").next().unwrap_or(&m.name).rsplit('.').next().unwrap_or(&m.name).to_string();
+        self.runner.select_tests(short, project.clone(), filter.clone());
+        self.session_dirty = true;
         let outs = self.runner.run_tests(&project, Some(filter));
         crate::ui::run_windows::handle_outputs(self, outs);
     }
@@ -1684,6 +1875,80 @@ impl CrabCraftApp {
     fn project_of_manifest(&self, path: &Path) -> Option<PathBuf> {
         let inside = self.workspace.as_ref().is_some_and(|w| path.starts_with(&w.ws.root));
         (!inside && path.is_file() && path.file_name().is_some_and(|n| n == "Cargo.toml")).then(|| path.parent().map(Path::to_path_buf)).flatten()
+    }
+
+    /// Opens the settings on `page`.
+    pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
+        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
+    }
+
+    /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the
+    /// Problems window's Inspection tab, grouped by lint.
+    pub fn inspect_code(&mut self) {
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
+            self.notify(tr("Open a Cargo project to inspect its code"), false);
+            return;
+        };
+        self.save_all_docs();
+        let outs = self.runner.cargo_command_in(&manifest, rc_cargo::inspect_args(&manifest));
+        if self.runner.build.as_ref().is_some_and(|b| b.handle.is_some()) {
+            self.inspection = Some(Inspection { running: true, diagnostics: Vec::new(), failed: None });
+        }
+        crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Picks up the end of an inspection.
+    pub(crate) fn poll_inspection(&mut self) {
+        let Some(i) = self.inspection.as_mut().filter(|i| i.running) else { return };
+        let Some(b) = &self.runner.build else { return };
+        if b.handle.is_some() && b.result.is_none() && b.failed.is_none() {
+            return;
+        }
+        i.running = false;
+        i.diagnostics = b.diagnostics.clone();
+        i.failed = b.failed.clone().or_else(|| b.result.as_ref().filter(|r| r.cancelled).map(|_| tr("Inspection cancelled").to_string()));
+        self.problems_tab_inspection = true;
+        self.dock.show(ToolWindow::Problems);
+    }
+
+    /// What the external tool macros stand for now: the active file, its caret and selection.
+    pub fn macro_context(&self) -> rc_core::external_tools::MacroContext {
+        let doc = self.docs.active_doc().filter(|d| !d.generated);
+        let caret = doc.map(|d| d.editor.caret_line_col());
+        rc_core::external_tools::MacroContext {
+            file: doc.map(|d| d.path.clone()),
+            project: self.workspace.as_ref().map(|w| w.ws.root.clone()),
+            line: caret.map(|(l, _)| l + 1),
+            column: caret.map(|(_, c)| c + 1),
+            selection: doc.map(|d| d.editor.selected_text()).unwrap_or_default(),
+        }
+    }
+
+    /// Runs the external tool called `name` in the Run window. Unsaved files are saved first,
+    /// since the tool reads them from disk.
+    pub fn run_external_tool(&mut self, name: &str) {
+        let Some(tool) = self.settings.external_tools.iter().find(|t| t.name == name).cloned() else {
+            self.notify(trf("There is no external tool called {name}", &[("name", &name)]), true);
+            return;
+        };
+        self.save_all_docs();
+        match external_plan(&tool, &self.macro_context(), self.runner.project_env_pairs()) {
+            Ok(plan) => {
+                let outs = self.runner.run_external(&tool.name, plan);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            Err(e) => self.notify(trf("Could not run {name}: {error}", &[("name", &tool.name), ("error", &e)]), true),
+        }
+    }
+
+    /// Opens what the command line or the system asked for, at its line and column (1-based).
+    pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
+        match request.line {
+            Some(line) if request.path.is_file() && self.project_of_manifest(&request.path).is_none() && !self.opens_workspace(&request.path) => {
+                self.open_at(&request.path, line - 1, request.column.unwrap_or(1).saturating_sub(1));
+            }
+            _ => self.open_path(&request.path),
+        }
     }
 
     pub fn open_path(&mut self, path: &Path) {
@@ -1770,12 +2035,15 @@ impl CrabCraftApp {
 
     pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
         let lang_changed = new.language != self.settings.language;
-        let keymap_changed = new.keymap != self.settings.keymap;
+        let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
         self.settings = new;
         self.runner.nextest = self.settings.use_nextest;
+        self.runner.external_tools = self.settings.external_tools.clone();
+        self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
+        self.insight.imports_on_paste = self.settings.imports_on_paste;
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
-            self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
+            self.keymap = build_keymap(&self.settings);
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -1824,6 +2092,7 @@ impl CrabCraftApp {
                     self.dock.show(ToolWindow::Nuget);
                 }
                 ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
+                ExplorerAction::SetAttached(path, on) => self.set_attached(&path, on),
             }
         }
     }
@@ -1851,6 +2120,35 @@ impl CrabCraftApp {
         }
         self.insight.set_exclude(list);
         self.session_dirty = true;
+    }
+
+    /// Tells rust-analyzer what to analyse: the attached projects and the open Rust scratches.
+    pub fn update_linked(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let scratches: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust).map(|d| d.path.clone()).collect();
+        self.insight.set_linked(linked_projects(&root, &self.explorer.attached, &scratches));
+    }
+
+    /// Attaches the Cargo project of `manifest` (analysed by rust-analyzer with the workspace,
+    /// though not a member), or detaches it. rust-analyzer restarts with the new list.
+    pub fn set_attached(&mut self, manifest: &Path, on: bool) {
+        if self.workspace.is_none() {
+            return;
+        }
+        let mut list = self.explorer.attached.clone();
+        list.retain(|p| p != manifest);
+        if on {
+            list.push(manifest.to_path_buf());
+        }
+        if list == self.explorer.attached {
+            return;
+        }
+        self.explorer.attached = list;
+        self.update_linked();
+        self.load_attached();
+        self.session_dirty = true;
+        let name = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        self.notify(if on { trf("Attached the Cargo project {name}", &[("name", &name)]) } else { trf("Detached the Cargo project {name}", &[("name", &name)]) }, false);
     }
 
     pub fn locate_active(&mut self) {
@@ -1933,6 +2231,10 @@ impl CrabCraftApp {
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
     /// fields don't see them.
     fn global_shortcuts(&mut self, ctx: &Context) {
+        // Settings › Keymap is recording a shortcut: the key belongs to it.
+        if ctx.data(|d| d.get_temp::<String>(egui::Id::new("recording_shortcut")).is_some()) {
+            return;
+        }
         let now = ctx.input(|i| i.time);
         // Shift, Shift: Search Everywhere.
         let shift = ctx.input(|i| i.modifiers.shift_only());
@@ -1973,11 +2275,52 @@ impl CrabCraftApp {
 
 /// What a start opens: files sent by Finder or the command line, otherwise the project open
 /// at the last quit (none after Close Project, as in Rider).
-pub fn startup_paths(settings: &Settings, from_system: Vec<PathBuf>) -> Vec<PathBuf> {
+/// The program, arguments and folder of an external tool, with its macros expanded. The
+/// arguments are split first, so a path with spaces stays one argument.
+pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core::external_tools::MacroContext, env: Vec<(String, String)>) -> Result<rc_dotnet::LaunchPlan, String> {
+    use rc_core::external_tools::{expand, working_dir};
+    let missing = |m: String| trf("{macro} has no value here (open a file or a project)", &[("macro", &m)]);
+    let program = expand(tool.program.trim(), ctx).map_err(missing)?;
+    if program.is_empty() {
+        return Err(tr("the tool has no program").to_string());
+    }
+    let args = rc_cargo::split_args(&tool.args).ok_or_else(|| tr("the arguments have an unclosed quote").to_string())?;
+    let args = args.iter().map(|a| expand(a, ctx)).collect::<Result<Vec<_>, _>>().map_err(missing)?;
+    let dir = working_dir(tool, ctx).map_err(missing)?.or_else(|| std::env::current_dir().ok()).unwrap_or_default();
+    if !dir.is_dir() {
+        return Err(trf("the folder {path} does not exist", &[("path", &dir.display())]));
+    }
+    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
+}
+
+/// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects
+/// or scratch files; otherwise the workspace's `Cargo.toml`, when there is one, the attached
+/// ones and the open Rust scratch files (analysed on their own).
+pub fn linked_projects(root: &Path, attached: &[PathBuf], scratches: &[PathBuf]) -> Vec<PathBuf> {
+    if attached.is_empty() && scratches.is_empty() {
+        return Vec::new();
+    }
+    let own = root.join("Cargo.toml");
+    own.is_file().then_some(own).into_iter().chain(attached.iter().cloned()).chain(scratches.iter().cloned()).collect()
+}
+
+/// Import paths as typed: trimmed, without blanks or `::` at either end, each once.
+pub fn clean_paths(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in list {
+        let p = p.trim().trim_matches(':').trim().to_string();
+        if !p.is_empty() && !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
     if !from_system.is_empty() {
         return from_system;
     }
-    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).into_iter().collect()
+    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).map(crate::cli::OpenRequest::path).into_iter().collect()
 }
 
 impl eframe::App for CrabCraftApp {
@@ -1993,8 +2336,9 @@ impl eframe::App for CrabCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.window_title = title;
         }
-        for path in crate::open_files::take() {
-            self.open_path(&path);
+        self.poll_toolchain_updates();
+        for request in crate::open_files::take() {
+            self.open_request(&request);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         if let Some(menu) = &self.native_menu {
@@ -2061,6 +2405,7 @@ impl eframe::App for CrabCraftApp {
         self.handle_insight(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        self.poll_inspection();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {
@@ -2091,9 +2436,31 @@ impl eframe::App for CrabCraftApp {
     }
 }
 
+/// The keymap of the settings with the user's shortcuts. Unknown actions or shortcuts in the
+/// settings file are skipped.
+pub fn build_keymap(settings: &Settings) -> Keymap {
+    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts))
+}
+
+/// The user's shortcuts as (action, shortcut) pairs; only actions of Find Action can change.
+pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> Vec<(Action, Option<rc_editor::keymap::Chord>)> {
+    let actions = crate::search::action_items();
+    map.iter()
+        .filter_map(|(id, chord)| {
+            let action = actions.iter().map(|(_, a)| *a).find(|a| format!("{a:?}") == *id)?;
+            if chord.is_empty() {
+                return Some((action, None));
+            }
+            rc_editor::keymap::parse_chord(chord).map(|c| (action, Some(c)))
+        })
+        .collect()
+}
+
 pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
     match choice {
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
+        KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
+        KeymapChoice::VsCode => KeymapKind::VsCode,
         KeymapChoice::Rider if cfg!(target_os = "macos") => KeymapKind::RiderMac,
         KeymapChoice::Rider => KeymapKind::Rider,
     }
@@ -2106,6 +2473,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         show_inlays: s.show_inlay_hints,
         sticky_lines: if s.sticky_lines { 5 } else { 0 },
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
+        live_templates: rc_core::live_templates::for_editor(&s.live_templates),
         ..EditorConfig::default()
     }
 }

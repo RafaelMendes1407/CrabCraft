@@ -845,5 +845,144 @@
   },
   "search-results": {
     "… more": "… mehr"
+  },
+  "cli": {
+    "Usage:": "Verwendung:",
+    "Options:": "Optionen:",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "Öffnet Ordner, Cargo-Projekte und Dateien. Dateien gehen an das bereits geöffnete CrabCraft-Fenster, falls vorhanden; ein Ordner oder eine Cargo.toml öffnet sich in einem neuen Fenster.",
+    "Put the caret on line N of the next file": "Setzt den Cursor in Zeile N der nächsten Datei",
+    "Put the caret on column N of the next file": "Setzt den Cursor in Spalte N der nächsten Datei",
+    "Show this help": "Zeigt diese Hilfe",
+    "Show the version": "Zeigt die Version",
+    "Unknown option: {option}": "Unbekannte Option: {option}",
+    "--line and --column must come before a file": "--line und --column müssen vor einer Datei stehen",
+    "{option} needs a number": "{option} braucht eine Zahl",
+    "{option} needs a number from 1 up, not {value}": "{option} braucht eine Zahl ab 1, nicht {value}"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "Einrückung, aus dem Codestil des Projekts: {files}"
+  },
+  "sync-log": {
+    "Cargo project": "Cargo-Projekt",
+    "Output": "Ausgabe",
+    "Sync": "Synchronisierung",
+    "{name} (failed)": "{name} (fehlgeschlagen)",
+    "How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed": "Wie CrabCraft das Cargo-Projekt geladen hat: jeder Lauf von cargo metadata und seine Ausgabe",
+    "No sync yet": "Noch keine Synchronisierung",
+    "The Cargo project is being loaded.": "Das Cargo-Projekt wird geladen.",
+    "(Cargo printed nothing)": "(Cargo hat nichts ausgegeben)",
+    "Finished in {time}": "Fertig in {time}",
+    "Failed after {time}": "Fehlgeschlagen nach {time}"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "Dateien ohne Projekt geöffnet: nur Bearbeitung, keine Codeanalyse",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit: Diese Datei gehört zum Cargo-Projekt {name}. Codeanalyse, Ausführen und Build brauchen das Projekt.",
+    "Open Project": "Projekt öffnen"
+  },
+  "external-tools": {
+    "External Tools": "Externe Tools",
+    "Configure External Tools…": "Externe Tools konfigurieren…",
+    "Program": "Programm",
+    "Arguments": "Argumente",
+    "Working folder": "Arbeitsordner",
+    "Add Tool": "Tool hinzufügen",
+    "Tool {n}": "Tool {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "Starten über Weitere Aktionen › Externe Tools oder Aktion suchen. Makros: {list}",
+    "There is no external tool called {name}": "Es gibt kein externes Tool namens {name}",
+    "Could not run {name}: {error}": "{name} konnte nicht ausgeführt werden: {error}",
+    "{macro} has no value here (open a file or a project)": "{macro} hat hier keinen Wert (öffne eine Datei oder ein Projekt)",
+    "the tool has no program": "das Tool hat kein Programm",
+    "the arguments have an unclosed quote": "die Argumente haben ein nicht geschlossenes Anführungszeichen",
+    "the folder {path} does not exist": "der Ordner {path} existiert nicht"
+  },
+  "rustup": {
+    "Updates": "Updates",
+    "Checking with rustup…": "Prüfe mit rustup…",
+    "Check for Updates": "Nach Updates suchen",
+    "Check Again": "Erneut prüfen",
+    "{name}: {current} → {new}": "{name}: {current} → {new}",
+    "{name}: {current}, up to date": "{name}: {current}, aktuell",
+    "rustup was not found: this toolchain was not installed with it": "rustup wurde nicht gefunden: Diese Toolchain wurde nicht damit installiert"
+  },
+  "before-launch": {
+    "Before launch": "Vor dem Start",
+    "{name} (missing)": "{name} (fehlt)",
+    "Add external tools in Settings › External Tools to run them before the build": "Füge externe Tools unter Einstellungen › Externe Tools hinzu, um sie vor dem Build auszuführen"
+  },
+  "run-instances": {
+    "Allow multiple instances": "Mehrere Instanzen zulassen",
+    "Running it again starts another instance instead of restarting it": "Erneutes Ausführen startet eine weitere Instanz, statt sie neu zu starten",
+    "Store as project file": "Als Projektdatei speichern",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "Wird in .crabcraft/runConfigurations gespeichert, um sie zu committen und zu teilen",
+    "Could not save the run configuration in the project: {error}": "Die Ausführungskonfiguration konnte nicht im Projekt gespeichert werden: {error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name} (temporär)",
+    "Save “{name}” Configuration": "Konfiguration „{name}“ speichern",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "Testkonfigurationen können noch nicht debuggt werden: Nutze Debuggen am Rand des Tests"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "Terminal in der Ausgabekonsole emulieren",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "Startet das Programm in einem Pseudoterminal: Farben, Terminalprüfungen und Tastatureingaben funktionieren wie in einem Terminal"
+  },
+  "live-templates": {
+    "Live Templates": "Live-Templates",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "Gib die Abkürzung in einer Rust-Datei ein und drücke Tab. Im Text sind $1 und ${2:default} die Stopps, die Tab anspringt, und $0 ist die Endposition des Cursors.",
+    "Templates": "Vorlagen",
+    "Abbreviation": "Abkürzung",
+    "Description": "Beschreibung",
+    "Add Template": "Vorlage hinzufügen",
+    "Restore Defaults": "Standardwerte wiederherstellen"
+  },
+  "refactor-preview": {
+    "Preview": "Vorschau",
+    "List the changes first and pick the ones to make": "Zuerst die Änderungen auflisten und auswählen, welche gemacht werden",
+    "Listing the changes…": "Änderungen werden aufgelistet…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{n} Änderungen in {files} Dateien. Hake die aus, die wegfallen sollen.",
+    "Refactor": "Refaktorisieren"
+  },
+  "inspect-code": {
+    "Inspect Code": "Code inspizieren",
+    "Open a Cargo project to inspect its code": "Öffne ein Cargo-Projekt, um seinen Code zu inspizieren",
+    "Inspection cancelled": "Inspektion abgebrochen",
+    "Current Files": "Aktuelle Dateien",
+    "Inspection": "Inspektion",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "Code inspizieren: Clippy über alle Mitglieder und Ziele des Cargo-Projekts",
+    "No inspection yet": "Noch keine Inspektion",
+    "Inspect Code runs Clippy over the whole project.": "Code inspizieren führt Clippy über das ganze Projekt aus.",
+    "Inspecting with Clippy…": "Inspiziere mit Clippy…",
+    "No problems found": "Keine Probleme gefunden",
+    "Clippy found nothing to report.": "Clippy hat nichts zu melden.",
+    "Other": "Sonstige"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "Cargo-Projekt anhängen",
+    "Detach Cargo Project": "Cargo-Projekt lösen",
+    "Analyse this Cargo project with the workspace, though it is not a member": "Dieses Cargo-Projekt mit dem Workspace analysieren, obwohl es kein Mitglied ist",
+    "Attached the Cargo project {name}": "Cargo-Projekt {name} angehängt",
+    "Detached the Cargo project {name}": "Cargo-Projekt {name} gelöst",
+    "Attached project": "Angehängtes Projekt",
+    "attached": "angehängt"
+  },
+  "autoimport-exclude": {
+    "Never import": "Nie importieren",
+    "Items or modules completion never offers to import, one path per line": "Elemente oder Module, die die Vervollständigung nie zum Import anbietet, ein Pfad pro Zeile"
+  },
+  "paste-imports": {
+    "Imported {list}": "Importiert: {list}",
+    "Several imports fit {names}: choose one with Show Context Actions": "Mehrere Importe passen zu {names}: Wähle einen über Kontextaktionen anzeigen",
+    "Add the imports pasted Rust code needs (when only one fits)": "Die Importe hinzufügen, die eingefügter Rust-Code braucht (wenn nur einer passt)"
+  },
+  "scratch-analysis": {
+    "Scratch file: analysed on its own, outside the project's crates": "Scratch-Datei: für sich analysiert, außerhalb der Crates des Projekts",
+    "Scratch file: open a project to have it analysed": "Scratch-Datei: Öffne ein Projekt, damit sie analysiert wird",
+    "Build it with rustc and run it": "Mit rustc bauen und ausführen"
+  },
+  "shortcuts": {
+    "Shortcuts": "Tastenkürzel",
+    "Press a shortcut…": "Tastenkürzel drücken…",
+    "Record Shortcut": "Tastenkürzel aufnehmen",
+    "Reset": "Zurücksetzen"
   }
 }

@@ -180,7 +180,7 @@ fn rust_language_features() {
     // Rename across files: the use in main.rs and the definition in lib.rs.
     let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
     let i = app.docs.active.unwrap();
-    app.insight.rename(&app.docs.list[i], pos, "greet");
+    app.insight.rename(&app.docs.list[i], pos, "greet", None);
     pump(&mut app, "the rename", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("Greeter.greet()")));
     pump(&mut app, "the definition to change", |_| std::fs::read_to_string(root.join("src/lib.rs")).is_ok_and(|t| t.contains("pub fn greet(")));
 
@@ -2540,4 +2540,517 @@ fn main() {
     find(&mut h, 2, vec![14]);
     assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Find));
     h.state_mut().insight.stop();
+}
+
+/// An external tool runs a real program on the active file, its macros expanded, and its
+/// output and exit code show in the Run window; Rerun starts it again.
+#[cfg(unix)]
+#[test]
+fn an_external_tool_runs_on_the_active_file() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("my proj");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"tooling\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"hi\");\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    app.run_external_tool("Count lines");
+    pump(&mut app, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let run = &app.runner.runs[0];
+    assert_eq!(run.name, "Count lines");
+    assert_eq!(run.exit, Some(Some(0)));
+    let text = run.console.term.screen_lines().join("\n");
+    assert!(text.contains("3 src/main.rs"), "{text}");
+
+    // A macro with no value stops it before anything starts.
+    app.docs.list.clear();
+    app.docs.active = None;
+    app.run_external_tool("Count lines");
+    assert_eq!(app.runner.runs.len(), 1);
+    assert!(app.notices.last().is_some_and(|n| n.text.contains("$FileRelativePath$")), "{:?}", app.notices.last().map(|n| &n.text));
+}
+
+/// Settings › Tools asks rustup for updates and runs rustup commands in the Run window; the
+/// toolchain versions are read again when a command ends.
+#[test]
+fn rustup_checks_updates_and_runs_commands() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = new_app(dir.path());
+    if app.rustup().is_none() {
+        eprintln!("rustup is not installed: skipped");
+        return;
+    }
+    app.check_toolchain_updates();
+    pump(&mut app, "rustup check", |a| {
+        a.poll_toolchain_updates();
+        !a.checking_toolchain_updates()
+    });
+    match app.toolchain_updates.as_ref().unwrap() {
+        Ok(list) => assert!(list.iter().any(|u| u.name == "rustup"), "{list:?}"),
+        // Offline machines get rustup's own error.
+        Err(e) => assert!(!e.is_empty()),
+    }
+
+    app.toolchain = Some(Default::default());
+    app.run_rustup(&["component", "list", "--installed"]);
+    pump(&mut app, "the rustup command", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let run = &app.runner.runs[0];
+    assert_eq!(run.name, "rustup component list --installed");
+    assert_eq!(run.exit, Some(Some(0)));
+    assert!(run.console.term.screen_lines().join("\n").contains("cargo"));
+    app.poll_toolchain_updates();
+    assert!(app.toolchain.is_none(), "read again after a rustup command");
+}
+
+/// A run configuration's "before launch" tools run first, in order, with their output in the
+/// Run window; one that fails stops the launch with its exit code.
+#[cfg(unix)]
+#[test]
+fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
+    use rc_core::external_tools::ExternalTool;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"hello from main\");\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.external_tools = vec![
+        ExternalTool { name: "Greet".into(), program: "sh".into(), args: "-c 'echo prepared $FileName$'".into(), working_dir: String::new() },
+        ExternalTool { name: "Fail".into(), program: "false".into(), args: String::new(), working_dir: String::new() },
+    ];
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let name = app.runner.configs[0].name.clone();
+    app.runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Greet".into()], ..Default::default() });
+    app.runner.selected = 0;
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(0)), "{text}");
+    let (greet, main) = (text.find("prepared main.rs"), text.find("hello from main"));
+    assert!(greet.is_some() && greet < main, "the tool runs before the program:\n{text}");
+
+    app.runner.options.insert(name, rc_core::session::RunOptions { before_launch: vec!["Fail".into(), "Greet".into()], ..Default::default() });
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the stopped launch", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("Fail failed with exit code 1"), "{text}");
+    assert!(!text.contains("hello from main") && !text.contains("prepared"), "{text}");
+}
+
+/// "Allow multiple instances" keeps the running program and starts a numbered second one;
+/// "Store as project file" writes the configuration into the project, and opening the project
+/// again reads it from there.
+#[cfg(unix)]
+#[test]
+fn run_configurations_allow_instances_and_live_in_the_project() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("server");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"server\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    // Runs until stopped.
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"up\");\n    std::thread::sleep(std::time::Duration::from_secs(60));\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let name = app.runner.configs[0].name.clone();
+    let options = rc_core::session::RunOptions { allow_parallel: true, in_project: true, args: "--port 1".into(), ..Default::default() };
+    app.runner.options.insert(name.clone(), options.clone());
+    rc_core::run_files::save(&root, &name, &options).unwrap();
+    app.runner.selected = 0;
+    for _ in 0..2 {
+        app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+        pump(&mut app, "the program", |a| a.runner.runs.last().is_some_and(|r| r.console.term.screen_lines().join("\n").contains("up")));
+    }
+    let names: Vec<_> = app.runner.runs.iter().map(|r| r.name.clone()).collect();
+    assert_eq!(names, [name.clone(), format!("{name} (2)")]);
+    assert!(app.runner.runs.iter().all(|r| r.running()));
+    app.runner.stop_all();
+
+    // Without the session's copy, the project's file still brings the configuration back.
+    app.close_workspace();
+    std::fs::remove_dir_all(rc_core::paths::sessions_dir()).unwrap();
+    app.open_workspace(&root);
+    let loaded = app.runner.options.get(&name).cloned().unwrap();
+    assert!(loaded.in_project && loaded.allow_parallel);
+    assert_eq!(loaded.args, "--port 1");
+}
+
+/// A gutter test run leaves a temporary configuration that Run starts again; at most five are
+/// kept, Save makes one permanent (kept in the session), and reloading the Cargo model keeps
+/// them.
+#[test]
+fn test_runs_become_temporary_configurations() {
+    use crate::runner::ConfigKind;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("lib");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"lib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(test)]\nmod tests {\n    #[test]\n    fn one() {}\n    #[test]\n    fn two() {}\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let manifest = app.runner.cargo_workspace.as_ref().unwrap().manifest.clone();
+    let filter = |n: &str| rc_dotnet::TestFilter::Tests(vec![n.to_string()]);
+
+    app.runner.select_tests("one".into(), manifest.clone(), filter("tests::one"));
+    assert_eq!(app.runner.selected_config().map(|c| c.name.as_str()), Some("one"));
+    assert!(app.runner.is_temporary("one"));
+    // The same tests again select the same configuration.
+    app.runner.select_tests("one".into(), manifest.clone(), filter("tests::one"));
+    assert_eq!(app.runner.temporary.len(), 1);
+
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the test", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 0), "only tests::one runs: {:?}", t.results.keys());
+
+    for i in 0..6 {
+        app.runner.select_tests(format!("t{i}"), manifest.clone(), filter(&format!("tests::t{i}")));
+    }
+    assert_eq!(app.runner.temporary.len(), 5, "the oldest go");
+    assert!(!app.runner.configs.iter().any(|c| c.name == "one"));
+
+    app.runner.save_temporary("t5");
+    assert!(!app.runner.is_temporary("t5"));
+    app.reload_cargo();
+    pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some() && a.runner.configs.iter().any(|c| c.name == "t5"));
+    assert!(app.runner.configs.iter().any(|c| c.name == "t4" && matches!(c.kind, ConfigKind::TestSelection { .. })), "temporary ones survive a reload");
+    app.save_session();
+    let session = rc_core::session::Session::load(&root);
+    assert_eq!(session.test_configs.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["t5"]);
+}
+
+/// "Emulate terminal" starts the program in a pseudo-terminal: it sees a terminal, reads what
+/// is typed in the console and its exit code reaches the tab.
+#[cfg(unix)]
+#[test]
+fn emulated_terminal_runs_see_a_tty_and_take_input() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("tty");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"tty\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(
+        root.join("src/main.rs"),
+        "use std::io::{BufRead, IsTerminal};\nfn main() {\n    println!(\"tty={}\", std::io::stdout().is_terminal());\n    let mut line = String::new();\n    std::io::stdin().lock().read_line(&mut line).unwrap();\n    println!(\"got {}\", line.trim());\n    std::process::exit(3);\n}\n",
+    )
+    .unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let name = app.runner.configs[0].name.clone();
+    app.runner.options.insert(name, rc_core::session::RunOptions { emulate_terminal: true, ..Default::default() });
+    app.runner.selected = 0;
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program in the terminal", |a| a.runner.runs.first().is_some_and(|r| r.is_terminal() && r.console.term.screen_lines().join("\n").contains("tty=")));
+    assert!(app.runner.runs[0].console.term.screen_lines().join("\n").contains("tty=true"));
+    app.runner.runs[0].console.term.write(b"crab\r".to_vec());
+    pump(&mut app, "the end", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("got crab"), "{text}");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(3)));
+}
+
+/// Rename › Preview lists rust-analyzer's edits with their lines; unchecking one leaves it
+/// out of the refactoring.
+#[test]
+fn a_rename_preview_applies_only_the_checked_changes() {
+    use crate::ui::dialogs::Dialog;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
+    let i = app.docs.active.unwrap();
+    app.insight.rename(&app.docs.list[i], pos, "greet", Some("Rename".into()));
+    pump(&mut app, "the preview", |a| match &mut a.dialog {
+        Some(Dialog::RefactorPreview(p)) => {
+            p.update();
+            !p.loading()
+        }
+        _ => false,
+    });
+    let Some(Dialog::RefactorPreview(preview)) = &mut app.dialog else { unreachable!() };
+    let lines: Vec<(String, String)> = preview.changes.iter().map(|c| (c.path.file_name().unwrap().to_string_lossy().into_owned(), c.after.trim().to_string())).collect();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert!(lines.contains(&("main.rs".into(), "println!(\"{}\", Greeter.greet());".into())), "{lines:?}");
+    // Nothing changed yet.
+    assert!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap().contains("pub fn hello("));
+    for c in &mut preview.changes {
+        if c.after.contains("assert_eq!") {
+            c.checked = false;
+        }
+    }
+    let checked = preview.checked();
+    crate::insight::apply_file_edits(&mut app.docs, checked).unwrap();
+    let main_text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(main_text.contains("Greeter.greet()"), "{main_text}");
+    let lib = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
+    assert!(lib.contains("pub fn greet(") && lib.contains("Greeter.hello(), \"hello\""), "the unchecked test line stays:\n{lib}");
+}
+
+/// Inspect Code runs Clippy over every member and target, also files never opened, and its
+/// findings land in the Problems window's Inspection tab with their lint names.
+#[test]
+fn inspect_code_runs_clippy_over_the_whole_workspace() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("ws");
+    write(&root.join("Cargo.toml"), "[workspace]\nmembers = [\"app\", \"util\"]\nresolver = \"2\"\n");
+    write(&root.join("app/Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("app/src/main.rs"), "fn main() {\n    let v = vec![1, 2];\n    println!(\"{}\", v.len() == 0);\n}\n");
+    write(&root.join("util/Cargo.toml"), "[package]\nname = \"util\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("util/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    x.len() * 2\n}\n");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::InspectCode);
+    assert!(app.inspection.as_ref().is_some_and(|i| i.running));
+    pump(&mut app, "the inspection", |a| {
+        a.poll_inspection();
+        a.inspection.as_ref().is_some_and(|i| !i.running)
+    });
+    let insp = app.inspection.as_ref().unwrap();
+    assert_eq!(insp.failed, None);
+    let codes: Vec<(&str, String)> = insp.diagnostics.iter().map(|d| (d.code.as_str(), d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default())).collect();
+    assert!(codes.iter().any(|(c, f)| c.contains("len_zero") && f.ends_with("main.rs")), "{codes:?}");
+    assert!(codes.iter().any(|(c, f)| c.contains("ptr_arg") && f.ends_with("lib.rs")), "{codes:?}");
+    assert!(app.problems_tab_inspection && app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
+}
+
+/// A compound configuration starts several Cargo binaries of the workspace together, and it
+/// stays after the Cargo model is read again.
+#[test]
+fn a_compound_configuration_starts_several_cargo_binaries() {
+    use crate::runner::ConfigKind;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("pair");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"pair\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("src/bin/server.rs"), "fn main() {\n    println!(\"server up\");\n}\n");
+    write(&root.join("src/bin/client.rs"), "fn main() {\n    println!(\"client up\");\n}\n");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.app_names().len() == 2);
+    app.runner.save_compound(None, "Both".into(), app.runner.app_names());
+    assert!(matches!(app.runner.selected_config().map(|c| &c.kind), Some(ConfigKind::Compound { .. })));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "both programs", |a| a.runner.runs.len() == 2 && a.runner.runs.iter().all(|r| r.exit.is_some()));
+    for (name, text) in [("server", "server up"), ("client", "client up")] {
+        let r = app.runner.runs.iter().find(|r| r.name == name).unwrap();
+        assert_eq!(r.exit, Some(Some(0)));
+        assert!(r.console.term.screen_lines().join("\n").contains(text));
+    }
+    app.reload_cargo();
+    pump(&mut app, "the reload", |a| a.runner.configs.iter().any(|c| c.name == "Both"));
+}
+
+/// A Cargo project nested too deep for rust-analyzer to find is analysed once attached (its
+/// type error shows up), not before; the attachment is kept in the session.
+#[test]
+fn an_attached_cargo_project_is_analysed() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let gen_manifest = root.join("tools/gen/Cargo.toml");
+    write(&gen_manifest, "[package]\nname = \"gen\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("tools/gen/src/lib.rs"), "pub fn wrong() -> u32 {\n    \"text\"\n}\n");
+    write(&root.join("tools/gen/src/main.rs"), "fn main() {\n    println!(\"generated\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let gen_manifest = gen_manifest.canonicalize().unwrap();
+    let lib = root.join("tools/gen/src/lib.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&lib);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let mismatch = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("mismatched types") || x.code.as_deref() == Some("E0308")));
+    // Give the server time to say what it knows about the file.
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(3) {
+        pump(&mut app, "a frame", |_| true);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(!mismatch(&app), "not analysed before it is attached");
+
+    app.set_attached(&gen_manifest, true);
+    pump(&mut app, "the analysis of the attached project", |a| mismatch(a));
+    // Its binary is a run configuration that builds with its own manifest.
+    pump(&mut app, "the attached project's targets", |a| a.runner.configs.iter().any(|c| c.name == "gen (gen)"));
+    assert!(app.sync_log.entries.iter().any(|e| e.kind == crate::sync_log::SyncKind::Attached && e.log.success));
+    std::fs::write(&lib, "pub fn right() -> u32 {\n    1\n}\n").unwrap();
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name == "gen (gen)").unwrap();
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the attached binary", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("generated"), "{text}");
+    app.save_session();
+    assert_eq!(rc_core::session::Session::load(&root).attached_projects, ["tools/gen/Cargo.toml"]);
+    app.set_attached(&gen_manifest, false);
+    assert!(app.explorer.attached.is_empty());
+    assert!(!app.runner.configs.iter().any(|c| c.name == "gen (gen)"));
+}
+
+/// Paths in Settings › Editor › Never import drop out of completion's import suggestions,
+/// on a running rust-analyzer.
+#[test]
+fn excluded_paths_are_not_offered_for_import() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let paths = |c: &rc_editor::Completion| c.items.iter().filter(|i| i.label.starts_with("Ordering")).map(|i| format!("{} {}", i.label, i.detail)).collect::<Vec<_>>();
+
+    let c = complete_at_end(&mut app, "fn main() {\n    let _o: Orderin|;\n}\n");
+    let before = paths(&c);
+    assert!(before.iter().any(|p| p.contains("atomic")) && before.iter().any(|p| p.contains("cmp")), "{before:?}");
+
+    let mut settings = app.settings.clone();
+    settings.autoimport_exclude = vec!["std::sync::atomic::Ordering".into(), "  ".into()];
+    app.apply_settings(&egui::Context::default(), settings);
+    let c = complete_at_end(&mut app, "fn main() {\n    let _o: Orderin|;\n}\n");
+    let after = paths(&c);
+    assert!(!after.iter().any(|p| p.contains("atomic")) && after.iter().any(|p| p.contains("cmp")), "{after:?}");
+    app.insight.stop();
+}
+
+/// Type-like names of pasted code: not after `::` or `.`, not macros, strings or comments.
+#[test]
+fn pasted_names_are_the_type_like_ones() {
+    let names: Vec<String> = crate::insight::pasted_names("let m: HashMap<String, Vec<u8>> = HashMap::new(); // Foo\nlet s = \"Bar\"; x.Baz; std::fmt::Display; Self; 'Life; vec![]; Some(1); println!(\"{}\", Ordering::Less);").into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["HashMap", "String", "Vec", "Some", "Ordering"]);
+}
+
+/// After a paste, the names with exactly one import get their `use` line; the ambiguous ones
+/// are named instead.
+#[test]
+fn pasted_code_gets_its_unambiguous_imports() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let before = "use demo::Greeter;\n\nfn main() {\n    \n}\n";
+    let pasted = "let m: HashMap<String, Ordering> = HashMap::new();";
+    let i = app.docs.active.unwrap();
+    let doc = &mut app.docs.list[i];
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, end, before);
+    let at = before.find("    \n}").unwrap() + 4;
+    doc.editor.replace(at, at, pasted);
+    doc.editor.last_paste = Some((at, at + pasted.chars().count()));
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed, rc_editor::EditorEvent::Pasted]);
+    pump(&mut app, "the import", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("use std::collections::HashMap;")));
+    let text = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(text.starts_with("use demo::Greeter;\nuse std::collections::HashMap;\n"), "{text}");
+    assert!(!text.contains("Ordering;"), "two imports fit Ordering: none is chosen\n{text}");
+    pump(&mut app, "the ambiguity message", |a| a.notices.iter().any(|n| n.text.contains("Ordering")));
+    app.insight.stop();
+}
+
+/// Without imports, the `use` lines go after the file's leading comments and attributes.
+#[test]
+fn imports_go_after_the_leading_comments() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("lib.rs");
+    write(&file, "//! Crate docs.\n#![allow(dead_code)]\n\nfn f() {}\n");
+    let mut app = new_app(dir.path());
+    app.open_file(&file);
+    let i = app.docs.active.unwrap();
+    let added = crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into(), "std::fmt::Write".into()]);
+    assert_eq!(added, ["std::fmt::Write"]);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "//! Crate docs.\n#![allow(dead_code)]\n\nuse std::fmt::Write;\n\nfn f() {}\n");
+    assert!(crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into()]).is_empty(), "already there");
+}
+
+/// A Rust scratch file is analysed on its own while a project is open (type hints arrive),
+/// and Run builds it with rustc and runs it.
+#[test]
+fn rust_scratches_are_analysed_and_run() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let scratch = rc_core::scratch::create(&rc_core::paths::scratches_dir(), rc_core::scratch::Kind::Rust).unwrap();
+    std::fs::write(&scratch, "fn main() {\n    let x = 6u8;\n    let y = x * 7;\n    println!(\"{y}\");\n}\n").unwrap();
+    app.open_file(&scratch);
+    let i = app.docs.active.unwrap();
+    assert!(app.docs.list[i].scratch);
+    pump(&mut app, "the scratch's type hints", |a| a.docs.list.get(i).is_some_and(|d| !d.editor.inlays.is_empty()));
+
+    let outs = app.runner.run_scratch(&scratch);
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the scratch program", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(0)), "{text}");
+    assert!(text.contains("42"), "{text}");
+
+    // A compile error stops before running, with rustc's message.
+    std::fs::write(&scratch, "fn main() { let x: u8 = \"no\"; }\n").unwrap();
+    let outs = app.runner.run_scratch(&scratch);
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the failed build", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("mismatched types") && text.contains("rustc failed"), "{text}");
+    app.insight.stop();
+}
+
+/// Reformat Code with a selection: rustfmt formats the file and only the selected function
+/// changes.
+#[test]
+fn reformat_with_a_selection_changes_only_those_lines() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let main = root.join("src/main.rs");
+    let text = "fn main(){println!(\"a\");}\n\nfn other(){let x=1;let _y=x;}\n";
+    write(&main, text);
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let i = app.docs.active.unwrap();
+    let start = text.find("fn other").unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::single(rc_text::Range::new(start, text.len() - 1));
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope().to_string() != text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main(){println!(\"a\");}\n\nfn other() {\n    let x = 1;\n    let _y = x;\n}\n");
 }

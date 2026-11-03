@@ -324,7 +324,7 @@ impl Debugger {
         let events = session.pump();
         for ev in events {
             match ev {
-                DebugEvent::Build(rc_dotnet::BuildEvent::Output(line)) => {
+                DebugEvent::Build(rc_dotnet::BuildEvent::Output(line) | rc_dotnet::BuildEvent::Task(line)) => {
                     if let Some(c) = &self.console {
                         c.line(&line);
                     }

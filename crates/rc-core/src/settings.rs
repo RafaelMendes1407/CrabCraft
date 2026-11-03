@@ -20,6 +20,8 @@ pub enum KeymapChoice {
     #[default]
     Rider,
     VisualStudio,
+    /// VS Code's default for the platform.
+    VsCode,
 }
 
 /// How rustfmt runs. Kept as the user typed it; `rc_cargo::Rustfmt` reads and checks it.
@@ -88,6 +90,17 @@ pub struct Settings {
     pub reopen_last: bool,
     /// The project open when CrabCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
+    /// Programs run from More Actions › External Tools and Find Action.
+    pub external_tools: Vec<crate::external_tools::ExternalTool>,
+    /// Abbreviations expanded with Tab in Rust files.
+    pub live_templates: Vec<crate::live_templates::LiveTemplate>,
+    /// Items and modules completion never offers to import (`std::sync::atomic::Ordering`).
+    pub autoimport_exclude: Vec<String>,
+    /// Add the `use` lines pasted Rust code needs, when only one import fits.
+    pub imports_on_paste: bool,
+    /// Shortcuts changed by the user, over the keymap: action id → shortcut id
+    /// (`ctrl+shift+K`), empty for none.
+    pub shortcuts: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -123,6 +136,11 @@ impl Default for Settings {
             recent_workspaces: Vec::new(),
             reopen_last: true,
             last_workspace: None,
+            external_tools: Vec::new(),
+            live_templates: crate::live_templates::defaults(),
+            autoimport_exclude: Vec::new(),
+            imports_on_paste: true,
+            shortcuts: Default::default(),
         }
     }
 }

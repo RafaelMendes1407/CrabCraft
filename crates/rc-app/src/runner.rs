@@ -19,6 +19,14 @@ pub enum ConfigKind {
     Compound { members: Vec<String> },
     /// A binary of a Cargo package.
     Cargo { package: String, bin: String },
+    /// An external tool of the settings, started as it is (never listed as a configuration).
+    External { tool: String },
+    /// A command the IDE runs for the user (`rustup update`…), started again by Rerun.
+    Command { program: PathBuf, args: Vec<String> },
+    /// A Rust scratch file, built with `rustc` and run (Rerun builds it again).
+    Scratch { file: PathBuf },
+    /// Some tests of a project (a gutter run, kept as a temporary or saved configuration).
+    TestSelection { target: PathBuf, filter: TestFilter },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,7 +41,10 @@ impl RunConfig {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
+            ConfigKind::TestSelection { .. } => rc_kit::ico::TEST_UNKNOWN,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
+            ConfigKind::External { .. } | ConfigKind::Command { .. } => rc_kit::ico::RUN_ANYTHING,
+            ConfigKind::Scratch { .. } => rc_kit::ico::CONFIG_APP,
         }
     }
 }
@@ -95,11 +106,99 @@ pub struct RunTab {
     pub console: Console,
     pub exit: Option<Option<i32>>,
     pub urls: Vec<String>,
+    /// "Emulate terminal": the build, then the program in a pseudo-terminal.
+    pty: Option<PtyRun>,
+}
+
+struct PtyRun {
+    prepare: Option<OpHandle>,
+    inbox: Inbox<rc_cargo::PrepareEvent>,
+    /// The program runs in the console's own pseudo-terminal.
+    started: bool,
 }
 
 impl RunTab {
+    /// "Emulate terminal": shows the build, starts the program in a pseudo-terminal when it is
+    /// ready and notices when it ends.
+    fn update_pty(&mut self, waker: &Waker, out: &mut Vec<RunnerOutput>) {
+        let Some(p) = &mut self.pty else { return };
+        for ev in p.inbox.drain() {
+            match ev {
+                rc_cargo::PrepareEvent::Build(BuildEvent::Task(line)) => self.console.line(&line),
+                rc_cargo::PrepareEvent::Build(BuildEvent::Diagnostic(d)) if d.severity == rc_dotnet::Severity::Error => {
+                    self.console.note(&format!("{}({},{}): {}", d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(), d.line.unwrap_or(0), d.column.unwrap_or(0), d.message));
+                }
+                rc_cargo::PrepareEvent::Build(BuildEvent::Finished(res)) if !res.success => out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone())),
+                rc_cargo::PrepareEvent::Build(_) => {}
+                rc_cargo::PrepareEvent::Ready(plan) => {
+                    p.prepare = None;
+                    let mut spec = rc_term::SpawnSpec::command(plan.program.display().to_string(), plan.args.clone(), Some(plan.working_dir.clone())).size(160, 40);
+                    for (k, v) in &plan.env {
+                        spec = spec.env(k, v);
+                    }
+                    match TermSession::spawn(&spec, waker.clone()) {
+                        Ok(term) => {
+                            term.feed(format!("\x1b[2m{}\x1b[0m\r\n", plan.command_line()).as_bytes());
+                            self.console.term = term;
+                            p.started = true;
+                        }
+                        Err(e) => {
+                            let e = format!("{e:#}");
+                            self.console.note(&e);
+                            self.exit = Some(None);
+                            out.push(RunnerOutput::Notify(e, true));
+                        }
+                    }
+                }
+                rc_cargo::PrepareEvent::Failed(e) => {
+                    p.prepare = None;
+                    self.console.note(&e);
+                    self.exit = Some(None);
+                    out.push(RunnerOutput::Notify(e, true));
+                }
+                rc_cargo::PrepareEvent::Cancelled => {
+                    p.prepare = None;
+                    if self.exit.is_none() {
+                        self.console.note(tr("Process stopped"));
+                        self.exit = Some(None);
+                    }
+                }
+            }
+        }
+        // The terminal prints "Process finished with exit code N" itself.
+        if p.started
+            && self.exit.is_none()
+            && let Some(info) = self.console.term.exit_status()
+        {
+            self.exit = Some(if info.signal.is_some() { None } else { Some(info.code as i32) });
+        }
+    }
+
     pub fn running(&self) -> bool {
         self.exit.is_none()
+    }
+
+    /// Whether the console takes keyboard input itself (a pseudo-terminal).
+    pub fn is_terminal(&self) -> bool {
+        self.pty.as_ref().is_some_and(|p| p.started)
+    }
+
+    /// Stops the build or the program, whichever is going.
+    pub fn stop(&mut self) {
+        if let Some(h) = &self.handle {
+            h.stop();
+        }
+        if let Some(p) = &mut self.pty {
+            if let Some(h) = p.prepare.take() {
+                h.cancel();
+            }
+            if p.started {
+                self.console.term.kill();
+            } else if self.exit.is_none() {
+                self.console.note(tr("Process stopped"));
+                self.exit = Some(None);
+            }
+        }
     }
 }
 
@@ -139,6 +238,10 @@ pub enum RunnerOutput {
 }
 
 pub struct Runner {
+    /// The external tools of the settings, for "before launch" tasks.
+    pub external_tools: Vec<rc_core::external_tools::ExternalTool>,
+    /// What the macros of those tools stand for, set by the app before each run.
+    pub macro_context: rc_core::external_tools::MacroContext,
     pub configs: Vec<RunConfig>,
     pub selected: usize,
     pub build: Option<BuildState>,
@@ -156,6 +259,14 @@ pub struct Runner {
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Saved test configurations (from the session).
+    pub test_configs: Vec<rc_core::session::SavedTestConfig>,
+    /// Temporary test configurations, oldest first.
+    pub temporary: Vec<RunConfig>,
+    /// Attached Cargo projects (analysed and run with the workspace, not members of it).
+    pub attached: Vec<rc_cargo::CargoWorkspace>,
+    /// Names of the configurations made for their binaries.
+    attached_configs: Vec<String>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
     /// Environment of every Cargo command, `NAME=value` per line (kept in the session).
@@ -166,7 +277,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -211,6 +322,7 @@ impl Runner {
                 self.configs.push(RunConfig { name, kind: ConfigKind::Tests { target: t } });
             }
         }
+        self.insert_test_configs();
         self.selected = remembered.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
@@ -221,6 +333,9 @@ impl Runner {
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
         self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
         self.cargo_workspace = Some(workspace);
+        self.insert_attached_configs();
+        self.insert_compounds();
+        self.insert_test_configs();
         let wanted = selected.as_deref().or(remembered);
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
@@ -241,6 +356,9 @@ impl Runner {
     pub fn clear(&mut self) {
         self.cargo_workspace = None;
         self.configs.clear();
+        self.temporary.clear();
+        self.attached.clear();
+        self.attached_configs.clear();
         self.build = None;
         self.runs.clear();
         self.tests = None;
@@ -329,25 +447,138 @@ impl Runner {
             ConfigKind::App { .. } => self.run_app(cfg),
             ConfigKind::Cargo { package, bin } => self.run_cargo(cfg, package, bin),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
+            ConfigKind::TestSelection { target, filter } => self.run_tests(&target, Some(filter)),
+            // Tools start from their menu, with the file and caret of that moment.
+            ConfigKind::External { .. } => Vec::new(),
+            ConfigKind::Scratch { file } => self.run_scratch(&file),
+            ConfigKind::Command { program, args } => {
+                let plan = self.command_plan(program, args);
+                self.run_process(cfg, plan)
+            }
             ConfigKind::Compound { members } => {
-                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
+                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).cloned()).collect();
                 if apps.is_empty() {
                     return vec![RunnerOutput::Notify(tr("The compound configuration has no applications to run").into(), true)];
                 }
                 let mut out = Vec::new();
                 for a in apps {
-                    out.extend(self.run_app(a));
+                    out.extend(match a.kind.clone() {
+                        // Cargo builds them one after the other (it locks the target folder).
+                        ConfigKind::Cargo { package, bin } => self.run_cargo(a, package, bin),
+                        _ => self.run_app(a),
+                    });
                 }
                 out
             }
         }
     }
 
+    /// The binaries of the attached projects go after the workspace's, named with their
+    /// project (`gen (tools/gen)` style: `bin (folder)`).
+    pub fn set_attached(&mut self, attached: Vec<rc_cargo::CargoWorkspace>) {
+        self.attached = attached;
+        self.insert_attached_configs();
+    }
+
+    fn insert_attached_configs(&mut self) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        let old = std::mem::take(&mut self.attached_configs);
+        self.configs.retain(|c| !(matches!(c.kind, ConfigKind::Cargo { .. }) && old.contains(&c.name)));
+        self.attached_configs = self.attached_bins().map(|(name, ..)| name).collect();
+        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::Cargo { .. })).map_or(0, |i| i + 1);
+        let new: Vec<RunConfig> = self.attached_bins().map(|(name, package, bin, _)| RunConfig { name, kind: ConfigKind::Cargo { package, bin } }).collect();
+        for (i, c) in new.into_iter().enumerate() {
+            self.configs.insert(at + i, c);
+        }
+        if let Some(n) = selected
+            && let Some(i) = self.configs.iter().position(|c| c.name == n)
+        {
+            self.selected = i;
+        }
+    }
+
+    /// (configuration name, package, binary, manifest) of each attached project's binaries.
+    fn attached_bins(&self) -> impl Iterator<Item = (String, String, String, PathBuf)> + '_ {
+        self.attached.iter().flat_map(|w| {
+            let folder = w.manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            w.binaries().map(move |(p, t)| (format!("{} ({folder})", t.name), p.name.clone(), t.name.clone(), w.manifest.clone()))
+        })
+    }
+
+    /// The manifest an attached project's configuration builds with.
+    fn cargo_manifest_of(&self, config: &str) -> Option<PathBuf> {
+        self.attached_bins().find(|(name, ..)| name == config).map(|(.., manifest)| manifest)
+    }
+
+    /// The most temporary configurations kept; older ones go.
+    const MAX_TEMPORARY: usize = 5;
+
+    /// Saved and temporary test configurations go last.
+    fn insert_test_configs(&mut self) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        self.configs.retain(|c| !matches!(c.kind, ConfigKind::TestSelection { .. }));
+        for t in &self.test_configs {
+            let filter = if t.class { TestFilter::Class(t.tests.first().cloned().unwrap_or_default()) } else { TestFilter::Tests(t.tests.clone()) };
+            self.configs.push(RunConfig { name: t.name.clone(), kind: ConfigKind::TestSelection { target: t.target.clone(), filter } });
+        }
+        self.configs.extend(self.temporary.iter().cloned());
+        if let Some(n) = selected
+            && let Some(i) = self.configs.iter().position(|c| c.name == n)
+        {
+            self.selected = i;
+        }
+    }
+
+    /// Selects the configuration for these tests, making a temporary one when there is none.
+    pub fn select_tests(&mut self, name: String, target: PathBuf, filter: TestFilter) {
+        let kind = ConfigKind::TestSelection { target, filter };
+        if let Some(i) = self.configs.iter().position(|c| c.kind == kind) {
+            self.selected = i;
+            return;
+        }
+        // Another selection with the same name (in another project) gets the next free name.
+        let name = (1..).map(|n| if n == 1 { name.clone() } else { format!("{name} ({n})") }).find(|n| !self.configs.iter().any(|c| &c.name == n)).unwrap_or(name);
+        if self.temporary.len() >= Self::MAX_TEMPORARY {
+            let oldest = self.temporary.remove(0);
+            self.configs.retain(|c| *c != oldest);
+        }
+        let cfg = RunConfig { name, kind };
+        self.temporary.push(cfg.clone());
+        self.configs.push(cfg);
+        self.selected = self.configs.len() - 1;
+    }
+
+    pub fn is_temporary(&self, name: &str) -> bool {
+        self.temporary.iter().any(|c| c.name == name)
+    }
+
+    /// Makes a temporary test configuration permanent (kept in the session).
+    pub fn save_temporary(&mut self, name: &str) {
+        let Some(cfg) = self.temporary.iter().find(|c| c.name == name).cloned() else { return };
+        let ConfigKind::TestSelection { target, filter } = cfg.kind else { return };
+        let (tests, class) = match filter {
+            TestFilter::Class(c) => (vec![c], true),
+            TestFilter::Tests(t) => (t, false),
+            TestFilter::Namespace(n) | TestFilter::Raw(n) => (vec![n], true),
+        };
+        self.temporary.retain(|c| c.name != name);
+        self.test_configs.push(rc_core::session::SavedTestConfig { name: cfg.name, target, tests, class });
+        self.insert_test_configs();
+    }
+
+    /// Removes a saved or temporary test configuration.
+    pub fn remove_test_config(&mut self, name: &str) {
+        self.temporary.retain(|c| c.name != name);
+        self.test_configs.retain(|t| t.name != name);
+        self.configs.retain(|c| !(c.name == name && matches!(c.kind, ConfigKind::TestSelection { .. })));
+        self.selected = self.selected.min(self.configs.len().saturating_sub(1));
+    }
+
     /// Compound configurations go right after the applications (before the tests).
     fn insert_compounds(&mut self) {
         let selected = self.selected_config().map(|c| c.name.clone());
         self.configs.retain(|c| !matches!(c.kind, ConfigKind::Compound { .. }));
-        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::App { .. })).map_or(0, |i| i + 1);
+        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).map_or(0, |i| i + 1);
         for (i, (name, members)) in self.compounds.iter().enumerate() {
             self.configs.insert(at + i, RunConfig { name: name.clone(), kind: ConfigKind::Compound { members: members.clone() } });
         }
@@ -378,7 +609,7 @@ impl Runner {
 
     /// Names of the application configurations (members a compound can have).
     pub fn app_names(&self) -> Vec<String> {
-        self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. })).map(|c| c.name.clone()).collect()
+        self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).map(|c| c.name.clone()).collect()
     }
 
     /// What to run for an application configuration, with the user's edits applied.
@@ -407,9 +638,22 @@ impl Runner {
 
     /// A binary of the Rust workspace, with the user's edits applied.
     fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
-        let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
-        let mut target = rc_cargo::RunTarget { test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
+        let attached = self.cargo_manifest_of(name);
+        let manifest = match &attached {
+            Some(m) => m.clone(),
+            None => self.cargo_workspace.as_ref()?.manifest.clone(),
+        };
+        let mut target = rc_cargo::RunTarget { before: Vec::new(), test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
         if let Some(o) = self.options.get(name) {
+            // A tool that cannot start (renamed, a macro without a value) stops the run with
+            // its reason.
+            for tool_name in &o.before_launch {
+                let plan = match self.external_tools.iter().find(|t| &t.name == tool_name) {
+                    Some(tool) => crate::app::external_plan(tool, &self.macro_context, self.project_env_pairs()),
+                    None => Err(trf("There is no external tool called {name}", &[("name", tool_name)])),
+                };
+                target.before.push(rc_cargo::BeforeLaunch { name: tool_name.clone(), plan });
+            }
             target.args = rc_dotnet::process::split_command_line(&o.args);
             target.env = o.env_pairs();
             if !o.working_dir.trim().is_empty() {
@@ -424,7 +668,11 @@ impl Runner {
             };
         }
         // What the binary cannot be built without.
-        let packages = self.cargo_workspace.as_ref().map_or(&[][..], |w| &w.packages);
+        let workspace = match &attached {
+            Some(m) => self.attached.iter().find(|w| &w.manifest == m),
+            None => self.cargo_workspace.as_ref(),
+        };
+        let packages = workspace.map_or(&[][..], |w| &w.packages);
         let required = packages.iter().filter(|p| p.name == target.package).flat_map(|p| &p.targets).find(|t| t.kind == rc_cargo::TargetKind::Bin && t.name == target.bin).map_or(&[][..], |t| &t.required_features);
         for feature in required {
             if !target.options.features.contains(feature) {
@@ -448,17 +696,20 @@ impl Runner {
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
         let Some(target) = self.cargo_target(&cfg.name, package, bin) else { return Vec::new() };
-        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
-            let old = self.runs.remove(i);
-            if let Some(h) = old.handle {
-                h.stop();
-            }
-        }
+        let tab = self.free_tab(&cfg);
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
+        if self.options.get(&cfg.name).is_some_and(|o| o.emulate_terminal) {
+            let prep_inbox = Inbox::new(self.waker.clone());
+            let prepare = rc_cargo::start_prepare(&cargo, target, prep_inbox.sender());
+            let pty = PtyRun { prepare: Some(prepare), inbox: prep_inbox, started: false };
+            self.runs.push(RunTab { name: tab, config: cfg, handle: None, inbox, console, exit: None, urls: Vec::new(), pty: Some(pty) });
+            self.active_run = self.runs.len() - 1;
+            return vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)];
+        }
         let handle = rc_cargo::start_run(&cargo, target, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -468,28 +719,92 @@ impl Runner {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
-        // Running the same configuration again restarts it (Rider's "Rerun").
-        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
-            let old = self.runs.remove(i);
-            if let Some(h) = old.handle {
-                h.stop();
-            }
-        }
         let Some(req) = self.request_for(&cfg) else { return Vec::new() };
+        let tab = self.free_tab(&cfg);
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
+    /// Makes room for a new run of `cfg` and returns its tab's name. Running a configuration
+    /// again restarts it (Rider's "Rerun"), unless it allows several instances: then the
+    /// finished tabs go and the new one is numbered (`server (2)`).
+    fn free_tab(&mut self, cfg: &RunConfig) -> String {
+        if !self.options.get(&cfg.name).is_some_and(|o| o.allow_parallel) {
+            if let Some(i) = self.runs.iter().position(|r| r.config == *cfg) {
+                self.runs.remove(i).stop();
+            }
+            return cfg.name.clone();
+        }
+        self.runs.retain(|r| r.config != *cfg || r.running());
+        let taken: Vec<&str> = self.runs.iter().filter(|r| r.config == *cfg).map(|r| r.name.as_str()).collect();
+        if !taken.contains(&cfg.name.as_str()) {
+            return cfg.name.clone();
+        }
+        (2..).map(|n| format!("{} ({n})", cfg.name)).find(|n| !taken.contains(&n.as_str())).unwrap_or_else(|| cfg.name.clone())
+    }
+
+    /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
+    pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
+        self.run_process(RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } }, plan)
+    }
+
+    /// Builds a Rust scratch file with `rustc` into a temporary folder and runs it.
+    pub fn run_scratch(&mut self, file: &Path) -> Vec<RunnerOutput> {
+        let cargo = match self.cargo.clone().or_else(rc_cargo::Cargo::locate) {
+            Some(c) => c.with_env(self.project_env_pairs()),
+            None => return vec![RunnerOutput::Notify(tr("Cargo was not found. Install Rust with rustup.").into(), true)],
+        };
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let cfg = RunConfig { name: name.clone(), kind: ConfigKind::Scratch { file: file.to_path_buf() } };
+        let tab = self.free_tab(&cfg);
+        let out_dir = rc_core::paths::data_dir().join("scratch-builds");
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            return vec![RunnerOutput::Notify(e.to_string(), true)];
+        }
+        let stem = file.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "scratch".into());
+        let out = out_dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let handle = rc_cargo::start_scratch(&cargo, file.to_path_buf(), out, inbox.sender());
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
+    /// Runs a command of the IDE (`rustup update`…) in a tab of the Run window.
+    pub fn run_command(&mut self, program: PathBuf, args: Vec<String>) -> Vec<RunnerOutput> {
+        let name = std::iter::once(program.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ");
+        let plan = self.command_plan(program.clone(), args.clone());
+        self.run_process(RunConfig { name, kind: ConfigKind::Command { program, args } }, plan)
+    }
+
+    /// IDE commands run in the home folder: a project's `rust-toolchain` file must not change
+    /// which toolchain `rustup update` sees.
+    fn command_plan(&self, program: PathBuf, args: Vec<String>) -> rc_dotnet::LaunchPlan {
+        let dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        rc_dotnet::LaunchPlan { program, args, env: self.project_env_pairs(), working_dir: dir, urls: Vec::new(), profile: None, browser_url: None }
+    }
+
+    fn run_process(&mut self, cfg: RunConfig, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
+        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
+            self.runs.remove(i).stop();
+        }
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let handle = rc_cargo::start_process(plan, inbox.sender());
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
 
     pub fn stop_all(&mut self) {
         for r in &mut self.runs {
-            if let Some(h) = &r.handle {
-                h.stop();
-            }
+            r.stop();
         }
         self.cancel_build();
         if let Some(t) = &mut self.tests
@@ -501,10 +816,7 @@ impl Runner {
 
     pub fn close_run(&mut self, i: usize) {
         if i < self.runs.len() {
-            let r = self.runs.remove(i);
-            if let Some(h) = r.handle {
-                h.stop();
-            }
+            self.runs.remove(i).stop();
             self.active_run = self.active_run.min(self.runs.len().saturating_sub(1));
         }
     }
@@ -603,7 +915,7 @@ impl Runner {
             for ev in b.inbox.drain() {
                 match ev {
                     BuildEvent::Started { command } => b.console.note(&command),
-                    BuildEvent::Output(line) => b.console.line(&line),
+                    BuildEvent::Output(line) | BuildEvent::Task(line) => b.console.line(&line),
                     BuildEvent::Diagnostic(d) => b.diagnostics.push(d),
                     BuildEvent::Finished(r) => {
                         b.handle = None;
@@ -623,6 +935,10 @@ impl Runner {
                 }
             }
         }
+        let waker = self.waker.clone();
+        for r in &mut self.runs {
+            r.update_pty(&waker, &mut out);
+        }
         for r in &mut self.runs {
             for ev in r.inbox.drain() {
                 match ev {
@@ -634,6 +950,7 @@ impl Runner {
                     RunEvent::Build(BuildEvent::Finished(res)) if !res.success => {
                         out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone()));
                     }
+                    RunEvent::Build(BuildEvent::Task(line)) => r.console.line(&line),
                     RunEvent::Build(_) => {}
                     RunEvent::Started { plan, .. } => {
                         r.console.note(&plan.command_line());

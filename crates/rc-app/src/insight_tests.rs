@@ -85,7 +85,7 @@ fn csharp_insight_end_to_end() {
     doc.editor.popups.close_all();
     let pos = doc.editor.buffer.rope().to_string().find("greeter.Hello").unwrap() + "greeter.".len() + 1;
     let i = app.docs.active.unwrap();
-    app.insight.rename(&app.docs.list[i], pos, "Greet");
+    app.insight.rename(&app.docs.list[i], pos, "Greet", None);
     pump(&mut app, "rename", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("greeter.Greet(")));
     let lib = std::fs::read_to_string(root.join("Lib/Greeter.cs")).unwrap();
     assert!(lib.contains("public string Greet("), "{lib}");

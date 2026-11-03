@@ -28,6 +28,7 @@ def generate() -> dict[str, bytes]:
         ("icon.png", 512, "PNG", {}),
         ("icon-32.png", 32, "PNG", {}),
         ("icon-64.png", 64, "PNG", {}),
+        ("icon-128.png", 128, "PNG", {}),
         ("icon.ico", 256, "ICO", {"sizes": [(s, s) for s in SIZES], "append_images": [draw(s) for s in SIZES[:-1]]}),
         ("CrabCraft.icns", 1024, "ICNS", {}),
     ]:

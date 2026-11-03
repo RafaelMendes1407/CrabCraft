@@ -48,6 +48,13 @@ pub fn build_args(manifest: &Path, action: BuildAction) -> Vec<String> {
     a
 }
 
+/// Inspect Code: Clippy over every member and target, with its findings as diagnostics.
+pub fn inspect_args(manifest: &Path) -> Vec<String> {
+    let mut a: Vec<String> = vec!["clippy".into(), "--workspace".into(), "--all-targets".into(), MESSAGE_FORMAT.into()];
+    a.extend(manifest_arg(manifest));
+    a
+}
+
 /// What one Cargo invocation left behind.
 #[derive(Default)]
 struct Collected {
@@ -241,6 +248,46 @@ pub struct RunTarget {
     /// Cargo arguments of a test executable to build, instead of the binary `bin`.
     pub test: Option<Vec<String>>,
     pub options: CargoOptions,
+    /// Programs run first, in order (the configuration's "before launch" tasks); one that
+    /// fails stops the launch.
+    pub before: Vec<BeforeLaunch>,
+}
+
+/// A task of a run configuration that runs before the build.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BeforeLaunch {
+    /// The name shown in the console (an external tool's).
+    pub name: String,
+    /// What to start, or why it cannot start (the launch then stops with that reason).
+    pub plan: Result<LaunchPlan, String>,
+}
+
+/// Runs the tasks before a launch, their output going to the build's. `Ok(false)` when cancelled.
+async fn run_before(tasks: &[BeforeLaunch], cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<bool> {
+    for task in tasks {
+        let plan = task.plan.as_ref().map_err(|e| anyhow::anyhow!("before launch, {}: {e}", task.name))?;
+        let line = std::iter::once(plan.program.display().to_string()).chain(plan.args.iter().cloned()).collect::<Vec<_>>().join(" ");
+        on_build(BuildEvent::Task(OutputLine { stream: Stream::Stdout, text: format!("{}: {line}", task.name), newline: true }));
+        let mut cmd = tokio::process::Command::new(&plan.program);
+        cmd.args(&plan.args).current_dir(&plan.working_dir);
+        for (k, v) in &plan.env {
+            cmd.env(k, v);
+        }
+        let events = std::sync::Mutex::new(&mut *on_build);
+        let opts = StreamOpts { partial_lines: false, grace: STOP_GRACE, stdin: None };
+        let outcome = run_streaming(cmd, cancel, opts, &mut |_| {}, &mut |l| {
+            if let Ok(mut f) = events.lock() {
+                f(BuildEvent::Task(l));
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("{}: {e}", task.name))?;
+        if outcome.cancelled {
+            return Ok(false);
+        }
+        anyhow::ensure!(outcome.code == Some(0), "before launch, {} failed with exit code {}", task.name, outcome.code.map_or("?".to_string(), |c| c.to_string()));
+    }
+    Ok(true)
 }
 
 /// Arguments that build just this binary.
@@ -277,9 +324,129 @@ pub fn start_run(cargo: &Cargo, target: RunTarget, outbox: Outbox<RunEvent>) -> 
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
+/// What [`start_prepare`] reports: the build, then what to start.
+#[derive(Clone, Debug)]
+pub enum PrepareEvent {
+    Build(BuildEvent),
+    Ready(LaunchPlan),
+    Failed(String),
+    Cancelled,
+}
+
+/// Builds the binary (and runs its "before launch" tasks) without starting it: the caller
+/// starts the plan itself (in a pseudo-terminal, for "emulate terminal").
+pub fn start_prepare(cargo: &Cargo, target: RunTarget, outbox: Outbox<PrepareEvent>) -> OpHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let cargo = cargo.clone();
+    let task = Runtime::spawn(async move {
+        let out = outbox.clone();
+        let result = prepare(&cargo, &target, &token, &mut |e| {
+            out.send(PrepareEvent::Build(e));
+        })
+        .await;
+        outbox.send(match result {
+            Ok(Some(plan)) => PrepareEvent::Ready(plan),
+            Ok(None) => PrepareEvent::Cancelled,
+            Err(e) => PrepareEvent::Failed(format!("{e:#}")),
+        });
+    });
+    OpHandle::new(cancel, task)
+}
+
+/// Starts a program as it is, with no build first (external tools). Its output, input and
+/// stop work as for a run configuration.
+pub fn start_process(plan: LaunchPlan, outbox: Outbox<RunEvent>) -> RunHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let (input, input_rx) = mpsc::unbounded_channel();
+    let pid = Arc::new(AtomicU32::new(0));
+    let pid2 = pid.clone();
+    let task = Runtime::spawn(async move {
+        let out = outbox.clone();
+        let end = launch(plan, &token, input_rx, &pid2, &mut |e| {
+            out.send(e);
+        })
+        .await;
+        outbox.send(end.unwrap_or_else(|e| RunEvent::Failed(format!("{e:#}"))));
+    });
+    RunHandle::new(OpHandle::new(cancel, task), input, pid)
+}
+
+/// Runs a Rust scratch file: `rustc` builds it into `out` (its messages go to the console),
+/// then the program starts as for a run configuration.
+pub fn start_scratch(cargo: &Cargo, file: PathBuf, out: PathBuf, outbox: Outbox<RunEvent>) -> RunHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let (input, input_rx) = mpsc::unbounded_channel();
+    let pid = Arc::new(AtomicU32::new(0));
+    let pid2 = pid.clone();
+    let rustc = cargo.path().with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" });
+    let env = cargo.env().to_vec();
+    let task = Runtime::spawn(async move {
+        let events = outbox.clone();
+        let end = async {
+            let mut cmd = tokio::process::Command::new(&rustc);
+            cmd.args(["--edition", "2021", "--color", "always", "-o"]).arg(&out).arg(&file);
+            cmd.envs(env.iter().map(|(k, v)| (k, v)));
+            events.send(RunEvent::Build(BuildEvent::Task(OutputLine { stream: Stream::Stdout, text: format!("rustc {}", file.display()), newline: true })));
+            let built = run_streaming(cmd, &token, StreamOpts::default(), &mut |_| {}, &mut |l| {
+                events.send(RunEvent::Build(BuildEvent::Task(l)));
+            })
+            .await?;
+            if built.cancelled {
+                return Ok(RunEvent::Exited { code: None, cancelled: true, duration: Duration::ZERO });
+            }
+            if built.code != Some(0) {
+                return Ok(RunEvent::Failed(format!("rustc failed with exit code {}", built.code.map_or("?".to_string(), |c| c.to_string()))));
+            }
+            let dir = file.parent().map(Path::to_path_buf).unwrap_or_else(std::env::temp_dir);
+            let plan = LaunchPlan { program: out.clone(), args: Vec::new(), env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None };
+            launch(plan, &token, input_rx, &pid2, &mut |e| {
+                events.send(e);
+            })
+            .await
+        }
+        .await;
+        outbox.send(end.unwrap_or_else(|e: anyhow::Error| RunEvent::Failed(format!("{e:#}"))));
+    });
+    RunHandle::new(OpHandle::new(cancel, task), input, pid)
+}
+
+async fn launch(plan: LaunchPlan, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+    let mut cmd = tokio::process::Command::new(&plan.program);
+    cmd.args(&plan.args).current_dir(&plan.working_dir);
+    for (k, v) in &plan.env {
+        cmd.env(k, v);
+    }
+    let started = Instant::now();
+    let events = std::sync::Mutex::new(on_event);
+    let report = |e: RunEvent| {
+        if let Ok(mut f) = events.lock() {
+            f(e);
+        }
+    };
+    let opts = StreamOpts { partial_lines: true, grace: STOP_GRACE, stdin: Some(input) };
+    let outcome = run_streaming(
+        cmd,
+        cancel,
+        opts,
+        &mut |p| {
+            pid.store(p, Ordering::SeqCst);
+            report(RunEvent::Started { pid: p, plan: plan.clone() });
+        },
+        &mut |line| report(RunEvent::Output(line)),
+    )
+    .await?;
+    Ok(RunEvent::Exited { code: outcome.code, cancelled: outcome.cancelled, duration: started.elapsed() })
+}
+
 /// Builds the binary and resolves what to start. `Ok(None)` when cancelled.
 pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<Option<LaunchPlan>> {
     t.options.check().map_err(anyhow::Error::msg)?;
+    if !run_before(&t.before, cancel, &mut *on_build).await? {
+        return Ok(None);
+    }
     let (result, executables) = invoke(cargo, &t.manifest, &run_build_args(t), cancel, &mut *on_build).await?;
     on_build(BuildEvent::Finished(result.clone()));
     if result.cancelled {
@@ -484,7 +651,7 @@ mod tests_args {
     #[test]
     fn options_change_the_build_and_bad_values_are_refused() {
         let options = CargoOptions { channel: "nightly".into(), profile: "release".into(), features: vec!["a".into(), "b".into()], ..Default::default() };
-        let t = RunTarget { manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
+        let t = RunTarget { before: Vec::new(), manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
         let args = run_build_args(&t);
         assert_eq!(args[..2], ["+nightly", "build"]);
         assert!(args.ends_with(&["--profile".into(), "release".into(), "--features".into(), "a,b".into()]), "{args:?}");

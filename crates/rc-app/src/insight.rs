@@ -53,6 +53,8 @@ pub struct Target {
 pub enum InsightOutput {
     /// A web page to open.
     OpenUrl(String),
+    /// The edits of a refactoring, to review before they are applied.
+    RefactorPreview { title: String, edit: lsp::WorkspaceEdit },
     /// The expansion of the macro call under the caret.
     MacroExpansion { name: String, text: String },
     /// The call tree is ready to show.
@@ -154,6 +156,10 @@ pub struct Insight {
     clippy: bool,
     /// Folders and files rust-analyzer leaves out (root-relative, `/`-separated).
     exclude: Vec<String>,
+    /// `Cargo.toml` files rust-analyzer analyses besides what it finds (attached projects).
+    linked: Vec<PathBuf>,
+    /// Paths completion never offers to import.
+    autoimport_exclude: Vec<String>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
@@ -189,7 +195,8 @@ pub struct Insight {
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
-    rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
+    /// The rename asked for, and whether its edits are previewed instead of applied.
+    rename: Option<(Pending<Option<lsp::WorkspaceEdit>>, Option<String>)>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
     optimizing: Option<Optimizing>,
@@ -207,6 +214,10 @@ pub struct Insight {
     usings: Option<UsingsRequest>,
     /// Documents to import usings for once their diagnostics catch up (after a paste).
     auto_usings: HashMap<u64, u64>,
+    /// Rust: after a paste, the import fixes asked for each name of the pasted code.
+    paste_imports: Option<PasteImports>,
+    /// Rust: add the imports pasted code needs (Settings › Editor).
+    pub imports_on_paste: bool,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     runnables_request: HashMap<u64, Versioned<Value>>,
@@ -275,6 +286,8 @@ impl Insight {
             accepted_resolve: None,
             clippy: false,
             exclude: Vec::new(),
+            linked: Vec::new(),
+            autoimport_exclude: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -283,6 +296,8 @@ impl Insight {
             auto_insert: None,
             usings: None,
             auto_usings: HashMap::new(),
+            paste_imports: None,
+            imports_on_paste: true,
             semantic: HashMap::new(),
             inlay: HashMap::new(),
             runnables_request: HashMap::new(),
@@ -348,6 +363,19 @@ impl Insight {
         }
     }
 
+    /// Paths completion never imports (Settings › Editor); applied to a running server.
+    pub fn set_autoimport_exclude(&mut self, list: Vec<String>) {
+        if list == self.autoimport_exclude {
+            return;
+        }
+        self.autoimport_exclude = list.clone();
+        if self.rust
+            && let Some(s) = &mut self.session
+        {
+            s.set_autoimport_exclude(list);
+        }
+    }
+
     /// The folders and files rust-analyzer leaves out (`files.exclude`). A running server is
     /// restarted: rust-analyzer 1.99 keeps its file set after `workspace/didChangeConfiguration`.
     pub fn set_exclude(&mut self, exclude: Vec<String>) {
@@ -355,6 +383,18 @@ impl Insight {
             return;
         }
         self.exclude = exclude;
+        if self.rust && self.session.is_some() {
+            self.restart();
+        }
+    }
+
+    /// The Cargo projects rust-analyzer analyses (`linkedProjects`); empty lets it find them.
+    /// A running server is restarted.
+    pub fn set_linked(&mut self, linked: Vec<PathBuf>) {
+        if linked == self.linked {
+            return;
+        }
+        self.linked = linked;
         if self.rust && self.session.is_some() {
             self.restart();
         }
@@ -375,7 +415,8 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), &self.env, self.waker.clone()) {
+            let ra = rc_lsp::rust_analyzer::RaSettings { clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone() };
+            match LanguageSession::start_rust(&program, &root, ra, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;
@@ -449,6 +490,7 @@ impl Insight {
         self.auto_insert = None;
         self.usings = None;
         self.auto_usings.clear();
+        self.paste_imports = None;
         self.semantic.clear();
         self.inlay.clear();
         self.runnables_request.clear();
@@ -739,6 +781,7 @@ impl Insight {
         }
         self.poll_completion(docs);
         self.poll_popups(docs);
+        self.poll_paste_imports(docs, out);
         self.poll_navigation(docs, out);
     }
 
@@ -1101,11 +1144,13 @@ impl Insight {
                 Err(e) => out.push(InsightOutput::Message(e.message)),
             }
         }
-        if let Some(p) = &mut self.rename
+        if let Some((p, preview)) = &mut self.rename
             && let Some(r) = p.poll()
         {
+            let preview = preview.take();
             self.rename = None;
             match r {
+                Ok(Some(edit)) if let Some(title) = preview => out.push(InsightOutput::RefactorPreview { title, edit }),
                 Ok(Some(edit)) => match apply_workspace_edit(docs, &edit) {
                     Ok(files) => out.push(InsightOutput::Message(trf("Renamed in {n} files", &[("n", &files)]))),
                     Err(e) => out.push(InsightOutput::Message(e)),
@@ -1228,6 +1273,7 @@ impl Insight {
             match ev {
                 EditorEvent::Typed(c) => self.on_typed(doc, *c),
                 // Pasted code gets its usings once the server has seen it (Rider, VS).
+                EditorEvent::Pasted if self.rust => self.ask_paste_imports(doc),
                 EditorEvent::Pasted => {
                     self.auto_usings.insert(doc.editor.id, doc.editor.buffer.version());
                 }
@@ -1338,6 +1384,62 @@ impl Insight {
         }
         if !pending.is_empty() {
             self.usings = Some((doc.editor.id, doc.editor.buffer.version(), pending, Vec::new()));
+        }
+    }
+
+    /// Rust: asks rust-analyzer how to import each type-like name of the pasted code. The
+    /// server already has the paste (requests follow the change in order).
+    fn ask_paste_imports(&mut self, doc: &Doc) {
+        let Some((start, end)) = doc.editor.last_paste.filter(|_| self.imports_on_paste) else { return };
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let end = end.min(rope.len_chars());
+        let names = pasted_names(&rope.slice(start.min(end)..end).to_string());
+        let mut asked = Vec::new();
+        for (name, offset) in names {
+            let pos = convert::lsp_position(rope, start + offset + 1);
+            let pending = session.client.request_raw(
+                "textDocument/codeAction",
+                json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "range": { "start": pos, "end": pos }, "context": { "diagnostics": [], "only": ["quickfix"], "triggerKind": 1 } }),
+            );
+            asked.push((name, pending));
+        }
+        if !asked.is_empty() {
+            self.paste_imports = Some(PasteImports { doc: doc.editor.id, version: doc.editor.buffer.version(), asked, paths: Vec::new(), ambiguous: Vec::new() });
+        }
+    }
+
+    /// Adds the `use` lines for the names with exactly one import; the others are named.
+    fn poll_paste_imports(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        let Some(p) = &mut self.paste_imports else { return };
+        let mut i = 0;
+        while i < p.asked.len() {
+            match p.asked[i].1.poll() {
+                Some(r) => {
+                    let (name, _) = p.asked.remove(i);
+                    let mut paths: Vec<String> = r.ok().as_ref().and_then(Value::as_array).into_iter().flatten().filter_map(|a| a.get("title")?.as_str()?.strip_prefix("Import `")?.strip_suffix('`').map(str::to_string)).collect();
+                    paths.dedup();
+                    match paths.len() {
+                        0 => {}
+                        1 => p.paths.extend(paths),
+                        _ => p.ambiguous.push(name),
+                    }
+                }
+                None => i += 1,
+            }
+        }
+        if !p.asked.is_empty() {
+            return;
+        }
+        let Some(p) = self.paste_imports.take() else { return };
+        // Edits made since the paste win: nothing is added then.
+        let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == p.doc).filter(|d| d.editor.buffer.version() == p.version) else { return };
+        let added = insert_rust_uses(d, &p.paths);
+        if !added.is_empty() {
+            out.push(InsightOutput::Message(trf("Imported {list}", &[("list", &added.join(", "))])));
+        }
+        if !p.ambiguous.is_empty() {
+            out.push(InsightOutput::Message(trf("Several imports fit {names}: choose one with Show Context Actions", &[("names", &p.ambiguous.join(", "))])));
         }
     }
 
@@ -1486,13 +1588,15 @@ impl Insight {
         self.rename_prepare = Some((doc.editor.id, pos, p));
     }
 
-    pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str) {
+    /// Renames the symbol at `pos`; with `preview` (the preview's title) the edits are shown
+    /// for review instead of applied.
+    pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str, preview: Option<String>) {
         let Some(session) = &self.session else { return };
         let p = session.client.request_raw(
             "textDocument/rename",
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos), "newName": new_name }),
         );
-        self.rename = Some(p);
+        self.rename = Some((p, preview));
     }
 
     /// ⌥⏎: quick fixes and refactorings at the caret / selection.
@@ -1736,7 +1840,8 @@ pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
 }
 
 pub fn has_insight(d: &Doc) -> bool {
-    !d.generated && !d.scratch && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
+    // Rust scratches are analysed on their own (linked as detached files).
+    !d.generated && (!d.scratch || d.editor.lang() == rc_syntax::Lang::Rust) && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.
@@ -2037,6 +2142,84 @@ fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
 
 /// The namespace of the only `using X;` fix among `actions` (Roslyn titles them exactly so);
 /// `None` when there is none or the name is ambiguous.
+/// A paste waiting for rust-analyzer's import fixes.
+struct PasteImports {
+    doc: u64,
+    version: u64,
+    asked: Vec<(String, Pending<Value>)>,
+    paths: Vec<String>,
+    ambiguous: Vec<String>,
+}
+
+/// Type-like names of pasted Rust code (capitalised identifiers that are not after `::` or `.`,
+/// nor macros), each once with the offset of its first use. At most 30.
+pub fn pasted_names(text: &str) -> Vec<(String, usize)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<(String, usize)> = Vec::new();
+    let mut i = 0;
+    let mut in_string = false;
+    while i < chars.len() && out.len() < 30 {
+        let c = chars[i];
+        if c == '"' && (i == 0 || chars[i - 1] != '\\') {
+            in_string = !in_string;
+            i += 1;
+            continue;
+        }
+        if c == '/' && chars.get(i + 1) == Some(&'/') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if in_string || !(c.is_alphabetic() || c == '_') {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+            i += 1;
+        }
+        let word: String = chars[start..i].iter().collect();
+        let qualified = start >= 1 && (chars[start - 1] == '.' || (start >= 2 && chars[start - 1] == ':' && chars[start - 2] == ':'));
+        let lifetime = start >= 1 && chars[start - 1] == '\'';
+        let mac = chars.get(i) == Some(&'!');
+        let type_like = word.chars().next().is_some_and(char::is_uppercase) && word.chars().any(char::is_lowercase) && word != "Self";
+        if type_like && !qualified && !lifetime && !mac && !out.iter().any(|(w, _)| *w == word) {
+            out.push((word, start));
+        }
+    }
+    out
+}
+
+/// Adds `use path;` lines that are missing: after the last top-level `use`, or else after the
+/// file's leading comments and inner attributes. Returns the paths added.
+pub fn insert_rust_uses(d: &mut Doc, paths: &[String]) -> Vec<String> {
+    let rope = d.editor.buffer.rope().clone();
+    let lines: Vec<String> = (0..rope.len_lines()).map(|l| rope.line(l).to_string()).collect();
+    let mut add: Vec<String> = paths.iter().filter(|p| !lines.iter().any(|l| l.trim() == format!("use {p};"))).cloned().collect();
+    add.sort();
+    add.dedup();
+    if add.is_empty() {
+        return add;
+    }
+    let after_use = lines.iter().rposition(|l| l.starts_with("use ") && l.trim_end().ends_with(';'));
+    let line = match after_use {
+        Some(l) => l + 1,
+        None => lines.iter().position(|l| {
+            let t = l.trim();
+            !(t.starts_with("//") || t.starts_with("#![") || t.is_empty())
+        }).unwrap_or(lines.len()),
+    };
+    let mut text: String = add.iter().map(|p| format!("use {p};\n")).collect();
+    // A blank line between the imports and the code that follows them.
+    if after_use.is_none() && lines.get(line).is_some_and(|l| !l.trim().is_empty()) {
+        text.push('\n');
+    }
+    let at = rope.line_to_char(line.min(rope.len_lines()));
+    d.editor.apply_text_edits(vec![rc_text::Change::new(at, at, text)]);
+    add
+}
+
 fn single_using(actions: &Value) -> Option<String> {
     let mut found: Vec<String> = actions
         .as_array()?

@@ -16,9 +16,34 @@ pub fn start(program: &Path, workspace: &Path, env: &[(String, String)], incomin
     Client::spawn(program, &[], workspace, env, incoming)
 }
 
-/// The settings sent at start and when the server asks for them. `exclude`: folders and files
-/// relative to the workspace root that the server leaves out (`files.exclude`).
-pub fn config(clippy: bool, exclude: &[String]) -> Value {
+/// What CrabCraft sets in rust-analyzer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RaSettings {
+    /// Clippy instead of `cargo check` on save.
+    pub clippy: bool,
+    /// Folders and files relative to the workspace root that the server leaves out.
+    pub exclude: Vec<String>,
+    /// The `Cargo.toml` files to analyse (`linkedProjects`, which replaces the server's own
+    /// discovery); empty lets the server find them.
+    pub linked: Vec<std::path::PathBuf>,
+    /// Paths completion never offers to import (`std::sync::atomic::Ordering`, a module…).
+    pub autoimport_exclude: Vec<String>,
+}
+
+/// The settings sent at start and when the server asks for them.
+pub fn config(s: &RaSettings) -> Value {
+    let mut value = config_base(s.clippy, &s.exclude);
+    if let Some(map) = value.as_object_mut() {
+        if !s.linked.is_empty() {
+            map.insert("linkedProjects".into(), json!(s.linked.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()));
+        }
+        let exclude: Vec<Value> = s.autoimport_exclude.iter().map(|p| json!({ "path": p, "type": "always" })).collect();
+        map.insert("completion".into(), json!({ "autoimport": { "enable": true, "exclude": exclude }, "postfix": { "enable": true } }));
+    }
+    value
+}
+
+fn config_base(clippy: bool, exclude: &[String]) -> Value {
     json!({
         "checkOnSave": true,
         "files": { "exclude": exclude },
@@ -56,7 +81,7 @@ fn capabilities() -> Value {
     caps
 }
 
-pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String]) -> Pending<lsp_types::InitializeResult> {
+pub fn initialize(client: &Client, root: &Path, settings: &RaSettings) -> Pending<lsp_types::InitializeResult> {
     let uri = path_to_uri(root);
     let name = root.file_name().map_or_else(|| "workspace".to_string(), |n| n.to_string_lossy().into_owned());
     client.request_raw(
@@ -68,15 +93,15 @@ pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String]
             "rootUri": uri.as_str(),
             "workspaceFolders": [{ "uri": uri.as_str(), "name": name }],
             "capabilities": capabilities(),
-            "initializationOptions": config(clippy, exclude)
+            "initializationOptions": config(settings)
         }),
     )
 }
 
 /// `workspace/configuration` of rust-analyzer: the settings once per requested section.
-pub fn configuration_reply(params: &Value, clippy: bool, exclude: &[String]) -> Value {
+pub fn configuration_reply(params: &Value, settings: &RaSettings) -> Value {
     let count = params.get("items").and_then(Value::as_array).map_or(0, Vec::len);
-    Value::Array(vec![config(clippy, exclude); count])
+    Value::Array(vec![config(settings); count])
 }
 
 /// Whether an `experimental/serverStatus` notification means analysis finished.
@@ -199,20 +224,24 @@ mod tests {
 
     #[test]
     fn the_configuration_answers_every_section() {
-        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false, &[]).as_array().map(Vec::len), Some(2));
-        assert_eq!(configuration_reply(&json!({}), false, &[]).as_array().map(Vec::len), Some(0));
+        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), &RaSettings::default()).as_array().map(Vec::len), Some(2));
+        assert_eq!(configuration_reply(&json!({}), &RaSettings::default()).as_array().map(Vec::len), Some(0));
     }
 
     #[test]
     fn the_linter_is_the_check_command() {
-        assert_eq!(config(false, &[])["check"]["command"], json!("check"));
-        assert_eq!(config(true, &[])["check"]["command"], json!("clippy"));
+        assert_eq!(config(&RaSettings::default())["check"]["command"], json!("check"));
+        assert_eq!(config(&RaSettings { clippy: true, ..Default::default() })["check"]["command"], json!("clippy"));
     }
 
     #[test]
     fn excluded_paths_are_the_files_exclude_setting() {
-        assert_eq!(config(false, &["gen".into(), "src/old.rs".into()])["files"]["exclude"], json!(["gen", "src/old.rs"]));
-        assert_eq!(config(false, &[])["files"]["exclude"], json!([]));
+        assert_eq!(config(&RaSettings { exclude: vec!["gen".into(), "src/old.rs".into()], ..Default::default() })["files"]["exclude"], json!(["gen", "src/old.rs"]));
+        assert_eq!(config(&RaSettings::default())["files"]["exclude"], json!([]));
+        assert!(config(&RaSettings::default()).get("linkedProjects").is_none(), "the server finds the projects itself");
+        let excluded = config(&RaSettings { autoimport_exclude: vec!["std::sync::atomic::Ordering".into()], ..Default::default() });
+        assert_eq!(excluded["completion"]["autoimport"]["exclude"], json!([{ "path": "std::sync::atomic::Ordering", "type": "always" }]));
+        assert_eq!(config(&RaSettings { linked: vec!["/w/Cargo.toml".into(), "/w/tools/x/Cargo.toml".into()], ..Default::default() })["linkedProjects"], json!(["/w/Cargo.toml", "/w/tools/x/Cargo.toml"]));
     }
 
     #[test]

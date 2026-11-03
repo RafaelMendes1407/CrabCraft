@@ -76,7 +76,7 @@ fn runs_the_binary_and_reports_its_output_and_exit_code() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() {\n    println!(\"hello {}\", std::env::args().nth(1).unwrap());\n    std::process::exit(7);\n}\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None, options: Default::default() };
+    let target = RunTarget { before: Vec::new(), test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: vec!["crab".into()], env: Vec::new(), working_dir: None, options: Default::default() };
     let handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(handle.pid().is_some());
@@ -93,7 +93,7 @@ fn options_reach_the_build_and_the_program() {
     let input = dir.path().join("input.txt");
     std::fs::write(&input, "from the file\n").unwrap();
     let options = CargoOptions { profile: "release".into(), backtrace: "full".into(), stdin_file: Some(input), ..Default::default() };
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options };
+    let target = RunTarget { before: Vec::new(), test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options };
     let inbox = Inbox::new(Waker::noop());
     let _handle = start_run(&cargo(), target.clone(), inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
@@ -123,7 +123,7 @@ fn a_binary_with_required_features_builds_through_its_run_configuration() {
     let bin = workspace.packages[0].targets.iter().find(|t| t.kind == TargetKind::Bin).unwrap();
     assert_eq!(bin.required_features, ["extra"]);
     let features = CargoOptions { features: bin.required_features.clone(), ..Default::default() };
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: features };
+    let target = RunTarget { before: Vec::new(), test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: features };
     let inbox = Inbox::new(Waker::noop());
     let _handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
@@ -135,7 +135,7 @@ fn a_build_error_stops_the_run() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() { nope }\n", "");
     let inbox = Inbox::new(Waker::noop());
-    let target = RunTarget { test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
+    let target = RunTarget { before: Vec::new(), test: None, manifest: dir.path().join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
     let _handle = start_run(&cargo(), target, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, RunEvent::Exited { .. } | RunEvent::Failed(_)));
     assert!(matches!(events.last(), Some(RunEvent::Failed(_))), "{events:?}");

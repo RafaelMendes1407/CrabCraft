@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 109 |
+| ✅ Pronto | 129 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
-| 🔁 Portar | 2 |
-| ⬜ A fazer | 116 |
+| 🔁 Portar | 1 |
+| ⬜ A fazer | 97 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -52,8 +52,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | ✅ | M1 | Configurações > Ferramentas mostra versões reais e a stdlib, ou como instalá-la; vista na janela nativa |
-| P-02 | Instalar rustup e stdlib pela IDE | ⬜ | M3 | Executar o instalador oficial com confirmação |
-| P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
+| P-02 | Instalar rustup e stdlib pela IDE | 🚧 | M3 | Feito: com rustup, botões Instalar para `rust-src` e `rust-analyzer` em Configurações › Ferramentas (`rustup component add` na janela Run, testado com rustup real). Falta: instalar o próprio rustup pela IDE, com confirmação |
+| P-03 | Avisar e aplicar atualização da toolchain | ✅ | M3 | Configurações › Ferramentas › Atualizações: Procurar atualizações roda `rustup check` em segundo plano só quando pedido (usa a rede) e lista cada toolchain e o rustup; Atualizar roda `rustup update` na janela Run (Rerun e Stop) e as versões são relidas ao terminar. Testado com rustup real (1.29.2 → 1.29.3 listado); captura conferida |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
 | P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |
@@ -70,14 +70,14 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-17 | Janela Cargo: membros e targets | ✅ | M3 | Lê `cargo metadata`, com recarregar; vista na janela nativa |
 | P-18 | Executar target com duplo clique | ✅ | M3 | bin na janela Run; lib, example, test e bench no console de Compilar; `lib` clicado na janela nativa, demais por teste real |
 | P-19 | Executar comando Cargo pela janela Cargo | ✅ | M3 | Campo com Enter; `cargo` no início é opcional; falha mostra o código de saída |
-| P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
+| P-20 | Anexar/desanexar projetos Cargo | ✅ | M3 | No explorador, um `Cargo.toml` que não é o do workspace tem Anexar/Desanexar projeto Cargo: o rust-analyzer passa a analisá-lo (`linkedProjects`, com o do workspace) e reinicia; seus binários viram configurações `bin (pasta)` que compilam com o próprio manifesto; a janela Cargo lista seus pacotes como anexados; a carga aparece na aba Sync; guardado na sessão. Testado com rust-analyzer e Cargo reais num crate em `tools/gen`; captura conferida |
 | P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
 | P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
-| P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
+| P-23 | Aba Sync com o log do carregamento | ✅ | M3 | Aba Sync na janela Build (projetos Cargo): cada `cargo metadata` do modelo e das dependências, com duração, hora e o que o Cargo imprimiu (o comando e o erro, quando falha); a aba diz "falhou" quando o modelo não carregou. Testado com Cargo real e um `Cargo.toml` quebrado; captura clara e escura conferida |
 | P-24 | Excluir pastas e arquivos da análise | ✅ | M3 | Menu de contexto do explorador (Excluir da análise / Incluir novamente), salvo por projeto na sessão; pastas e arquivos excluídos ficam fora do índice (Ir para arquivo, Search Everywhere), do Find in Files e dos eventos enviados ao servidor, aparecem esmaecidos no explorador e vão para o rust-analyzer em files.exclude (reinicia o servidor ao mudar). target/ já era oculto. |
 | P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
-| P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
+| P-27 | Estilo de código compartilhado no projeto | ✅ | M3 | `.editorconfig` (seções com globs, `root`, indentação, `tab_width`, `max_line_length`, `trim_trailing_whitespace`, `insert_final_newline`, `end_of_line` em arquivo novo) e, para `.rs`, `rustfmt.toml`/`.rustfmt.toml` (`hard_tabs`, `tab_spaces`, `max_width`, `newline_style`), lidos só dentro do projeto; o rustfmt prevalece em Rust. Indentação e margem direita ao abrir, limpeza ao salvar (menos na linha do cursor); a barra de status diz de onde veio. Visto na janela nativa com `hard_tabs` e `max_width = 60` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
 | P-29 | Abrir projeto por `Cargo.toml` ou pasta | ✅ | M1 | Abrir pasta ou Cargo.toml testado; dentro do projeto o Cargo.toml abre para edição |
 
@@ -98,9 +98,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🟢 | M1 | |
 | E-13 | Local History | ✅ | M3 | Cada salvamento e recarga guarda a versão anterior e a nova em history/ na pasta de dados (rc-core::history: hash do caminho, sem duplicatas consecutivas, até 100 versões e 30 dias), gravadas numa thread própria. "Show Local History" (menu da aba, Find Action, menu File) lista as versões com prévia das linhas alteradas, "Show Diff" lado a lado e "Revert to This Version" como edição desfazível. Teste de UI num projeto Cargo: screens::local_history_lists_saved_versions_and_reverts_as_an_undoable_edit. |
-| E-14 | LightEdit (arquivo sem projeto) | ⬜ | M3 | |
+| E-14 | LightEdit (arquivo sem projeto) | ✅ | M3 | Arquivo aberto sem projeto (CLI, Abrir…, arrastar) fica em modo LightEdit: só edição, sem rust-analyzer, com "LightEdit" na barra de status; se ele pertence a um projeto Cargo (o `[workspace]` mais externo ou o `Cargo.toml` mais próximo), uma faixa oferece Abrir projeto. Teste headless e captura clara e escura conferida |
 | E-15 | Corretor ortográfico e gramática | ⬜ | M6 | |
-| E-16 | Live templates e variáveis | ⬜ | M3 | Reaproveitar snippets do LSP |
+| E-16 | Live templates e variáveis | ✅ | M3 | Configurações › Live Templates: abreviação, descrição e corpo com `$1`, `${2:padrão}` e `$0`, com modelos iniciais (`p`, `pd`, `main`, `fn`, `test`, `tmod`, `st`, `en`, `impl`, `ifl`, `matchr`) e Restaurar padrões. Em arquivo Rust, abreviação + Tab expande na indentação da linha; Tab e Shift+Tab percorrem as paradas, Esc encerra. Snippets da completação do rust-analyzer ganharam as mesmas paradas. Teste headless e captura conferida. Falta: variáveis com expressões e contextos além de Rust |
 | E-17 | Postfix completion (`.if`, `.match`…) | ✅ | M3 | Postfix chega ao completar, testado com rust-analyzer real |
 | E-18 | Pré-visualização de Markdown | 🟢 | M1 | |
 | E-19 | Suporte a JSON e XML | 🟢 | M1 | |
@@ -111,7 +111,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
-| E-27 | Scratch files | 🚧 | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Falta: análise do rust-analyzer e Run de rascunhos Rust |
+| E-27 | Scratch files | ✅ | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Com um projeto aberto, rascunho Rust é analisado sozinho pelo rust-analyzer (arquivo avulso em `linkedProjects`); o botão Run da faixa compila com `rustc` numa pasta temporária e roda na janela Run (Rerun recompila; erro do rustc impede a execução). Testado com rust-analyzer e rustc reais |
 
 ## 3. Inteligência de código
 
@@ -121,8 +121,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
 | I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Derive e macro testados com rust-analyzer real; em doctest ele não trouxe sugestões na sonda, exige solução própria |
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
-| I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
-| I-06 | Excluir itens do auto-import | ⬜ | M3 | |
+| I-05 | Auto-import ao digitar e ao colar | ✅ | M3 | Ao digitar: aceitar uma sugestão da completação de um item de outro módulo adiciona o `use` (testado). Ao colar código Rust: para cada nome tipo-tipo do trecho, o rust-analyzer é consultado; os que têm uma só importação ganham a linha `use` (após os `use` do arquivo, ou após comentários e atributos iniciais) e os ambíguos são avisados para escolher em Mostrar ações de contexto; opção em Configurações › Editor. Testado com rust-analyzer real (`HashMap` importado, `Ordering` ambíguo). Falta: importar sem completação enquanto digita |
+| I-06 | Excluir itens do auto-import | ✅ | M3 | Configurações › Editor › Nunca importar: caminhos (item ou módulo, um por linha) que a completação nunca oferece importar, via `completion.autoimport.exclude` do rust-analyzer, aplicados sem reiniciar o servidor. Testado com rust-analyzer real: `std::sync::atomic::Ordering` some das sugestões e `std::cmp::Ordering` fica |
 | I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
 | I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |
 | I-09 | Ordenação de completar por ML | 🚫 | - | Sem modelo próprio; rust-analyzer ordena |
@@ -133,7 +133,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-14 | Diagnósticos em tempo real | ✅ | M1 | Testado com rust-analyzer real: erro de sintaxe ao digitar e erro do cargo check ao salvar |
 | I-15 | Quick fixes e intention actions (Alt+Enter) | ✅ | M1 | Import pelo Alt+Enter testado com rust-analyzer real |
 | I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
-| I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
+| I-17 | Inspeções em todo o projeto | ✅ | M3 | Inspecionar código (Find Action, menu nativo ou a aba Inspeção da janela Problems) roda `cargo clippy --workspace --all-targets` em segundo plano, cancelável pela janela Build; os achados, também de arquivos nunca abertos, ficam na aba Inspeção agrupados por lint, com clique para abrir na linha. Testado com Clippy real num workspace de dois crates; captura conferida |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
 | I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
@@ -146,7 +146,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ✅ | M3 | Configurações > Ferramentas: argumentos, canal (via rustup, +canal) e variáveis de ambiente; valem para Reformat Code, ao salvar e ao commitar (o mesmo comando rustfmt, sem depender do rust-analyzer); erros de configuração aparecem no diálogo e cancelam o commit |
-| I-30 | Formatador embutido para trechos | ⬜ | M3 | rust-analyzer não formatou trecho na sonda; hoje a IDE avisa que o rustfmt formata o arquivo inteiro |
+| I-30 | Formatador embutido para trechos | ✅ | M3 | Reformatar código com seleção num arquivo Rust: o rustfmt (com as configurações do usuário) formata o arquivo em segundo plano e só os blocos de mudança que tocam as linhas selecionadas são aplicados (um bloco que cruza a borda vai inteiro). Testado com rustfmt real: só a função selecionada mudou |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
 | I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
@@ -180,7 +180,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ✅ | M3 | Popup com Renomear e as refatorações do rust-analyzer (tipo `refactor*`); também no menu de contexto e no menu Refatorar. |
 | R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
-| R-03 | Pré-visualização de refatoração | ⬜ | M3 | |
+| R-03 | Pré-visualização de refatoração | ✅ | M3 | Renomear símbolo › Pré-visualizar lista as edições do rust-analyzer por arquivo, cada linha antes → depois com caixa de seleção (por arquivo e por mudança); Refatorar aplica só as marcadas (arquivos abertos como um passo de desfazer, fechados no disco). Renomear arquivo já mostrava a lista. Testado com rust-analyzer real; captura conferida. Falta: prévia das demais refatorações (ações de código) |
 | R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |
 | R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
@@ -219,18 +219,18 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |
 | B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | ✅ | M3 | Editar configuração: perfil, toolchain, features, ambiente, pasta e arquivo de entrada, testados no toolchain real, exceto a troca de toolchain (só os argumentos); outros comandos pela janela Cargo |
 | B-08 | Features automáticas (`required-features`) | ✅ | M3 | `required-features` lidas do metadata e aplicadas sozinhas; teste real |
-| B-09 | Emular terminal na saída | ⬜ | M3 | `rc-term` já suporta |
+| B-09 | Emular terminal na saída | ✅ | M3 | Opção da configuração Cargo Emular terminal no console de saída: compila (e roda as tarefas antes de executar) e inicia o programa num pseudoterminal na aba Run, com cores, `isatty` verdadeiro e entrada pelo teclado; Stop e o código de saída funcionam. Testado com Cargo real (`is_terminal`, leitura de linha, saída 3). Falta: depurar com terminal emulado |
 | B-10 | Executar como root | ⬜ | M6 | |
-| B-11 | Múltiplas instâncias e configuração no projeto | ⬜ | M3 | |
-| B-12 | Configurações compostas | 🔁 | M3 | |
+| B-11 | Múltiplas instâncias e configuração no projeto | ✅ | M3 | Na configuração de execução: Permitir várias instâncias (rodar de novo abre outra aba numerada, `server (2)`, sem parar a anterior) e Guardar como arquivo do projeto (`.crabcraft/runConfigurations/*.json`, versionável; ao abrir o projeto o arquivo prevalece sobre a sessão; arquivos quebrados ou grandes são ignorados). Testado com Cargo real |
+| B-12 | Configurações compostas | ✅ | M3 | Configuração composta (seletor › Adicionar configuração composta…) aceita binários Cargo: Run inicia todos, cada um na sua aba da janela Run (o Cargo compila um de cada vez); editar e excluir pelo seletor; guardada na sessão e mantida ao recarregar o Cargo. Testado com dois binários reais |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |
 | B-15 | Run Anything (Ctrl duplo) | ✅ | M3 | Comandos Cargo, configurações de execução e histórico; só roda Cargo, não comandos do sistema; visto na janela nativa |
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ✅ | M3 | short, full ou 0 na configuração; o ambiente da configuração tem prioridade |
 | B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |
-| B-19 | Tarefas antes do launch | ⬜ | M3 | |
-| B-20 | Configurações temporárias e salvar como permanente | ⬜ | M3 | |
+| B-19 | Tarefas antes do launch | ✅ | M3 | Configuração Cargo › Antes de executar: ferramentas externas marcadas rodam antes do build, na ordem em que foram marcadas, também ao depurar; a saída vai para a janela Run (ou o console do depurador) e uma que falha (ou some, ou tem macro sem valor) impede a execução com o motivo. Testado com Cargo real; captura conferida. Falta: tarefas que não sejam ferramentas externas |
+| B-20 | Configurações temporárias e salvar como permanente | ✅ | M3 | Rodar um teste ou módulo pela margem cria uma configuração temporária (marcada "temporária" no seletor, até 5; as mais antigas saem) que Run roda de novo; Salvar configuração a torna permanente (guardada na sessão) e Excluir a remove; sobrevivem a recarregar o Cargo. Testado com `cargo test` real. Depurar uma configuração de teste ainda não: o seletor avisa e a margem continua depurando |
 | B-21 | Pastas de configurações | ⬜ | M4 | |
 | B-22 | Argumentos após `--` e redirecionar stdin | ✅ | M3 | Argumentos vão direto ao programa; arquivo de entrada testado, ignorado ao depurar |
 
@@ -335,7 +335,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | F-09 | Docker | ⬜ | M5 | Via CLI `docker` |
 | F-10 | Solana (experimental) | 🚫 | - | Plugin de nicho |
 | F-11 | LinkedIn Connected Apps | 🚫 | - | Sem valor para o foco em Rust |
-| F-12 | Ferramentas externas | ⬜ | M3 | |
+| F-12 | Ferramentas externas | ✅ | M3 | Configurações › Ferramentas externas: nome, programa, argumentos (com aspas) e pasta, com macros `$FilePath$`, `$FileDir$`, `$FileName$`, `$FileNameWithoutExtension$`, `$FileRelativePath$`, `$ProjectFileDir$`, `$LineNumber$`, `$ColumnNumber$`, `$SelectedText$`; roda por Mais ações › Ferramentas externas ou Find Action, numa aba da janela Run com Rerun e Stop; macro sem valor avisa antes de rodar. Testado com `wc` real num caminho com espaço; capturas conferidas |
 | F-13 | Terminal: abas, divisão e busca | 🟢 | M1 | Conferir o que veio do DotCraft |
 | F-14 | Terminal: completar comandos | ⬜ | M6 | |
 
@@ -360,15 +360,15 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
 | G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
-| G-03 | Keymaps | 🟢 | M1 | Adicionar o keymap do RustRover: o herdado é o do Rider |
-| G-04 | Configurar atalhos | ⬜ | M3 | |
+| G-03 | Keymaps | 🟢 | M1 | Rider (macOS e Windows/Linux), Visual Studio e VS Code (macOS e Windows/Linux, atalhos padrão da referência pública do VS Code; acordes de duas etapas como Ctrl+K Ctrl+S ainda não existem). VS Code testado headless: Ctrl+P, Ctrl+Shift+P e Ctrl+D. Falta o keymap do RustRover: o herdado é o do Rider |
+| G-04 | Configurar atalhos | ✅ | M3 | Configurações › Keymap › Atalhos: cada ação do Find Action com seu atalho; Gravar atalho captura a próxima tecla com modificadores (Esc cancela), Remover deixa sem atalho e Restaurar volta ao do keymap; o atalho tomado sai da outra ação; guardado nas configurações e aplicado sem reiniciar. Teste headless. Falta: ações de edição fora do Find Action |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |
 | G-06 | Backup e sincronização de configurações | ⬜ | M6 | Exportar/importar arquivo |
 | G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |
 | G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |
 | G-09 | Plugins | ⬜ | M6 | |
 | G-10 | Migração a partir do VS Code e do RustRover | ⬜ | M6 | |
-| G-11 | CLI: abrir arquivos | ⬜ | M3 | |
+| G-11 | CLI: abrir arquivos | ✅ | M3 | `crabcraft [--line N] [--column N] arquivo[:linha[:coluna]]…`, com `--help` e `--version` traduzidos; arquivos vão para a janela já aberta (socket do usuário em `$XDG_RUNTIME_DIR` ou na pasta de dados; no Windows porta local com token), pasta ou `Cargo.toml` abre outra janela. Visto na janela nativa: `crabcraft src/main.rs:4:20` pôs o cursor em 4:20 no CrabCraft aberto. Falta `--wait` |
 | G-12 | CLI: diff e merge | ⬜ | M6 | |
 | G-13 | CLI: formatar e inspecionar | ⬜ | M6 | |
 | G-14 | Assistente de IA com modelos locais | ⬜ | M6 | ollama por padrão |

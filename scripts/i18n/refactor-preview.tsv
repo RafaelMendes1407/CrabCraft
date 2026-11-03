@@ -1,0 +1,7 @@
+# Refactoring preview. Import: python3 scripts/i18n_tsv.py refactor-preview scripts/i18n/refactor-preview.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Preview	Vista previa	Aperçu	Pré-visualizar	Vorschau	Podgląd	预览	プレビュー
+List the changes first and pick the ones to make	Muestra primero los cambios y elige cuáles hacer	Lister d'abord les modifications et choisir celles à faire	Lista as mudanças primeiro para escolher quais fazer	Zuerst die Änderungen auflisten und auswählen, welche gemacht werden	Najpierw wyświetl zmiany i wybierz, które wprowadzić	先列出更改，再选择要进行的更改	先に変更を一覧にし、適用するものを選びます
+Listing the changes…	Listando los cambios…	Liste des modifications…	Listando as mudanças…	Änderungen werden aufgelistet…	Wyświetlanie zmian…	正在列出更改…	変更を一覧にしています…
+{n} changes in {files} files. Uncheck the ones to leave out.	{n} cambios en {files} archivos. Desmarca los que quieras dejar fuera.	{n} modifications dans {files} fichiers. Décochez celles à exclure.	{n} mudanças em {files} arquivos. Desmarque as que devem ficar de fora.	{n} Änderungen in {files} Dateien. Hake die aus, die wegfallen sollen.	{n} zmian w {files} plikach. Odznacz te, które pominąć.	{files} 个文件中有 {n} 处更改。取消勾选要排除的更改。	{files} 個のファイルに {n} 件の変更があります。除外するものはチェックを外してください。
+Refactor	Refactorizar	Refactoriser	Refatorar	Refaktorisieren	Refaktoryzuj	重构	リファクタリング

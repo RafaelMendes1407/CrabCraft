@@ -845,5 +845,144 @@
   },
   "search-results": {
     "… more": "… 更多"
+  },
+  "cli": {
+    "Usage:": "用法：",
+    "Options:": "选项：",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "打开文件夹、Cargo 项目和文件。文件会发送到已打开的 CrabCraft 窗口（如果有）；文件夹或 Cargo.toml 会在新窗口中打开。",
+    "Put the caret on line N of the next file": "将光标放在下一个文件的第 N 行",
+    "Put the caret on column N of the next file": "将光标放在下一个文件的第 N 列",
+    "Show this help": "显示此帮助",
+    "Show the version": "显示版本",
+    "Unknown option: {option}": "未知选项：{option}",
+    "--line and --column must come before a file": "--line 和 --column 必须位于文件之前",
+    "{option} needs a number": "{option} 需要一个数字",
+    "{option} needs a number from 1 up, not {value}": "{option} 需要从 1 开始的数字，而不是 {value}"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "缩进，来自项目的代码样式：{files}"
+  },
+  "sync-log": {
+    "Cargo project": "Cargo 项目",
+    "Output": "输出",
+    "Sync": "同步",
+    "{name} (failed)": "{name}（失败）",
+    "How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed": "CrabCraft 如何加载 Cargo 项目：每次 cargo metadata 运行及其输出",
+    "No sync yet": "尚未同步",
+    "The Cargo project is being loaded.": "正在加载 Cargo 项目。",
+    "(Cargo printed nothing)": "（Cargo 没有输出）",
+    "Finished in {time}": "用时 {time} 完成",
+    "Failed after {time}": "{time} 后失败"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "未打开项目的文件：仅编辑，无代码分析",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit：此文件属于 Cargo 项目 {name}。代码分析、运行和构建需要打开项目。",
+    "Open Project": "打开项目"
+  },
+  "external-tools": {
+    "External Tools": "外部工具",
+    "Configure External Tools…": "配置外部工具…",
+    "Program": "程序",
+    "Arguments": "参数",
+    "Working folder": "工作文件夹",
+    "Add Tool": "添加工具",
+    "Tool {n}": "工具 {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "从“更多操作 › 外部工具”或“查找操作”运行。宏：{list}",
+    "There is no external tool called {name}": "没有名为 {name} 的外部工具",
+    "Could not run {name}: {error}": "无法运行 {name}：{error}",
+    "{macro} has no value here (open a file or a project)": "{macro} 在此没有值（请打开文件或项目）",
+    "the tool has no program": "该工具没有程序",
+    "the arguments have an unclosed quote": "参数中有未闭合的引号",
+    "the folder {path} does not exist": "文件夹 {path} 不存在"
+  },
+  "rustup": {
+    "Updates": "更新",
+    "Checking with rustup…": "正在通过 rustup 检查…",
+    "Check for Updates": "检查更新",
+    "Check Again": "再次检查",
+    "{name}: {current} → {new}": "{name}：{current} → {new}",
+    "{name}: {current}, up to date": "{name}：{current}，已是最新",
+    "rustup was not found: this toolchain was not installed with it": "未找到 rustup：此工具链不是用它安装的"
+  },
+  "before-launch": {
+    "Before launch": "启动前",
+    "{name} (missing)": "{name}（缺失）",
+    "Add external tools in Settings › External Tools to run them before the build": "在“设置 › 外部工具”中添加外部工具，以便在构建前运行"
+  },
+  "run-instances": {
+    "Allow multiple instances": "允许多个实例",
+    "Running it again starts another instance instead of restarting it": "再次运行会启动另一个实例，而不是重新启动",
+    "Store as project file": "存储为项目文件",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "保存在 .crabcraft/runConfigurations 中，便于提交和共享",
+    "Could not save the run configuration in the project: {error}": "无法将运行配置保存到项目中：{error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name}（临时）",
+    "Save “{name}” Configuration": "保存“{name}”配置",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "测试配置暂不能调试：请使用测试旁边的“调试”"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "在输出控制台中模拟终端",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "在伪终端中运行程序：颜色、终端检测和键盘输入与在终端中一样工作"
+  },
+  "live-templates": {
+    "Live Templates": "实时模板",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "在 Rust 文件中输入缩写并按 Tab。在正文中，$1、${2:default} 是 Tab 依次停留的位置，$0 是光标最终所在位置。",
+    "Templates": "模板",
+    "Abbreviation": "缩写",
+    "Description": "描述",
+    "Add Template": "添加模板",
+    "Restore Defaults": "恢复默认值"
+  },
+  "refactor-preview": {
+    "Preview": "预览",
+    "List the changes first and pick the ones to make": "先列出更改，再选择要进行的更改",
+    "Listing the changes…": "正在列出更改…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 个文件中有 {n} 处更改。取消勾选要排除的更改。",
+    "Refactor": "重构"
+  },
+  "inspect-code": {
+    "Inspect Code": "检查代码",
+    "Open a Cargo project to inspect its code": "打开 Cargo 项目以检查其代码",
+    "Inspection cancelled": "检查已取消",
+    "Current Files": "当前文件",
+    "Inspection": "检查",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "检查代码：对 Cargo 项目的所有成员和目标运行 Clippy",
+    "No inspection yet": "尚未检查",
+    "Inspect Code runs Clippy over the whole project.": "“检查代码”会对整个项目运行 Clippy。",
+    "Inspecting with Clippy…": "正在用 Clippy 检查…",
+    "No problems found": "未发现问题",
+    "Clippy found nothing to report.": "Clippy 没有发现需要报告的问题。",
+    "Other": "其他"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "附加 Cargo 项目",
+    "Detach Cargo Project": "分离 Cargo 项目",
+    "Analyse this Cargo project with the workspace, though it is not a member": "与工作区一起分析此 Cargo 项目，即使它不是成员",
+    "Attached the Cargo project {name}": "已附加 Cargo 项目 {name}",
+    "Detached the Cargo project {name}": "已分离 Cargo 项目 {name}",
+    "Attached project": "附加项目",
+    "attached": "已附加"
+  },
+  "autoimport-exclude": {
+    "Never import": "从不导入",
+    "Items or modules completion never offers to import, one path per line": "补全永不建议导入的项或模块，每行一个路径"
+  },
+  "paste-imports": {
+    "Imported {list}": "已导入 {list}",
+    "Several imports fit {names}: choose one with Show Context Actions": "{names} 有多个可用导入：请通过“显示上下文操作”选择一个",
+    "Add the imports pasted Rust code needs (when only one fits)": "添加粘贴的 Rust 代码所需的导入（仅一个匹配时）"
+  },
+  "scratch-analysis": {
+    "Scratch file: analysed on its own, outside the project's crates": "草稿文件：单独分析，不属于项目的 crate",
+    "Scratch file: open a project to have it analysed": "草稿文件：打开项目后才会分析",
+    "Build it with rustc and run it": "用 rustc 构建并运行"
+  },
+  "shortcuts": {
+    "Shortcuts": "快捷键",
+    "Press a shortcut…": "请按快捷键…",
+    "Record Shortcut": "录制快捷键",
+    "Reset": "重置"
   }
 }

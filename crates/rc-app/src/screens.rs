@@ -255,23 +255,24 @@ fn screens() {
 /// Close Project, quit, start: the welcome screen. Quitting with a project open reopens it.
 #[test]
 fn closed_projects_are_not_reopened_on_startup() {
+    use crate::cli::OpenRequest;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("Shop/Shop.sln");
     let mut app = test_app(home.path(), true);
     app.open_workspace(&sln);
-    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![sln.clone()]);
+    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     app.close_project();
     assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
     app.open_workspace(&sln);
     let mut settings = rc_core::Settings::load();
-    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![sln.clone()]);
+    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     settings.reopen_last = false;
     assert!(crate::app::startup_paths(&settings, Vec::new()).is_empty());
     // Files from Finder win.
     let file = fixtures().join("Shop/README.md");
-    assert_eq!(crate::app::startup_paths(&settings, vec![file.clone()]), vec![file]);
+    assert_eq!(crate::app::startup_paths(&settings, vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
 }
 
 #[test]
@@ -338,8 +339,8 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     let first = dir.join("scratch_1.rs").canonicalize().unwrap();
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
-    // Outside every Cargo package, so rust-analyzer never gets it.
-    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && !crate::insight::has_insight(d)));
+    // Outside every Cargo package: rust-analyzer gets it as a file on its own.
+    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && crate::insight::has_insight(d)));
     assert_eq!(h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()), Some("fn main() {
     
 }
@@ -1207,3 +1208,401 @@ fn cut_copy_and_paste_from_the_editor_context_menu() {
     assert_eq!(text(&h), " beta\nalphagamma\n");
 }
 
+
+/// The VS Code keymap drives the app: Ctrl+P finds files, Ctrl+Shift+P actions, and Ctrl+D
+/// adds the next occurrence in the editor.
+#[test]
+fn vscode_shortcuts_reach_their_actions() {
+    use crate::search::SeTab;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    h.state_mut().keymap = rc_editor::Keymap::new(rc_editor::KeymapKind::VsCode);
+    let ctrl = egui::Modifiers::CTRL;
+
+    h.key_press_modifiers(ctrl, egui::Key::P);
+    h.run_steps(3);
+    assert_eq!(se(&h).tab, SeTab::Files);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert!(h.state().search_everywhere.is_none());
+    h.key_press_modifiers(ctrl | egui::Modifiers::SHIFT, egui::Key::P);
+    h.run_steps(3);
+    assert_eq!(se(&h).tab, SeTab::Actions);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+
+    let file = root.join("beta/src/lib.rs");
+    h.state_mut().open_at(&file, 3, 14);
+    h.run_steps(3);
+    h.key_press_modifiers(ctrl, egui::Key::D);
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    let rope = doc.editor.buffer.rope();
+    let texts: Vec<String> = doc.editor.selection.ranges().iter().map(|r| rope.slice(r.start()..r.end()).to_string()).collect();
+    assert_eq!(texts, ["NEEDLE"], "Ctrl+D selects the word at the caret first");
+}
+
+/// The project's `.editorconfig` and `rustfmt.toml` set the indentation and right margin of
+/// its files, and saving trims trailing whitespace and ends the file with one newline.
+#[test]
+fn the_project_code_style_applies_on_open_and_save() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("styled");
+    let write = |name: &str, text: &str| {
+        let p = root.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    write("Cargo.toml", "[package]\nname = \"styled\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(".editorconfig", "root = true\n[*]\nindent_style = space\nindent_size = 2\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n[*.md]\ntrim_trailing_whitespace = false\n");
+    write("rustfmt.toml", "hard_tabs = true\nmax_width = 90\n");
+    // Four-space lines: detection alone would pick four spaces.
+    write("notes.txt", "a  \n    b\t\n    c");
+    write("src/main.rs", "fn main() {\n    let x = 1;\n}\n");
+    write("README.md", "keep  \n");
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+
+    app.open_file(&root.join("notes.txt"));
+    let doc = app.docs.active_doc().unwrap();
+    assert_eq!(doc.editor.indent.unit, "  ");
+    assert_eq!(doc.editor.right_margin, None);
+    app.open_file(&root.join("src/main.rs"));
+    let doc = app.docs.active_doc().unwrap();
+    assert_eq!(doc.editor.indent.unit, "\t", "rustfmt.toml wins for Rust files");
+    assert_eq!(doc.editor.right_margin, Some(90));
+
+    app.open_file(&root.join("notes.txt"));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.goto(0, 0);
+    app.docs.list[i].editor.replace(0, 0, "z");
+    app.docs.save(i).unwrap();
+    // The caret's line keeps its spaces; the others lose theirs, and a newline ends the file.
+    assert_eq!(std::fs::read_to_string(root.join("notes.txt")).unwrap(), "za  \n    b\n    c\n");
+
+    app.open_file(&root.join("README.md"));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.replace(0, 0, "x");
+    app.docs.list[i].editor.goto(0, 0);
+    app.docs.save(i).unwrap();
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "xkeep  \n");
+}
+
+/// The Build window's Sync tab lists each load of the Cargo model with what Cargo printed;
+/// a broken manifest shows Cargo's error there.
+#[test]
+fn the_sync_tab_shows_each_cargo_load() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    run_frames(&mut h, "the project and dependency loads", |a| a.sync_log.entries.len() >= 2);
+    let kinds: Vec<_> = h.state().sync_log.entries.iter().map(|e| e.kind).collect();
+    assert!(kinds.contains(&crate::sync_log::SyncKind::Project) && kinds.contains(&crate::sync_log::SyncKind::Dependencies), "{kinds:?}");
+    let project = h.state().sync_log.entries.iter().find(|e| e.kind == crate::sync_log::SyncKind::Project).unwrap().clone();
+    assert!(project.log.success);
+    assert!(project.log.command.starts_with("cargo metadata --no-deps"), "{}", project.log.command);
+
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Build);
+    h.run_steps(3);
+    h.get_by_label(rc_kit::i18n::tr("Sync")).click();
+    h.run_steps(3);
+    assert!(h.state().sync_log.tab_open);
+    h.get_by_label(rc_kit::i18n::tr("Cargo project"));
+
+    // A broken manifest: the reload fails and the tab says so, with Cargo's message.
+    std::fs::write(root.join("Cargo.toml"), "[workspace\nmembers = [\n").unwrap();
+    h.state_mut().reload_cargo();
+    run_frames(&mut h, "the failed reload", |a| a.sync_log.last_failed());
+    let last = h.state().sync_log.entries.last().unwrap().clone();
+    assert_eq!(last.kind, crate::sync_log::SyncKind::Project);
+    assert!(last.log.stderr.contains("Cargo.toml"), "{}", last.log.stderr);
+    h.run_steps(3);
+    h.get_by_label(&rc_kit::i18n::trf("{name} (failed)", &[("name", &rc_kit::i18n::tr("Sync"))]));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/sync-tab-*.png"]
+fn sync_tab_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = two_crates_harness(dir.path(), dark);
+        run_frames(&mut h, "both loads", |a| a.sync_log.entries.len() >= 2);
+        std::fs::write(root.join("Cargo.toml"), "[workspace\nmembers = [\n").unwrap();
+        h.state_mut().reload_cargo();
+        run_frames(&mut h, "the failed reload", |a| a.sync_log.last_failed());
+        h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Build);
+        h.state_mut().sync_log.tab_open = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("sync-tab-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/light-edit-*.png"]
+fn light_edit_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        two_crates(&dir.path().join("ws"));
+        let mut app = test_app(&dir.path().join("home"), dark);
+        app.open_path(&dir.path().join("ws/beta/src/lib.rs"));
+        assert!(app.workspace.is_none());
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("light-edit-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A Rust file opened without its project is in LightEdit: the editor says which Cargo
+/// project it belongs to and opens it on request.
+#[test]
+fn light_edit_offers_the_files_cargo_project() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let ws = dir.path().join("ws");
+    two_crates(&ws);
+    let ws = ws.canonicalize().unwrap();
+    assert_eq!(crate::docs::cargo_project_of(&ws.join("beta/src/lib.rs")), Some(ws.clone()), "the workspace, not the member");
+    let loose = dir.path().join("notes.txt");
+    std::fs::write(&loose, "plain\n").unwrap();
+
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_path(&loose);
+    app.open_path(&ws.join("beta/src/lib.rs"));
+    assert!(app.workspace.is_none());
+    assert_eq!(app.docs.list[0].light_project, None);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    h.get_by_label(rc_kit::i18n::tr("LightEdit"));
+    h.get_by_label(rc_kit::i18n::tr("Open Project")).click();
+    h.run_steps(4);
+    assert_eq!(h.state().workspace.as_ref().map(|w| w.ws.root.canonicalize().unwrap()), Some(ws));
+    assert!(h.query_by_label(rc_kit::i18n::tr("LightEdit")).is_none());
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/external-tools-*.png"]
+fn external_tools_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    h.state_mut().settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
+    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().run_external_tool("Count lines");
+    run_frames(&mut h, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("external-tools-run.png")).unwrap();
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::ExternalTools);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("external-tools-settings.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU, rustup and the network; writes target/snapshots/toolchain-updates.png"]
+fn toolchain_updates_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    app.check_toolchain_updates();
+    app.open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "rustup check and the toolchain", |a| a.toolchain_updates.is_some() && a.toolchain.is_some());
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("toolchain-updates.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/before-launch.png"]
+fn before_launch_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.settings.external_tools = vec![
+        rc_core::external_tools::ExternalTool { name: "Generate schema".into(), program: "sh".into(), ..Default::default() },
+        rc_core::external_tools::ExternalTool { name: "Lint SQL".into(), program: "sqlfluff".into(), ..Default::default() },
+    ];
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the workspace", |a| !a.runner.configs.is_empty());
+    let name = h.state().runner.configs[0].name.clone();
+    h.state_mut().runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Lint SQL".into(), "Old tool".into()], ..Default::default() });
+    h.state_mut().edit_run_config(Some(name));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("before-launch.png")).unwrap();
+}
+
+/// A live template: its abbreviation and Tab insert the snippet with its first stop selected;
+/// what is typed replaces it and Tab goes on to the body.
+#[test]
+fn live_templates_expand_with_tab_and_visit_their_stops() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let file = root.join("beta/src/lib.rs");
+    h.state_mut().open_file(&file);
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    h.event(egui::Event::Text("test".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    let selected = h.state().docs.active_doc().unwrap().editor.selected_text();
+    assert_eq!(selected, "name", "the first stop is selected");
+    h.event(egui::Event::Text("works".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    h.event(egui::Event::Text("assert!(true);".into()));
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    let text = doc.editor.buffer.rope().to_string();
+    assert!(text.ends_with("#[test]\nfn works() {\n    assert!(true);\n}"), "{text}");
+    assert!(doc.editor.snippet.is_none(), "the final stop ends the snippet");
+    // Tab elsewhere indents as usual.
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("assert!(true);  \n"));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/live-templates.png"]
+fn live_templates_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_settings(crate::ui::dialogs::SettingsPage::LiveTemplates);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("live-templates.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/refactor-preview.png"]
+fn refactor_preview_capture() {
+    use rc_lsp::lsp_types as lsp;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    let file = root.join("beta/src/lib.rs");
+    let uri = rc_lsp::path_to_uri(&file);
+    let edit = |line, a, b| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: "NEEDLE_NAME".into() };
+    let mut changes = std::collections::HashMap::new();
+    changes.insert(uri, vec![edit(3, 10, 16), edit(0, 7, 11)]);
+    let ws_edit = lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() };
+    let preview = crate::refactor_preview::RefactorPreview::start("Rename 'NEEDLE' to 'NEEDLE_NAME'".into(), &ws_edit, Vec::new(), rc_core::Waker::noop());
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorPreview(Box::new(preview)));
+    run_frames(&mut h, "the listing", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::RefactorPreview(p)) if !p.loading()));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("refactor-preview.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU and Clippy; writes target/snapshots/inspection.png"]
+fn inspection_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    std::fs::write(root.join("beta/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    if x.len() == 0 { 0 } else { x.len() * 2 }\n}\n").unwrap();
+    h.state_mut().inspect_code();
+    run_frames(&mut h, "the inspection", |a| a.inspection.as_ref().is_some_and(|i| !i.running));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("inspection.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/attached-project.png"]
+fn attached_project_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let gen_dir = root.join("tools/gen");
+    std::fs::create_dir_all(gen_dir.join("src")).unwrap();
+    std::fs::write(gen_dir.join("Cargo.toml"), "[package]\nname = \"gen\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(gen_dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+    h.state_mut().set_attached(&gen_dir.join("Cargo.toml"), true);
+    run_frames(&mut h, "the attached project", |a| a.runner.configs.iter().any(|c| c.name == "gen (gen)"));
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("attached-project.png")).unwrap();
+}
+
+/// A real paste in the editor records where the text went (for the imports it needs).
+#[test]
+fn a_paste_records_its_range() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(0);
+    h.run_steps(3);
+    h.event(egui::Event::Paste("use x;\n".into()));
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    assert_eq!(doc.editor.last_paste, Some((0, 7)));
+    assert!(doc.editor.buffer.rope().to_string().starts_with("use x;\n// The beta crate."));
+}
+
+/// Settings › Keymap records a new shortcut for an action; after OK the app's keymap runs the
+/// action with it, and Remove leaves the action without one.
+#[test]
+fn shortcuts_are_recorded_in_the_settings() {
+    use crate::ui::dialogs::{Dialog, SettingsPage};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_settings(SettingsPage::Keymap);
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    h.run_steps(3);
+    let commit = format!("{:?}", rc_editor::Action::Commit);
+    h.state().keymap.chord(rc_editor::Action::Commit).expect("Commit has a shortcut");
+    // As the Record button of the Commit row does.
+    let ctx = h.ctx.clone();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("recording_shortcut"), commit.clone()));
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::K);
+    h.run_steps(3);
+    let Some(Dialog::Settings { draft, .. }) = &h.state().dialog else { panic!("settings closed") };
+    assert_eq!(draft.shortcuts.get(&commit).map(String::as_str), Some("ctrl+shift+K"));
+    h.get_by_label(rc_kit::i18n::tr("OK")).click();
+    h.run_steps(3);
+    let chord = rc_editor::keymap::parse_chord("ctrl+shift+K").unwrap();
+    assert_eq!(h.state().keymap.action_of(chord), Some(rc_editor::Action::Commit));
+    assert_eq!(rc_core::Settings::load().shortcuts.get(&commit).map(String::as_str), Some("ctrl+shift+K"), "saved");
+
+    let mut settings = h.state().settings.clone();
+    settings.shortcuts.insert(commit, String::new());
+    let ctx = h.ctx.clone();
+    h.state_mut().apply_settings(&ctx, settings);
+    assert_eq!(h.state().keymap.chord(rc_editor::Action::Commit), None);
+}

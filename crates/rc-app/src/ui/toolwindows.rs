@@ -98,6 +98,20 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
 }
 
 fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
+    // Open files, or the last Inspect Code run.
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        if ui.selectable_label(!app.problems_tab_inspection, tr("Current Files")).clicked() {
+            app.problems_tab_inspection = false;
+        }
+        if ui.selectable_label(app.problems_tab_inspection, tr("Inspection")).on_hover_text(tr("Inspect Code: Clippy over every member and target of the Cargo project")).clicked() {
+            app.problems_tab_inspection = true;
+        }
+    });
+    if app.problems_tab_inspection {
+        inspection(app, ui);
+        return;
+    }
     if app.insight.problems.is_empty() {
         let (title, hint) = empty_text(ToolWindow::Problems);
         empty_state(ui, ToolWindow::Problems.icon(), title, hint);
@@ -130,6 +144,67 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
             let pos = pos.min(doc.editor.buffer.len_chars());
             doc.editor.set_selection(rc_text::Selection::point(pos));
         }
+    }
+}
+
+/// Inspect Code's findings, grouped by lint, then by file.
+fn inspection(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let can_run = app.runner.cargo_workspace.is_some() && app.inspection.as_ref().is_none_or(|i| !i.running);
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        if ui.add_enabled(can_run, egui::Button::new(tr("Inspect Code"))).clicked() {
+            app.inspect_code();
+        }
+    });
+    let Some(insp) = &app.inspection else {
+        empty_state(ui, rc_kit::ico::WARNING, tr("No inspection yet"), tr("Inspect Code runs Clippy over the whole project."));
+        return;
+    };
+    if insp.running {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            ui.spinner();
+            ui.label(tr("Inspecting with Clippy…"));
+        });
+        return;
+    }
+    if let Some(e) = &insp.failed {
+        ui.label(egui::RichText::new(e).color(p.error));
+    }
+    if insp.diagnostics.is_empty() {
+        if insp.failed.is_none() {
+            empty_state(ui, rc_kit::ico::SUCCESS, tr("No problems found"), tr("Clippy found nothing to report."));
+        }
+        return;
+    }
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let mut groups: std::collections::BTreeMap<String, Vec<&rc_dotnet::Diagnostic>> = Default::default();
+    for d in &insp.diagnostics {
+        let key = if d.code.is_empty() { tr("Other").to_string() } else { d.code.clone() };
+        groups.entry(key).or_default().push(d);
+    }
+    let mut open = None;
+    egui::ScrollArea::vertical().id_salt("inspection").auto_shrink([false, false]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (code, list) in &groups {
+            let errors = list.iter().any(|d| d.severity == rc_dotnet::Severity::Error);
+            let icon = if errors { rc_kit::ico::ERROR } else { rc_kit::ico::WARNING };
+            list_row(ui, 0, icon, code, &rc_kit::i18n::trf("{n} problems", &[("n", &list.len())]), false);
+            for d in list {
+                let file = d.file.as_ref().map(|f| root.as_ref().and_then(|r| f.strip_prefix(r).ok()).unwrap_or(f).display().to_string()).unwrap_or_default();
+                let place = format!("{file}:{}", d.line.unwrap_or(1));
+                let resp = list_row(ui, 1, rc_kit::icons::for_file(&file), &d.message, &place, false);
+                if resp.clicked()
+                    && let Some(f) = &d.file
+                {
+                    open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
+                }
+            }
+        }
+    });
+    if let Some((f, l, c)) = open {
+        app.open_at(&f, l, c);
     }
 }
 

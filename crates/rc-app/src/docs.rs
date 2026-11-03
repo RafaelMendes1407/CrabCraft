@@ -34,6 +34,10 @@ pub struct Doc {
     pub scratch: bool,
     /// Written by the IDE (a macro expansion): read-only and never sent to the language server.
     pub generated: bool,
+    /// What the project's `.editorconfig` and `rustfmt.toml` say about this file.
+    pub style: rc_core::code_style::CodeStyle,
+    /// Opened with no project (LightEdit): the Cargo project the file belongs to, if any.
+    pub light_project: Option<PathBuf>,
 }
 
 /// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
@@ -67,6 +71,78 @@ pub struct Docs {
     pub read_only_roots: Vec<PathBuf>,
     /// Where saved and reloaded versions go (none in unit tests).
     pub history: Option<crate::local_history::HistoryService>,
+    /// The open project: code style files are read up to it.
+    pub style_root: Option<PathBuf>,
+}
+
+/// The folder of the Cargo project `file` belongs to: the outermost `Cargo.toml` above it that
+/// declares a `[workspace]`, or else the nearest one.
+pub fn cargo_project_of(file: &Path) -> Option<PathBuf> {
+    let mut nearest = None;
+    let mut workspace = None;
+    for dir in file.ancestors().skip(1) {
+        let manifest = dir.join("Cargo.toml");
+        let Ok(meta) = std::fs::metadata(&manifest) else { continue };
+        if !meta.is_file() || meta.len() > 1 << 20 {
+            continue;
+        }
+        nearest.get_or_insert_with(|| dir.to_path_buf());
+        if std::fs::read_to_string(&manifest).is_ok_and(|t| t.lines().any(|l| l.trim() == "[workspace]")) {
+            workspace = Some(dir.to_path_buf());
+        }
+    }
+    workspace.or(nearest)
+}
+
+/// The indentation and right margin of the project's style; detection decides what it leaves
+/// unset.
+pub fn apply_style(editor: &mut EditorState, style: &rc_core::code_style::CodeStyle) {
+    if let Some((unit, tab_width)) = style.indent() {
+        editor.indent = rc_text::commands::Indent { unit, tab_width };
+    }
+    editor.right_margin = style.max_line_length;
+    if let Some(eol) = style.end_of_line
+        && editor.buffer.len_chars() == 0
+    {
+        // A new file gets the project's line ending; existing ones keep theirs.
+        editor.buffer.set_line_ending(match eol {
+            rc_core::code_style::EndOfLine::Lf => rc_text::LineEnding::Lf,
+            rc_core::code_style::EndOfLine::CrLf => rc_text::LineEnding::CrLf,
+        });
+    }
+}
+
+/// What saving changes for the style: trailing whitespace goes (except on the lines with a
+/// caret, so typing is not disturbed) and the file ends with exactly one newline.
+pub fn style_fixes(editor: &EditorState, style: &rc_core::code_style::CodeStyle) -> Vec<rc_text::Change> {
+    let rope = editor.buffer.rope();
+    let mut edits = Vec::new();
+    if style.trim_trailing_whitespace == Some(true) {
+        let caret_lines: BTreeSet<usize> = editor.selection.ranges().iter().map(|r| rope.char_to_line(r.head)).collect();
+        for line in 0..rope.len_lines() {
+            if caret_lines.contains(&line) {
+                continue;
+            }
+            let text = rope.line(line);
+            let len = rc_text::buffer::line_len(rope, line);
+            let content = text.chars().take(len);
+            let trailing = content.collect::<Vec<char>>().iter().rev().take_while(|c| **c == ' ' || **c == '\t').count();
+            if trailing > 0 {
+                let end = rope.line_to_char(line) + len;
+                edits.push(rc_text::Change::new(end - trailing, end, String::new()));
+            }
+        }
+    }
+    let len = rope.len_chars();
+    match style.insert_final_newline {
+        Some(true) if len > 0 && rope.char(len - 1) != '\n' => edits.push(rc_text::Change::new(len, len, "\n".to_string())),
+        Some(false) if len > 0 && rope.char(len - 1) == '\n' => {
+            let keep = len - rope.chars_at(len).reversed().take_while(|c| *c == '\n' || *c == '\r').count();
+            edits.push(rc_text::Change::new(keep, len, String::new()));
+        }
+        _ => {}
+    }
+    edits
 }
 
 /// Reads a text file: (text without BOM, had BOM). Binary files are refused.
@@ -92,7 +168,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None, style_root: None }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -134,7 +210,15 @@ impl Docs {
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
         let saved = editor.buffer.snapshot();
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch: rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path), generated: false, saved });
+        let scratch = rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path);
+        // Only files of the project follow its style (scratches and dependencies do not).
+        let style = match &self.style_root {
+            Some(root) if !scratch && path.starts_with(root) => rc_core::code_style::for_file(&path, Some(root)),
+            _ => Default::default(),
+        };
+        apply_style(&mut editor, &style);
+        let light_project = if self.style_root.is_none() && !scratch { cargo_project_of(&path) } else { None };
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -215,6 +299,12 @@ impl Docs {
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
         let doc = &mut self.list[i];
+        if !doc.editor.read_only {
+            let edits = style_fixes(&doc.editor, &doc.style);
+            if !edits.is_empty() {
+                doc.editor.apply_text_edits(edits);
+            }
+        }
         let mut bytes = Vec::new();
         if doc.bom {
             bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);

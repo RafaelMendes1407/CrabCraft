@@ -90,6 +90,24 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Build),
         _ => {}
     }
+    // Cargo projects also show how their model was loaded.
+    if app.runner.cargo_workspace.is_some() || !app.sync_log.entries.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            if ui.selectable_label(!app.sync_log.tab_open, tr("Output")).clicked() {
+                app.sync_log.tab_open = false;
+            }
+            let failed = app.sync_log.last_failed();
+            let sync = ui.selectable_label(app.sync_log.tab_open, if failed { trf("{name} (failed)", &[("name", &tr("Sync"))]) } else { tr("Sync").to_string() });
+            if sync.on_hover_text(tr("How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed")).clicked() {
+                app.sync_log.tab_open = true;
+            }
+        });
+        if app.sync_log.tab_open {
+            sync_tab(app, ui);
+            return;
+        }
+    }
     let Some(b) = &app.runner.build else {
         empty_state(ui, ToolWindow::Build.icon(), tr("No build output"), tr("Build the project to see errors and warnings."));
         return;
@@ -165,6 +183,47 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
 }
 
+/// The Sync tab: the runs of `cargo metadata`, newest first, and the output of the chosen one.
+fn sync_tab(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    if app.sync_log.entries.is_empty() {
+        empty_state(ui, ico::REFRESH, tr("No sync yet"), tr("The Cargo project is being loaded."));
+        return;
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+    let h = (app.sync_log.entries.len() as f32 * 24.0 + 4.0).min(ui.available_height() * 0.4);
+    let mut select = None;
+    egui::ScrollArea::vertical().id_salt("sync_runs").max_height(h).auto_shrink([false, true]).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (i, e) in app.sync_log.entries.iter().enumerate().rev() {
+            let selected = app.sync_log.selected == Some(i);
+            let icon = if e.log.success { ico::SUCCESS } else { ico::ERROR };
+            let secondary = format!("{} · {}", duration_text(e.log.duration), crate::ui::dialogs::history_age(now, e.time_ms));
+            if row(ui, 0, icon, e.kind.title(), &secondary, selected).clicked() {
+                select = Some(i);
+            }
+        }
+    });
+    if let Some(i) = select {
+        app.sync_log.selected = Some(i);
+    }
+    ui.separator();
+    let Some(entry) = app.sync_log.selected.and_then(|i| app.sync_log.entries.get(i)) else { return };
+    let mut text = format!("$ {}\n", entry.log.command);
+    if entry.log.stderr.trim().is_empty() {
+        text.push_str(tr("(Cargo printed nothing)"));
+    } else {
+        text.push_str(entry.log.stderr.trim_end());
+    }
+    text.push('\n');
+    text.push_str(&if entry.log.success { trf("Finished in {time}", &[("time", &duration_text(entry.log.duration))]) } else { trf("Failed after {time}", &[("time", &duration_text(entry.log.duration))]) });
+    egui::ScrollArea::both().id_salt("sync_output").auto_shrink([false, false]).show(ui, |ui| {
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(12, 4)).show(ui, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(text).font(FontId::monospace(12.5)).color(p.text)).selectable(true).extend());
+        });
+    });
+}
+
 // ---------------------------------------------------------------------------------- Run
 
 pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
@@ -180,7 +239,17 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
     ];
     match header(ui, tr("Run"), &actions) {
         Some(0) => {
-            if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
+            let kind = app.runner.runs.get(active).map(|r| r.config.kind.clone());
+            if let Some(crate::runner::ConfigKind::External { tool }) = kind {
+                app.run_external_tool(&tool);
+            } else if let Some(crate::runner::ConfigKind::Scratch { file }) = kind {
+                app.save_all_docs();
+                let outs = app.runner.run_scratch(&file);
+                handle_outputs(app, outs);
+            } else if let Some(crate::runner::ConfigKind::Command { program, args }) = kind {
+                let outs = app.runner.run_command(program, args);
+                handle_outputs(app, outs);
+            } else if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
                 && let Some(i) = app.runner.configs.iter().position(|c| *c == cfg)
             {
                 app.runner.selected = i;
@@ -189,8 +258,8 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
         }
         Some(1) => {
-            if let Some(h) = app.runner.runs.get(active).and_then(|r| r.handle.as_ref()) {
-                h.stop();
+            if let Some(r) = app.runner.runs.get_mut(active) {
+                r.stop();
             }
         }
         Some(2) => {

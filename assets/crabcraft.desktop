@@ -8,4 +8,4 @@ Icon=crabcraft
 Terminal=false
 Categories=Development;IDE;
 MimeType=text/plain;text/rust;application/json;
-StartupWMClass=crabcraft
+StartupWMClass=CrabCraft

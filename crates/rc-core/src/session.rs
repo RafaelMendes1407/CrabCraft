@@ -18,6 +18,18 @@ pub struct OpenFile {
     pub pinned: bool,
 }
 
+/// A run configuration for some tests: by full name, or every test of a module/class.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedTestConfig {
+    pub name: String,
+    /// The project (`Cargo.toml`, solution or test project) the tests belong to.
+    pub target: PathBuf,
+    pub tests: Vec<String>,
+    /// `tests` holds one module or class: all of its tests run.
+    pub class: bool,
+}
+
 /// What the user changed in an application run configuration (Run › Edit Configuration).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -44,11 +56,19 @@ pub struct RunOptions {
     pub backtrace: String,
     /// Rust: a file to read as the program's input.
     pub stdin_file: String,
+    /// Rust: external tools (by name) run first, in order; one that fails stops the launch.
+    pub before_launch: Vec<String>,
+    /// Running it again starts another instance instead of restarting the running one.
+    pub allow_parallel: bool,
+    /// Rust: start the program in a pseudo-terminal (colours, `isatty`, interactive input).
+    pub emulate_terminal: bool,
+    /// Kept in the project (`.crabcraft/runConfigurations`) to be shared, not in the session.
+    pub in_project: bool,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new() }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
     }
 }
 
@@ -122,11 +142,15 @@ pub struct Session {
     pub bookmarks: BTreeMap<PathBuf, Vec<usize>>,
     /// Compound run configurations: name and the configurations they start.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Test configurations made from a gutter run and saved (Save Configuration).
+    pub test_configs: Vec<SavedTestConfig>,
     /// Edited application configurations, by name.
     pub run_options: BTreeMap<String, RunOptions>,
     /// Folders and files left out of the index, Find in Files and the analysis (root-relative,
     /// `/`-separated). Read with [`crate::workspace::clean_excluded`].
     pub excluded: Vec<String>,
+    /// `Cargo.toml` files of other Cargo projects analysed with the workspace (root-relative).
+    pub attached_projects: Vec<String>,
     /// Environment of every Cargo command and of rust-analyzer: `NAME=value` per line.
     pub project_env: String,
 }

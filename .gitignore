@@ -4,3 +4,4 @@
 **/obj/
 *.trx
 /.claude/
+__pycache__/

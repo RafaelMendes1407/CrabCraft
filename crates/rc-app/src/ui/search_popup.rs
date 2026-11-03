@@ -14,6 +14,8 @@ enum Hit {
     File { path: PathBuf, rel: String, indices: Vec<u32>, line: Option<u32>, col: Option<u32> },
     Symbol(crate::search::SymbolHit),
     Action(&'static str, rc_editor::Action),
+    /// An external tool of the settings, by name.
+    Tool(String),
     Text(TextHit),
     /// "… more" under a group of All: opens that tab with every result.
     More(SeTab),
@@ -91,8 +93,21 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
             })
             .collect();
         ranked.sort_by_key(|r| std::cmp::Reverse(r.0));
-        for (i, (_, l, a)) in ranked.into_iter().take(if se.tab == SeTab::All { 5 } else { 40 }).enumerate() {
-            out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Actions")), Hit::Action(l, a)));
+        let first = out.len();
+        for (_, l, a) in ranked.into_iter().take(if se.tab == SeTab::All { 5 } else { 40 }) {
+            out.push((None, Hit::Action(l, a)));
+        }
+        // External tools are found by their name, also as "External Tools".
+        for tool in &app.settings.external_tools {
+            let score = rc_editor::popup::fuzzy_score(&tool.name, text).or_else(|| rc_editor::popup::fuzzy_score(tr("External Tools"), text));
+            if score.is_some() && !tool.name.trim().is_empty() {
+                out.push((None, Hit::Tool(tool.name.clone())));
+            }
+        }
+        if se.tab == SeTab::All
+            && let Some(row) = out.get_mut(first)
+        {
+            row.0 = Some(tr("Actions"));
         }
     }
     // Text only on its tab: a full-text search for every keystroke of All would cost too much.
@@ -285,6 +300,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             }
                             Hit::Symbol(s) => (crate::convert::symbol_icon(s.kind), s.name.clone(), s.container.clone(), s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), Vec::new()),
                             Hit::Action(l, a) => (crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING), l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
+                            Hit::Tool(name) => (ico::RUN_ANYTHING, name.clone(), tr("External Tools").to_string(), String::new(), Vec::new()),
                             Hit::Text(t) => {
                                 let file = t.rel.rsplit('/').next().unwrap_or(&t.rel);
                                 (icons::for_file(file), t.preview.clone(), String::new(), format!("{file}:{}", t.line + 1), t.highlight.clone())
@@ -335,6 +351,10 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         }
         Some(Hit::Action(_, a)) => {
             app.pending.push(a);
+            close = true;
+        }
+        Some(Hit::Tool(name)) => {
+            app.run_external_tool(&name);
             close = true;
         }
         Some(Hit::More(tab)) => {
