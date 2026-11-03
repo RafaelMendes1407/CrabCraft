@@ -1,0 +1,6 @@
+# Macro expansion. Import: python3 scripts/i18n_tsv.py insight scripts/i18n/expand-macro.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Expand Macro Recursively	Expandir macro recursivamente	Développer la macro récursivement	Expandir macro recursivamente	Makro rekursiv expandieren	Rozwiń makro rekurencyjnie	递归展开宏	マクロを再帰的に展開
+No macro call at the caret	No hay una llamada a macro en el cursor	Aucun appel de macro au curseur	Nenhuma chamada de macro no cursor	Kein Makroaufruf an der Cursorposition	Brak wywołania makra przy kursorze	光标处没有宏调用	キャレット位置にマクロ呼び出しがありません
+Recursive expansion of {name}!	Expansión recursiva de {name}!	Développement récursif de {name}!	Expansão recursiva de {name}!	Rekursive Expansion von {name}!	Rekurencyjne rozwinięcie {name}!	{name}! 的递归展开	{name}! の再帰的展開
+Could not show the expansion: {error}	No se pudo mostrar la expansión: {error}	Impossible d’afficher le développement : {error}	Não foi possível mostrar a expansão: {error}	Die Expansion konnte nicht angezeigt werden: {error}	Nie można pokazać rozwinięcia: {error}	无法显示展开结果：{error}	展開結果を表示できませんでした: {error}

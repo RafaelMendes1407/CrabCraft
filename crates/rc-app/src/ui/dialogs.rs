@@ -28,9 +28,15 @@ pub enum Dialog {
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
+    /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
+    InvalidateCaches { clean: bool },
     RecentFiles { selected: usize, filter: String },
+    /// New Scratch File: the kinds to create, then the scratch files there are.
+    Scratches { selected: usize, filter: String, files: Vec<PathBuf> },
     /// ⌥⏎ context actions for the active editor.
     CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
+    /// Generate › Derive: the traits a Rust type derives (checked) and others typed in.
+    Derive { doc: u64, name: String, traits: Vec<(String, bool)>, other: String },
     /// Shift+F6 on a symbol.
     RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
     /// Confirm rolling back files to HEAD.
@@ -74,8 +80,11 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
+        Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
+        Dialog::Scratches { selected, filter, files } => scratches(app, ctx, selected, filter, files),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
+        Dialog::Derive { doc, name, traits, other } => derive(app, ctx, *doc, name, traits, other),
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
@@ -187,6 +196,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label(tr("Rust"));
                         ui.checkbox(&mut draft.format_on_save, tr("Reformat with rustfmt on save"));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.use_nextest, tr("Run tests with cargo-nextest")).on_hover_text(tr("Needs cargo-nextest installed. Doctests do not run with it."));
+                        ui.end_row();
                         ui.label(tr("Font size"));
                         ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
                         ui.end_row();
@@ -201,6 +213,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
+                        ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
@@ -937,6 +952,24 @@ fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+fn invalidate_caches(app: &mut CrabCraftApp, ctx: &Context, clean: &mut bool) -> Outcome {
+    let rust = app.runner.cargo_workspace.is_some();
+    let ((ok, cancel), esc) = modal(ctx, "invalidate_caches", 460.0, |ui| {
+        title(ui, tr("Invalidate Caches"));
+        ui.label(tr("Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open."));
+        ui.add_space(6.0);
+        if rust {
+            ui.checkbox(clean, tr("Also delete the build output (cargo clean)"));
+        }
+        buttons(ui, tr("Invalidate"), true)
+    });
+    if ok {
+        app.invalidate_caches(rust && *clean);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn trash(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     {
@@ -1005,6 +1038,89 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
     if esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// The name a kind of scratch file has in the New Scratch File list.
+pub fn scratch_kind_name(kind: rc_core::scratch::Kind) -> &'static str {
+    use rc_core::scratch::Kind;
+    match kind {
+        Kind::Rust => "Rust",
+        Kind::Toml => "TOML",
+        Kind::Markdown => "Markdown",
+        Kind::Json => "JSON",
+        Kind::Text => tr("Plain Text"),
+    }
+}
+
+/// New Scratch File: a filterable list of the kinds to create, then the existing scratch files.
+fn scratches(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, filter: &mut String, files: &[PathBuf]) -> Outcome {
+    use rc_core::scratch::Kind;
+    enum Row<'a> {
+        New(Kind),
+        Open(&'a PathBuf),
+    }
+    let needle = filter.to_lowercase();
+    let mut rows: Vec<Row> = Kind::ALL.into_iter().filter(|k| needle.is_empty() || scratch_kind_name(*k).to_lowercase().contains(&needle)).map(Row::New).collect();
+    rows.extend(files.iter().filter(|p| needle.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&needle))).map(Row::Open));
+    *selected = (*selected).min(rows.len().saturating_sub(1));
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut chosen = None;
+    let (_, esc) = modal(ctx, "scratches", 480.0, |ui| {
+        title(ui, tr("New Scratch File"));
+        let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(rows.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) && !rows.is_empty() {
+            chosen = Some(*selected);
+        }
+        ui.add_space(6.0);
+        let mut header = false;
+        for (i, row) in rows.iter().enumerate().take(30) {
+            if matches!(row, Row::Open(_)) && !header {
+                header = true;
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(tr("Scratches")).size(11.5).color(p.muted));
+            }
+            let (icon, name) = match row {
+                Row::New(k) => (icons::for_file(&format!("x.{}", k.extension())), scratch_kind_name(*k).to_string()),
+                Row::Open(path) => {
+                    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    (icons::for_file(&name), name)
+                }
+            };
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+            if i == *selected {
+                ui.painter().rect_filled(r, 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 4.0, p.row_hover);
+            }
+            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
+            ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
+            if resp.clicked() {
+                chosen = Some(i);
+            }
+        }
+    });
+    match chosen.and_then(|i| rows.get(i)) {
+        Some(Row::New(kind)) => {
+            match rc_core::scratch::create(&rc_core::paths::scratches_dir(), *kind) {
+                Ok(path) => app.open_file(&path),
+                Err(e) => app.notify(trf("Could not create the scratch file: {error}", &[("error", &e)]), true),
+            }
+            Outcome::Close
+        }
+        Some(Row::Open(path)) => {
+            app.open_file(path);
+            Outcome::Close
+        }
+        None if esc => Outcome::Close,
+        None => Outcome::Keep,
+    }
+}
+
 /// The list of context actions, under the caret like IntelliJ's bulb popup.
 fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
     use rc_lsp::lsp_types::CodeActionOrCommand as A;
@@ -1062,6 +1178,27 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                 }
                 crate::insight::SELECT_IN_EXPLORER => {
                     app.locate_active();
+                    true
+                }
+                crate::insight::DERIVE_COMMAND => {
+                    if let Some(d) = app.docs.active_doc()
+                        && let Some(t) = crate::insight::derive_target_of(d)
+                    {
+                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
+                        let other = t.items.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
+                        traits.sort_by_key(|(_, on)| !on);
+                        app.dialog = Some(Dialog::Derive { doc: d.editor.id, name: t.name, traits, other });
+                    }
+                    return Outcome::Keep;
+                }
+                crate::insight::SUPPRESS_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let arg = |i: usize| args.get(i).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    if let Some(i) = app.docs.active
+                        && let Some((a, b, text)) = crate::insight::suppress_edit(&app.docs.list[i], &arg(0), &arg(1))
+                    {
+                        app.docs.list[i].editor.replace(a, b, &text);
+                    }
                     true
                 }
                 crate::insight::REVEAL_FILE => {
@@ -1197,6 +1334,44 @@ fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outco
     });
     if ok {
         app.vcs.new_branch(name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Generate › Derive: check the traits; OK rewrites the type's `#[derive]` (or adds one).
+fn derive(app: &mut CrabCraftApp, ctx: &Context, doc: u64, name: &str, traits: &mut [(String, bool)], other: &mut String) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "derive", 380.0, |ui| {
+        title(ui, &rc_kit::i18n::trf("Derive for {name}", &[("name", &name)]));
+        egui::Grid::new("derive_traits").num_columns(3).spacing(vec2(16.0, 6.0)).show(ui, |ui| {
+            for (i, (t, on)) in traits.iter_mut().enumerate() {
+                ui.checkbox(on, t.as_str());
+                if i % 3 == 2 {
+                    ui.end_row();
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.add(egui::TextEdit::singleline(other).hint_text(tr("Other traits, separated by commas")).desired_width(f32::INFINITY));
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("OK"), true);
+        (ok || enter, cancel)
+    });
+    if ok {
+        let mut list: Vec<String> = traits.iter().filter(|(_, on)| *on).map(|(t, _)| t.clone()).collect();
+        for t in other.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+            if !list.iter().any(|x| x == t) {
+                list.push(t.to_string());
+            }
+        }
+        // The text may have changed while the dialog was open: find the type again.
+        if let Some(d) = app.docs.list.iter_mut().find(|d| d.editor.id == doc)
+            && let Some(t) = crate::insight::derive_target_of(d).filter(|t| t.name == name)
+            && let Some((a, b, text)) = t.edit(&list)
+        {
+            d.editor.replace(a, b, &text);
+            app.focus_editor = true;
+        }
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

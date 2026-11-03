@@ -47,7 +47,10 @@ pub struct CargoWorkspace {
 impl CargoWorkspace {
     /// The edition of the member that owns `path`, the innermost one when members are nested.
     pub fn edition_of(&self, path: &Path) -> Option<&str> {
-        let folder = |p: &&Package| p.manifest.parent().map(Path::to_path_buf).unwrap_or_default();
+        // Canonical on both sides: on Windows one may be verbatim (`\\?\C:\…`) and the other `C:\…`.
+        let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let path = &canon(path);
+        let folder = |p: &&Package| p.manifest.parent().map(canon).unwrap_or_default();
         self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count()).map(|p| p.edition.as_str())
     }
 

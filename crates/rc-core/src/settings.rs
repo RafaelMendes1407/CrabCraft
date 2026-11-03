@@ -34,6 +34,8 @@ pub struct Settings {
     pub ui_zoom: f32,
     pub show_inlay_hints: bool,
     pub show_indent_guides: bool,
+    /// Keep the first lines of the enclosing blocks at the top of the editor.
+    pub sticky_lines: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
     pub autosave: bool,
@@ -56,6 +58,8 @@ pub struct Settings {
     pub rust_analyzer_path: Option<PathBuf>,
     /// Clippy instead of `cargo check` on save.
     pub use_clippy: bool,
+    /// Run Rust tests with cargo-nextest instead of `cargo test`.
+    pub use_nextest: bool,
     /// Reformat Rust files when they are saved.
     pub format_on_save: bool,
     /// Reformat the Rust files of a commit before committing them.
@@ -83,6 +87,7 @@ impl Default for Settings {
             ui_zoom: 1.0,
             show_inlay_hints: true,
             show_indent_guides: true,
+            sticky_lines: true,
             right_margin: 120,
             autosave: true,
             single_click_open: false,
@@ -95,6 +100,7 @@ impl Default for Settings {
             netcoredbg_path: None,
             rust_analyzer_path: None,
             use_clippy: false,
+            use_nextest: false,
             format_on_save: false,
             format_on_commit: false,
             run_anything_history: Vec::new(),
