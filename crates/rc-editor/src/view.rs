@@ -193,6 +193,9 @@ impl<'a> EditorView<'a> {
         if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused) {
             out.accepted_completion = Some(i);
         }
+        if let Some(code) = state.popups.explain_clicked.take() {
+            out.events.push(EditorEvent::ExplainError(code));
+        }
 
         // The gutter and the scrollbars keep the normal pointer.
         let over_sticky = response.hover_pos().is_some_and(|p| p.y < text_rect.top() + sticky.len() as f32 * m.row_h);

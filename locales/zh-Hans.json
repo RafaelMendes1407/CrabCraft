@@ -403,7 +403,15 @@
     "This action is available in C# files": "此操作在 C# 文件中可用",
     "This element cannot be renamed": "无法重命名此元素",
     "Usages": "用法",
-    "{n} problems": "{n} 个问题"
+    "{n} problems": "{n} 个问题",
+    "Explain {code}": "解释 {code}",
+    "Show rustc's explanation of this error code": "显示 rustc 对此错误代码的解释",
+    "Only rustc error codes (like E0308) have an explanation": "只有 rustc 错误代码（如 E0308）才有解释",
+    "rustc did not answer in time": "rustc 未及时响应",
+    "rustc could not be started: {error}": "无法启动 rustc：{error}",
+    "Could not explain {code}: {error}": "无法解释 {code}：{error}",
+    "rustc has no explanation for {code}": "rustc 没有 {code} 的解释",
+    "Could not show the explanation: {error}": "无法显示解释：{error}"
   },
   "invalidate-caches": {
     "Also delete the build output (cargo clean)": "同时删除构建输出（cargo clean）",

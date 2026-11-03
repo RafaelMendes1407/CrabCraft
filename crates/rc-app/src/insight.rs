@@ -881,9 +881,11 @@ impl Insight {
             self.hover = None;
             if let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == doc) {
                 let text = r.ok().flatten().map(|h| convert::markup_text(&h.contents)).unwrap_or_default();
-                let problem = d.editor.diagnostic_at(pos).map(|x| (x.severity, x.message.clone()));
+                let diagnostic = d.editor.diagnostic_at(pos);
+                let problem = diagnostic.map(|x| (x.severity, x.message.clone()));
+                let explain = diagnostic.and_then(|x| x.code.as_deref()).and_then(rc_cargo::error_code).map(str::to_string);
                 if !text.trim().is_empty() || problem.is_some() {
-                    d.editor.popups.hover = Some(Hover { pos, text: clean_hover(&text), problem, screen });
+                    d.editor.popups.hover = Some(Hover { pos, text: clean_hover(&text), problem, explain, screen });
                 }
             }
         }

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 131 |
+| ✅ Pronto | 132 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 95 |
+| ⬜ A fazer | 94 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -140,7 +140,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
-| I-24 | Explicações inline de erros | ⬜ | M4 | |
+| I-24 | Explicações inline de erros | ✅ | M4 | Para diagnósticos com código do rustc (`E` e quatro dígitos, validado antes de chamar o rustc), "Explicar E0308" no hover do erro no editor e no menu de contexto das janelas Problemas e Build abre a explicação de `rustc --explain` (o rustc ao lado do cargo, em segundo plano com tempo limite e cache por código) numa aba Markdown somente leitura. Sem explicação, avisa. Testado em projeto Cargo real: E0308 de `cargo check` ao salvar e do build, com rustc e rust-analyzer reais; visto na janela renderizada |
 | I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |

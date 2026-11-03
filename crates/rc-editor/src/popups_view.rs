@@ -161,8 +161,11 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
             accept(state, i, false);
         }
     }
-    if let Some(h) = state.popups.hover.clone() {
-        show_hover(ui, &h, scheme, pal, m);
+    if let Some(h) = state.popups.hover.clone()
+        && show_hover(ui, &h, scheme, pal, m)
+    {
+        state.popups.hover = None;
+        state.popups.explain_clicked = h.explain;
     }
     accepted
 }
@@ -291,7 +294,9 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
     let _ = (scheme, m);
 }
 
-fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) {
+/// True when the problem's "Explain" link was clicked.
+fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) -> bool {
+    let mut explain = false;
     let pos = h.screen + vec2(-4.0, m.row_h);
     let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -306,6 +311,10 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
                     icons::image(ui, icon, 16.0);
                     ui.add(egui::Label::new(egui::RichText::new(msg).color(pal.text)).wrap());
                 });
+                if let Some(code) = &h.explain {
+                    let label = rc_kit::i18n::trf("Explain {code}", &[("code", code)]);
+                    explain = ui.link(egui::RichText::new(label).color(pal.accent)).on_hover_text(rc_kit::i18n::tr("Show rustc's explanation of this error code")).clicked();
+                }
                 if !h.text.trim().is_empty() {
                     ui.add_space(4.0);
                     ui.separator();
@@ -318,6 +327,7 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
     });
     let hovered = resp.response.hovered() || resp.response.contains_pointer();
     ui.ctx().data_mut(|d| d.insert_temp(Id::new("crabcraft_hover_popup_hovered"), hovered));
+    explain
 }
 
 /// Minimal Markdown for documentation: fenced code blocks in monospace, `inline code`,

@@ -8,6 +8,7 @@
 //! safe on a project the user has not trusted. Build, run and test execute the project's code
 //! (`build.rs`, proc macros) and only start from an explicit user action.
 
+pub mod explain;
 pub mod format;
 pub mod messages;
 pub mod metadata;
@@ -18,6 +19,7 @@ pub mod test_output;
 pub mod toolchain;
 pub mod tree;
 
+pub use explain::{ExplainError, Explainer, error_code};
 pub use format::{FormatError, FormatFile, FormatJob, Rustfmt, format_files, split_args};
 pub use metadata::{CargoWorkspace, Library, LoadLog, Package, Target, TargetKind, find_manifest, load_libraries, load_libraries_logged, load_workspace, load_workspace_logged};
 pub use ops::{BeforeLaunch, CargoOptions, PrepareEvent, RunTarget, inspect_args, start_prepare, command_line, prepare, start_build, start_command, start_process, start_run, start_scratch, start_tests, target_command};

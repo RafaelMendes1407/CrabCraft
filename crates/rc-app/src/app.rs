@@ -39,6 +39,9 @@ pub struct WorkspaceState {
     pub solution: Option<Solution>,
 }
 
+/// What `rustc --explain` answered: its text, or `None` when it has none.
+type ExplainAnswer = Result<Option<String>, rc_cargo::ExplainError>;
+
 pub struct CrabCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
@@ -116,6 +119,10 @@ pub struct CrabCraftApp {
     /// What the last `rustup check` said (Settings › Tools).
     pub toolchain_updates: Option<Result<Vec<rc_cargo::ToolchainUpdate>, String>>,
     toolchain_updates_load: Option<Inbox<Result<Vec<rc_cargo::ToolchainUpdate>, String>>>,
+    /// What `rustc --explain` said per error code (`None`: it has no explanation).
+    pub explanations: std::collections::HashMap<String, Option<String>>,
+    /// The error code whose explanation rustc is printing.
+    pub(crate) explain_load: Option<(String, Inbox<ExplainAnswer>)>,
     /// The Run tab of a rustup command: when it ends, the toolchain is read again.
     rustup_run: Option<String>,
     /// The last Inspect Code run.
@@ -243,6 +250,8 @@ impl CrabCraftApp {
             problems_tab_inspection: false,
             toolchain_updates: None,
             toolchain_updates_load: None,
+            explanations: Default::default(),
+            explain_load: None,
             rustup_run: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
@@ -1354,6 +1363,85 @@ impl CrabCraftApp {
         }
     }
 
+    /// Shows rustc's explanation of an error code (`E0308`) in a read-only tab. `rustc --explain`
+    /// runs on a thread, with a timeout; its answer is kept for the next time.
+    pub fn explain_error(&mut self, code: &str) {
+        let Some(code) = rc_cargo::error_code(code).map(str::to_string) else {
+            self.notify(tr("Only rustc error codes (like E0308) have an explanation"), true);
+            return;
+        };
+        if let Some(answer) = self.explanations.get(&code).cloned() {
+            self.show_explanation(&code, answer.as_deref());
+            return;
+        }
+        if self.explain_load.as_ref().is_some_and(|(c, _)| *c == code) {
+            return;
+        }
+        // The project's toolchain file applies only once the project is trusted: naming a
+        // missing toolchain would otherwise make rustup reach the network.
+        let dir = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
+        let env = self.runner.project_env_pairs();
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let asked = code.clone();
+        std::thread::spawn(move || {
+            let result = match rc_cargo::Cargo::locate() {
+                Some(cargo) => rc_cargo::Explainer { dir, env, ..rc_cargo::Explainer::new(rc_cargo::explain::rustc_path(&cargo)) }.explain(&asked),
+                None => Err(rc_cargo::ExplainError::NoRustc(tr("Cargo was not found. Install Rust with rustup.").to_string())),
+            };
+            out.send(result);
+        });
+        self.explain_load = Some((code, inbox));
+    }
+
+    /// Picks up the answer of `rustc --explain`.
+    pub(crate) fn poll_explanation(&mut self) {
+        let Some(result) = self.explain_load.as_ref().and_then(|(_, i)| i.drain().into_iter().last()) else { return };
+        let Some((code, _)) = self.explain_load.take() else { return };
+        match result {
+            Ok(answer) => {
+                self.explanations.insert(code.clone(), answer.clone());
+                self.show_explanation(&code, answer.as_deref());
+            }
+            Err(e) => {
+                let error = match e {
+                    rc_cargo::ExplainError::InvalidCode => tr("Only rustc error codes (like E0308) have an explanation").to_string(),
+                    rc_cargo::ExplainError::TimedOut => tr("rustc did not answer in time").to_string(),
+                    rc_cargo::ExplainError::NoRustc(m) => trf("rustc could not be started: {error}", &[("error", &m)]),
+                    rc_cargo::ExplainError::Failed(m) => m,
+                };
+                self.notify(trf("Could not explain {code}: {error}", &[("code", &code), ("error", &error)]), true);
+            }
+        }
+    }
+
+    fn show_explanation(&mut self, code: &str, text: Option<&str>) {
+        let Some(text) = text else {
+            self.notify(trf("rustc has no explanation for {code}", &[("code", &code)]), false);
+            return;
+        };
+        // `code` was checked: `E` and four digits, safe as a file name.
+        let path = rc_core::paths::explanations_dir().join(format!("{code}.md"));
+        let body = format!("# {code}\n\n{text}\n");
+        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
+            self.notify(trf("Could not show the explanation: {error}", &[("error", &e.to_string())]), true);
+            return;
+        }
+        match self.docs.open(&path) {
+            Ok(i) => {
+                let d = &mut self.docs.list[i];
+                d.generated = true;
+                if d.editor.buffer.rope() != body.as_str() {
+                    d.editor.reload(&body);
+                }
+                d.editor.read_only = true;
+                d.md_view = Some(crate::docs::MdView::Preview);
+                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
     pub fn close_tab(&mut self, i: usize) {
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
@@ -2429,6 +2517,7 @@ impl eframe::App for CrabCraftApp {
             self.window_title = title;
         }
         self.poll_toolchain_updates();
+        self.poll_explanation();
         for request in crate::open_files::take() {
             self.open_request(&request);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);

@@ -420,6 +420,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;
+    let mut explain = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -451,6 +452,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
+            EditorEvent::ExplainError(code) => explain = Some(code),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } => run_binary_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
@@ -528,6 +530,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     if let Some(line) = run_test_line {
         app.run_test_at(line);
+    }
+    if let Some(code) = explain {
+        app.explain_error(&code);
     }
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);

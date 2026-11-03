@@ -1691,3 +1691,126 @@ fn cfg_inactive_capture() {
     assert!(!h.state_mut().docs.active_doc_mut().unwrap().editor.inactive().is_empty());
     h.render().unwrap().save(out.join("cfg-inactive.png")).unwrap();
 }
+
+/// I-24: rustc's explanation of an error code opens in a read-only Markdown tab, from the
+/// Build window's diagnostic, the Problems window and the editor's hover of a real E0308.
+#[test]
+fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::trf;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x: u32 = \"text\";\n    println!(\"{x}\");\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = test_app(home.path(), false);
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let target = h.state().workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+    let outs = h.state_mut().runner.build(&target, rc_dotnet::BuildAction::Build);
+    crate::ui::run_windows::handle_outputs(h.state_mut(), outs);
+    run_frames(&mut h, "the failed build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some() && b.diagnostics.iter().any(|d| d.code == "E0308")));
+    let explain = trf("Explain {code}", &[("code", &"E0308")]);
+    let explained = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md"));
+
+    // The Build window: right-click the diagnostic.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Build);
+    h.run_steps(3);
+    h.get_by_label_contains("E0308 mismatched types").click_secondary();
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the Build window", explained);
+    {
+        let d = h.state().docs.active_doc().unwrap();
+        assert!(d.editor.read_only && d.generated);
+        assert_eq!(d.md_view, Some(crate::docs::MdView::Preview));
+        let text = d.editor.buffer.rope().to_string();
+        assert!(text.starts_with("# E0308") && text.contains("Expected type did not match the received type"), "{text}");
+    }
+    assert!(h.state().explanations.contains_key("E0308"), "the answer is kept");
+    let close = |h: &mut Harness<'static, CrabCraftApp>| {
+        let i = h.state().docs.active.unwrap();
+        h.state_mut().close_tab(i);
+        h.run_steps(2);
+    };
+    close(&mut h);
+
+    // The Problems window, with the same error from the build.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Problems);
+    run_frames(&mut h, "the problem", |a| a.insight.problems.get(&main).is_some_and(|p| p.iter().any(|d| d.code.as_deref() == Some("E0308"))));
+    h.get_by_label("mismatched types").click_secondary();
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the Problems window", explained);
+    close(&mut h);
+
+    // The editor's hover of the problem offers the same link.
+    h.state_mut().open_file(&main);
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        let pos = d.editor.buffer.rope().to_string().find("\"text\"").unwrap();
+        d.editor.popups.hover = Some(rc_editor::popup::Hover {
+            pos,
+            text: String::new(),
+            problem: Some((rc_editor::Severity::Error, "mismatched types".into())),
+            explain: Some("E0308".into()),
+            screen: egui::pos2(400.0, 300.0),
+        });
+    }
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the hover", explained);
+    assert!(h.state().docs.list.iter().find(|d| d.path == main).is_some_and(|d| d.editor.popups.hover.is_none()), "the hover closes");
+
+    // A code rustc does not know is reported, and nothing else reaches it.
+    h.state_mut().explain_error("E9999");
+    run_frames(&mut h, "no explanation", |a| a.explain_load.is_none());
+    assert!(h.state().notices.iter().any(|n| n.text == trf("rustc has no explanation for {code}", &[("code", &"E9999")])));
+    h.state_mut().explain_error("clippy::len_zero");
+    assert!(h.state().explain_load.is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/explain-error-*.png"]
+fn explain_error_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x: u32 = \"text\";\n    println!(\"{x}\");\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        let pos = d.editor.buffer.rope().to_string().find("\"text\"").unwrap();
+        d.editor.popups.hover = Some(rc_editor::popup::Hover {
+            pos,
+            text: String::new(),
+            problem: Some((rc_editor::Severity::Error, "mismatched types: expected `u32`, found `&str`".into())),
+            explain: Some("E0308".into()),
+            screen: egui::pos2(420.0, 160.0),
+        });
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("explain-error-hover.png")).unwrap();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+    h.state_mut().explain_error("E0308");
+    run_frames(&mut h, "the explanation", |a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md")));
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("explain-error-tab.png")).unwrap();
+}

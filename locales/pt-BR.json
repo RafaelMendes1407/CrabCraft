@@ -403,7 +403,15 @@
     "This action is available in C# files": "Esta ação está disponível em arquivos C#",
     "This element cannot be renamed": "Este elemento não pode ser renomeado",
     "Usages": "Usos",
-    "{n} problems": "{n} problemas"
+    "{n} problems": "{n} problemas",
+    "Explain {code}": "Explicar {code}",
+    "Show rustc's explanation of this error code": "Mostrar a explicação do rustc para este código de erro",
+    "Only rustc error codes (like E0308) have an explanation": "Só os códigos de erro do rustc (como E0308) têm explicação",
+    "rustc did not answer in time": "O rustc não respondeu a tempo",
+    "rustc could not be started: {error}": "Não foi possível iniciar o rustc: {error}",
+    "Could not explain {code}: {error}": "Não foi possível explicar {code}: {error}",
+    "rustc has no explanation for {code}": "O rustc não tem explicação para {code}",
+    "Could not show the explanation: {error}": "Não foi possível mostrar a explicação: {error}"
   },
   "invalidate-caches": {
     "Also delete the build output (cargo clean)": "Apagar também a saída da compilação (cargo clean)",

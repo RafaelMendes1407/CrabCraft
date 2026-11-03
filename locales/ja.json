@@ -403,7 +403,15 @@
     "This action is available in C# files": "このアクションは C# ファイルで使用できます",
     "This element cannot be renamed": "この要素の名前は変更できません",
     "Usages": "使用箇所",
-    "{n} problems": "{n} 件の問題"
+    "{n} problems": "{n} 件の問題",
+    "Explain {code}": "{code} を説明",
+    "Show rustc's explanation of this error code": "このエラーコードの rustc による説明を表示",
+    "Only rustc error codes (like E0308) have an explanation": "説明があるのは rustc のエラーコード（E0308 など）だけです",
+    "rustc did not answer in time": "rustc が時間内に応答しませんでした",
+    "rustc could not be started: {error}": "rustc を起動できませんでした: {error}",
+    "Could not explain {code}: {error}": "{code} を説明できませんでした: {error}",
+    "rustc has no explanation for {code}": "rustc には {code} の説明がありません",
+    "Could not show the explanation: {error}": "説明を表示できませんでした: {error}"
   },
   "invalidate-caches": {
     "Also delete the build output (cargo clean)": "ビルド出力も削除する (cargo clean)",

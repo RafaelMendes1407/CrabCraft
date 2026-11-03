@@ -101,6 +101,8 @@ pub enum EditorEvent {
     Pasted,
     /// Right-click in the text (after moving the caret there): the context menu opens.
     TextSecondaryClicked,
+    /// "Explain E0308" was clicked in the hover of a problem.
+    ExplainError(String),
 }
 
 /// One open document view.

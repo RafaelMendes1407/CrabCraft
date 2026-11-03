@@ -119,6 +119,7 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let mut open: Option<(std::path::PathBuf, usize)> = None;
+    let mut explain = None;
     let entries: Vec<(std::path::PathBuf, Vec<rc_editor::Diagnostic>)> = app.insight.problems.iter().map(|(p, d)| (p.clone(), d.clone())).collect();
     egui::ScrollArea::vertical().id_salt("problems").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -135,9 +136,13 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
                 if resp.double_clicked() || resp.clicked() {
                     open = Some((path.clone(), d.start));
                 }
+                explain_menu(&resp, &code, &mut explain);
             }
         }
     });
+    if let Some(code) = explain {
+        app.explain_error(&code);
+    }
     if let Some((path, pos)) = open {
         app.open_file(&path);
         if let Some(doc) = app.docs.active_doc_mut() {
@@ -145,6 +150,17 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
             doc.editor.set_selection(rc_text::Selection::point(pos));
         }
     }
+}
+
+/// The context menu of a problem with a rustc error code: "Explain E0308".
+pub(crate) fn explain_menu(resp: &egui::Response, code: &str, explain: &mut Option<String>) {
+    let Some(code) = rc_cargo::error_code(code) else { return };
+    resp.context_menu(|ui| {
+        if ui.button(rc_kit::i18n::trf("Explain {code}", &[("code", &code)])).clicked() {
+            *explain = Some(code.to_string());
+            ui.close();
+        }
+    });
 }
 
 /// Inspect Code's findings, grouped by lint, then by file.

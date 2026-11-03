@@ -202,6 +202,17 @@ fn rust_language_features() {
     write(&main, saved);
     app.insight.did_save(&main);
     pump(&mut app, "the error of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("E0308") && x.message.contains("mismatched types"))));
+
+    // Its hover offers rustc's explanation of E0308 (I-24), which opens in a read-only tab.
+    let pos = saved.find("\"text\"").unwrap() + 1;
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::HoverAt { pos, screen: egui::pos2(300.0, 200.0) }]);
+    pump(&mut app, "the hover of the error", |a| a.docs.active_doc().and_then(|d| d.editor.popups.hover.as_ref()).is_some_and(|h| h.explain.as_deref() == Some("E0308")));
+    app.explain_error("E0308");
+    pump(&mut app, "the explanation", |a| {
+        a.poll_explanation();
+        a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md") && d.editor.buffer.rope().to_string().contains("Expected type did not match"))
+    });
     app.insight.stop();
 }
 

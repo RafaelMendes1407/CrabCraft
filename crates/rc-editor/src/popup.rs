@@ -138,6 +138,8 @@ pub struct Hover {
     pub text: String,
     /// Diagnostic message shown above the documentation.
     pub problem: Option<(crate::state::Severity, String)>,
+    /// The problem's rustc error code (`E0308`): the popup offers its explanation.
+    pub explain: Option<String>,
     pub screen: egui::Pos2,
 }
 
@@ -146,6 +148,8 @@ pub struct Popups {
     pub completion: Option<Completion>,
     pub signature: Option<SignatureHelp>,
     pub hover: Option<Hover>,
+    /// The error code whose explanation was asked from the hover, for the IDE to take.
+    pub explain_clicked: Option<String>,
 }
 
 impl Popups {

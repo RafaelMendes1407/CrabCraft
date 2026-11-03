@@ -29,6 +29,11 @@ pub fn scratches_dir() -> PathBuf {
     data_dir().join("scratches")
 }
 
+/// Explanations of rustc error codes shown in read-only tabs.
+pub fn explanations_dir() -> PathBuf {
+    data_dir().join("error-explanations")
+}
+
 /// Macro expansions shown in read-only tabs.
 pub fn expansions_dir() -> PathBuf {
     data_dir().join("macro-expansions")
