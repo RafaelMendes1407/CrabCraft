@@ -963,3 +963,30 @@ fn screens_search_everywhere() {
     }
 }
 
+
+#[test]
+fn find_in_files_suggests_a_rust_file_mask() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]
+name = \"mask\"
+version = \"0.1.0\"
+edition = \"2021\"
+
+[workspace]
+").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}
+").unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root.canonicalize().unwrap());
+    app.pending.push(rc_editor::Action::FindInFiles);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    assert!(h.state().find_in_files.is_some(), "Find in Files did not open");
+    let hint = |h: &Harness<'static, CrabCraftApp>, mask: &'static str| h.query_by(|n| n.placeholder() == Some(mask)).is_some();
+    assert!(hint(&h, "*.rs"), "the file mask does not suggest *.rs");
+    assert!(!hint(&h, "*.cs"), "the file mask still suggests *.cs");
+}
