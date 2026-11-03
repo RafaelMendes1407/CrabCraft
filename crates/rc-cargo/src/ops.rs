@@ -373,6 +373,46 @@ pub fn start_process(plan: LaunchPlan, outbox: Outbox<RunEvent>) -> RunHandle {
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
+/// Runs a Rust scratch file: `rustc` builds it into `out` (its messages go to the console),
+/// then the program starts as for a run configuration.
+pub fn start_scratch(cargo: &Cargo, file: PathBuf, out: PathBuf, outbox: Outbox<RunEvent>) -> RunHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let (input, input_rx) = mpsc::unbounded_channel();
+    let pid = Arc::new(AtomicU32::new(0));
+    let pid2 = pid.clone();
+    let rustc = cargo.path().with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" });
+    let env = cargo.env().to_vec();
+    let task = Runtime::spawn(async move {
+        let events = outbox.clone();
+        let end = async {
+            let mut cmd = tokio::process::Command::new(&rustc);
+            cmd.args(["--edition", "2021", "--color", "always", "-o"]).arg(&out).arg(&file);
+            cmd.envs(env.iter().map(|(k, v)| (k, v)));
+            events.send(RunEvent::Build(BuildEvent::Task(OutputLine { stream: Stream::Stdout, text: format!("rustc {}", file.display()), newline: true })));
+            let built = run_streaming(cmd, &token, StreamOpts::default(), &mut |_| {}, &mut |l| {
+                events.send(RunEvent::Build(BuildEvent::Task(l)));
+            })
+            .await?;
+            if built.cancelled {
+                return Ok(RunEvent::Exited { code: None, cancelled: true, duration: Duration::ZERO });
+            }
+            if built.code != Some(0) {
+                return Ok(RunEvent::Failed(format!("rustc failed with exit code {}", built.code.map_or("?".to_string(), |c| c.to_string()))));
+            }
+            let dir = file.parent().map(Path::to_path_buf).unwrap_or_else(std::env::temp_dir);
+            let plan = LaunchPlan { program: out.clone(), args: Vec::new(), env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None };
+            launch(plan, &token, input_rx, &pid2, &mut |e| {
+                events.send(e);
+            })
+            .await
+        }
+        .await;
+        outbox.send(end.unwrap_or_else(|e: anyhow::Error| RunEvent::Failed(format!("{e:#}"))));
+    });
+    RunHandle::new(OpHandle::new(cancel, task), input, pid)
+}
+
 async fn launch(plan: LaunchPlan, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
     let mut cmd = tokio::process::Command::new(&plan.program);
     cmd.args(&plan.args).current_dir(&plan.working_dir);

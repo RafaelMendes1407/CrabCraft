@@ -973,5 +973,10 @@
     "Imported {list}": "Zaimportowano: {list}",
     "Several imports fit {names}: choose one with Show Context Actions": "Kilka importów pasuje do {names}: wybierz jeden przez Pokaż akcje kontekstowe",
     "Add the imports pasted Rust code needs (when only one fits)": "Dodawaj importy potrzebne wklejonemu kodowi Rust (gdy pasuje tylko jeden)"
+  },
+  "scratch-analysis": {
+    "Scratch file: analysed on its own, outside the project's crates": "Plik roboczy: analizowany osobno, poza crate'ami projektu",
+    "Scratch file: open a project to have it analysed": "Plik roboczy: otwórz projekt, aby go przeanalizować",
+    "Build it with rustc and run it": "Zbuduj przez rustc i uruchom"
   }
 }

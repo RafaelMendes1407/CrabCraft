@@ -23,6 +23,8 @@ pub enum ConfigKind {
     External { tool: String },
     /// A command the IDE runs for the user (`rustup update`…), started again by Rerun.
     Command { program: PathBuf, args: Vec<String> },
+    /// A Rust scratch file, built with `rustc` and run (Rerun builds it again).
+    Scratch { file: PathBuf },
     /// Some tests of a project (a gutter run, kept as a temporary or saved configuration).
     TestSelection { target: PathBuf, filter: TestFilter },
 }
@@ -42,6 +44,7 @@ impl RunConfig {
             ConfigKind::TestSelection { .. } => rc_kit::ico::TEST_UNKNOWN,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
             ConfigKind::External { .. } | ConfigKind::Command { .. } => rc_kit::ico::RUN_ANYTHING,
+            ConfigKind::Scratch { .. } => rc_kit::ico::CONFIG_APP,
         }
     }
 }
@@ -447,6 +450,7 @@ impl Runner {
             ConfigKind::TestSelection { target, filter } => self.run_tests(&target, Some(filter)),
             // Tools start from their menu, with the file and caret of that moment.
             ConfigKind::External { .. } => Vec::new(),
+            ConfigKind::Scratch { file } => self.run_scratch(&file),
             ConfigKind::Command { program, args } => {
                 let plan = self.command_plan(program, args);
                 self.run_process(cfg, plan)
@@ -747,6 +751,29 @@ impl Runner {
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
     pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
         self.run_process(RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } }, plan)
+    }
+
+    /// Builds a Rust scratch file with `rustc` into a temporary folder and runs it.
+    pub fn run_scratch(&mut self, file: &Path) -> Vec<RunnerOutput> {
+        let cargo = match self.cargo.clone().or_else(rc_cargo::Cargo::locate) {
+            Some(c) => c.with_env(self.project_env_pairs()),
+            None => return vec![RunnerOutput::Notify(tr("Cargo was not found. Install Rust with rustup.").into(), true)],
+        };
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let cfg = RunConfig { name: name.clone(), kind: ConfigKind::Scratch { file: file.to_path_buf() } };
+        let tab = self.free_tab(&cfg);
+        let out_dir = rc_core::paths::data_dir().join("scratch-builds");
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            return vec![RunnerOutput::Notify(e.to_string(), true)];
+        }
+        let stem = file.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "scratch".into());
+        let out = out_dir.join(if cfg!(windows) { format!("{stem}.exe") } else { stem });
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let handle = rc_cargo::start_scratch(&cargo, file.to_path_buf(), out, inbox.sender());
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
 
     /// Runs a command of the IDE (`rustup update`…) in a tab of the Run window.

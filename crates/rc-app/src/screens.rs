@@ -339,8 +339,8 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     let first = dir.join("scratch_1.rs").canonicalize().unwrap();
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
-    // Outside every Cargo package, so rust-analyzer never gets it.
-    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && !crate::insight::has_insight(d)));
+    // Outside every Cargo package: rust-analyzer gets it as a file on its own.
+    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && crate::insight::has_insight(d)));
     assert_eq!(h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()), Some("fn main() {
     
 }

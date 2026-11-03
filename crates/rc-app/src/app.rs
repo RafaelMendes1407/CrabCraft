@@ -320,7 +320,7 @@ impl CrabCraftApp {
         self.insight.set_exclude(self.explorer.excluded.clone());
         // Attached Cargo projects that still exist (the session is from an earlier run).
         self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
-        self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached));
+        self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root);
         let projects = match &ws.kind {
@@ -351,6 +351,8 @@ impl CrabCraftApp {
         self.docs.style_root = Some(ws.root.canonicalize().unwrap_or_else(|_| ws.root.clone()));
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+        // Scratches reopened with the session are analysed too.
+        self.update_linked();
         if let Some(manifest) = manifest {
             self.load_cargo_workspace(manifest);
         }
@@ -1177,7 +1179,11 @@ impl CrabCraftApp {
     pub fn open_file(&mut self, path: &Path) {
         self.push_nav();
         match self.docs.open(path) {
-            Ok(_) => {
+            Ok(i) => {
+                // A Rust scratch gets analysed on its own.
+                if self.docs.list.get(i).is_some_and(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust) {
+                    self.update_linked();
+                }
                 self.focus_editor = true;
                 self.session_dirty = true;
             }
@@ -1267,7 +1273,11 @@ impl CrabCraftApp {
         // The tab beside it in the same group takes its place.
         let id = self.docs.list.get(i).map(|d| d.editor.id);
         let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
+        let scratch = self.docs.list.get(i).is_some_and(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust);
         self.docs.close(i);
+        if scratch {
+            self.update_linked();
+        }
         if let Some(n) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
             self.docs.active = Some(n);
         }
@@ -2111,10 +2121,19 @@ impl CrabCraftApp {
         self.session_dirty = true;
     }
 
+    /// Tells rust-analyzer what to analyse: the attached projects and the open Rust scratches.
+    pub fn update_linked(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let scratches: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust).map(|d| d.path.clone()).collect();
+        self.insight.set_linked(linked_projects(&root, &self.explorer.attached, &scratches));
+    }
+
     /// Attaches the Cargo project of `manifest` (analysed by rust-analyzer with the workspace,
     /// though not a member), or detaches it. rust-analyzer restarts with the new list.
     pub fn set_attached(&mut self, manifest: &Path, on: bool) {
-        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        if self.workspace.is_none() {
+            return;
+        }
         let mut list = self.explorer.attached.clone();
         list.retain(|p| p != manifest);
         if on {
@@ -2124,7 +2143,7 @@ impl CrabCraftApp {
             return;
         }
         self.explorer.attached = list;
-        self.insight.set_linked(linked_projects(&root, &self.explorer.attached));
+        self.update_linked();
         self.load_attached();
         self.session_dirty = true;
         let name = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -2269,14 +2288,15 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
     Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
 }
 
-/// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects;
-/// otherwise the workspace's `Cargo.toml`, when there is one, and the attached ones.
-pub fn linked_projects(root: &Path, attached: &[PathBuf]) -> Vec<PathBuf> {
-    if attached.is_empty() {
+/// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects
+/// or scratch files; otherwise the workspace's `Cargo.toml`, when there is one, the attached
+/// ones and the open Rust scratch files (analysed on their own).
+pub fn linked_projects(root: &Path, attached: &[PathBuf], scratches: &[PathBuf]) -> Vec<PathBuf> {
+    if attached.is_empty() && scratches.is_empty() {
         return Vec::new();
     }
     let own = root.join("Cargo.toml");
-    own.is_file().then_some(own).into_iter().chain(attached.iter().cloned()).collect()
+    own.is_file().then_some(own).into_iter().chain(attached.iter().cloned()).chain(scratches.iter().cloned()).collect()
 }
 
 /// Import paths as typed: trimmed, without blanks or `::` at either end, each once.

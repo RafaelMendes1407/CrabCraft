@@ -2994,3 +2994,40 @@ fn imports_go_after_the_leading_comments() {
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "//! Crate docs.\n#![allow(dead_code)]\n\nuse std::fmt::Write;\n\nfn f() {}\n");
     assert!(crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into()]).is_empty(), "already there");
 }
+
+/// A Rust scratch file is analysed on its own while a project is open (type hints arrive),
+/// and Run builds it with rustc and runs it.
+#[test]
+fn rust_scratches_are_analysed_and_run() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let scratch = rc_core::scratch::create(&rc_core::paths::scratches_dir(), rc_core::scratch::Kind::Rust).unwrap();
+    std::fs::write(&scratch, "fn main() {\n    let x = 6u8;\n    let y = x * 7;\n    println!(\"{y}\");\n}\n").unwrap();
+    app.open_file(&scratch);
+    let i = app.docs.active.unwrap();
+    assert!(app.docs.list[i].scratch);
+    pump(&mut app, "the scratch's type hints", |a| a.docs.list.get(i).is_some_and(|d| !d.editor.inlays.is_empty()));
+
+    let outs = app.runner.run_scratch(&scratch);
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the scratch program", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(0)), "{text}");
+    assert!(text.contains("42"), "{text}");
+
+    // A compile error stops before running, with rustc's message.
+    std::fs::write(&scratch, "fn main() { let x: u8 = \"no\"; }\n").unwrap();
+    let outs = app.runner.run_scratch(&scratch);
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the failed build", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("mismatched types") && text.contains("rustc failed"), "{text}");
+    app.insight.stop();
+}

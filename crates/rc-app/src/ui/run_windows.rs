@@ -242,6 +242,10 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
             let kind = app.runner.runs.get(active).map(|r| r.config.kind.clone());
             if let Some(crate::runner::ConfigKind::External { tool }) = kind {
                 app.run_external_tool(&tool);
+            } else if let Some(crate::runner::ConfigKind::Scratch { file }) = kind {
+                app.save_all_docs();
+                let outs = app.runner.run_scratch(&file);
+                handle_outputs(app, outs);
             } else if let Some(crate::runner::ConfigKind::Command { program, args }) = kind {
                 let outs = app.runner.run_command(program, args);
                 handle_outputs(app, outs);

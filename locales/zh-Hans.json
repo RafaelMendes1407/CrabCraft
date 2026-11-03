@@ -973,5 +973,10 @@
     "Imported {list}": "已导入 {list}",
     "Several imports fit {names}: choose one with Show Context Actions": "{names} 有多个可用导入：请通过“显示上下文操作”选择一个",
     "Add the imports pasted Rust code needs (when only one fits)": "添加粘贴的 Rust 代码所需的导入（仅一个匹配时）"
+  },
+  "scratch-analysis": {
+    "Scratch file: analysed on its own, outside the project's crates": "草稿文件：单独分析，不属于项目的 crate",
+    "Scratch file: open a project to have it analysed": "草稿文件：打开项目后才会分析",
+    "Build it with rustc and run it": "用 rustc 构建并运行"
   }
 }

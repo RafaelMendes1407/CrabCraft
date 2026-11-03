@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 126 |
-| 🚧 Em andamento | 5 |
+| ✅ Pronto | 127 |
+| 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
 | ⬜ A fazer | 99 |
@@ -111,7 +111,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
-| E-27 | Scratch files | 🚧 | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Falta: análise do rust-analyzer e Run de rascunhos Rust |
+| E-27 | Scratch files | ✅ | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Com um projeto aberto, rascunho Rust é analisado sozinho pelo rust-analyzer (arquivo avulso em `linkedProjects`); o botão Run da faixa compila com `rustc` numa pasta temporária e roda na janela Run (Rerun recompila; erro do rustc impede a execução). Testado com rust-analyzer e rustc reais |
 
 ## 3. Inteligência de código
 
