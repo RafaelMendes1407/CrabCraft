@@ -961,6 +961,8 @@
     "Detach Cargo Project": "分离 Cargo 项目",
     "Analyse this Cargo project with the workspace, though it is not a member": "与工作区一起分析此 Cargo 项目，即使它不是成员",
     "Attached the Cargo project {name}": "已附加 Cargo 项目 {name}",
-    "Detached the Cargo project {name}": "已分离 Cargo 项目 {name}"
+    "Detached the Cargo project {name}": "已分离 Cargo 项目 {name}",
+    "Attached project": "附加项目",
+    "attached": "已附加"
   }
 }

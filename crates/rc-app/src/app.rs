@@ -97,6 +97,8 @@ pub struct CrabCraftApp {
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
     libraries_load: Option<Inbox<(Vec<rc_cargo::Library>, Option<rc_cargo::LoadLog>)>>,
+    /// The attached Cargo projects being read.
+    attached_load: Option<Inbox<Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>>>,
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
@@ -218,6 +220,7 @@ impl CrabCraftApp {
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
             toolchain: None,
+            attached_load: None,
             libraries_load: None,
             rustfmt_jobs: Default::default(),
             inspection: None,
@@ -377,6 +380,18 @@ impl CrabCraftApp {
             self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.canonicalize().unwrap_or_else(|_| l.root.clone())).collect();
             self.explorer.libraries = libraries;
         }
+        if let Some(loaded) = self.attached_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
+            self.attached_load = None;
+            let mut workspaces = Vec::new();
+            for (result, log) in loaded {
+                self.sync_log.push(crate::sync_log::SyncKind::Attached, log);
+                match result {
+                    Ok(w) => workspaces.push(w),
+                    Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
+                }
+            }
+            self.runner.set_attached(workspaces);
+        }
         let Some(inbox) = &self.cargo_load else { return };
         for (result, log) in inbox.drain() {
             if let Some(log) = log {
@@ -386,12 +401,35 @@ impl CrabCraftApp {
                 Ok(workspace) => {
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
                     self.load_libraries();
+                    self.load_attached();
                 }
                 Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
             }
             self.cargo_load = None;
             return;
         }
+    }
+
+    /// Reads the attached Cargo projects in the background (their binaries become run
+    /// configurations).
+    fn load_attached(&mut self) {
+        let manifests = self.explorer.attached.clone();
+        if manifests.is_empty() {
+            self.attached_load = None;
+            self.runner.set_attached(Vec::new());
+            return;
+        }
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
+        std::thread::spawn(move || {
+            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
+            out.send(manifests.iter().map(|m| {
+                let (result, log) = rc_cargo::load_workspace_logged(&cargo, m);
+                (result.map_err(|e| e.to_string()), log)
+            }).collect());
+        });
+        self.attached_load = Some(inbox);
     }
 
     /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
@@ -594,6 +632,29 @@ impl CrabCraftApp {
         }
         match rc_cargo::target_command(package, target) {
             Some(args) => self.run_cargo_args(args),
+            None => self.notify(tr("Cargo cannot run this target"), false),
+        }
+    }
+
+    /// Runs a target of an attached Cargo project: a binary through its run configuration,
+    /// the rest with Cargo and the project's own manifest.
+    pub fn run_attached_target(&mut self, ctx: &Context, manifest: &Path, package: &str, target: &rc_cargo::Target) {
+        let folder = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = format!("{} ({folder})", target.name);
+        if target.kind == rc_cargo::TargetKind::Bin
+            && let Some(index) = self.runner.configs.iter().position(|c| c.name == name)
+        {
+            self.runner.selected = index;
+            self.session_dirty = true;
+            self.run_ide_action(ctx, Action::Run);
+            return;
+        }
+        match rc_cargo::target_command(package, target) {
+            Some(args) => {
+                self.save_all_docs();
+                let outs = self.runner.cargo_command_in(manifest, args);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
             None => self.notify(tr("Cargo cannot run this target"), false),
         }
     }
@@ -2057,6 +2118,7 @@ impl CrabCraftApp {
         }
         self.explorer.attached = list;
         self.insight.set_linked(linked_projects(&root, &self.explorer.attached));
+        self.load_attached();
         self.session_dirty = true;
         let name = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         self.notify(if on { trf("Attached the Cargo project {name}", &[("name", &name)]) } else { trf("Detached the Cargo project {name}", &[("name", &name)]) }, false);

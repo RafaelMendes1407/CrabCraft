@@ -260,6 +260,10 @@ pub struct Runner {
     pub test_configs: Vec<rc_core::session::SavedTestConfig>,
     /// Temporary test configurations, oldest first.
     pub temporary: Vec<RunConfig>,
+    /// Attached Cargo projects (analysed and run with the workspace, not members of it).
+    pub attached: Vec<rc_cargo::CargoWorkspace>,
+    /// Names of the configurations made for their binaries.
+    attached_configs: Vec<String>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
     /// Environment of every Cargo command, `NAME=value` per line (kept in the session).
@@ -270,7 +274,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -326,6 +330,7 @@ impl Runner {
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
         self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
         self.cargo_workspace = Some(workspace);
+        self.insert_attached_configs();
         self.insert_compounds();
         self.insert_test_configs();
         let wanted = selected.as_deref().or(remembered);
@@ -349,6 +354,8 @@ impl Runner {
         self.cargo_workspace = None;
         self.configs.clear();
         self.temporary.clear();
+        self.attached.clear();
+        self.attached_configs.clear();
         self.build = None;
         self.runs.clear();
         self.tests = None;
@@ -460,6 +467,43 @@ impl Runner {
                 out
             }
         }
+    }
+
+    /// The binaries of the attached projects go after the workspace's, named with their
+    /// project (`gen (tools/gen)` style: `bin (folder)`).
+    pub fn set_attached(&mut self, attached: Vec<rc_cargo::CargoWorkspace>) {
+        self.attached = attached;
+        self.insert_attached_configs();
+    }
+
+    fn insert_attached_configs(&mut self) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        let old = std::mem::take(&mut self.attached_configs);
+        self.configs.retain(|c| !(matches!(c.kind, ConfigKind::Cargo { .. }) && old.contains(&c.name)));
+        self.attached_configs = self.attached_bins().map(|(name, ..)| name).collect();
+        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::Cargo { .. })).map_or(0, |i| i + 1);
+        let new: Vec<RunConfig> = self.attached_bins().map(|(name, package, bin, _)| RunConfig { name, kind: ConfigKind::Cargo { package, bin } }).collect();
+        for (i, c) in new.into_iter().enumerate() {
+            self.configs.insert(at + i, c);
+        }
+        if let Some(n) = selected
+            && let Some(i) = self.configs.iter().position(|c| c.name == n)
+        {
+            self.selected = i;
+        }
+    }
+
+    /// (configuration name, package, binary, manifest) of each attached project's binaries.
+    fn attached_bins(&self) -> impl Iterator<Item = (String, String, String, PathBuf)> + '_ {
+        self.attached.iter().flat_map(|w| {
+            let folder = w.manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            w.binaries().map(move |(p, t)| (format!("{} ({folder})", t.name), p.name.clone(), t.name.clone(), w.manifest.clone()))
+        })
+    }
+
+    /// The manifest an attached project's configuration builds with.
+    fn cargo_manifest_of(&self, config: &str) -> Option<PathBuf> {
+        self.attached_bins().find(|(name, ..)| name == config).map(|(.., manifest)| manifest)
     }
 
     /// The most temporary configurations kept; older ones go.
@@ -590,7 +634,11 @@ impl Runner {
 
     /// A binary of the Rust workspace, with the user's edits applied.
     fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
-        let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
+        let attached = self.cargo_manifest_of(name);
+        let manifest = match &attached {
+            Some(m) => m.clone(),
+            None => self.cargo_workspace.as_ref()?.manifest.clone(),
+        };
         let mut target = rc_cargo::RunTarget { before: Vec::new(), test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
         if let Some(o) = self.options.get(name) {
             // A tool that cannot start (renamed, a macro without a value) stops the run with
@@ -616,7 +664,11 @@ impl Runner {
             };
         }
         // What the binary cannot be built without.
-        let packages = self.cargo_workspace.as_ref().map_or(&[][..], |w| &w.packages);
+        let workspace = match &attached {
+            Some(m) => self.attached.iter().find(|w| &w.manifest == m),
+            None => self.cargo_workspace.as_ref(),
+        };
+        let packages = workspace.map_or(&[][..], |w| &w.packages);
         let required = packages.iter().filter(|p| p.name == target.package).flat_map(|p| &p.targets).find(|t| t.kind == rc_cargo::TargetKind::Bin && t.name == target.bin).map_or(&[][..], |t| &t.required_features);
         for feature in required {
             if !target.options.features.contains(feature) {

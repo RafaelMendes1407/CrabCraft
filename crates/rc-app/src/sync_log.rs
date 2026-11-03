@@ -12,6 +12,8 @@ pub enum SyncKind {
     Project,
     /// Dependencies from `Cargo.lock` (`--offline --locked`).
     Dependencies,
+    /// An attached Cargo project's members and targets.
+    Attached,
 }
 
 impl SyncKind {
@@ -19,6 +21,7 @@ impl SyncKind {
         match self {
             SyncKind::Project => tr("Cargo project"),
             SyncKind::Dependencies => tr("Dependencies"),
+            SyncKind::Attached => tr("Attached project"),
         }
     }
 }

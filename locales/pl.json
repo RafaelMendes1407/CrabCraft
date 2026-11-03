@@ -961,6 +961,8 @@
     "Detach Cargo Project": "Odłącz projekt Cargo",
     "Analyse this Cargo project with the workspace, though it is not a member": "Analizuj ten projekt Cargo razem z obszarem roboczym, choć nie jest jego członkiem",
     "Attached the Cargo project {name}": "Dołączono projekt Cargo {name}",
-    "Detached the Cargo project {name}": "Odłączono projekt Cargo {name}"
+    "Detached the Cargo project {name}": "Odłączono projekt Cargo {name}",
+    "Attached project": "Dołączony projekt",
+    "attached": "dołączony"
   }
 }

@@ -961,6 +961,8 @@
     "Detach Cargo Project": "Cargo プロジェクトをデタッチ",
     "Analyse this Cargo project with the workspace, though it is not a member": "メンバーでなくても、この Cargo プロジェクトをワークスペースと一緒に解析します",
     "Attached the Cargo project {name}": "Cargo プロジェクト {name} をアタッチしました",
-    "Detached the Cargo project {name}": "Cargo プロジェクト {name} をデタッチしました"
+    "Detached the Cargo project {name}": "Cargo プロジェクト {name} をデタッチしました",
+    "Attached project": "アタッチしたプロジェクト",
+    "attached": "アタッチ済み"
   }
 }

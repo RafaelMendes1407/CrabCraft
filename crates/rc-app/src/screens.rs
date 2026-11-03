@@ -1536,3 +1536,22 @@ fn inspection_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("inspection.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/attached-project.png"]
+fn attached_project_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let gen_dir = root.join("tools/gen");
+    std::fs::create_dir_all(gen_dir.join("src")).unwrap();
+    std::fs::write(gen_dir.join("Cargo.toml"), "[package]\nname = \"gen\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(gen_dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+    h.state_mut().set_attached(&gen_dir.join("Cargo.toml"), true);
+    run_frames(&mut h, "the attached project", |a| a.runner.configs.iter().any(|c| c.name == "gen (gen)"));
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("attached-project.png")).unwrap();
+}

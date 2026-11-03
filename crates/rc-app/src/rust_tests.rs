@@ -2874,6 +2874,7 @@ fn an_attached_cargo_project_is_analysed() {
     let gen_manifest = root.join("tools/gen/Cargo.toml");
     write(&gen_manifest, "[package]\nname = \"gen\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
     write(&root.join("tools/gen/src/lib.rs"), "pub fn wrong() -> u32 {\n    \"text\"\n}\n");
+    write(&root.join("tools/gen/src/main.rs"), "fn main() {\n    println!(\"generated\");\n}\n");
     let root = root.canonicalize().unwrap();
     let gen_manifest = gen_manifest.canonicalize().unwrap();
     let lib = root.join("tools/gen/src/lib.rs");
@@ -2893,8 +2894,18 @@ fn an_attached_cargo_project_is_analysed() {
 
     app.set_attached(&gen_manifest, true);
     pump(&mut app, "the analysis of the attached project", |a| mismatch(a));
+    // Its binary is a run configuration that builds with its own manifest.
+    pump(&mut app, "the attached project's targets", |a| a.runner.configs.iter().any(|c| c.name == "gen (gen)"));
+    assert!(app.sync_log.entries.iter().any(|e| e.kind == crate::sync_log::SyncKind::Attached && e.log.success));
+    std::fs::write(&lib, "pub fn right() -> u32 {\n    1\n}\n").unwrap();
+    app.runner.selected = app.runner.configs.iter().position(|c| c.name == "gen (gen)").unwrap();
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the attached binary", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("generated"), "{text}");
     app.save_session();
     assert_eq!(rc_core::session::Session::load(&root).attached_projects, ["tools/gen/Cargo.toml"]);
     app.set_attached(&gen_manifest, false);
     assert!(app.explorer.attached.is_empty());
+    assert!(!app.runner.configs.iter().any(|c| c.name == "gen (gen)"));
 }

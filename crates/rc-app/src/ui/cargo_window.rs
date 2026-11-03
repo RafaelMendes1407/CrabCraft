@@ -21,7 +21,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Cargo),
         _ => {}
     }
-    let Some(packages) = app.runner.cargo_workspace.as_ref().map(|w| w.packages.clone()) else {
+    let Some(own) = app.runner.cargo_workspace.as_ref().map(|w| w.packages.clone()) else {
         empty_state(ui, ToolWindow::Cargo.icon(), tr("No Cargo project"), tr("Open a folder with a Cargo.toml to see its members and targets."));
         return;
     };
@@ -35,11 +35,17 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
     });
     ui.add_space(4.0);
+    // The workspace's packages, then those of the attached projects (with their manifest).
+    let mut packages: Vec<(rc_cargo::Package, Option<std::path::PathBuf>)> = own.into_iter().map(|p| (p, None)).collect();
+    for w in &app.runner.attached {
+        packages.extend(w.packages.iter().cloned().map(|p| (p, Some(w.manifest.clone()))));
+    }
     let mut chosen = None;
     egui::ScrollArea::both().id_salt("cargo_targets").auto_shrink([false, false]).show(ui, |ui| {
-        for package in &packages {
+        for (package, manifest) in &packages {
             let folded = app.cargo_folded.contains(&package.name);
-            if row(ui, 0, Some(!folded), ico::PACKAGE, &package.name, "", true).clicked() {
+            let note = if manifest.is_some() { tr("attached") } else { "" };
+            if row(ui, 0, Some(!folded), ico::PACKAGE, &package.name, note, true).clicked() {
                 if folded {
                     app.cargo_folded.remove(&package.name);
                 } else {
@@ -58,20 +64,23 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 }
                 let response = response.on_hover_text(tr("Double-click to run"));
                 if response.double_clicked() {
-                    chosen = Some((package.name.clone(), target.clone()));
+                    chosen = Some((package.name.clone(), target.clone(), manifest.clone()));
                 }
                 response.context_menu(|ui| {
                     if ui.button(tr("Run")).clicked() {
-                        chosen = Some((package.name.clone(), target.clone()));
+                        chosen = Some((package.name.clone(), target.clone(), manifest.clone()));
                         ui.close();
                     }
                 });
             }
         }
     });
-    if let Some((package, target)) = chosen {
+    if let Some((package, target, manifest)) = chosen {
         let ctx = ui.ctx().clone();
-        app.run_cargo_target(&ctx, &package, &target);
+        match manifest {
+            None => app.run_cargo_target(&ctx, &package, &target),
+            Some(m) => app.run_attached_target(&ctx, &m, &package, &target),
+        }
     }
 }
 

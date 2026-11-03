@@ -5,3 +5,7 @@ Detach Cargo Project	Separar proyecto Cargo	Détacher le projet Cargo	Desanexar 
 Analyse this Cargo project with the workspace, though it is not a member	Analiza este proyecto Cargo junto con el espacio de trabajo, aunque no sea miembro	Analyser ce projet Cargo avec l'espace de travail, même s'il n'en est pas membre	Analisa este projeto Cargo junto com o workspace, mesmo sem ser membro	Dieses Cargo-Projekt mit dem Workspace analysieren, obwohl es kein Mitglied ist	Analizuj ten projekt Cargo razem z obszarem roboczym, choć nie jest jego członkiem	与工作区一起分析此 Cargo 项目，即使它不是成员	メンバーでなくても、この Cargo プロジェクトをワークスペースと一緒に解析します
 Attached the Cargo project {name}	Se adjuntó el proyecto Cargo {name}	Projet Cargo {name} attaché	Projeto Cargo {name} anexado	Cargo-Projekt {name} angehängt	Dołączono projekt Cargo {name}	已附加 Cargo 项目 {name}	Cargo プロジェクト {name} をアタッチしました
 Detached the Cargo project {name}	Se separó el proyecto Cargo {name}	Projet Cargo {name} détaché	Projeto Cargo {name} desanexado	Cargo-Projekt {name} gelöst	Odłączono projekt Cargo {name}	已分离 Cargo 项目 {name}	Cargo プロジェクト {name} をデタッチしました
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Attached project	Proyecto adjunto	Projet attaché	Projeto anexado	Angehängtes Projekt	Dołączony projekt	附加项目	アタッチしたプロジェクト
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+attached	adjunto	attaché	anexado	angehängt	dołączony	已附加	アタッチ済み
