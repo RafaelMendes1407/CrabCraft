@@ -1,5 +1,5 @@
 //! Modal dialogs and small popups: Settings, About, Go to Line, New File/Folder, Rename,
-//! Delete and Recent Files.
+//! Delete, Recent Files and Local History.
 
 use crate::app::CrabCraftApp;
 use egui::{Align2, Context, FontId, Id, Key, Ui, vec2};
@@ -54,6 +54,8 @@ pub enum Dialog {
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
     Evaluate { expression: String, focus: bool },
+    /// The earlier versions of a file kept by the IDE.
+    LocalHistory(Box<LocalHistoryView>),
     /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
     ProjectEnv { text: String },
 }
@@ -95,6 +97,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
@@ -1442,6 +1445,184 @@ fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, se
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The Local History dialog: the stored versions of one file, newest first, what changed since
+/// the selected one, and Revert (an undoable edit of the open document).
+pub struct LocalHistoryView {
+    pub path: PathBuf,
+    inbox: rc_core::Inbox<crate::local_history::Loaded>,
+    pub revisions: Option<Vec<rc_core::history::Revision>>,
+    pub selected: usize,
+    pub texts: std::collections::HashMap<u64, Result<String, String>>,
+    requested: std::collections::HashSet<u64>,
+    /// For (revision time, buffer version): preview lines, added and removed line counts.
+    preview: Option<PreviewCache>,
+}
+
+type PreviewCache = ((u64, u64), Vec<crate::local_history::PreviewLine>, usize, usize);
+
+impl LocalHistoryView {
+    pub fn new(path: PathBuf, inbox: rc_core::Inbox<crate::local_history::Loaded>) -> Self {
+        LocalHistoryView { path, inbox, revisions: None, selected: 0, texts: Default::default(), requested: Default::default(), preview: None }
+    }
+}
+
+/// "3 min ago", or the date for old versions.
+fn history_age(now_ms: u64, time_ms: u64) -> String {
+    let secs = now_ms.saturating_sub(time_ms) / 1000;
+    match secs {
+        0..60 => tr("just now").to_string(),
+        60..3600 => trf("{n} min ago", &[("n", &(secs / 60))]),
+        3600..86_400 => trf("{n} h ago", &[("n", &(secs / 3600))]),
+        _ => crate::vcs::format_date((time_ms / 1000) as i64),
+    }
+}
+
+fn byte_size(len: u64) -> String {
+    match len {
+        0..1024 => format!("{len} B"),
+        1024..1_048_576 => format!("{:.1} KB", len as f64 / 1024.0),
+        _ => format!("{:.1} MB", len as f64 / 1_048_576.0),
+    }
+}
+
+fn local_history(app: &mut CrabCraftApp, ctx: &Context, v: &mut LocalHistoryView) -> Outcome {
+    for msg in v.inbox.drain() {
+        match msg {
+            crate::local_history::Loaded::List(list) => {
+                v.revisions = Some(list);
+                v.selected = 0;
+            }
+            crate::local_history::Loaded::Text(time, text) => {
+                v.texts.insert(time, text);
+            }
+        }
+    }
+    // The file was closed meanwhile: nothing to revert.
+    let Some(doc_i) = app.docs.index_of(&v.path) else { return Outcome::Close };
+    let revisions = v.revisions.clone().unwrap_or_default();
+    v.selected = v.selected.min(revisions.len().saturating_sub(1));
+    let current = revisions.get(v.selected).cloned();
+    if let (Some(rev), Some(h)) = (&current, &app.docs.history)
+        && v.requested.insert(rev.time_ms)
+    {
+        h.read(rev, v.inbox.sender());
+    }
+    let version = app.docs.list[doc_i].editor.buffer.version();
+    if let Some(rev) = &current
+        && let Some(Ok(old)) = v.texts.get(&rev.time_ms)
+        && v.preview.as_ref().is_none_or(|p| p.0 != (rev.time_ms, version))
+    {
+        let now = app.docs.list[doc_i].editor.buffer.rope().to_string();
+        let (lines, added, removed) = crate::local_history::preview(old, &now, 2000);
+        v.preview = Some(((rev.time_ms, version), lines, added, removed));
+    }
+    let text = current.as_ref().and_then(|r| v.texts.get(&r.time_ms));
+    let preview = v.preview.as_ref().filter(|p| current.as_ref().is_some_and(|r| p.0 == (r.time_ms, version)));
+    let read_only = app.docs.list[doc_i].editor.read_only;
+    let can_revert = !read_only && preview.is_some_and(|p| p.2 + p.3 > 0);
+    let dark = ctx.global_style().visuals.dark_mode;
+    let p = rc_kit::theme::palette(dark);
+    let s = rc_kit::theme::scheme(dark);
+    let now_ms = rc_core::history::now_ms();
+    let name = app.docs.list[doc_i].name();
+    let loading = v.revisions.is_none();
+    let mut selected = v.selected;
+    let (mut revert, mut show_diff, mut close) = (false, false, false);
+    let (_, esc) = modal(ctx, "local_history", 880.0, |ui| {
+        title(ui, &trf("Local History: {file}", &[("file", &name)]));
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            selected = (selected + 1).min(revisions.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            selected = selected.saturating_sub(1);
+        }
+        let height = 360.0;
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(vec2(240.0, height), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(vec2(240.0, height));
+                if loading {
+                    ui.label(egui::RichText::new(tr("Loading…")).color(p.muted));
+                } else if revisions.is_empty() {
+                    ui.label(egui::RichText::new(tr("No local history for this file yet. Versions are kept when it is saved.")).color(p.muted));
+                }
+                egui::ScrollArea::vertical().id_salt("local_history_list").max_height(height).show(ui, |ui| {
+                    for (i, r) in revisions.iter().enumerate() {
+                        let (rect, resp) = ui.allocate_exact_size(vec2(236.0, 40.0), egui::Sense::click());
+                        if i == selected {
+                            ui.painter().rect_filled(rect, 4.0, p.selection);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(rect, 4.0, p.row_hover);
+                        }
+                        icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(16.0, 13.0), vec2(16.0, 16.0)), rc_kit::ico::HISTORY, &p, true);
+                        ui.painter().text(rect.left_top() + vec2(32.0, 13.0), Align2::LEFT_CENTER, history_age(now_ms, r.time_ms), FontId::proportional(13.0), p.text);
+                        ui.painter().text(rect.left_top() + vec2(32.0, 30.0), Align2::LEFT_CENTER, byte_size(r.len), FontId::proportional(11.5), p.muted);
+                        if resp.clicked() {
+                            selected = i;
+                        }
+                    }
+                });
+            });
+            // A fixed-height divider (a separator would take the whole window height).
+            let (line, _) = ui.allocate_exact_size(vec2(13.0, height), egui::Sense::hover());
+            ui.painter().vline(line.center().x, line.y_range(), egui::Stroke::new(1.0, p.island_border));
+            let width = ui.available_width();
+            ui.allocate_ui_with_layout(vec2(width, height), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(vec2(width, height));
+                match (text, preview) {
+                    (Some(Err(e)), _) => {
+                        ui.label(egui::RichText::new(trf("Could not read this version: {error}", &[("error", e)])).color(p.error));
+                    }
+                    (_, Some((_, lines, added, removed))) => {
+                        let summary = if added + removed == 0 { tr("Same as the current text").to_string() } else { trf("Changed since this version: +{added} −{removed} lines", &[("added", added), ("removed", removed)]) };
+                        ui.label(egui::RichText::new(summary).color(p.muted));
+                        ui.add_space(4.0);
+                        egui::ScrollArea::both().id_salt("local_history_preview").max_height(height - 24.0).auto_shrink([false, false]).show_rows(ui, 18.0, lines.len(), |ui, range| {
+                            for (kind, line) in &lines[range] {
+                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width().max(560.0), 18.0), egui::Sense::hover());
+                                let (bg, sign, text) = match kind {
+                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                };
+                                ui.painter().rect_filled(rect, 0.0, bg);
+                                ui.painter().text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), if sign.is_empty() { p.muted } else { p.text });
+                            }
+                        });
+                    }
+                    _ if current.is_some() => {
+                        ui.label(egui::RichText::new(tr("Loading…")).color(p.muted));
+                    }
+                    _ => {}
+                }
+            });
+        });
+        ui.add_space(14.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            revert = ui.add_enabled_ui(can_revert, |ui| theme::primary_button(ui, tr("Revert to This Version"))).inner.clicked();
+            close = theme::secondary_button(ui, tr("Close")).clicked();
+            show_diff = ui.add_enabled_ui(preview.is_some(), |ui| theme::secondary_button(ui, tr("Show Diff"))).inner.clicked();
+        });
+    });
+    let old = current.as_ref().and_then(|r| v.texts.get(&r.time_ms)).and_then(|t| t.as_ref().ok()).cloned();
+    v.selected = selected;
+    if revert && let Some(old) = old {
+        // One undoable edit of the whole text: Undo brings the current version back.
+        let e = &mut app.docs.list[doc_i].editor;
+        let len = e.buffer.len_chars();
+        e.replace(0, len, &old);
+        app.docs.list[doc_i].preview = false;
+        app.docs.activate(doc_i);
+        return Outcome::Close;
+    }
+    if show_diff && let (Some(old), Some(rev)) = (old, &current) {
+        let now = app.docs.list[doc_i].editor.buffer.rope().to_string();
+        let title = format!("{name} ({} ↔ {})", history_age(now_ms, rev.time_ms), tr("Current"));
+        app.vcs.show_diff(title, v.path.clone(), &old, &now, dark);
+        return Outcome::Close;
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 #[cfg(test)]

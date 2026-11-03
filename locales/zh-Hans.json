@@ -228,7 +228,19 @@
     "netcoredbg debugger": "netcoredbg 调试器",
     "not found": "未找到",
     "{line}:{col} ({n} chars)": "{line}:{col}（{n} 个字符）",
-    "{n} spaces": "{n} 个空格"
+    "{n} spaces": "{n} 个空格",
+    "Show Local History": "显示本地历史记录",
+    "Local History: {file}": "本地历史记录：{file}",
+    "No local history for this file yet. Versions are kept when it is saved.": "此文件还没有本地历史记录。保存文件时会保留版本。",
+    "just now": "刚刚",
+    "{n} min ago": "{n} 分钟前",
+    "{n} h ago": "{n} 小时前",
+    "Could not read this version: {error}": "无法读取此版本：{error}",
+    "Same as the current text": "与当前文本相同",
+    "Changed since this version: +{added} −{removed} lines": "自此版本以来的更改：+{added} −{removed} 行",
+    "Line {n}": "第 {n} 行",
+    "Revert to This Version": "还原到此版本",
+    "Current": "当前"
   },
   "compound": {
     "A configuration with that name already exists": "已存在同名配置",

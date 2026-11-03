@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 104 |
+| ✅ Pronto | 105 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 119 |
+| ⬜ A fazer | 118 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -97,7 +97,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🟢 | M1 | |
-| E-13 | Local History | ⬜ | M3 | |
+| E-13 | Local History | ✅ | M3 | Cada salvamento e recarga guarda a versão anterior e a nova em history/ na pasta de dados (rc-core::history: hash do caminho, sem duplicatas consecutivas, até 100 versões e 30 dias), gravadas numa thread própria. "Show Local History" (menu da aba, Find Action, menu File) lista as versões com prévia das linhas alteradas, "Show Diff" lado a lado e "Revert to This Version" como edição desfazível. Teste de UI num projeto Cargo: screens::local_history_lists_saved_versions_and_reverts_as_an_undoable_edit. |
 | E-14 | LightEdit (arquivo sem projeto) | ⬜ | M3 | |
 | E-15 | Corretor ortográfico e gramática | ⬜ | M6 | |
 | E-16 | Live templates e variáveis | ⬜ | M3 | Reaproveitar snippets do LSP |

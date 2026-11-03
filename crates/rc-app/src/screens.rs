@@ -720,3 +720,69 @@ fn screens_rust_icons() {
         h.state_mut().insight.stop();
     }
 }
+
+/// Local history on a Cargo project: every save keeps a version, the dialog lists them newest
+/// first, and Revert puts an older text in the editor as one undoable edit (the file on disk
+/// stays as it was until the next save).
+#[test]
+fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
+    use crate::ui::dialogs::Dialog;
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1200.0, 800.0));
+    let ctx = h.ctx.clone();
+    const ONE: &str = "fn main() {\n    println!(\"one\");\n}\n";
+    const TWO: &str = "fn main() {\n    println!(\"two\");\n}\n";
+    for text in [ONE, TWO] {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        let len = d.editor.buffer.len_chars();
+        d.editor.replace(0, len, text);
+        h.state_mut().run_ide_action(&ctx, rc_editor::Action::Save);
+        h.run_steps(2);
+    }
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), TWO);
+
+    h.state_mut().run_ide_action(&ctx, rc_editor::Action::ShowLocalHistory);
+    let versions = |a: &CrabCraftApp| match &a.dialog {
+        Some(Dialog::LocalHistory(v)) => v.revisions.as_ref().map(|r| r.len()),
+        _ => None,
+    };
+    run_frames(&mut h, "the local history", |a| versions(a).is_some());
+    // The text it was opened with, then each save, newest first.
+    assert_eq!(versions(h.state()), Some(3));
+    assert!(home.path().join("history").is_dir());
+
+    // The newest version is the saved text: nothing to revert. The one before is selected
+    // with the arrow keys and previewed.
+    h.key_press(egui::Key::ArrowDown);
+    let loaded = |a: &CrabCraftApp| match &a.dialog {
+        Some(Dialog::LocalHistory(v)) => v.selected == 1 && v.revisions.as_ref().and_then(|r| r.get(1)).is_some_and(|r| v.texts.get(&r.time_ms).is_some_and(|t| t.as_deref() == Ok(ONE))),
+        _ => false,
+    };
+    run_frames(&mut h, "the selected version", loaded);
+    h.get_by_label(tr("Revert to This Version")).click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    let doc = h.state().docs.active_doc().unwrap();
+    assert_eq!(doc.editor.buffer.rope().to_string(), ONE);
+    assert!(doc.is_modified());
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), TWO, "reverting does not write the file");
+
+    // Undo brings the current version back in one step.
+    h.state_mut().docs.active_doc_mut().unwrap().editor.undo();
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), TWO);
+    assert!(!h.state().docs.active_doc().unwrap().is_modified());
+}
+

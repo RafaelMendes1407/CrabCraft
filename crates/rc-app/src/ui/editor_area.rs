@@ -37,6 +37,7 @@ enum TabCommand {
     Locate(usize),
     Blame(usize),
     Diff(usize),
+    LocalHistory(usize),
     Split(usize, bool),
     Float(usize),
     ToMain(usize),
@@ -278,11 +279,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         if b.button(tr("Load from Disk")).clicked() {
             let path = app.docs.list[active].path.clone();
             if let Ok((text, bom, mtime)) = crate::docs::read_text(&path) {
-                let d = &mut app.docs.list[active];
-                d.editor.reload(&text);
-                d.bom = bom;
-                d.mtime = mtime;
-                d.conflict = false;
+                // The unsaved edits it discards stay in the local history.
+                app.docs.remember(active);
+                app.docs.reloaded(active, &text, bom, mtime);
             }
         }
         if b.button(tr("Keep Mine")).clicked() {
@@ -808,6 +807,10 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, 
                 ui.close();
             }
         }
+        if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Local History"), false).clicked() {
+            commands.push(TabCommand::LocalHistory(i));
+            ui.close();
+        }
         if theme::menu_item(ui, Some(ico::LOCATE), tr("Select in Explorer"), false).clicked() {
             commands.push(TabCommand::Locate(i));
             ui.close();
@@ -859,6 +862,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
             | TabCommand::Locate(i)
             | TabCommand::Blame(i)
             | TabCommand::Diff(i)
+            | TabCommand::LocalHistory(i)
             | TabCommand::Split(i, _)
             | TabCommand::Float(i)
             | TabCommand::ToMain(i) => i,
@@ -913,6 +917,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
                     app.vcs.open_diff(&rel);
                 }
             }
+            TabCommand::LocalHistory(i) => app.show_local_history(i),
             TabCommand::Locate(i) => {
                 app.docs.activate(i);
                 app.locate_active();

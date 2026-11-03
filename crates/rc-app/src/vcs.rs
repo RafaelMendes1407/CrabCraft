@@ -311,6 +311,11 @@ impl Vcs {
         });
     }
 
+    /// Shows two texts side by side in the editor area (the local history's versions).
+    pub fn show_diff(&mut self, title: String, path: PathBuf, left: &str, right: &str, dark: bool) {
+        self.diff = Some(self.make_diff(title, path, left, right, dark));
+    }
+
     pub fn toggle_blame(&mut self, path: &Path, text: String, docs: &mut Docs) {
         if self.blame_for.as_deref() == Some(path) {
             self.blame_for = None;

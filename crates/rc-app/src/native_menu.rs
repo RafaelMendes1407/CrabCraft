@@ -384,6 +384,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ProjectEnvironment, || tr("Project Environment Variables…")),
             &sep(),
             &act(Action::SaveAll, || tr("Save All")),
+            &act(Action::ShowLocalHistory, || tr("Show Local History")),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
     )?;

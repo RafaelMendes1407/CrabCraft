@@ -228,7 +228,19 @@
     "netcoredbg debugger": "Débogueur netcoredbg",
     "not found": "introuvable",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} caractères)",
-    "{n} spaces": "{n} espaces"
+    "{n} spaces": "{n} espaces",
+    "Show Local History": "Afficher l'historique local",
+    "Local History: {file}": "Historique local : {file}",
+    "No local history for this file yet. Versions are kept when it is saved.": "Ce fichier n'a pas encore d'historique local. Les versions sont conservées à chaque enregistrement.",
+    "just now": "à l'instant",
+    "{n} min ago": "il y a {n} min",
+    "{n} h ago": "il y a {n} h",
+    "Could not read this version: {error}": "Impossible de lire cette version : {error}",
+    "Same as the current text": "Identique au texte actuel",
+    "Changed since this version: +{added} −{removed} lines": "Modifications depuis cette version : +{added} −{removed} lignes",
+    "Line {n}": "Ligne {n}",
+    "Revert to This Version": "Revenir à cette version",
+    "Current": "Actuel"
   },
   "compound": {
     "A configuration with that name already exists": "Une configuration portant ce nom existe déjà",

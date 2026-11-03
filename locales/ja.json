@@ -228,7 +228,19 @@
     "netcoredbg debugger": "netcoredbg デバッガー",
     "not found": "見つかりません",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} 文字)",
-    "{n} spaces": "{n} スペース"
+    "{n} spaces": "{n} スペース",
+    "Show Local History": "ローカル履歴を表示",
+    "Local History: {file}": "ローカル履歴: {file}",
+    "No local history for this file yet. Versions are kept when it is saved.": "このファイルにはまだローカル履歴がありません。保存するとバージョンが記録されます。",
+    "just now": "たった今",
+    "{n} min ago": "{n} 分前",
+    "{n} h ago": "{n} 時間前",
+    "Could not read this version: {error}": "このバージョンを読み込めません: {error}",
+    "Same as the current text": "現在のテキストと同じです",
+    "Changed since this version: +{added} −{removed} lines": "このバージョン以降の変更: +{added} −{removed} 行",
+    "Line {n}": "{n} 行目",
+    "Revert to This Version": "このバージョンに戻す",
+    "Current": "現在"
   },
   "compound": {
     "A configuration with that name already exists": "その名前の構成は既に存在します",

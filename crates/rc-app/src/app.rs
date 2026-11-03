@@ -172,7 +172,11 @@ impl CrabCraftApp {
             keymap,
             editor_config,
             workspace: None,
-            docs: Docs::new(pool),
+            docs: {
+                let mut docs = Docs::new(pool);
+                docs.history = Some(crate::local_history::HistoryService::start(rc_core::history::LocalHistory::open_default()));
+                docs
+            },
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
@@ -766,6 +770,14 @@ impl CrabCraftApp {
         self.session_dirty = false;
     }
 
+    /// Opens the Local History dialog for document `i`; its versions load in the background.
+    pub fn show_local_history(&mut self, i: usize) {
+        let (Some(doc), Some(h)) = (self.docs.list.get(i), &self.docs.history) else { return };
+        let inbox = rc_core::Inbox::new(self.waker.clone());
+        h.list(&doc.path, inbox.sender());
+        self.dialog = Some(Dialog::LocalHistory(Box::new(crate::ui::dialogs::LocalHistoryView::new(doc.path.clone(), inbox))));
+    }
+
     pub fn save_all_docs(&mut self) {
         let modified: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.is_modified()).map(|d| d.path.clone()).collect();
         for e in self.docs.save_all() {
@@ -1131,6 +1143,11 @@ impl CrabCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
+            Action::ShowLocalHistory => {
+                if let Some(i) = self.docs.active {
+                    self.show_local_history(i);
+                }
+            }
             Action::OptimizeImports => {
                 let mut out = Vec::new();
                 self.insight.optimize_imports(&mut self.docs, &mut out);
