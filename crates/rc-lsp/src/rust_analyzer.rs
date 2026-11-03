@@ -10,9 +10,10 @@ use rc_core::inbox::Outbox;
 use serde_json::{Value, json};
 use std::path::Path;
 
-/// Starts the server; must run inside the tokio runtime.
-pub fn start(program: &Path, workspace: &Path, incoming: Outbox<Incoming>) -> std::io::Result<Client> {
-    Client::spawn(program, &[], workspace, &[], incoming)
+/// Starts the server with the project's environment `env`, which the Cargo commands, build
+/// scripts and procedural macros it runs inherit; must run inside the tokio runtime.
+pub fn start(program: &Path, workspace: &Path, env: &[(String, String)], incoming: Outbox<Incoming>) -> std::io::Result<Client> {
+    Client::spawn(program, &[], workspace, env, incoming)
 }
 
 /// The settings sent at start and when the server asks for them.

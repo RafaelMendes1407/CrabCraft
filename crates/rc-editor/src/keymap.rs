@@ -120,6 +120,7 @@ pub enum Action {
     AttachToProcess,
     Evaluate,
     ShowSettings,
+    ProjectEnvironment,
     ToggleProjectWindow,
     ToggleTerminal,
     ToggleGitWindow,
@@ -209,6 +210,7 @@ impl Action {
                 | AttachToProcess
                 | Evaluate
                 | ShowSettings
+                | ProjectEnvironment
                 | ToggleProjectWindow
                 | ToggleTerminal
                 | ToggleGitWindow

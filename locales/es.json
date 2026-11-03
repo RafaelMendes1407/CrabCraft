@@ -497,6 +497,13 @@
     "{id}: done": "{id}: hecho",
     "{n} projects": "{n} proyectos"
   },
+  "project-env": {
+    "Line {line} is not NAME=value with a valid name.": "La línea {line} no es NOMBRE=valor con un nombre válido.",
+    "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Un NOMBRE=valor por línea. Se aplican a todos los comandos de Cargo, a los programas que inician y a rust-analyzer; las variables de una configuración de ejecución tienen prioridad.",
+    "Open a project to set its environment variables": "Abre un proyecto para definir sus variables de entorno",
+    "Project Environment Variables": "Variables de entorno del proyecto",
+    "Project Environment Variables…": "Variables de entorno del proyecto…"
+  },
   "runconfig": {
     "Edit Run Configuration…": "Editar configuración de arranque…",
     "Test configurations have nothing to edit": "Las configuraciones de pruebas no tienen nada que editar",

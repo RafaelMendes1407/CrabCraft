@@ -281,6 +281,10 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.close_project();
             ui.close();
         }
+        if app.workspace.is_some() && theme::menu_item(ui, Some(ico::SETTINGS), tr("Project Environment Variables…"), false).clicked() {
+            app.pending.push(rc_editor::Action::ProjectEnvironment);
+            ui.close();
+        }
         let recents: Vec<std::path::PathBuf> = app.settings.recent_workspaces.iter().filter(|r| app.workspace.as_ref().is_none_or(|w| w.ws.key_path() != r.as_path())).cloned().collect();
         if !recents.is_empty() {
             ui.separator();

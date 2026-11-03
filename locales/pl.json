@@ -497,6 +497,13 @@
     "{id}: done": "{id}: gotowe",
     "{n} projects": "{n} projektów"
   },
+  "project-env": {
+    "Line {line} is not NAME=value with a valid name.": "Wiersz {line} nie ma postaci NAZWA=wartość z poprawną nazwą.",
+    "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Jedno NAZWA=wartość w wierszu. Stosowane do każdego polecenia Cargo, uruchamianych przez nie programów i rust-analyzer; zmienne konfiguracji uruchomieniowej mają pierwszeństwo.",
+    "Open a project to set its environment variables": "Otwórz projekt, aby ustawić jego zmienne środowiskowe",
+    "Project Environment Variables": "Zmienne środowiskowe projektu",
+    "Project Environment Variables…": "Zmienne środowiskowe projektu…"
+  },
   "runconfig": {
     "Edit Run Configuration…": "Edytuj konfigurację uruchamiania…",
     "Test configurations have nothing to edit": "Konfiguracje testów nie mają nic do edycji",

@@ -381,6 +381,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::InvalidateCaches, || tr("Invalidate Caches…")),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
             &sep(),
+            &act(Action::ProjectEnvironment, || tr("Project Environment Variables…")),
+            &sep(),
             &act(Action::SaveAll, || tr("Save All")),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
