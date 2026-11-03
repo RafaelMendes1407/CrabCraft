@@ -46,11 +46,15 @@ pub struct RunOptions {
     pub stdin_file: String,
     /// Rust: external tools (by name) run first, in order; one that fails stops the launch.
     pub before_launch: Vec<String>,
+    /// Running it again starts another instance instead of restarting the running one.
+    pub allow_parallel: bool,
+    /// Kept in the project (`.crabcraft/runConfigurations`) to be shared, not in the session.
+    pub in_project: bool,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new() }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, in_project: false }
     }
 }
 

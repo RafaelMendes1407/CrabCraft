@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 116 |
+| ✅ Pronto | 117 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 108 |
+| ⬜ A fazer | 107 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -221,7 +221,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-08 | Features automáticas (`required-features`) | ✅ | M3 | `required-features` lidas do metadata e aplicadas sozinhas; teste real |
 | B-09 | Emular terminal na saída | ⬜ | M3 | `rc-term` já suporta |
 | B-10 | Executar como root | ⬜ | M6 | |
-| B-11 | Múltiplas instâncias e configuração no projeto | ⬜ | M3 | |
+| B-11 | Múltiplas instâncias e configuração no projeto | ✅ | M3 | Na configuração de execução: Permitir várias instâncias (rodar de novo abre outra aba numerada, `server (2)`, sem parar a anterior) e Guardar como arquivo do projeto (`.crabcraft/runConfigurations/*.json`, versionável; ao abrir o projeto o arquivo prevalece sobre a sessão; arquivos quebrados ou grandes são ignorados). Testado com Cargo real |
 | B-12 | Configurações compostas | 🔁 | M3 | |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |

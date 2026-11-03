@@ -317,6 +317,8 @@ impl CrabCraftApp {
         }
         self.runner.compounds = session.compounds.clone();
         self.runner.options = session.run_options.clone();
+        // Configurations stored in the project win over the session's copy.
+        self.runner.options.extend(rc_core::run_files::load(&ws.root));
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);

@@ -728,6 +728,12 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             ui.add_enabled(!watch, egui::Checkbox::new(&mut o.build_first, tr("Build before running")));
             ui.end_row();
             }
+            ui.label("");
+            ui.checkbox(&mut o.allow_parallel, tr("Allow multiple instances")).on_hover_text(tr("Running it again starts another instance instead of restarting it"));
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut o.in_project, tr("Store as project file")).on_hover_text(tr("Saved in .crabcraft/runConfigurations to be committed and shared"));
+            ui.end_row();
         });
         ui.add_space(6.0);
         ui.label(egui::RichText::new(if rust { tr("One NAME=value per line.") } else { tr("Variables here are added to the profile's; one NAME=value per line.") }).size(12.0).color(p.muted));
@@ -748,6 +754,12 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             app.runner.options.remove(name);
         } else {
             app.runner.options.insert(name.to_string(), o.clone());
+        }
+        if let Some(root) = app.workspace.as_ref().map(|w| w.ws.root.clone()) {
+            let written = if o.in_project { rc_core::run_files::save(&root, name, o).map(|_| ()) } else { rc_core::run_files::remove(&root, name) };
+            if let Err(e) = written {
+                app.notify(trf("Could not save the run configuration in the project: {error}", &[("error", &e)]), true);
+            }
         }
         app.session_dirty = true;
         return Outcome::Close;

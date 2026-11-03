@@ -909,5 +909,12 @@
     "Before launch": "启动前",
     "{name} (missing)": "{name}（缺失）",
     "Add external tools in Settings › External Tools to run them before the build": "在“设置 › 外部工具”中添加外部工具，以便在构建前运行"
+  },
+  "run-instances": {
+    "Allow multiple instances": "允许多个实例",
+    "Running it again starts another instance instead of restarting it": "再次运行会启动另一个实例，而不是重新启动",
+    "Store as project file": "存储为项目文件",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "保存在 .crabcraft/runConfigurations 中，便于提交和共享",
+    "Could not save the run configuration in the project: {error}": "无法将运行配置保存到项目中：{error}"
   }
 }

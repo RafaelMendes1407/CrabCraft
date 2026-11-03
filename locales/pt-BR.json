@@ -909,5 +909,12 @@
     "Before launch": "Antes de executar",
     "{name} (missing)": "{name} (não existe)",
     "Add external tools in Settings › External Tools to run them before the build": "Adicione ferramentas externas em Configurações › Ferramentas externas para executá-las antes do build"
+  },
+  "run-instances": {
+    "Allow multiple instances": "Permitir várias instâncias",
+    "Running it again starts another instance instead of restarting it": "Executá-la de novo inicia outra instância em vez de reiniciá-la",
+    "Store as project file": "Guardar como arquivo do projeto",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "Salva em .crabcraft/runConfigurations para ser versionada e compartilhada",
+    "Could not save the run configuration in the project: {error}": "Não foi possível salvar a configuração de execução no projeto: {error}"
   }
 }

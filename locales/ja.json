@@ -909,5 +909,12 @@
     "Before launch": "起動前",
     "{name} (missing)": "{name}（見つかりません）",
     "Add external tools in Settings › External Tools to run them before the build": "ビルド前に実行するには、設定 › 外部ツールで外部ツールを追加してください"
+  },
+  "run-instances": {
+    "Allow multiple instances": "複数インスタンスを許可",
+    "Running it again starts another instance instead of restarting it": "再実行すると再起動せずに別のインスタンスを起動します",
+    "Store as project file": "プロジェクトファイルとして保存",
+    "Saved in .crabcraft/runConfigurations to be committed and shared": "コミットして共有できるよう .crabcraft/runConfigurations に保存されます",
+    "Could not save the run configuration in the project: {error}": "実行構成をプロジェクトに保存できませんでした: {error}"
   }
 }

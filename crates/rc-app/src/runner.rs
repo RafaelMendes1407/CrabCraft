@@ -472,17 +472,12 @@ impl Runner {
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
         let Some(target) = self.cargo_target(&cfg.name, package, bin) else { return Vec::new() };
-        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
-            let old = self.runs.remove(i);
-            if let Some(h) = old.handle {
-                h.stop();
-            }
-        }
+        let tab = self.free_tab(&cfg);
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_cargo::start_run(&cargo, target, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -492,21 +487,36 @@ impl Runner {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
         };
-        // Running the same configuration again restarts it (Rider's "Rerun").
-        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
-            let old = self.runs.remove(i);
-            if let Some(h) = old.handle {
-                h.stop();
-            }
-        }
         let Some(req) = self.request_for(&cfg) else { return Vec::new() };
+        let tab = self.free_tab(&cfg);
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
+    /// Makes room for a new run of `cfg` and returns its tab's name. Running a configuration
+    /// again restarts it (Rider's "Rerun"), unless it allows several instances: then the
+    /// finished tabs go and the new one is numbered (`server (2)`).
+    fn free_tab(&mut self, cfg: &RunConfig) -> String {
+        if !self.options.get(&cfg.name).is_some_and(|o| o.allow_parallel) {
+            if let Some(i) = self.runs.iter().position(|r| r.config == *cfg) {
+                let old = self.runs.remove(i);
+                if let Some(h) = old.handle {
+                    h.stop();
+                }
+            }
+            return cfg.name.clone();
+        }
+        self.runs.retain(|r| r.config != *cfg || r.running());
+        let taken: Vec<&str> = self.runs.iter().filter(|r| r.config == *cfg).map(|r| r.name.as_str()).collect();
+        if !taken.contains(&cfg.name.as_str()) {
+            return cfg.name.clone();
+        }
+        (2..).map(|n| format!("{} ({n})", cfg.name)).find(|n| !taken.contains(&n.as_str())).unwrap_or_else(|| cfg.name.clone())
     }
 
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.

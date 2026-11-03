@@ -2643,3 +2643,42 @@ fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
     assert!(text.contains("Fail failed with exit code 1"), "{text}");
     assert!(!text.contains("hello from main") && !text.contains("prepared"), "{text}");
 }
+
+/// "Allow multiple instances" keeps the running program and starts a numbered second one;
+/// "Store as project file" writes the configuration into the project, and opening the project
+/// again reads it from there.
+#[cfg(unix)]
+#[test]
+fn run_configurations_allow_instances_and_live_in_the_project() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("server");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"server\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    // Runs until stopped.
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"up\");\n    std::thread::sleep(std::time::Duration::from_secs(60));\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let name = app.runner.configs[0].name.clone();
+    let options = rc_core::session::RunOptions { allow_parallel: true, in_project: true, args: "--port 1".into(), ..Default::default() };
+    app.runner.options.insert(name.clone(), options.clone());
+    rc_core::run_files::save(&root, &name, &options).unwrap();
+    app.runner.selected = 0;
+    for _ in 0..2 {
+        app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+        pump(&mut app, "the program", |a| a.runner.runs.last().is_some_and(|r| r.console.term.screen_lines().join("\n").contains("up")));
+    }
+    let names: Vec<_> = app.runner.runs.iter().map(|r| r.name.clone()).collect();
+    assert_eq!(names, [name.clone(), format!("{name} (2)")]);
+    assert!(app.runner.runs.iter().all(|r| r.running()));
+    app.runner.stop_all();
+
+    // Without the session's copy, the project's file still brings the configuration back.
+    app.close_workspace();
+    std::fs::remove_dir_all(rc_core::paths::sessions_dir()).unwrap();
+    app.open_workspace(&root);
+    let loaded = app.runner.options.get(&name).cloned().unwrap();
+    assert!(loaded.in_project && loaded.allow_parallel);
+    assert_eq!(loaded.args, "--port 1");
+}

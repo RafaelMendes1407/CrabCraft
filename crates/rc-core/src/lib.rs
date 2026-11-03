@@ -3,6 +3,7 @@
 
 pub mod code_style;
 pub mod external_tools;
+pub mod run_files;
 pub mod history;
 pub mod inbox;
 pub mod paths;
