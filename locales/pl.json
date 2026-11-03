@@ -302,7 +302,19 @@
     "Threads & Variables": "Wątki i zmienne",
     "Variables are shown when the program is paused": "Zmienne są wyświetlane, gdy program jest wstrzymany",
     "netcoredbg is ready": "netcoredbg jest gotowy",
-    "Show Integers in Hex": "Pokaż liczby całkowite szesnastkowo"
+    "Show Integers in Hex": "Pokaż liczby całkowite szesnastkowo",
+    "Memory": "Pamięć",
+    "Show in Memory View": "Pokaż w widoku pamięci",
+    "Address or expression (Enter), e.g. &x or 0x7ffd…": "Adres lub wyrażenie (Enter), np. &x lub 0x7ffd…",
+    "Previous Page": "Poprzednia strona",
+    "Next Page": "Następna strona",
+    "Type an address or an expression, or choose Show in Memory View on a variable.": "Wpisz adres lub wyrażenie albo wybierz Pokaż w widoku pamięci na zmiennej.",
+    "Memory is shown when the program is paused": "Pamięć jest pokazywana, gdy program jest wstrzymany",
+    "Memory can be read when the program is paused": "Pamięć można odczytać tylko przy wstrzymanym programie",
+    "This debugger cannot read memory": "Ten debuger nie potrafi odczytać pamięci",
+    "Cannot read memory: {error}": "Nie można odczytać pamięci: {error}",
+    "{expression} has no address. Try &{expression}.": "{expression} nie ma adresu. Spróbuj &{expression}.",
+    "Cannot evaluate {expression}: {error}": "Nie można obliczyć {expression}: {error}"
   },
   "editor": {
     "Editor Only": "Tylko edytor",

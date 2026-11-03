@@ -302,7 +302,19 @@
     "Threads & Variables": "线程和变量",
     "Variables are shown when the program is paused": "程序暂停时显示变量",
     "netcoredbg is ready": "netcoredbg 已就绪",
-    "Show Integers in Hex": "以十六进制显示整数"
+    "Show Integers in Hex": "以十六进制显示整数",
+    "Memory": "内存",
+    "Show in Memory View": "在内存视图中显示",
+    "Address or expression (Enter), e.g. &x or 0x7ffd…": "地址或表达式（回车），例如 &x 或 0x7ffd…",
+    "Previous Page": "上一页",
+    "Next Page": "下一页",
+    "Type an address or an expression, or choose Show in Memory View on a variable.": "输入地址或表达式，或在变量上选择“在内存视图中显示”。",
+    "Memory is shown when the program is paused": "程序暂停时显示内存",
+    "Memory can be read when the program is paused": "只有在程序暂停时才能读取内存",
+    "This debugger cannot read memory": "此调试器无法读取内存",
+    "Cannot read memory: {error}": "无法读取内存：{error}",
+    "{expression} has no address. Try &{expression}.": "{expression} 没有地址。请尝试 &{expression}。",
+    "Cannot evaluate {expression}: {error}": "无法求值 {expression}：{error}"
   },
   "editor": {
     "Editor Only": "仅编辑器",

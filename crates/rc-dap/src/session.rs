@@ -237,6 +237,8 @@ pub enum DebugEvent {
     WatchesUpdated,
     Evaluated { id: u64, expression: String, context: EvalContext, result: Result<EvalValue, String> },
     VariableSet { reference: i64, name: String, result: Result<String, String> },
+    /// The answer of [`DebugSession::read_memory`] with its id.
+    MemoryRead { id: u64, result: Result<crate::memory::MemoryBlock, String> },
     /// The exception the program stopped on.
     Exception(ExceptionInfo),
     Module(ModuleEvent),
@@ -271,6 +273,7 @@ enum Purpose {
     Watch { generation: u64, id: u64, hex: bool },
     Evaluate { id: u64, expression: String, context: EvalContext, hex: bool },
     SetVariable { generation: u64, reference: i64, name: String },
+    ReadMemory { id: u64, requested: Option<u64>, count: usize },
     ExceptionInfo { generation: u64 },
     LogPoint { generation: u64, index: usize, part: usize },
     Command(&'static str),
@@ -479,7 +482,7 @@ impl DebugSession {
                     "supportsVariableType": true,
                     "supportsVariablePaging": true,
                     "supportsRunInTerminalRequest": false,
-                    "supportsMemoryReferences": false,
+                    "supportsMemoryReferences": true,
                     "supportsProgressReporting": false,
                     "supportsInvalidatedEvent": false,
                 });
@@ -832,6 +835,13 @@ impl DebugSession {
                     }
                     Err(e) => self.events.push(DebugEvent::VariableSet { reference, name, result: Err(e.message) }),
                 }
+            }
+            Purpose::ReadMemory { id, requested, count } => {
+                let result = r
+                    .and_then(|v| serde_json::from_value::<ReadMemoryResponse>(v).map_err(|e| DapError::new(e.to_string())))
+                    .map_err(|e| e.message)
+                    .and_then(|reply| crate::memory::decode_read(requested, count, &reply).map_err(|e| e.to_string()));
+                self.events.push(DebugEvent::MemoryRead { id, result });
             }
             Purpose::ExceptionInfo { generation } => {
                 if generation != self.generation {
@@ -1516,6 +1526,30 @@ impl DebugSession {
                 self.in_flight.push((p, Purpose::Evaluate { id, expression: expression.to_string(), context, hex }));
             }
             _ => self.events.push(DebugEvent::Evaluated { id, expression: expression.to_string(), context, result: Err("the debugger is not running".into()) }),
+        }
+        id
+    }
+
+    /// Reads `count` bytes (at most [`crate::memory::MAX_READ`]) at `offset` from
+    /// `memory_reference` while stopped; the answer comes as [`DebugEvent::MemoryRead`] with
+    /// the returned id.
+    pub fn read_memory(&mut self, memory_reference: &str, offset: i64, count: usize) -> u64 {
+        let id = self.next_id();
+        let count = count.min(crate::memory::MAX_READ);
+        let refuse = if !self.state.is_stopped() {
+            Some("the program is not paused")
+        } else if !self.capabilities.supports_read_memory_request {
+            Some("the debugger cannot read memory")
+        } else {
+            None
+        };
+        match (&self.client, refuse) {
+            (Some(c), None) => {
+                let requested = crate::memory::parse_address(memory_reference).and_then(|a| a.checked_add_signed(offset));
+                let p = c.request("readMemory", json!({"memoryReference": memory_reference, "offset": offset, "count": count}));
+                self.in_flight.push((p, Purpose::ReadMemory { id, requested, count }));
+            }
+            (_, refuse) => self.events.push(DebugEvent::MemoryRead { id, result: Err(refuse.unwrap_or("the debugger is not running").into()) }),
         }
         id
     }

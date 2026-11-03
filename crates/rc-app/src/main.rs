@@ -12,6 +12,7 @@ mod item_templates;
 mod layout;
 mod local_history;
 mod manifest_completion;
+mod memory_view;
 mod refactor_preview;
 mod run_anything;
 mod runner;

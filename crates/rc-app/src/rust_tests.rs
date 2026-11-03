@@ -820,6 +820,127 @@ fn integers_switch_to_hexadecimal_while_paused() {
     app.debugger.stop();
 }
 
+const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad, 0xbe, 0xef];\n    std::hint::black_box(&mut bytes);\n    bytes[1] = 0x42;\n    std::hint::black_box(&bytes);\n    println!(\"{bytes:?}\");\n}\n";
+
+/// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
+fn paused_on_bytes(dir: &Path) -> CrabCraftApp {
+    use rc_editor::{Action, BreakpointKind};
+    let root = dir.join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MEMORY_MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    app
+}
+
+/// Pumps the debugger until `done`.
+fn settle_debugger(app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool) {
+    let start = Instant::now();
+    while !done(app) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}: {:?}", app.debugger.memory.error);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Opens the Memory tab on the local `bytes`, as its context menu does, and waits for the page.
+fn show_bytes_in_memory(app: &mut CrabCraftApp) {
+    let bytes = locals(app).into_iter().find(|v| v.name == "bytes").unwrap();
+    app.debugger.show_memory_of(bytes.memory_reference.as_deref(), &bytes.evaluate_name.clone().unwrap_or_else(|| bytes.name.clone()));
+    assert!(app.debugger.show_memory);
+    settle_debugger(app, "the memory", &|a| a.debugger.memory.block.is_some() && !a.debugger.memory.loading());
+}
+
+/// Steps over the line that changes a byte and waits for the page to be read again.
+fn step_over_the_byte_change(app: &mut CrabCraftApp) {
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::StepOver);
+    settle_debugger(app, "the step", &|a| a.debugger.stopped() && a.debugger.memory.previous.is_some() && a.debugger.memory.block.is_some() && !a.debugger.memory.loading());
+}
+
+#[test]
+fn the_memory_view_shows_bytes_and_highlights_what_a_step_changed() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_on_bytes(dir.path());
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    assert!(caps.supports_read_memory_request, "GDB should answer readMemory");
+
+    // An array has no memory reference of its own: the view reads at `&bytes`.
+    show_bytes_in_memory(&mut app);
+    assert_eq!(app.debugger.memory.error, None);
+    assert_eq!(app.debugger.memory.input, "&bytes");
+    let block = app.debugger.memory.block.clone().unwrap();
+    assert_eq!(block.bytes.len(), crate::memory_view::PAGE);
+    let first = rc_dap::memory::row_text(&block.rows()[0]);
+    assert!(first.contains("  de ad be ef "), "{first}");
+    assert!(block.changed_since(app.debugger.memory.previous.as_ref()).iter().all(|c| !c));
+    // GDB gives a memory reference for pointers (`&bytes`), the address the view shows.
+    app.debugger.evaluate("&bytes".into());
+    settle_debugger(&mut app, "the evaluation", &|a| matches!(a.debugger.eval, Some((_, _, Some(_)))));
+    match &app.debugger.eval {
+        Some((_, _, Some(Ok(v)))) => assert_eq!(v.memory_reference.as_deref().and_then(rc_dap::memory::parse_address), Some(block.address)),
+        other => panic!("{other:?}"),
+    }
+
+    // Step over `bytes[1] = 0x42`: the page is read again and only that byte changed.
+    let address = block.address;
+    step_over_the_byte_change(&mut app);
+    let now = app.debugger.memory.block.clone().unwrap();
+    assert_eq!(now.address, address);
+    assert!(rc_dap::memory::row_text(&now.rows()[0]).contains("  de 42 be ef "));
+    let changed = now.changed_since(app.debugger.memory.previous.as_ref());
+    assert!(changed[1], "the changed byte is highlighted");
+    assert!(!changed[0] && !changed[2] && !changed[3]);
+
+    // Paging and a typed address read on demand.
+    app.debugger.memory_page(1);
+    settle_debugger(&mut app, "the next page", &|a| !a.debugger.memory.loading());
+    assert_eq!(app.debugger.memory.block.as_ref().map(|b| b.address), Some(address + crate::memory_view::PAGE as u64));
+    app.debugger.memory.input = format!("{address:#x}");
+    app.debugger.go_to_memory();
+    settle_debugger(&mut app, "the typed address", &|a| !a.debugger.memory.loading());
+    assert_eq!(app.debugger.memory.block.as_ref().and_then(|b| b.get(address + 1)), Some(Some(0x42)));
+    // Address 0 cannot be read: shown as unreadable, with the reason.
+    app.debugger.memory.input = "0x0".into();
+    app.debugger.go_to_memory();
+    settle_debugger(&mut app, "the unreadable page", &|a| !a.debugger.memory.loading());
+    assert!(app.debugger.memory.error.is_some());
+    assert!(app.debugger.memory.block.as_ref().is_some_and(|b| b.bytes.iter().all(|x| x.is_none())));
+    app.debugger.stop();
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/memory-view-*.png"]
+fn memory_view_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_on_bytes(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        show_bytes_in_memory(&mut app);
+        step_over_the_byte_change(&mut app);
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("memory-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
 #[test]
 fn step_into_walks_past_the_standard_library() {
     use rc_editor::{Action, BreakpointKind};

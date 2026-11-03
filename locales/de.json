@@ -302,7 +302,19 @@
     "Threads & Variables": "Threads und Variablen",
     "Variables are shown when the program is paused": "Variablen werden angezeigt, wenn das Programm angehalten ist",
     "netcoredbg is ready": "netcoredbg ist bereit",
-    "Show Integers in Hex": "Ganzzahlen hexadezimal anzeigen"
+    "Show Integers in Hex": "Ganzzahlen hexadezimal anzeigen",
+    "Memory": "Speicher",
+    "Show in Memory View": "In der Speicheransicht anzeigen",
+    "Address or expression (Enter), e.g. &x or 0x7ffd…": "Adresse oder Ausdruck (Eingabe), z. B. &x oder 0x7ffd…",
+    "Previous Page": "Vorherige Seite",
+    "Next Page": "Nächste Seite",
+    "Type an address or an expression, or choose Show in Memory View on a variable.": "Geben Sie eine Adresse oder einen Ausdruck ein oder wählen Sie bei einer Variablen In der Speicheransicht anzeigen.",
+    "Memory is shown when the program is paused": "Der Speicher wird angezeigt, wenn das Programm angehalten ist",
+    "Memory can be read when the program is paused": "Der Speicher kann nur bei angehaltenem Programm gelesen werden",
+    "This debugger cannot read memory": "Dieser Debugger kann keinen Speicher lesen",
+    "Cannot read memory: {error}": "Speicher kann nicht gelesen werden: {error}",
+    "{expression} has no address. Try &{expression}.": "{expression} hat keine Adresse. Versuchen Sie &{expression}.",
+    "Cannot evaluate {expression}: {error}": "{expression} kann nicht ausgewertet werden: {error}"
   },
   "editor": {
     "Editor Only": "Nur Editor",

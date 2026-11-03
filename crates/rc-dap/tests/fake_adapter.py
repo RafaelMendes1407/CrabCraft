@@ -2,6 +2,7 @@
 # Usage: fake_adapter.py <log file> <early|late> [--interpreter=vscode]
 # Logs every request it receives (one JSON line each) and plays a scripted program:
 # a loop that hits line 10 of the breakpoint file three times (x = 1, 2, 3), then exits with 3.
+import base64
 import json
 import sys
 
@@ -82,6 +83,7 @@ while True:
             "supportsConditionalBreakpoints": True,
             "supportsExceptionInfoRequest": True,
             "supportsSetVariable": True,
+            "supportsReadMemoryRequest": True,
             "exceptionBreakpointFilters": [
                 {"filter": "all", "label": "All"},
                 {"filter": "user-unhandled", "label": "User-Unhandled", "default": True},
@@ -162,6 +164,17 @@ while True:
     elif cmd == "pause":
         respond(m)
         stop("pause")
+    elif cmd == "readMemory":
+        # 8 readable bytes at 0x1000 (the last one is x); everything after is unreadable.
+        start = int(a["memoryReference"], 0) + a.get("offset", 0)
+        memory = bytes([0xDE, 0xAD, 0xBE, 0xEF, 0, 0, 0, x])
+        lo = max(start, 0x1000)
+        hi = min(start + a["count"], 0x1000 + len(memory))
+        if hi <= lo:
+            respond(m, {"address": hex(start), "unreadableBytes": a["count"]})
+        else:
+            data = memory[lo - 0x1000:hi - 0x1000]
+            respond(m, {"address": hex(lo), "data": base64.b64encode(data).decode(), "unreadableBytes": start + a["count"] - hi})
     elif cmd == "exceptionInfo":
         respond(m, {"exceptionId": "System.Exception", "breakMode": "always"})
     elif cmd == "disconnect":

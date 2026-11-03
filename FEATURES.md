@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 139 |
+| ✅ Pronto | 140 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 87 |
+| ⬜ A fazer | 86 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -272,7 +272,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-14 | Attach a processo | ✅ | M2 | Attach com GDB real e diálogo visto; com ptrace_scope 1 o Linux bloqueia e o app explica |
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
-| D-17 | Memory view | ⬜ | M4 | |
+| D-17 | Memory view | ✅ | M4 | Aba "Memory" na janela Debug: "Show in Memory View" no menu de contexto de Variables/Watches (usa o `memoryReference` da variável ou o endereço de `&expr`) ou um endereço/expressão digitado (`&x`, `0x7ffd…`). Dump hex com coluna de endereço, 16 bytes por linha e ASCII; bytes ilegíveis aparecem como `??`; páginas de 512 bytes lidas sob demanda (anterior/próxima) com `readMemory`. Relê a página a cada parada e destaca os bytes que mudaram desde a parada anterior. O GDB 15.1 anuncia `supportsReadMemoryRequest` e dá `memoryReference` só para ponteiros (arrays usam `&nome`); quando a leitura falha ele recusa a página inteira, sem leitura parcial. Testado num programa Rust real sob GDB (`the_memory_view_shows_bytes_and_highlights_what_a_step_changed`). Escrever na memória fica fora do escopo |
 | D-18 | Disassembly view | ⬜ | M4 | |
 | D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
 | D-20 | Parallel stacks | ⬜ | M4 | |

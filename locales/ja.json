@@ -302,7 +302,19 @@
     "Threads & Variables": "スレッドと変数",
     "Variables are shown when the program is paused": "プログラムが一時停止すると変数が表示されます",
     "netcoredbg is ready": "netcoredbg の準備ができました",
-    "Show Integers in Hex": "整数を16進数で表示"
+    "Show Integers in Hex": "整数を16進数で表示",
+    "Memory": "メモリ",
+    "Show in Memory View": "メモリビューで表示",
+    "Address or expression (Enter), e.g. &x or 0x7ffd…": "アドレスまたは式（Enter）、例: &x や 0x7ffd…",
+    "Previous Page": "前のページ",
+    "Next Page": "次のページ",
+    "Type an address or an expression, or choose Show in Memory View on a variable.": "アドレスか式を入力するか、変数で「メモリビューで表示」を選んでください。",
+    "Memory is shown when the program is paused": "プログラムが一時停止しているときにメモリを表示します",
+    "Memory can be read when the program is paused": "メモリはプログラムの一時停止中にのみ読み取れます",
+    "This debugger cannot read memory": "このデバッガーはメモリを読み取れません",
+    "Cannot read memory: {error}": "メモリを読み取れません: {error}",
+    "{expression} has no address. Try &{expression}.": "{expression} にはアドレスがありません。&{expression} を試してください。",
+    "Cannot evaluate {expression}: {error}": "{expression} を評価できません: {error}"
   },
   "editor": {
     "Editor Only": "エディターのみ",
