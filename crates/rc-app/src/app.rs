@@ -2885,6 +2885,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         show_indent_guides: s.show_indent_guides,
         show_inlays: s.show_inlay_hints,
         sticky_lines: if s.sticky_lines { 5 } else { 0 },
+        scrollbar_lens: s.scrollbar_lens,
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         live_templates: rc_core::live_templates::for_editor(&s.live_templates),
         ..EditorConfig::default()

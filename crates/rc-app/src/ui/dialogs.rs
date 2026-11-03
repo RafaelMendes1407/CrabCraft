@@ -239,6 +239,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
                         ui.end_row();
                         ui.label("");
+                        ui.checkbox(&mut draft.scrollbar_lens, tr("Show a code preview when hovering the scrollbar"));
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
                         ui.end_row();
                         ui.label("");

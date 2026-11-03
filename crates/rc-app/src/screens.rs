@@ -2224,3 +2224,96 @@ fn target_picker_capture() {
         h.render().unwrap().save(out.join(format!("target-picker-windows-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// A long real file of this repository, open with a problem on `error_line`.
+fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-editor/src/view.rs").canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    let doc = h.state_mut().docs.active_doc_mut().unwrap();
+    assert!(doc.editor.buffer.len_lines() > 1000, "a long file");
+    let start = doc.editor.buffer.rope().line_to_char(error_line) + 4;
+    doc.editor.diagnostics.push(rc_editor::Diagnostic {
+        start,
+        end: start + 6,
+        severity: rc_editor::Severity::Error,
+        message: "lens test: mismatched types".into(),
+        code: None,
+        unnecessary: false,
+        deprecated: false,
+    });
+    h.run_steps(2);
+    (h, file)
+}
+
+/// Height of the scrollbar where the stripe mark of `line` is (no folds).
+fn track_y_of_line(h: &Harness<'static, CrabCraftApp>, line: usize) -> egui::Pos2 {
+    let ed = &h.state().docs.active_doc().unwrap().editor;
+    let track = ed.scrollbar_track;
+    let rows = ed.buffer.len_lines() as f32;
+    let y = track.top() + line as f32 / rows.max(track.height() / ed.row_height()) * track.height();
+    egui::pos2(track.center().x, y + 0.2)
+}
+
+fn hover_lens(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2) -> Option<rc_editor::lens::ScrollLens> {
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(2);
+    h.state().docs.active_doc().unwrap().editor.scroll_lens.clone()
+}
+
+/// Hovering the scrollbar over a real Rust file previews the code at that height; a problem's
+/// stripe mark shows its message; leaving the bar or turning the setting off hides the lens.
+#[test]
+fn the_scrollbar_lens_previews_the_code_under_the_pointer() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _) = lens_harness(dir.path(), false, 300);
+    let target = {
+        let ed = &h.state().docs.active_doc().unwrap().editor;
+        (0..ed.buffer.len_lines()).find(|&l| ed.buffer.line_text(l).starts_with("fn paint_scrollbars(")).expect("the function is in view.rs")
+    };
+    let at = track_y_of_line(&h, target);
+    let lens = hover_lens(&mut h, at).expect("the lens is shown");
+    assert_eq!(lens.line, target);
+    assert_eq!(lens.lines, (target - 4..=target + 4).collect::<Vec<_>>());
+    assert_eq!(lens.message, None);
+    let track = h.state().docs.active_doc().unwrap().editor.scrollbar_track;
+    assert!(lens.rect.right() <= track.left(), "left of the scrollbar");
+    // Hovering scrolls nothing.
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.scroll_offset().y, 0.0);
+
+    // The error's stripe mark: its line in the middle and its message.
+    let at = track_y_of_line(&h, 300) + egui::vec2(0.0, 0.8);
+    let lens = hover_lens(&mut h, at).expect("the lens is shown");
+    assert_eq!(lens.line, 300);
+    assert_eq!(lens.message, Some((rc_editor::Severity::Error, "lens test: mismatched types".to_string())));
+
+    // Away from the bar: gone.
+    assert_eq!(hover_lens(&mut h, egui::pos2(500.0, 400.0)), None);
+
+    // Turned off in the settings.
+    let mut settings = h.state().settings.clone();
+    settings.scrollbar_lens = false;
+    let ctx = h.ctx.clone();
+    h.state_mut().apply_settings(&ctx, settings);
+    let at = track_y_of_line(&h, target);
+    assert_eq!(hover_lens(&mut h, at), None);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/scrollbar-lens-*.png"]
+fn scrollbar_lens_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = lens_harness(dir.path(), dark, 900);
+        let at = track_y_of_line(&h, 900) + egui::vec2(0.0, 0.8);
+        hover_lens(&mut h, at).expect("the lens is shown");
+        h.run_steps(2);
+        h.render().unwrap().save(out.join(format!("scrollbar-lens-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

@@ -1,0 +1,3 @@
+# Scrollbar lens (E-25). Import: python3 scripts/i18n_tsv.py lens scripts/i18n/scrollbar-lens.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show a code preview when hovering the scrollbar	Mostrar una vista previa del código al pasar sobre la barra de desplazamiento	Afficher un aperçu du code au survol de la barre de défilement	Mostrar uma prévia do código ao passar sobre a barra de rolagem	Codevorschau beim Überfahren der Bildlaufleiste anzeigen	Pokazuj podgląd kodu po najechaniu na pasek przewijania	悬停在滚动条上时显示代码预览	スクロールバーにカーソルを合わせたときにコードのプレビューを表示

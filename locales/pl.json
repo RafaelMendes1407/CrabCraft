@@ -1132,5 +1132,8 @@
     "{locked} · {latest} available": "{locked} · dostępna {latest}",
     "Show newer versions of dependencies from crates.io": "Pokazuj nowsze wersje zależności z crates.io",
     "Only crate names are sent to crates.io.": "Do crates.io wysyłane są tylko nazwy crate'ów."
+  },
+  "lens": {
+    "Show a code preview when hovering the scrollbar": "Pokazuj podgląd kodu po najechaniu na pasek przewijania"
   }
 }

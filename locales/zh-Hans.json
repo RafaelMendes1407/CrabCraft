@@ -1132,5 +1132,8 @@
     "{locked} · {latest} available": "{locked} · 可用 {latest}",
     "Show newer versions of dependencies from crates.io": "显示 crates.io 上依赖项的较新版本",
     "Only crate names are sent to crates.io.": "仅向 crates.io 发送 crate 名称。"
+  },
+  "lens": {
+    "Show a code preview when hovering the scrollbar": "悬停在滚动条上时显示代码预览"
   }
 }

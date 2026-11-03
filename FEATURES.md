@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 140 |
+| ✅ Pronto | 141 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 86 |
+| ⬜ A fazer | 85 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -109,7 +109,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-22 | Cabeçalhos de copyright | ⬜ | M6 | |
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
-| E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
+| E-25 | Lens mode na barra de rolagem | ✅ | M6 | Passar o ponteiro na barra de rolagem mostra 9 linhas do código naquela altura (cores, números, problemas sublinhados, dobras respeitadas); sobre a marca de um erro mostra a mensagem. Desligável em Settings › Editor. Teste headless em `crates/rc-editor/src/view.rs` deste repositório (`the_scrollbar_lens_previews_the_code_under_the_pointer`) e captura GPU `scrollbar_lens_capture`. |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
 | E-27 | Scratch files | ✅ | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Com um projeto aberto, rascunho Rust é analisado sozinho pelo rust-analyzer (arquivo avulso em `linkedProjects`); o botão Run da faixa compila com `rustc` numa pasta temporária e roda na janela Run (Rerun recompila; erro do rustc impede a execução). Testado com rust-analyzer e rustc reais |
 

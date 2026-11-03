@@ -178,6 +178,10 @@ pub struct EditorState {
     /// Line numbers to show instead of the buffer's (diff sides: `None` for filler rows).
     pub display_numbers: Option<Vec<Option<usize>>>,
     pub popups: Popups,
+    /// The scrollbar lens shown this frame, if any.
+    pub scroll_lens: Option<crate::lens::ScrollLens>,
+    /// Screen rect of the vertical scrollbar in the last frame.
+    pub scrollbar_track: egui::Rect,
     pub(crate) edits: Vec<Edit>,
     pub(crate) hl_cache: Option<HlCache>,
     pub(crate) display: Option<Vec<usize>>,
@@ -240,6 +244,8 @@ impl EditorState {
             annotations: None,
             display_numbers: None,
             popups: Popups::default(),
+            scroll_lens: None,
+            scrollbar_track: egui::Rect::NOTHING,
             edits: Vec::new(),
             hl_cache: None,
             display: None,
@@ -316,6 +322,11 @@ impl EditorState {
     /// Scroll offset in points (persisted with the session).
     pub fn scroll_offset(&self) -> egui::Vec2 {
         self.scroll
+    }
+
+    /// Height of a row in points, as of the last frame.
+    pub fn row_height(&self) -> f32 {
+        self.row_h
     }
 
     pub fn set_scroll_offset(&mut self, offset: egui::Vec2) {

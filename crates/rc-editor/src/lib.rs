@@ -4,6 +4,7 @@
 
 pub mod keymap;
 pub mod layout;
+pub mod lens;
 pub mod popup;
 mod popups_view;
 mod select;

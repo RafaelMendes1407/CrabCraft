@@ -22,11 +22,13 @@ pub struct EditorConfig {
     pub sticky_lines: usize,
     /// Live templates of Rust files: (abbreviation, snippet body), expanded with Tab.
     pub live_templates: Vec<(String, String)>,
+    /// Preview the code under the pointer while hovering the vertical scrollbar.
+    pub scrollbar_lens: bool,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5, live_templates: Vec::new() }
+        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5, live_templates: Vec::new(), scrollbar_lens: true }
     }
 }
 
@@ -56,7 +58,7 @@ pub(crate) struct Metrics {
     pub fold_x: f32,
 }
 
-const TEXT_PAD: f32 = 6.0;
+pub(crate) const TEXT_PAD: f32 = 6.0;
 const SCROLLBAR_W: f32 = 12.0;
 const HOVER_DELAY: f64 = 0.55;
 
@@ -164,7 +166,7 @@ impl<'a> EditorView<'a> {
                 }
             }
         }
-        let (vbar, hbar) = paint_scrollbars(ui, state, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
+        let (vbar, hbar) = paint_scrollbars(ui, state, config, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
         if let Some(r) = vbar.or(hbar) {
             let _ = r;
         }
@@ -230,7 +232,7 @@ pub(crate) fn metrics(ui: &Ui, state: &EditorState, config: &EditorConfig, rect:
     Metrics { row_h, char_w, text_dy, gutter_w, num_right, icons_x, vcs_x, fold_x }
 }
 
-fn display_row_count(state: &mut EditorState) -> usize {
+pub(crate) fn display_row_count(state: &mut EditorState) -> usize {
     let n = state.buffer.len_lines();
     state.display_rows().map_or(n, |r| r.len())
 }
@@ -579,7 +581,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     }
 }
 
-fn wavy(x0: f32, x1: f32, y: f32, color: Color32) -> Shape {
+pub(crate) fn wavy(x0: f32, x1: f32, y: f32, color: Color32) -> Shape {
     let mut pts = Vec::new();
     let step = 2.0;
     let mut x = x0;
@@ -789,6 +791,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
 fn paint_scrollbars(
     ui: &Ui,
     state: &mut EditorState,
+    config: &EditorConfig,
     scheme: &Scheme,
     pal: &rc_kit::Palette,
     rect: Rect,
@@ -808,8 +811,11 @@ fn paint_scrollbars(
         track.top() + (row / rows.max(track.height() / m.row_h)) * track.height()
     };
     let diags: Vec<(usize, Severity)> = state.diagnostics.iter().filter(|d| d.severity <= Severity::Warning).map(|d| (d.start, d.severity)).collect();
+    // (centre y, line) of each problem mark, for the lens.
+    let mut marks: Vec<(f32, usize)> = Vec::with_capacity(diags.len());
     for (pos, sev) in diags {
         let y = mark_y(state, pos);
+        marks.push((y + 1.0, state.buffer.line_col(pos).0));
         painter.rect_filled(Rect::from_min_size(pos2(track.left() + 3.0, y), vec2(SCROLLBAR_W - 5.0, 2.0)), 0.0, severity_color(sev, scheme));
     }
     let matches: Vec<usize> = state.search_matches.iter().take(2000).map(|m| m.0).collect();
@@ -843,6 +849,17 @@ fn paint_scrollbars(
         let thumb = if active { thumb.expand2(vec2(1.5, 0.0)).translate(vec2(-1.5, 0.0)) } else { thumb };
         painter.rect_filled(thumb, 4.0, pal.text.gamma_multiply(alpha));
         vresp = Some(resp);
+    }
+    // Lens: the code at the hovered height of the scrollbar (not while dragging the thumb).
+    state.scrollbar_track = track;
+    state.scroll_lens = None;
+    if config.scrollbar_lens
+        && content_h > text_rect.height() + 0.5
+        && !vresp.as_ref().is_some_and(|r| r.dragged())
+        && ui.rect_contains_pointer(track)
+        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
+    {
+        crate::lens::show(ui, state, config, scheme, pal, m, rect, track, p, &marks);
     }
     let mut hresp = None;
     if content_w > text_rect.width() + 0.5 {

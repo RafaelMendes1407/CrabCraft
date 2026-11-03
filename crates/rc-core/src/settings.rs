@@ -50,6 +50,8 @@ pub struct Settings {
     pub show_indent_guides: bool,
     /// Keep the first lines of the enclosing blocks at the top of the editor.
     pub sticky_lines: bool,
+    /// Preview the code under the pointer while hovering the editor's scrollbar.
+    pub scrollbar_lens: bool,
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
     pub autosave: bool,
@@ -120,6 +122,7 @@ impl Default for Settings {
             show_inlay_hints: true,
             show_indent_guides: true,
             sticky_lines: true,
+            scrollbar_lens: true,
             right_margin: 120,
             autosave: true,
             single_click_open: false,

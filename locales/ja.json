@@ -1132,5 +1132,8 @@
     "{locked} · {latest} available": "{locked} · {latest} が利用可能",
     "Show newer versions of dependencies from crates.io": "crates.io の依存関係の新しいバージョンを表示",
     "Only crate names are sent to crates.io.": "crates.io に送信されるのは crate 名だけです。"
+  },
+  "lens": {
+    "Show a code preview when hovering the scrollbar": "スクロールバーにカーソルを合わせたときにコードのプレビューを表示"
   }
 }
