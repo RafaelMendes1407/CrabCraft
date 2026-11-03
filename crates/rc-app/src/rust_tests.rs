@@ -1500,7 +1500,21 @@ fn generate_offers_only_what_writes_code() {
         _ => None,
     });
     assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
-    assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // The IDE's own Derive row comes first on a type.
+    assert_eq!(found[0], "Derive…", "{found:?}");
+    assert!(found[1..].iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // Deriving writes the attribute above the type, and a second time merges into it.
+    for traits in [vec!["Debug", "Clone"], vec!["Debug", "Clone", "PartialEq"]] {
+        let d = &mut app.docs.list[i];
+        let t = crate::insight::derive_target_of(d).unwrap();
+        let (a, b, new) = t.edit(&traits.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        d.editor.replace(a, b, &new);
+        d.editor.parse_blocking();
+    }
+    let edited = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(edited.starts_with("#[derive(Debug, Clone, PartialEq)]\nstruct A {"), "{edited}");
+    app.docs.list[i].editor.reload(text);
+    app.docs.list[i].editor.parse_blocking();
 
     // Refactor This offers Rename and the refactorings, and no generators.
     let at = text.find("1 + 2").unwrap();

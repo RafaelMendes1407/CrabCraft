@@ -95,6 +95,8 @@ pub const RENAME_COMMAND: &str = "crabcraft.rename";
 /// The rows of the Select In popup, run by the IDE.
 pub const SELECT_IN_EXPLORER: &str = "crabcraft.select_in_explorer";
 pub const REVEAL_FILE: &str = "crabcraft.reveal_file";
+/// The Derive row of the Generate popup, run by the IDE.
+pub const DERIVE_COMMAND: &str = "crabcraft.derive";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
@@ -1063,11 +1065,16 @@ impl Insight {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {
                 out.push(InsightOutput::Actions(refactorings(list)));
-            } else if list.is_empty() {
+            } else if list.is_empty() && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some())) {
+                self.generate_only = false;
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
                 if std::mem::take(&mut self.generate_only) {
-                    let list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
+                    let mut list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
+                    // On a Rust type: its derive list, written by the IDE.
+                    if docs.active_doc().is_some_and(|d| derive_target_of(d).is_some()) {
+                        list.insert(0, lsp::CodeActionOrCommand::Command(lsp::Command { title: tr("Derive…").into(), command: DERIVE_COMMAND.into(), arguments: None }));
+                    }
                     out.push(if list.is_empty() { InsightOutput::Message(tr("Nothing to generate here").into()) } else { InsightOutput::Actions(list) });
                 } else {
                     out.push(InsightOutput::Actions(list));
@@ -1586,6 +1593,14 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
 }
 
 /// Whether the language server covers this document.
+/// The Rust struct, enum or union the caret of `d` is in.
+pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
+    if d.editor.lang() != rc_syntax::Lang::Rust || d.editor.read_only {
+        return None;
+    }
+    rc_syntax::derive_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())
+}
+
 pub fn has_insight(d: &Doc) -> bool {
     matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }

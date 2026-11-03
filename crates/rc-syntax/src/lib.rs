@@ -6,12 +6,14 @@
 //! for the [`ParserPool`] thread, which only parses the newest version of each document and
 //! sends the tree back; results for older versions are dropped.
 
+mod derive;
 mod highlight;
 mod lang;
 mod parse;
 mod structure;
 pub mod sample;
 
+pub use derive::{COMMON_DERIVES, DeriveTarget, derive_target};
 pub use highlight::{Hl, Span, highlight_lexical, highlight_lines};
 pub use lang::Lang;
 pub use parse::{ParseResult, ParserPool, parse_now};

@@ -274,7 +274,10 @@
     "This element cannot be renamed": "Dieses Element kann nicht umbenannt werden",
     "Usages": "Verwendungen",
     "{n} problems": "{n} Probleme",
-    "The C# server is still loading the solution; navigation continues when it is ready": "Der C#-Server lädt die Projektmappe noch; die Navigation wird fortgesetzt, sobald er bereit ist"
+    "The C# server is still loading the solution; navigation continues when it is ready": "Der C#-Server lädt die Projektmappe noch; die Navigation wird fortgesetzt, sobald er bereit ist",
+    "Derive…": "Derive…",
+    "Derive for {name}": "Derive für {name}",
+    "Other traits, separated by commas": "Weitere Traits, durch Kommas getrennt"
   },
   "runner": {
     "All Tests": "Alle Tests",
