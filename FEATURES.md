@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 97 |
+| ✅ Pronto | 98 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 127 |
+| ⬜ A fazer | 126 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -75,7 +75,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
 | P-24 | Excluir pastas e arquivos da análise | ⬜ | M3 | |
-| P-25 | Invalidar caches | ⬜ | M3 | |
+| P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |

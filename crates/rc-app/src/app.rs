@@ -505,6 +505,31 @@ impl CrabCraftApp {
         }
     }
 
+    /// Throws away what the IDE derived from the project and builds it again: open files from
+    /// disk, the file index, Git status, the Cargo model and rust-analyzer. Tabs, terminals and
+    /// running programs stay. `clean` also deletes Cargo's build output.
+    pub fn invalidate_caches(&mut self, clean: bool) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        self.docs.reload_all();
+        self.files.open(&root, self.waker.clone());
+        self.vcs.refresh();
+        let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
+        if let Some(manifest) = manifest {
+            if self.settings.trusted_projects.contains(&root) {
+                self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            }
+            if clean {
+                self.save_all_docs();
+                let outs = self.runner.cargo_command_in(&manifest, vec!["clean".into()]);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            self.load_cargo_workspace(manifest);
+        } else if self.insight.session.is_some() {
+            self.insight.restart();
+        }
+        self.notify(tr("Caches invalidated"), false);
+    }
+
     /// Opens the workspace again (after adding a project: run configurations, explorer and the
     /// language server pick it up).
     pub fn reload_workspace(&mut self) {
@@ -1078,6 +1103,7 @@ impl CrabCraftApp {
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
+            Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {

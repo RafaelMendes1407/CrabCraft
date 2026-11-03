@@ -743,5 +743,13 @@
     "Remove once hit": "Remover ao atingir",
     "Refactor This…": "Refatorar isto…",
     "Select In…": "Selecionar em…"
+  },
+  "invalidate-caches": {
+    "Invalidate Caches": "Invalidar caches",
+    "Invalidate Caches…": "Invalidar caches…",
+    "Invalidate": "Invalidar",
+    "Caches invalidated": "Caches invalidados",
+    "Also delete the build output (cargo clean)": "Apagar também a saída da compilação (cargo clean)",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "Os arquivos abertos são lidos do disco de novo, e o índice de arquivos, o status do Git, o projeto Cargo e o servidor de linguagem são reconstruídos. Abas, terminais e programas em execução continuam abertos."
   }
 }

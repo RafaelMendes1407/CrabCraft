@@ -743,5 +743,13 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "invalidate-caches": {
+    "Invalidate Caches": "Caches invalidieren",
+    "Invalidate Caches…": "Caches invalidieren…",
+    "Invalidate": "Invalidieren",
+    "Caches invalidated": "Caches invalidiert",
+    "Also delete the build output (cargo clean)": "Auch die Build-Ausgabe löschen (cargo clean)",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "Geöffnete Dateien werden erneut von der Festplatte gelesen, und Dateiindex, Git-Status, Cargo-Projekt und Sprachserver werden neu aufgebaut. Tabs, Terminals und laufende Programme bleiben offen."
   }
 }

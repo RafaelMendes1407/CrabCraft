@@ -279,10 +279,16 @@ impl Runner {
 
     /// Runs a Cargo command in the workspace, shown in the Build window.
     pub fn cargo_command(&mut self, args: Vec<String>) -> Vec<RunnerOutput> {
+        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        self.cargo_command_in(&manifest, args)
+    }
+
+    /// Runs `cargo <args>` for `manifest`, which need not be loaded yet.
+    pub fn cargo_command_in(&mut self, manifest: &Path, args: Vec<String>) -> Vec<RunnerOutput> {
         if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
             return vec![RunnerOutput::Notify(tr("Wait for the running build to finish").into(), false)];
         }
-        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        let manifest = manifest.to_path_buf();
         let cargo = match self.cargo() {
             Ok(cargo) => cargo,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],

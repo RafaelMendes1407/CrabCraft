@@ -743,5 +743,13 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "invalidate-caches": {
+    "Invalidate Caches": "清除缓存",
+    "Invalidate Caches…": "清除缓存…",
+    "Invalidate": "清除",
+    "Caches invalidated": "缓存已清除",
+    "Also delete the build output (cargo clean)": "同时删除构建输出（cargo clean）",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "重新从磁盘读取已打开的文件，并重建文件索引、Git 状态、Cargo 项目和语言服务器。标签页、终端和正在运行的程序保持打开。"
   }
 }

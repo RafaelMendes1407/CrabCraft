@@ -256,6 +256,21 @@ impl Docs {
         doc.editor.request_parse(&self.pool);
     }
 
+    /// Reads every document from disk again (the unmodified ones change; the modified ones are
+    /// flagged when the file differs) and parses them all afresh.
+    pub fn reload_all(&mut self) {
+        let paths: Vec<PathBuf> = self.list.iter().map(|d| d.path.clone()).collect();
+        for path in paths {
+            if let Some(i) = self.index_of(&path) {
+                self.list[i].mtime = None;
+            }
+            self.on_disk_change(&path);
+        }
+        for d in &mut self.list {
+            d.editor.request_parse(&self.pool);
+        }
+    }
+
     /// Takes finished background parses; returns whether any arrived (repaint).
     pub fn poll_parses(&mut self) -> bool {
         let results = self.pool.poll();
