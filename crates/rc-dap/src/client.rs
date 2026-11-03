@@ -308,11 +308,11 @@ impl DapClient {
 
     /// Children of a variable; `start`/`count` page through indexed children.
     pub fn variables(&self, reference: i64, start: Option<i64>, count: Option<i64>) -> Pending<VariablesResponse> {
-        self.request("variables", args::variables(reference, start, count))
+        self.request("variables", args::variables(reference, start, count, false))
     }
 
     pub fn evaluate(&self, expression: &str, frame_id: Option<i64>, context: EvalContext) -> Pending<EvaluateResponse> {
-        self.request("evaluate", args::evaluate(expression, frame_id, context))
+        self.request("evaluate", args::evaluate(expression, frame_id, context, false))
     }
 
     pub fn set_variable(&self, reference: i64, name: &str, value: &str) -> Pending<SetVariableResponse> {
@@ -370,8 +370,12 @@ pub(crate) mod args {
         json!({"threadId": thread_id, "startFrame": start, "levels": levels})
     }
 
-    pub fn variables(reference: i64, start: Option<i64>, count: Option<i64>) -> Value {
+    /// `hex` asks for integers in hexadecimal (`ValueFormat`).
+    pub fn variables(reference: i64, start: Option<i64>, count: Option<i64>, hex: bool) -> Value {
         let mut a = json!({"variablesReference": reference});
+        if hex {
+            a["format"] = json!({"hex": true});
+        }
         if let Some(s) = start {
             a["start"] = json!(s);
         }
@@ -381,8 +385,11 @@ pub(crate) mod args {
         a
     }
 
-    pub fn evaluate(expression: &str, frame_id: Option<i64>, context: EvalContext) -> Value {
+    pub fn evaluate(expression: &str, frame_id: Option<i64>, context: EvalContext, hex: bool) -> Value {
         let mut a = json!({"expression": expression, "context": context.as_str()});
+        if hex {
+            a["format"] = json!({"hex": true});
+        }
         if let Some(f) = frame_id {
             a["frameId"] = json!(f);
         }

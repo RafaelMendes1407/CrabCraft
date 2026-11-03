@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 132 |
+| ✅ Pronto | 134 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 94 |
+| ⬜ A fazer | 92 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -274,7 +274,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
 | D-17 | Memory view | ⬜ | M4 | |
 | D-18 | Disassembly view | ⬜ | M4 | |
-| D-19 | Inteiros em hexadecimal | ⬜ | M4 | |
+| D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
 | D-20 | Parallel stacks | ⬜ | M4 | |
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |

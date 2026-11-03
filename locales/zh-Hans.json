@@ -301,7 +301,8 @@
     "Thread {id}": "线程 {id}",
     "Threads & Variables": "线程和变量",
     "Variables are shown when the program is paused": "程序暂停时显示变量",
-    "netcoredbg is ready": "netcoredbg 已就绪"
+    "netcoredbg is ready": "netcoredbg 已就绪",
+    "Show Integers in Hex": "以十六进制显示整数"
   },
   "editor": {
     "Editor Only": "仅编辑器",

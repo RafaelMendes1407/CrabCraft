@@ -510,6 +510,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::RunToCursor, || tr("Run to Cursor")),
             &act(Action::Resume, || tr("Resume Program")),
             &act(Action::Evaluate, || tr("Evaluate Expression…")),
+            &act(Action::ToggleHexValues, || tr("Show Integers in Hex")),
             &act(Action::AttachToProcess, || tr("Attach to Process…")),
             &sep(),
             &act(Action::ToggleBreakpoint, || tr("Toggle Line Breakpoint")),

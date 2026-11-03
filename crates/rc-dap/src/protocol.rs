@@ -102,6 +102,8 @@ pub struct Capabilities {
     pub support_terminate_debuggee: bool,
     pub supports_cancel_request: bool,
     pub supports_delayed_stack_trace_loading: bool,
+    /// `variables` and `evaluate` accept `format` (`{"hex": true}`).
+    pub supports_value_formatting_options: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

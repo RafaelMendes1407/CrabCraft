@@ -6,9 +6,11 @@
 //!   handshake, breakpoints, stops, frames, variables, watches, evaluation.
 //! - [`launch`]: what to debug ([`DebugTarget`]) and the adapter's launch arguments.
 //! - [`breakpoints`]: breakpoints by file and line, hit conditions and logpoints.
+//! - [`format`]: integers in hexadecimal for adapters that cannot print them so.
 
 pub mod breakpoints;
 pub mod client;
+pub mod format;
 pub mod gdb;
 pub mod launch;
 pub mod netcoredbg;

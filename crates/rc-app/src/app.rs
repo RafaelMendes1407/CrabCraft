@@ -240,7 +240,11 @@ impl CrabCraftApp {
                 runner.external_tools = settings.external_tools.clone();
                 runner
             },
-            debugger: crate::debugger::Debugger::new(waker.clone()),
+            debugger: {
+                let mut debugger = crate::debugger::Debugger::new(waker.clone());
+                debugger.hex = settings.debugger_hex;
+                debugger
+            },
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
@@ -1677,6 +1681,7 @@ impl CrabCraftApp {
                     self.debugger.run_to_cursor(&path, line);
                 }
             }
+            Action::ToggleHexValues => self.toggle_hex_values(),
             Action::Evaluate => {
                 if self.debugger.stopped() {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
@@ -2059,6 +2064,14 @@ impl CrabCraftApp {
             }
             None => self.notify(tr("There is no run configuration to debug"), false),
         }
+    }
+
+    /// Integers in hexadecimal or decimal in the debugger, kept in the settings.
+    pub fn toggle_hex_values(&mut self) {
+        let hex = !self.debugger.hex;
+        self.debugger.set_hex(hex);
+        self.settings.debugger_hex = hex;
+        let _ = self.settings.save();
     }
 
     /// The debugger's Restart: what is being debugged, from the beginning.

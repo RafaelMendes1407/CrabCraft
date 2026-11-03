@@ -1,0 +1,3 @@
+# Integers in hexadecimal in the debugger (D-19). Import: python3 scripts/i18n_tsv.py debugger scripts/i18n/hex-values.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show Integers in Hex	Mostrar enteros en hexadecimal	Afficher les entiers en hexadécimal	Mostrar inteiros em hexadecimal	Ganzzahlen hexadezimal anzeigen	Pokaż liczby całkowite szesnastkowo	以十六进制显示整数	整数を16進数で表示

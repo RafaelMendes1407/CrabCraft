@@ -98,6 +98,8 @@ pub struct Settings {
     pub autoimport_exclude: Vec<String>,
     /// Add the `use` lines pasted Rust code needs, when only one import fits.
     pub imports_on_paste: bool,
+    /// The debugger shows integers in hexadecimal.
+    pub debugger_hex: bool,
     /// Shortcuts changed by the user, over the keymap: action id → shortcut id
     /// (`ctrl+shift+K`), empty for none.
     pub shortcuts: std::collections::BTreeMap<String, String>,
@@ -140,6 +142,7 @@ impl Default for Settings {
             live_templates: crate::live_templates::defaults(),
             autoimport_exclude: Vec::new(),
             imports_on_paste: true,
+            debugger_hex: false,
             shortcuts: Default::default(),
         }
     }

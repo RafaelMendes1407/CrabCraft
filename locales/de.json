@@ -301,7 +301,8 @@
     "Thread {id}": "Thread {id}",
     "Threads & Variables": "Threads und Variablen",
     "Variables are shown when the program is paused": "Variablen werden angezeigt, wenn das Programm angehalten ist",
-    "netcoredbg is ready": "netcoredbg ist bereit"
+    "netcoredbg is ready": "netcoredbg ist bereit",
+    "Show Integers in Hex": "Ganzzahlen hexadezimal anzeigen"
   },
   "editor": {
     "Editor Only": "Nur Editor",

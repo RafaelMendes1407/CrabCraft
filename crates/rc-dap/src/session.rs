@@ -267,9 +267,9 @@ enum Purpose {
     Threads { generation: u64 },
     StackTrace { generation: u64, thread_id: i64, for_stop: bool },
     Scopes { generation: u64, frame_id: i64 },
-    Variables { generation: u64, key: VarKey },
-    Watch { generation: u64, id: u64 },
-    Evaluate { id: u64, expression: String, context: EvalContext },
+    Variables { generation: u64, key: VarKey, hex: bool },
+    Watch { generation: u64, id: u64, hex: bool },
+    Evaluate { id: u64, expression: String, context: EvalContext, hex: bool },
     SetVariable { generation: u64, reference: i64, name: String },
     ExceptionInfo { generation: u64 },
     LogPoint { generation: u64, index: usize, part: usize },
@@ -337,6 +337,8 @@ pub struct DebugSession {
     loading: HashSet<(i64, VarKey)>,
     scopes_loading: HashSet<i64>,
     selected_frame: Option<i64>,
+    /// Integers shown in hexadecimal (variables, watches, hover and evaluation).
+    hex: bool,
     watches: Vec<Watch>,
     next_id: u64,
     exception: Option<ExceptionInfo>,
@@ -387,6 +389,7 @@ impl DebugSession {
             loading: HashSet::new(),
             scopes_loading: HashSet::new(),
             selected_frame: None,
+            hex: false,
             watches: Vec::new(),
             next_id: 1,
             exception: None,
@@ -762,13 +765,21 @@ impl DebugSession {
                 self.scopes.insert(frame_id, scopes);
                 self.events.push(DebugEvent::ScopesLoaded { frame_id });
             }
-            Purpose::Variables { generation, key } => {
-                if generation != self.generation {
+            Purpose::Variables { generation, key, hex } => {
+                // Asked in the other format: the cache was cleared and asked again.
+                if generation != self.generation || hex != self.hex {
                     return;
                 }
                 self.loading.remove(&(key.reference, key));
                 match r.and_then(|v| serde_json::from_value::<VariablesResponse>(v).map_err(|e| DapError::new(e.to_string()))) {
-                    Ok(v) => {
+                    Ok(mut v) => {
+                        if self.client_hex(hex) {
+                            for var in v.variables.iter_mut().filter(|var| var.variables_reference == 0) {
+                                if let Some(h) = crate::format::hex_integer(&var.value, var.type_name.as_deref()) {
+                                    var.value = h;
+                                }
+                            }
+                        }
                         self.variables.insert(key, v.variables);
                         self.events.push(DebugEvent::VariablesLoaded { reference: key.reference });
                     }
@@ -778,20 +789,22 @@ impl DebugSession {
                     }
                 }
             }
-            Purpose::Watch { generation, id } => {
-                if generation != self.generation {
+            Purpose::Watch { generation, id, hex } => {
+                if generation != self.generation || hex != self.hex {
                     return;
                 }
+                let client_hex = self.client_hex(hex);
                 if let Some(w) = self.watches.iter_mut().find(|w| w.id == id) {
                     w.value = match r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))) {
-                        Ok(v) => WatchValue::Value(v),
+                        Ok(v) => WatchValue::Value(hex_result(v, client_hex)),
                         Err(e) => WatchValue::Error(e.message),
                     };
                     self.events.push(DebugEvent::WatchesUpdated);
                 }
             }
-            Purpose::Evaluate { id, expression, context } => {
-                let result = r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))).map_err(|e| e.message);
+            Purpose::Evaluate { id, expression, context, hex } => {
+                let client_hex = self.client_hex(hex);
+                let result = r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))).map(|v| hex_result(v, client_hex)).map_err(|e| e.message);
                 self.events.push(DebugEvent::Evaluated { id, expression, context, result });
             }
             Purpose::SetVariable { generation, reference, name } => {
@@ -1029,7 +1042,7 @@ impl DebugSession {
                 LogPart::Expr(e) => {
                     if let Some(c) = &self.client {
                         eval.outstanding += 1;
-                        let p = c.request("evaluate", args::evaluate(e, frame_id, context));
+                        let p = c.request("evaluate", args::evaluate(e, frame_id, context, false));
                         self.in_flight.push((p, Purpose::LogPoint { generation: self.generation, index, part: i }));
                     }
                 }
@@ -1389,8 +1402,8 @@ impl DebugSession {
         }
         let Some(c) = &self.client else { return };
         self.loading.insert((key.reference, key));
-        let p = c.request("variables", args::variables(key.reference, key.start, key.count));
-        self.in_flight.push((p, Purpose::Variables { generation: self.generation, key }));
+        let p = c.request("variables", args::variables(key.reference, key.start, key.count, self.adapter_hex(self.hex)));
+        self.in_flight.push((p, Purpose::Variables { generation: self.generation, key, hex: self.hex }));
     }
 
     pub fn is_loading_variables(&self, reference: i64) -> bool {
@@ -1403,7 +1416,11 @@ impl DebugSession {
         if !self.state.is_stopped() {
             return;
         }
-        let p = c.request("setVariable", json!({"variablesReference": reference, "name": name, "value": value}));
+        let mut a = json!({"variablesReference": reference, "name": name, "value": value});
+        if self.adapter_hex(self.hex) {
+            a["format"] = json!({"hex": true});
+        }
+        let p = c.request("setVariable", a);
         self.in_flight.push((p, Purpose::SetVariable { generation: self.generation, reference, name: name.to_string() }));
     }
 
@@ -1464,6 +1481,7 @@ impl DebugSession {
 
     fn evaluate_watch(&mut self, id: u64) {
         let frame = self.selected_frame;
+        let (hex, adapter_hex) = (self.hex, self.adapter_hex(self.hex));
         let stopped = self.state.is_stopped();
         let generation = self.generation;
         let Some(w) = self.watches.iter_mut().find(|w| w.id == id) else { return };
@@ -1472,8 +1490,8 @@ impl DebugSession {
             return;
         };
         w.value = WatchValue::Evaluating;
-        let p = c.request("evaluate", args::evaluate(&w.expression, frame, EvalContext::Watch));
-        self.in_flight.push((p, Purpose::Watch { generation, id }));
+        let p = c.request("evaluate", args::evaluate(&w.expression, frame, EvalContext::Watch, adapter_hex));
+        self.in_flight.push((p, Purpose::Watch { generation, id, hex }));
     }
 
     /// Evaluates in the selected frame (console, hover); the answer comes as
@@ -1492,12 +1510,43 @@ impl DebugSession {
         let id = self.next_id();
         match &self.client {
             Some(c) if !self.state.is_ended() => {
-                let p = c.request("evaluate", args::evaluate(expression, self.selected_frame, context));
-                self.in_flight.push((p, Purpose::Evaluate { id, expression: expression.to_string(), context }));
+                // Debugger commands typed in the console print as they are.
+                let hex = self.hex && context != EvalContext::Repl;
+                let p = c.request("evaluate", args::evaluate(expression, self.selected_frame, context, self.adapter_hex(hex)));
+                self.in_flight.push((p, Purpose::Evaluate { id, expression: expression.to_string(), context, hex }));
             }
             _ => self.events.push(DebugEvent::Evaluated { id, expression: expression.to_string(), context, result: Err("the debugger is not running".into()) }),
         }
         id
+    }
+
+    /// Whether integers are shown in hexadecimal.
+    pub fn hex(&self) -> bool {
+        self.hex
+    }
+
+    /// Shows integers in hexadecimal or decimal: what was fetched in this stop is asked again
+    /// in the new format (variables when shown, watches now).
+    pub fn set_hex(&mut self, hex: bool) {
+        if self.hex == hex {
+            return;
+        }
+        self.hex = hex;
+        self.variables.clear();
+        self.loading.clear();
+        if self.state.is_stopped() {
+            self.evaluate_watches();
+        }
+    }
+
+    /// The adapter prints `hex` values itself (`format` in the request).
+    fn adapter_hex(&self, hex: bool) -> bool {
+        hex && self.capabilities.supports_value_formatting_options
+    }
+
+    /// `hex` values are converted here, the adapter cannot.
+    fn client_hex(&self, hex: bool) -> bool {
+        hex && !self.capabilities.supports_value_formatting_options
     }
 
     fn next_id(&mut self) -> u64 {
@@ -1505,6 +1554,17 @@ impl DebugSession {
         self.next_id += 1;
         id
     }
+}
+
+/// An evaluation result with its integer value in hexadecimal when `hex`.
+fn hex_result(mut v: EvaluateResponse, hex: bool) -> EvaluateResponse {
+    if hex
+        && v.variables_reference == 0
+        && let Some(h) = crate::format::hex_integer(&v.result, v.type_name.as_deref())
+    {
+        v.result = h;
+    }
+    v
 }
 
 impl Drop for DebugSession {

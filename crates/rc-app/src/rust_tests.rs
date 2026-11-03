@@ -751,6 +751,76 @@ fn logpoints_print_and_a_breakpoint_can_remove_itself() {
 }
 
 #[test]
+fn integers_switch_to_hexadecimal_while_paused() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    const MAIN: &str = "fn main() {\n    let n: u32 = 255;\n    let m: i32 = -1;\n    let f: f64 = 2.5;\n    let s = \"hi\";\n    std::hint::black_box((n, m, f, s));\n    println!(\"{n} {m} {f} {s}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let ctx = egui::Context::default();
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(6, BreakpointKind::Normal);
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    assert_eq!(local(&mut app, "n"), "255");
+    let pid = app.debugger.session.as_ref().and_then(|s| s.debuggee_pid());
+    let w = app.debugger.session.as_mut().unwrap().add_watch("n + 1");
+
+    let settle = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            // The Variables view asks for them while it is shown.
+            locals(app);
+            assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let inline = |a: &CrabCraftApp, line: usize| a.docs.active_doc().and_then(|d| d.editor.debug_values.get(&line).cloned()).unwrap_or_default();
+    let watch = |a: &CrabCraftApp| match a.debugger.session.as_ref().and_then(|s| s.watches().iter().find(|x| x.id == w)).map(|x| x.value.clone()) {
+        Some(rc_dap::WatchValue::Value(v)) => v.result,
+        _ => String::new(),
+    };
+    settle(&mut app, "decimal values", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+
+    // GDB prints in hexadecimal itself (`ValueFormat`, its `output-radix 16`).
+    assert!(app.debugger.session.as_ref().unwrap().capabilities().supports_value_formatting_options);
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    assert!(app.settings.debugger_hex);
+    settle(&mut app, "hexadecimal values", &|a| inline(a, 1) == "n = 0xff" && watch(a) == "0x100");
+    assert_eq!(local(&mut app, "n"), "0xff");
+    assert_eq!(local(&mut app, "m"), "0xffffffff");
+    assert_eq!(local(&mut app, "f"), "2.5");
+    assert!(local(&mut app, "s").contains("\"hi\""), "{}", local(&mut app, "s"));
+    assert_eq!(inline(&app, 2), "m = 0xffffffff");
+    app.debugger.evaluate("n".into());
+    settle(&mut app, "the evaluation", &|a| matches!(a.debugger.eval, Some((_, _, Some(_)))));
+    match &app.debugger.eval {
+        Some((_, _, Some(Ok(v)))) => assert_eq!(v.result, "0xff"),
+        other => panic!("{other:?}"),
+    }
+
+    // And back, in the same session.
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    assert!(!app.settings.debugger_hex);
+    settle(&mut app, "decimal values again", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+    assert_eq!(local(&mut app, "m"), "-1");
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), pid);
+    assert!(app.debugger.stopped());
+    app.debugger.stop();
+}
+
+#[test]
 fn step_into_walks_past_the_standard_library() {
     use rc_editor::{Action, BreakpointKind};
     const MAIN: &str = "fn own(text: &str) -> usize {\n    text.len()\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let upper = text.to_uppercase();\n    let n = own(&upper);\n    println!(\"{n}\");\n}\n";

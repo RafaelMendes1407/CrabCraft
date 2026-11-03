@@ -40,6 +40,8 @@ pub struct Debugger {
     pub new_watch: String,
     /// Breakpoints stay in the editors but do not stop the program.
     pub muted: bool,
+    /// Integers shown in hexadecimal (variables, watches, inline values, evaluation).
+    pub hex: bool,
     /// The stop and frame whose values the editor shows.
     inline_frame: Option<(u64, i64)>,
     /// The command being typed in the debugger's console.
@@ -86,6 +88,7 @@ impl Debugger {
             logs: HashMap::new(),
             once: HashSet::new(),
             muted: false,
+            hex: false,
             inline_frame: None,
             console_input: String::new(),
             console_commands: Vec::new(),
@@ -145,7 +148,9 @@ impl Debugger {
         self.console = Some(console);
         self.name = name.to_string();
         self.expanded.clear();
-        self.session = Some(DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone()));
+        let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
+        self.session = Some(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 
@@ -166,6 +171,7 @@ impl Debugger {
         self.expanded.clear();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
         }
@@ -202,6 +208,7 @@ impl Debugger {
         self.expanded.clear();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
         }
@@ -212,6 +219,26 @@ impl Debugger {
     pub fn stop(&mut self) {
         if let Some(s) = &mut self.session {
             s.stop();
+        }
+    }
+
+    /// Shows integers in hexadecimal or decimal; a paused session shows them again in the new
+    /// format without restarting (variables, watches, inline values, the Evaluate result).
+    pub fn set_hex(&mut self, hex: bool) {
+        if self.hex == hex {
+            return;
+        }
+        self.hex = hex;
+        self.inline_frame = None;
+        self.hover_result = None;
+        if let Some(s) = &mut self.session {
+            s.set_hex(hex);
+        }
+        if let Some((_, expression, _)) = &self.eval
+            && self.stopped()
+        {
+            let expression = expression.clone();
+            self.evaluate(expression);
         }
     }
 

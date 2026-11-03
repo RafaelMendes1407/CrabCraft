@@ -301,7 +301,8 @@
     "Thread {id}": "Wątek {id}",
     "Threads & Variables": "Wątki i zmienne",
     "Variables are shown when the program is paused": "Zmienne są wyświetlane, gdy program jest wstrzymany",
-    "netcoredbg is ready": "netcoredbg jest gotowy"
+    "netcoredbg is ready": "netcoredbg jest gotowy",
+    "Show Integers in Hex": "Pokaż liczby całkowite szesnastkowo"
   },
   "editor": {
     "Editor Only": "Tylko edytor",

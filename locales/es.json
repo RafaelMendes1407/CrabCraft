@@ -301,7 +301,8 @@
     "Thread {id}": "Hilo {id}",
     "Threads & Variables": "Hilos y variables",
     "Variables are shown when the program is paused": "Las variables se muestran cuando el programa está en pausa",
-    "netcoredbg is ready": "netcoredbg está listo"
+    "netcoredbg is ready": "netcoredbg está listo",
+    "Show Integers in Hex": "Mostrar enteros en hexadecimal"
   },
   "editor": {
     "Editor Only": "Solo editor",

@@ -203,6 +203,52 @@ fn handshake_order_stops_caches_watches_and_exit() {
 }
 
 #[test]
+fn hex_is_converted_here_when_the_adapter_cannot_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::ScopesLoaded { frame_id: 10 }));
+    let locals = s.scopes(10).unwrap()[0].variables_reference;
+    s.request_variables(locals);
+    let w = s.add_watch("x * 10");
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "1");
+    assert_eq!(result_of(watch_value(&s, w)), "10");
+
+    // Turning hex on asks again without restarting; objects stay as they are.
+    s.set_hex(true);
+    assert!(s.hex());
+    assert!(s.variables(locals).is_none());
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    let vars = s.variables(locals).unwrap();
+    assert_eq!((vars[0].value.as_str(), vars[1].value.as_str()), ("0x1", "{Order}"));
+    assert_eq!(result_of(watch_value(&s, w)), "0xa");
+    let id = s.evaluate("x", EvalContext::Hover);
+    let mut hover = None;
+    pump_until(&mut s, &mut ev, |e, _| match e {
+        DebugEvent::Evaluated { id: got, result, .. } if *got == id => {
+            hover = result.clone().ok().map(|v| v.result);
+            true
+        }
+        _ => false,
+    });
+    assert_eq!(hover.as_deref(), Some("0x1"));
+    // The fake adapter does not advertise value formatting: no `format` on the wire.
+    assert!(requests(&log).iter().all(|r| r["arguments"].get("format").is_none()));
+
+    s.set_hex(false);
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "1");
+    assert_eq!(result_of(watch_value(&s, w)), "10");
+}
+
+#[test]
 fn logpoints_and_hit_conditions_are_emulated() {
     let dir = tempfile::tempdir().unwrap();
     let (adapter, log) = fake(dir.path(), "early");

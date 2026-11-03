@@ -132,7 +132,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     frames(&mut lu, &mut app.debugger);
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
-    variables(&mut ru, &mut app.debugger);
+    if variables(&mut ru, &mut app.debugger) {
+        app.toggle_hex_values();
+    }
     ui.advance_cursor_after_rect(avail);
 }
 
@@ -209,7 +211,8 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
     }
 }
 
-fn variables(ui: &mut Ui, dbg: &mut Debugger) {
+/// The Watches and Variables list; true when the user asked to switch the integer format.
+fn variables(ui: &mut Ui, dbg: &mut Debugger) -> bool {
     let p = rc_kit::pal(ui);
     // "Evaluate or add a watch" field (Enter adds a watch, as the + button).
     let mut add = false;
@@ -230,7 +233,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
             s.add_watch(e.trim().to_string());
         }
     }
-    let Some(s) = &mut dbg.session else { return };
+    let Some(s) = &mut dbg.session else { return false };
     let stopped = s.state().is_stopped();
     let mut rows: Vec<Row> = Vec::new();
     for w in s.watches() {
@@ -266,6 +269,8 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     let mut toggle = None;
     let mut remove = None;
     let mut add_watch = None;
+    let hex = dbg.hex;
+    let mut toggle_hex = false;
     egui::ScrollArea::vertical().id_salt("dbg_vars").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if rows.is_empty() {
@@ -292,6 +297,10 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
                 if !row.scope && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
                     ui.ctx().copy_text(row.value.clone());
                 }
+                ui.separator();
+                if theme::menu_item(ui, hex.then_some(ico::CHECKMARK), tr("Show Integers in Hex"), false).clicked() {
+                    toggle_hex = true;
+                }
             });
         }
     });
@@ -306,6 +315,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     if let Some(e) = add_watch {
         s.add_watch(e);
     }
+    toggle_hex
 }
 
 fn scopes_flat(name: &str) -> bool {

@@ -119,6 +119,8 @@ pub enum Action {
     RunToCursor,
     AttachToProcess,
     Evaluate,
+    /// Integers in hexadecimal or decimal in the debugger.
+    ToggleHexValues,
     ShowSettings,
     ProjectEnvironment,
     ToggleProjectWindow,
@@ -211,6 +213,7 @@ impl Action {
                 | RunToCursor
                 | AttachToProcess
                 | Evaluate
+                | ToggleHexValues
                 | ShowSettings
                 | ProjectEnvironment
                 | ToggleProjectWindow
