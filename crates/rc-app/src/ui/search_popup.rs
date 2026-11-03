@@ -15,9 +15,14 @@ enum Hit {
     Symbol(crate::search::SymbolHit),
     Action(&'static str, rc_editor::Action),
     Text(TextHit),
+    /// "… more" under a group of All: opens that tab with every result.
+    More(SeTab),
 }
 
 const ROW_H: f32 = 28.0;
+/// Rows of a group in All, and of the Files tab.
+const ALL_LIMIT: usize = 8;
+const FILES_LIMIT: usize = 500;
 
 fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static str>, Hit)> {
     let mut out: Vec<(Option<&'static str>, Hit)> = Vec::new();
@@ -25,8 +30,9 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
     let want = |t: SeTab| se.tab == SeTab::All || se.tab == t;
     // Files: recent files first when nothing is typed.
     if want(SeTab::Files) {
-        let limit = if se.tab == SeTab::All { 8 } else { 60 };
+        let limit = if se.tab == SeTab::All { ALL_LIMIT } else { FILES_LIMIT };
         let mut files: Vec<Hit> = Vec::new();
+        let mut more = false;
         if text.is_empty() {
             for p in app.docs.recent.iter() {
                 let rel = app.workspace.as_ref().and_then(|w| p.strip_prefix(&w.ws.root).ok()).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_else(|| p.display().to_string());
@@ -40,14 +46,20 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
             let recent: Vec<String> = app.docs.recent.iter().filter_map(|p| snap.relative(p)).collect();
             let boost = |e: &rc_search::FileEntry| if recent.iter().any(|r| r == e.rel()) { 5_000 } else { 0 };
             // A package scope filters afterwards, so it asks for more.
-            let wanted = if matches!(se.scope, crate::search::SeScope::Package { .. }) { limit * 20 } else { limit };
+            // One more than shown tells whether All needs its "more" row.
+            let wanted = if matches!(se.scope, crate::search::SeScope::Package { .. }) { limit * 20 } else { limit + 1 };
             let res = rc_search::search_files(&snap, &q, &boost, wanted);
-            for m in res.matches.into_iter().filter(|m| se.in_scope(m.entry.rel())).take(limit) {
+            let mut found = res.matches.into_iter().filter(|m| se.in_scope(m.entry.rel()));
+            for m in found.by_ref().take(limit) {
                 files.push(Hit::File { path: snap.abs_path(&m.entry), rel: m.entry.rel().to_string(), indices: m.indices, line: q.line, col: q.column });
             }
+            more = found.next().is_some();
         }
         for (i, f) in files.into_iter().enumerate() {
             out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Files")), f));
+        }
+        if more && se.tab == SeTab::All {
+            out.push((None, Hit::More(SeTab::Files)));
         }
     }
     if want(SeTab::Classes) || want(SeTab::Symbols) {
@@ -107,21 +119,25 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     ctx.input_mut(|i| {
         if i.consume_key(egui::Modifiers::NONE, Key::ArrowDown) {
             se.selected = (se.selected + 1).min(hits.len().saturating_sub(1));
+            se.reveal = true;
         }
         if i.consume_key(egui::Modifiers::NONE, Key::ArrowUp) {
             se.selected = se.selected.saturating_sub(1);
+            se.reveal = true;
         }
         // Shift+Tab first: `consume_key` ignores an extra Shift, so plain Tab would take it.
         if i.consume_key(egui::Modifiers::SHIFT, Key::Tab) {
             let k = SeTab::ALL.iter().position(|t| *t == se.tab).unwrap_or(0);
             se.tab = SeTab::ALL[(k + SeTab::ALL.len() - 1) % SeTab::ALL.len()];
             se.selected = 0;
+            se.reveal = true;
             se.focus = true;
         }
         if i.consume_key(egui::Modifiers::NONE, Key::Tab) {
             let k = SeTab::ALL.iter().position(|t| *t == se.tab).unwrap_or(0);
             se.tab = SeTab::ALL[(k + 1) % SeTab::ALL.len()];
             se.selected = 0;
+            se.reveal = true;
             se.focus = true;
         }
         if i.consume_key(egui::Modifiers::NONE, Key::Escape) {
@@ -161,6 +177,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         if resp.clicked() {
                             se.tab = t;
                             se.selected = 0;
+                            se.reveal = true;
                             se.focus = true;
                         }
                     }
@@ -180,6 +197,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         if let Some(s) = chosen {
                             se.scope = s;
                             se.selected = 0;
+                            se.reveal = true;
                             se.focus = true;
                         }
                     });
@@ -204,6 +222,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 }
                 if te.changed() {
                     se.selected = 0;
+                    se.reveal = true;
                 }
                 ui.allocate_rect(ir, Sense::hover());
                 ui.add_space(6.0);
@@ -220,7 +239,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                     ui.painter().text(r.center(), Align2::CENTER_CENTER, msg, FontId::proportional(13.0), p.muted);
                     return;
                 }
-                egui::ScrollArea::vertical().max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+                // The list grows down to the bottom of the window. The area only offers last
+                // frame's size, so the minimum height lets it grow past it (then it shrinks to
+                // the rows). Only a selection moved by the keyboard or a new query scrolls it: a
+                // wheel scroll stays where it is left.
+                let max_h = (screen.bottom() - ui.cursor().top() - 60.0).max(ROW_H * 4.0);
+                let reveal = std::mem::take(&mut se.reveal);
+                egui::ScrollArea::vertical().id_salt("search_everywhere_results").max_height(max_h).min_scrolled_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for (i, (group, hit)) in hits.iter().enumerate() {
                         if let Some(g) = group {
@@ -230,9 +255,20 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
                         if i == se.selected {
                             ui.painter().rect_filled(r, 6.0, p.selection);
-                            ui.scroll_to_rect(r, None);
+                            if reveal {
+                                ui.scroll_to_rect(r, None);
+                            }
                         } else if resp.hovered() {
                             ui.painter().rect_filled(r, 6.0, p.row_hover);
+                        }
+                        if let Hit::More(_) = hit {
+                            let more = tr("… more");
+                            ui.painter().text(pos2(r.left() + 34.0, r.center().y), Align2::LEFT_CENTER, more, FontId::proportional(12.5), p.muted);
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, more));
+                            if resp.clicked() {
+                                choose = Some(hit.clone());
+                            }
+                            continue;
                         }
                         let (icon, name, secondary, shortcut, highlight): (Ico, String, String, String, Vec<usize>) = match hit {
                             Hit::File { rel, indices, .. } => {
@@ -247,21 +283,25 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                                 let file = t.rel.rsplit('/').next().unwrap_or(&t.rel);
                                 (icons::for_file(file), t.preview.clone(), String::new(), format!("{file}:{}", t.line + 1), t.highlight.clone())
                             }
+                            Hit::More(_) => continue,
                         };
-                        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
-                        // Name with the matched chars in bold accent.
-                        let mut job = egui::text::LayoutJob::default();
-                        for (k, ch) in name.chars().enumerate() {
-                            let (font, color) = if highlight.contains(&k) { (theme::bold(13.0), p.accent) } else { (FontId::proportional(13.0), p.text) };
-                            job.append(&ch.to_string(), 0.0, egui::TextFormat { font_id: font, color, ..Default::default() });
-                        }
-                        let g = ui.painter().layout_job(job);
-                        ui.painter().galley(pos2(r.left() + 34.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
-                        if !secondary.is_empty() {
-                            ui.painter().text(pos2(r.left() + 42.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, &secondary, FontId::proportional(12.0), p.muted);
-                        }
-                        if !shortcut.is_empty() {
-                            ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
+                        // Rows scrolled out of view are laid out but not painted.
+                        if ui.is_rect_visible(r) {
+                            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
+                            // Name with the matched chars in bold accent.
+                            let mut job = egui::text::LayoutJob::default();
+                            for (k, ch) in name.chars().enumerate() {
+                                let (font, color) = if highlight.contains(&k) { (theme::bold(13.0), p.accent) } else { (FontId::proportional(13.0), p.text) };
+                                job.append(&ch.to_string(), 0.0, egui::TextFormat { font_id: font, color, ..Default::default() });
+                            }
+                            let g = ui.painter().layout_job(job);
+                            ui.painter().galley(pos2(r.left() + 34.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
+                            if !secondary.is_empty() {
+                                ui.painter().text(pos2(r.left() + 42.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, &secondary, FontId::proportional(12.0), p.muted);
+                            }
+                            if !shortcut.is_empty() {
+                                ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
+                            }
                         }
                         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
                         if resp.clicked() {
@@ -290,6 +330,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Some(Hit::Action(_, a)) => {
             app.pending.push(a);
             close = true;
+        }
+        Some(Hit::More(tab)) => {
+            se.tab = tab;
+            se.selected = 0;
+            se.reveal = true;
+            se.focus = true;
         }
         Some(Hit::Text(t)) => {
             app.open_at(&t.path, t.line, t.col);
