@@ -202,6 +202,17 @@ fn rust_language_features() {
     write(&main, saved);
     app.insight.did_save(&main);
     pump(&mut app, "the error of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("E0308") && x.message.contains("mismatched types"))));
+
+    // Its hover offers rustc's explanation of E0308 (I-24), which opens in a read-only tab.
+    let pos = saved.find("\"text\"").unwrap() + 1;
+    let i = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::HoverAt { pos, screen: egui::pos2(300.0, 200.0) }]);
+    pump(&mut app, "the hover of the error", |a| a.docs.active_doc().and_then(|d| d.editor.popups.hover.as_ref()).is_some_and(|h| h.explain.as_deref() == Some("E0308")));
+    app.explain_error("E0308");
+    pump(&mut app, "the explanation", |a| {
+        a.poll_explanation();
+        a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md") && d.editor.buffer.rope().to_string().contains("Expected type did not match"))
+    });
     app.insight.stop();
 }
 
@@ -740,6 +751,197 @@ fn logpoints_print_and_a_breakpoint_can_remove_itself() {
 }
 
 #[test]
+fn integers_switch_to_hexadecimal_while_paused() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    const MAIN: &str = "fn main() {\n    let n: u32 = 255;\n    let m: i32 = -1;\n    let f: f64 = 2.5;\n    let s = \"hi\";\n    std::hint::black_box((n, m, f, s));\n    println!(\"{n} {m} {f} {s}\");\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let ctx = egui::Context::default();
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(6, BreakpointKind::Normal);
+    app.run_ide_action(&ctx, Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    assert_eq!(local(&mut app, "n"), "255");
+    let pid = app.debugger.session.as_ref().and_then(|s| s.debuggee_pid());
+    let w = app.debugger.session.as_mut().unwrap().add_watch("n + 1");
+
+    let settle = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            // The Variables view asks for them while it is shown.
+            locals(app);
+            assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let inline = |a: &CrabCraftApp, line: usize| a.docs.active_doc().and_then(|d| d.editor.debug_values.get(&line).cloned()).unwrap_or_default();
+    let watch = |a: &CrabCraftApp| match a.debugger.session.as_ref().and_then(|s| s.watches().iter().find(|x| x.id == w)).map(|x| x.value.clone()) {
+        Some(rc_dap::WatchValue::Value(v)) => v.result,
+        _ => String::new(),
+    };
+    settle(&mut app, "decimal values", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+
+    // GDB prints in hexadecimal itself (`ValueFormat`, its `output-radix 16`).
+    assert!(app.debugger.session.as_ref().unwrap().capabilities().supports_value_formatting_options);
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    assert!(app.settings.debugger_hex);
+    settle(&mut app, "hexadecimal values", &|a| inline(a, 1) == "n = 0xff" && watch(a) == "0x100");
+    assert_eq!(local(&mut app, "n"), "0xff");
+    assert_eq!(local(&mut app, "m"), "0xffffffff");
+    assert_eq!(local(&mut app, "f"), "2.5");
+    assert!(local(&mut app, "s").contains("\"hi\""), "{}", local(&mut app, "s"));
+    assert_eq!(inline(&app, 2), "m = 0xffffffff");
+    app.debugger.evaluate("n".into());
+    settle(&mut app, "the evaluation", &|a| matches!(a.debugger.eval, Some((_, _, Some(_)))));
+    match &app.debugger.eval {
+        Some((_, _, Some(Ok(v)))) => assert_eq!(v.result, "0xff"),
+        other => panic!("{other:?}"),
+    }
+
+    // And back, in the same session.
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    assert!(!app.settings.debugger_hex);
+    settle(&mut app, "decimal values again", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+    assert_eq!(local(&mut app, "m"), "-1");
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), pid);
+    assert!(app.debugger.stopped());
+    app.debugger.stop();
+}
+
+const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad, 0xbe, 0xef];\n    std::hint::black_box(&mut bytes);\n    bytes[1] = 0x42;\n    std::hint::black_box(&bytes);\n    println!(\"{bytes:?}\");\n}\n";
+
+/// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
+fn paused_on_bytes(dir: &Path) -> CrabCraftApp {
+    use rc_editor::{Action, BreakpointKind};
+    let root = dir.join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MEMORY_MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    app
+}
+
+/// Pumps the debugger until `done`.
+fn settle_debugger(app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool) {
+    let start = Instant::now();
+    while !done(app) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}: {:?}", app.debugger.memory.error);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Opens the Memory tab on the local `bytes`, as its context menu does, and waits for the page.
+fn show_bytes_in_memory(app: &mut CrabCraftApp) {
+    let bytes = locals(app).into_iter().find(|v| v.name == "bytes").unwrap();
+    app.debugger.show_memory_of(bytes.memory_reference.as_deref(), &bytes.evaluate_name.clone().unwrap_or_else(|| bytes.name.clone()));
+    assert!(app.debugger.show_memory);
+    settle_debugger(app, "the memory", &|a| a.debugger.memory.block.is_some() && !a.debugger.memory.loading());
+}
+
+/// Steps over the line that changes a byte and waits for the page to be read again.
+fn step_over_the_byte_change(app: &mut CrabCraftApp) {
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::StepOver);
+    settle_debugger(app, "the step", &|a| a.debugger.stopped() && a.debugger.memory.previous.is_some() && a.debugger.memory.block.is_some() && !a.debugger.memory.loading());
+}
+
+#[test]
+fn the_memory_view_shows_bytes_and_highlights_what_a_step_changed() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_on_bytes(dir.path());
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    assert!(caps.supports_read_memory_request, "GDB should answer readMemory");
+
+    // An array has no memory reference of its own: the view reads at `&bytes`.
+    show_bytes_in_memory(&mut app);
+    assert_eq!(app.debugger.memory.error, None);
+    assert_eq!(app.debugger.memory.input, "&bytes");
+    let block = app.debugger.memory.block.clone().unwrap();
+    assert_eq!(block.bytes.len(), crate::memory_view::PAGE);
+    let first = rc_dap::memory::row_text(&block.rows()[0]);
+    assert!(first.contains("  de ad be ef "), "{first}");
+    assert!(block.changed_since(app.debugger.memory.previous.as_ref()).iter().all(|c| !c));
+    // GDB gives a memory reference for pointers (`&bytes`), the address the view shows.
+    app.debugger.evaluate("&bytes".into());
+    settle_debugger(&mut app, "the evaluation", &|a| matches!(a.debugger.eval, Some((_, _, Some(_)))));
+    match &app.debugger.eval {
+        Some((_, _, Some(Ok(v)))) => assert_eq!(v.memory_reference.as_deref().and_then(rc_dap::memory::parse_address), Some(block.address)),
+        other => panic!("{other:?}"),
+    }
+
+    // Step over `bytes[1] = 0x42`: the page is read again and only that byte changed.
+    let address = block.address;
+    step_over_the_byte_change(&mut app);
+    let now = app.debugger.memory.block.clone().unwrap();
+    assert_eq!(now.address, address);
+    assert!(rc_dap::memory::row_text(&now.rows()[0]).contains("  de 42 be ef "));
+    let changed = now.changed_since(app.debugger.memory.previous.as_ref());
+    assert!(changed[1], "the changed byte is highlighted");
+    assert!(!changed[0] && !changed[2] && !changed[3]);
+
+    // Paging and a typed address read on demand.
+    app.debugger.memory_page(1);
+    settle_debugger(&mut app, "the next page", &|a| !a.debugger.memory.loading());
+    assert_eq!(app.debugger.memory.block.as_ref().map(|b| b.address), Some(address + crate::memory_view::PAGE as u64));
+    app.debugger.memory.input = format!("{address:#x}");
+    app.debugger.go_to_memory();
+    settle_debugger(&mut app, "the typed address", &|a| !a.debugger.memory.loading());
+    assert_eq!(app.debugger.memory.block.as_ref().and_then(|b| b.get(address + 1)), Some(Some(0x42)));
+    // Address 0 cannot be read: shown as unreadable, with the reason.
+    app.debugger.memory.input = "0x0".into();
+    app.debugger.go_to_memory();
+    settle_debugger(&mut app, "the unreadable page", &|a| !a.debugger.memory.loading());
+    assert!(app.debugger.memory.error.is_some());
+    assert!(app.debugger.memory.block.as_ref().is_some_and(|b| b.bytes.iter().all(|x| x.is_none())));
+    app.debugger.stop();
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/memory-view-*.png"]
+fn memory_view_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_on_bytes(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        show_bytes_in_memory(&mut app);
+        step_over_the_byte_change(&mut app);
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("memory-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
+#[test]
 fn step_into_walks_past_the_standard_library() {
     use rc_editor::{Action, BreakpointKind};
     const MAIN: &str = "fn own(text: &str) -> usize {\n    text.len()\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let upper = text.to_uppercase();\n    let n = own(&upper);\n    println!(\"{n}\");\n}\n";
@@ -1051,6 +1253,10 @@ fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
 
 #[test]
 fn tests_run_with_nextest_when_the_setting_is_on() {
+    if std::process::Command::new("cargo").args(["nextest", "--version"]).output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: cargo-nextest is not installed");
+        return;
+    }
     const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
@@ -3053,4 +3259,181 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
     pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope().to_string() != text);
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main(){println!(\"a\");}\n\nfn other() {\n    let x = 1;\n    let _y = x;\n}\n");
+}
+
+/// Code that a `cfg` turns off is faded in the editor: the target comes from `rustc --print
+/// cfg` and the features from the manifest's `default`. It needs no language server.
+#[test]
+fn code_disabled_by_cfg_is_faded() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n");
+    let lib = "#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}\n\n#[cfg(feature = \"std\")]\npub fn with_std() {}\n\n#[cfg(not(any(unix, windows)))]\npub fn elsewhere() {}\n\npub fn always() -> u32 {\n    2\n}\n";
+    write(&root.join("src/lib.rs"), lib);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let faded = |a: &mut CrabCraftApp| -> Vec<String> {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.inactive().iter().map(|r| text.chars().skip(r.start).take(r.end - r.start).collect()).collect()
+    };
+    pump(&mut app, "the cfg of the crate", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some())
+    });
+    assert_eq!(faded(&mut app), vec!["#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}".to_string(), "#[cfg(not(any(unix, windows)))]\npub fn elsewhere() {}".to_string()]);
+    // Typing keeps the faded range on the item.
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "// note\n");
+    assert!(faded(&mut app)[0].starts_with("#[cfg(feature = \"extra\")]"));
+    // Untrusted: no language server ran.
+    assert!(app.insight.session.is_none());
+}
+
+/// A feature turned on from the gutter of `Cargo.toml` stops the fading of its code, is saved
+/// with the session and reaches rust-analyzer, whose build script run sees it.
+#[test]
+fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
+    use rc_editor::GutterIcon;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}\n\npub fn always() -> u32 {\n    2\n}\n");
+    // Build scripts see the enabled features as `CARGO_FEATURE_*`.
+    write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_FEATURES\", format!(\"extra={}\", std::env::var(\"CARGO_FEATURE_EXTRA\").is_ok())).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    pump(&mut app, "the cfg of the crate", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some())
+    });
+    let faded = |a: &mut CrabCraftApp| -> usize {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        doc.editor.inactive().len()
+    };
+    assert_eq!(faded(&mut app), 1, "extra is off");
+
+    app.open_file(&root.join("Cargo.toml"));
+    app.update_feature_icons();
+    let icons = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.gutter_icons.clone();
+    // default, std (on through default) and extra (off), on lines 6 to 8.
+    assert_eq!(icons(&app).into_iter().collect::<Vec<_>>(), vec![(6, GutterIcon::FeatureOn), (7, GutterIcon::FeatureOn), (8, GutterIcon::FeatureOff)]);
+    // A feature that default turns on stays on.
+    app.toggle_feature_at(7);
+    assert!(app.cargo_features.is_empty());
+    app.toggle_feature_at(8);
+    assert_eq!(app.cargo_features, vec!["demo/extra".to_string()]);
+    app.update_feature_icons();
+    assert_eq!(icons(&app).get(&8), Some(&GutterIcon::FeatureOn));
+
+    app.open_file(&root.join("src/lib.rs"));
+    assert_eq!(faded(&mut app), 0, "extra is on");
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_features, vec!["demo/extra".to_string()]);
+
+    // Trusted, rust-analyzer builds with the feature.
+    app.trust_project();
+    pump(&mut app, "the build script with extra", |_| std::fs::read_to_string(root.join("BUILD_FEATURES")).is_ok_and(|t| t == "extra=true"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // Turned off, the running server reloads the workspace without restarting.
+    let started = app.insight.session.as_ref().map(|s| s.started);
+    std::fs::remove_file(root.join("BUILD_FEATURES")).unwrap();
+    app.open_file(&root.join("Cargo.toml"));
+    app.toggle_feature_at(8);
+    assert!(app.cargo_features.is_empty());
+    assert_eq!(app.insight.session.as_ref().map(|s| s.started), started);
+    pump(&mut app, "the build script without extra", |_| std::fs::read_to_string(root.join("BUILD_FEATURES")).is_ok_and(|t| t == "extra=false"));
+    app.insight.stop();
+
+    // A feature removed from the manifest is dropped once the project is read again.
+    app.set_cargo_feature("demo", "extra", true);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\n\n[workspace]\n");
+    app.reload_cargo();
+    pump(&mut app, "the feature dropped", |a| a.cargo_features.is_empty());
+}
+
+/// The target picked in the status bar list flips the cfg fading (`windows` on, `unix` off), is
+/// saved with the session and reaches rust-analyzer as `cargo.target`, whose build script run
+/// sees it as `TARGET`, live.
+#[test]
+fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
+    const WINDOWS: &str = "x86_64-pc-windows-msvc";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), "#[cfg(windows)]\npub fn on_windows() {}\n\n#[cfg(unix)]\npub fn on_unix() {}\n\npub fn always() -> u32 {\n    2\n}\n");
+    write(&root.join(".cargo/config.toml"), "[build]\n# a board\ntarget = \"thumbv7em-none-eabihf\"\n");
+    write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_TARGET\", std::env::var(\"TARGET\").unwrap()).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let faded = |a: &mut CrabCraftApp| -> Vec<String> {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.inactive().iter().map(|r| text.chars().skip(r.start).take(r.end - r.start).collect()).collect()
+    };
+    pump(&mut app, "the cfg and the targets", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some()) && !a.triple_choices.is_empty()
+    });
+    // The project builds for a board by default: neither unix nor windows.
+    pump(&mut app, "the cfg of the board", |a| faded(a).len() == 2);
+    assert_eq!(app.analysis_triple(), Some("thumbv7em-none-eabihf"));
+    // The list: the host first, then the project's target, then rustup's.
+    let host = app.host_triple.clone().expect("rustc -vV gives the host");
+    assert!(app.triple_choices[0].host && app.triple_choices[0].installed && app.triple_choices[0].triple == host);
+    assert!(app.triple_choices[1].from_config && app.triple_choices[1].triple == "thumbv7em-none-eabihf");
+    let windows = app.triple_choices.iter().find(|c| c.triple == WINDOWS).expect("rustup lists the targets it can install");
+    assert!(!windows.installed);
+
+    // An invalid triple never reaches a process.
+    app.set_cargo_target(Some("--print=sysroot".into()));
+    assert_eq!(app.cargo_target, None);
+    app.set_cargo_target(Some(WINDOWS.into()));
+    assert_eq!(app.analysis_triple(), Some(WINDOWS));
+    pump(&mut app, "the cfg of Windows", |a| faded(a) == vec!["#[cfg(unix)]\npub fn on_unix() {}".to_string()]);
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_target, WINDOWS);
+
+    // Opened again, the session brings the target back.
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(again.cargo_target.as_deref(), Some(WINDOWS));
+    drop(again);
+
+    // Trusted, rust-analyzer analyses for the target: its build script run sees it.
+    app.trust_project();
+    pump(&mut app, "the build script for Windows", |_| std::fs::read_to_string(root.join("BUILD_TARGET")).is_ok_and(|t| t == WINDOWS));
+    let settings = app.insight.session.as_ref().map(|s| s.ra_settings().clone()).unwrap();
+    assert_eq!(rc_lsp::rust_analyzer::configuration_reply(&serde_json::json!({ "items": [{ "section": "rust-analyzer" }] }), &settings)[0]["cargo"]["target"], serde_json::json!(WINDOWS));
+    // The host, the running server reloads the workspace without restarting.
+    let started = app.insight.session.as_ref().map(|s| s.started);
+    std::fs::remove_file(root.join("BUILD_TARGET")).unwrap();
+    app.set_cargo_target(Some(host.clone()));
+    assert_eq!(app.cargo_target.as_deref(), Some(host.as_str()));
+    assert_eq!(app.insight.session.as_ref().map(|s| s.started), started);
+    assert_eq!(app.insight.session.as_ref().and_then(|s| s.ra_settings().target.clone()), Some(host.clone()));
+    pump(&mut app, "the build script for the host", |_| std::fs::read_to_string(root.join("BUILD_TARGET")).is_ok_and(|t| t == host));
+    pump(&mut app, "the cfg of the host", |a| faded(a) == vec!["#[cfg(windows)]\npub fn on_windows() {}".to_string()]);
+    // Back to the default (the board): nothing is sent, rust-analyzer reads the config.
+    app.set_cargo_target(None);
+    assert_eq!(app.insight.session.as_ref().and_then(|s| s.ra_settings().target.clone()), None);
+    pump(&mut app, "the cfg of the board again", |a| faded(a).len() == 2);
+    app.insight.stop();
 }

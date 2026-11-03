@@ -161,6 +161,10 @@ fn tests_report_each_outcome_with_the_failure_output() {
 
 #[test]
 fn nextest_reports_each_outcome_with_the_failure_output() {
+    if std::process::Command::new("cargo").args(["nextest", "--version"]).output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: cargo-nextest is not installed");
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let lib = "pub fn two() -> u32 { 2 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn good() { assert_eq!(super::two(), 2); }\n    #[test]\n    fn bad() { println!(\"said\"); assert_eq!(super::two(), 3, \"not three\"); }\n    #[test]\n    #[ignore]\n    fn skipped() {}\n}\n";
     project(dir.path(), "fn main() {}\n", lib);
@@ -190,4 +194,39 @@ fn tests_that_do_not_compile_report_a_failed_build() {
     let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), false, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, TestEvent::Finished(_) | TestEvent::Failed(_)));
     assert!(events.iter().any(|e| matches!(e, TestEvent::Build(BuildEvent::Finished(r)) if !r.success && r.errors > 0)), "{events:?}");
+}
+
+#[test]
+fn the_dependency_tree_comes_from_cargo_tree_without_building_or_locking() {
+    use rc_cargo::{DepKind, load_tree_logged};
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["helper", "gen", "check"] {
+        let d = dir.path().join(name);
+        std::fs::create_dir_all(d.join("src")).unwrap();
+        std::fs::write(d.join("Cargo.toml"), format!("[package]\nname = \"{name}\"\nversion = \"0.2.0\"\nedition = \"2021\"\n")).unwrap();
+        std::fs::write(d.join("src/lib.rs"), "").unwrap();
+    }
+    std::fs::create_dir_all(dir.path().join("src")).unwrap();
+    std::fs::write(
+        dir.path().join("Cargo.toml"),
+        "[package]\nname = \"crabby\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nhelper = { path = \"helper\" }\n\n[build-dependencies]\ngen = { path = \"gen\" }\n\n[dev-dependencies]\ncheck = { path = \"check\" }\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("src/lib.rs"), "").unwrap();
+    std::fs::write(dir.path().join("build.rs"), "fn main() { std::fs::write(\"RAN\", \"\").unwrap(); }\n").unwrap();
+    let manifest = dir.path().join("Cargo.toml");
+    // Without a lock file it fails rather than write one.
+    let (result, log) = load_tree_logged(&cargo(), &manifest, "crabby");
+    assert!(result.is_err() && !log.success, "{result:?}");
+    assert!(!dir.path().join("Cargo.lock").exists());
+    let status = cargo().std_command().args(["generate-lockfile", "--offline", "--manifest-path"]).arg(&manifest).status().unwrap();
+    assert!(status.success());
+    let (result, log) = load_tree_logged(&cargo(), &manifest, "crabby");
+    let nodes = result.unwrap();
+    assert!(log.success && log.command.starts_with("cargo tree"));
+    let short: Vec<(usize, &str, DepKind)> = nodes.iter().map(|n| (n.depth, n.name.as_str(), n.kind)).collect();
+    assert_eq!(short, vec![(0, "crabby", DepKind::Normal), (1, "helper", DepKind::Normal), (1, "gen", DepKind::Build), (1, "check", DepKind::Dev)]);
+    assert_eq!(nodes[1].version, "0.2.0");
+    assert!(!dir.path().join("RAN").exists());
+    assert!(!dir.path().join("target").exists());
 }

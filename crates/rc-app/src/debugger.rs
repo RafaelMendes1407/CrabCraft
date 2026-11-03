@@ -40,6 +40,8 @@ pub struct Debugger {
     pub new_watch: String,
     /// Breakpoints stay in the editors but do not stop the program.
     pub muted: bool,
+    /// Integers shown in hexadecimal (variables, watches, inline values, evaluation).
+    pub hex: bool,
     /// The stop and frame whose values the editor shows.
     inline_frame: Option<(u64, i64)>,
     /// The command being typed in the debugger's console.
@@ -58,6 +60,9 @@ pub struct Debugger {
     /// Breakpoints that remove themselves at their first stop, by (file, 0-based line).
     pub once: HashSet<(PathBuf, usize)>,
     pub show_console: bool,
+    /// The Memory tab is shown (instead of Threads & Variables or the Console).
+    pub show_memory: bool,
+    pub memory: crate::memory_view::MemoryView,
     /// Breakpoint set by Run to Cursor, removed at the next stop (file, 1-based line).
     temp: Option<(PathBuf, u32)>,
     /// URLs the debugged web app listens on.
@@ -86,10 +91,13 @@ impl Debugger {
             logs: HashMap::new(),
             once: HashSet::new(),
             muted: false,
+            hex: false,
             inline_frame: None,
             console_input: String::new(),
             console_commands: Vec::new(),
             show_console: false,
+            show_memory: false,
+            memory: Default::default(),
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),
@@ -145,7 +153,10 @@ impl Debugger {
         self.console = Some(console);
         self.name = name.to_string();
         self.expanded.clear();
-        self.session = Some(DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone()));
+        self.memory.reset();
+        let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
+        self.session = Some(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 
@@ -164,8 +175,10 @@ impl Debugger {
         self.console = Some(console);
         self.name = config.name.clone();
         self.expanded.clear();
+        self.memory.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
         }
@@ -200,8 +213,10 @@ impl Debugger {
         self.console = Some(console);
         self.name = config.name.clone();
         self.expanded.clear();
+        self.memory.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
         }
@@ -212,6 +227,49 @@ impl Debugger {
     pub fn stop(&mut self) {
         if let Some(s) = &mut self.session {
             s.stop();
+        }
+    }
+
+    /// Shows integers in hexadecimal or decimal; a paused session shows them again in the new
+    /// format without restarting (variables, watches, inline values, the Evaluate result).
+    pub fn set_hex(&mut self, hex: bool) {
+        if self.hex == hex {
+            return;
+        }
+        self.hex = hex;
+        self.inline_frame = None;
+        self.hover_result = None;
+        if let Some(s) = &mut self.session {
+            s.set_hex(hex);
+        }
+        if let Some((_, expression, _)) = &self.eval
+            && self.stopped()
+        {
+            let expression = expression.clone();
+            self.evaluate(expression);
+        }
+    }
+
+    /// Shows the memory of a variable or watch in the Memory tab: its memory reference, or
+    /// the address of `expression`.
+    pub fn show_memory_of(&mut self, memory_reference: Option<&str>, expression: &str) {
+        let Some(s) = &mut self.session else { return };
+        self.memory.open_variable(s, memory_reference, expression);
+        self.show_memory = true;
+        self.show_console = false;
+    }
+
+    /// Shows the memory at the address or expression typed in the Memory tab.
+    pub fn go_to_memory(&mut self) {
+        let Some(s) = &mut self.session else { return };
+        let text = self.memory.input.clone();
+        self.memory.go(s, &text);
+    }
+
+    /// The previous (`-1`) or next (`1`) page of the Memory tab.
+    pub fn memory_page(&mut self, pages: i64) {
+        if let Some(s) = &mut self.session {
+            self.memory.page(s, pages);
         }
     }
 
@@ -323,6 +381,7 @@ impl Debugger {
         let Some(session) = &mut self.session else { return out };
         let events = session.pump();
         for ev in events {
+            self.memory.on_event(&ev, session);
             match ev {
                 DebugEvent::Build(rc_dotnet::BuildEvent::Output(line) | rc_dotnet::BuildEvent::Task(line)) => {
                     if let Some(c) = &self.console {
@@ -372,6 +431,7 @@ impl Debugger {
                     if let Some((path, line)) = session.execution_point() {
                         out.push(DebugOutput::ShowLine(path, line.saturating_sub(1) as usize));
                     }
+                    self.memory.on_stopped(session);
                     if info.reason == rc_dap::StopReason::Panic {
                         out.push(DebugOutput::Notify(tr("The program panicked").into(), true));
                     }

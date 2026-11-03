@@ -6,17 +6,22 @@
 //!   handshake, breakpoints, stops, frames, variables, watches, evaluation.
 //! - [`launch`]: what to debug ([`DebugTarget`]) and the adapter's launch arguments.
 //! - [`breakpoints`]: breakpoints by file and line, hit conditions and logpoints.
+//! - [`format`]: integers in hexadecimal for adapters that cannot print them so.
+//! - [`memory`]: `readMemory` answers decoded and laid out as a hex dump.
 
 pub mod breakpoints;
 pub mod client;
+pub mod format;
 pub mod gdb;
 pub mod launch;
+pub mod memory;
 pub mod netcoredbg;
 pub mod protocol;
 pub mod session;
 
 pub use breakpoints::{BreakpointSpec, BreakpointState, Breakpoints};
 pub use client::{DapClient, DapError, Incoming, Pending};
+pub use memory::MemoryBlock;
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
 pub use netcoredbg::{AdapterCommand, DownloadEvent};
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};

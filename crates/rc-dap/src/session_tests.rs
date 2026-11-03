@@ -203,6 +203,107 @@ fn handshake_order_stops_caches_watches_and_exit() {
 }
 
 #[test]
+fn hex_is_converted_here_when_the_adapter_cannot_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::ScopesLoaded { frame_id: 10 }));
+    let locals = s.scopes(10).unwrap()[0].variables_reference;
+    s.request_variables(locals);
+    let w = s.add_watch("x * 10");
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "1");
+    assert_eq!(result_of(watch_value(&s, w)), "10");
+
+    // Turning hex on asks again without restarting; objects stay as they are.
+    s.set_hex(true);
+    assert!(s.hex());
+    assert!(s.variables(locals).is_none());
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    let vars = s.variables(locals).unwrap();
+    assert_eq!((vars[0].value.as_str(), vars[1].value.as_str()), ("0x1", "{Order}"));
+    assert_eq!(result_of(watch_value(&s, w)), "0xa");
+    let id = s.evaluate("x", EvalContext::Hover);
+    let mut hover = None;
+    pump_until(&mut s, &mut ev, |e, _| match e {
+        DebugEvent::Evaluated { id: got, result, .. } if *got == id => {
+            hover = result.clone().ok().map(|v| v.result);
+            true
+        }
+        _ => false,
+    });
+    assert_eq!(hover.as_deref(), Some("0x1"));
+    // The fake adapter does not advertise value formatting: no `format` on the wire.
+    assert!(requests(&log).iter().all(|r| r["arguments"].get("format").is_none()));
+
+    s.set_hex(false);
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "1");
+    assert_eq!(result_of(watch_value(&s, w)), "10");
+}
+
+/// Pumps until the memory read `id` answers.
+fn memory_read(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<crate::memory::MemoryBlock, String> {
+    let mut got = None;
+    pump_until(s, ev, |e, _| match e {
+        DebugEvent::MemoryRead { id: i, result } if *i == id => {
+            got = Some(result.clone());
+            true
+        }
+        _ => false,
+    });
+    got.unwrap()
+}
+
+#[test]
+fn memory_is_read_decoded_and_partly_unreadable() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    // Not stopped yet: refused without asking the adapter.
+    let early = s.read_memory("0x1000", 0, 8);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::MemoryRead { id, result: Err(_) } if *id == early));
+    pump_until(&mut s, &mut ev, stopped);
+    assert!(s.capabilities().supports_read_memory_request);
+    assert_eq!(requests(&log)[0]["arguments"]["supportsMemoryReferences"], true);
+
+    let id = s.read_memory("0x1000", 0, 12);
+    let block = memory_read(&mut s, &mut ev, id).unwrap();
+    assert_eq!(block.address, 0x1000);
+    assert_eq!(block.bytes[..4], [Some(0xde), Some(0xad), Some(0xbe), Some(0xef)]);
+    assert_eq!(block.bytes[7], Some(1));
+    // Past the readable bytes: `unreadableBytes`.
+    assert_eq!(block.bytes[8..], [None, None, None, None]);
+    let req = requests(&log).into_iter().find(|r| r["command"] == "readMemory").unwrap();
+    assert_eq!((req["arguments"]["memoryReference"].as_str(), req["arguments"]["offset"].as_i64(), req["arguments"]["count"].as_i64()), (Some("0x1000"), Some(0), Some(12)));
+
+    // Before the readable bytes: the answer starts later; a huge count is cut.
+    let id = s.read_memory("0x1000", -2, 1 << 30);
+    let block = memory_read(&mut s, &mut ev, id).unwrap();
+    assert_eq!(block.address, 0xffe);
+    assert_eq!(block.bytes.len(), crate::memory::MAX_READ);
+    assert_eq!(block.bytes[..3], [None, None, Some(0xde)]);
+
+    // The next stop changes the last byte (x = 2).
+    s.continue_();
+    pump_until(&mut s, &mut ev, stopped);
+    let id = s.read_memory("0x1000", 0, 8);
+    let again = memory_read(&mut s, &mut ev, id).unwrap();
+    let first = crate::memory::MemoryBlock { address: 0x1000, bytes: vec![Some(0xde), Some(0xad), Some(0xbe), Some(0xef), Some(0), Some(0), Some(0), Some(1)] };
+    assert_eq!(again.changed_since(Some(&first)), [false, false, false, false, false, false, false, true]);
+    s.stop();
+}
+
+#[test]
 fn logpoints_and_hit_conditions_are_emulated() {
     let dir = tempfile::tempdir().unwrap();
     let (adapter, log) = fake(dir.path(), "early");

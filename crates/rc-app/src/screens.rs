@@ -1486,6 +1486,91 @@ fn live_templates_expand_with_tab_and_visit_their_stops() {
     assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("assert!(true);  \n"));
 }
 
+/// Types `text` one character at a time, as a user would (each one may open completion).
+fn type_chars(h: &mut Harness<'static, CrabCraftApp>, text: &str) {
+    for c in text.chars() {
+        h.event(egui::Event::Text(c.to_string()));
+        h.run_steps(2);
+    }
+}
+
+fn completion_labels(h: &Harness<'static, CrabCraftApp>) -> Vec<String> {
+    let doc = h.state().docs.active_doc().unwrap();
+    doc.editor.popups.completion.as_ref().map(|c| c.filtered.iter().map(|&i| c.items[i].label.clone()).collect()).unwrap_or_default()
+}
+
+/// Cargo.toml of a real Cargo workspace is completed without the language server: typing a
+/// key, a table header after `[`, ⌃Space for the keys of that table, then the value of a key
+/// with a fixed set, each accepted with Enter.
+#[test]
+fn cargo_toml_completes_tables_keys_and_values() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let file = root.join("alpha/Cargo.toml");
+    h.state_mut().open_file(&file);
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+
+    // Typing a key opens the list of [package] keys, with its description; `-` keeps it open.
+    type_chars(&mut h, "rust-v");
+    assert_eq!(completion_labels(&h).first().map(String::as_str), Some("rust-version"));
+    let c = h.state().docs.active_doc().unwrap().editor.popups.completion.clone().unwrap();
+    assert!(c.selected_item().and_then(|i| i.doc.as_deref()).is_some_and(|d| d.contains("Rust")));
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("edition = \"2021\"\nrust-version = \"\""), "{}", text(&h));
+    type_chars(&mut h, "1.80");
+
+    // `[` on a new line offers the tables the file does not have yet.
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "[");
+    let labels = completion_labels(&h);
+    assert!(labels.contains(&"dependencies".to_string()) && !labels.contains(&"package".to_string()), "{labels:?}");
+    type_chars(&mut h, "profile.rel");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("rust-version = \"1.80\"\n[profile.release]"), "{}", text(&h));
+
+    // ⌃Space lists the profile's keys; choosing `panic` goes on to its values.
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(2);
+    assert!(completion_labels(&h).contains(&"codegen-units".to_string()), "{:?}", completion_labels(&h));
+    type_chars(&mut h, "pan");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(completion_labels(&h), vec!["unwind", "abort"]);
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("[profile.release]\npanic = \"abort\""), "{}", text(&h));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-toml-completion.png"]
+fn cargo_toml_completion_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    h.state_mut().open_file(&root.join("alpha/Cargo.toml"));
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    type_chars(&mut h, "re");
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("cargo-toml-completion.png")).unwrap();
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/live-templates.png"]
 fn live_templates_capture() {
@@ -1605,4 +1690,537 @@ fn shortcuts_are_recorded_in_the_settings() {
     let ctx = h.ctx.clone();
     h.state_mut().apply_settings(&ctx, settings);
     assert_eq!(h.state().keymap.chord(rc_editor::Action::Commit), None);
+}
+
+/// [`two_crates`] where `alpha` uses `beta`, locked, with the Cargo window open.
+fn dependent_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    two_crates(&root);
+    std::fs::write(root.join("alpha/Cargo.toml"), "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nbeta = { path = \"../beta\" }\n\n[dev-dependencies]\nbeta = { path = \"../beta\" }\n").unwrap();
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    assert!(cargo.std_command().args(["generate-lockfile", "--offline"]).current_dir(&root).status().unwrap().success());
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2));
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(3);
+    (h, root)
+}
+
+/// Each member of the Cargo window has a Dependencies node; unfolding it reads `cargo tree`
+/// in the background and lists the dependencies, logged in the Sync tab.
+#[test]
+fn the_cargo_window_shows_the_dependency_tree() {
+    use crate::ui::cargo_window::DepTree;
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dependent_crates_harness(dir.path(), false);
+    assert!(h.state().cargo_trees.is_empty(), "nothing is read before the node is unfolded");
+    let before = h.get_all_by_label("beta").count();
+    // One Dependencies node per member: alpha's comes first.
+    h.get_all_by_label(rc_kit::i18n::tr("Dependencies")).next().unwrap().click();
+    h.run_steps(2);
+    run_frames(&mut h, "the dependency tree", |a| a.cargo_trees.values().any(|t| matches!(t, DepTree::Ready(_))));
+    let (key, tree) = h.state().cargo_trees.iter().next().unwrap();
+    assert_eq!(key, &(root.join("Cargo.toml"), "alpha".to_string()));
+    let DepTree::Ready(nodes) = tree else { panic!() };
+    let names: Vec<_> = nodes.iter().map(|n| (n.depth, n.name.as_str(), n.kind)).collect();
+    assert_eq!(names, vec![(0, "alpha", rc_cargo::DepKind::Normal), (1, "beta", rc_cargo::DepKind::Normal), (1, "beta", rc_cargo::DepKind::Dev)]);
+    h.run_steps(2);
+    assert_eq!(h.get_all_by_label("beta").count(), before + 2, "alpha's normal and dev dependency on beta");
+    assert!(h.state().sync_log.entries.iter().any(|e| e.log.command.starts_with("cargo tree")));
+    assert!(!root.join("target").exists());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-tree-*.png"]
+fn cargo_tree_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = dependent_crates_harness(dir.path(), dark);
+        h.get_all_by_label(rc_kit::i18n::tr("Dependencies")).next().unwrap().click();
+        h.run_steps(2);
+        run_frames(&mut h, "the tree", |a| a.cargo_trees.values().any(|t| matches!(t, crate::ui::cargo_window::DepTree::Ready(_))));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-tree-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A crate with `[features]`, its `Cargo.toml` open and the Cargo window shown.
+fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("Cargo.toml"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(3);
+    (h, root)
+}
+
+/// The Cargo window lists each member's features with a switch; the gutter of `Cargo.toml`
+/// shows the same state.
+#[test]
+fn the_cargo_window_turns_features_on_and_off() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = features_harness(dir.path(), false);
+    let icon = |h: &Harness<'static, CrabCraftApp>, line| h.state().docs.active_doc().and_then(|d| d.editor.gutter_icons.get(&line).copied());
+    assert_eq!(icon(&h, 8), Some(rc_editor::GutterIcon::FeatureOff));
+    h.get_by_label(rc_kit::i18n::tr("Features")).click();
+    h.run_steps(3);
+    h.get_by_label("extra").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_features, vec!["demo/extra".to_string()]);
+    assert_eq!(icon(&h, 8), Some(rc_editor::GutterIcon::FeatureOn));
+    // std is on through default: clicking it changes nothing.
+    h.get_by_label("std").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_features, vec!["demo/extra".to_string()]);
+    h.get_by_label("extra").click();
+    h.run_steps(3);
+    assert!(h.state().cargo_features.is_empty());
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-features-*.png"]
+fn cargo_features_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = features_harness(dir.path(), dark);
+        h.get_by_label(rc_kit::i18n::tr("Features")).click();
+        h.run_steps(3);
+        h.state_mut().set_cargo_feature("demo", "extra", true);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-features-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A crate with a crates.io dependency, a path dependency, two locked versions of a dev
+/// dependency and a feature, with a hand-written `Cargo.lock`; its `Cargo.toml` open. crates.io
+/// answers are given beforehand, so nothing goes to the network.
+fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::create_dir_all(root.join("helper/src")).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\nhelper = { path = \"helper\" }\n\n[dev-dependencies]\nrand = \"0.7\"\n\n[features]\nextra = []\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").unwrap();
+    std::fs::write(root.join("helper/Cargo.toml"), "[package]\nname = \"helper\"\nversion = \"0.2.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("helper/src/lib.rs"), "").unwrap();
+    let reg = "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n";
+    std::fs::write(
+        root.join("Cargo.lock"),
+        format!("version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"helper\"\nversion = \"0.2.0\"\n\n[[package]]\nname = \"rand\"\nversion = \"0.7.3\"\n{reg}\n[[package]]\nname = \"rand\"\nversion = \"0.8.5\"\n{reg}\n[[package]]\nname = \"serde\"\nversion = \"1.0.100\"\n{reg}"),
+    )
+    .unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.dep_versions.set_published("serde", rc_cargo::versions::parse_index("{\"vers\":\"1.0.229\",\"yanked\":false}\n{\"vers\":\"1.0.230\",\"yanked\":true}"));
+    app.dep_versions.set_published("rand", rc_cargo::versions::parse_index("{\"vers\":\"0.7.3\",\"yanked\":false}"));
+    app.open_workspace(&root);
+    app.open_file(&root.join("Cargo.toml"));
+    let mut h = harness(app, vec2(1100.0, 520.0));
+    run_frames(&mut h, "the Cargo workspace and the lock", |a| a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty()));
+    (h, root)
+}
+
+/// Each dependency line shows its locked version, and the newest on crates.io when newer; a
+/// crates.io dependency gets a docs.rs icon for its locked version. Path dependencies get
+/// neither, and the feature switch keeps its line.
+#[test]
+fn cargo_toml_shows_locked_versions_and_docs_rs_icons() {
+    use rc_editor::GutterIcon;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    let hints = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.end_hints.clone();
+    let icon = |h: &Harness<'static, CrabCraftApp>, line| h.state().docs.active_doc().and_then(|d| d.editor.gutter_icons.get(&line).copied());
+    let available = rc_kit::i18n::trf("{locked} · {latest} available", &[("locked", &"1.0.100"), ("latest", &"1.0.229")]);
+    // serde (line 6) is behind crates.io; rand 0.7 picks 0.7.3 of the two locked versions.
+    assert_eq!(hints(&h).into_iter().collect::<Vec<_>>(), vec![(6, available), (10, "0.7.3".to_string())]);
+    assert_eq!(icon(&h, 6), Some(GutterIcon::DocsRs));
+    assert_eq!(icon(&h, 7), None, "path dependency");
+    assert_eq!(icon(&h, 10), Some(GutterIcon::DocsRs));
+    assert_eq!(icon(&h, 13), Some(GutterIcon::FeatureOff));
+    h.state_mut().open_docs_rs_at(6);
+    assert_eq!(h.state().opened_url.as_deref(), Some("https://docs.rs/serde/1.0.100"));
+    h.state_mut().open_docs_rs_at(10);
+    assert_eq!(h.state().opened_url.as_deref(), Some("https://docs.rs/rand/0.7.3"));
+    // The online check off: only the locked version.
+    h.state_mut().settings.check_crates_io = false;
+    h.run_steps(2);
+    assert_eq!(hints(&h).get(&6).map(String::as_str), Some("1.0.100"));
+    // An edited requirement is read again from the unsaved text.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("\"0.7\"").unwrap();
+        editor.replace(at, at + 5, "\"0.8\"");
+    }
+    h.run_steps(2);
+    assert_eq!(hints(&h).get(&10).map(String::as_str), Some("0.8.5"));
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
+fn cargo_dep_versions_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = dep_versions_harness(dir.path(), dark);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-dep-versions-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU; opens CrabCraft's own instance.rs and writes target/snapshots/cfg-inactive.png"]
+fn cfg_inactive_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&repo);
+    let file = repo.join("crates/rc-app/src/instance.rs");
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the cfg of the crate", |a| a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some()));
+    let text = std::fs::read_to_string(&file).unwrap();
+    let at = text.find("#[cfg(windows)]").expect("a Windows-only item");
+    let line = text[..at].matches('\n').count();
+    let doc = h.state_mut().docs.active_doc_mut().unwrap();
+    doc.editor.goto(line + 12, 0);
+    h.run_steps(6);
+    assert!(!h.state_mut().docs.active_doc_mut().unwrap().editor.inactive().is_empty());
+    h.render().unwrap().save(out.join("cfg-inactive.png")).unwrap();
+}
+
+/// C-03/C-11 on a real project: CrabCraft's own `crates/rc-cargo/Cargo.toml` against the
+/// repository's `Cargo.lock` (members inherit from `[workspace.dependencies]`), with the live
+/// crates.io check.
+#[test]
+#[ignore = "Needs the network and a GPU; writes target/snapshots/cargo-dep-versions-crabcraft.png"]
+fn cargo_dep_versions_on_crabcraft_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&repo);
+    let file = repo.join("crates/rc-cargo/Cargo.toml");
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 600.0));
+    let text = std::fs::read_to_string(&file).unwrap();
+    let line_of = |key: &str| text.lines().position(|l| l.starts_with(key)).unwrap();
+    let (anyhow, semver) = (line_of("anyhow"), line_of("semver"));
+    run_frames(&mut h, "the locked versions", |a| a.docs.active_doc().is_some_and(|d| d.editor.end_hints.contains_key(&anyhow) && d.editor.end_hints.contains_key(&semver)));
+    // Give crates.io a few seconds.
+    for _ in 0..100 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let editor = &h.state().docs.active_doc().unwrap().editor;
+    eprintln!("hints: {:?}", editor.end_hints);
+    assert_eq!(editor.gutter_icons.get(&semver), Some(&rc_editor::GutterIcon::DocsRs));
+    h.state_mut().open_docs_rs_at(semver);
+    eprintln!("docs.rs: {:?}", h.state().opened_url);
+    assert!(h.state().opened_url.as_deref().is_some_and(|u| u.starts_with("https://docs.rs/semver/1.")));
+    h.render().unwrap().save(out.join("cargo-dep-versions-crabcraft.png")).unwrap();
+}
+
+/// I-24: rustc's explanation of an error code opens in a read-only Markdown tab, from the
+/// Build window's diagnostic, the Problems window and the editor's hover of a real E0308.
+#[test]
+fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::trf;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x: u32 = \"text\";\n    println!(\"{x}\");\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = test_app(home.path(), false);
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let target = h.state().workspace.as_ref().unwrap().ws.key_path().to_path_buf();
+    let outs = h.state_mut().runner.build(&target, rc_dotnet::BuildAction::Build);
+    crate::ui::run_windows::handle_outputs(h.state_mut(), outs);
+    run_frames(&mut h, "the failed build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some() && b.diagnostics.iter().any(|d| d.code == "E0308")));
+    let explain = trf("Explain {code}", &[("code", &"E0308")]);
+    let explained = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md"));
+
+    // The Build window: right-click the diagnostic.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Build);
+    h.run_steps(3);
+    h.get_by_label_contains("E0308 mismatched types").click_secondary();
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the Build window", explained);
+    {
+        let d = h.state().docs.active_doc().unwrap();
+        assert!(d.editor.read_only && d.generated);
+        assert_eq!(d.md_view, Some(crate::docs::MdView::Preview));
+        let text = d.editor.buffer.rope().to_string();
+        assert!(text.starts_with("# E0308") && text.contains("Expected type did not match the received type"), "{text}");
+    }
+    assert!(h.state().explanations.contains_key("E0308"), "the answer is kept");
+    let close = |h: &mut Harness<'static, CrabCraftApp>| {
+        let i = h.state().docs.active.unwrap();
+        h.state_mut().close_tab(i);
+        h.run_steps(2);
+    };
+    close(&mut h);
+
+    // The Problems window, with the same error from the build.
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Problems);
+    run_frames(&mut h, "the problem", |a| a.insight.problems.get(&main).is_some_and(|p| p.iter().any(|d| d.code.as_deref() == Some("E0308"))));
+    h.get_by_label("mismatched types").click_secondary();
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the Problems window", explained);
+    close(&mut h);
+
+    // The editor's hover of the problem offers the same link.
+    h.state_mut().open_file(&main);
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        let pos = d.editor.buffer.rope().to_string().find("\"text\"").unwrap();
+        d.editor.popups.hover = Some(rc_editor::popup::Hover {
+            pos,
+            text: String::new(),
+            problem: Some((rc_editor::Severity::Error, "mismatched types".into())),
+            explain: Some("E0308".into()),
+            screen: egui::pos2(400.0, 300.0),
+        });
+    }
+    h.run_steps(2);
+    h.get_by_label(&explain).click();
+    run_frames(&mut h, "the explanation from the hover", explained);
+    assert!(h.state().docs.list.iter().find(|d| d.path == main).is_some_and(|d| d.editor.popups.hover.is_none()), "the hover closes");
+
+    // A code rustc does not know is reported, and nothing else reaches it.
+    h.state_mut().explain_error("E9999");
+    run_frames(&mut h, "no explanation", |a| a.explain_load.is_none());
+    assert!(h.state().notices.iter().any(|n| n.text == trf("rustc has no explanation for {code}", &[("code", &"E9999")])));
+    h.state_mut().explain_error("clippy::len_zero");
+    assert!(h.state().explain_load.is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/explain-error-*.png"]
+fn explain_error_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x: u32 = \"text\";\n    println!(\"{x}\");\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = test_app(home.path(), true);
+    app.open_workspace(&root);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        let pos = d.editor.buffer.rope().to_string().find("\"text\"").unwrap();
+        d.editor.popups.hover = Some(rc_editor::popup::Hover {
+            pos,
+            text: String::new(),
+            problem: Some((rc_editor::Severity::Error, "mismatched types: expected `u32`, found `&str`".into())),
+            explain: Some("E0308".into()),
+            screen: egui::pos2(420.0, 160.0),
+        });
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("explain-error-hover.png")).unwrap();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+    h.state_mut().explain_error("E0308");
+    run_frames(&mut h, "the explanation", |a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("E0308.md")));
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("explain-error-tab.png")).unwrap();
+}
+
+/// Opens this repository's `app.rs` with the caret deep in a method of `impl CrabCraftApp`.
+fn context_info_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, usize) {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs").canonicalize().unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let at = text.find("Action::ToggleHexValues => self.toggle_hex_values()").expect("the line the test puts the caret on");
+    let line = text[..at].matches('\n').count();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let col = text[..at].rsplit('\n').next().map_or(0, |l| l.chars().count());
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        d.editor.goto(line, col);
+        d.editor.request_scroll_to_caret();
+    }
+    run_frames(&mut h, "the tree of app.rs", |a| a.docs.active_doc().is_some_and(|d| d.editor.syntax.tree().is_some()));
+    (h, line)
+}
+
+/// Alt+Q (⌃⇧Q on macOS) lists the impl and method headers scrolled out of view, outermost
+/// first; a click on one goes to its line, and Escape closes the popup.
+#[test]
+fn alt_q_shows_the_enclosing_declarations_and_goes_to_them() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, caret_line) = context_info_harness(dir.path(), false);
+    h.state_mut().keymap = rc_editor::Keymap::new(rc_editor::KeymapKind::Rider);
+    let chord = h.state().keymap.chord(rc_editor::Action::ShowContextInfo).unwrap();
+    assert_eq!((chord.key, chord.mods.alt), (egui::Key::Q, true), "Alt+Q");
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+    let rows: Vec<(usize, String)> = {
+        let d = h.state().docs.active_doc().unwrap();
+        let ctx = d.editor.popups.context.as_ref().expect("the popup is open");
+        ctx.rows.iter().map(|r| (r.line, r.text.clone())).collect()
+    };
+    let texts: Vec<&str> = rows.iter().map(|(_, t)| t.as_str()).collect();
+    assert_eq!(texts, ["impl CrabCraftApp", "pub fn run_ide_action(&mut self, ctx: &Context, action: Action)"]);
+    assert!(rows.iter().all(|(l, _)| *l < caret_line));
+    // The rows are coloured from the source: `impl` and `pub` are keywords.
+    let d = h.state().docs.active_doc().unwrap();
+    assert!(d.editor.popups.context.as_ref().unwrap().rows.iter().all(|r| r.roles.first() == Some(&rc_syntax::Hl::Keyword)));
+
+    // Escape closes it; moving the caret closes it too.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_none());
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_some());
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_none(), "moving the caret closes it");
+
+    // A click on the method's header goes there.
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+    h.get_by_label(&rows[1].1).click();
+    h.run_steps(3);
+    let d = h.state().docs.active_doc().unwrap();
+    assert_eq!(d.editor.caret_line_col().0, rows[1].0, "the caret is on the method's line");
+    assert!(d.editor.popups.context.is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/context-info-*.png"]
+fn context_info_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = context_info_harness(dir.path(), dark);
+        let chord = h.state().keymap.chord(rc_editor::Action::ShowContextInfo).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("context-info-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A crate with `#[cfg(windows)]` and `#[cfg(unix)]` code, `src/lib.rs` open, once the target
+/// list is read.
+fn targets_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(windows)]\npub fn on_windows() {}\n\n#[cfg(unix)]\npub fn on_unix() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the target list", |a| !a.triple_choices.is_empty() && a.runner.cargo_workspace.is_some());
+    h.run_steps(3);
+    (h, root)
+}
+
+/// The status bar shows the host triple; its list picks another target, which is saved.
+#[test]
+fn the_status_bar_picks_the_analysis_target() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = targets_harness(dir.path(), false);
+    let host = h.state().host_triple.clone().unwrap();
+    h.get_by_label(host.as_str()).click();
+    h.run_steps(3);
+    // rustup lists every target it knows: the list is long enough to have a filter.
+    assert!(h.state().triple_choices.len() > 8);
+    h.state_mut().triple_filter = "windows-msvc".into();
+    h.run_steps(2);
+    h.get_by_label("x86_64-pc-windows-msvc").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
+    assert!(h.state().triple_filter.is_empty());
+    h.state_mut().save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/target-picker-*.png"]
+fn target_picker_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = targets_harness(dir.path(), dark);
+        let host = h.state().host_triple.clone().unwrap();
+        h.get_by_label(host.as_str()).click();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("target-picker-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        // Windows picked: the unix code is faded.
+        h.state_mut().set_cargo_target(Some("x86_64-pc-windows-msvc".into()));
+        egui::Popup::close_all(&h.ctx);
+        run_frames(&mut h, "the cfg of Windows", |a| {
+            a.docs.active_doc().is_some_and(|d| d.editor.cfg.as_ref().is_some_and(|c| c.eval("windows") == Some(true)))
+        });
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("target-picker-windows-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
 }

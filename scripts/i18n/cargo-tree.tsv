@@ -1,0 +1,4 @@
+# cargo tree in the Cargo window. Import: python3 scripts/i18n_tsv.py cargotree scripts/i18n/cargo-tree.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Retry	Reintentar	Réessayer	Tentar novamente	Erneut versuchen	Ponów	重试	再試行
+listed above	mostrado arriba	affiché plus haut	listado acima	oben aufgeführt	pokazane wyżej	已在上方列出	上に表示済み

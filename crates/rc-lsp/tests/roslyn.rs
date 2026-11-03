@@ -87,6 +87,10 @@ fn wait<T>(mut p: rc_lsp::Pending<T>) -> Result<T, rc_lsp::RpcError> {
 
 #[test]
 fn roslyn_completion_rename_and_diagnostics() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let cmd = server();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();

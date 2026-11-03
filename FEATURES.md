@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 129 |
+| ✅ Pronto | 140 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 97 |
+| ⬜ A fazer | 86 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -140,7 +140,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
-| I-24 | Explicações inline de erros | ⬜ | M4 | |
+| I-24 | Explicações inline de erros | ✅ | M4 | Para diagnósticos com código do rustc (`E` e quatro dígitos, validado antes de chamar o rustc), "Explicar E0308" no hover do erro no editor e no menu de contexto das janelas Problemas e Build abre a explicação de `rustc --explain` (o rustc ao lado do cargo, em segundo plano com tempo limite e cache por código) numa aba Markdown somente leitura. Sem explicação, avisa. Testado em projeto Cargo real: E0308 de `cargo check` ao salvar e do build, com rustc e rust-analyzer reais; visto na janela renderizada |
 | I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
@@ -171,7 +171,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-14 | Navegar para a fonte de dependências | ✅ | M3 | Ctrl+B entra na stdlib e abre somente leitura; teste real, crates do registro pelo mesmo caminho |
 | N-15 | Scopes e cores de arquivo | ⬜ | M4 | |
 | N-16 | Navigation bar e Select In | ✅ | M3 | Barra clicável na parte de baixo (pastas, arquivo e símbolos). Select In (Alt+F1) leva ao Explorador ou ao gerenciador de arquivos; sem outros destinos, como a janela Estrutura. |
-| N-17 | Mostrar contexto do código (Alt+Q) | ⬜ | M4 | |
+| N-17 | Mostrar contexto do código (Alt+Q) | ✅ | M4 | Navegar › Mostrar informações de contexto (Alt+Q no keymap Rider; ⌃⇧Q no macOS; sem atalho nos keymaps VS e VS Code; também em Localizar ação): popup acima do cursor com os cabeçalhos das declarações que o envolvem e estão fora da vista (mod, impl, trait, fn, struct, enum, macro_rules!, closures), do mais externo ao mais interno, com número da linha e cores da fonte do editor; assinaturas de várias linhas viram uma (ou primeira linha + …). Clique vai à linha; Esc, digitar ou mover o cursor fecha. Outras linguagens usam os blocos de dobra. Testado em src/app.rs deste repositório (teste headless e captura conferida) |
 | N-18 | Compartilhar no Rust Playground | ⬜ | M4 | Pede confirmação antes de enviar o código |
 
 ## 5. Refatoração e geração de código
@@ -195,17 +195,17 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| C-01 | Completar chaves do manifesto | ⬜ | M4 | |
+| C-01 | Completar chaves do manifesto | ✅ | M4 | Local, sem rede nem rust-analyzer: cabeçalhos após `[`/`[[` (sem repetir tabelas que já existem), chaves da tabela atual (package, alvos, profile, workspace, lints, dependência em tabela ou inline) e valores fixos (edition, resolver, panic, lto, opt-level, strip, debug, booleanos). Abre ao digitar e com Ctrl+Espaço, com descrição traduzida no popup. Teste kittest digitando no Cargo.toml de um workspace Cargo real; análise em `rc_cargo::manifest_complete` com testes. Não completa nomes de crates, versões nem features dentro de listas |
 | C-02 | Completar nome e versão de crates (crates.io) | ⬜ | M4 | Índice esparso; porta o cliente NuGet |
-| C-03 | Mostrar versão do lock e a mais recente | ⬜ | M4 | |
+| C-03 | Mostrar versão do lock e a mais recente | ✅ | M4 | No `Cargo.toml` aberto, cada dependência (`[dependencies]`, dev, build, `target.*`, `[workspace.dependencies]`, `[dependencies.x]`, chaves pontuadas e `workspace = true`, que herda do manifesto do workspace) mostra no fim da linha a versão resolvida no `Cargo.lock` (com várias versões travadas, a mais nova que atende ao requisito) e, se houver, a mais recente do crates.io (`1.0.100 · 1.0.229 available`). O lock é lido localmente numa thread, com limite de tamanho; o crates.io é consultado pelo índice esparso (só o nome do crate vai na requisição), em segundo plano, com timeout e cache por sessão, ignorando versões yanked e pré-lançamentos (salvo se a atual for um). Dependências de path e git não mostram nada. Opção em Configurações › Editor para desligar a consulta online (ligada por padrão). Testado no app com um projeto gerado e lock real (teste headless) e no `crates/rc-cargo/Cargo.toml` do próprio CrabCraft com o crates.io de verdade. Falta: atualizar a versão pela dica (quick-fix) e consultar registros alternativos |
 | C-04 | Avisar crates inexistentes ou desatualizados | ⬜ | M4 | |
 | C-05 | Gerenciador visual de dependências | 🔁 | M4 | Reescrever a janela NuGet com `cargo add`/`remove` |
-| C-06 | `cargo tree` integrado | ⬜ | M4 | |
-| C-07 | Ligar/desligar features pela margem | ⬜ | M4 | `rust-analyzer.cargo.features` |
-| C-08 | Atenuar código desativado por `cfg` | ⬜ | M4 | |
-| C-09 | Seletor de target (triple) na barra de status | ⬜ | M4 | |
+| C-06 | `cargo tree` integrado | ✅ | M4 | Cada membro da janela Cargo tem um nó Dependências: ao abrir, roda `cargo tree --offline --locked` em segundo plano (não compila nem grava o `Cargo.lock`) e mostra a árvore dobrável, com versão, seção build/dev e repetições. A execução entra na aba Sync. Testado com o cargo real num projeto gerado e na árvore do próprio CrabCraft (1140 nós) |
+| C-07 | Ligar/desligar features pela margem | ✅ | M4 | No `Cargo.toml` aberto, cada entrada de `[features]` tem um interruptor na margem; a janela Cargo tem um nó Features por membro com os mesmos interruptores. As escolhidas ficam na sessão do projeto (`pacote/feature`, validadas ao ler), vão para o rust-analyzer como `cargo.features` via `didChangeConfiguration` (sem reiniciar o servidor) e entram na atenuação de `cfg` (C-08). Features ligadas pelo `default` ou por outra feature aparecem ligadas e não se desligam pela margem; as que somem do manifesto são descartadas. Testado com o cargo e o rust-analyzer reais num projeto gerado: o build script vê `CARGO_FEATURE_EXTRA` ao ligar e deixa de ver ao desligar. Falta: passar `--features` em builds e configurações de execução, e `noDefaultFeatures` |
+| C-08 | Atenuar código desativado por `cfg` | ✅ | M4 | O editor avalia cada `#[cfg(...)]` (itens, instruções, campos, variantes e braços de `match`) com os cfgs de `rustc --print cfg` e as features do `default` do pacote mais as ligadas pelo usuário (C-07), e atenua o que fica desligado. Não depende do rust-analyzer (o 1.99 não publica `inactive-code`) nem de confiar no projeto. Testado no app com um projeto gerado e no `instance.rs` do próprio CrabCraft. Falta: dica ao passar o mouse |
+| C-09 | Seletor de target (triple) na barra de status | ✅ | M4 | A barra de status mostra o triple usado na análise (o `[build] target` do `.cargo/config.toml`, senão o host); o clique abre a lista com o host marcado, os targets do projeto, os instalados pelo rustup e os não instalados (`rustup target list`, rodado fora do projeto), com filtro quando a lista é longa. O triple é validado (`[A-Za-z0-9_.-]`) antes de ir a qualquer processo, fica na sessão do projeto, vai para o rust-analyzer como `cargo.target` via `didChangeConfiguration` (sem reiniciar) e recarrega `rustc --print cfg --target` para a atenuação (C-08). Testado com rustc, rustup e rust-analyzer reais num projeto gerado: ao escolher `x86_64-pc-windows-msvc` o `#[cfg(windows)]` deixa de ser atenuado e o `#[cfg(unix)]` passa a ser, e o build script do rust-analyzer vê `TARGET` mudar. Falta: passar `--target` em builds/checks iniciados pela IDE (escolha deliberada: mudaria a pasta dos binários usados por executar e depurar) |
 | C-10 | Quick fix para habilitar feature | ⬜ | M4 | |
-| C-11 | Ícone da margem para abrir docs.rs do crate | ⬜ | M4 | |
+| C-11 | Ícone da margem para abrir docs.rs do crate | ✅ | M4 | Cada dependência do crates.io no `Cargo.toml` aberto tem um ícone de link na margem que abre `https://docs.rs/<nome>/<versão do lock>` no navegador (`latest` se o crate não está no lock). Dependências de path, git e de outros registros não têm ícone; convive com os interruptores de features (C-07). Testado no app com um projeto gerado e no `crates/rc-cargo/Cargo.toml` do CrabCraft (abre `docs.rs/semver/1.0.28`). Falta: dica ao passar o mouse sobre o ícone |
 
 ## 7. Build e execução
 
@@ -272,9 +272,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-14 | Attach a processo | ✅ | M2 | Attach com GDB real e diálogo visto; com ptrace_scope 1 o Linux bloqueia e o app explica |
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
-| D-17 | Memory view | ⬜ | M4 | |
+| D-17 | Memory view | ✅ | M4 | Aba "Memory" na janela Debug: "Show in Memory View" no menu de contexto de Variables/Watches (usa o `memoryReference` da variável ou o endereço de `&expr`) ou um endereço/expressão digitado (`&x`, `0x7ffd…`). Dump hex com coluna de endereço, 16 bytes por linha e ASCII; bytes ilegíveis aparecem como `??`; páginas de 512 bytes lidas sob demanda (anterior/próxima) com `readMemory`. Relê a página a cada parada e destaca os bytes que mudaram desde a parada anterior. O GDB 15.1 anuncia `supportsReadMemoryRequest` e dá `memoryReference` só para ponteiros (arrays usam `&nome`); quando a leitura falha ele recusa a página inteira, sem leitura parcial. Testado num programa Rust real sob GDB (`the_memory_view_shows_bytes_and_highlights_what_a_step_changed`). Escrever na memória fica fora do escopo |
 | D-18 | Disassembly view | ⬜ | M4 | |
-| D-19 | Inteiros em hexadecimal | ⬜ | M4 | |
+| D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
 | D-20 | Parallel stacks | ⬜ | M4 | |
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |

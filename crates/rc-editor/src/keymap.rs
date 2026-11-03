@@ -87,6 +87,8 @@ pub enum Action {
     ToggleBreakpoint,
     ToggleBookmark,
     ShowBookmarks,
+    /// The declarations around the caret that are scrolled out of view (Alt+Q).
+    ShowContextInfo,
     // --- IDE (reported to the app)
     SearchEverywhere,
     FindAction,
@@ -119,6 +121,8 @@ pub enum Action {
     RunToCursor,
     AttachToProcess,
     Evaluate,
+    /// Integers in hexadecimal or decimal in the debugger.
+    ToggleHexValues,
     ShowSettings,
     ProjectEnvironment,
     ToggleProjectWindow,
@@ -211,6 +215,7 @@ impl Action {
                 | RunToCursor
                 | AttachToProcess
                 | Evaluate
+                | ToggleHexValues
                 | ShowSettings
                 | ProjectEnvironment
                 | ToggleProjectWindow
@@ -511,6 +516,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F1, s, ExternalDocs),
         b(Key::F1, a, SelectIn),
         b(Key::J, ctrl, QuickDoc),
+        b(Key::Q, ctrl_s, ShowContextInfo),
         b(Key::Enter, a, ShowIntentions),
         b(Key::Insert, a, Generate),
         b(Key::B, c, GotoDeclaration),
@@ -731,6 +737,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
             b(Key::Minus, cs, FoldAll),
             b(Key::Equals, cs, UnfoldAll),
             b(Key::Q, c, QuickDoc),
+            b(Key::Q, a, ShowContextInfo),
             b(Key::B, c, GotoDeclaration),
             b(Key::B, ca, GotoImplementation),
             b(Key::B, cs, GotoTypeDeclaration),
@@ -984,6 +991,16 @@ mod tests {
         let mac = Keymap::new(KeymapKind::RiderMac);
         assert_eq!(mac.shortcut_text(Action::SearchEverywhere).as_deref(), Some("⌘P"));
         assert_eq!(mac.shortcut_text(Action::ParameterInfo).as_deref(), Some("⌃⇧Space"));
+    }
+
+    #[test]
+    fn show_context_info_has_the_jetbrains_shortcut_and_none_elsewhere() {
+        assert_eq!(Keymap::new(KeymapKind::Rider).shortcut_text(Action::ShowContextInfo).as_deref(), Some("Alt+Q"));
+        assert_eq!(Keymap::new(KeymapKind::RiderMac).shortcut_text(Action::ShowContextInfo).as_deref(), Some("⌃⇧Q"));
+        for kind in [KeymapKind::VisualStudio, KeymapKind::VsCode, KeymapKind::VsCodeMac] {
+            assert_eq!(Keymap::new(kind).chord(Action::ShowContextInfo), None, "{kind:?}");
+        }
+        assert!(Action::ShowContextInfo.is_editing());
     }
 
     #[test]

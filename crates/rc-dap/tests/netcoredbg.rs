@@ -149,6 +149,10 @@ fn project(name: &str) -> PathBuf {
 
 #[test]
 fn debugs_the_cli_breakpoints_stack_variables_watches_steps_and_output() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let calc = shop().join("src/Shop.Core/PriceCalculator.cs");
     let program = shop().join("src/Shop.Cli/Program.cs");
@@ -274,6 +278,10 @@ fn alive(pid: u32) -> bool {
 
 #[test]
 fn debugs_the_api_through_an_http_request_and_stops_cleanly() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let controller = shop().join("src/Shop.Api/Controllers/OrdersController.cs");
     let line = line_of(&controller, "var order = Order.Sample();");
@@ -328,6 +336,10 @@ fn debugs_the_api_through_an_http_request_and_stops_cleanly() {
 
 #[test]
 fn stops_on_exceptions_with_exception_info() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let order_cs = shop().join("src/Shop.Core/Order.cs");
     let throw_line = line_of(&order_cs, "throw new ArgumentException(\"A customer is required.\"");
@@ -377,6 +389,10 @@ fn stops_on_exceptions_with_exception_info() {
 
 #[test]
 fn attaches_to_a_running_api_and_detaches() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dotnet = dotnet();
     let api = project("Shop.Api");

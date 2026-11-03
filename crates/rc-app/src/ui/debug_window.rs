@@ -1,6 +1,6 @@
 //! Debug tool window (Rider layout): toolbar with the stepping actions, then "Threads &
 //! Variables" (frames on the left; watches and variables of the selected frame on the right)
-//! and "Console" (program output).
+//! "Console" (program output) and "Memory" (a hex dump of the paused program's memory).
 
 use crate::app::CrabCraftApp;
 use crate::debugger::Debugger;
@@ -86,11 +86,18 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let state = app.debugger.state_label();
     ui.horizontal(|ui| {
         ui.add_space(8.0);
-        if theme::tab(ui, !app.debugger.show_console, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
+        let (console_tab, memory_tab) = (app.debugger.show_console, app.debugger.show_memory && !app.debugger.show_console);
+        if theme::tab(ui, !console_tab && !memory_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
             app.debugger.show_console = false;
+            app.debugger.show_memory = false;
         }
-        if theme::tab(ui, app.debugger.show_console, Some(ico::FILE_SHELL), tr("Console"), false).0.clicked() {
+        if theme::tab(ui, console_tab, Some(ico::FILE_SHELL), tr("Console"), false).0.clicked() {
             app.debugger.show_console = true;
+            app.debugger.show_memory = false;
+        }
+        if theme::tab(ui, memory_tab, Some(ico::FILE_BINARY), tr("Memory"), false).0.clicked() {
+            app.debugger.show_console = false;
+            app.debugger.show_memory = true;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(12.0);
@@ -124,6 +131,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.advance_cursor_after_rect(avail);
         return;
     }
+    if app.debugger.show_memory {
+        memory(ui, &mut app.debugger);
+        return;
+    }
     let avail = ui.available_rect_before_wrap();
     let split = (avail.width() * 0.34).clamp(200.0, 420.0);
     let left = Rect::from_min_size(avail.min, vec2(split, avail.height()));
@@ -132,8 +143,99 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     frames(&mut lu, &mut app.debugger);
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
-    variables(&mut ru, &mut app.debugger);
+    let asked = variables(&mut ru, &mut app.debugger);
+    if asked.toggle_hex {
+        app.toggle_hex_values();
+    }
+    if let Some((reference, expression)) = asked.memory {
+        app.debugger.show_memory_of(reference.as_deref(), &expression);
+    }
     ui.advance_cursor_after_rect(avail);
+}
+
+/// The Memory tab: an address or expression field, page buttons and the hex dump (address,
+/// 16 bytes in hex, ASCII), with the bytes changed since the previous stop highlighted.
+fn memory(ui: &mut Ui, dbg: &mut Debugger) {
+    use rc_dap::memory::{BYTES_PER_ROW, format_address, format_ascii, format_byte};
+    let p = rc_kit::pal(ui);
+    let stopped = dbg.stopped();
+    let has_page = dbg.memory.reference.is_some();
+    let mut go = false;
+    let mut page = 0;
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        let te = ui.add(
+            egui::TextEdit::singleline(&mut dbg.memory.input)
+                .hint_text(tr("Address or expression (Enter), e.g. &x or 0x7ffd…"))
+                .font(egui::TextStyle::Monospace)
+                .desired_width((ui.available_width() - 90.0).max(80.0)),
+        );
+        if te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            go = true;
+        }
+        if theme::icon_button(ui, ico::CHEVRON_UP, stopped && has_page, tr("Previous Page")).clicked() {
+            page = -1;
+        }
+        if theme::icon_button(ui, ico::CHEVRON_DOWN, stopped && has_page, tr("Next Page")).clicked() {
+            page = 1;
+        }
+        if dbg.memory.loading() {
+            ui.add(egui::Spinner::new().size(12.0));
+        }
+    });
+    if go && stopped {
+        dbg.go_to_memory();
+    }
+    if page != 0 {
+        dbg.memory_page(page);
+    }
+    if let Some(e) = &dbg.memory.error {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            ui.label(egui::RichText::new(e).size(12.0).color(p.error));
+        });
+    }
+    let Some(block) = dbg.memory.block.clone() else {
+        if dbg.memory.error.is_none() {
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                ui.add_space(12.0);
+                let msg = if stopped { tr("Type an address or an expression, or choose Show in Memory View on a variable.") } else { tr("Memory is shown when the program is paused") };
+                ui.label(egui::RichText::new(msg).color(p.muted));
+            });
+        }
+        return;
+    };
+    let changed = block.changed_since(dbg.memory.previous.as_ref());
+    let font = FontId::monospace(12.5);
+    let highlight = p.warn.gamma_multiply(0.45);
+    let rows = block.rows();
+    egui::ScrollArea::vertical().id_salt("dbg_memory").auto_shrink([false, false]).show_rows(ui, ROW_H - 4.0, rows.len(), |ui, range| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (i, row) in rows.iter().enumerate().skip(range.start).take(range.len()) {
+            let mut job = egui::text::LayoutJob::default();
+            job.append(&format_address(row.address), 8.0, egui::TextFormat::simple(font.clone(), p.muted));
+            job.append("  ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
+            for c in 0..BYTES_PER_ROW {
+                if c == BYTES_PER_ROW / 2 {
+                    job.append(" ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
+                }
+                let cell = row.cells.get(c).copied();
+                let text = cell.map(format_byte).unwrap_or_else(|| "  ".into());
+                let mut f = egui::TextFormat::simple(font.clone(), if matches!(cell, Some(Some(_))) { p.text } else { p.muted });
+                if changed.get(i * BYTES_PER_ROW + c).copied().unwrap_or(false) {
+                    f.background = highlight;
+                }
+                job.append(&text, 0.0, f);
+                job.append(" ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
+            }
+            job.append(" ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
+            job.append(&format_ascii(&row.cells), 0.0, egui::TextFormat::simple(font.clone(), p.text_muted));
+            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H - 4.0), Sense::hover());
+            let g = ui.painter().layout_job(job);
+            ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, p.text);
+        }
+    });
 }
 
 fn frames(ui: &mut Ui, dbg: &mut Debugger) {
@@ -209,7 +311,17 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
     }
 }
 
-fn variables(ui: &mut Ui, dbg: &mut Debugger) {
+/// What the user asked for in the Watches and Variables list.
+#[derive(Default)]
+struct VariablesAsked {
+    /// Switch the integer format.
+    toggle_hex: bool,
+    /// Show a value in the Memory tab: (its memory reference, its expression).
+    memory: Option<(Option<String>, String)>,
+}
+
+/// The Watches and Variables list.
+fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
     let p = rc_kit::pal(ui);
     // "Evaluate or add a watch" field (Enter adds a watch, as the + button).
     let mut add = false;
@@ -230,17 +342,18 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
             s.add_watch(e.trim().to_string());
         }
     }
-    let Some(s) = &mut dbg.session else { return };
+    let Some(s) = &mut dbg.session else { return VariablesAsked::default() };
     let stopped = s.state().is_stopped();
     let mut rows: Vec<Row> = Vec::new();
     for w in s.watches() {
-        let (value, ty, reference, error) = match &w.value {
-            WatchValue::Value(v) => (v.result.clone(), v.type_name.clone(), v.variables_reference, false),
-            WatchValue::Error(e) => (e.clone(), None, 0, true),
-            WatchValue::Evaluating => ("…".into(), None, 0, false),
-            WatchValue::NotEvaluated => (tr("Cannot evaluate while running").into(), None, 0, true),
+        let (value, ty, reference, error, memory) = match &w.value {
+            WatchValue::Value(v) => (v.result.clone(), v.type_name.clone(), v.variables_reference, false, v.memory_reference.clone()),
+            WatchValue::Error(e) => (e.clone(), None, 0, true, None),
+            WatchValue::Evaluating => ("…".into(), None, 0, false, None),
+            WatchValue::NotEvaluated => (tr("Cannot evaluate while running").into(), None, 0, true, None),
         };
-        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false });
+        let expression = (!error).then(|| w.expression.clone());
+        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false, memory, expression });
     }
     if stopped && let Some(frame) = s.selected_frame().map(|f| f.id) {
         match s.scopes(frame) {
@@ -254,7 +367,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
                         children(s, &dbg.expanded, sc.variables_reference, &format!("s:{}", sc.name), 0, &mut rows);
                     } else {
                         let key = format!("s:{}", sc.name);
-                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true });
+                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true, memory: None, expression: None });
                         if dbg.expanded.contains(&key) {
                             children(s, &dbg.expanded, sc.variables_reference, &key, 1, &mut rows);
                         }
@@ -266,6 +379,9 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     let mut toggle = None;
     let mut remove = None;
     let mut add_watch = None;
+    let hex = dbg.hex;
+    let mut toggle_hex = false;
+    let mut show_memory = None;
     egui::ScrollArea::vertical().id_salt("dbg_vars").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if rows.is_empty() {
@@ -292,6 +408,14 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
                 if !row.scope && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
                     ui.ctx().copy_text(row.value.clone());
                 }
+                let can_show = stopped && !row.scope && (row.memory.is_some() || row.expression.is_some());
+                if !row.scope && theme::menu_entry(ui, Some(ico::FILE_BINARY), tr("Show in Memory View"), None, false, can_show).clicked() && can_show {
+                    show_memory = Some((row.memory.clone(), row.expression.clone().unwrap_or_default()));
+                }
+                ui.separator();
+                if theme::menu_item(ui, hex.then_some(ico::CHECKMARK), tr("Show Integers in Hex"), false).clicked() {
+                    toggle_hex = true;
+                }
             });
         }
     });
@@ -306,6 +430,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) {
     if let Some(e) = add_watch {
         s.add_watch(e);
     }
+    VariablesAsked { toggle_hex, memory: show_memory }
 }
 
 fn scopes_flat(name: &str) -> bool {
@@ -322,6 +447,10 @@ struct Row {
     error: bool,
     watch: Option<u64>,
     scope: bool,
+    /// Where the value's memory starts, when the debugger says.
+    memory: Option<String>,
+    /// An expression for the value (its address is shown in the Memory tab).
+    expression: Option<String>,
 }
 
 /// Children of `reference` (requested when not loaded), recursing into expanded rows.
@@ -331,7 +460,7 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
     }
     let Some(vars) = s.variables(reference).map(|v| v.to_vec()) else {
         s.request_variables(reference);
-        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false });
+        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false, memory: None, expression: None });
         return;
     };
     for v in vars {
@@ -341,7 +470,9 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
 
 fn push_var(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<String>, v: &Variable, parent: &str, depth: usize, rows: &mut Vec<Row>) {
     let key = format!("{parent}/{}", v.name);
-    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false });
+    // Only a top-level local is known by its name; deeper rows need the adapter's expression.
+    let expression = v.evaluate_name.clone().filter(|e| !e.is_empty()).or_else(|| (depth == 0).then(|| v.name.clone()));
+    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: v.memory_reference.clone(), expression });
     if v.variables_reference > 0 && expanded.contains(&key) {
         children(s, expanded, v.variables_reference, &key, depth + 1, rows);
     }
@@ -438,7 +569,7 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
     let Some(s) = &mut dbg.session else { return };
     let mut rows = Vec::new();
     let key = format!("e:{expression}");
-    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false });
+    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: None, expression: None });
     if v.variables_reference > 0 && dbg.expanded.contains(&key) {
         children(s, &dbg.expanded, v.variables_reference, &key, 1, &mut rows);
     }
@@ -463,7 +594,19 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
 }
 
 fn clone_row(r: &Row) -> Row {
-    Row { depth: r.depth, key: r.key.clone(), name: r.name.clone(), value: r.value.clone(), ty: r.ty.clone(), reference: r.reference, error: r.error, watch: r.watch, scope: r.scope }
+    Row {
+        depth: r.depth,
+        key: r.key.clone(),
+        name: r.name.clone(),
+        value: r.value.clone(),
+        ty: r.ty.clone(),
+        reference: r.reference,
+        error: r.error,
+        watch: r.watch,
+        scope: r.scope,
+        memory: r.memory.clone(),
+        expression: r.expression.clone(),
+    }
 }
 
 #[cfg(test)]

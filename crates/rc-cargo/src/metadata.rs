@@ -32,6 +32,74 @@ pub struct Package {
     pub manifest: PathBuf,
     pub edition: String,
     pub targets: Vec<Target>,
+    /// The `[features]` table: each feature and what it enables.
+    pub features: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl Package {
+    /// The features a plain `cargo build` enables: `default` and what it enables, transitively,
+    /// plus `extra`. Optional dependencies (`dep:x`) and features of dependencies (`x/f`) are
+    /// left out; a feature of the package that names an optional dependency is kept.
+    pub fn enabled_features(&self, extra: &[String]) -> Vec<String> {
+        let mut on: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut todo: Vec<String> = extra.to_vec();
+        if self.features.contains_key("default") {
+            todo.push("default".into());
+        }
+        while let Some(f) = todo.pop() {
+            if f.starts_with("dep:") || f.contains('/') || !on.insert(f.clone()) {
+                continue;
+            }
+            todo.extend(self.features.get(&f).into_iter().flatten().cloned());
+        }
+        on.into_iter().collect()
+    }
+
+    /// The features of this package among `chosen`, which holds `package/feature` entries for
+    /// the whole workspace (as rust-analyzer's `cargo.features` takes them). Unknown names are
+    /// dropped: the manifest may have changed since they were chosen.
+    pub fn chosen_features(&self, chosen: &[String]) -> Vec<String> {
+        chosen.iter().filter_map(|c| c.split_once('/')).filter(|(p, f)| *p == self.name && self.features.contains_key(*f)).map(|(_, f)| f.to_string()).collect()
+    }
+}
+
+/// Whether `entry` is a `package/feature` pair Cargo could accept (`--features p/f`). Session
+/// files are untrusted: anything else would reach a command line.
+pub fn valid_feature_entry(entry: &str) -> bool {
+    let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '+' | '.'));
+    entry.split_once('/').is_some_and(|(p, f)| ok(p) && ok(f))
+}
+
+/// The entries of the `[features]` table of a `Cargo.toml`: 0-based line and feature name.
+/// A plain line scan, so it works on unsaved text; continuation lines of a multi-line array
+/// and comments are skipped.
+pub fn feature_lines(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    let mut in_array = false;
+    for (i, line) in text.lines().enumerate() {
+        let t = line.split('#').next().unwrap_or("").trim();
+        if in_array {
+            in_array = !t.contains(']');
+            continue;
+        }
+        if t.starts_with('[') {
+            inside = !t.starts_with("[[") && t.trim_start_matches('[').trim_end_matches(']').trim() == "features";
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        let Some((key, value)) = t.split_once('=') else { continue };
+        let key = key.trim();
+        let key = key.strip_prefix('"').and_then(|k| k.strip_suffix('"')).unwrap_or(key);
+        if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '+' | '.')) {
+            out.push((i, key.to_string()));
+        }
+        let value = value.trim();
+        in_array = value.starts_with('[') && !value.contains(']');
+    }
+    out
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,11 +115,16 @@ pub struct CargoWorkspace {
 impl CargoWorkspace {
     /// The edition of the member that owns `path`, the innermost one when members are nested.
     pub fn edition_of(&self, path: &Path) -> Option<&str> {
+        self.package_of(path).map(|p| p.edition.as_str())
+    }
+
+    /// The member that owns `path`, the innermost one when members are nested.
+    pub fn package_of(&self, path: &Path) -> Option<&Package> {
         // Canonical on both sides: on Windows one may be verbatim (`\\?\C:\…`) and the other `C:\…`.
         let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
         let path = &canon(path);
         let folder = |p: &&Package| p.manifest.parent().map(canon).unwrap_or_default();
-        self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count()).map(|p| p.edition.as_str())
+        self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count())
     }
 
     /// Runnable binaries as `(package, target)`.
@@ -134,7 +207,6 @@ pub fn parse_libraries(text: &str) -> anyhow::Result<Vec<Library>> {
     Ok(libraries)
 }
 
-/// Runs `cargo metadata` to its end and returns what it printed.
 /// Runs `cargo metadata` and keeps what it printed on stderr, also when it fails.
 fn run_metadata_logged(cargo: &Cargo, manifest: &Path, options: &[&str]) -> (anyhow::Result<String>, LoadLog) {
     let mut command = format!("cargo metadata {} --format-version 1 --manifest-path {}", options.join(" "), manifest.display());
@@ -147,14 +219,21 @@ fn run_metadata_logged(cargo: &Cargo, manifest: &Path, options: &[&str]) -> (any
 }
 
 fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str], stderr_text: &mut String) -> anyhow::Result<String> {
+    let mut args: Vec<std::ffi::OsString> = vec!["metadata".into()];
+    args.extend(options.iter().map(Into::into));
+    args.extend(["--format-version".into(), "1".into(), "--manifest-path".into(), manifest.as_os_str().to_owned()]);
+    run_to_end(cargo, manifest, &args, stderr_text)
+}
+
+/// Runs a Cargo command that only reads the project, from the manifest's folder, and returns what
+/// it printed. It is killed after [`LOAD_TIMEOUT`]. This blocks.
+pub(crate) fn run_to_end(cargo: &Cargo, manifest: &Path, args: &[std::ffi::OsString], stderr_text: &mut String) -> anyhow::Result<String> {
     use std::process::Stdio;
     let dir = manifest.parent().context("the manifest has no folder")?;
+    let name = args.first().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
     let mut child = cargo
         .std_command()
-        .arg("metadata")
-        .args(options)
-        .args(["--format-version", "1", "--manifest-path"])
-        .arg(manifest)
+        .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -181,7 +260,7 @@ fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str], stderr_text: &
         if started.elapsed() > LOAD_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            anyhow::bail!("cargo metadata did not finish in {} s", LOAD_TIMEOUT.as_secs());
+            anyhow::bail!("cargo {name} did not finish in {} s", LOAD_TIMEOUT.as_secs());
         }
         std::thread::sleep(Duration::from_millis(10));
     };
@@ -217,7 +296,12 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
             let required_features = t.get("required-features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect();
             targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")?, required_features });
         }
-        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets });
+        let features = p
+            .get("features")
+            .and_then(Value::as_object)
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect())).collect())
+            .unwrap_or_default();
+        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets, features });
     }
     Ok(CargoWorkspace { manifest: root.join("Cargo.toml"), root, target_dir, packages })
 }
@@ -266,6 +350,38 @@ mod tests {
         assert_eq!(w.packages[1].targets[0].kind, TargetKind::Lib);
         assert_eq!(w.packages[1].targets[1].kind, TargetKind::Example);
         assert_eq!(w.binaries().map(|(p, t)| (p.name.as_str(), t.name.as_str())).collect::<Vec<_>>(), [("app", "app")]);
+    }
+
+    #[test]
+    fn enabled_features_follow_default() {
+        let features = [("default", vec!["std"]), ("std", vec!["alloc", "dep:libc", "serde/std"]), ("alloc", vec![]), ("extra", vec![]), ("libc", vec!["dep:libc"])]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.into_iter().map(str::to_string).collect()))
+            .collect();
+        let p = Package { name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
+        assert_eq!(p.enabled_features(&[]), vec!["alloc", "default", "std"]);
+        assert_eq!(p.enabled_features(&["extra".to_string(), "libc".to_string()]), vec!["alloc", "default", "extra", "libc", "std"]);
+        let none = Package { features: Default::default(), ..p };
+        assert!(none.enabled_features(&[]).is_empty());
+    }
+
+    #[test]
+    fn feature_lines_follow_the_features_table() {
+        let text = "[package]\nname = \"p\"\n\n[features]\n# a comment\ndefault = [\"std\"]\nstd = [\n    \"alloc\", # why\n    \"x = 1\",\n]\n\"quoted-name\" = []\nalloc = [] # inline\n\n[dependencies]\nserde = \"1\"\n";
+        assert_eq!(feature_lines(text), vec![(5, "default".to_string()), (6, "std".to_string()), (10, "quoted-name".to_string()), (11, "alloc".to_string())]);
+        assert!(feature_lines("[package]\nname = \"p\"\n").is_empty());
+    }
+
+    #[test]
+    fn chosen_features_are_per_package_and_checked() {
+        let features = ["extra", "std"].into_iter().map(|k| (k.to_string(), Vec::new())).collect();
+        let p = Package { name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
+        let chosen = ["p/extra", "q/extra", "p/gone", "extra"].map(String::from);
+        assert_eq!(p.chosen_features(&chosen), vec!["extra"]);
+        assert!(valid_feature_entry("my-crate/serde+json"));
+        for bad in ["extra", "/x", "p/", "p/a b", "p/a,b", "p/--x\n", "a/b/c"] {
+            assert!(!valid_feature_entry(bad), "{bad}");
+        }
     }
 
     #[test]

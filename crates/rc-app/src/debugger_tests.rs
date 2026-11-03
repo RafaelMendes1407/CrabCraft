@@ -104,6 +104,10 @@ fn select(app: &mut CrabCraftApp, prefix: &str) -> crate::runner::RunConfig {
 
 #[test]
 fn debugs_the_cli_and_the_api_from_the_ide() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let mut app = app(home.path());

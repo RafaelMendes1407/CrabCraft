@@ -39,6 +39,9 @@ pub struct WorkspaceState {
     pub solution: Option<Solution>,
 }
 
+/// What `rustc --explain` answered: its text, or `None` when it has none.
+type ExplainAnswer = Result<Option<String>, rc_cargo::ExplainError>;
+
 pub struct CrabCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
@@ -60,6 +63,34 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
+    /// Dependency trees of the Cargo window, by `(manifest, package)`.
+    pub cargo_trees: std::collections::BTreeMap<(PathBuf, String), crate::ui::cargo_window::DepTree>,
+    /// What `rustc --print cfg` printed for the project, and its load.
+    rustc_cfg: Option<String>,
+    rustc_cfg_load: Option<Inbox<Option<String>>>,
+    /// Bumped when the Cargo model or the rustc cfg change; each document remembers the epoch
+    /// its `cfg` set was given for.
+    cfg_epoch: u64,
+    cfg_given: std::collections::HashMap<u64, u64>,
+    /// Cargo features the user turned on, as `package/feature` (saved with the session).
+    pub cargo_features: Vec<String>,
+    /// The `(text version, cfg_epoch)` each `Cargo.toml` editor got its feature icons for.
+    feature_icons_given: std::collections::HashMap<u64, (u64, u64)>,
+    /// The target triple the code is analysed for; `None`: the host (saved with the session).
+    pub cargo_target: Option<String>,
+    /// The host triple and the targets offered in the status bar, once read.
+    pub host_triple: Option<String>,
+    pub triple_choices: Vec<rc_cargo::TripleChoice>,
+    triple_load: Option<Inbox<(Option<String>, Vec<rc_cargo::TripleChoice>)>>,
+    /// What is typed in the filter of the target list.
+    pub triple_filter: String,
+    /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
+    /// docs.rs icons.
+    pub dep_versions: crate::dep_versions::DepVersions,
+    /// The last external page opened from the editor (docs.rs).
+    pub opened_url: Option<String>,
+    /// Rows unfolded in the Cargo window's dependency trees (they start folded).
+    pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
     pub layout: crate::layout::Layout,
     /// A tab being dragged to another place.
@@ -105,6 +136,10 @@ pub struct CrabCraftApp {
     /// What the last `rustup check` said (Settings › Tools).
     pub toolchain_updates: Option<Result<Vec<rc_cargo::ToolchainUpdate>, String>>,
     toolchain_updates_load: Option<Inbox<Result<Vec<rc_cargo::ToolchainUpdate>, String>>>,
+    /// What `rustc --explain` said per error code (`None`: it has no explanation).
+    pub explanations: std::collections::HashMap<String, Option<String>>,
+    /// The error code whose explanation rustc is printing.
+    pub(crate) explain_load: Option<(String, Inbox<ExplainAnswer>)>,
     /// The Run tab of a rustup command: when it ends, the toolchain is read again.
     rustup_run: Option<String>,
     /// The last Inspect Code run.
@@ -218,7 +253,11 @@ impl CrabCraftApp {
                 runner.external_tools = settings.external_tools.clone();
                 runner
             },
-            debugger: crate::debugger::Debugger::new(waker.clone()),
+            debugger: {
+                let mut debugger = crate::debugger::Debugger::new(waker.clone());
+                debugger.hex = settings.debugger_hex;
+                debugger
+            },
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
@@ -232,9 +271,26 @@ impl CrabCraftApp {
             problems_tab_inspection: false,
             toolchain_updates: None,
             toolchain_updates_load: None,
+            explanations: Default::default(),
+            explain_load: None,
             rustup_run: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
+            cargo_trees: Default::default(),
+            rustc_cfg: None,
+            rustc_cfg_load: None,
+            cfg_epoch: 0,
+            cfg_given: Default::default(),
+            cargo_features: Vec::new(),
+            feature_icons_given: Default::default(),
+            cargo_target: None,
+            host_triple: None,
+            triple_choices: Vec::new(),
+            triple_load: None,
+            triple_filter: String::new(),
+            dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            opened_url: None,
+            cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
             editor_frame: None,
@@ -331,6 +387,11 @@ impl CrabCraftApp {
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.runner.project_env = session.project_env.clone();
         self.insight.set_env(self.runner.project_env_pairs());
+        self.cargo_features = clean_features(&session.cargo_features);
+        self.insight.set_features(self.cargo_features.clone());
+        self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
+        self.insight.set_target(self.cargo_target.clone());
+        self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
@@ -398,6 +459,8 @@ impl CrabCraftApp {
                 }
             }
             self.runner.set_attached(workspaces);
+            self.prune_features();
+            self.cfg_epoch += 1;
         }
         let Some(inbox) = &self.cargo_load else { return };
         for (result, log) in inbox.drain() {
@@ -406,7 +469,12 @@ impl CrabCraftApp {
             }
             match result {
                 Ok(workspace) => {
+                    let root = workspace.root.clone();
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
+                    self.prune_features();
+                    self.cfg_epoch += 1;
+                    self.load_rustc_cfg(root.clone());
+                    self.load_triples(root);
                     self.load_libraries();
                     self.load_attached();
                 }
@@ -628,10 +696,237 @@ impl CrabCraftApp {
         self.reload_cargo();
     }
 
+    /// Turns the Cargo feature `feature` of `package` on or off for the analysis: rust-analyzer
+    /// gets it as `cargo.features` and the code under `#[cfg(feature = …)]` is faded again.
+    pub fn set_cargo_feature(&mut self, package: &str, feature: &str, on: bool) {
+        let entry = format!("{package}/{feature}");
+        if !rc_cargo::valid_feature_entry(&entry) || self.cargo_features.contains(&entry) == on {
+            return;
+        }
+        if on {
+            self.cargo_features.push(entry);
+            self.cargo_features.sort();
+        } else {
+            self.cargo_features.retain(|e| *e != entry);
+        }
+        self.session_dirty = true;
+        self.cfg_epoch += 1;
+        self.insight.set_features(self.cargo_features.clone());
+    }
+
+    /// Whether `feature` of `package` is on: chosen by the user, or enabled by `default`.
+    /// `None` when the package has no such feature.
+    pub fn feature_state(&self, package: &rc_cargo::Package, feature: &str) -> Option<FeatureState> {
+        if !package.features.contains_key(feature) {
+            return None;
+        }
+        let chosen = package.chosen_features(&self.cargo_features);
+        Some(if chosen.iter().any(|f| f == feature) {
+            FeatureState::Chosen
+        } else if package.enabled_features(&chosen).iter().any(|f| f == feature) {
+            FeatureState::Implied
+        } else {
+            FeatureState::Off
+        })
+    }
+
+    /// Click on the feature icon of a `Cargo.toml` line: turns that feature on or off. One that
+    /// another enabled feature (or `default`) turns on cannot be turned off from here.
+    pub fn toggle_feature_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let Some(package) = self.package_of_manifest(&doc.path) else { return };
+        let Some(name) = rc_cargo::feature_lines(&doc.editor.buffer.rope().to_string()).into_iter().find(|(l, _)| *l == line).map(|(_, n)| n) else { return };
+        match self.feature_state(&package, &name) {
+            Some(FeatureState::Off) => self.set_cargo_feature(&package.name, &name, true),
+            Some(FeatureState::Chosen) => self.set_cargo_feature(&package.name, &name, false),
+            Some(FeatureState::Implied) => self.notify(trf("The feature {name} is turned on by default or by another enabled feature", &[("name", &name)]), false),
+            None => {}
+        }
+    }
+
+    /// Drops chosen features that a loaded package no longer has: Cargo, and so rust-analyzer,
+    /// refuse a `--features` entry the package does not define. Entries of packages not loaded
+    /// (yet) are kept.
+    fn prune_features(&mut self) {
+        let packages: Vec<&rc_cargo::Package> = self.runner.cargo_workspace.iter().chain(&self.runner.attached).flat_map(|w| &w.packages).collect();
+        let before = self.cargo_features.len();
+        self.cargo_features.retain(|e| {
+            let Some((p, f)) = e.split_once('/') else { return false };
+            packages.iter().filter(|pk| pk.name == p).all(|pk| pk.features.contains_key(f))
+        });
+        if self.cargo_features.len() != before {
+            self.session_dirty = true;
+            self.insight.set_features(self.cargo_features.clone());
+        }
+    }
+
+    /// The member (or attached package) whose manifest is `path`.
+    pub fn package_of_manifest(&self, path: &Path) -> Option<rc_cargo::Package> {
+        let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let path = canon(path);
+        self.runner.cargo_workspace.iter().chain(&self.runner.attached).flat_map(|w| &w.packages).find(|p| canon(&p.manifest) == path).cloned()
+    }
+
+    /// Feature switches in the gutter of an open `Cargo.toml`, one per `[features]` entry.
+    pub(crate) fn update_feature_icons(&mut self) {
+        use rc_editor::GutterIcon;
+        let Some(i) = self.docs.active else { return };
+        let doc = &self.docs.list[i];
+        if doc.path.file_name().is_none_or(|n| n != "Cargo.toml") {
+            return;
+        }
+        let stamp = (doc.editor.buffer.version(), self.cfg_epoch);
+        if self.feature_icons_given.get(&doc.editor.id) == Some(&stamp) {
+            return;
+        }
+        self.feature_icons_given.insert(doc.editor.id, stamp);
+        let package = self.package_of_manifest(&doc.path);
+        let lines = rc_cargo::feature_lines(&doc.editor.buffer.rope().to_string());
+        let icons: Vec<(usize, GutterIcon)> = match &package {
+            Some(p) => lines.into_iter().filter_map(|(line, name)| self.feature_state(p, &name).map(|s| (line, if s == FeatureState::Off { GutterIcon::FeatureOff } else { GutterIcon::FeatureOn }))).collect(),
+            None => Vec::new(),
+        };
+        let doc = &mut self.docs.list[i];
+        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::FeatureOn | GutterIcon::FeatureOff));
+        doc.editor.gutter_icons.extend(icons);
+    }
+
+    /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
+    /// locked version in the browser.
+    pub fn open_docs_rs_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let Some(url) = self.dep_versions.links.get(&doc.editor.id).and_then(|l| l.get(&line)).cloned() else { return };
+        #[cfg(not(test))]
+        crate::ui::run_windows::open_url(&url);
+        self.opened_url = Some(url);
+    }
+
     /// Reads the Cargo project again.
     pub fn reload_cargo(&mut self) {
+        self.cargo_trees.clear();
         if let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
             self.load_cargo_workspace(manifest);
+        }
+    }
+
+    /// Asks rustc for the `cfg` of the chosen target (or the host) in the background; it
+    /// compiles nothing.
+    fn load_rustc_cfg(&mut self, dir: PathBuf) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let target = self.cargo_target.clone();
+        std::thread::spawn(move || {
+            // Without a choice, what Cargo and rust-analyzer build for: the project's
+            // `[build] target`, else the host.
+            let target = target.or_else(|| rc_cargo::project_build_targets(&dir).into_iter().next());
+            out.send(rc_cargo::Cargo::locate().and_then(|c| rc_cargo::print_cfg(&c, &dir, target.as_deref())))
+        });
+        self.rustc_cfg_load = Some(inbox);
+    }
+
+    /// Reads the host triple and the targets to offer (rustup's, the project's `[build] target`)
+    /// in the background. Nothing of the project runs.
+    fn load_triples(&mut self, root: PathBuf) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(rc_cargo::Cargo::locate().as_ref(), &root)));
+        self.triple_load = Some(inbox);
+    }
+
+    /// Analyses the code for `target` (`None` or the default one: the default): rust-analyzer
+    /// gets it as `cargo.target` and the code under `#[cfg]` is faded for that target. An
+    /// invalid triple is ignored.
+    pub fn set_cargo_target(&mut self, target: Option<String>) {
+        let target = target.filter(|t| self.default_triple() != Some(t.as_str()));
+        if target.as_deref().is_some_and(|t| !rc_cargo::valid_triple(t)) || target == self.cargo_target {
+            return;
+        }
+        self.cargo_target = target;
+        self.session_dirty = true;
+        self.insight.set_target(self.cargo_target.clone());
+        if let Some(root) = self.runner.cargo_workspace.as_ref().map(|w| w.root.clone()) {
+            self.load_rustc_cfg(root);
+        }
+    }
+
+    /// The target triple shown in the status bar: the chosen one or the default one.
+    pub fn analysis_triple(&self) -> Option<&str> {
+        self.cargo_target.as_deref().or(self.default_triple())
+    }
+
+    /// What the code is built and analysed for without a choice: the project's
+    /// `[build] target`, else the host.
+    pub fn default_triple(&self) -> Option<&str> {
+        self.triple_choices.iter().find(|c| c.from_config).map(|c| c.triple.as_str()).or(self.host_triple.as_deref())
+    }
+
+    /// Gives each Rust document the `cfg` set of its crate, so the code it turns off is faded.
+    pub(crate) fn update_cfg_sets(&mut self) {
+        if let Some((host, list)) = self.triple_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.triple_load = None;
+            self.host_triple = host;
+            self.triple_choices = list;
+            // The target chosen in an earlier session may be the default now.
+            if self.cargo_target.is_some() && self.cargo_target.as_deref() == self.default_triple() {
+                self.cargo_target = None;
+                self.insight.set_target(None);
+            }
+        }
+        if let Some(cfg) = self.rustc_cfg_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.rustc_cfg_load = None;
+            self.rustc_cfg = cfg;
+            self.cfg_epoch += 1;
+        }
+        let epoch = self.cfg_epoch;
+        let mut sets: std::collections::BTreeMap<PathBuf, std::sync::Arc<rc_syntax::CfgSet>> = Default::default();
+        for doc in &mut self.docs.list {
+            if self.cfg_given.get(&doc.editor.id) == Some(&epoch) || doc.editor.syntax.lang != rc_syntax::Lang::Rust {
+                continue;
+            }
+            self.cfg_given.insert(doc.editor.id, epoch);
+            let package = self.runner.cargo_workspace.iter().chain(&self.runner.attached).find_map(|w| w.package_of(&doc.path));
+            let set = match (package, &self.rustc_cfg) {
+                (Some(p), Some(cfg)) => Some(sets.entry(p.manifest.clone()).or_insert_with(|| std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&p.chosen_features(&self.cargo_features))))).clone()),
+                _ => None,
+            };
+            doc.editor.set_cfg(set);
+        }
+    }
+
+    /// Reads the dependency tree of `package` in the background; `cargo tree` builds nothing.
+    pub fn load_dep_tree(&mut self, manifest: PathBuf, package: String) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
+        let (m, p) = (manifest.clone(), package.clone());
+        std::thread::spawn(move || {
+            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
+                Some(cargo) => {
+                    let (result, log) = rc_cargo::load_tree_logged(&cargo, &m, &p);
+                    (result.map_err(|e| e.to_string()), Some(log))
+                }
+                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
+            };
+            out.send(result);
+        });
+        self.cargo_trees.insert((manifest, package), crate::ui::cargo_window::DepTree::Loading(inbox));
+    }
+
+    /// Takes the dependency trees that finished loading.
+    pub(crate) fn poll_dep_trees(&mut self) {
+        use crate::ui::cargo_window::DepTree;
+        let mut logs = Vec::new();
+        for tree in self.cargo_trees.values_mut() {
+            let DepTree::Loading(inbox) = tree else { continue };
+            let Some((result, log)) = inbox.drain().into_iter().last() else { continue };
+            logs.extend(log);
+            *tree = match result {
+                Ok(nodes) => DepTree::Ready(nodes),
+                Err(e) => DepTree::Failed(e),
+            };
+        }
+        for log in logs {
+            self.sync_log.push(crate::sync_log::SyncKind::Dependencies, log);
         }
     }
 
@@ -978,6 +1273,8 @@ impl CrabCraftApp {
             excluded: self.explorer.excluded.clone(),
             attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
+            cargo_features: self.cargo_features.clone(),
+            cargo_target: self.cargo_target.clone().unwrap_or_default(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1074,6 +1371,11 @@ impl CrabCraftApp {
             if self.rustfmt_document(i, false) {
                 return;
             }
+        }
+        // Cargo.toml is completed here: the Rust server does not complete TOML.
+        if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+            crate::manifest_completion::complete(&mut self.docs.list[i], true);
+            return;
         }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
@@ -1264,6 +1566,85 @@ impl CrabCraftApp {
         }
     }
 
+    /// Shows rustc's explanation of an error code (`E0308`) in a read-only tab. `rustc --explain`
+    /// runs on a thread, with a timeout; its answer is kept for the next time.
+    pub fn explain_error(&mut self, code: &str) {
+        let Some(code) = rc_cargo::error_code(code).map(str::to_string) else {
+            self.notify(tr("Only rustc error codes (like E0308) have an explanation"), true);
+            return;
+        };
+        if let Some(answer) = self.explanations.get(&code).cloned() {
+            self.show_explanation(&code, answer.as_deref());
+            return;
+        }
+        if self.explain_load.as_ref().is_some_and(|(c, _)| *c == code) {
+            return;
+        }
+        // The project's toolchain file applies only once the project is trusted: naming a
+        // missing toolchain would otherwise make rustup reach the network.
+        let dir = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
+        let env = self.runner.project_env_pairs();
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let asked = code.clone();
+        std::thread::spawn(move || {
+            let result = match rc_cargo::Cargo::locate() {
+                Some(cargo) => rc_cargo::Explainer { dir, env, ..rc_cargo::Explainer::new(rc_cargo::explain::rustc_path(&cargo)) }.explain(&asked),
+                None => Err(rc_cargo::ExplainError::NoRustc(tr("Cargo was not found. Install Rust with rustup.").to_string())),
+            };
+            out.send(result);
+        });
+        self.explain_load = Some((code, inbox));
+    }
+
+    /// Picks up the answer of `rustc --explain`.
+    pub(crate) fn poll_explanation(&mut self) {
+        let Some(result) = self.explain_load.as_ref().and_then(|(_, i)| i.drain().into_iter().last()) else { return };
+        let Some((code, _)) = self.explain_load.take() else { return };
+        match result {
+            Ok(answer) => {
+                self.explanations.insert(code.clone(), answer.clone());
+                self.show_explanation(&code, answer.as_deref());
+            }
+            Err(e) => {
+                let error = match e {
+                    rc_cargo::ExplainError::InvalidCode => tr("Only rustc error codes (like E0308) have an explanation").to_string(),
+                    rc_cargo::ExplainError::TimedOut => tr("rustc did not answer in time").to_string(),
+                    rc_cargo::ExplainError::NoRustc(m) => trf("rustc could not be started: {error}", &[("error", &m)]),
+                    rc_cargo::ExplainError::Failed(m) => m,
+                };
+                self.notify(trf("Could not explain {code}: {error}", &[("code", &code), ("error", &error)]), true);
+            }
+        }
+    }
+
+    fn show_explanation(&mut self, code: &str, text: Option<&str>) {
+        let Some(text) = text else {
+            self.notify(trf("rustc has no explanation for {code}", &[("code", &code)]), false);
+            return;
+        };
+        // `code` was checked: `E` and four digits, safe as a file name.
+        let path = rc_core::paths::explanations_dir().join(format!("{code}.md"));
+        let body = format!("# {code}\n\n{text}\n");
+        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
+            self.notify(trf("Could not show the explanation: {error}", &[("error", &e.to_string())]), true);
+            return;
+        }
+        match self.docs.open(&path) {
+            Ok(i) => {
+                let d = &mut self.docs.list[i];
+                d.generated = true;
+                if d.editor.buffer.rope() != body.as_str() {
+                    d.editor.reload(&body);
+                }
+                d.editor.read_only = true;
+                d.md_view = Some(crate::docs::MdView::Preview);
+                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
     pub fn close_tab(&mut self, i: usize) {
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
@@ -1392,6 +1773,7 @@ impl CrabCraftApp {
                     self.debugger.run_to_cursor(&path, line);
                 }
             }
+            Action::ToggleHexValues => self.toggle_hex_values(),
             Action::Evaluate => {
                 if self.debugger.stopped() {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
@@ -1774,6 +2156,14 @@ impl CrabCraftApp {
             }
             None => self.notify(tr("There is no run configuration to debug"), false),
         }
+    }
+
+    /// Integers in hexadecimal or decimal in the debugger, kept in the settings.
+    pub fn toggle_hex_values(&mut self) {
+        let hex = !self.debugger.hex;
+        self.debugger.set_hex(hex);
+        self.settings.debugger_hex = hex;
+        let _ = self.settings.save();
     }
 
     /// The debugger's Restart: what is being debugged, from the beginning.
@@ -2163,6 +2553,8 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         self.poll_cargo_workspace();
+        self.poll_dep_trees();
+        self.update_cfg_sets();
         self.poll_rustfmt();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
@@ -2293,6 +2685,24 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
     Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
 }
 
+/// Whether a Cargo feature of a package is on for the analysis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeatureState {
+    /// Turned on by the user.
+    Chosen,
+    /// On because `default` or another enabled feature turns it on.
+    Implied,
+    Off,
+}
+
+/// The session's chosen features that are valid `package/feature` entries, sorted, once each.
+fn clean_features(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = list.iter().filter(|e| rc_cargo::valid_feature_entry(e)).cloned().collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects
 /// or scratch files; otherwise the workspace's `Cargo.toml`, when there is one, the attached
 /// ones and the open Rust scratch files (analysed on their own).
@@ -2337,6 +2747,7 @@ impl eframe::App for CrabCraftApp {
             self.window_title = title;
         }
         self.poll_toolchain_updates();
+        self.poll_explanation();
         for request in crate::open_files::take() {
             self.open_request(&request);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -2414,6 +2825,8 @@ impl eframe::App for CrabCraftApp {
             }
         }
         self.update_test_markers();
+        self.update_feature_icons();
+        self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

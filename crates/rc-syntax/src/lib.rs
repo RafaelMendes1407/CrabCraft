@@ -6,6 +6,8 @@
 //! for the [`ParserPool`] thread, which only parses the newest version of each document and
 //! sends the tree back; results for older versions are dropped.
 
+mod cfg;
+mod context;
 mod derive;
 mod highlight;
 mod lang;
@@ -13,6 +15,8 @@ mod parse;
 mod structure;
 pub mod sample;
 
+pub use cfg::{CfgSet, Inactive, inactive_ranges};
+pub use context::{ContextHeader, HeaderPiece, context_headers};
 pub use derive::{AttrList, COMMON_DERIVES, DeriveTarget, allow_in_file, allow_target, derive_target, is_lint_name};
 pub use highlight::{Hl, Span, highlight_lexical, highlight_lines};
 pub use lang::Lang;

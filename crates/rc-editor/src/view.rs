@@ -190,8 +190,11 @@ impl<'a> EditorView<'a> {
         }
 
         // ---------------------------------------------------------------- popups
-        if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused) {
+        if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused, &mut out) {
             out.accepted_completion = Some(i);
+        }
+        if let Some(code) = state.popups.explain_clicked.take() {
+            out.events.push(EditorEvent::ExplainError(code));
         }
 
         // The gutter and the scrollbars keep the normal pointer.
@@ -306,6 +309,9 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
     if let Some(values) = state.debug_values.get(&line) {
         virtuals.push(Virtual { col: text.chars().count(), text: values.clone(), kind: VirtualKind::InlayHint });
     }
+    if let Some(hint) = state.end_hints.get(&line) {
+        virtuals.push(Virtual { col: text.chars().count(), text: hint.clone(), kind: VirtualKind::EndNote });
+    }
     if let Some(note) = state.failure_notes.get(&line) {
         virtuals.push(Virtual { col: text.chars().count(), text: note.clone(), kind: VirtualKind::FailureNote });
     }
@@ -319,12 +325,11 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
         }
     }
     virtuals.sort_by_key(|v| (v.col, v.kind == VirtualKind::FoldPlaceholder));
-    let dimmed: Vec<(usize, usize)> = state
-        .diagnostics
-        .iter()
-        .filter(|d| d.unnecessary && d.start < line_end.max(line_start + 1) && d.end > line_start)
-        .map(|d| (d.start.saturating_sub(line_start), (d.end - line_start).min(text.chars().count())))
-        .collect();
+    let len = text.chars().count();
+    let overlaps = |start: usize, end: usize| start < line_end.max(line_start + 1) && end > line_start;
+    let clip = |start: usize, end: usize| (start.saturating_sub(line_start), (end - line_start).min(len));
+    let mut dimmed: Vec<(usize, usize)> = state.diagnostics.iter().filter(|d| d.unnecessary && overlaps(d.start, d.end)).map(|d| clip(d.start, d.end)).collect();
+    dimmed.extend(state.inactive().iter().filter(|r| overlaps(r.start, r.end)).map(|r| clip(r.start, r.end)));
     let input = LineInput {
         text: &text,
         spans,
@@ -495,7 +500,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
                 VirtualKind::InlayHint => {
                     painter.rect_filled(bx.shrink2(vec2(1.0, 1.0)), 3.0, scheme.hint_bg);
                 }
-                VirtualKind::FailureNote => {}
+                VirtualKind::FailureNote | VirtualKind::EndNote => {}
             }
         }
         // Hints carry their own background in the galley; strip it by painting with the
@@ -730,6 +735,9 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         if Some(l) == state.execution_line {
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ico::EXECUTION_POINT, pal, true);
+        } else if let Some(icon @ (GutterIcon::FeatureOn | GutterIcon::FeatureOff)) = state.gutter_icons.get(&l) {
+            let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
+            icons::paint_switch(&painter, r, *icon == GutterIcon::FeatureOn, pal);
         } else if let Some(icon) = state.gutter_icons.get(&l) {
             let ic = match icon {
                 GutterIcon::RunTest => ico::GUTTER_RUN,
@@ -740,7 +748,8 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 GutterIcon::Implementing => ico::GUTTER_IMPLEMENTING,
                 GutterIcon::Overridden => ico::GUTTER_OVERRIDDEN,
                 GutterIcon::Overriding => ico::GUTTER_OVERRIDING,
-                GutterIcon::Bookmark => ico::GUTTER_BOOKMARK,
+                GutterIcon::DocsRs => ico::EXTERNAL_LINK,
+                GutterIcon::Bookmark | GutterIcon::FeatureOn | GutterIcon::FeatureOff => ico::GUTTER_BOOKMARK,
             };
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ic, pal, true);
@@ -1223,7 +1232,7 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
         // Typing filters an open completion list.
         if let Some(c) = &mut state.popups.completion {
             let caret = state.selection.primary().head;
-            if caret < c.anchor || !(ch.is_alphanumeric() || ch == '_') {
+            if caret < c.anchor || !(ch.is_alphanumeric() || ch == '_' || c.extra_word_chars.contains(ch)) {
                 state.popups.completion = None;
             } else {
                 let prefix = state.buffer.rope().slice(c.anchor..caret).to_string();
@@ -1573,6 +1582,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         }
         FoldAll => state.fold_all(),
         UnfoldAll => state.unfold_all(),
+        ShowContextInfo => crate::popups_view::open_context(state, config.font.size),
         _ => {}
     }
     let _ = config;

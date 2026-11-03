@@ -158,6 +158,22 @@ pub fn paint_tinted(painter: &Painter, rect: Rect, ico: Ico, dark: bool, size: f
     paint_variant(painter, rect, ico, dark, size, Variant::Tinted(tint));
 }
 
+/// A small on/off switch drawn in `rect` (no asset): a filled accent pill with the knob on the
+/// right when on, an outlined one with the knob on the left when off.
+pub fn paint_switch(painter: &Painter, rect: Rect, on: bool, p: &Palette) {
+    use egui::emath::GuiRounding as _;
+    let pill = Rect::from_center_size(rect.center(), vec2(rect.width().min(16.0), rect.height().min(16.0) * 0.6)).round_to_pixels(painter.pixels_per_point());
+    let radius = pill.height() / 2.0;
+    let knob_x = if on { pill.right() - radius } else { pill.left() + radius };
+    if on {
+        painter.rect_filled(pill, radius, p.accent);
+        painter.circle_filled(pos2(knob_x, pill.center().y), radius - 2.0, Color32::WHITE);
+    } else {
+        painter.rect_stroke(pill, radius, egui::Stroke::new(1.0, p.muted), egui::StrokeKind::Inside);
+        painter.circle_filled(pos2(knob_x, pill.center().y), radius - 2.5, p.muted);
+    }
+}
+
 /// Allocates `size`×`size` and shows the icon there.
 pub fn image(ui: &mut egui::Ui, ico: Ico, size: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::hover());

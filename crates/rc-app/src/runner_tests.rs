@@ -21,6 +21,10 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
 
 #[test]
 fn shop_builds_runs_and_passes_its_tests() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.
@@ -63,6 +67,10 @@ fn shop_builds_runs_and_passes_its_tests() {
 
 #[test]
 fn a_compound_configuration_starts_several_applications() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.
@@ -90,6 +98,10 @@ fn a_compound_configuration_starts_several_applications() {
 
 #[test]
 fn edited_run_configurations_reach_the_process_and_the_session() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.

@@ -102,6 +102,10 @@ pub struct Capabilities {
     pub support_terminate_debuggee: bool,
     pub supports_cancel_request: bool,
     pub supports_delayed_stack_trace_loading: bool,
+    /// `variables` and `evaluate` accept `format` (`{"hex": true}`).
+    pub supports_value_formatting_options: bool,
+    /// The adapter answers `readMemory`.
+    pub supports_read_memory_request: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -220,6 +224,8 @@ pub struct Variable {
     pub variables_reference: i64,
     pub named_variables: Option<i64>,
     pub indexed_variables: Option<i64>,
+    /// Where the memory the value refers to starts (GDB gives it for pointers).
+    pub memory_reference: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -238,6 +244,16 @@ pub struct EvaluateResponse {
     pub variables_reference: i64,
     pub named_variables: Option<i64>,
     pub indexed_variables: Option<i64>,
+    pub memory_reference: Option<String>,
+}
+
+/// Result of `readMemory`: base64 `data` starting at `address`; `unreadable_bytes` follow it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ReadMemoryResponse {
+    pub address: String,
+    pub unreadable_bytes: Option<i64>,
+    pub data: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

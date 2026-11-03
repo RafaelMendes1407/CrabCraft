@@ -133,6 +133,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let diags = b.diagnostics.clone();
     let mut open = None;
     let mut apply = None;
+    let mut explain = None;
     if !diags.is_empty() {
         let h = (diags.len() as f32 * 24.0 + 4.0).min(ui.available_height() * 0.45);
         egui::ScrollArea::vertical().id_salt("build_diags").max_height(h).auto_shrink([false, true]).show(ui, |ui| {
@@ -164,6 +165,8 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 {
                     open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
                 }
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", d.code, d.message)));
+                crate::ui::toolwindows::explain_menu(&resp, &d.code, &mut explain);
             }
         });
         ui.separator();
@@ -175,6 +178,9 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if let Some((file, fix)) = apply {
         app.apply_build_fix(&file, &fix);
+    }
+    if let Some(code) = explain {
+        app.explain_error(&code);
     }
     for e in events {
         if let rc_term::ViewEvent::LinkClicked(link) = e {

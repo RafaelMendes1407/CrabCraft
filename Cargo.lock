@@ -3552,9 +3552,13 @@ dependencies = [
  "anyhow",
  "rc-core",
  "rc-dotnet",
+ "reqwest",
+ "semver",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -3578,6 +3582,7 @@ name = "rc-dap"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "flate2",
  "libc",
  "parking_lot",

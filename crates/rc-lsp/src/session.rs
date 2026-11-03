@@ -312,6 +312,25 @@ impl LanguageSession {
         self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
     }
 
+    /// Changes the Cargo features analysed; the server asks for its settings again and reloads
+    /// the workspace with them.
+    pub fn set_features(&mut self, list: Vec<String>) {
+        self.ra.features = list;
+        self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
+    }
+
+    /// Changes the target triple analysed (`None`: the host); the server asks for its settings
+    /// again and reloads the workspace for it.
+    pub fn set_target(&mut self, target: Option<String>) {
+        self.ra.target = target;
+        self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
+    }
+
+    /// The rust-analyzer settings this session answers with.
+    pub fn ra_settings(&self) -> &crate::rust_analyzer::RaSettings {
+        &self.ra
+    }
+
     pub fn did_change_watched(&self, changes: &[(PathBuf, u8)]) {
         let list: Vec<Value> = changes.iter().map(|(p, t)| json!({ "uri": path_to_uri(p).as_str(), "type": t })).collect();
         self.client.notify_raw("workspace/didChangeWatchedFiles", json!({ "changes": list }));

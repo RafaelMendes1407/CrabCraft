@@ -19,6 +19,8 @@ pub struct CompletionItem {
     pub deprecated: bool,
     /// Opaque index back into the server's list.
     pub data: usize,
+    /// Documentation known up front (local items); the server's comes in [`Completion::doc`].
+    pub doc: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -34,6 +36,9 @@ pub struct Completion {
     pub doc: Option<String>,
     /// Set while the server has not answered yet.
     pub loading: bool,
+    /// Characters besides letters, digits and `_` that typing adds to the prefix (`-` in
+    /// Cargo.toml keys) instead of closing the list.
+    pub extra_word_chars: &'static str,
     pub(crate) scroll_to_selected: bool,
 }
 
@@ -138,7 +143,31 @@ pub struct Hover {
     pub text: String,
     /// Diagnostic message shown above the documentation.
     pub problem: Option<(crate::state::Severity, String)>,
+    /// The problem's rustc error code (`E0308`): the popup offers its explanation.
+    pub explain: Option<String>,
     pub screen: egui::Pos2,
+}
+
+/// One line of Show Context Info: an enclosing declaration's header with its colours.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextRow {
+    pub line: usize,
+    pub text: String,
+    /// Colour role of each char of `text`.
+    pub roles: Vec<rc_syntax::Hl>,
+}
+
+/// The Show Context Info popup: the declarations around the caret that are out of view.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContextInfo {
+    /// Caret and text version it was opened for: moving the caret or typing closes it.
+    pub caret: usize,
+    pub version: u64,
+    pub rows: Vec<ContextRow>,
+    /// Editor font size, for the rows.
+    pub font_size: f32,
+    /// The rows still visible on screen were dropped (done on the first frame shown).
+    pub(crate) filtered: bool,
 }
 
 #[derive(Default)]
@@ -146,11 +175,14 @@ pub struct Popups {
     pub completion: Option<Completion>,
     pub signature: Option<SignatureHelp>,
     pub hover: Option<Hover>,
+    pub context: Option<ContextInfo>,
+    /// The error code whose explanation was asked from the hover, for the IDE to take.
+    pub explain_clicked: Option<String>,
 }
 
 impl Popups {
     pub fn any(&self) -> bool {
-        self.completion.is_some() || self.signature.is_some() || self.hover.is_some()
+        self.completion.is_some() || self.signature.is_some() || self.hover.is_some() || self.context.is_some()
     }
 
     pub fn close_all(&mut self) {

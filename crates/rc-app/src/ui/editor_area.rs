@@ -400,7 +400,14 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     // Before the insertion reaches the server, which resolves the item's import on the old text.
     if let Some(data) = out.accepted_completion {
-        app.insight.completion_accepted(doc, data);
+        if data >= crate::manifest_completion::LOCAL_ITEM_THEN_VALUE {
+            crate::manifest_completion::accepted(doc, data);
+        } else {
+            app.insight.completion_accepted(doc, data);
+        }
+    }
+    if crate::manifest_completion::is_manifest(doc) {
+        crate::manifest_completion::on_editor_events(doc, &out.events);
     }
     if app.debugger.stopped() {
         let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
@@ -420,6 +427,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;
+    let mut explain = None;
+    let mut feature_line = None;
+    let mut docs_rs_line = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -451,7 +461,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::CaretMoved => app.session_dirty = true,
             // Editing a preview tab keeps it.
             EditorEvent::Changed => doc.preview = false,
+            EditorEvent::ExplainError(code) => explain = Some(code),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } => run_binary_line = Some(line),
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::FeatureOn | rc_editor::GutterIcon::FeatureOff } => feature_line = Some(line),
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::DocsRs } => docs_rs_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
@@ -528,6 +541,15 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     if let Some(line) = run_test_line {
         app.run_test_at(line);
+    }
+    if let Some(code) = explain {
+        app.explain_error(&code);
+    }
+    if let Some(line) = feature_line {
+        app.toggle_feature_at(line);
+    }
+    if let Some(line) = docs_rs_line {
+        app.open_docs_rs_at(line);
     }
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);

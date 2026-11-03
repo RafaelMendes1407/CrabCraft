@@ -51,6 +51,12 @@ pub enum GutterIcon {
     Overridden,
     Overriding,
     Bookmark,
+    /// A Cargo feature of a `Cargo.toml` that is on for the analysis (click: turn off).
+    FeatureOn,
+    /// A Cargo feature that is off (click: turn on).
+    FeatureOff,
+    /// A crates.io dependency of a `Cargo.toml` (click: open its page on docs.rs).
+    DocsRs,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,6 +107,8 @@ pub enum EditorEvent {
     Pasted,
     /// Right-click in the text (after moving the caret there): the context menu opens.
     TextSecondaryClicked,
+    /// "Explain E0308" was clicked in the hover of a problem.
+    ExplainError(String),
 }
 
 /// One open document view.
@@ -139,11 +147,18 @@ pub struct EditorState {
     pub(crate) select_stack: Vec<Range>,
     // --- decorations
     pub diagnostics: Vec<Diagnostic>,
+    /// The `cfg` set of the file's crate: code it turns off is faded. `None` outside a Cargo
+    /// project.
+    pub cfg: Option<std::sync::Arc<rc_syntax::CfgSet>>,
+    /// Code `cfg` turns off, for a syntax generation.
+    inactive_cache: Option<(u64, Vec<rc_syntax::Inactive>)>,
     pub inlays: Vec<InlayHint>,
     /// Debugger values shown at the end of each line while paused.
     pub debug_values: BTreeMap<usize, String>,
     /// Why a test failed on this line, shown after its text.
     pub failure_notes: BTreeMap<usize, String>,
+    /// A muted note after the text of a line (the locked and newest version of a dependency).
+    pub end_hints: BTreeMap<usize, String>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -206,9 +221,12 @@ impl EditorState {
             line_clipboard: None,
             select_stack: Vec::new(),
             diagnostics: Vec::new(),
+            cfg: None,
+            inactive_cache: None,
             inlays: Vec::new(),
             debug_values: BTreeMap::new(),
             failure_notes: BTreeMap::new(),
+            end_hints: BTreeMap::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
@@ -460,6 +478,7 @@ impl EditorState {
             let row = e.start_point.row;
             shift_lines(&mut self.breakpoints, row, added);
             shift_lines(&mut self.gutter_icons, row, added);
+            shift_lines(&mut self.end_hints, row, added);
             shift_line_set(&mut self.bookmarks, row, added);
             shift_line_set(&mut self.folded, row, added);
             if added != 0 && row < self.semantic.len() {
@@ -677,6 +696,27 @@ impl EditorState {
             spans = merge_spans(&spans, sem);
         }
         spans
+    }
+
+    /// The code turned off by `cfg`, read again when the tree changes.
+    pub fn inactive(&mut self) -> &[rc_syntax::Inactive] {
+        let generation = self.syntax.generation();
+        if self.inactive_cache.as_ref().is_none_or(|c| c.0 != generation) {
+            let ranges = match (&self.cfg, self.syntax.tree()) {
+                (Some(set), Some(tree)) if self.syntax.lang == rc_syntax::Lang::Rust => rc_syntax::inactive_ranges(tree, self.buffer.rope(), set),
+                _ => Vec::new(),
+            };
+            self.inactive_cache = Some((generation, ranges));
+        }
+        self.inactive_cache.as_ref().map_or(&[], |c| c.1.as_slice())
+    }
+
+    /// Sets the `cfg` set and drops the ranges read with the old one.
+    pub fn set_cfg(&mut self, cfg: Option<std::sync::Arc<rc_syntax::CfgSet>>) {
+        if self.cfg != cfg {
+            self.cfg = cfg;
+            self.inactive_cache = None;
+        }
     }
 
     /// Syntax colours for `first..first+count`, merged with semantic colours. Cached until

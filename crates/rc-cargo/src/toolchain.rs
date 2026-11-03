@@ -85,6 +85,23 @@ pub fn detect_toolchain(cargo: Option<&Cargo>, analyzer: Option<&Path>, project:
     }
 }
 
+/// What `rustc --print cfg` prints for `target` (`None`: the host), run from `dir` so a
+/// `rust-toolchain.toml` there picks the compiler. It compiles nothing, and works for targets
+/// that are not installed. An invalid triple gives `None`. This blocks.
+pub fn print_cfg(cargo: &Cargo, dir: &Path, target: Option<&str>) -> Option<String> {
+    let rustc = cargo.path().with_file_name(exe("rustc"));
+    let mut cmd = std::process::Command::new(rustc);
+    cmd.args(["--print", "cfg"]);
+    if let Some(t) = target {
+        if !crate::triple::valid_triple(t) {
+            return None;
+        }
+        cmd.args(["--target", t]);
+    }
+    let out = cmd.current_dir(dir).stdin(std::process::Stdio::null()).output().ok().filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// The sources of the standard library inside a sysroot, from the `rust-src` component.
 pub fn stdlib_sources(sysroot: &Path) -> Option<PathBuf> {
     Some(sysroot.join("lib/rustlib/src/rust/library")).filter(|p| p.is_dir())

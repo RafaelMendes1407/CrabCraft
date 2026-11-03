@@ -1,0 +1,4 @@
+# Show Context Info (Alt+Q) in the editor. Import: python3 scripts/i18n_tsv.py contextinfo scripts/i18n/context-info.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show Context Info	Mostrar información de contexto	Afficher les informations de contexte	Mostrar informações de contexto	Kontextinformationen anzeigen	Pokaż informacje o kontekście	显示上下文信息	コンテキスト情報を表示
+No enclosing declarations out of view	No hay declaraciones contenedoras fuera de la vista	Aucune déclaration englobante hors de la vue	Nenhuma declaração envolvente fora da vista	Keine umgebenden Deklarationen außerhalb der Ansicht	Brak otaczających deklaracji poza widokiem	没有视图外的外层声明	表示範囲外の外側の宣言はありません

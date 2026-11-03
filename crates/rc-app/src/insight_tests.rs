@@ -45,6 +45,10 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
 
 #[test]
 fn csharp_insight_end_to_end() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
     // SAFETY: set before the app reads it; other tests use their own temp homes the same way.
@@ -126,6 +130,10 @@ fn csharp_insight_end_to_end() {
 /// itself, and a framework type.
 #[test]
 fn go_to_declaration_and_back() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/test-home").canonicalize().expect("run the rc-lsp tests first");
     // SAFETY: as above.

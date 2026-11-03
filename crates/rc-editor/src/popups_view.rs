@@ -37,9 +37,10 @@ pub(crate) fn handle_key(state: &mut EditorState, key: Key, mods: Modifiers, out
         }
         return true;
     }
-    if key == Key::Escape && (state.popups.signature.is_some() || state.popups.hover.is_some()) {
+    if key == Key::Escape && (state.popups.signature.is_some() || state.popups.hover.is_some() || state.popups.context.is_some()) {
         state.popups.signature = None;
         state.popups.hover = None;
+        state.popups.context = None;
         return true;
     }
     false
@@ -139,8 +140,10 @@ pub fn expand_snippet(s: &str) -> (String, Option<usize>) {
     (out, first)
 }
 
-pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool) -> Option<usize> {
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool, out: &mut EditorOutput) -> Option<usize> {
     let mut accepted = None;
+    show_context(ui, state, scheme, pal, m, text_rect, focused, out);
     // A completion whose anchor is no longer before the caret is stale.
     if let Some(c) = &state.popups.completion {
         let caret = state.caret();
@@ -161,10 +164,137 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
             accept(state, i, false);
         }
     }
-    if let Some(h) = state.popups.hover.clone() {
-        show_hover(ui, &h, scheme, pal, m);
+    if let Some(h) = state.popups.hover.clone()
+        && show_hover(ui, &h, scheme, pal, m)
+    {
+        state.popups.hover = None;
+        state.popups.explain_clicked = h.explain;
     }
     accepted
+}
+
+/// Opens Show Context Info for the caret: the headers of the declarations around it, with the
+/// colours of their source text. Which ones are out of view is decided when it is first shown.
+pub(crate) fn open_context(state: &mut EditorState, font_size: f32) {
+    let caret = state.caret();
+    let headers = rc_syntax::context_headers(state.syntax.lang, state.syntax.tree(), state.syntax.folds(), state.buffer.rope(), caret);
+    let mut spans: std::collections::HashMap<usize, Vec<rc_syntax::Span>> = std::collections::HashMap::new();
+    let rows = headers
+        .into_iter()
+        .map(|h| {
+            let mut roles = vec![rc_syntax::Hl::Plain; h.text.chars().count()];
+            for p in &h.pieces {
+                let line_spans = spans.entry(p.line).or_insert_with(|| state.spans_of_line(p.line));
+                for s in line_spans.iter() {
+                    let (a, b) = (s.start.max(p.start_col), s.end.min(p.end_col));
+                    for col in a..b {
+                        if let Some(r) = roles.get_mut(p.at + col - p.start_col) {
+                            *r = s.hl;
+                        }
+                    }
+                }
+            }
+            crate::popup::ContextRow { line: h.line, text: h.text, roles }
+        })
+        .collect();
+    state.popups.context = Some(crate::popup::ContextInfo { caret, version: state.buffer.version(), rows, font_size, filtered: false });
+}
+
+/// The Show Context Info popup, above the caret's line. Typing, moving the caret or losing the
+/// focus closes it; a click on a row goes to that line.
+#[allow(clippy::too_many_arguments)]
+fn show_context(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool, out: &mut EditorOutput) {
+    let Some(ctx) = &state.popups.context else { return };
+    let area_id = Id::new(("context_info", state.id));
+    // A click on the popup takes the focus from the editor for that frame; it gives it back.
+    let on_popup = ui.ctx().pointer_latest_pos().zip(ui.ctx().memory(|m| m.area_rect(area_id))).is_some_and(|(p, r)| r.contains(p));
+    if ctx.caret != state.caret() || ctx.version != state.buffer.version() || !(focused || on_popup) {
+        state.popups.context = None;
+        return;
+    }
+    if !ctx.filtered {
+        // Only what is scrolled out of view above the editor is context.
+        let first_row = (state.scroll.y / m.row_h).floor().max(0.0) as usize;
+        let lines: Vec<usize> = ctx.rows.iter().map(|r| r.line).collect();
+        let hidden: Vec<bool> = lines.into_iter().map(|l| crate::view::row_of_line(state, l) < first_row).collect();
+        if let Some(c) = &mut state.popups.context {
+            let mut keep = hidden.into_iter();
+            c.rows.retain(|_| keep.next().unwrap_or(false));
+            c.filtered = true;
+        }
+    }
+    let Some(ctx) = state.popups.context.clone() else { return };
+    let anchor = crate::view::caret_anchor(ui, state, scheme, m, text_rect, ctx.caret);
+    let size = if ctx.font_size > 0.0 { ctx.font_size } else { 13.0 };
+    let row_h = m.row_h.max(size * 1.4);
+    let digits = ctx.rows.iter().map(|r| (r.line + 1).to_string().len()).max().unwrap_or(1) as f32;
+    let num_w = (digits * size * 0.62).ceil() + 12.0;
+    let height = ctx.rows.len().max(1) as f32 * row_h + 10.0;
+    let screen = ui.ctx().content_rect();
+    let x = text_rect.left().max(screen.left() + 4.0);
+    // Above the caret's line, or below it when there is no room.
+    let y = if anchor.y - height - 4.0 >= screen.top() + 4.0 { anchor.y - height - 4.0 } else { anchor.y + m.row_h + 4.0 };
+    let mut jump = None;
+    egui::Area::new(area_id).order(Order::Foreground).fixed_pos(pos2(x, y)).show(ui.ctx(), |ui| {
+        popup_frame(pal).inner_margin(egui::Margin::symmetric(6, 5)).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            if ctx.rows.is_empty() {
+                let text = rc_kit::i18n::tr("No enclosing declarations out of view");
+                let g = ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(13.0), pal.muted);
+                let (r, _) = ui.allocate_exact_size(vec2(g.size().x + 12.0, row_h), Sense::hover());
+                ui.painter().galley(pos2(r.left() + 6.0, r.center().y - g.size().y / 2.0), g, pal.muted);
+                return;
+            }
+            let max_w = (text_rect.right() - x - 24.0).max(200.0);
+            let galleys: Vec<_> = ctx
+                .rows
+                .iter()
+                .map(|row| {
+                    let mut job = egui::text::LayoutJob::default();
+                    let mut run = String::new();
+                    let mut role = None;
+                    for (ch, r) in row.text.chars().zip(row.roles.iter().copied().chain(std::iter::repeat(rc_syntax::Hl::Plain))) {
+                        if role.is_some_and(|x| x != r) {
+                            job.append(&run, 0.0, crate::layout::format_for(role.unwrap_or_default(), scheme, size));
+                            run.clear();
+                        }
+                        role = Some(r);
+                        run.push(ch);
+                    }
+                    if !run.is_empty() {
+                        job.append(&run, 0.0, crate::layout::format_for(role.unwrap_or_default(), scheme, size));
+                    }
+                    job.wrap.max_width = max_w - num_w;
+                    job.wrap.max_rows = 1;
+                    job.wrap.overflow_character = Some('…');
+                    ui.painter().layout_job(job)
+                })
+                .collect();
+            let width = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max) + num_w + 14.0;
+            for (row, g) in ctx.rows.iter().zip(galleys) {
+                let (r, resp) = ui.allocate_exact_size(vec2(width, row_h), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &row.text));
+                if resp.hovered() {
+                    ui.painter().rect_filled(r, 4.0, pal.row_hover);
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                let n = ui.painter().layout_no_wrap((row.line + 1).to_string(), FontId::monospace(size - 1.0), pal.gutter_fg);
+                ui.painter().galley(pos2(r.left() + num_w - 8.0 - n.size().x, r.center().y - n.size().y / 2.0), n, pal.gutter_fg);
+                ui.painter().galley(pos2(r.left() + num_w, r.center().y - g.size().y / 2.0), g, scheme.text);
+                if resp.clicked() {
+                    jump = Some(row.line);
+                }
+            }
+        });
+    });
+    if let Some(line) = jump {
+        let indent = state.buffer.line_text(line).chars().take_while(|c| c.is_whitespace()).count();
+        state.goto(line, indent);
+        state.request_scroll_to_caret();
+        state.popups.context = None;
+        out.response.request_focus();
+        out.events.push(crate::state::EditorEvent::CaretMoved);
+    }
 }
 
 fn popup_frame(pal: &Palette) -> egui::Frame {
@@ -248,7 +378,8 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
         });
     });
     // Documentation of the selected item, to the right of the list.
-    if let Some(doc) = c.doc.clone().filter(|d| !d.trim().is_empty()) {
+    let doc = c.doc.clone().or_else(|| c.selected_item().and_then(|i| i.doc.clone()));
+    if let Some(doc) = doc.filter(|d| !d.trim().is_empty()) {
         let doc_pos = pos2(pos.x + LIST_W + 14.0, pos.y);
         egui::Area::new(Id::new(("completion_doc", state.id))).order(Order::Foreground).fixed_pos(doc_pos).show(ui.ctx(), |ui| {
             popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -291,7 +422,9 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
     let _ = (scheme, m);
 }
 
-fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) {
+/// True when the problem's "Explain" link was clicked.
+fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) -> bool {
+    let mut explain = false;
     let pos = h.screen + vec2(-4.0, m.row_h);
     let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -306,6 +439,10 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
                     icons::image(ui, icon, 16.0);
                     ui.add(egui::Label::new(egui::RichText::new(msg).color(pal.text)).wrap());
                 });
+                if let Some(code) = &h.explain {
+                    let label = rc_kit::i18n::trf("Explain {code}", &[("code", code)]);
+                    explain = ui.link(egui::RichText::new(label).color(pal.accent)).on_hover_text(rc_kit::i18n::tr("Show rustc's explanation of this error code")).clicked();
+                }
                 if !h.text.trim().is_empty() {
                     ui.add_space(4.0);
                     ui.separator();
@@ -318,6 +455,7 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
     });
     let hovered = resp.response.hovered() || resp.response.contains_pointer();
     ui.ctx().data_mut(|d| d.insert_temp(Id::new("crabcraft_hover_popup_hovered"), hovered));
+    explain
 }
 
 /// Minimal Markdown for documentation: fenced code blocks in monospace, `inline code`,

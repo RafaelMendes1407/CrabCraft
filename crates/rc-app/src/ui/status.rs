@@ -41,6 +41,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 insight_widget(app, ui);
                 debugger_widget(app, ui);
                 linter_widget(app, ui);
+                target_widget(app, ui);
                 let Some(doc) = app.docs.active_doc() else { return };
                 let e = &doc.editor;
                 let widget = |ui: &mut Ui, text: String, tip: &str| {
@@ -82,6 +83,71 @@ fn linter_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     let name = if app.settings.use_clippy { "Clippy" } else { "Cargo Check" };
     if theme::flat_button(ui, None, name, FontId::proportional(12.5), false, true).on_hover_text(tr("Linter that runs on save. Click to switch.")).clicked() {
         app.toggle_linter();
+    }
+}
+
+/// The target triple the Rust code is analysed for (click: the list of targets).
+fn target_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
+    if app.runner.cargo_workspace.is_none() {
+        return;
+    }
+    let Some(triple) = app.analysis_triple().map(str::to_string) else { return };
+    let resp = theme::flat_button(ui, None, &triple, FontId::proportional(12.5), false, true).on_hover_text(tr("Target the code is analysed for. Click to pick another one."));
+    egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).align(egui::RectAlign::TOP_END).show(|ui| target_menu(app, ui));
+    ui.add_space(4.0);
+}
+
+/// Above this many targets, the list gets a filter field.
+const TARGET_FILTER_FROM: usize = 8;
+
+/// The targets to analyse for: the host, the project's `[build] target` and rustup's targets,
+/// each with what it is (host, from the project, not installed).
+pub fn target_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
+    ui.set_min_width(340.0);
+    let mut list = app.triple_choices.clone();
+    // A target chosen in an earlier session that is no longer listed.
+    if let Some(t) = &app.cargo_target
+        && !list.iter().any(|c| &c.triple == t)
+    {
+        list.insert(0, rc_cargo::TripleChoice { triple: t.clone(), host: false, installed: false, from_config: false });
+    }
+    let p = rc_kit::pal(ui);
+    if list.is_empty() {
+        ui.label(egui::RichText::new(tr("No targets found")).size(12.5).color(p.text_muted));
+        return;
+    }
+    if list.len() > TARGET_FILTER_FROM {
+        ui.add(egui::TextEdit::singleline(&mut app.triple_filter).hint_text(tr("Filter targets")).desired_width(f32::INFINITY));
+        ui.add_space(4.0);
+    }
+    let filter = app.triple_filter.trim().to_ascii_lowercase();
+    let current = app.analysis_triple().map(str::to_string);
+    let room = (ui.ctx().content_rect().height() * 0.6).max(160.0);
+    let mut chosen = None;
+    egui::ScrollArea::vertical().id_salt("target_menu").max_height(room).show(ui, |ui| {
+        for c in list.iter().filter(|c| filter.is_empty() || c.triple.to_ascii_lowercase().contains(&filter)) {
+            let mut marks: Vec<&str> = Vec::new();
+            if c.host {
+                marks.push(tr("host"));
+            }
+            if c.from_config {
+                marks.push(tr("project"));
+            }
+            if !c.installed {
+                marks.push(tr("not installed"));
+            }
+            let marks = marks.join(", ");
+            let resp = theme::menu_entry(ui, None, &c.triple, Some(&marks).filter(|m| !m.is_empty()).map(String::as_str), current.as_deref() == Some(c.triple.as_str()), true);
+            let resp = if c.installed { resp } else { resp.on_hover_text(tr("The standard library of this target is not installed: rust-analyzer may not resolve std")) };
+            if resp.clicked() {
+                chosen = Some(c.triple.clone());
+            }
+        }
+    });
+    if let Some(t) = chosen {
+        app.set_cargo_target(Some(t));
+        app.triple_filter.clear();
+        ui.close();
     }
 }
 
