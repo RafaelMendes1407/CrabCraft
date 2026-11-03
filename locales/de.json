@@ -845,5 +845,18 @@
   },
   "search-results": {
     "… more": "… mehr"
+  },
+  "cli": {
+    "Usage:": "Verwendung:",
+    "Options:": "Optionen:",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "Öffnet Ordner, Cargo-Projekte und Dateien. Dateien gehen an das bereits geöffnete CrabCraft-Fenster, falls vorhanden; ein Ordner oder eine Cargo.toml öffnet sich in einem neuen Fenster.",
+    "Put the caret on line N of the next file": "Setzt den Cursor in Zeile N der nächsten Datei",
+    "Put the caret on column N of the next file": "Setzt den Cursor in Spalte N der nächsten Datei",
+    "Show this help": "Zeigt diese Hilfe",
+    "Show the version": "Zeigt die Version",
+    "Unknown option: {option}": "Unbekannte Option: {option}",
+    "--line and --column must come before a file": "--line und --column müssen vor einer Datei stehen",
+    "{option} needs a number": "{option} braucht eine Zahl",
+    "{option} needs a number from 1 up, not {value}": "{option} braucht eine Zahl ab 1, nicht {value}"
   }
 }

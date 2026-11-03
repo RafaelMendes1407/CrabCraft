@@ -845,5 +845,18 @@
   },
   "search-results": {
     "… more": "… さらに表示"
+  },
+  "cli": {
+    "Usage:": "使い方:",
+    "Options:": "オプション:",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "フォルダー、Cargo プロジェクト、ファイルを開きます。ファイルはすでに開いている CrabCraft ウィンドウに送られます。フォルダーまたは Cargo.toml は新しいウィンドウで開きます。",
+    "Put the caret on line N of the next file": "次のファイルの N 行目にキャレットを置く",
+    "Put the caret on column N of the next file": "次のファイルの N 列目にキャレットを置く",
+    "Show this help": "このヘルプを表示",
+    "Show the version": "バージョンを表示",
+    "Unknown option: {option}": "不明なオプション: {option}",
+    "--line and --column must come before a file": "--line と --column はファイルの前に指定してください",
+    "{option} needs a number": "{option} には数値が必要です",
+    "{option} needs a number from 1 up, not {value}": "{option} には 1 以上の数値が必要です（{value} ではなく）"
   }
 }

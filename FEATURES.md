@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 109 |
+| ✅ Pronto | 110 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 116 |
+| ⬜ A fazer | 115 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -368,7 +368,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |
 | G-09 | Plugins | ⬜ | M6 | |
 | G-10 | Migração a partir do VS Code e do RustRover | ⬜ | M6 | |
-| G-11 | CLI: abrir arquivos | ⬜ | M3 | |
+| G-11 | CLI: abrir arquivos | ✅ | M3 | `crabcraft [--line N] [--column N] arquivo[:linha[:coluna]]…`, com `--help` e `--version` traduzidos; arquivos vão para a janela já aberta (socket do usuário em `$XDG_RUNTIME_DIR` ou na pasta de dados; no Windows porta local com token), pasta ou `Cargo.toml` abre outra janela. Visto na janela nativa: `crabcraft src/main.rs:4:20` pôs o cursor em 4:20 no CrabCraft aberto. Falta `--wait` |
 | G-12 | CLI: diff e merge | ⬜ | M6 | |
 | G-13 | CLI: formatar e inspecionar | ⬜ | M6 | |
 | G-14 | Assistente de IA com modelos locais | ⬜ | M6 | ollama por padrão |

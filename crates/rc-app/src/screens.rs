@@ -255,23 +255,24 @@ fn screens() {
 /// Close Project, quit, start: the welcome screen. Quitting with a project open reopens it.
 #[test]
 fn closed_projects_are_not_reopened_on_startup() {
+    use crate::cli::OpenRequest;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("Shop/Shop.sln");
     let mut app = test_app(home.path(), true);
     app.open_workspace(&sln);
-    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![sln.clone()]);
+    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     app.close_project();
     assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
     app.open_workspace(&sln);
     let mut settings = rc_core::Settings::load();
-    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![sln.clone()]);
+    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     settings.reopen_last = false;
     assert!(crate::app::startup_paths(&settings, Vec::new()).is_empty());
     // Files from Finder win.
     let file = fixtures().join("Shop/README.md");
-    assert_eq!(crate::app::startup_paths(&settings, vec![file.clone()]), vec![file]);
+    assert_eq!(crate::app::startup_paths(&settings, vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
 }
 
 #[test]

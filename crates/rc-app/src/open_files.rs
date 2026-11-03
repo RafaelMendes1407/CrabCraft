@@ -1,14 +1,16 @@
 //! Files the system asks CrabCraft to open: Finder's "Open With" and double-clicks on
-//! associated files (macOS sends them as an Apple Event, not as arguments), queued for the UI.
+//! associated files (macOS sends them as an Apple Event, not as arguments), and the ones later
+//! `crabcraft` calls hand over (see `instance`), queued for the UI.
 //!
 //! winit has no API for it, so `application:openURLs:` is added to `NSObject` before the app
 //! starts: winit's application delegate inherits it and AppKit delivers the files there, also
 //! the ones that launch the app (they arrive before the first frame and wait in the queue).
 
-use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
-static PENDING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+use crate::cli::OpenRequest;
+
+static PENDING: Mutex<Vec<OpenRequest>> = Mutex::new(Vec::new());
 static CTX: OnceLock<egui::Context> = OnceLock::new();
 
 /// Wakes the UI when files arrive while it is idle.
@@ -17,15 +19,15 @@ pub fn set_context(ctx: &egui::Context) {
 }
 
 /// Files received since the last call.
-pub fn take() -> Vec<PathBuf> {
+pub fn take() -> Vec<OpenRequest> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-fn push(paths: Vec<PathBuf>) {
-    if paths.is_empty() {
+pub fn push(requests: Vec<OpenRequest>) {
+    if requests.is_empty() {
         return;
     }
-    PENDING.lock().unwrap_or_else(|e| e.into_inner()).extend(paths);
+    PENDING.lock().unwrap_or_else(|e| e.into_inner()).extend(requests);
     if let Some(ctx) = CTX.get() {
         ctx.request_repaint();
     }
@@ -39,7 +41,7 @@ pub fn install() {
 
     unsafe extern "C-unwind" fn open_urls(_this: &AnyObject, _cmd: Sel, _app: *mut AnyObject, urls: *const NSArray<NSURL>) {
         let Some(urls) = (unsafe { urls.as_ref() }) else { return };
-        let paths = urls.iter().filter_map(|u| u.path()).map(|p| PathBuf::from(p.to_string())).collect();
+        let paths = urls.iter().filter_map(|u| u.path()).map(|p| OpenRequest::path(std::path::PathBuf::from(p.to_string()))).collect();
         push(paths);
     }
 
@@ -59,8 +61,9 @@ pub fn install() {}
 mod tests {
     #[test]
     fn queued_files_are_taken_once() {
-        super::push(vec!["/tmp/a.txt".into(), "/tmp/b.json".into()]);
-        assert_eq!(super::take(), vec![std::path::PathBuf::from("/tmp/a.txt"), "/tmp/b.json".into()]);
+        use crate::cli::OpenRequest;
+        super::push(vec![OpenRequest::path("/tmp/a.txt"), OpenRequest { path: "/tmp/b.json".into(), line: Some(2), column: None }]);
+        assert_eq!(super::take(), vec![OpenRequest::path("/tmp/a.txt"), OpenRequest { path: "/tmp/b.json".into(), line: Some(2), column: None }]);
         assert!(super::take().is_empty());
     }
 }

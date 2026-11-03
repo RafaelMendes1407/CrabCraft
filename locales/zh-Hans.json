@@ -845,5 +845,18 @@
   },
   "search-results": {
     "… more": "… 更多"
+  },
+  "cli": {
+    "Usage:": "用法：",
+    "Options:": "选项：",
+    "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window.": "打开文件夹、Cargo 项目和文件。文件会发送到已打开的 CrabCraft 窗口（如果有）；文件夹或 Cargo.toml 会在新窗口中打开。",
+    "Put the caret on line N of the next file": "将光标放在下一个文件的第 N 行",
+    "Put the caret on column N of the next file": "将光标放在下一个文件的第 N 列",
+    "Show this help": "显示此帮助",
+    "Show the version": "显示版本",
+    "Unknown option: {option}": "未知选项：{option}",
+    "--line and --column must come before a file": "--line 和 --column 必须位于文件之前",
+    "{option} needs a number": "{option} 需要一个数字",
+    "{option} needs a number from 1 up, not {value}": "{option} 需要从 1 开始的数字，而不是 {value}"
   }
 }

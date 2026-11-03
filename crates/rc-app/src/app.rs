@@ -147,7 +147,7 @@ fn double_tap(state: &mut (f64, u8, bool), down: bool, interrupted: bool, now: f
 }
 
 impl CrabCraftApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, open: Vec<crate::cli::OpenRequest>) -> Self {
         let settings = Settings::load();
         i18n::set_lang(settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
         rc_kit::theme::install_fonts(&cc.egui_ctx);
@@ -161,8 +161,8 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        for path in startup_paths(&app.settings, from_system) {
-            app.open_path(&path);
+        for request in startup_paths(&app.settings, from_system) {
+            app.open_request(&request);
         }
         app
     }
@@ -1686,6 +1686,16 @@ impl CrabCraftApp {
         (!inside && path.is_file() && path.file_name().is_some_and(|n| n == "Cargo.toml")).then(|| path.parent().map(Path::to_path_buf)).flatten()
     }
 
+    /// Opens what the command line or the system asked for, at its line and column (1-based).
+    pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
+        match request.line {
+            Some(line) if request.path.is_file() && self.project_of_manifest(&request.path).is_none() && !self.opens_workspace(&request.path) => {
+                self.open_at(&request.path, line - 1, request.column.unwrap_or(1).saturating_sub(1));
+            }
+            _ => self.open_path(&request.path),
+        }
+    }
+
     pub fn open_path(&mut self, path: &Path) {
         if let Some(project) = self.project_of_manifest(path) {
             self.open_workspace(&project);
@@ -1973,11 +1983,11 @@ impl CrabCraftApp {
 
 /// What a start opens: files sent by Finder or the command line, otherwise the project open
 /// at the last quit (none after Close Project, as in Rider).
-pub fn startup_paths(settings: &Settings, from_system: Vec<PathBuf>) -> Vec<PathBuf> {
+pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
     if !from_system.is_empty() {
         return from_system;
     }
-    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).into_iter().collect()
+    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).map(crate::cli::OpenRequest::path).into_iter().collect()
 }
 
 impl eframe::App for CrabCraftApp {
@@ -1993,8 +2003,8 @@ impl eframe::App for CrabCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.window_title = title;
         }
-        for path in crate::open_files::take() {
-            self.open_path(&path);
+        for request in crate::open_files::take() {
+            self.open_request(&request);
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
         if let Some(menu) = &self.native_menu {
