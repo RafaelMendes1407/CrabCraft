@@ -61,7 +61,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
-| P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde` |
+| P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde`. Ícones de `.rs`, `.toml`, `Cargo.toml`, `Cargo.lock` e `.lock`; ao lado de um `Cargo.toml`, `src`/`examples` com ícone de fontes, `tests`/`benches` de testes e `target` de excluída; captura offscreen clara e escura conferida |
 | P-12 | Dependências externas na árvore do projeto | ✅ | M3 | Nó Bibliotecas externas, ver P-11 |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | ✅ | M3 | Menu Adicionar em projetos Cargo; escreve o `mod` no pai, no editor se estiver aberto; visto na janela nativa |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ✅ | M3 | Arquivo Rust ou Módulo Rust (`x/mod.rs`), com opção `pub mod`; `#[path]` não é considerado |
