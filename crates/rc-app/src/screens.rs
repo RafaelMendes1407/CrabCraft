@@ -1208,3 +1208,37 @@ fn cut_copy_and_paste_from_the_editor_context_menu() {
     assert_eq!(text(&h), " beta\nalphagamma\n");
 }
 
+
+/// The VS Code keymap drives the app: Ctrl+P finds files, Ctrl+Shift+P actions, and Ctrl+D
+/// adds the next occurrence in the editor.
+#[test]
+fn vscode_shortcuts_reach_their_actions() {
+    use crate::search::SeTab;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    h.state_mut().keymap = rc_editor::Keymap::new(rc_editor::KeymapKind::VsCode);
+    let ctrl = egui::Modifiers::CTRL;
+
+    h.key_press_modifiers(ctrl, egui::Key::P);
+    h.run_steps(3);
+    assert_eq!(se(&h).tab, SeTab::Files);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert!(h.state().search_everywhere.is_none());
+    h.key_press_modifiers(ctrl | egui::Modifiers::SHIFT, egui::Key::P);
+    h.run_steps(3);
+    assert_eq!(se(&h).tab, SeTab::Actions);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+
+    let file = root.join("beta/src/lib.rs");
+    h.state_mut().open_at(&file, 3, 14);
+    h.run_steps(3);
+    h.key_press_modifiers(ctrl, egui::Key::D);
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    let rope = doc.editor.buffer.rope();
+    let texts: Vec<String> = doc.editor.selection.ranges().iter().map(|r| rope.slice(r.start()..r.end()).to_string()).collect();
+    assert_eq!(texts, ["NEEDLE"], "Ctrl+D selects the word at the caret first");
+}

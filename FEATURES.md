@@ -360,7 +360,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
 | G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
-| G-03 | Keymaps | 🟢 | M1 | Adicionar o keymap do RustRover: o herdado é o do Rider |
+| G-03 | Keymaps | 🟢 | M1 | Rider (macOS e Windows/Linux), Visual Studio e VS Code (macOS e Windows/Linux, atalhos padrão da referência pública do VS Code; acordes de duas etapas como Ctrl+K Ctrl+S ainda não existem). VS Code testado headless: Ctrl+P, Ctrl+Shift+P e Ctrl+D. Falta o keymap do RustRover: o herdado é o do Rider |
 | G-04 | Configurar atalhos | ⬜ | M3 | |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |
 | G-06 | Backup e sincronização de configurações | ⬜ | M6 | Exportar/importar arquivo |

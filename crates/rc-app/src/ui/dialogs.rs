@@ -245,10 +245,12 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                             .selected_text(match draft.keymap {
                                 KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
                                 KeymapChoice::VisualStudio => "Visual Studio",
+                                KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
                             })
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::Rider, if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" });
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::VisualStudio, "Visual Studio");
+                                ui.selectable_value(&mut draft.keymap, KeymapChoice::VsCode, if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" });
                             });
                         ui.end_row();
                     }

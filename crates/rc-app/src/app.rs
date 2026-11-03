@@ -2104,6 +2104,8 @@ impl eframe::App for CrabCraftApp {
 pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
     match choice {
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
+        KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
+        KeymapChoice::VsCode => KeymapKind::VsCode,
         KeymapChoice::Rider if cfg!(target_os = "macos") => KeymapKind::RiderMac,
         KeymapChoice::Rider => KeymapKind::Rider,
     }

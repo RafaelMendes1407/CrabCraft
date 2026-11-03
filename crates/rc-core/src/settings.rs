@@ -20,6 +20,8 @@ pub enum KeymapChoice {
     #[default]
     Rider,
     VisualStudio,
+    /// VS Code's default for the platform.
+    VsCode,
 }
 
 /// How rustfmt runs. Kept as the user typed it; `rc_cargo::Rustfmt` reads and checks it.
