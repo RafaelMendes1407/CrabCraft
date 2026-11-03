@@ -26,6 +26,10 @@ pub struct Doc {
     pub conflict: bool,
     /// Markdown files: editor, preview or both side by side.
     pub md_view: Option<MdView>,
+    /// A scratch file (outside every project): rust-analyzer is not asked about it.
+    pub scratch: bool,
+    /// Written by the IDE (a macro expansion): read-only and never sent to the language server.
+    pub generated: bool,
 }
 
 /// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
@@ -123,7 +127,7 @@ impl Docs {
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch: rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path), generated: false });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -149,17 +153,6 @@ impl Docs {
             }
             None => Ok(i),
         }
-    }
-
-    /// Moves tab `from` to `to` (drag and drop), keeping the active document.
-    pub fn move_tab(&mut self, from: usize, to: usize) {
-        if from >= self.list.len() || to >= self.list.len() || from == to {
-            return;
-        }
-        let active = self.active.map(|a| self.list[a].editor.id);
-        let doc = self.list.remove(from);
-        self.list.insert(to, doc);
-        self.active = active.and_then(|id| self.list.iter().position(|d| d.editor.id == id));
     }
 
     pub fn activate(&mut self, i: usize) {
@@ -318,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn preview_tabs_are_replaced_until_kept_and_tabs_reorder() {
+    fn preview_tabs_are_replaced_until_kept() {
         let dir = tempfile::tempdir().unwrap();
         for f in ["a.cs", "b.cs", "c.cs", "d.cs"] {
             std::fs::write(dir.path().join(f), "class X {}\n").unwrap();
@@ -335,8 +328,6 @@ mod tests {
         docs.list[1].preview = false;
         docs.open_preview(&dir.path().join("d.cs")).unwrap();
         assert_eq!(docs.list.len(), 3);
-        docs.move_tab(2, 0);
-        assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["d.cs", "a.cs", "c.cs"]);
         assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
     }
 }

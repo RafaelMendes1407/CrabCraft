@@ -375,6 +375,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         &[
             &item(MenuCommand::NewSolution, || tr("New Project…"), None),
             &item(MenuCommand::NewFile, || tr("New File…"), None),
+            &act(Action::NewScratchFile, || tr("New Scratch File…")),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
@@ -478,6 +479,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::Complete, || tr("Code Completion")),
             &act(Action::ParameterInfo, || tr("Parameter Info")),
             &act(Action::ExternalDocs, || tr("External Documentation")),
+            &act(Action::ExpandMacro, || tr("Expand Macro Recursively")),
             &act(Action::QuickDoc, || tr("Quick Documentation")),
             &act(Action::ShowIntentions, || tr("Show Context Actions")),
             &sep(),

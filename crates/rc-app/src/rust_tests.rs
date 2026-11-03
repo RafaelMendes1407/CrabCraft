@@ -564,6 +564,51 @@ fn external_documentation_finds_the_page_of_an_item() {
 }
 
 #[test]
+fn a_macro_call_expands_recursively_into_a_read_only_tab() {
+    use crate::insight::InsightOutput;
+    const SOURCE: &str = "macro_rules! twice {\n    ($e:expr) => { double!($e) + double!($e) };\n}\nmacro_rules! double {\n    ($e:expr) => { $e * 2 };\n}\nfn main() {\n    let _n = twice!(21);\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    // On `twice!`: both levels expanded. Asked again until the server has indexed the file.
+    let start = Instant::now();
+    let (name, text) = loop {
+        app.insight.expand_macro(&app.docs.list[i], SOURCE.find("twice!(21)").unwrap() + 2);
+        let reply = output(&mut app, "the expansion", |o| match o {
+            InsightOutput::MacroExpansion { name, text } => Some(Some((name.clone(), text.clone()))),
+            InsightOutput::Message(_) => Some(None),
+            _ => None,
+        });
+        match reply {
+            Some(found) => break found,
+            None if start.elapsed() < Duration::from_secs(120) => std::thread::sleep(Duration::from_millis(500)),
+            None => panic!("no expansion"),
+        }
+    };
+    // Not on a macro call: said so.
+    app.insight.expand_macro(&app.docs.list[i], SOURCE.find("fn main").unwrap() + 1);
+    output(&mut app, "the empty answer", |o| matches!(o, InsightOutput::Message(_)).then_some(()));
+    assert_eq!(name, "twice");
+    assert!(text.contains("21*2") || text.contains("21 * 2"), "{text}");
+    assert!(!text.contains("double!"), "{text}");
+    app.show_macro_expansion(&name, &text);
+    let d = app.docs.active_doc().unwrap();
+    assert_eq!(d.name(), "twice.rs");
+    assert!(d.editor.read_only && d.generated && !crate::insight::has_insight(d));
+    assert!(d.editor.buffer.rope().to_string().contains(&text), "{:?} / {text:?}", d.editor.buffer.rope().to_string());
+    app.insight.stop();
+}
+
+#[test]
 fn the_type_hierarchy_lists_implementations() {
     const SOURCE: &str = "trait Speak {\n    fn speak(&self);\n}\nstruct A;\nstruct B;\nimpl Speak for A {\n    fn speak(&self) {}\n}\nimpl Speak for B {\n    fn speak(&self) {}\n}\nimpl A {\n    fn own(&self) {}\n}\ntrait Lonely {}\nfn main() {}\n";
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -859,6 +904,82 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     let t = app.runner.tests.as_ref().unwrap();
     assert_eq!((t.passed, t.failed), (0, 1));
     assert!(t.results.keys().eq(["checks::bad"].iter().copied()), "{:?}", t.results.keys());
+}
+
+/// A real Ctrl+click (⌘ on macOS) in the rendered editor, as a mouse sends it.
+fn command_click(h: &mut egui_kittest::Harness<'static, CrabCraftApp>, at: egui::Pos2) {
+    let mods = egui::Modifiers::COMMAND;
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run_steps(2);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: mods });
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: mods });
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+}
+
+#[test]
+fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "use demo::Greeter;\n\nfn main() {\n    let text: String = Greeter.hello().to_string();\n    println!(\"{text}\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.trust_project();
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    let ready = |a: &CrabCraftApp| a.insight.status == InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty());
+    let start = Instant::now();
+    while !ready(h.state()) {
+        assert!(start.elapsed() < Duration::from_secs(180), "timed out waiting for rust-analyzer: {:?}", h.state().insight.status);
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    // Where a word of main.rs is drawn: put the caret in it and read the caret's place.
+    let place = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, line: usize, col: usize| {
+        let i = h.state().docs.index_of(&main).unwrap();
+        h.state_mut().docs.activate(i);
+        h.state_mut().docs.list[i].editor.goto(line, col);
+        h.run_steps(3);
+        h.state().caret_screen.unwrap() + egui::vec2(1.0, -6.0)
+    };
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(h.state()) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+    let at = |a: &CrabCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0));
+
+    // The method: to `pub fn hello` in lib.rs.
+    let p = place(&mut h, 3, "    let text: String = Greeter.he".len());
+    command_click(&mut h, p);
+    wait(&mut h, "hello in lib.rs", &|a| at(a) == Some((root.join("src/lib.rs"), 3)));
+
+    // The type, from its `use`: to `pub struct Greeter`.
+    let p = place(&mut h, 0, "use demo::Gre".len());
+    command_click(&mut h, p);
+    wait(&mut h, "Greeter in lib.rs", &|a| at(a) == Some((root.join("src/lib.rs"), 0)));
+
+    // A standard library type opens read-only.
+    let p = place(&mut h, 3, "    let text: Str".len());
+    command_click(&mut h, p);
+    wait(&mut h, "String in the standard library", &|a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("string.rs") && d.editor.read_only));
+
+    // Back returns to the click.
+    h.state_mut().run_ide_action(&egui::Context::default(), rc_editor::Action::NavigateBack);
+    assert_eq!(at(h.state()).map(|(p, l)| (p, l)), Some((main.clone(), 3)));
+    h.state_mut().insight.stop();
 }
 
 #[test]
@@ -1534,7 +1655,21 @@ fn generate_offers_only_what_writes_code() {
         _ => None,
     });
     assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
-    assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // The IDE's own Derive row comes first on a type.
+    assert_eq!(found[0], "Derive…", "{found:?}");
+    assert!(found[1..].iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // Deriving writes the attribute above the type, and a second time merges into it.
+    for traits in [vec!["Debug", "Clone"], vec!["Debug", "Clone", "PartialEq"]] {
+        let d = &mut app.docs.list[i];
+        let t = crate::insight::derive_target_of(d).unwrap();
+        let (a, b, new) = t.edit(&traits.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        d.editor.replace(a, b, &new);
+        d.editor.parse_blocking();
+    }
+    let edited = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(edited.starts_with("#[derive(Debug, Clone, PartialEq)]\nstruct A {"), "{edited}");
+    app.docs.list[i].editor.reload(text);
+    app.docs.list[i].editor.parse_blocking();
 
     // Refactor This offers Rename and the refactorings, and no generators.
     let at = text.find("1 + 2").unwrap();
@@ -1765,5 +1900,47 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     app.save_all_docs();
     pump(&mut app, "rustfmt to change the file on disk", |_| std::fs::read_to_string(&main).is_ok_and(|t| t.starts_with("fn main() {\n")));
     pump(&mut app, "the lint of Clippy", |a| lint(a));
+    app.insight.stop();
+}
+
+#[test]
+fn a_warning_is_suppressed_for_its_statement_or_the_file() {
+    use crate::insight::{InsightOutput, SUPPRESS_COMMAND};
+    const SOURCE: &str = "fn main() {\n    let unused = 1;\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs").canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // rustc's warning arrives with `cargo check` on save, named by its lint.
+    app.insight.did_save(&main);
+    pump(&mut app, "the warning of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("unused_variables"))));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("unused =").unwrap());
+    app.insight.code_actions(&app.docs.list[i]);
+    let rows = output(&mut app, "the context actions", |o| match o {
+        InsightOutput::Actions(list) => Some(
+            list.iter()
+                .filter_map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) if c.command == SUPPRESS_COMMAND => Some(c.title.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    });
+    assert_eq!(rows, vec!["Suppress `unused_variables` for the statement", "Suppress `unused_variables` for the file"]);
+    let (a, b, text) = crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "item").unwrap();
+    app.docs.list[i].editor.replace(a, b, &text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    #[allow(unused_variables)]\n    let unused = 1;\n}\n");
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "file").map(|e| e.2), Some("#![allow(unused_variables)]\n".into()));
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unresolved-import", "item"), None);
     app.insight.stop();
 }
