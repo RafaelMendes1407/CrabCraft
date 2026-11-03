@@ -144,6 +144,10 @@ pub enum RunnerOutput {
 }
 
 pub struct Runner {
+    /// The external tools of the settings, for "before launch" tasks.
+    pub external_tools: Vec<rc_core::external_tools::ExternalTool>,
+    /// What the macros of those tools stand for, set by the app before each run.
+    pub macro_context: rc_core::external_tools::MacroContext,
     pub configs: Vec<RunConfig>,
     pub selected: usize,
     pub build: Option<BuildState>,
@@ -171,7 +175,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -419,8 +423,17 @@ impl Runner {
     /// A binary of the Rust workspace, with the user's edits applied.
     fn cargo_target(&self, name: &str, package: String, bin: String) -> Option<rc_cargo::RunTarget> {
         let manifest = self.cargo_workspace.as_ref()?.manifest.clone();
-        let mut target = rc_cargo::RunTarget { test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
+        let mut target = rc_cargo::RunTarget { before: Vec::new(), test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
         if let Some(o) = self.options.get(name) {
+            // A tool that cannot start (renamed, a macro without a value) stops the run with
+            // its reason.
+            for tool_name in &o.before_launch {
+                let plan = match self.external_tools.iter().find(|t| &t.name == tool_name) {
+                    Some(tool) => crate::app::external_plan(tool, &self.macro_context, self.project_env_pairs()),
+                    None => Err(trf("There is no external tool called {name}", &[("name", tool_name)])),
+                };
+                target.before.push(rc_cargo::BeforeLaunch { name: tool_name.clone(), plan });
+            }
             target.args = rc_dotnet::process::split_command_line(&o.args);
             target.env = o.env_pairs();
             if !o.working_dir.trim().is_empty() {
@@ -648,7 +661,7 @@ impl Runner {
             for ev in b.inbox.drain() {
                 match ev {
                     BuildEvent::Started { command } => b.console.note(&command),
-                    BuildEvent::Output(line) => b.console.line(&line),
+                    BuildEvent::Output(line) | BuildEvent::Task(line) => b.console.line(&line),
                     BuildEvent::Diagnostic(d) => b.diagnostics.push(d),
                     BuildEvent::Finished(r) => {
                         b.handle = None;
@@ -679,6 +692,7 @@ impl Runner {
                     RunEvent::Build(BuildEvent::Finished(res)) if !res.success => {
                         out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone()));
                     }
+                    RunEvent::Build(BuildEvent::Task(line)) => r.console.line(&line),
                     RunEvent::Build(_) => {}
                     RunEvent::Started { plan, .. } => {
                         r.console.note(&plan.command_line());

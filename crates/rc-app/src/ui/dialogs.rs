@@ -695,6 +695,27 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                     }
                 });
                 ui.end_row();
+                ui.label(tr("Before launch"));
+                ui.vertical(|ui| {
+                    let tools: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
+                    // Tools that no longer exist stay listed, so they can be unchecked.
+                    let gone: Vec<String> = o.before_launch.iter().filter(|n| !tools.contains(n)).cloned().collect();
+                    for name in tools.iter().chain(&gone) {
+                        let mut on = o.before_launch.contains(name);
+                        let label = if gone.contains(name) { trf("{name} (missing)", &[("name", name)]) } else { name.clone() };
+                        if ui.checkbox(&mut on, label).changed() {
+                            if on {
+                                o.before_launch.push(name.clone());
+                            } else {
+                                o.before_launch.retain(|n| n != name);
+                            }
+                        }
+                    }
+                    if tools.is_empty() && gone.is_empty() {
+                        ui.label(egui::RichText::new(tr("Add external tools in Settings › External Tools to run them before the build")).color(p.muted));
+                    }
+                });
+                ui.end_row();
             }
             if !rust {
             ui.label("");

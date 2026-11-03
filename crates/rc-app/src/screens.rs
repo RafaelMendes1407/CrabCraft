@@ -1425,3 +1425,29 @@ fn toolchain_updates_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("toolchain-updates.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/before-launch.png"]
+fn before_launch_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.settings.external_tools = vec![
+        rc_core::external_tools::ExternalTool { name: "Generate schema".into(), program: "sh".into(), ..Default::default() },
+        rc_core::external_tools::ExternalTool { name: "Lint SQL".into(), program: "sqlfluff".into(), ..Default::default() },
+    ];
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the workspace", |a| !a.runner.configs.is_empty());
+    let name = h.state().runner.configs[0].name.clone();
+    h.state_mut().runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Lint SQL".into(), "Old tool".into()], ..Default::default() });
+    h.state_mut().edit_run_config(Some(name));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("before-launch.png")).unwrap();
+}

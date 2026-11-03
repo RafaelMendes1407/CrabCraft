@@ -1,0 +1,5 @@
+# Before launch tasks of run configurations. Import: python3 scripts/i18n_tsv.py before-launch scripts/i18n/before-launch.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Before launch	Antes de ejecutar	Avant le lancement	Antes de executar	Vor dem Start	Przed uruchomieniem	启动前	起動前
+{name} (missing)	{name} (no existe)	{name} (introuvable)	{name} (não existe)	{name} (fehlt)	{name} (brak)	{name}（缺失）	{name}（見つかりません）
+Add external tools in Settings › External Tools to run them before the build	Añade herramientas externas en Configuración › Herramientas externas para ejecutarlas antes de compilar	Ajoutez des outils externes dans Paramètres › Outils externes pour les lancer avant la compilation	Adicione ferramentas externas em Configurações › Ferramentas externas para executá-las antes do build	Füge externe Tools unter Einstellungen › Externe Tools hinzu, um sie vor dem Build auszuführen	Dodaj narzędzia zewnętrzne w Ustawienia › Narzędzia zewnętrzne, aby uruchamiać je przed budowaniem	在“设置 › 外部工具”中添加外部工具，以便在构建前运行	ビルド前に実行するには、設定 › 外部ツールで外部ツールを追加してください

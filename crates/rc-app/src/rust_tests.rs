@@ -2605,3 +2605,41 @@ fn rustup_checks_updates_and_runs_commands() {
     app.poll_toolchain_updates();
     assert!(app.toolchain.is_none(), "read again after a rustup command");
 }
+
+/// A run configuration's "before launch" tools run first, in order, with their output in the
+/// Run window; one that fails stops the launch with its exit code.
+#[cfg(unix)]
+#[test]
+fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
+    use rc_core::external_tools::ExternalTool;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"hello from main\");\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.external_tools = vec![
+        ExternalTool { name: "Greet".into(), program: "sh".into(), args: "-c 'echo prepared $FileName$'".into(), working_dir: String::new() },
+        ExternalTool { name: "Fail".into(), program: "false".into(), args: String::new(), working_dir: String::new() },
+    ];
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    let name = app.runner.configs[0].name.clone();
+    app.runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Greet".into()], ..Default::default() });
+    app.runner.selected = 0;
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(0)), "{text}");
+    let (greet, main) = (text.find("prepared main.rs"), text.find("hello from main"));
+    assert!(greet.is_some() && greet < main, "the tool runs before the program:\n{text}");
+
+    app.runner.options.insert(name, rc_core::session::RunOptions { before_launch: vec!["Fail".into(), "Greet".into()], ..Default::default() });
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the stopped launch", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("Fail failed with exit code 1"), "{text}");
+    assert!(!text.contains("hello from main") && !text.contains("prepared"), "{text}");
+}

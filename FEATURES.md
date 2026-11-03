@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 115 |
+| ✅ Pronto | 116 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 109 |
+| ⬜ A fazer | 108 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -229,7 +229,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-16 | Configuração wasm-pack | ⬜ | M4 | |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ✅ | M3 | short, full ou 0 na configuração; o ambiente da configuração tem prioridade |
 | B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |
-| B-19 | Tarefas antes do launch | ⬜ | M3 | |
+| B-19 | Tarefas antes do launch | ✅ | M3 | Configuração Cargo › Antes de executar: ferramentas externas marcadas rodam antes do build, na ordem em que foram marcadas, também ao depurar; a saída vai para a janela Run (ou o console do depurador) e uma que falha (ou some, ou tem macro sem valor) impede a execução com o motivo. Testado com Cargo real; captura conferida. Falta: tarefas que não sejam ferramentas externas |
 | B-20 | Configurações temporárias e salvar como permanente | ⬜ | M3 | |
 | B-21 | Pastas de configurações | ⬜ | M4 | |
 | B-22 | Argumentos após `--` e redirecionar stdin | ✅ | M3 | Argumentos vão direto ao programa; arquivo de entrada testado, ignorado ao depurar |

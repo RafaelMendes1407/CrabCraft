@@ -904,5 +904,10 @@
     "{name}: {current} → {new}": "{name}：{current} → {new}",
     "{name}: {current}, up to date": "{name}：{current}，已是最新",
     "rustup was not found: this toolchain was not installed with it": "未找到 rustup：此工具链不是用它安装的"
+  },
+  "before-launch": {
+    "Before launch": "启动前",
+    "{name} (missing)": "{name}（缺失）",
+    "Add external tools in Settings › External Tools to run them before the build": "在“设置 › 外部工具”中添加外部工具，以便在构建前运行"
   }
 }

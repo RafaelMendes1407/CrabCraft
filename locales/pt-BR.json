@@ -904,5 +904,10 @@
     "{name}: {current} → {new}": "{name}: {current} → {new}",
     "{name}: {current}, up to date": "{name}: {current}, atualizado",
     "rustup was not found: this toolchain was not installed with it": "O rustup não foi encontrado: esta toolchain não foi instalada com ele"
+  },
+  "before-launch": {
+    "Before launch": "Antes de executar",
+    "{name} (missing)": "{name} (não existe)",
+    "Add external tools in Settings › External Tools to run them before the build": "Adicione ferramentas externas em Configurações › Ferramentas externas para executá-las antes do build"
   }
 }

@@ -196,6 +196,7 @@ impl CrabCraftApp {
             runner: {
                 let mut runner = Runner::new(waker.clone());
                 runner.nextest = settings.use_nextest;
+                runner.external_tools = settings.external_tools.clone();
                 runner
             },
             debugger: crate::debugger::Debugger::new(waker.clone()),
@@ -1191,6 +1192,11 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if matches!(action, Action::Run | Action::Debug) {
+            // "Before launch" tools see the file and caret of this moment.
+            self.runner.macro_context = self.macro_context();
+            self.runner.external_tools = self.settings.external_tools.clone();
+        }
         match action {
             Action::SaveAll | Action::Save => {
                 self.save_all_docs();
@@ -1710,7 +1716,7 @@ impl CrabCraftApp {
         // One thread, so stepping stays in the test being debugged.
         args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
-        let target = rc_cargo::RunTarget { manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
+        let target = rc_cargo::RunTarget { before: Vec::new(), manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
         let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
         self.debug_rust_test(config, target);
     }
@@ -1890,6 +1896,7 @@ impl CrabCraftApp {
         let keymap_changed = new.keymap != self.settings.keymap;
         self.settings = new;
         self.runner.nextest = self.settings.use_nextest;
+        self.runner.external_tools = self.settings.external_tools.clone();
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));

@@ -44,11 +44,13 @@ pub struct RunOptions {
     pub backtrace: String,
     /// Rust: a file to read as the program's input.
     pub stdin_file: String,
+    /// Rust: external tools (by name) run first, in order; one that fails stops the launch.
+    pub before_launch: Vec<String>,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new() }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new() }
     }
 }
 

@@ -84,6 +84,9 @@ pub enum BuildEvent {
     /// The command line, once the process started.
     Started { command: String },
     Output(OutputLine),
+    /// Output of a task run before the build (a run configuration's "before launch" tool):
+    /// shown even where the build's own output is hidden.
+    Task(OutputLine),
     Diagnostic(Diagnostic),
     /// Always the last event (also when cancelled).
     Finished(BuildResult),

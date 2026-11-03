@@ -241,6 +241,46 @@ pub struct RunTarget {
     /// Cargo arguments of a test executable to build, instead of the binary `bin`.
     pub test: Option<Vec<String>>,
     pub options: CargoOptions,
+    /// Programs run first, in order (the configuration's "before launch" tasks); one that
+    /// fails stops the launch.
+    pub before: Vec<BeforeLaunch>,
+}
+
+/// A task of a run configuration that runs before the build.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BeforeLaunch {
+    /// The name shown in the console (an external tool's).
+    pub name: String,
+    /// What to start, or why it cannot start (the launch then stops with that reason).
+    pub plan: Result<LaunchPlan, String>,
+}
+
+/// Runs the tasks before a launch, their output going to the build's. `Ok(false)` when cancelled.
+async fn run_before(tasks: &[BeforeLaunch], cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<bool> {
+    for task in tasks {
+        let plan = task.plan.as_ref().map_err(|e| anyhow::anyhow!("before launch, {}: {e}", task.name))?;
+        let line = std::iter::once(plan.program.display().to_string()).chain(plan.args.iter().cloned()).collect::<Vec<_>>().join(" ");
+        on_build(BuildEvent::Task(OutputLine { stream: Stream::Stdout, text: format!("{}: {line}", task.name), newline: true }));
+        let mut cmd = tokio::process::Command::new(&plan.program);
+        cmd.args(&plan.args).current_dir(&plan.working_dir);
+        for (k, v) in &plan.env {
+            cmd.env(k, v);
+        }
+        let events = std::sync::Mutex::new(&mut *on_build);
+        let opts = StreamOpts { partial_lines: false, grace: STOP_GRACE, stdin: None };
+        let outcome = run_streaming(cmd, cancel, opts, &mut |_| {}, &mut |l| {
+            if let Ok(mut f) = events.lock() {
+                f(BuildEvent::Task(l));
+            }
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("{}: {e}", task.name))?;
+        if outcome.cancelled {
+            return Ok(false);
+        }
+        anyhow::ensure!(outcome.code == Some(0), "before launch, {} failed with exit code {}", task.name, outcome.code.map_or("?".to_string(), |c| c.to_string()));
+    }
+    Ok(true)
 }
 
 /// Arguments that build just this binary.
@@ -327,6 +367,9 @@ async fn launch(plan: LaunchPlan, cancel: &CancelToken, input: mpsc::UnboundedRe
 /// Builds the binary and resolves what to start. `Ok(None)` when cancelled.
 pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<Option<LaunchPlan>> {
     t.options.check().map_err(anyhow::Error::msg)?;
+    if !run_before(&t.before, cancel, &mut *on_build).await? {
+        return Ok(None);
+    }
     let (result, executables) = invoke(cargo, &t.manifest, &run_build_args(t), cancel, &mut *on_build).await?;
     on_build(BuildEvent::Finished(result.clone()));
     if result.cancelled {
@@ -531,7 +574,7 @@ mod tests_args {
     #[test]
     fn options_change_the_build_and_bad_values_are_refused() {
         let options = CargoOptions { channel: "nightly".into(), profile: "release".into(), features: vec!["a".into(), "b".into()], ..Default::default() };
-        let t = RunTarget { manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
+        let t = RunTarget { before: Vec::new(), manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
         let args = run_build_args(&t);
         assert_eq!(args[..2], ["+nightly", "build"]);
         assert!(args.ends_with(&["--profile".into(), "release".into(), "--features".into(), "a,b".into()]), "{args:?}");
