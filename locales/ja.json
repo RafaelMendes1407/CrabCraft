@@ -934,5 +934,12 @@
     "Description": "説明",
     "Add Template": "テンプレートを追加",
     "Restore Defaults": "既定値に戻す"
+  },
+  "refactor-preview": {
+    "Preview": "プレビュー",
+    "List the changes first and pick the ones to make": "先に変更を一覧にし、適用するものを選びます",
+    "Listing the changes…": "変更を一覧にしています…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 個のファイルに {n} 件の変更があります。除外するものはチェックを外してください。",
+    "Refactor": "リファクタリング"
   }
 }

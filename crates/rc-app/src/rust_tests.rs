@@ -180,7 +180,7 @@ fn rust_language_features() {
     // Rename across files: the use in main.rs and the definition in lib.rs.
     let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
     let i = app.docs.active.unwrap();
-    app.insight.rename(&app.docs.list[i], pos, "greet");
+    app.insight.rename(&app.docs.list[i], pos, "greet", None);
     pump(&mut app, "the rename", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("Greeter.greet()")));
     pump(&mut app, "the definition to change", |_| std::fs::read_to_string(root.join("src/lib.rs")).is_ok_and(|t| t.contains("pub fn greet(")));
 
@@ -2758,4 +2758,50 @@ fn emulated_terminal_runs_see_a_tty_and_take_input() {
     let text = app.runner.runs[0].console.term.screen_lines().join("\n");
     assert!(text.contains("got crab"), "{text}");
     assert_eq!(app.runner.runs[0].exit, Some(Some(3)));
+}
+
+/// Rename › Preview lists rust-analyzer's edits with their lines; unchecking one leaves it
+/// out of the refactoring.
+#[test]
+fn a_rename_preview_applies_only_the_checked_changes() {
+    use crate::ui::dialogs::Dialog;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
+    let i = app.docs.active.unwrap();
+    app.insight.rename(&app.docs.list[i], pos, "greet", Some("Rename".into()));
+    pump(&mut app, "the preview", |a| match &mut a.dialog {
+        Some(Dialog::RefactorPreview(p)) => {
+            p.update();
+            !p.loading()
+        }
+        _ => false,
+    });
+    let Some(Dialog::RefactorPreview(preview)) = &mut app.dialog else { unreachable!() };
+    let lines: Vec<(String, String)> = preview.changes.iter().map(|c| (c.path.file_name().unwrap().to_string_lossy().into_owned(), c.after.trim().to_string())).collect();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert!(lines.contains(&("main.rs".into(), "println!(\"{}\", Greeter.greet());".into())), "{lines:?}");
+    // Nothing changed yet.
+    assert!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap().contains("pub fn hello("));
+    for c in &mut preview.changes {
+        if c.after.contains("assert_eq!") {
+            c.checked = false;
+        }
+    }
+    let checked = preview.checked();
+    crate::insight::apply_file_edits(&mut app.docs, checked).unwrap();
+    let main_text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(main_text.contains("Greeter.greet()"), "{main_text}");
+    let lib = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
+    assert!(lib.contains("pub fn greet(") && lib.contains("Greeter.hello(), \"hello\""), "the unchecked test line stays:\n{lib}");
 }

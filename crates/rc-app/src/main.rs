@@ -10,6 +10,7 @@ mod call_tree;
 mod item_templates;
 mod layout;
 mod local_history;
+mod refactor_preview;
 mod run_anything;
 mod runner;
 mod rustfmt;

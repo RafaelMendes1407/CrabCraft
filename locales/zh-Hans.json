@@ -934,5 +934,12 @@
     "Description": "描述",
     "Add Template": "添加模板",
     "Restore Defaults": "恢复默认值"
+  },
+  "refactor-preview": {
+    "Preview": "预览",
+    "List the changes first and pick the ones to make": "先列出更改，再选择要进行的更改",
+    "Listing the changes…": "正在列出更改…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 个文件中有 {n} 处更改。取消勾选要排除的更改。",
+    "Refactor": "重构"
   }
 }

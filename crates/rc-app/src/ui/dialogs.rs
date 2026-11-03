@@ -31,6 +31,8 @@ pub enum Dialog {
     Rename { path: PathBuf, name: String, error: Option<String> },
     /// After the new name of a file: the other changes the rename brings.
     RenameFile(Box<crate::file_rename::FileRename>),
+    /// The edits of a refactoring, to review before applying them.
+    RefactorPreview(Box<crate::refactor_preview::RefactorPreview>),
     ConfirmDelete { path: PathBuf },
     /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
     InvalidateCaches { clean: bool },
@@ -86,6 +88,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::RenameFile(r) => rename_file(app, ctx, r),
+        Dialog::RefactorPreview(r) => refactor_preview(app, ctx, r),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -1158,30 +1161,7 @@ fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename
                 ui.label(egui::RichText::new(trf("The language server could not list the references: {error}", &[("error", e)])).size(12.0).color(p.warn));
             }
             ui.add_space(6.0);
-            egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
-                let mut i = 0;
-                while i < r.changes.len() {
-                    let path = r.changes[i].path.clone();
-                    let end = (i..r.changes.len()).find(|&j| r.changes[j].path != path).unwrap_or(r.changes.len());
-                    let shown = root.as_ref().and_then(|root| path.strip_prefix(root).ok()).unwrap_or(&path).display().to_string();
-                    let mut all = r.changes[i..end].iter().all(|c| c.checked);
-                    if ui.checkbox(&mut all, egui::RichText::new(&shown).strong()).changed() {
-                        for c in &mut r.changes[i..end] {
-                            c.checked = all;
-                        }
-                    }
-                    for c in &mut r.changes[i..end] {
-                        ui.horizontal(|ui| {
-                            ui.add_space(22.0);
-                            let kind = if c.from_server { tr("code reference") } else { tr("text match") };
-                            let label = format!("{}: {} \u{2192} {}", c.line + 1, clip(c.before.trim()), clip(c.after.trim()));
-                            ui.checkbox(&mut c.checked, egui::RichText::new(label).monospace().size(12.0));
-                            ui.label(egui::RichText::new(kind).size(11.0).color(p.muted));
-                        });
-                    }
-                    i = end;
-                }
-            });
+            change_list(ui, &mut r.changes, root.as_deref(), p.muted, true);
         }
         if let Some(e) = &r.error {
             ui.colored_label(p.error, e);
@@ -1200,6 +1180,81 @@ fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename
         return finish_rename(app, r, update);
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The refactoring's changes, grouped by file, each with a checkbox; Refactor applies the
+/// checked ones.
+fn refactor_preview(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refactor_preview::RefactorPreview) -> Outcome {
+    r.update();
+    let loading = r.loading();
+    if loading {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let title_text = r.title.clone();
+    let ((apply, cancel), esc) = modal(ctx, "refactor_preview", 680.0, |ui| {
+        title(ui, &title_text);
+        if loading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(tr("Listing the changes…"));
+            });
+        } else {
+            let mut files: Vec<&PathBuf> = r.changes.iter().map(|c| &c.path).collect();
+            files.dedup();
+            ui.label(trf("{n} changes in {files} files. Uncheck the ones to leave out.", &[("n", &r.changes.len()), ("files", &files.len())]));
+            ui.add_space(6.0);
+            change_list(ui, &mut r.changes, root.as_deref(), p.muted, false);
+        }
+        if let Some(e) = &r.error {
+            ui.colored_label(p.error, e);
+        }
+        buttons(ui, tr("Refactor"), !loading && r.changes.iter().any(|c| c.checked))
+    });
+    if apply {
+        return match crate::insight::apply_file_edits(&mut app.docs, r.checked()) {
+            Ok(n) => {
+                app.notify(trf("Renamed in {n} files", &[("n", &n)]), false);
+                Outcome::Close
+            }
+            Err(e) => {
+                r.error = Some(e);
+                Outcome::Keep
+            }
+        };
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Changes grouped by file, with a checkbox per file and per change.
+fn change_list(ui: &mut Ui, changes: &mut [crate::file_rename::Change], root: Option<&std::path::Path>, muted: egui::Color32, kinds: bool) {
+    egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+        let mut i = 0;
+        while i < changes.len() {
+            let path = changes[i].path.clone();
+            let end = (i..changes.len()).find(|&j| changes[j].path != path).unwrap_or(changes.len());
+            let shown = root.and_then(|root| path.strip_prefix(root).ok()).unwrap_or(&path).display().to_string();
+            let mut all = changes[i..end].iter().all(|c| c.checked);
+            if ui.checkbox(&mut all, egui::RichText::new(&shown).strong()).changed() {
+                for c in &mut changes[i..end] {
+                    c.checked = all;
+                }
+            }
+            for c in &mut changes[i..end] {
+                ui.horizontal(|ui| {
+                    ui.add_space(22.0);
+                    let label = format!("{}: {} \u{2192} {}", c.line + 1, clip(c.before.trim()), clip(c.after.trim()));
+                    ui.checkbox(&mut c.checked, egui::RichText::new(label).monospace().size(12.0));
+                    if kinds {
+                        let kind = if c.from_server { tr("code reference") } else { tr("text match") };
+                        ui.label(egui::RichText::new(kind).size(11.0).color(muted));
+                    }
+                });
+            }
+            i = end;
+        }
+    });
 }
 
 /// Renames on disk with the picked changes (`update`) or none.
@@ -1538,14 +1593,22 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
         }
         ui.label(egui::RichText::new(tr("Renames the symbol and its usages in every project.")).size(12.0).color(rc_kit::pal(ui).muted));
         let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        let (ok, cancel) = buttons(ui, tr("Rename"), valid);
-        (ok || enter && valid, cancel)
+        ui.add_space(14.0);
+        let mut res = (false, false, false);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            res.0 = ui.add_enabled_ui(valid, |ui| theme::primary_button(ui, tr("Rename"))).inner.clicked();
+            res.2 = ui.add_enabled_ui(valid, |ui| theme::secondary_button(ui, tr("Preview"))).inner.on_hover_text(tr("List the changes first and pick the ones to make")).clicked();
+            res.1 = theme::secondary_button(ui, tr("Cancel")).clicked();
+        });
+        ((res.0 || enter && valid, res.2), res.1)
     });
-    if ok {
+    let (ok, preview) = ok;
+    if ok || preview {
         if *name != *original
             && let Some(d) = app.docs.list.iter().find(|d| d.editor.id == doc)
         {
-            app.insight.rename(d, pos, name.trim());
+            let title = preview.then(|| trf("Rename '{old}' to '{new}'", &[("old", original), ("new", &name.trim())]));
+            app.insight.rename(d, pos, name.trim(), title);
         }
         return Outcome::Close;
     }

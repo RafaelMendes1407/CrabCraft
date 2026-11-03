@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 120 |
+| ✅ Pronto | 121 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 104 |
+| ⬜ A fazer | 103 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -180,7 +180,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ✅ | M3 | Popup com Renomear e as refatorações do rust-analyzer (tipo `refactor*`); também no menu de contexto e no menu Refatorar. |
 | R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
-| R-03 | Pré-visualização de refatoração | ⬜ | M3 | |
+| R-03 | Pré-visualização de refatoração | ✅ | M3 | Renomear símbolo › Pré-visualizar lista as edições do rust-analyzer por arquivo, cada linha antes → depois com caixa de seleção (por arquivo e por mudança); Refatorar aplica só as marcadas (arquivos abertos como um passo de desfazer, fechados no disco). Renomear arquivo já mostrava a lista. Testado com rust-analyzer real; captura conferida. Falta: prévia das demais refatorações (ações de código) |
 | R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |
 | R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |

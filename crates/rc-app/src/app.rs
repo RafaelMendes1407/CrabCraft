@@ -960,6 +960,11 @@ impl CrabCraftApp {
                     self.dock.show(ToolWindow::Find);
                 }
                 InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
+                InsightOutput::RefactorPreview { title, edit } => {
+                    let open = self.docs.list.iter().map(|d| (d.path.clone(), d.editor.buffer.rope().clone())).collect();
+                    let preview = crate::refactor_preview::RefactorPreview::start(title, &edit, open, self.waker.clone());
+                    self.dialog = Some(Dialog::RefactorPreview(Box::new(preview)));
+                }
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
             }

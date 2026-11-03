@@ -934,5 +934,12 @@
     "Description": "Descripción",
     "Add Template": "Añadir plantilla",
     "Restore Defaults": "Restaurar valores predeterminados"
+  },
+  "refactor-preview": {
+    "Preview": "Vista previa",
+    "List the changes first and pick the ones to make": "Muestra primero los cambios y elige cuáles hacer",
+    "Listing the changes…": "Listando los cambios…",
+    "{n} changes in {files} files. Uncheck the ones to leave out.": "{n} cambios en {files} archivos. Desmarca los que quieras dejar fuera.",
+    "Refactor": "Refactorizar"
   }
 }

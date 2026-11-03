@@ -1499,3 +1499,25 @@ fn live_templates_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("live-templates.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/refactor-preview.png"]
+fn refactor_preview_capture() {
+    use rc_lsp::lsp_types as lsp;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    let file = root.join("beta/src/lib.rs");
+    let uri = rc_lsp::path_to_uri(&file);
+    let edit = |line, a, b| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: "NEEDLE_NAME".into() };
+    let mut changes = std::collections::HashMap::new();
+    changes.insert(uri, vec![edit(3, 10, 16), edit(0, 7, 11)]);
+    let ws_edit = lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() };
+    let preview = crate::refactor_preview::RefactorPreview::start("Rename 'NEEDLE' to 'NEEDLE_NAME'".into(), &ws_edit, Vec::new(), rc_core::Waker::noop());
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorPreview(Box::new(preview)));
+    run_frames(&mut h, "the listing", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::RefactorPreview(p)) if !p.loading()));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("refactor-preview.png")).unwrap();
+}

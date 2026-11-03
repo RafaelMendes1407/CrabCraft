@@ -53,6 +53,8 @@ pub struct Target {
 pub enum InsightOutput {
     /// A web page to open.
     OpenUrl(String),
+    /// The edits of a refactoring, to review before they are applied.
+    RefactorPreview { title: String, edit: lsp::WorkspaceEdit },
     /// The expansion of the macro call under the caret.
     MacroExpansion { name: String, text: String },
     /// The call tree is ready to show.
@@ -189,7 +191,8 @@ pub struct Insight {
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
-    rename: Option<Pending<Option<lsp::WorkspaceEdit>>>,
+    /// The rename asked for, and whether its edits are previewed instead of applied.
+    rename: Option<(Pending<Option<lsp::WorkspaceEdit>>, Option<String>)>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
     optimizing: Option<Optimizing>,
@@ -1101,11 +1104,13 @@ impl Insight {
                 Err(e) => out.push(InsightOutput::Message(e.message)),
             }
         }
-        if let Some(p) = &mut self.rename
+        if let Some((p, preview)) = &mut self.rename
             && let Some(r) = p.poll()
         {
+            let preview = preview.take();
             self.rename = None;
             match r {
+                Ok(Some(edit)) if let Some(title) = preview => out.push(InsightOutput::RefactorPreview { title, edit }),
                 Ok(Some(edit)) => match apply_workspace_edit(docs, &edit) {
                     Ok(files) => out.push(InsightOutput::Message(trf("Renamed in {n} files", &[("n", &files)]))),
                     Err(e) => out.push(InsightOutput::Message(e)),
@@ -1486,13 +1491,15 @@ impl Insight {
         self.rename_prepare = Some((doc.editor.id, pos, p));
     }
 
-    pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str) {
+    /// Renames the symbol at `pos`; with `preview` (the preview's title) the edits are shown
+    /// for review instead of applied.
+    pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str, preview: Option<String>) {
         let Some(session) = &self.session else { return };
         let p = session.client.request_raw(
             "textDocument/rename",
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos), "newName": new_name }),
         );
-        self.rename = Some(p);
+        self.rename = Some((p, preview));
     }
 
     /// ⌥⏎: quick fixes and refactorings at the caret / selection.
