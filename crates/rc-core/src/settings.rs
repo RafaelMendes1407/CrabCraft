@@ -92,6 +92,8 @@ pub struct Settings {
     pub last_workspace: Option<PathBuf>,
     /// Programs run from More Actions › External Tools and Find Action.
     pub external_tools: Vec<crate::external_tools::ExternalTool>,
+    /// Abbreviations expanded with Tab in Rust files.
+    pub live_templates: Vec<crate::live_templates::LiveTemplate>,
 }
 
 impl Default for Settings {
@@ -128,6 +130,7 @@ impl Default for Settings {
             reopen_last: true,
             last_workspace: None,
             external_tools: Vec::new(),
+            live_templates: crate::live_templates::defaults(),
         }
     }
 }

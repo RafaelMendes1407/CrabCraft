@@ -16,6 +16,7 @@ pub enum SettingsPage {
     Keymap,
     Tools,
     ExternalTools,
+    LiveTemplates,
 }
 
 pub enum Dialog {
@@ -148,6 +149,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::Keymap, tr("Keymap")),
                     (SettingsPage::Tools, tr("Tools")),
                     (SettingsPage::ExternalTools, tr("External Tools")),
+                    (SettingsPage::LiveTemplates, tr("Live Templates")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -166,6 +168,11 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
             ui.vertical(|ui| {
                 ui.set_min_height(320.0);
                 ui.set_width(500.0);
+                // A list of its own, outside the two-column grid of the other pages.
+                if *page == SettingsPage::LiveTemplates {
+                    live_templates_page(ui, &mut draft.live_templates, p.text_muted);
+                    return;
+                }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
                     SettingsPage::Appearance => {
                         ui.label(tr("Theme"));
@@ -283,6 +290,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
+                    SettingsPage::LiveTemplates => {}
                 });
             });
         });
@@ -293,6 +301,38 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Settings › Live Templates: abbreviation, description and body of each template.
+fn live_templates_page(ui: &mut Ui, templates: &mut Vec<rc_core::live_templates::LiveTemplate>, muted: egui::Color32) {
+    ui.add(egui::Label::new(egui::RichText::new(tr("Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.")).color(muted)).wrap());
+    ui.add_space(8.0);
+    let mut remove = None;
+    egui::ScrollArea::vertical().id_salt("live_templates").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
+        for (i, t) in templates.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut t.abbreviation).hint_text(tr("Abbreviation")).font(egui::TextStyle::Monospace).desired_width(90.0));
+                ui.add(egui::TextEdit::singleline(&mut t.description).hint_text(tr("Description")).desired_width(330.0));
+                if theme::icon_button(ui, rc_kit::ico::DELETE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+            ui.add(egui::TextEdit::multiline(&mut t.body).font(egui::TextStyle::Monospace).desired_rows(2).desired_width(450.0));
+            ui.add_space(8.0);
+        }
+    });
+    if let Some(i) = remove {
+        templates.remove(i);
+    }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        if ui.button(tr("Add Template")).clicked() {
+            templates.push(rc_core::live_templates::LiveTemplate { abbreviation: String::new(), description: String::new(), body: "$0".into() });
+        }
+        if ui.button(tr("Restore Defaults")).clicked() {
+            *templates = rc_core::live_templates::defaults();
+        }
+    });
 }
 
 /// Settings › External Tools: each tool's name, program, arguments and folder.

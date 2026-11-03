@@ -925,5 +925,14 @@
   "emulate-terminal": {
     "Emulate terminal in the output console": "Émuler un terminal dans la console de sortie",
     "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "Lance le programme dans un pseudo-terminal : couleurs, détection du terminal et saisie au clavier fonctionnent comme dans un terminal"
+  },
+  "live-templates": {
+    "Live Templates": "Modèles dynamiques",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "Tapez l'abréviation dans un fichier Rust et appuyez sur Tab. Dans le corps, $1 et ${2:default} sont les arrêts parcourus par Tab et $0 est la position finale du curseur.",
+    "Templates": "Modèles",
+    "Abbreviation": "Abréviation",
+    "Description": "Description",
+    "Add Template": "Ajouter un modèle",
+    "Restore Defaults": "Restaurer les valeurs par défaut"
   }
 }

@@ -63,6 +63,11 @@ pub fn accept(state: &mut EditorState, index: usize, replace_word: bool) {
             end += 1;
         }
     }
+    // Snippets keep their stops: Tab visits the arguments of a completed call.
+    if item.insert.contains('$') {
+        state.insert_snippet(start, end, &item.insert);
+        return;
+    }
     let (text, caret_offset) = expand_snippet(&item.insert);
     state.replace(start, end, &text);
     let pos = start + caret_offset.unwrap_or(text.chars().count());

@@ -113,6 +113,8 @@ pub struct EditorState {
     pub indent: Indent,
     /// The right margin set by the project's code style, over the editor setting.
     pub right_margin: Option<usize>,
+    /// A snippet being filled in: Tab goes to its next stop.
+    pub snippet: Option<crate::snippet::SnippetSession>,
     pub read_only: bool,
     // --- view
     pub(crate) scroll: egui::Vec2,
@@ -179,6 +181,7 @@ impl EditorState {
             id,
             path,
             buffer,
+            snippet: None,
             right_margin: None,
             selection: Selection::point(0),
             syntax: Syntax::new(lang),
@@ -336,6 +339,48 @@ impl EditorState {
         true
     }
 
+    /// Replaces `start..end` with a snippet (`$1`, `${2:x}`, `$0`), fitted to the line's
+    /// indentation, and selects its first stop; with more stops Tab visits them.
+    pub fn insert_snippet(&mut self, start: usize, end: usize, body: &str) {
+        let rope = self.buffer.rope();
+        let line = rope.char_to_line(start.min(rope.len_chars()));
+        let indent = rc_text::commands::line_indent(rope, line);
+        let body = crate::snippet::reindent(body, &indent, &self.indent.unit);
+        let parsed = crate::snippet::parse(&body);
+        self.snippet = None;
+        self.replace(start, end, &parsed.text);
+        let stops: Vec<(usize, usize)> = parsed.stops.iter().map(|(s, e)| (start + s, start + e)).collect();
+        match stops.first() {
+            None => self.selection = Selection::point(start + parsed.text.chars().count()),
+            Some(&(s, e)) => {
+                self.selection = Selection::single(Range::new(s, e));
+                if stops.len() > 1 {
+                    self.snippet = Some(crate::snippet::SnippetSession { stops, current: 0 });
+                }
+            }
+        }
+        self.request_scroll_to_caret();
+    }
+
+    /// Moves to the next (or previous) stop of the snippet being filled in; past the last
+    /// one it ends. `false` when there is no snippet.
+    pub fn snippet_step(&mut self, forward: bool) -> bool {
+        let Some(s) = &mut self.snippet else { return false };
+        let next = if forward { s.current + 1 } else { s.current.saturating_sub(1) };
+        let Some(&(start, end)) = s.stops.get(next) else {
+            self.snippet = None;
+            return false;
+        };
+        s.current = next;
+        if next + 1 == s.stops.len() {
+            // The final stop is where the caret ends up: the snippet is done.
+            self.snippet = None;
+        }
+        self.selection = Selection::single(Range::new(start, end));
+        self.request_scroll_to_caret();
+        true
+    }
+
     /// Replaces `start..end` with `text` (completion, code actions, rename…) as one step.
     pub fn replace(&mut self, start: usize, end: usize, text: &str) {
         let cs = ChangeSet::single(rc_text::Change::new(start, end, text));
@@ -389,6 +434,14 @@ impl EditorState {
         }
         for h in &mut self.inlays {
             h.pos = map(h.pos);
+        }
+        // Snippet stops grow with what is typed at their edges.
+        if let Some(s) = &mut self.snippet {
+            for stop in &mut s.stops {
+                let start = changes.map_pos(stop.0, rc_text::Assoc::Before);
+                stop.1 = changes.map_pos(stop.1, rc_text::Assoc::After).max(start);
+                stop.0 = start;
+            }
         }
         self.search_matches.clear();
         self.current_match = None;

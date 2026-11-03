@@ -925,5 +925,14 @@
   "emulate-terminal": {
     "Emulate terminal in the output console": "在输出控制台中模拟终端",
     "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "在伪终端中运行程序：颜色、终端检测和键盘输入与在终端中一样工作"
+  },
+  "live-templates": {
+    "Live Templates": "实时模板",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "在 Rust 文件中输入缩写并按 Tab。在正文中，$1、${2:default} 是 Tab 依次停留的位置，$0 是光标最终所在位置。",
+    "Templates": "模板",
+    "Abbreviation": "缩写",
+    "Description": "描述",
+    "Add Template": "添加模板",
+    "Restore Defaults": "恢复默认值"
   }
 }

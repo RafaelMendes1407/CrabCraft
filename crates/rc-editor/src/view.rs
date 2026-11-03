@@ -20,11 +20,13 @@ pub struct EditorConfig {
     pub caret_blink: bool,
     /// Lines of the enclosing scopes kept at the top while scrolling (0: none).
     pub sticky_lines: usize,
+    /// Live templates of Rust files: (abbreviation, snippet body), expanded with Tab.
+    pub live_templates: Vec<(String, String)>,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5 }
+        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5, live_templates: Vec::new() }
     }
 }
 
@@ -1461,11 +1463,20 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
                 state.apply(e, EditKind::Other);
             }
         }
+        Indent if !ro && state.snippet.is_some() && state.snippet_step(true) => {}
+        // A live template: its abbreviation right before a lone caret.
+        Indent if !ro && sel.len() == 1 && sel.primary().is_empty() && state.lang() == rc_syntax::Lang::Rust && {
+            let caret = sel.primary().head;
+            let line = rope.char_to_line(caret);
+            let before: String = rope.slice(rope.line_to_char(line)..caret).to_string();
+            crate::snippet::template_at(&before, caret, &config.live_templates).map(|(start, body)| (start, body.to_string())).inspect(|(start, body)| state.insert_snippet(*start, caret, body)).is_some()
+        } => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };
             state.apply(e, EditKind::Other);
         }
+        Unindent if !ro && state.snippet.is_some() && state.snippet_step(false) => {}
         Unindent if !ro => {
             let e = commands::indent_lines(&rope, &sel, &indent, true);
             state.apply(e, EditKind::Other);
@@ -1537,6 +1548,8 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         Escape => {
             if state.popups.any() {
                 state.popups.close_all();
+            } else if state.snippet.take().is_some() {
+                // The snippet ends; the selection stays.
             } else if sel.len() > 1 {
                 state.selection = sel.clone().into_primary();
             } else if !sel.primary().is_empty() {

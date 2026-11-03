@@ -925,5 +925,14 @@
   "emulate-terminal": {
     "Emulate terminal in the output console": "出力コンソールで端末をエミュレート",
     "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "疑似端末でプログラムを実行します。色、端末判定、キーボード入力が端末と同じように動作します"
+  },
+  "live-templates": {
+    "Live Templates": "ライブテンプレート",
+    "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.": "Rust ファイルで略語を入力して Tab を押します。本文の $1、${2:default} は Tab で移動する位置、$0 はキャレットの最終位置です。",
+    "Templates": "テンプレート",
+    "Abbreviation": "略語",
+    "Description": "説明",
+    "Add Template": "テンプレートを追加",
+    "Restore Defaults": "既定値に戻す"
   }
 }

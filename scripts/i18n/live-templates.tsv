@@ -1,0 +1,9 @@
+# Live templates. Import: python3 scripts/i18n_tsv.py live-templates scripts/i18n/live-templates.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Live Templates	Plantillas en vivo	Modèles dynamiques	Live templates	Live-Templates	Szablony na żywo	实时模板	ライブテンプレート
+Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.	Escribe la abreviatura en un archivo Rust y pulsa Tab. En el cuerpo, $1 y ${2:default} son las paradas que recorre Tab y $0 es donde acaba el cursor.	Tapez l'abréviation dans un fichier Rust et appuyez sur Tab. Dans le corps, $1 et ${2:default} sont les arrêts parcourus par Tab et $0 est la position finale du curseur.	Digite a abreviação num arquivo Rust e pressione Tab. No corpo, $1 e ${2:default} são as paradas que o Tab percorre e $0 é onde o cursor termina.	Gib die Abkürzung in einer Rust-Datei ein und drücke Tab. Im Text sind $1 und ${2:default} die Stopps, die Tab anspringt, und $0 ist die Endposition des Cursors.	Wpisz skrót w pliku Rust i naciśnij Tab. W treści $1 i ${2:default} to przystanki odwiedzane przez Tab, a $0 to końcowa pozycja kursora.	在 Rust 文件中输入缩写并按 Tab。在正文中，$1、${2:default} 是 Tab 依次停留的位置，$0 是光标最终所在位置。	Rust ファイルで略語を入力して Tab を押します。本文の $1、${2:default} は Tab で移動する位置、$0 はキャレットの最終位置です。
+Templates	Plantillas	Modèles	Modelos	Vorlagen	Szablony	模板	テンプレート
+Abbreviation	Abreviatura	Abréviation	Abreviação	Abkürzung	Skrót	缩写	略語
+Description	Descripción	Description	Descrição	Beschreibung	Opis	描述	説明
+Add Template	Añadir plantilla	Ajouter un modèle	Adicionar modelo	Vorlage hinzufügen	Dodaj szablon	添加模板	テンプレートを追加
+Restore Defaults	Restaurar valores predeterminados	Restaurer les valeurs par défaut	Restaurar padrões	Standardwerte wiederherstellen	Przywróć domyślne	恢复默认值	既定値に戻す

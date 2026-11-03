@@ -1451,3 +1451,51 @@ fn before_launch_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("before-launch.png")).unwrap();
 }
+
+/// A live template: its abbreviation and Tab insert the snippet with its first stop selected;
+/// what is typed replaces it and Tab goes on to the body.
+#[test]
+fn live_templates_expand_with_tab_and_visit_their_stops() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let file = root.join("beta/src/lib.rs");
+    h.state_mut().open_file(&file);
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    h.event(egui::Event::Text("test".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    let selected = h.state().docs.active_doc().unwrap().editor.selected_text();
+    assert_eq!(selected, "name", "the first stop is selected");
+    h.event(egui::Event::Text("works".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    h.event(egui::Event::Text("assert!(true);".into()));
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    let text = doc.editor.buffer.rope().to_string();
+    assert!(text.ends_with("#[test]\nfn works() {\n    assert!(true);\n}"), "{text}");
+    assert!(doc.editor.snippet.is_none(), "the final stop ends the snippet");
+    // Tab elsewhere indents as usual.
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("assert!(true);  \n"));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/live-templates.png"]
+fn live_templates_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_settings(crate::ui::dialogs::SettingsPage::LiveTemplates);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("live-templates.png")).unwrap();
+}
