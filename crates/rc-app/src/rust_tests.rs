@@ -564,6 +564,51 @@ fn external_documentation_finds_the_page_of_an_item() {
 }
 
 #[test]
+fn a_macro_call_expands_recursively_into_a_read_only_tab() {
+    use crate::insight::InsightOutput;
+    const SOURCE: &str = "macro_rules! twice {\n    ($e:expr) => { double!($e) + double!($e) };\n}\nmacro_rules! double {\n    ($e:expr) => { $e * 2 };\n}\nfn main() {\n    let _n = twice!(21);\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    // On `twice!`: both levels expanded. Asked again until the server has indexed the file.
+    let start = Instant::now();
+    let (name, text) = loop {
+        app.insight.expand_macro(&app.docs.list[i], SOURCE.find("twice!(21)").unwrap() + 2);
+        let reply = output(&mut app, "the expansion", |o| match o {
+            InsightOutput::MacroExpansion { name, text } => Some(Some((name.clone(), text.clone()))),
+            InsightOutput::Message(_) => Some(None),
+            _ => None,
+        });
+        match reply {
+            Some(found) => break found,
+            None if start.elapsed() < Duration::from_secs(120) => std::thread::sleep(Duration::from_millis(500)),
+            None => panic!("no expansion"),
+        }
+    };
+    // Not on a macro call: said so.
+    app.insight.expand_macro(&app.docs.list[i], SOURCE.find("fn main").unwrap() + 1);
+    output(&mut app, "the empty answer", |o| matches!(o, InsightOutput::Message(_)).then_some(()));
+    assert_eq!(name, "twice");
+    assert!(text.contains("21*2") || text.contains("21 * 2"), "{text}");
+    assert!(!text.contains("double!"), "{text}");
+    app.show_macro_expansion(&name, &text);
+    let d = app.docs.active_doc().unwrap();
+    assert_eq!(d.name(), "twice.rs");
+    assert!(d.editor.read_only && d.generated && !crate::insight::has_insight(d));
+    assert!(d.editor.buffer.rope().to_string().contains(&text));
+    app.insight.stop();
+}
+
+#[test]
 fn the_type_hierarchy_lists_implementations() {
     const SOURCE: &str = "trait Speak {\n    fn speak(&self);\n}\nstruct A;\nstruct B;\nimpl Speak for A {\n    fn speak(&self) {}\n}\nimpl Speak for B {\n    fn speak(&self) {}\n}\nimpl A {\n    fn own(&self) {}\n}\ntrait Lonely {}\nfn main() {}\n";
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

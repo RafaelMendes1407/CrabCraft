@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 97 |
-| 🚧 Em andamento | 2 |
+| 🚧 Em andamento | 3 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 127 |
+| ⬜ A fazer | 126 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -141,7 +141,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
 | I-24 | Explicações inline de erros | ⬜ | M4 | |
-| I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
+| I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
