@@ -164,7 +164,7 @@ fn rust_language_features() {
     pump(&mut app, "the structure", |a| a.insight.structure.get(&id).is_some_and(|s| s.iter().any(|n| n.name == "main")));
 
     // Workspace symbols.
-    let mut symbols = app.insight.workspace_symbols("Greeter").expect("a request");
+    let mut symbols = app.insight.workspace_symbols("Greeter", false, false).expect("a request");
     let found = {
         let start = Instant::now();
         loop {
@@ -1061,7 +1061,7 @@ fn wait_symbols(app: &mut CrabCraftApp, query: &str, what: &str, want: impl Fn(&
     let start = Instant::now();
     let mut last = Vec::new();
     while start.elapsed() < Duration::from_secs(120) {
-        let mut pending = app.insight.workspace_symbols(query);
+        let mut pending = app.insight.workspace_symbols(query, true, false);
         let asked = Instant::now();
         while let Some(p) = &mut pending
             && asked.elapsed() < Duration::from_secs(30)
@@ -1254,6 +1254,65 @@ fn f2_in_the_explorer_renames_a_file_and_offers_its_text_mentions() {
     assert!(h.state().dialog.is_none());
     assert!(root.join("todo.txt").exists() && !root.join("notes.txt").exists());
     assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "Read todo.txt first.\n");
+}
+
+/// Search Everywhere's Classes and Symbols tabs ask rust-analyzer; the libraries scope adds
+/// the standard library.
+#[test]
+fn search_everywhere_finds_classes_symbols_and_library_types() {
+    use crate::search::{SeScope, SeTab};
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.trust_project();
+    app.open_file(&root.join("src/main.rs"));
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(h.state()) {
+            assert!(start.elapsed() < Duration::from_secs(180), "timed out waiting for {what}: {:?}", h.state().insight.status);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+    wait(&mut h, "rust-analyzer", &|a| a.insight.status == InsightStatus::Ready);
+    let chord = h.state().keymap.chord(rc_editor::Action::SearchEverywhere).unwrap();
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+    let set = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, tab: SeTab, text: &str, scope: SeScope| {
+        let s = h.state_mut().search_everywhere.as_mut().expect("Search Everywhere is open");
+        s.tab = tab;
+        s.text = text.into();
+        s.scope = scope;
+    };
+    let found = |a: &CrabCraftApp, name: &str| a.search_everywhere.as_ref().is_some_and(|s| s.symbols.iter().any(|x| x.name == name));
+    let symbol = |a: &CrabCraftApp, name: &str| a.search_everywhere.as_ref().and_then(|s| s.symbols.iter().find(|x| x.name == name).cloned());
+
+    // Classes: the struct of lib.rs.
+    set(&mut h, SeTab::Classes, "Greeter", SeScope::Project);
+    wait(&mut h, "the Greeter struct", &|a| found(a, "Greeter"));
+    let g = symbol(h.state(), "Greeter").unwrap();
+    assert!(g.is_type() && g.path == root.join("src/lib.rs"), "{g:?}");
+
+    // Symbols: a method, which rust-analyzer only returns when asked for every symbol.
+    set(&mut h, SeTab::Symbols, "hello", SeScope::Project);
+    wait(&mut h, "the hello method", &|a| found(a, "hello"));
+    assert_eq!(symbol(h.state(), "hello").unwrap().path, root.join("src/lib.rs"));
+
+    // The standard library only with the libraries scope.
+    set(&mut h, SeTab::Classes, "HashMap", SeScope::Project);
+    wait(&mut h, "the project's answer", &|a| a.search_everywhere.as_ref().is_some_and(|s| !s.symbols.iter().any(|x| x.name == "Greeter" || x.name == "hello")));
+    h.run_steps(30);
+    assert!(!found(h.state(), "HashMap"), "HashMap is not a project type");
+    set(&mut h, SeTab::Classes, "HashMap", SeScope::ProjectAndLibraries);
+    wait(&mut h, "HashMap from the standard library", &|a| found(a, "HashMap"));
+    assert!(!symbol(h.state(), "HashMap").unwrap().path.starts_with(&root));
+    h.state_mut().insight.stop();
 }
 
 fn pump_debugger(app: &mut CrabCraftApp, what: &str) {

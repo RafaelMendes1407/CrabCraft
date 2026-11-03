@@ -776,6 +776,17 @@
     "{n} occurrences replaced": "{n} Vorkommen ersetzt",
     "{n} results": "{n} Ergebnisse"
   },
+  "search-everywhere": {
+    "Classes": "Klassen",
+    "Crate {name}": "Crate {name}",
+    "Search classes, files, symbols and actions": "Klassen, Dateien, Symbole und Aktionen suchen",
+    "Search scope": "Suchbereich",
+    "Text": "Text",
+    "Type a struct, enum or trait name": "Namen eines Structs, Enums oder Traits eingeben",
+    "Type the text to find in the files": "Text eingeben, der in den Dateien gesucht wird",
+    "Workspace": "Arbeitsbereich",
+    "Workspace and Dependencies": "Arbeitsbereich und Abhängigkeiten"
+  },
   "settings": {
     "Reopen the last project on startup": "Letztes Projekt beim Start erneut öffnen"
   },

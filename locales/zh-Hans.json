@@ -776,6 +776,17 @@
     "{n} occurrences replaced": "已替换 {n} 处",
     "{n} results": "{n} 个结果"
   },
+  "search-everywhere": {
+    "Classes": "类",
+    "Crate {name}": "Crate {name}",
+    "Search classes, files, symbols and actions": "搜索类、文件、符号和操作",
+    "Search scope": "搜索范围",
+    "Text": "文本",
+    "Type a struct, enum or trait name": "输入结构体、枚举或 trait 的名称",
+    "Type the text to find in the files": "输入要在文件中查找的文本",
+    "Workspace": "工作区",
+    "Workspace and Dependencies": "工作区和依赖项"
+  },
   "settings": {
     "Reopen the last project on startup": "启动时重新打开上一个项目"
   },

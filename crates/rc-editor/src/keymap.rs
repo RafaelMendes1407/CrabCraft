@@ -430,7 +430,9 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::Equals, cs, UnfoldAll),
         b(Key::Plus, cs, UnfoldAll),
         b(Key::Space, ctrl, Complete),
-        b(Key::P, c, ParameterInfo),
+        // ⌘P opens Search Everywhere, so Parameter Info moves next to completion.
+        b(Key::Space, ctrl_s, ParameterInfo),
+        b(Key::P, c, SearchEverywhere),
         b(Key::F1, none, QuickDoc),
         b(Key::F1, s, ExternalDocs),
         b(Key::F1, a, SelectIn),
@@ -568,7 +570,9 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::A, c, SelectAll),
         b(Key::Escape, none, Escape),
         b(Key::Space, c, Complete),
-        b(Key::P, c, ParameterInfo),
+        // Ctrl+P opens Search Everywhere, so Parameter Info moves next to completion.
+        b(Key::Space, cs, ParameterInfo),
+        b(Key::P, c, SearchEverywhere),
         b(Key::Enter, a, ShowIntentions),
         b(Key::Insert, a, Generate),
         b(Key::F7, a, FindUsages),
@@ -721,5 +725,14 @@ mod tests {
             }
         }
         assert_eq!(Keymap::new(KeymapKind::Rider).shortcut_text(Action::FindInFiles).as_deref(), Some("Ctrl+Shift+F"));
+        for kind in [KeymapKind::Rider, KeymapKind::VisualStudio] {
+            let k = Keymap::new(kind);
+            assert_eq!(k.lookup(Key::P, m(false, true, false, false)), Some(Action::SearchEverywhere));
+            assert_eq!(k.shortcut_text(Action::SearchEverywhere).as_deref(), Some("Ctrl+P"));
+            assert_eq!(k.shortcut_text(Action::ParameterInfo).as_deref(), Some("Ctrl+Shift+Space"));
+        }
+        let mac = Keymap::new(KeymapKind::RiderMac);
+        assert_eq!(mac.shortcut_text(Action::SearchEverywhere).as_deref(), Some("⌘P"));
+        assert_eq!(mac.shortcut_text(Action::ParameterInfo).as_deref(), Some("⌃⇧Space"));
     }
 }
