@@ -32,6 +32,28 @@ pub struct Package {
     pub manifest: PathBuf,
     pub edition: String,
     pub targets: Vec<Target>,
+    /// The `[features]` table: each feature and what it enables.
+    pub features: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl Package {
+    /// The features a plain `cargo build` enables: `default` and what it enables, transitively,
+    /// plus `extra`. Optional dependencies (`dep:x`) and features of dependencies (`x/f`) are
+    /// left out; a feature of the package that names an optional dependency is kept.
+    pub fn enabled_features(&self, extra: &[String]) -> Vec<String> {
+        let mut on: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut todo: Vec<String> = extra.to_vec();
+        if self.features.contains_key("default") {
+            todo.push("default".into());
+        }
+        while let Some(f) = todo.pop() {
+            if f.starts_with("dep:") || f.contains('/') || !on.insert(f.clone()) {
+                continue;
+            }
+            todo.extend(self.features.get(&f).into_iter().flatten().cloned());
+        }
+        on.into_iter().collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,11 +69,16 @@ pub struct CargoWorkspace {
 impl CargoWorkspace {
     /// The edition of the member that owns `path`, the innermost one when members are nested.
     pub fn edition_of(&self, path: &Path) -> Option<&str> {
+        self.package_of(path).map(|p| p.edition.as_str())
+    }
+
+    /// The member that owns `path`, the innermost one when members are nested.
+    pub fn package_of(&self, path: &Path) -> Option<&Package> {
         // Canonical on both sides: on Windows one may be verbatim (`\\?\C:\…`) and the other `C:\…`.
         let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
         let path = &canon(path);
         let folder = |p: &&Package| p.manifest.parent().map(canon).unwrap_or_default();
-        self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count()).map(|p| p.edition.as_str())
+        self.packages.iter().filter(|p| path.starts_with(folder(p))).max_by_key(|p| folder(p).components().count())
     }
 
     /// Runnable binaries as `(package, target)`.
@@ -223,7 +250,12 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
             let required_features = t.get("required-features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect();
             targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")?, required_features });
         }
-        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets });
+        let features = p
+            .get("features")
+            .and_then(Value::as_object)
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect())).collect())
+            .unwrap_or_default();
+        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets, features });
     }
     Ok(CargoWorkspace { manifest: root.join("Cargo.toml"), root, target_dir, packages })
 }
@@ -272,6 +304,19 @@ mod tests {
         assert_eq!(w.packages[1].targets[0].kind, TargetKind::Lib);
         assert_eq!(w.packages[1].targets[1].kind, TargetKind::Example);
         assert_eq!(w.binaries().map(|(p, t)| (p.name.as_str(), t.name.as_str())).collect::<Vec<_>>(), [("app", "app")]);
+    }
+
+    #[test]
+    fn enabled_features_follow_default() {
+        let features = [("default", vec!["std"]), ("std", vec!["alloc", "dep:libc", "serde/std"]), ("alloc", vec![]), ("extra", vec![]), ("libc", vec!["dep:libc"])]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.into_iter().map(str::to_string).collect()))
+            .collect();
+        let p = Package { name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
+        assert_eq!(p.enabled_features(&[]), vec!["alloc", "default", "std"]);
+        assert_eq!(p.enabled_features(&["extra".to_string(), "libc".to_string()]), vec!["alloc", "default", "extra", "libc", "std"]);
+        let none = Package { features: Default::default(), ..p };
+        assert!(none.enabled_features(&[]).is_empty());
     }
 
     #[test]

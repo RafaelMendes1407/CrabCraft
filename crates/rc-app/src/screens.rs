@@ -1667,3 +1667,27 @@ fn cargo_tree_capture() {
         h.render().unwrap().save(out.join(format!("cargo-tree-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; opens CrabCraft's own instance.rs and writes target/snapshots/cfg-inactive.png"]
+fn cfg_inactive_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&repo);
+    let file = repo.join("crates/rc-app/src/instance.rs");
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the cfg of the crate", |a| a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some()));
+    let text = std::fs::read_to_string(&file).unwrap();
+    let at = text.find("#[cfg(windows)]").expect("a Windows-only item");
+    let line = text[..at].matches('\n').count();
+    let doc = h.state_mut().docs.active_doc_mut().unwrap();
+    doc.editor.goto(line + 12, 0);
+    h.run_steps(6);
+    assert!(!h.state_mut().docs.active_doc_mut().unwrap().editor.inactive().is_empty());
+    h.render().unwrap().save(out.join("cfg-inactive.png")).unwrap();
+}

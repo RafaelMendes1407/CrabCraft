@@ -3054,3 +3054,38 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope().to_string() != text);
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main(){println!(\"a\");}\n\nfn other() {\n    let x = 1;\n    let _y = x;\n}\n");
 }
+
+/// Code that a `cfg` turns off is faded in the editor: the target comes from `rustc --print
+/// cfg` and the features from the manifest's `default`. It needs no language server.
+#[test]
+fn code_disabled_by_cfg_is_faded() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n");
+    let lib = "#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}\n\n#[cfg(feature = \"std\")]\npub fn with_std() {}\n\n#[cfg(not(any(unix, windows)))]\npub fn elsewhere() {}\n\npub fn always() -> u32 {\n    2\n}\n";
+    write(&root.join("src/lib.rs"), lib);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let faded = |a: &mut CrabCraftApp| -> Vec<String> {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.inactive().iter().map(|r| text.chars().skip(r.start).take(r.end - r.start).collect()).collect()
+    };
+    pump(&mut app, "the cfg of the crate", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some())
+    });
+    assert_eq!(faded(&mut app), vec!["#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}".to_string(), "#[cfg(not(any(unix, windows)))]\npub fn elsewhere() {}".to_string()]);
+    // Typing keeps the faded range on the item.
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "// note\n");
+    assert!(faded(&mut app)[0].starts_with("#[cfg(feature = \"extra\")]"));
+    // Untrusted: no language server ran.
+    assert!(app.insight.session.is_none());
+}

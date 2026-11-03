@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 130 |
+| ✅ Pronto | 131 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 96 |
+| ⬜ A fazer | 95 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -202,7 +202,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | C-05 | Gerenciador visual de dependências | 🔁 | M4 | Reescrever a janela NuGet com `cargo add`/`remove` |
 | C-06 | `cargo tree` integrado | ✅ | M4 | Cada membro da janela Cargo tem um nó Dependências: ao abrir, roda `cargo tree --offline --locked` em segundo plano (não compila nem grava o `Cargo.lock`) e mostra a árvore dobrável, com versão, seção build/dev e repetições. A execução entra na aba Sync. Testado com o cargo real num projeto gerado e na árvore do próprio CrabCraft (1140 nós) |
 | C-07 | Ligar/desligar features pela margem | ⬜ | M4 | `rust-analyzer.cargo.features` |
-| C-08 | Atenuar código desativado por `cfg` | ⬜ | M4 | |
+| C-08 | Atenuar código desativado por `cfg` | ✅ | M4 | O editor avalia cada `#[cfg(...)]` (itens, instruções, campos, variantes e braços de `match`) com os cfgs de `rustc --print cfg` e as features do `default` do pacote, e atenua o que fica desligado. Não depende do rust-analyzer (o 1.99 não publica `inactive-code`) nem de confiar no projeto. Testado no app com um projeto gerado e no `instance.rs` do próprio CrabCraft. Falta: dica ao passar o mouse e features escolhidas pelo usuário (C-07) |
 | C-09 | Seletor de target (triple) na barra de status | ⬜ | M4 | |
 | C-10 | Quick fix para habilitar feature | ⬜ | M4 | |
 | C-11 | Ícone da margem para abrir docs.rs do crate | ⬜ | M4 | |

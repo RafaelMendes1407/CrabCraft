@@ -85,6 +85,14 @@ pub fn detect_toolchain(cargo: Option<&Cargo>, analyzer: Option<&Path>, project:
     }
 }
 
+/// What `rustc --print cfg` prints for the host, run from `dir` so a `rust-toolchain.toml`
+/// there picks the compiler. It compiles nothing. This blocks.
+pub fn print_cfg(cargo: &Cargo, dir: &Path) -> Option<String> {
+    let rustc = cargo.path().with_file_name(exe("rustc"));
+    let out = std::process::Command::new(rustc).args(["--print", "cfg"]).current_dir(dir).stdin(std::process::Stdio::null()).output().ok().filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// The sources of the standard library inside a sysroot, from the `rust-src` component.
 pub fn stdlib_sources(sysroot: &Path) -> Option<PathBuf> {
     Some(sysroot.join("lib/rustlib/src/rust/library")).filter(|p| p.is_dir())

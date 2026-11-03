@@ -62,6 +62,13 @@ pub struct CrabCraftApp {
     pub cargo_folded: std::collections::BTreeSet<String>,
     /// Dependency trees of the Cargo window, by `(manifest, package)`.
     pub cargo_trees: std::collections::BTreeMap<(PathBuf, String), crate::ui::cargo_window::DepTree>,
+    /// What `rustc --print cfg` printed for the project, and its load.
+    rustc_cfg: Option<String>,
+    rustc_cfg_load: Option<Inbox<Option<String>>>,
+    /// Bumped when the Cargo model or the rustc cfg change; each document remembers the epoch
+    /// its `cfg` set was given for.
+    cfg_epoch: u64,
+    cfg_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -240,6 +247,10 @@ impl CrabCraftApp {
             toolchain_load: None,
             cargo_folded: Default::default(),
             cargo_trees: Default::default(),
+            rustc_cfg: None,
+            rustc_cfg_load: None,
+            cfg_epoch: 0,
+            cfg_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -404,6 +415,7 @@ impl CrabCraftApp {
                 }
             }
             self.runner.set_attached(workspaces);
+            self.cfg_epoch += 1;
         }
         let Some(inbox) = &self.cargo_load else { return };
         for (result, log) in inbox.drain() {
@@ -412,7 +424,10 @@ impl CrabCraftApp {
             }
             match result {
                 Ok(workspace) => {
+                    let root = workspace.root.clone();
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
+                    self.cfg_epoch += 1;
+                    self.load_rustc_cfg(root);
                     self.load_libraries();
                     self.load_attached();
                 }
@@ -639,6 +654,37 @@ impl CrabCraftApp {
         self.cargo_trees.clear();
         if let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
             self.load_cargo_workspace(manifest);
+        }
+    }
+
+    /// Asks rustc for the target's `cfg` in the background (it compiles nothing).
+    fn load_rustc_cfg(&mut self, dir: PathBuf) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || out.send(rc_cargo::Cargo::locate().and_then(|c| rc_cargo::print_cfg(&c, &dir))));
+        self.rustc_cfg_load = Some(inbox);
+    }
+
+    /// Gives each Rust document the `cfg` set of its crate, so the code it turns off is faded.
+    pub(crate) fn update_cfg_sets(&mut self) {
+        if let Some(cfg) = self.rustc_cfg_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.rustc_cfg_load = None;
+            self.rustc_cfg = cfg;
+            self.cfg_epoch += 1;
+        }
+        let epoch = self.cfg_epoch;
+        let mut sets: std::collections::BTreeMap<PathBuf, std::sync::Arc<rc_syntax::CfgSet>> = Default::default();
+        for doc in &mut self.docs.list {
+            if self.cfg_given.get(&doc.editor.id) == Some(&epoch) || doc.editor.syntax.lang != rc_syntax::Lang::Rust {
+                continue;
+            }
+            self.cfg_given.insert(doc.editor.id, epoch);
+            let package = self.runner.cargo_workspace.iter().chain(&self.runner.attached).find_map(|w| w.package_of(&doc.path));
+            let set = match (package, &self.rustc_cfg) {
+                (Some(p), Some(cfg)) => Some(sets.entry(p.manifest.clone()).or_insert_with(|| std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&[])))).clone()),
+                _ => None,
+            };
+            doc.editor.set_cfg(set);
         }
     }
 
@@ -2208,6 +2254,7 @@ impl CrabCraftApp {
     fn poll_background(&mut self) {
         self.poll_cargo_workspace();
         self.poll_dep_trees();
+        self.update_cfg_sets();
         self.poll_rustfmt();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();

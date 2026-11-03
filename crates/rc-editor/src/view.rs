@@ -319,12 +319,11 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
         }
     }
     virtuals.sort_by_key(|v| (v.col, v.kind == VirtualKind::FoldPlaceholder));
-    let dimmed: Vec<(usize, usize)> = state
-        .diagnostics
-        .iter()
-        .filter(|d| d.unnecessary && d.start < line_end.max(line_start + 1) && d.end > line_start)
-        .map(|d| (d.start.saturating_sub(line_start), (d.end - line_start).min(text.chars().count())))
-        .collect();
+    let len = text.chars().count();
+    let overlaps = |start: usize, end: usize| start < line_end.max(line_start + 1) && end > line_start;
+    let clip = |start: usize, end: usize| (start.saturating_sub(line_start), (end - line_start).min(len));
+    let mut dimmed: Vec<(usize, usize)> = state.diagnostics.iter().filter(|d| d.unnecessary && overlaps(d.start, d.end)).map(|d| clip(d.start, d.end)).collect();
+    dimmed.extend(state.inactive().iter().filter(|r| overlaps(r.start, r.end)).map(|r| clip(r.start, r.end)));
     let input = LineInput {
         text: &text,
         spans,
