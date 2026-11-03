@@ -2728,3 +2728,34 @@ fn test_runs_become_temporary_configurations() {
     let session = rc_core::session::Session::load(&root);
     assert_eq!(session.test_configs.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["t5"]);
 }
+
+/// "Emulate terminal" starts the program in a pseudo-terminal: it sees a terminal, reads what
+/// is typed in the console and its exit code reaches the tab.
+#[cfg(unix)]
+#[test]
+fn emulated_terminal_runs_see_a_tty_and_take_input() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("tty");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"tty\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(
+        root.join("src/main.rs"),
+        "use std::io::{BufRead, IsTerminal};\nfn main() {\n    println!(\"tty={}\", std::io::stdout().is_terminal());\n    let mut line = String::new();\n    std::io::stdin().lock().read_line(&mut line).unwrap();\n    println!(\"got {}\", line.trim());\n    std::process::exit(3);\n}\n",
+    )
+    .unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let name = app.runner.configs[0].name.clone();
+    app.runner.options.insert(name, rc_core::session::RunOptions { emulate_terminal: true, ..Default::default() });
+    app.runner.selected = 0;
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the program in the terminal", |a| a.runner.runs.first().is_some_and(|r| r.is_terminal() && r.console.term.screen_lines().join("\n").contains("tty=")));
+    assert!(app.runner.runs[0].console.term.screen_lines().join("\n").contains("tty=true"));
+    app.runner.runs[0].console.term.write(b"crab\r".to_vec());
+    pump(&mut app, "the end", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let text = app.runner.runs[0].console.term.screen_lines().join("\n");
+    assert!(text.contains("got crab"), "{text}");
+    assert_eq!(app.runner.runs[0].exit, Some(Some(3)));
+}

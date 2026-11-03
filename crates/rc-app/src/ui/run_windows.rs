@@ -254,8 +254,8 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
         }
         Some(1) => {
-            if let Some(h) = app.runner.runs.get(active).and_then(|r| r.handle.as_ref()) {
-                h.stop();
+            if let Some(r) = app.runner.runs.get_mut(active) {
+                r.stop();
             }
         }
         Some(2) => {

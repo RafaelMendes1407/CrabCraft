@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 118 |
+| ✅ Pronto | 119 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 106 |
+| ⬜ A fazer | 105 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -219,7 +219,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-06 | Editor de configurações de run | ✅ | M3 | Diálogo visto na janela real |
 | B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | ✅ | M3 | Editar configuração: perfil, toolchain, features, ambiente, pasta e arquivo de entrada, testados no toolchain real, exceto a troca de toolchain (só os argumentos); outros comandos pela janela Cargo |
 | B-08 | Features automáticas (`required-features`) | ✅ | M3 | `required-features` lidas do metadata e aplicadas sozinhas; teste real |
-| B-09 | Emular terminal na saída | ⬜ | M3 | `rc-term` já suporta |
+| B-09 | Emular terminal na saída | ✅ | M3 | Opção da configuração Cargo Emular terminal no console de saída: compila (e roda as tarefas antes de executar) e inicia o programa num pseudoterminal na aba Run, com cores, `isatty` verdadeiro e entrada pelo teclado; Stop e o código de saída funcionam. Testado com Cargo real (`is_terminal`, leitura de linha, saída 3). Falta: depurar com terminal emulado |
 | B-10 | Executar como root | ⬜ | M6 | |
 | B-11 | Múltiplas instâncias e configuração no projeto | ✅ | M3 | Na configuração de execução: Permitir várias instâncias (rodar de novo abre outra aba numerada, `server (2)`, sem parar a anterior) e Guardar como arquivo do projeto (`.crabcraft/runConfigurations/*.json`, versionável; ao abrir o projeto o arquivo prevalece sobre a sessão; arquivos quebrados ou grandes são ignorados). Testado com Cargo real |
 | B-12 | Configurações compostas | 🔁 | M3 | |

@@ -695,6 +695,9 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                     }
                 });
                 ui.end_row();
+                ui.label("");
+                ui.checkbox(&mut o.emulate_terminal, tr("Emulate terminal in the output console")).on_hover_text(tr("Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal"));
+                ui.end_row();
                 ui.label(tr("Before launch"));
                 ui.vertical(|ui| {
                     let tools: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();

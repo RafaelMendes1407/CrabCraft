@@ -103,11 +103,99 @@ pub struct RunTab {
     pub console: Console,
     pub exit: Option<Option<i32>>,
     pub urls: Vec<String>,
+    /// "Emulate terminal": the build, then the program in a pseudo-terminal.
+    pty: Option<PtyRun>,
+}
+
+struct PtyRun {
+    prepare: Option<OpHandle>,
+    inbox: Inbox<rc_cargo::PrepareEvent>,
+    /// The program runs in the console's own pseudo-terminal.
+    started: bool,
 }
 
 impl RunTab {
+    /// "Emulate terminal": shows the build, starts the program in a pseudo-terminal when it is
+    /// ready and notices when it ends.
+    fn update_pty(&mut self, waker: &Waker, out: &mut Vec<RunnerOutput>) {
+        let Some(p) = &mut self.pty else { return };
+        for ev in p.inbox.drain() {
+            match ev {
+                rc_cargo::PrepareEvent::Build(BuildEvent::Task(line)) => self.console.line(&line),
+                rc_cargo::PrepareEvent::Build(BuildEvent::Diagnostic(d)) if d.severity == rc_dotnet::Severity::Error => {
+                    self.console.note(&format!("{}({},{}): {}", d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(), d.line.unwrap_or(0), d.column.unwrap_or(0), d.message));
+                }
+                rc_cargo::PrepareEvent::Build(BuildEvent::Finished(res)) if !res.success => out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone())),
+                rc_cargo::PrepareEvent::Build(_) => {}
+                rc_cargo::PrepareEvent::Ready(plan) => {
+                    p.prepare = None;
+                    let mut spec = rc_term::SpawnSpec::command(plan.program.display().to_string(), plan.args.clone(), Some(plan.working_dir.clone())).size(160, 40);
+                    for (k, v) in &plan.env {
+                        spec = spec.env(k, v);
+                    }
+                    match TermSession::spawn(&spec, waker.clone()) {
+                        Ok(term) => {
+                            term.feed(format!("\x1b[2m{}\x1b[0m\r\n", plan.command_line()).as_bytes());
+                            self.console.term = term;
+                            p.started = true;
+                        }
+                        Err(e) => {
+                            let e = format!("{e:#}");
+                            self.console.note(&e);
+                            self.exit = Some(None);
+                            out.push(RunnerOutput::Notify(e, true));
+                        }
+                    }
+                }
+                rc_cargo::PrepareEvent::Failed(e) => {
+                    p.prepare = None;
+                    self.console.note(&e);
+                    self.exit = Some(None);
+                    out.push(RunnerOutput::Notify(e, true));
+                }
+                rc_cargo::PrepareEvent::Cancelled => {
+                    p.prepare = None;
+                    if self.exit.is_none() {
+                        self.console.note(tr("Process stopped"));
+                        self.exit = Some(None);
+                    }
+                }
+            }
+        }
+        // The terminal prints "Process finished with exit code N" itself.
+        if p.started
+            && self.exit.is_none()
+            && let Some(info) = self.console.term.exit_status()
+        {
+            self.exit = Some(if info.signal.is_some() { None } else { Some(info.code as i32) });
+        }
+    }
+
     pub fn running(&self) -> bool {
         self.exit.is_none()
+    }
+
+    /// Whether the console takes keyboard input itself (a pseudo-terminal).
+    pub fn is_terminal(&self) -> bool {
+        self.pty.as_ref().is_some_and(|p| p.started)
+    }
+
+    /// Stops the build or the program, whichever is going.
+    pub fn stop(&mut self) {
+        if let Some(h) = &self.handle {
+            h.stop();
+        }
+        if let Some(p) = &mut self.pty {
+            if let Some(h) = p.prepare.take() {
+                h.cancel();
+            }
+            if p.started {
+                self.console.term.kill();
+            } else if self.exit.is_none() {
+                self.console.note(tr("Process stopped"));
+                self.exit = Some(None);
+            }
+        }
     }
 }
 
@@ -551,8 +639,16 @@ impl Runner {
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
+        if self.options.get(&cfg.name).is_some_and(|o| o.emulate_terminal) {
+            let prep_inbox = Inbox::new(self.waker.clone());
+            let prepare = rc_cargo::start_prepare(&cargo, target, prep_inbox.sender());
+            let pty = PtyRun { prepare: Some(prepare), inbox: prep_inbox, started: false };
+            self.runs.push(RunTab { name: tab, config: cfg, handle: None, inbox, console, exit: None, urls: Vec::new(), pty: Some(pty) });
+            self.active_run = self.runs.len() - 1;
+            return vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)];
+        }
         let handle = rc_cargo::start_run(&cargo, target, inbox.sender());
-        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -568,7 +664,7 @@ impl Runner {
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
-        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: tab, config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
@@ -579,10 +675,7 @@ impl Runner {
     fn free_tab(&mut self, cfg: &RunConfig) -> String {
         if !self.options.get(&cfg.name).is_some_and(|o| o.allow_parallel) {
             if let Some(i) = self.runs.iter().position(|r| r.config == *cfg) {
-                let old = self.runs.remove(i);
-                if let Some(h) = old.handle {
-                    h.stop();
-                }
+                self.runs.remove(i).stop();
             }
             return cfg.name.clone();
         }
@@ -615,24 +708,19 @@ impl Runner {
 
     fn run_process(&mut self, cfg: RunConfig, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
         if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
-            let old = self.runs.remove(i);
-            if let Some(h) = old.handle {
-                h.stop();
-            }
+            self.runs.remove(i).stop();
         }
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let handle = rc_cargo::start_process(plan, inbox.sender());
-        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new(), pty: None });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
     }
 
     pub fn stop_all(&mut self) {
         for r in &mut self.runs {
-            if let Some(h) = &r.handle {
-                h.stop();
-            }
+            r.stop();
         }
         self.cancel_build();
         if let Some(t) = &mut self.tests
@@ -644,10 +732,7 @@ impl Runner {
 
     pub fn close_run(&mut self, i: usize) {
         if i < self.runs.len() {
-            let r = self.runs.remove(i);
-            if let Some(h) = r.handle {
-                h.stop();
-            }
+            self.runs.remove(i).stop();
             self.active_run = self.active_run.min(self.runs.len().saturating_sub(1));
         }
     }
@@ -765,6 +850,10 @@ impl Runner {
                     }
                 }
             }
+        }
+        let waker = self.waker.clone();
+        for r in &mut self.runs {
+            r.update_pty(&waker, &mut out);
         }
         for r in &mut self.runs {
             for ev in r.inbox.drain() {

@@ -317,6 +317,36 @@ pub fn start_run(cargo: &Cargo, target: RunTarget, outbox: Outbox<RunEvent>) -> 
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
+/// What [`start_prepare`] reports: the build, then what to start.
+#[derive(Clone, Debug)]
+pub enum PrepareEvent {
+    Build(BuildEvent),
+    Ready(LaunchPlan),
+    Failed(String),
+    Cancelled,
+}
+
+/// Builds the binary (and runs its "before launch" tasks) without starting it: the caller
+/// starts the plan itself (in a pseudo-terminal, for "emulate terminal").
+pub fn start_prepare(cargo: &Cargo, target: RunTarget, outbox: Outbox<PrepareEvent>) -> OpHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let cargo = cargo.clone();
+    let task = Runtime::spawn(async move {
+        let out = outbox.clone();
+        let result = prepare(&cargo, &target, &token, &mut |e| {
+            out.send(PrepareEvent::Build(e));
+        })
+        .await;
+        outbox.send(match result {
+            Ok(Some(plan)) => PrepareEvent::Ready(plan),
+            Ok(None) => PrepareEvent::Cancelled,
+            Err(e) => PrepareEvent::Failed(format!("{e:#}")),
+        });
+    });
+    OpHandle::new(cancel, task)
+}
+
 /// Starts a program as it is, with no build first (external tools). Its output, input and
 /// stop work as for a run configuration.
 pub fn start_process(plan: LaunchPlan, outbox: Outbox<RunEvent>) -> RunHandle {

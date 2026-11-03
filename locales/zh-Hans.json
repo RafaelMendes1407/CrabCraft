@@ -921,5 +921,9 @@
     "{name} (temporary)": "{name}（临时）",
     "Save “{name}” Configuration": "保存“{name}”配置",
     "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "测试配置暂不能调试：请使用测试旁边的“调试”"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "在输出控制台中模拟终端",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "在伪终端中运行程序：颜色、终端检测和键盘输入与在终端中一样工作"
   }
 }

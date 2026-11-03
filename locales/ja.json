@@ -921,5 +921,9 @@
     "{name} (temporary)": "{name}（一時）",
     "Save “{name}” Configuration": "構成「{name}」を保存",
     "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "テスト構成はまだデバッグできません。テストの横の「デバッグ」を使ってください"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "出力コンソールで端末をエミュレート",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "疑似端末でプログラムを実行します。色、端末判定、キーボード入力が端末と同じように動作します"
   }
 }

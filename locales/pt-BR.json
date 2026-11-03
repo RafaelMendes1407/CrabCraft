@@ -921,5 +921,9 @@
     "{name} (temporary)": "{name} (temporária)",
     "Save “{name}” Configuration": "Salvar a configuração “{name}”",
     "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "Configurações de teste ainda não podem ser depuradas: use Depurar na margem do teste"
+  },
+  "emulate-terminal": {
+    "Emulate terminal in the output console": "Emular terminal no console de saída",
+    "Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal": "Executa o programa num pseudoterminal: cores, detecção de terminal e entrada do teclado funcionam como num terminal"
   }
 }
