@@ -1,0 +1,14 @@
+# Local History (E-13): the dialog with the earlier versions of a file.
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show Local History	Mostrar historial local	Afficher l'historique local	Mostrar histórico local	Lokalen Verlauf anzeigen	Pokaż historię lokalną	显示本地历史记录	ローカル履歴を表示
+Local History: {file}	Historial local: {file}	Historique local : {file}	Histórico local: {file}	Lokaler Verlauf: {file}	Historia lokalna: {file}	本地历史记录：{file}	ローカル履歴: {file}
+No local history for this file yet. Versions are kept when it is saved.	Este archivo aún no tiene historial local. Las versiones se guardan al guardar el archivo.	Ce fichier n'a pas encore d'historique local. Les versions sont conservées à chaque enregistrement.	Este arquivo ainda não tem histórico local. As versões são guardadas quando ele é salvo.	Für diese Datei gibt es noch keinen lokalen Verlauf. Versionen werden beim Speichern aufbewahrt.	Ten plik nie ma jeszcze historii lokalnej. Wersje są zachowywane przy zapisie.	此文件还没有本地历史记录。保存文件时会保留版本。	このファイルにはまだローカル履歴がありません。保存するとバージョンが記録されます。
+just now	ahora mismo	à l'instant	agora mesmo	gerade eben	przed chwilą	刚刚	たった今
+{n} min ago	hace {n} min	il y a {n} min	há {n} min	vor {n} Min.	{n} min temu	{n} 分钟前	{n} 分前
+{n} h ago	hace {n} h	il y a {n} h	há {n} h	vor {n} Std.	{n} godz. temu	{n} 小时前	{n} 時間前
+Could not read this version: {error}	No se pudo leer esta versión: {error}	Impossible de lire cette version : {error}	Não foi possível ler esta versão: {error}	Diese Version konnte nicht gelesen werden: {error}	Nie można odczytać tej wersji: {error}	无法读取此版本：{error}	このバージョンを読み込めません: {error}
+Same as the current text	Igual que el texto actual	Identique au texte actuel	Igual ao texto atual	Identisch mit dem aktuellen Text	Taki sam jak bieżący tekst	与当前文本相同	現在のテキストと同じです
+Changed since this version: +{added} −{removed} lines	Cambios desde esta versión: +{added} −{removed} líneas	Modifications depuis cette version : +{added} −{removed} lignes	Alterações desde esta versão: +{added} −{removed} linhas	Änderungen seit dieser Version: +{added} −{removed} Zeilen	Zmiany od tej wersji: +{added} −{removed} wierszy	自此版本以来的更改：+{added} −{removed} 行	このバージョン以降の変更: +{added} −{removed} 行
+Line {n}	Línea {n}	Ligne {n}	Linha {n}	Zeile {n}	Wiersz {n}	第 {n} 行	{n} 行目
+Revert to This Version	Revertir a esta versión	Revenir à cette version	Reverter para esta versão	Auf diese Version zurücksetzen	Przywróć tę wersję	还原到此版本	このバージョンに戻す
+Current	Actual	Actuel	Atual	Aktuell	Bieżąca	当前	現在

@@ -214,7 +214,19 @@
     "netcoredbg debugger": "Debuger netcoredbg",
     "not found": "nie znaleziono",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} znaków)",
-    "{n} spaces": "{n} spacji"
+    "{n} spaces": "{n} spacji",
+    "Show Local History": "Pokaż historię lokalną",
+    "Local History: {file}": "Historia lokalna: {file}",
+    "No local history for this file yet. Versions are kept when it is saved.": "Ten plik nie ma jeszcze historii lokalnej. Wersje są zachowywane przy zapisie.",
+    "just now": "przed chwilą",
+    "{n} min ago": "{n} min temu",
+    "{n} h ago": "{n} godz. temu",
+    "Could not read this version: {error}": "Nie można odczytać tej wersji: {error}",
+    "Same as the current text": "Taki sam jak bieżący tekst",
+    "Changed since this version: +{added} −{removed} lines": "Zmiany od tej wersji: +{added} −{removed} wierszy",
+    "Line {n}": "Wiersz {n}",
+    "Revert to This Version": "Przywróć tę wersję",
+    "Current": "Bieżąca"
   },
   "terminal": {
     "Local": "Lokalny",

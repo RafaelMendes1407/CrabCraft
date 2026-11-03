@@ -19,6 +19,11 @@ pub fn sessions_dir() -> PathBuf {
     data_dir().join("sessions")
 }
 
+/// Earlier versions of edited files (local history).
+pub fn history_dir() -> PathBuf {
+    data_dir().join("history")
+}
+
 pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }

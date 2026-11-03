@@ -125,6 +125,7 @@ pub enum Action {
     ToggleProblems,
     HideToolWindows,
     Commit,
+    ShowLocalHistory,
     OpenFolder,
     ZoomIn,
     ZoomOut,
@@ -211,6 +212,7 @@ impl Action {
                 | ToggleProblems
                 | HideToolWindows
                 | Commit
+                | ShowLocalHistory
                 | OpenFolder
                 | ZoomIn
                 | ZoomOut

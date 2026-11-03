@@ -380,6 +380,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
             &sep(),
             &act(Action::SaveAll, || tr("Save All")),
+            &act(Action::ShowLocalHistory, || tr("Show Local History")),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],
     )?;
