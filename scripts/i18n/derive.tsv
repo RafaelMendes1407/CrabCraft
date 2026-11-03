@@ -1,0 +1,5 @@
+# Generate derive. Import: python3 scripts/i18n_tsv.py insight scripts/i18n/derive.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Derive…	Derive…	Derive…	Derive…	Derive…	Derive…	Derive…	Derive…
+Derive for {name}	Derive para {name}	Derive pour {name}	Derive para {name}	Derive für {name}	Derive dla {name}	为 {name} 派生	{name} の derive
+Other traits, separated by commas	Otros traits, separados por comas	Autres traits, séparés par des virgules	Outros traits, separados por vírgulas	Weitere Traits, durch Kommas getrennt	Inne traity, oddzielone przecinkami	其他 trait，用逗号分隔	その他のトレイト（カンマ区切り）

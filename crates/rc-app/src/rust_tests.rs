@@ -27,6 +27,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(180) {
         app.poll_cargo_workspace();
+        app.poll_rustfmt();
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
         let outs = app.runner.update();
@@ -564,6 +565,51 @@ fn external_documentation_finds_the_page_of_an_item() {
 }
 
 #[test]
+fn a_macro_call_expands_recursively_into_a_read_only_tab() {
+    use crate::insight::InsightOutput;
+    const SOURCE: &str = "macro_rules! twice {\n    ($e:expr) => { double!($e) + double!($e) };\n}\nmacro_rules! double {\n    ($e:expr) => { $e * 2 };\n}\nfn main() {\n    let _n = twice!(21);\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let i = app.docs.active.unwrap();
+    // On `twice!`: both levels expanded. Asked again until the server has indexed the file.
+    let start = Instant::now();
+    let (name, text) = loop {
+        app.insight.expand_macro(&app.docs.list[i], SOURCE.find("twice!(21)").unwrap() + 2);
+        let reply = output(&mut app, "the expansion", |o| match o {
+            InsightOutput::MacroExpansion { name, text } => Some(Some((name.clone(), text.clone()))),
+            InsightOutput::Message(_) => Some(None),
+            _ => None,
+        });
+        match reply {
+            Some(found) => break found,
+            None if start.elapsed() < Duration::from_secs(120) => std::thread::sleep(Duration::from_millis(500)),
+            None => panic!("no expansion"),
+        }
+    };
+    // Not on a macro call: said so.
+    app.insight.expand_macro(&app.docs.list[i], SOURCE.find("fn main").unwrap() + 1);
+    output(&mut app, "the empty answer", |o| matches!(o, InsightOutput::Message(_)).then_some(()));
+    assert_eq!(name, "twice");
+    assert!(text.contains("21*2") || text.contains("21 * 2"), "{text}");
+    assert!(!text.contains("double!"), "{text}");
+    app.show_macro_expansion(&name, &text);
+    let d = app.docs.active_doc().unwrap();
+    assert_eq!(d.name(), "twice.rs");
+    assert!(d.editor.read_only && d.generated && !crate::insight::has_insight(d));
+    assert!(d.editor.buffer.rope().to_string().contains(&text), "{:?} / {text:?}", d.editor.buffer.rope().to_string());
+    app.insight.stop();
+}
+
+#[test]
 fn the_type_hierarchy_lists_implementations() {
     const SOURCE: &str = "trait Speak {\n    fn speak(&self);\n}\nstruct A;\nstruct B;\nimpl Speak for A {\n    fn speak(&self) {}\n}\nimpl Speak for B {\n    fn speak(&self) {}\n}\nimpl A {\n    fn own(&self) {}\n}\ntrait Lonely {}\nfn main() {}\n";
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -937,6 +983,279 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
     h.state_mut().insight.stop();
 }
 
+#[test]
+fn tests_run_with_nextest_when_the_setting_is_on() {
+    const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    let mut settings = app.settings.clone();
+    settings.use_nextest = true;
+    app.apply_settings(&egui::Context::default(), settings);
+    assert!(app.runner.nextest);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 1));
+    // nextest names the test binary where cargo test gives its path.
+    assert_eq!(t.results["checks::bad"][0].source.as_deref(), Some(Path::new("demo")), "not run by nextest");
+    // The failure leads to its line, as with cargo test.
+    app.goto_test("checks::bad");
+    assert_eq!(app.docs.active_doc().unwrap().editor.caret_line_col().0, 13);
+    // Only the failed test runs again.
+    let outs = app.runner.rerun_failed();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the second run", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed, t.skipped), (0, 1, 0));
+}
+
+#[test]
+fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/lib.rs"));
+    app.open_file(&root.join("src/main.rs"));
+
+    // Untrusted: the server stays off (cargo clean runs no project code).
+    app.invalidate_caches(true);
+    assert_eq!(app.insight.status, InsightStatus::Untrusted);
+    assert!(app.insight.session.is_none());
+
+    app.trust_project();
+    pump(&mut app, "the server", |a| a.insight.status == InsightStatus::Ready);
+    app.runner.selected = 0;
+    app.runner.run_selected();
+    pump(&mut app, "the build", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    assert!(root.join("target").exists());
+
+    // A change the watcher missed, and a Cargo model that is out of date.
+    write(&root.join("src/lib.rs"), "pub fn changed() {}\n");
+    app.runner.cargo_workspace = None;
+    app.invalidate_caches(true);
+    assert!(matches!(app.insight.status, InsightStatus::Starting | InsightStatus::Loading(_)), "{:?}", app.insight.status);
+    assert_eq!(app.docs.list.len(), 2);
+    assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".to_string()));
+    let lib = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    assert_eq!(app.docs.list[lib].editor.buffer.rope().to_string(), "pub fn changed() {}\n");
+    let cleaned = |a: &CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.title == "cargo clean" && b.result.as_ref().is_some_and(|r| r.success));
+    pump(&mut app, "everything again", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some() && cleaned(a));
+    app.insight.stop();
+}
+
+/// Asks rust-analyzer for the workspace symbols named `query` until `want` holds for the names.
+fn wait_symbols(app: &mut CrabCraftApp, query: &str, what: &str, want: impl Fn(&[String]) -> bool) {
+    let start = Instant::now();
+    let mut last = Vec::new();
+    while start.elapsed() < Duration::from_secs(120) {
+        let mut pending = app.insight.workspace_symbols(query, true, false);
+        let asked = Instant::now();
+        while let Some(p) = &mut pending
+            && asked.elapsed() < Duration::from_secs(30)
+        {
+            let out = app.insight.update(&mut app.docs, true);
+            app.handle_insight(out);
+            if let Some(r) = p.poll() {
+                last = r.ok().and_then(|v| v.as_array().cloned()).unwrap_or_default().iter().filter_map(|s| s.get("name")?.as_str().map(str::to_string)).collect();
+                pending = None;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if want(&last) {
+            return;
+        }
+        let out = app.insight.update(&mut app.docs, true);
+        app.handle_insight(out);
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    panic!("timed out waiting for {what}; last symbols {last:?}");
+}
+
+#[test]
+fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
+    use crate::ui::explorer::Exclusion;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), &format!("pub mod generated;\n{LIB}"));
+    write(&root.join("src/generated/mod.rs"), "pub fn only_in_generated_code() -> u32 {\n    7\n}\n");
+    let root = root.canonicalize().unwrap();
+    let generated = root.join("src/generated");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let indexed = |a: &CrabCraftApp| a.files.index.as_ref().filter(|i| i.is_ready()).map(|i| i.snapshot().get("src/generated/mod.rs").is_some());
+    pump(&mut app, "the file index", |a| indexed(a).is_some());
+    assert_eq!(indexed(&app), Some(true));
+    wait_symbols(&mut app, "only_in_generated", "the symbol of the folder", |names| names.iter().any(|n| n == "only_in_generated_code"));
+
+    // Excluded: out of the index, Find in Files and the server; dimmed in the explorer; saved.
+    app.set_excluded(&generated, true);
+    assert_eq!(app.explorer.excluded, ["src/generated"]);
+    assert_eq!(app.explorer.exclusion(&root, &generated), Exclusion::Itself);
+    assert_eq!(app.explorer.exclusion(&root, &generated.join("mod.rs")), Exclusion::Inherited);
+    assert_eq!(app.explorer.exclusion(&root, &root.join("src/lib.rs")), Exclusion::No);
+    pump(&mut app, "the new file index", |a| indexed(a) == Some(false));
+    let mut find = crate::search::FindInFiles::new(&root, Waker::noop(), "generated".into());
+    find.excluded = app.explorer.excluded.clone();
+    find.search();
+    pump(&mut app, "Find in Files", |_| {
+        find.poll();
+        find.summary.is_some()
+    });
+    let found: Vec<&str> = find.results.iter().map(|f| f.rel.as_str()).collect();
+    assert_eq!(found, ["src/lib.rs"]);
+    wait_symbols(&mut app, "only_in_generated", "rust-analyzer to drop the folder", |names| names.is_empty());
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).excluded, ["src/generated"]);
+
+    // Included again: everything comes back.
+    app.set_excluded(&generated, false);
+    assert!(app.explorer.excluded.is_empty());
+    pump(&mut app, "the file index again", |a| indexed(a) == Some(true));
+    wait_symbols(&mut app, "only_in_generated", "the symbol again", |names| names.iter().any(|n| n == "only_in_generated_code"));
+    app.insight.stop();
+
+    // Reopened: the exclusion list comes from the session.
+    let mut app = new_app(dir.path());
+    std::fs::write(rc_core::Session::file_for(&root), r#"{ "excluded": ["src\\generated", "../outside"] }"#).unwrap();
+    app.open_workspace(&root);
+    assert_eq!(app.explorer.excluded, ["src/generated"]);
+    pump(&mut app, "the reopened file index", |a| indexed(a) == Some(false));
+    app.insight.stop();
+}
+
+/// Looks for what renaming `from` to `to` changes until `want` holds for the found changes.
+fn rename_changes(app: &mut CrabCraftApp, from: &Path, to: &Path, want: impl Fn(&[crate::file_rename::Change]) -> bool) -> crate::file_rename::FileRename {
+    let start = Instant::now();
+    loop {
+        let mut r = crate::file_rename::FileRename::start(app, from.to_path_buf(), to.to_path_buf());
+        assert!(r.asked_server, "rust-analyzer offers willRenameFiles");
+        pump(app, "the changes of the rename", |a| {
+            r.update(&a.docs);
+            !r.searching()
+        });
+        if want(&r.changes) {
+            return r;
+        }
+        // The server may still be loading the last rename.
+        assert!(start.elapsed() < Duration::from_secs(60), "{:?} {:?}", r.server_error, r.changes);
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+#[test]
+fn renaming_a_module_file_updates_its_declaration_and_paths() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "pub mod util;\npub use util::helper;\n");
+    write(&root.join("src/util.rs"), "pub fn helper() {}\n");
+    write(&root.join("src/main.rs"), "fn main() {\n    demo::util::helper();\n}\n");
+    write(&root.join("README.md"), "See src/util.rs.\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let src = root.join("src");
+    app.open_file(&src.join("util.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let read = |name: &str| std::fs::read_to_string(src.join(name)).unwrap();
+
+    // The declaration and the path in lib.rs, the path in main.rs, and the README as text.
+    let mentions = |name: &'static str| move |c: &[crate::file_rename::Change]| c.iter().filter(|c| c.from_server && c.after.contains(name)).count() >= 3;
+    let mut r = rename_changes(&mut app, &src.join("util.rs"), &src.join("tools.rs"), mentions("tools"));
+    let lib: Vec<_> = r.changes.iter().filter(|c| c.path == src.join("lib.rs")).map(|c| (c.line, c.before.clone(), c.after.clone(), c.checked)).collect();
+    assert!(lib.contains(&(0, "pub mod util;".into(), "pub mod tools;".into(), true)), "{lib:?}");
+    let readme = r.changes.iter().find(|c| c.path == root.join("README.md")).expect("the README's mention");
+    assert!(!readme.from_server && !readme.checked && readme.after == "See src/tools.rs.", "{readme:?}");
+    let changes = std::mem::take(&mut r.changes);
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &changes), Ok(2));
+    assert!(!src.join("util.rs").exists() && src.join("tools.rs").exists());
+    assert_eq!(read("lib.rs"), "pub mod tools;\npub use tools::helper;\n");
+    assert!(read("main.rs").contains("demo::tools::helper();"));
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "See src/util.rs.\n");
+    // The open tab follows the file.
+    assert!(app.docs.list.iter().any(|d| d.path == src.join("tools.rs")));
+    let check = std::process::Command::new("cargo").args(["check", "--quiet"]).current_dir(&root).output().unwrap();
+    assert!(check.status.success(), "{}", String::from_utf8_lossy(&check.stderr));
+
+    // A file left unchecked keeps its text.
+    let mut r = rename_changes(&mut app, &src.join("tools.rs"), &src.join("gear.rs"), mentions("gear"));
+    for c in r.changes.iter_mut().filter(|c| c.path == src.join("main.rs")) {
+        c.checked = false;
+    }
+    let changes = std::mem::take(&mut r.changes);
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &changes), Ok(1));
+    assert_eq!(read("lib.rs"), "pub mod gear;\npub use gear::helper;\n");
+    assert!(read("main.rs").contains("demo::tools::helper();"));
+
+    // Rename only: nothing else changes.
+    let r = rename_changes(&mut app, &src.join("gear.rs"), &src.join("wheel.rs"), |c| !c.is_empty());
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &[]), Ok(0));
+    assert!(src.join("wheel.rs").exists());
+    assert_eq!(read("lib.rs"), "pub mod gear;\npub use gear::helper;\n");
+    app.insight.stop();
+}
+
+#[test]
+fn f2_in_the_explorer_renames_a_file_and_offers_its_text_mentions() {
+    use egui_kittest::kittest::Queryable;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("notes");
+    write(&root.join("notes.txt"), "plain\n");
+    write(&root.join("README.md"), "Read notes.txt first.\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = crate::screens::test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.get_by_label("notes.txt").click();
+    h.run_steps(2);
+    h.key_press(egui::Key::F2);
+    h.run_steps(2);
+    match &mut h.state_mut().dialog {
+        Some(crate::ui::dialogs::Dialog::Rename { name, .. }) => *name = "todo.txt".into(),
+        _ => panic!("F2 opens the Rename dialog; focus {} docs {}", h.state().explorer.has_focus, h.state().docs.list.len()),
+    }
+    h.run_steps(1);
+    h.key_press(egui::Key::Enter);
+    let start = Instant::now();
+    while h.query_by_label("Rename Only").is_none() || h.state().dialog.as_ref().is_some_and(|d| matches!(d, crate::ui::dialogs::Dialog::RenameFile(r) if r.searching())) {
+        assert!(start.elapsed() < Duration::from_secs(30), "the list of changes");
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // A text match is not picked until the user picks it.
+    assert!(h.query_by_label("No language server checked the code: only text matches are listed.").is_some());
+    assert!(!root.join("todo.txt").exists());
+    h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "README.md").click();
+    h.run_steps(2);
+    h.get_by_label("Rename and Update References").click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert!(root.join("todo.txt").exists() && !root.join("notes.txt").exists());
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "Read todo.txt first.\n");
+}
+
 /// Search Everywhere's Classes and Symbols tabs ask rust-analyzer; the libraries scope adds
 /// the standard library.
 #[test]
@@ -1302,6 +1621,74 @@ fn a_rust_run_configuration_takes_arguments_and_environment() {
 }
 
 #[test]
+fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    // `env!` needs the variable in the compiler's environment, so Cargo must have it.
+    write(&root.join("src/main.rs"), "fn main() {\n    println!(\"built={} run={} shared={}\", env!(\"CRAB_PROJECT\"), std::env::var(\"CRAB_PROJECT\").unwrap_or_default(), std::env::var(\"CRAB_SHARED\").unwrap_or_default());\n}\n");
+    write(&root.join("src/lib.rs"), "#[test]\nfn sees_the_project_environment() {\n    assert_eq!(option_env!(\"CRAB_PROJECT\"), Some(\"from-project\"));\n    assert_eq!(std::env::var(\"CRAB_SHARED\").as_deref(), Ok(\"project\"));\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+
+    // The action opens the dialog with the current variables.
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::ProjectEnvironment);
+    assert!(matches!(&app.dialog, Some(crate::ui::dialogs::Dialog::ProjectEnv { text }) if text.is_empty()));
+    app.dialog = None;
+    app.set_project_env("CRAB_PROJECT=from-project\nCRAB_SHARED=project".to_string());
+    assert!(app.session_dirty);
+    pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some());
+
+    // The run configuration's variables win over the project's.
+    let name = app.runner.selected_config().unwrap().name.clone();
+    app.runner.options.insert(name, rc_core::session::RunOptions { env: "CRAB_SHARED=config".to_string(), ..Default::default() });
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("built=from-project run=from-project shared=config")));
+
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 0), "{:?}", t.failure);
+
+    // A command typed in the Cargo window has it too.
+    app.run_cargo_command("run --bin demo");
+    let console = |a: &CrabCraftApp| a.runner.build.as_ref().map(|b| b.console.term.screen_lines().join("\n")).unwrap_or_default();
+    pump(&mut app, "the typed command", |a| console(a).contains("built=from-project run=from-project shared=project"));
+
+    // It is kept in the session of the workspace.
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).project_env, "CRAB_PROJECT=from-project\nCRAB_SHARED=project");
+}
+
+#[test]
+fn rust_analyzer_runs_build_scripts_with_the_project_environment() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("build.rs"), "fn main() {\n    println!(\"cargo:rerun-if-env-changed=CRAB_PROJECT\");\n    std::fs::write(\"BUILD_ENV\", std::env::var(\"CRAB_PROJECT\").unwrap_or_default()).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    // Setting it runs nothing while the project is not trusted.
+    app.set_project_env("CRAB_PROJECT=first".to_string());
+    assert!(app.insight.session.is_none());
+    app.trust_project();
+    pump(&mut app, "the build script", |_| std::fs::read_to_string(root.join("BUILD_ENV")).is_ok_and(|t| t == "first"));
+
+    // A change restarts the server, whose build scripts see the new value.
+    std::fs::remove_file(root.join("BUILD_ENV")).unwrap();
+    app.set_project_env("CRAB_PROJECT=second".to_string());
+    assert!(app.insight.session.is_some());
+    pump(&mut app, "the build script again", |_| std::fs::read_to_string(root.join("BUILD_ENV")).is_ok_and(|t| t == "second"));
+    app.insight.stop();
+}
+
+#[test]
 fn reformat_code_runs_rustfmt() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
@@ -1525,6 +1912,98 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
 }
 
 #[test]
+fn rustfmt_settings_apply_to_reformat_save_and_commit() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join(".gitignore"), "target\n");
+    let root = root.canonicalize().unwrap();
+    let (main, lib) = (root.join("src/main.rs"), root.join("src/lib.rs"));
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git").args(args).current_dir(&root).output().unwrap();
+        assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Test"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "First"]);
+    write(&main, "fn main(){\nprintln!(\"x\");\n}\n");
+    // Not trusted: no language server runs, and rustfmt still does.
+    let mut app = new_app(dir.path());
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), channel: "+stable".into(), env: "CRABCRAFT_RUSTFMT=1\n".into() };
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let text = |a: &CrabCraftApp| a.docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
+
+    // Reformat Code: the document changes, the file waits for a save.
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "Reformat Code", |a| text(a) == "fn main() {\n   println!(\"x\");\n}\n");
+    assert!(app.docs.active_doc().unwrap().is_modified());
+
+    // On save: the formatted text is written.
+    app.settings.format_on_save = true;
+    let doc = app.docs.active_doc_mut().unwrap();
+    let len = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, len, "fn main(){\nlet a=1;\n}\n");
+    app.save_all_docs();
+    pump(&mut app, "rustfmt on save", |_| std::fs::read_to_string(&main).is_ok_and(|t| t == "fn main() {\n   let a = 1;\n}\n"));
+    assert!(!app.docs.active_doc().unwrap().is_modified());
+    app.settings.format_on_save = false;
+
+    // The environment reaches rustfmt: rustup reads this toolchain from it and fails.
+    app.settings.rustfmt = rc_core::RustfmtSettings { env: "RUSTUP_TOOLCHAIN=crabcraft-missing".into(), ..Default::default() };
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "\n");
+    let before = text(&app);
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "the rustfmt error", |a| a.notices.iter().any(|n| n.error && n.text.contains("main.rs") && n.text.contains("crabcraft-missing")));
+    assert_eq!(text(&app), before);
+    // Settings that cannot work are reported before rustfmt runs.
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config 'tab_spaces=2".into(), ..Default::default() };
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    assert_eq!(app.notices.last().map(|n| n.text.clone()), Some(crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments)));
+    assert!(app.rustfmt_jobs.is_empty());
+
+    // At commit: the included file is committed formatted with the same settings.
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), ..Default::default() };
+    app.settings.format_on_commit = true;
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 1, "");
+    std::fs::write(&lib, "pub fn a(){\nlet b=1;\n}\n").unwrap();
+    let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}; error {:?}", app.vcs.error);
+            app.vcs.update(&mut app.docs, true);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    wait(&mut app, "the status", &|a| a.vcs.status.is_some());
+    app.vcs.refresh();
+    wait(&mut app, "the changes", &|a| ["src/lib.rs", "src/main.rs"].iter().all(|p| a.vcs.changes().iter().any(|c| c.path == *p)));
+    app.vcs.message = "Formatted".into();
+    app.commit_changes(false);
+    wait(&mut app, "the commit", &|a| a.vcs.busy.is_none());
+    assert_eq!(app.vcs.error, None);
+    assert_eq!(git(&["show", "HEAD:src/lib.rs"]), "pub fn a() {\n   let b = 1;\n}\n");
+
+    // A bad setting stops the commit.
+    app.settings.rustfmt.channel = "not a channel".into();
+    std::fs::write(&lib, "pub fn c(){}\n").unwrap();
+    app.vcs.refresh();
+    wait(&mut app, "the change", &|a| a.vcs.changes().iter().any(|c| c.path == "src/lib.rs"));
+    let head = git(&["rev-parse", "HEAD"]);
+    app.vcs.message = "Must not exist".into();
+    app.commit_changes(false);
+    wait(&mut app, "the failure", &|a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.as_deref().is_some_and(|e| e.contains("not a channel")), "{:?}", app.vcs.error);
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
+}
+
+#[test]
 fn run_options_and_required_features_reach_the_target() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
@@ -1635,7 +2114,21 @@ fn generate_offers_only_what_writes_code() {
         _ => None,
     });
     assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
-    assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // The IDE's own Derive row comes first on a type.
+    assert_eq!(found[0], "Derive…", "{found:?}");
+    assert!(found[1..].iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // Deriving writes the attribute above the type, and a second time merges into it.
+    for traits in [vec!["Debug", "Clone"], vec!["Debug", "Clone", "PartialEq"]] {
+        let d = &mut app.docs.list[i];
+        let t = crate::insight::derive_target_of(d).unwrap();
+        let (a, b, new) = t.edit(&traits.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        d.editor.replace(a, b, &new);
+        d.editor.parse_blocking();
+    }
+    let edited = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(edited.starts_with("#[derive(Debug, Clone, PartialEq)]\nstruct A {"), "{edited}");
+    app.docs.list[i].editor.reload(text);
+    app.docs.list[i].editor.parse_blocking();
 
     // Refactor This offers Rename and the refactorings, and no generators.
     let at = text.find("1 + 2").unwrap();
@@ -1866,5 +2359,47 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     app.save_all_docs();
     pump(&mut app, "rustfmt to change the file on disk", |_| std::fs::read_to_string(&main).is_ok_and(|t| t.starts_with("fn main() {\n")));
     pump(&mut app, "the lint of Clippy", |a| lint(a));
+    app.insight.stop();
+}
+
+#[test]
+fn a_warning_is_suppressed_for_its_statement_or_the_file() {
+    use crate::insight::{InsightOutput, SUPPRESS_COMMAND};
+    const SOURCE: &str = "fn main() {\n    let unused = 1;\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs").canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // rustc's warning arrives with `cargo check` on save, named by its lint.
+    app.insight.did_save(&main);
+    pump(&mut app, "the warning of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("unused_variables"))));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("unused =").unwrap());
+    app.insight.code_actions(&app.docs.list[i]);
+    let rows = output(&mut app, "the context actions", |o| match o {
+        InsightOutput::Actions(list) => Some(
+            list.iter()
+                .filter_map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) if c.command == SUPPRESS_COMMAND => Some(c.title.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    });
+    assert_eq!(rows, vec!["Suppress `unused_variables` for the statement", "Suppress `unused_variables` for the file"]);
+    let (a, b, text) = crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "item").unwrap();
+    app.docs.list[i].editor.replace(a, b, &text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    #[allow(unused_variables)]\n    let unused = 1;\n}\n");
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "file").map(|e| e.2), Some("#![allow(unused_variables)]\n".into()));
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unresolved-import", "item"), None);
     app.insight.stop();
 }

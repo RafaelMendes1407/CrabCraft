@@ -57,6 +57,9 @@ pub struct ExplorerState {
     pub has_focus: bool,
     /// Open files with a single click (Settings › Editor).
     pub single_click: bool,
+    /// Folders and files the user excluded from the index, Find in Files and the analysis
+    /// (root-relative, `/`-separated, sorted). Saved in the session.
+    pub excluded: Vec<String>,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -76,11 +79,40 @@ pub enum ExplorerAction {
     ManagePackages(PathBuf),
     /// Add New Project to this solution.
     AddProject(PathBuf),
+    /// Exclude the folder or file from the index, Find in Files and the analysis (`true`), or
+    /// include it again (`false`).
+    SetExcluded(PathBuf, bool),
     Collapse,
     LocateActive,
 }
 
+/// How a folder or file stands with the user's exclusions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Exclusion {
+    /// Not excluded (or outside the workspace root).
+    No,
+    /// Excluded by the user.
+    Itself,
+    /// Inside an excluded folder.
+    Inherited,
+}
+
 impl ExplorerState {
+    /// Whether `path` was excluded, itself or through a folder above it.
+    pub fn exclusion(&self, root: &Path, path: &Path) -> Exclusion {
+        if self.excluded.is_empty() {
+            return Exclusion::No;
+        }
+        let Some(rel) = rc_core::workspace::relative_path(root, path) else { return Exclusion::No };
+        if self.excluded.contains(&rel) {
+            Exclusion::Itself
+        } else if rc_core::workspace::is_excluded(&rel, &self.excluded) {
+            Exclusion::Inherited
+        } else {
+            Exclusion::No
+        }
+    }
+
     pub fn invalidate(&mut self, path: &Path) {
         if let Some(parent) = path.parent() {
             self.dir_cache.remove(parent);
@@ -316,31 +348,35 @@ impl ExplorerState {
         }
         let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
         let children = self.children_of_dir(&dir);
+        let cargo = has_cargo_toml(&children);
         for c in children {
             if c.path == path {
                 continue;
             }
-            self.push_node(rows, &c, depth + 1);
+            self.push_node(rows, &c, depth + 1, cargo);
         }
     }
 
     fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize) {
-        for c in self.children_of_dir(dir) {
-            self.push_node(rows, &c, depth);
+        let children = self.children_of_dir(dir);
+        // From the cached listing: no file system access while drawing.
+        let cargo = has_cargo_toml(&children);
+        for c in children {
+            self.push_node(rows, &c, depth, cargo);
         }
     }
 
-    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize) {
+    /// `in_cargo_package`: the node's folder has a `Cargo.toml` (picks the source/test root icons).
+    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize, in_cargo_package: bool) {
         if node.is_dir {
             let key = format!("dir:{}", node.path.display());
-            let special = node.name == "Properties";
             rows.push(Row {
                 key: key.clone(),
                 kind: NodeKind::Dir(node.path.clone()),
                 depth,
                 label: node.name.clone(),
                 secondary: String::new(),
-                icon: if special { ico::FILE_CONFIG } else { ico::FOLDER },
+                icon: icons::for_dir(&node.name, in_cargo_package),
                 expandable: true,
             });
             if self.expanded.contains(&key) {
@@ -350,6 +386,10 @@ impl ExplorerState {
             rows.push(file_row(&node.path, depth));
         }
     }
+}
+
+fn has_cargo_toml(children: &[FileNode]) -> bool {
+    children.iter().any(|c| !c.is_dir && c.name == "Cargo.toml")
 }
 
 fn file_row(path: &Path, depth: usize) -> Row {
@@ -401,6 +441,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
     let mut toggle_row: Option<usize> = None;
     let mut select_row: Option<usize> = None;
     let mut context: Option<(usize, egui::Response)> = None;
+    // The tree takes the keyboard focus, so it is a widget of its own (accessibility needs a
+    // node for the focused id).
+    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive()).widget_info(|| egui::WidgetInfo::new(egui::WidgetType::Other));
 
     let scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
     scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
@@ -426,13 +469,20 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                     toggle_row = Some(i);
                 }
             }
+            // Excluded folders and files are dimmed; the excluded one itself says so.
+            let exclusion = match &row.kind {
+                NodeKind::Dir(path) | NodeKind::File(path) => state.exclusion(root, path),
+                _ => Exclusion::No,
+            };
             let ir = Rect::from_center_size(pos2(x0 + 26.0, cy), vec2(16.0, 16.0));
-            icons::paint(ui.painter(), ir, row.icon, &p, true);
-            let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), p.text);
+            icons::paint(ui.painter(), ir, row.icon, &p, exclusion == Exclusion::No);
+            let text_color = if exclusion == Exclusion::No { p.text } else { p.muted };
+            let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), text_color);
             let lx = x0 + 40.0;
-            ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), p.text);
-            if !row.secondary.is_empty() {
-                let sec = ui.painter().layout_no_wrap(row.secondary.clone(), FontId::proportional(12.0), p.muted);
+            ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), text_color);
+            let secondary = if exclusion == Exclusion::Itself { tr("excluded").to_string() } else { row.secondary.clone() };
+            if !secondary.is_empty() {
+                let sec = ui.painter().layout_no_wrap(secondary, FontId::proportional(12.0), p.muted);
                 ui.painter().galley(pos2(lx + label.size().x + 8.0, (cy - sec.size().y / 2.0).round()), sec, p.muted);
             }
             if selected && state.reveal {
@@ -459,7 +509,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if !in_library {
                 resp.context_menu(|ui| {
                     let rust = rc_cargo::find_manifest(root).is_some();
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, &mut actions);
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, exclusion, &mut actions);
                 });
             }
         }
@@ -554,7 +604,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, exclusion: Exclusion, actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
@@ -659,5 +709,92 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
     if theme::menu_item(ui, Some(ico::FILE_SHELL), tr("Open in Terminal"), false).clicked() {
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
+    }
+    // Exclusion: folders and files inside the workspace (an excluded folder's contents follow it).
+    if matches!(row.kind, NodeKind::Dir(_) | NodeKind::File(_)) && rc_core::workspace::relative_path(root, &path).is_some() {
+        ui.separator();
+        match exclusion {
+            Exclusion::No => {
+                if theme::menu_item(ui, Some(ico::HIDE), tr("Exclude from Analysis"), false).clicked() {
+                    actions.push(ExplorerAction::SetExcluded(path, true));
+                    ui.close();
+                }
+            }
+            Exclusion::Itself => {
+                if theme::menu_item(ui, Some(ico::HIDE), tr("Include in Analysis Again"), false).clicked() {
+                    actions.push(ExplorerAction::SetExcluded(path, false));
+                    ui.close();
+                }
+            }
+            Exclusion::Inherited => {
+                ui.label(egui::RichText::new(tr("Excluded with its folder")).color(rc_kit::pal(ui).muted));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    /// The context menu of a folder, as it would open for `exclusion`; returns what it asked for.
+    fn click_in_menu(exclusion: Exclusion, label: &str, absent: &str) -> Vec<ExplorerAction> {
+        let root = Path::new("/ws");
+        let row = Row { key: "dir:/ws/gen".into(), kind: NodeKind::Dir(root.join("gen")), depth: 1, label: "gen".into(), secondary: String::new(), icon: ico::FOLDER, expandable: true };
+        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, exclusion, actions), Vec::new());
+        h.run();
+        assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
+        h.get_by_label(label).click();
+        h.run();
+        std::mem::take(h.state_mut())
+    }
+
+    #[test]
+    fn the_context_menu_excludes_a_folder_and_includes_it_again() {
+        let gen_dir = Path::new("/ws").join("gen");
+        assert_eq!(click_in_menu(Exclusion::No, "Exclude from Analysis", "Include in Analysis Again"), [ExplorerAction::SetExcluded(gen_dir.clone(), true)]);
+        assert_eq!(click_in_menu(Exclusion::Itself, "Include in Analysis Again", "Exclude from Analysis"), [ExplorerAction::SetExcluded(gen_dir, false)]);
+    }
+
+    #[test]
+    fn rows_know_whether_they_are_excluded() {
+        let root = Path::new("/ws");
+        let state = ExplorerState { excluded: vec!["gen".into(), "src/old.rs".into()], ..Default::default() };
+        assert_eq!(state.exclusion(root, &root.join("gen")), Exclusion::Itself);
+        assert_eq!(state.exclusion(root, &root.join("gen/a/b.rs")), Exclusion::Inherited);
+        assert_eq!(state.exclusion(root, &root.join("src/old.rs")), Exclusion::Itself);
+        assert_eq!(state.exclusion(root, &root.join("src/new.rs")), Exclusion::No);
+        assert_eq!(state.exclusion(root, root), Exclusion::No);
+        assert_eq!(state.exclusion(root, Path::new("/elsewhere/gen")), Exclusion::No);
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    use super::*;
+
+    #[test]
+    fn cargo_packages_show_source_and_test_root_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for d in ["src", "tests", "docs/src"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        for f in ["Cargo.toml", "Cargo.lock", "src/main.rs", "tests/it.rs", "docs/src/a.md"] {
+            std::fs::write(root.join(f), "").unwrap();
+        }
+        let mut state = ExplorerState::default();
+        state.expanded.extend(["sln".to_string(), format!("dir:{}", root.join("docs").display())]);
+        let rows = state.rows(None, root, "app");
+        let icon = |label: &str, depth: usize| rows.iter().find(|r| r.label == label && r.depth == depth).map(|r| r.icon);
+        assert_eq!(icon("src", 1), Some(ico::SOURCE_ROOT));
+        assert_eq!(icon("tests", 1), Some(ico::TEST_ROOT));
+        assert_eq!(icon("docs", 1), Some(ico::FOLDER));
+        // No Cargo.toml next to it: an ordinary folder.
+        assert_eq!(icon("src", 2), Some(ico::FOLDER));
+        assert_eq!(icon("Cargo.toml", 1), Some(ico::CARGO_TOML));
+        assert_eq!(icon("Cargo.lock", 1), Some(ico::CARGO_LOCK));
     }
 }

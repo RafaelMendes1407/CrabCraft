@@ -6,8 +6,11 @@ mod debugger;
 mod insight;
 mod call_tree;
 mod item_templates;
+mod layout;
+mod local_history;
 mod run_anything;
 mod runner;
+mod rustfmt;
 mod search;
 mod vcs;
 #[cfg(test)]
@@ -23,6 +26,7 @@ mod rust_tests;
 #[cfg(test)]
 mod screens;
 mod docs;
+mod file_rename;
 mod native_menu;
 mod open_files;
 mod toolwindow;

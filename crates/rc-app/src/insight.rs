@@ -53,6 +53,8 @@ pub struct Target {
 pub enum InsightOutput {
     /// A web page to open.
     OpenUrl(String),
+    /// The expansion of the macro call under the caret.
+    MacroExpansion { name: String, text: String },
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
@@ -95,6 +97,10 @@ pub const RENAME_COMMAND: &str = "crabcraft.rename";
 /// The rows of the Select In popup, run by the IDE.
 pub const SELECT_IN_EXPLORER: &str = "crabcraft.select_in_explorer";
 pub const REVEAL_FILE: &str = "crabcraft.reveal_file";
+/// The Derive row of the Generate popup, run by the IDE.
+pub const DERIVE_COMMAND: &str = "crabcraft.derive";
+/// The Suppress rows of Alt+Enter (arguments: the lint, then `item` or `file`), run by the IDE.
+pub const SUPPRESS_COMMAND: &str = "crabcraft.suppress";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
@@ -146,11 +152,15 @@ pub struct Insight {
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
     clippy: bool,
+    /// Folders and files rust-analyzer leaves out (root-relative, `/`-separated).
+    exclude: Vec<String>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
     save_again: Option<u64>,
     configured: Option<PathBuf>,
+    /// The project's environment, given to rust-analyzer.
+    env: Vec<(String, String)>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     /// The text the positions of `problems` refer to, for files that are not open.
@@ -164,6 +174,7 @@ pub struct Insight {
     nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
+    expand_macro: Option<Pending<Value>>,
     types: Option<(Target, Pending<Value>)>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
@@ -236,6 +247,7 @@ impl Insight {
             dotnet: PathBuf::from("dotnet"),
             rust: false,
             configured: None,
+            env: Vec::new(),
             problems: BTreeMap::new(),
             problem_text: BTreeMap::new(),
             raw_items: Vec::new(),
@@ -247,6 +259,7 @@ impl Insight {
             calls: None,
             types: None,
             external_docs: None,
+            expand_macro: None,
             call_levels: Vec::new(),
             call_generation: 0,
             call_tree: None,
@@ -260,6 +273,7 @@ impl Insight {
             optimizing: None,
             accepted_resolve: None,
             clippy: false,
+            exclude: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -314,11 +328,34 @@ impl Insight {
         self.launch();
     }
 
+    /// Sets the project's environment; a running rust-analyzer restarts to take it.
+    pub fn set_env(&mut self, env: Vec<(String, String)>) {
+        if self.env == env {
+            return;
+        }
+        self.env = env;
+        if self.rust && self.session.is_some() {
+            self.restart();
+        }
+    }
+
     /// Switches the linter that runs on save between Clippy and `cargo check`.
     pub fn set_clippy(&mut self, clippy: bool) {
         self.clippy = clippy;
         if let Some(s) = &mut self.session {
             s.set_clippy(clippy);
+        }
+    }
+
+    /// The folders and files rust-analyzer leaves out (`files.exclude`). A running server is
+    /// restarted: rust-analyzer 1.99 keeps its file set after `workspace/didChangeConfiguration`.
+    pub fn set_exclude(&mut self, exclude: Vec<String>) {
+        if exclude == self.exclude {
+            return;
+        }
+        self.exclude = exclude;
+        if self.rust && self.session.is_some() {
+            self.restart();
         }
     }
 
@@ -337,7 +374,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.waker.clone()) {
+            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;
@@ -884,6 +921,18 @@ impl Insight {
         }
     }
 
+    fn poll_expand_macro(&mut self, out: &mut Vec<InsightOutput>) {
+        if let Some(p) = &mut self.expand_macro
+            && let Some(reply) = p.poll()
+        {
+            self.expand_macro = None;
+            out.push(match reply.ok().as_ref().and_then(macro_expansion) {
+                Some((name, text)) => InsightOutput::MacroExpansion { name, text },
+                None => InsightOutput::Message(tr("No macro call at the caret").into()),
+            });
+        }
+    }
+
     fn poll_calls(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree, entries};
         if let Some((_, p)) = &mut self.calls
@@ -1019,6 +1068,7 @@ impl Insight {
         self.poll_calls(docs, out);
         self.poll_types(docs, out);
         self.poll_external_docs(out);
+        self.poll_expand_macro(out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -1063,13 +1113,21 @@ impl Insight {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {
                 out.push(InsightOutput::Actions(refactorings(list)));
-            } else if list.is_empty() {
+            } else if list.is_empty() && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some())) && (self.generate_only || docs.active_doc().is_none_or(|d| suppress_commands(d).is_empty())) {
+                self.generate_only = false;
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
                 if std::mem::take(&mut self.generate_only) {
-                    let list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
+                    let mut list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
+                    // On a Rust type: its derive list, written by the IDE.
+                    if docs.active_doc().is_some_and(|d| derive_target_of(d).is_some()) {
+                        list.insert(0, lsp::CodeActionOrCommand::Command(lsp::Command { title: tr("Derive…").into(), command: DERIVE_COMMAND.into(), arguments: None }));
+                    }
                     out.push(if list.is_empty() { InsightOutput::Message(tr("Nothing to generate here").into()) } else { InsightOutput::Actions(list) });
                 } else {
+                    // The server's fixes first, then allowing the warning's lint.
+                    let mut list = list;
+                    list.extend(docs.active_doc().map(suppress_commands).unwrap_or_default());
                     out.push(InsightOutput::Actions(list));
                 }
             }
@@ -1435,6 +1493,13 @@ impl Insight {
         self.external_docs = Some(session.client.request_raw("experimental/externalDocs", params));
     }
 
+    /// The recursive expansion of the macro call at `pos` (rust-analyzer only expands fully).
+    pub fn expand_macro(&mut self, doc: &Doc, pos: usize) {
+        let Some(session) = self.session.as_ref().filter(|_| self.rust) else { return };
+        let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        self.expand_macro = Some(session.client.request_raw("rust-analyzer/expandMacro", params));
+    }
+
     /// The context actions that write code (Alt+Insert).
     pub fn generate_actions(&mut self, doc: &Doc) {
         self.code_actions(doc);
@@ -1547,6 +1612,25 @@ impl Insight {
         }
     }
 
+    /// Asks the server for the edits that renaming `from` to `to` needs
+    /// (`workspace/willRenameFiles`; rust-analyzer renames the module and its paths). `None`
+    /// when no started server offers it.
+    pub fn will_rename_files(&self, from: &Path, to: &Path) -> Option<Pending<Option<lsp::WorkspaceEdit>>> {
+        let session = self.session.as_ref().filter(|s| s.is_initialized())?;
+        let ops = session.capabilities.as_ref()?.workspace.as_ref()?.file_operations.as_ref()?;
+        ops.will_rename.as_ref()?;
+        Some(session.client.request_raw("workspace/willRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] })))
+    }
+
+    /// Tells the server a file or folder was renamed, when it asked to know.
+    pub fn did_rename_files(&self, from: &Path, to: &Path) {
+        let Some(session) = self.session.as_ref().filter(|s| s.is_initialized()) else { return };
+        let wanted = session.capabilities.as_ref().and_then(|c| c.workspace.as_ref()).and_then(|w| w.file_operations.as_ref()).is_some_and(|o| o.did_rename.is_some());
+        if wanted {
+            session.client.notify_raw("workspace/didRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] }));
+        }
+    }
+
     /// Tells the server about files changed on disk (closed files it has loaded).
     pub fn files_changed(&self, changes: &[(PathBuf, u8)]) {
         if let Some(s) = &self.session
@@ -1590,8 +1674,59 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
 }
 
 /// Whether the language server covers this document.
+/// Alt+Enter on a rustc or Clippy warning: allow its lint for the statement or item around the
+/// caret, or for the whole file.
+pub fn suppress_commands(d: &Doc) -> Vec<lsp::CodeActionOrCommand> {
+    if d.editor.lang() != rc_syntax::Lang::Rust || d.editor.read_only {
+        return Vec::new();
+    }
+    let line = d.editor.caret_line_col().0;
+    let buffer = &d.editor.buffer;
+    let mut lints: Vec<String> = d
+        .editor
+        .diagnostics
+        .iter()
+        .filter(|x| x.severity != rc_editor::Severity::Error && buffer.line_col(x.start).0 <= line && line <= buffer.line_col(x.end).0)
+        .filter_map(|x| x.code.clone())
+        .filter(|c| rc_syntax::is_lint_name(c))
+        .collect();
+    lints.sort();
+    lints.dedup();
+    let target = d.editor.syntax.tree().and_then(|t| rc_syntax::allow_target(t, buffer.rope(), d.editor.caret()));
+    let command = |title: String, lint: &str, scope: &str| lsp::CodeActionOrCommand::Command(lsp::Command { title, command: SUPPRESS_COMMAND.into(), arguments: Some(vec![json!(lint), json!(scope)]) });
+    let mut out = Vec::new();
+    for lint in &lints {
+        match &target {
+            Some(t) if t.name.is_empty() => out.push(command(trf("Suppress `{lint}` for the statement", &[("lint", lint)]), lint, "item")),
+            Some(t) => out.push(command(trf("Suppress `{lint}` for {name}", &[("lint", lint), ("name", &t.name)]), lint, "item")),
+            None => {}
+        }
+        out.push(command(trf("Suppress `{lint}` for the file", &[("lint", lint)]), lint, "file"));
+    }
+    out
+}
+
+/// The edit a Suppress row makes in `d`: `#[allow]` on the item at the caret, or `#![allow]`.
+pub fn suppress_edit(d: &Doc, lint: &str, scope: &str) -> Option<(usize, usize, String)> {
+    if !rc_syntax::is_lint_name(lint) {
+        return None;
+    }
+    if scope == "file" {
+        return Some(rc_syntax::allow_in_file(lint));
+    }
+    rc_syntax::allow_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())?.add(lint)
+}
+
+/// The Rust struct, enum or union the caret of `d` is in.
+pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
+    if d.editor.lang() != rc_syntax::Lang::Rust || d.editor.read_only {
+        return None;
+    }
+    rc_syntax::derive_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())
+}
+
 pub fn has_insight(d: &Doc) -> bool {
-    matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
+    !d.generated && !d.scratch && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.
@@ -1737,6 +1872,16 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
 /// Assists of rust-analyzer that make up Optimize Imports, in order.
 const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"];
 
+/// The macro's name and its expansion in a `rust-analyzer/expandMacro` reply (`null` when the
+/// caret is not on a macro call).
+fn macro_expansion(v: &Value) -> Option<(String, String)> {
+    // rust-analyzer writes the name with its `!`.
+    let name = v.get("name")?.as_str()?.trim_end_matches('!').to_string();
+    // On Windows the expansion comes with `\r\n`, and with blank lines around it.
+    let text = v.get("expansion")?.as_str()?.replace("\r\n", "\n").trim_matches('\n').to_string();
+    Some((name, text))
+}
+
 /// The address in an `experimental/externalDocs` reply: a string, or `{ web, local }`.
 fn web_docs(reply: &Value) -> Option<String> {
     let url = reply.as_str().or_else(|| reply.get("web")?.as_str())?;
@@ -1786,6 +1931,11 @@ fn use_block(text: &str) -> Option<(usize, usize)> {
 /// Applies a workspace edit: open documents through their editor (one undo step each),
 /// closed files on disk. Returns the number of files changed.
 pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Result<usize, String> {
+    apply_file_edits(docs, workspace_edit_files(edit))
+}
+
+/// The text edits of a workspace edit, per file (file operations are left out).
+pub fn workspace_edit_files(edit: &lsp::WorkspaceEdit) -> BTreeMap<PathBuf, Vec<lsp::TextEdit>> {
     let mut per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>> = BTreeMap::new();
     if let Some(changes) = &edit.changes {
         for (uri, edits) in changes {
@@ -1814,6 +1964,12 @@ pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Resul
             }
         }
     }
+    per_file
+}
+
+/// Applies text edits per file: open documents through their editor (one undo step each),
+/// closed files on disk. Returns the number of files changed.
+pub fn apply_file_edits(docs: &mut Docs, per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>>) -> Result<usize, String> {
     let mut count = 0;
     for (path, edits) in per_file {
         if let Some(d) = docs.list.iter_mut().find(|d| d.path == path) {

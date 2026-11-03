@@ -7,7 +7,7 @@ use ignore::{WalkBuilder, WalkState};
 use parking_lot::Mutex;
 use rc_core::Waker;
 use rc_core::watch::FsEvent;
-use rc_core::workspace::{HIDDEN_DIRS, is_hidden};
+use rc_core::workspace::{HIDDEN_DIRS, is_excluded, is_hidden};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -176,9 +176,9 @@ pub(crate) fn walker_threads() -> usize {
     std::thread::available_parallelism().map_or(2, |n| n.get().saturating_sub(1).clamp(1, 8))
 }
 
-/// Walks `start` in parallel and returns the files below it relative to `root`; `None` when
-/// cancelled.
-fn walk_files(root: &Path, start: &Path, cancel: &AtomicBool) -> Option<Vec<FileEntry>> {
+/// Walks `start` in parallel and returns the files below it relative to `root`, leaving out the
+/// `excluded` paths (see [`is_excluded`]); `None` when cancelled.
+fn walk_files(root: &Path, start: &Path, excluded: &[String], cancel: &AtomicBool) -> Option<Vec<FileEntry>> {
     struct Collector<'a> {
         local: Vec<FileEntry>,
         out: &'a Mutex<Vec<FileEntry>>,
@@ -196,9 +196,15 @@ fn walk_files(root: &Path, start: &Path, cancel: &AtomicBool) -> Option<Vec<File
             if cancel.load(Ordering::Relaxed) {
                 return WalkState::Quit;
             }
-            if let Ok(e) = res
-                && e.file_type().is_some_and(|t| t.is_file())
-                && let Some(rel) = relative_to(root, e.path())
+            let Ok(e) = res else { return WalkState::Continue };
+            let rel = relative_to(root, e.path());
+            if let Some(rel) = &rel
+                && is_excluded(rel, excluded)
+            {
+                return WalkState::Skip;
+            }
+            if e.file_type().is_some_and(|t| t.is_file())
+                && let Some(rel) = rel
                 && !rel.is_empty()
             {
                 c.local.push(FileEntry::new(&rel));
@@ -216,6 +222,8 @@ fn walk_files(root: &Path, start: &Path, cancel: &AtomicBool) -> Option<Vec<File
 
 struct Shared {
     root: PathBuf,
+    /// Folders and files the user excluded (root-relative, `/`-separated).
+    excluded: Vec<String>,
     snapshot: Mutex<Arc<IndexSnapshot>>,
     /// `Some` while a scan runs: events wait here and are replayed on the scan's result.
     pending: Mutex<Option<Vec<FsEvent>>>,
@@ -262,11 +270,18 @@ impl Drop for ScanHandle {
 impl FileIndex {
     /// An empty index for `root`; call [`start_scan`](Self::start_scan) to fill it.
     pub fn new(root: &Path) -> FileIndex {
+        FileIndex::with_excluded(root, Vec::new())
+    }
+
+    /// An empty index for `root` that leaves out the `excluded` folders and files
+    /// (root-relative, `/`-separated).
+    pub fn with_excluded(root: &Path, excluded: Vec<String>) -> FileIndex {
         let root = root.to_path_buf();
         let snapshot = Arc::new(IndexSnapshot { root: root.clone(), files: Vec::new() });
         FileIndex {
             shared: Arc::new(Shared {
                 root,
+                excluded,
                 snapshot: Mutex::new(snapshot),
                 pending: Mutex::new(None),
                 ready: AtomicBool::new(false),
@@ -277,7 +292,7 @@ impl FileIndex {
     /// Scans `root` on the calling thread (tests, benches, CLI tools).
     pub fn scan_blocking(root: &Path) -> FileIndex {
         let index = FileIndex::new(root);
-        if let Some(files) = walk_files(root, root, &AtomicBool::new(false)) {
+        if let Some(files) = walk_files(root, root, &[], &AtomicBool::new(false)) {
             *index.shared.snapshot.lock() = Arc::new(IndexSnapshot { root: root.to_path_buf(), files });
         }
         index.shared.ready.store(true, Ordering::Release);
@@ -294,7 +309,7 @@ impl FileIndex {
         let thread = std::thread::Builder::new()
             .name("rc-search-index".into())
             .spawn(move || {
-                let files = walk_files(&shared.root, &shared.root, &flag);
+                let files = walk_files(&shared.root, &shared.root, &shared.excluded, &flag);
                 let mut pending = shared.pending.lock();
                 let Some(files) = files else {
                     // Cancelled: keep the previous snapshot and apply what arrived meanwhile.
@@ -355,7 +370,7 @@ fn apply_events(shared: &Shared, events: &[FsEvent]) {
     let mut changed = false;
     for ev in events {
         let Some(rel) = relative_to(&shared.root, ev.path()) else { continue };
-        if rel.is_empty() || rel.split('/').any(|c| HIDDEN_DIRS.contains(&c)) {
+        if rel.is_empty() || rel.split('/').any(|c| HIDDEN_DIRS.contains(&c)) || is_excluded(&rel, &shared.excluded) {
             continue;
         }
         // Rebuilt from the root as given, so a canonical event path compares equal below.
@@ -369,7 +384,7 @@ fn apply_events(shared: &Shared, events: &[FsEvent]) {
             // A modified folder only means its listing changed; its files report themselves.
             if matches!(ev, FsEvent::Created(_))
                 && is_included(&shared.root, path, &files)
-                && let Some(mut added) = walk_files(&shared.root, path, &AtomicBool::new(false))
+                && let Some(mut added) = walk_files(&shared.root, path, &shared.excluded, &AtomicBool::new(false))
             {
                 files.append(&mut added);
                 sort_dedup(&mut files);

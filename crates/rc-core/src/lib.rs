@@ -1,9 +1,11 @@
 //! Core services of CrabCraft without UI: the shared async runtime, inboxes that wake the UI,
-//! settings and per-workspace sessions, the workspace's file tree and file watching.
+//! settings and per-workspace sessions, the local history of files, the workspace's file tree and file watching.
 
+pub mod history;
 pub mod inbox;
 pub mod paths;
 pub mod runtime;
+pub mod scratch;
 pub mod session;
 pub mod settings;
 pub mod processes;
@@ -13,5 +15,5 @@ pub mod workspace;
 pub use inbox::{Inbox, Waker};
 pub use runtime::Runtime;
 pub use session::Session;
-pub use settings::Settings;
+pub use settings::{RustfmtSettings, Settings};
 pub use workspace::{FileNode, Workspace, WorkspaceKind};
