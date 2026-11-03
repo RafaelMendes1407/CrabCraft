@@ -963,3 +963,72 @@ fn screens_search_everywhere() {
     }
 }
 
+
+/// A right click at `at` in the rendered window, as a mouse sends it.
+fn right_click(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+}
+
+/// Clicks the context menu's `entry` and returns the text the frames after it copied.
+fn click_entry(h: &mut Harness<'static, CrabCraftApp>, entry: &str) -> (Vec<String>, bool) {
+    use egui_kittest::kittest::Queryable;
+    h.get_by_label(entry).click();
+    let (mut copied, mut paste) = (Vec::new(), false);
+    for _ in 0..3 {
+        h.run_steps(1);
+        for c in &h.output().platform_output.commands {
+            if let egui::OutputCommand::CopyText(t) = c {
+                copied.push(t.clone());
+            }
+        }
+        paste |= h.output().viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
+    }
+    (copied, paste)
+}
+
+#[test]
+fn cut_copy_and_paste_from_the_editor_context_menu() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let file = home.path().join("notes.txt");
+    std::fs::write(&file, "alpha beta\ngamma\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
+    // Select "alpha" and right-click on it: the selection stays.
+    let select_alpha = |h: &mut Harness<'static, CrabCraftApp>| {
+        let doc = &mut h.state_mut().docs.list[0];
+        doc.editor.set_selection(rc_text::Selection::single(rc_text::Range::new(0, 5)));
+        h.run_steps(2);
+        h.state().caret_screen.unwrap() + vec2(-8.0, -6.0)
+    };
+    let at = select_alpha(&mut h);
+    right_click(&mut h, at);
+    let (copied, _) = click_entry(&mut h, "Copy");
+    assert_eq!(copied, vec!["alpha".to_string()]);
+    assert_eq!(text(&h), "alpha beta\ngamma\n");
+
+    let at = select_alpha(&mut h);
+    right_click(&mut h, at);
+    let (copied, _) = click_entry(&mut h, "Cut");
+    assert_eq!(copied, vec!["alpha".to_string()]);
+    assert_eq!(text(&h), " beta\ngamma\n");
+
+    // Paste asks the platform for the clipboard; its answer goes into the editor.
+    h.state_mut().docs.list[0].editor.goto(1, 0);
+    h.run_steps(2);
+    let at = h.state().caret_screen.unwrap() + vec2(2.0, -6.0);
+    right_click(&mut h, at);
+    let (_, requested) = click_entry(&mut h, "Paste");
+    assert!(requested, "the clipboard was not requested");
+    h.event(egui::Event::Paste("alpha".into()));
+    h.run_steps(2);
+    assert_eq!(text(&h), " beta\nalphagamma\n");
+}
