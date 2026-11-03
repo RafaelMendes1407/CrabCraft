@@ -559,6 +559,7 @@ pub fn flat_button(ui: &mut Ui, leading: Option<Ico>, text: &str, font: FontId, 
     let h = 26.0;
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, h), sense);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
         ui.painter().rect_filled(rect, 6.0, fill);

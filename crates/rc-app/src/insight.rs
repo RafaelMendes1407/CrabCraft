@@ -171,7 +171,8 @@ pub struct Insight {
     resolve: Option<(usize, Option<Pending<lsp::CompletionItem>>)>,
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
     signature: Option<(u64, usize, Pending<Option<lsp::SignatureHelp>>)>,
-    nav: Option<(NavKind, NavOrigin, Pending<Value>)>,
+    /// The `bool`: a single usage is jumped to (⌘+click on a declaration) instead of listed.
+    nav: Option<(NavKind, NavOrigin, bool, Pending<Value>)>,
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
     expand_macro: Option<Pending<Value>>,
@@ -1027,9 +1028,9 @@ impl Insight {
 
     /// Go to Declaration / Implementation / Usages results.
     fn poll_goto(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
-        let Some((_, _, p)) = &mut self.nav else { return };
+        let Some((_, _, _, p)) = &mut self.nav else { return };
         let Some(r) = p.poll() else { return };
-        let Some((kind, origin, _)) = self.nav.take() else { return };
+        let Some((kind, origin, jump, _)) = self.nav.take() else { return };
         let targets = r.map(|v| locations(&v, docs)).unwrap_or_default();
         // Nothing yet because the solution is still loading: go there once it has loaded.
         if targets.is_empty() && self.status != InsightStatus::Ready {
@@ -1048,15 +1049,24 @@ impl Insight {
         {
             let pos = doc.editor.buffer.pos_at(line, from);
             self.navigate(doc, pos, NavKind::Usages);
+            if let Some(nav) = &mut self.nav {
+                nav.2 = true;
+            }
             return;
         }
         match (kind, targets.len()) {
-            (_, 0) => out.push(InsightOutput::Message(match kind {
-                NavKind::Usages => tr("No usages found").into(),
-                NavKind::Implementation => tr("No implementations found").into(),
-                _ => tr("Cannot find declaration to go to").into(),
-            })),
-            (NavKind::Usages, _) => out.push(InsightOutput::Usages { title: tr("Usages").into(), targets }),
+            (_, 0) => {
+                out.push(InsightOutput::Message(match kind {
+                    NavKind::Usages => tr("No usages found").into(),
+                    NavKind::Implementation => tr("No implementations found").into(),
+                    _ => tr("Cannot find declaration to go to").into(),
+                }));
+                // Find Usages never leaves the list of another symbol in the Find window.
+                if kind == NavKind::Usages && !jump {
+                    out.push(InsightOutput::Usages { title: tr("Usages").into(), targets });
+                }
+            }
+            (NavKind::Usages, _) if !jump || targets.len() > 1 => out.push(InsightOutput::Usages { title: tr("Usages").into(), targets }),
             (_, 1) => out.push(InsightOutput::Navigate(targets.into_iter().next().expect("one"))),
             (NavKind::Implementation, _) => out.push(InsightOutput::Usages { title: tr("Implementations").into(), targets }),
             _ => out.push(InsightOutput::Usages { title: tr("Declarations").into(), targets }),
@@ -1462,7 +1472,7 @@ impl Insight {
         let (from, to) = rc_text::commands::word_at(doc.editor.buffer.rope(), pos);
         let (line, start) = doc.editor.buffer.line_col(from);
         let origin = (doc.path.clone(), line, start, start + (to - from));
-        self.nav = Some((kind, origin, session.client.request_raw(method, params)));
+        self.nav = Some((kind, origin, false, session.client.request_raw(method, params)));
     }
 
     /// Shift+F6: asks the server what can be renamed at the caret.

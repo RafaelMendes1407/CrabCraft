@@ -280,7 +280,7 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         ui.add_space(8.0);
         ui.label(egui::RichText::new(tr("File mask:")).size(12.5).color(p.text_muted));
-        rerun |= ui.add(egui::TextEdit::singleline(&mut f.mask).hint_text("*.cs").desired_width(120.0)).changed();
+        rerun |= ui.add(egui::TextEdit::singleline(&mut f.mask).hint_text("*.rs").desired_width(120.0)).changed();
         if ui.add(egui::Button::selectable(f.show_replace, tr("Replace"))).clicked() {
             f.show_replace = !f.show_replace;
         }
