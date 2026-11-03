@@ -325,7 +325,8 @@ impl CrabCraftApp {
     pub(crate) fn poll_cargo_workspace(&mut self) {
         if let Some(libraries) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
             self.libraries_load = None;
-            self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.clone()).collect();
+            // Canonical like the documents' paths (`\\?\C:\…` on Windows).
+            self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.canonicalize().unwrap_or_else(|_| l.root.clone())).collect();
             self.explorer.libraries = libraries;
         }
         let Some(inbox) = &self.cargo_load else { return };

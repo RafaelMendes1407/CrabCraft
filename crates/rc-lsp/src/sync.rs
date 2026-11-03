@@ -31,7 +31,10 @@ pub fn uri_to_path(uri: &Uri) -> Option<PathBuf> {
     let decoded = percent_decode_str(rest).decode_utf8().ok()?.into_owned();
     // `file:///C:/x` → `C:/x` on Windows.
     if cfg!(windows) && decoded.len() > 2 && decoded.as_bytes()[2] == b':' {
-        return Some(PathBuf::from(&decoded[1..]));
+        let path = PathBuf::from(&decoded[1..]);
+        // Open documents are kept by canonical path (`\\?\C:\x` there); a server's `c:/x`
+        // must name the same document.
+        return Some(path.canonicalize().unwrap_or(path));
     }
     Some(PathBuf::from(decoded))
 }
@@ -110,6 +113,17 @@ mod tests {
         let u = path_to_uri(p);
         assert_eq!(u.as_str(), "file:///Users/me/My%20Projects/Caf%C3%A9/A%231.cs");
         assert_eq!(uri_to_path(&u).unwrap(), p);
+    }
+
+    /// A server's `file:///c%3A/...` names the same document as the canonical path it was
+    /// opened with.
+    #[test]
+    #[cfg(windows)]
+    fn uris_of_existing_files_come_back_canonical() {
+        let dir = std::env::temp_dir().canonicalize().unwrap();
+        let uri = path_to_uri(&dir);
+        let lower = uri.as_str().replacen("file:///C:", "file:///c%3A", 1);
+        assert_eq!(uri_to_path(&Uri::from_str(&lower).unwrap()).unwrap(), dir);
     }
 
     #[test]
