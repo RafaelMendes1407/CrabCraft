@@ -1,0 +1,4 @@
+# cargo-nextest test runner. Import: python3 scripts/i18n_tsv.py nextest scripts/i18n/nextest.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Run tests with cargo-nextest	Ejecutar pruebas con cargo-nextest	Exécuter les tests avec cargo-nextest	Executar testes com o cargo-nextest	Tests mit cargo-nextest ausführen	Uruchamiaj testy za pomocą cargo-nextest	使用 cargo-nextest 运行测试	cargo-nextest でテストを実行
+Needs cargo-nextest installed. Doctests do not run with it.	Requiere cargo-nextest instalado. Con él no se ejecutan los doctests.	Nécessite cargo-nextest installé. Les doctests ne sont pas exécutés avec lui.	Exige o cargo-nextest instalado. Com ele, os doctests não são executados.	Erfordert ein installiertes cargo-nextest. Doctests laufen damit nicht.	Wymaga zainstalowanego cargo-nextest. Doctesty nie są z nim uruchamiane.	需要安装 cargo-nextest。使用它时不运行文档测试。	cargo-nextest のインストールが必要です。doctest は実行されません。

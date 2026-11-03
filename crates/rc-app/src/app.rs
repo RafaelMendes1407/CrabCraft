@@ -26,18 +26,6 @@ pub struct Notice {
     pub at: f64,
 }
 
-/// The editor split in two panes (documents by editor id).
-#[derive(Clone, Debug, PartialEq)]
-pub struct Split {
-    /// Side by side (else one above the other).
-    pub vertical: bool,
-    pub main: u64,
-    pub other: u64,
-    pub focus_second: bool,
-    /// Size of the first pane (0..1).
-    pub ratio: f32,
-}
-
 pub struct WorkspaceState {
     pub ws: Workspace,
     pub solution: Option<Solution>,
@@ -64,11 +52,12 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
-    pub split: Option<Split>,
-    /// Documents shown in windows of their own (editor ids).
-    pub floating: Vec<u64>,
-    /// The last document of the main pane (when the active one is in another window).
-    pub last_main: Option<u64>,
+    /// Editor groups, splits and floating editor windows.
+    pub layout: crate::layout::Layout,
+    /// A tab being dragged to another place.
+    pub tab_drag: Option<crate::ui::editor_area::TabDrag>,
+    /// Keyboard focus and menu actions for the active editor, wherever it is shown this frame.
+    pub editor_frame: Option<(bool, Vec<Action>)>,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
@@ -185,13 +174,21 @@ impl CrabCraftApp {
             keymap,
             editor_config,
             workspace: None,
-            docs: Docs::new(pool),
+            docs: {
+                let mut docs = Docs::new(pool);
+                docs.history = Some(crate::local_history::HistoryService::start(rc_core::history::LocalHistory::open_default()));
+                docs
+            },
             dock: Dock::default(),
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
             insight: Insight::new(waker.clone()),
-            runner: Runner::new(waker.clone()),
+            runner: {
+                let mut runner = Runner::new(waker.clone());
+                runner.nextest = settings.use_nextest;
+                runner
+            },
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -203,9 +200,9 @@ impl CrabCraftApp {
             rustfmt_jobs: Default::default(),
             toolchain_load: None,
             cargo_folded: Default::default(),
-            split: None,
-            floating: Vec::new(),
-            last_main: None,
+            layout: Default::default(),
+            tab_drag: None,
+            editor_frame: None,
             new_project: None,
             search_everywhere: None,
             find_bar: None,
@@ -289,6 +286,8 @@ impl CrabCraftApp {
             rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner.project_env = session.project_env.clone();
+        self.insight.set_env(self.runner.project_env_pairs());
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
@@ -315,8 +314,9 @@ impl CrabCraftApp {
     fn load_cargo_workspace(&mut self, manifest: PathBuf) {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
-            let result = match rc_cargo::Cargo::locate() {
+            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
                 Some(cargo) => rc_cargo::load_workspace(&cargo, &manifest).map_err(|e| e.to_string()),
                 None => Err(tr("Cargo was not found. Install Rust with rustup.").to_string()),
             };
@@ -353,8 +353,9 @@ impl CrabCraftApp {
         let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
-            let Some(cargo) = rc_cargo::Cargo::locate() else { return };
+            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
             let mut list = rc_cargo::load_libraries(&cargo, &manifest).unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
             if let Some(root) = info.stdlib {
@@ -465,6 +466,18 @@ impl CrabCraftApp {
         self.toolchain_load = Some(inbox);
     }
 
+    /// Changes the project's environment: rust-analyzer restarts with it and the Cargo project
+    /// is read again (nothing restarts when it did not change).
+    pub fn set_project_env(&mut self, text: String) {
+        if self.runner.project_env == text {
+            return;
+        }
+        self.runner.project_env = text;
+        self.session_dirty = true;
+        self.insight.set_env(self.runner.project_env_pairs());
+        self.reload_cargo();
+    }
+
     /// Reads the Cargo project again.
     pub fn reload_cargo(&mut self) {
         if let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
@@ -562,6 +575,31 @@ impl CrabCraftApp {
         }
     }
 
+    /// Throws away what the IDE derived from the project and builds it again: open files from
+    /// disk, the file index, Git status, the Cargo model and rust-analyzer. Tabs, terminals and
+    /// running programs stay. `clean` also deletes Cargo's build output.
+    pub fn invalidate_caches(&mut self, clean: bool) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        self.docs.reload_all();
+        self.files.open(&root, self.waker.clone());
+        self.vcs.refresh();
+        let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
+        if let Some(manifest) = manifest {
+            if self.settings.trusted_projects.contains(&root) {
+                self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            }
+            if clean {
+                self.save_all_docs();
+                let outs = self.runner.cargo_command_in(&manifest, vec!["clean".into()]);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            self.load_cargo_workspace(manifest);
+        } else if self.insight.session.is_some() {
+            self.insight.restart();
+        }
+        self.notify(tr("Caches invalidated"), false);
+    }
+
     /// Opens the workspace again (after adding a project: run configurations, explorer and the
     /// language server pick it up).
     pub fn reload_workspace(&mut self) {
@@ -635,6 +673,8 @@ impl CrabCraftApp {
         self.find_results = None;
         self.docs.list.clear();
         self.docs.active = None;
+        self.layout = Default::default();
+        self.tab_drag = None;
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
         self.libraries_load = None;
@@ -659,11 +699,17 @@ impl CrabCraftApp {
                 }
             }
         }
+        // Editor id of each file of the session, for the layout.
+        let mut ids = Vec::with_capacity(s.files.len());
         for f in &s.files {
+            ids.push(None);
             if !f.path.exists() {
                 continue;
             }
             if let Ok(i) = self.docs.open(&f.path) {
+                if let Some(last) = ids.last_mut() {
+                    *last = Some(self.docs.list[i].editor.id);
+                }
                 let d = &mut self.docs.list[i];
                 d.pinned = f.pinned;
                 let pos = d.editor.buffer.pos_at(f.line, f.col);
@@ -678,6 +724,8 @@ impl CrabCraftApp {
             }
         }
         self.docs.active = s.active.filter(|&a| a < self.docs.list.len()).or(if self.docs.list.is_empty() { None } else { Some(0) });
+        self.layout = crate::layout::Layout::from_session(s.editor_layout.as_ref(), &s.editor_windows, |i| ids.get(i).copied().flatten());
+        self.sync_layout();
         for (path, lines) in &s.bookmarks {
             let lines: std::collections::BTreeSet<usize> = lines.iter().copied().collect();
             match self.docs.index_of(path) {
@@ -735,9 +783,12 @@ impl CrabCraftApp {
             .filter(|d| !d.editor.breakpoints.is_empty())
             .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
             .collect();
+        let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
             files,
             active: self.docs.active,
+            editor_layout: Some(editor_layout),
+            editor_windows,
             tool_windows: self.dock.to_session(),
             expanded: {
                 let mut v: Vec<String> = self.explorer.expanded.iter().cloned().collect();
@@ -747,6 +798,7 @@ impl CrabCraftApp {
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
+            project_env: self.runner.project_env.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -773,6 +825,14 @@ impl CrabCraftApp {
             eprintln!("could not save the session: {e:#}");
         }
         self.session_dirty = false;
+    }
+
+    /// Opens the Local History dialog for document `i`; its versions load in the background.
+    pub fn show_local_history(&mut self, i: usize) {
+        let (Some(doc), Some(h)) = (self.docs.list.get(i), &self.docs.history) else { return };
+        let inbox = rc_core::Inbox::new(self.waker.clone());
+        h.list(&doc.path, inbox.sender());
+        self.dialog = Some(Dialog::LocalHistory(Box::new(crate::ui::dialogs::LocalHistoryView::new(doc.path.clone(), inbox))));
     }
 
     pub fn save_all_docs(&mut self) {
@@ -803,6 +863,7 @@ impl CrabCraftApp {
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
+                InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {
@@ -856,6 +917,7 @@ impl CrabCraftApp {
             Action::ParameterInfo => self.insight.parameter_info(doc),
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
+            Action::ExpandMacro => self.insight.expand_macro(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::RefactorThis => self.insight.refactor_actions(doc),
@@ -990,6 +1052,36 @@ impl CrabCraftApp {
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
+    /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
+    pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
+        // Only the name's word characters reach the file name.
+        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
+        let path = rc_core::paths::expansions_dir().join(format!("{}.rs", if safe.is_empty() { "macro" } else { &safe }));
+        let body = format!("// {}
+
+{text}
+", trf("Recursive expansion of {name}!", &[("name", &name)]));
+        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
+            self.notify(trf("Could not show the expansion: {error}", &[("error", &e.to_string())]), true);
+            return;
+        }
+        match self.docs.open(&path) {
+            Ok(i) => {
+                let d = &mut self.docs.list[i];
+                d.generated = true;
+                // Already open from an earlier expansion: show the new text.
+                if d.editor.buffer.rope() != body.as_str() {
+                    d.editor.reload(&body);
+                    d.editor.parse_blocking();
+                }
+                d.editor.read_only = true;
+                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
+                self.focus_editor = true;
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
     pub fn close_tab(&mut self, i: usize) {
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
@@ -997,8 +1089,22 @@ impl CrabCraftApp {
             self.notify(e, true);
             return;
         }
+        // The tab beside it in the same group takes its place.
+        let id = self.docs.list.get(i).map(|d| d.editor.id);
+        let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
         self.docs.close(i);
+        if let Some(n) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
+            self.docs.active = Some(n);
+        }
+        self.sync_layout();
         self.session_dirty = true;
+    }
+
+    /// Brings the editor layout in step with the open documents and the active one.
+    pub fn sync_layout(&mut self) {
+        let docs: Vec<(u64, bool)> = self.docs.list.iter().map(|d| (d.editor.id, d.pinned)).collect();
+        let active = self.docs.active_doc().map(|d| d.editor.id);
+        self.layout.sync(&docs, active);
     }
 
     // ------------------------------------------------------------------ actions
@@ -1016,16 +1122,20 @@ impl CrabCraftApp {
                 }
             }
             Action::NextTab | Action::PreviousTab => {
-                if let Some(a) = self.docs.active {
-                    let n = self.docs.list.len();
-                    let next = if action == Action::NextTab { (a + 1) % n } else { (a + n - 1) % n };
-                    self.docs.activate(next);
+                // Within the group of the active tab.
+                let next = self.docs.active_doc().and_then(|d| self.layout.next_tab(d.editor.id, action == Action::NextTab));
+                if let Some(i) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
+                    self.docs.activate(i);
                     self.focus_editor = true;
                 }
             }
             Action::NavigateBack => self.navigate(true),
             Action::NavigateForward => self.navigate(false),
             Action::ShowSettings => self.dialog = Some(Dialog::settings(&self.settings)),
+            Action::ProjectEnvironment => match self.workspace {
+                Some(_) => self.dialog = Some(Dialog::ProjectEnv { text: self.runner.project_env.clone() }),
+                None => self.notify(tr("Open a project to set its environment variables"), false),
+            },
             Action::ToggleProjectWindow => self.toggle_tool(ToolWindow::Explorer),
             Action::ToggleTerminal => self.toggle_tool(ToolWindow::Terminal),
             Action::ToggleGitWindow => self.toggle_tool(ToolWindow::Git),
@@ -1101,6 +1211,11 @@ impl CrabCraftApp {
                 }
             }
             Action::Commit => self.dock.show(ToolWindow::Commit),
+            Action::ShowLocalHistory => {
+                if let Some(i) = self.docs.active {
+                    self.show_local_history(i);
+                }
+            }
             Action::OptimizeImports => {
                 let mut out = Vec::new();
                 self.insight.optimize_imports(&mut self.docs, &mut out);
@@ -1147,6 +1262,8 @@ impl CrabCraftApp {
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
+            Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
+            Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {
@@ -1633,6 +1750,7 @@ impl CrabCraftApp {
         let lang_changed = new.language != self.settings.language;
         let keymap_changed = new.keymap != self.settings.keymap;
         self.settings = new;
+        self.runner.nextest = self.settings.use_nextest;
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
@@ -1934,6 +2052,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         font: rc_editor::layout::EditorFont { size: s.editor_font_size.clamp(8.0, 32.0), line_spacing: s.editor_line_spacing.clamp(1.0, 2.0) },
         show_indent_guides: s.show_indent_guides,
         show_inlays: s.show_inlay_hints,
+        sticky_lines: if s.sticky_lines { 5 } else { 0 },
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         ..EditorConfig::default()
     }
