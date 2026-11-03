@@ -442,6 +442,10 @@
     "xUnit Test Project": "Projet de test xUnit",
     "{name} created": "{name} créé"
   },
+  "nextest": {
+    "Needs cargo-nextest installed. Doctests do not run with it.": "Nécessite cargo-nextest installé. Les doctests ne sont pas exécutés avec lui.",
+    "Run tests with cargo-nextest": "Exécuter les tests avec cargo-nextest"
+  },
   "nuget": {
     "Could not search NuGet: {error}": "Impossible de rechercher dans NuGet : {error}",
     "Install": "Installer",

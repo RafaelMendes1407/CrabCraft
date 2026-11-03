@@ -442,6 +442,10 @@
     "xUnit Test Project": "xUnit テスト プロジェクト",
     "{name} created": "{name} を作成しました"
   },
+  "nextest": {
+    "Needs cargo-nextest installed. Doctests do not run with it.": "cargo-nextest のインストールが必要です。doctest は実行されません。",
+    "Run tests with cargo-nextest": "cargo-nextest でテストを実行"
+  },
   "nuget": {
     "Could not search NuGet: {error}": "NuGet を検索できませんでした: {error}",
     "Install": "インストール",

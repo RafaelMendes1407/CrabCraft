@@ -442,6 +442,10 @@
     "xUnit Test Project": "xUnit 测试项目",
     "{name} created": "已创建 {name}"
   },
+  "nextest": {
+    "Needs cargo-nextest installed. Doctests do not run with it.": "需要安装 cargo-nextest。使用它时不运行文档测试。",
+    "Run tests with cargo-nextest": "使用 cargo-nextest 运行测试"
+  },
   "nuget": {
     "Could not search NuGet: {error}": "无法搜索 NuGet：{error}",
     "Install": "安装",
