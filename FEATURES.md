@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 99 |
-| 🚧 Em andamento | 2 |
-| 🟢 Herdado | 24 |
+| ✅ Pronto | 101 |
+| 🚧 Em andamento | 3 |
+| 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 125 |
+| ⬜ A fazer | 123 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -93,7 +93,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-06 | Múltiplos cursores e seleção | 🟢 | M1 | |
 | E-07 | Colchetes pareados e fechamento automático | 🟢 | M1 | Conferir `'` em lifetimes e `|` em closures |
 | E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
-| E-09 | Sticky lines | ⬜ | M3 | |
+| E-09 | Sticky lines | ✅ | M3 | Até 5 linhas de abertura dos blocos em volta do topo (dobras do tree-sitter) ficam fixas; clique leva à linha; opção em Configurações > Editor. Teste de UI em código Rust e captura conferida |
 | E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🟢 | M1 | |
@@ -110,7 +110,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
-| E-26 | Abas: fixar, dividir, destacar, pré-visualização | 🟢 | M1 | Divisão herdada; conferir o restante |
+| E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
 | E-27 | Scratch files | ⬜ | M3 | |
 
 ## 3. Inteligência de código
@@ -141,7 +141,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
 | I-24 | Explicações inline de erros | ⬜ | M4 | |
-| I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
+| I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
@@ -157,7 +157,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP; Shift duplo corrigido, antes nunca abria com egui 0.36 |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
-| N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
+| N-03 | Ir para definição | ✅ | M1 | Ctrl+clique (⌘ no macOS) e Ctrl+B levam à definição: método, tipo e item da stdlib (aberto somente leitura), testado com cliques reais e rust-analyzer real |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
 | N-05 | Encontrar usos | ✅ | M1 | Usos testados com rust-analyzer real |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |

@@ -604,6 +604,22 @@ impl EditorState {
         }
     }
 
+    /// Colours of one line outside the viewport (sticky lines), without touching the cache of
+    /// the visible lines.
+    pub(crate) fn spans_of_line(&self, line: usize) -> Vec<Span> {
+        let rope = self.buffer.rope();
+        let mut spans = match self.syntax.tree() {
+            Some(tree) => rc_syntax::highlight_lines(self.syntax.lang, tree, rope, line, 1),
+            None => rc_syntax::highlight_lexical(self.syntax.lang, rope, line, 1).unwrap_or_default(),
+        }
+        .pop()
+        .unwrap_or_default();
+        if let Some(sem) = self.semantic.get(line).filter(|s| !s.is_empty()) {
+            spans = merge_spans(&spans, sem);
+        }
+        spans
+    }
+
     /// Syntax colours for `first..first+count`, merged with semantic colours. Cached until
     /// the tree or the semantic tokens change.
     pub(crate) fn line_spans(&mut self, first: usize, count: usize) -> &[Vec<Span>] {

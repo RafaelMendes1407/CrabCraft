@@ -6,6 +6,7 @@ mod debugger;
 mod insight;
 mod call_tree;
 mod item_templates;
+mod layout;
 mod run_anything;
 mod runner;
 mod search;
