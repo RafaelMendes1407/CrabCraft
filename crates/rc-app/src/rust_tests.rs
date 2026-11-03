@@ -3031,3 +3031,26 @@ fn rust_scratches_are_analysed_and_run() {
     assert!(text.contains("mismatched types") && text.contains("rustc failed"), "{text}");
     app.insight.stop();
 }
+
+/// Reformat Code with a selection: rustfmt formats the file and only the selected function
+/// changes.
+#[test]
+fn reformat_with_a_selection_changes_only_those_lines() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let main = root.join("src/main.rs");
+    let text = "fn main(){println!(\"a\");}\n\nfn other(){let x=1;let _y=x;}\n";
+    write(&main, text);
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let i = app.docs.active.unwrap();
+    let start = text.find("fn other").unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::single(rc_text::Range::new(start, text.len() - 1));
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope().to_string() != text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main(){println!(\"a\");}\n\nfn other() {\n    let x = 1;\n    let _y = x;\n}\n");
+}

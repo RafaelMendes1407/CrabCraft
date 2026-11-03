@@ -501,7 +501,15 @@ impl CrabCraftApp {
             Ok(rustfmt) => {
                 let doc = &self.docs.list[i];
                 let job = rustfmt.start(doc.path.clone(), edition, doc.editor.buffer.rope().to_string(), self.waker.clone());
-                self.rustfmt_jobs.push(doc.editor.id, doc.editor.buffer.version(), save, job);
+                // Reformat Code with a selection: rustfmt formats the file and only the changes
+                // touching the selected lines are kept.
+                let sel = doc.editor.selection.primary();
+                let lines = (!save && !sel.is_empty()).then(|| {
+                    let rope = doc.editor.buffer.rope();
+                    let last = if sel.end() > sel.start() && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start()) && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end() { rope.char_to_line(sel.end()) - 1 } else { rope.char_to_line(sel.end()) };
+                    (rope.char_to_line(sel.start()), last)
+                });
+                self.rustfmt_jobs.push_lines(doc.editor.id, doc.editor.buffer.version(), save, lines, job);
             }
             Err(e) => self.notify(e, true),
         }
@@ -1063,10 +1071,6 @@ impl CrabCraftApp {
         let Some(i) = self.docs.active else { return };
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
         if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
-            if !self.docs.list[i].editor.selection.primary().is_empty() {
-                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
-                return;
-            }
             if self.rustfmt_document(i, false) {
                 return;
             }
@@ -1122,9 +1126,6 @@ impl CrabCraftApp {
                 self.push_nav();
                 let doc = &self.docs.list[i];
                 self.insight.navigate(doc, caret, NavKind::Super);
-            }
-            Action::Reformat if self.runner.cargo_workspace.is_some() && !doc.editor.selection.primary().is_empty() => {
-                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
             }
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
