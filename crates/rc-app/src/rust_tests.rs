@@ -1016,6 +1016,45 @@ fn tests_run_with_nextest_when_the_setting_is_on() {
     assert_eq!((t.passed, t.failed, t.skipped), (0, 1, 0));
 }
 
+#[test]
+fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/lib.rs"));
+    app.open_file(&root.join("src/main.rs"));
+
+    // Untrusted: the server stays off (cargo clean runs no project code).
+    app.invalidate_caches(true);
+    assert_eq!(app.insight.status, InsightStatus::Untrusted);
+    assert!(app.insight.session.is_none());
+
+    app.trust_project();
+    pump(&mut app, "the server", |a| a.insight.status == InsightStatus::Ready);
+    app.runner.selected = 0;
+    app.runner.run_selected();
+    pump(&mut app, "the build", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    assert!(root.join("target").exists());
+
+    // A change the watcher missed, and a Cargo model that is out of date.
+    write(&root.join("src/lib.rs"), "pub fn changed() {}\n");
+    app.runner.cargo_workspace = None;
+    app.invalidate_caches(true);
+    assert!(matches!(app.insight.status, InsightStatus::Starting | InsightStatus::Loading(_)), "{:?}", app.insight.status);
+    assert_eq!(app.docs.list.len(), 2);
+    assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".to_string()));
+    let lib = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    assert_eq!(app.docs.list[lib].editor.buffer.rope().to_string(), "pub fn changed() {}\n");
+    let cleaned = |a: &CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.title == "cargo clean" && b.result.as_ref().is_some_and(|r| r.success));
+    pump(&mut app, "everything again", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some() && cleaned(a));
+    app.insight.stop();
+}
+
 fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {

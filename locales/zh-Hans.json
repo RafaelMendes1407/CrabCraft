@@ -387,6 +387,14 @@
     "Usages": "用法",
     "{n} problems": "{n} 个问题"
   },
+  "invalidate-caches": {
+    "Also delete the build output (cargo clean)": "同时删除构建输出（cargo clean）",
+    "Caches invalidated": "缓存已清除",
+    "Invalidate": "清除",
+    "Invalidate Caches": "清除缓存",
+    "Invalidate Caches…": "清除缓存…",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "重新从磁盘读取已打开的文件，并重建文件索引、Git 状态、Cargo 项目和语言服务器。标签页、终端和正在运行的程序保持打开。"
+  },
   "kit": {
     "Close window": "关闭窗口",
     "Maximize": "最大化",

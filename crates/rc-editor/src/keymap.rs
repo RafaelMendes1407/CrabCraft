@@ -127,6 +127,7 @@ pub enum Action {
     HideToolWindows,
     Commit,
     OpenFolder,
+    InvalidateCaches,
     NewScratchFile,
     ZoomIn,
     ZoomOut,
@@ -215,6 +216,7 @@ impl Action {
                 | HideToolWindows
                 | Commit
                 | OpenFolder
+                | InvalidateCaches
                 | NewScratchFile
                 | ZoomIn
                 | ZoomOut

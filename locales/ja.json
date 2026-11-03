@@ -387,6 +387,14 @@
     "Usages": "使用箇所",
     "{n} problems": "{n} 件の問題"
   },
+  "invalidate-caches": {
+    "Also delete the build output (cargo clean)": "ビルド出力も削除する (cargo clean)",
+    "Caches invalidated": "キャッシュを無効化しました",
+    "Invalidate": "無効化",
+    "Invalidate Caches": "キャッシュの無効化",
+    "Invalidate Caches…": "キャッシュの無効化…",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "開いているファイルをディスクから読み直し、ファイルインデックス、Git の状態、Cargo プロジェクト、言語サーバーを再構築します。タブ、ターミナル、実行中のプログラムはそのまま開いたままです。"
+  },
   "kit": {
     "Close window": "ウィンドウを閉じる",
     "Maximize": "最大化",

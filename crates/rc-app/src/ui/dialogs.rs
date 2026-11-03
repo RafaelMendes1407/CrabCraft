@@ -28,6 +28,8 @@ pub enum Dialog {
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
+    /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
+    InvalidateCaches { clean: bool },
     RecentFiles { selected: usize, filter: String },
     /// New Scratch File: the kinds to create, then the scratch files there are.
     Scratches { selected: usize, filter: String, files: Vec<PathBuf> },
@@ -76,6 +78,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
+        Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
         Dialog::Scratches { selected, filter, files } => scratches(app, ctx, selected, filter, files),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
@@ -920,6 +923,24 @@ fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> 
             }
             Err(e) => app.notify(trf("Could not delete {name}: {error}", &[("name", &name), ("error", &e)]), true),
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn invalidate_caches(app: &mut CrabCraftApp, ctx: &Context, clean: &mut bool) -> Outcome {
+    let rust = app.runner.cargo_workspace.is_some();
+    let ((ok, cancel), esc) = modal(ctx, "invalidate_caches", 460.0, |ui| {
+        title(ui, tr("Invalidate Caches"));
+        ui.label(tr("Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open."));
+        ui.add_space(6.0);
+        if rust {
+            ui.checkbox(clean, tr("Also delete the build output (cargo clean)"));
+        }
+        buttons(ui, tr("Invalidate"), true)
+    });
+    if ok {
+        app.invalidate_caches(rust && *clean);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

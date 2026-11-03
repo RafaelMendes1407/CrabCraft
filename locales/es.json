@@ -387,6 +387,14 @@
     "Usages": "Usos",
     "{n} problems": "{n} problemas"
   },
+  "invalidate-caches": {
+    "Also delete the build output (cargo clean)": "Borrar también la salida de compilación (cargo clean)",
+    "Caches invalidated": "Cachés invalidadas",
+    "Invalidate": "Invalidar",
+    "Invalidate Caches": "Invalidar cachés",
+    "Invalidate Caches…": "Invalidar cachés…",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "Los archivos abiertos se vuelven a leer del disco y se reconstruyen el índice de archivos, el estado de Git, el proyecto de Cargo y el servidor de lenguaje. Las pestañas, terminales y programas en ejecución siguen abiertos."
+  },
   "kit": {
     "Close window": "Cerrar ventana",
     "Maximize": "Maximizar",

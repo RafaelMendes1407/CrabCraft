@@ -387,6 +387,14 @@
     "Usages": "Użycia",
     "{n} problems": "Problemy: {n}"
   },
+  "invalidate-caches": {
+    "Also delete the build output (cargo clean)": "Usuń też wyniki kompilacji (cargo clean)",
+    "Caches invalidated": "Pamięć podręczna unieważniona",
+    "Invalidate": "Unieważnij",
+    "Invalidate Caches": "Unieważnij pamięć podręczną",
+    "Invalidate Caches…": "Unieważnij pamięć podręczną…",
+    "Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open.": "Otwarte pliki są ponownie wczytywane z dysku, a indeks plików, stan Git, projekt Cargo i serwer języka są odbudowywane. Karty, terminale i uruchomione programy pozostają otwarte."
+  },
   "kit": {
     "Close window": "Zamknij okno",
     "Maximize": "Maksymalizuj",
