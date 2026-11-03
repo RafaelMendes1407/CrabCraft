@@ -841,5 +841,8 @@
     "The patch does not apply": "パッチを適用できません",
     "The push was rejected (fetch first)": "プッシュが拒否されました（先にフェッチしてください）",
     "{path} is not inside a Git repository": "{path} は Git リポジトリ内にありません"
+  },
+  "search-results": {
+    "… more": "… さらに表示"
   }
 }
