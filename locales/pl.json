@@ -978,5 +978,11 @@
     "Scratch file: analysed on its own, outside the project's crates": "Plik roboczy: analizowany osobno, poza crate'ami projektu",
     "Scratch file: open a project to have it analysed": "Plik roboczy: otwórz projekt, aby go przeanalizować",
     "Build it with rustc and run it": "Zbuduj przez rustc i uruchom"
+  },
+  "shortcuts": {
+    "Shortcuts": "Skróty",
+    "Press a shortcut…": "Naciśnij skrót…",
+    "Record Shortcut": "Nagraj skrót",
+    "Reset": "Przywróć"
   }
 }

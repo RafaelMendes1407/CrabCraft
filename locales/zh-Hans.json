@@ -978,5 +978,11 @@
     "Scratch file: analysed on its own, outside the project's crates": "草稿文件：单独分析，不属于项目的 crate",
     "Scratch file: open a project to have it analysed": "草稿文件：打开项目后才会分析",
     "Build it with rustc and run it": "用 rustc 构建并运行"
+  },
+  "shortcuts": {
+    "Shortcuts": "快捷键",
+    "Press a shortcut…": "请按快捷键…",
+    "Record Shortcut": "录制快捷键",
+    "Reset": "重置"
   }
 }

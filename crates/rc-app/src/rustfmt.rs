@@ -27,12 +27,8 @@ pub enum Done {
 pub struct Jobs(Vec<Job>);
 
 impl Jobs {
-    /// A newer request replaces the one running on the same document.
-    pub fn push(&mut self, doc: u64, version: u64, save: bool, job: FormatJob) {
-        self.push_lines(doc, version, save, None, job);
-    }
-
-    /// Like [`Jobs::push`], keeping only the changes that touch `lines`.
+    /// A newer request replaces the one running on the same document. With `lines`, only
+    /// the changes touching them are kept.
     pub fn push_lines(&mut self, doc: u64, version: u64, save: bool, lines: Option<(usize, usize)>, job: FormatJob) {
         let save = save || self.0.iter().any(|j| j.doc == doc && j.save);
         self.0.retain(|j| j.doc != doc);

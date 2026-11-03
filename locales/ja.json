@@ -978,5 +978,11 @@
     "Scratch file: analysed on its own, outside the project's crates": "スクラッチファイル: プロジェクトのクレートとは別に単独で解析されます",
     "Scratch file: open a project to have it analysed": "スクラッチファイル: 解析するにはプロジェクトを開いてください",
     "Build it with rustc and run it": "rustc でビルドして実行"
+  },
+  "shortcuts": {
+    "Shortcuts": "ショートカット",
+    "Press a shortcut…": "ショートカットを押してください…",
+    "Record Shortcut": "ショートカットを記録",
+    "Reset": "リセット"
   }
 }

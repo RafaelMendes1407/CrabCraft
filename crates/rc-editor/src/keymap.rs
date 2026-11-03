@@ -264,6 +264,7 @@ const fn m(alt: bool, ctrl: bool, shift: bool, mac_cmd: bool) -> Modifiers {
     Modifiers { alt, ctrl, shift, mac_cmd, command: mac_cmd || ctrl }
 }
 
+#[derive(Clone)]
 pub struct Keymap {
     pub kind: KeymapKind,
     bindings: Vec<(Chord, Action)>,
@@ -281,6 +282,26 @@ impl Keymap {
         Keymap { kind, bindings }
     }
 
+    /// The keymap with the user's changes: each action gets the given shortcut (or none),
+    /// which another action then loses.
+    pub fn with_overrides(kind: KeymapKind, overrides: &[(Action, Option<Chord>)]) -> Self {
+        let mut keymap = Keymap::new(kind);
+        let same = |a: &Chord, b: &Chord| a.key == b.key && (a.mods.alt, a.mods.ctrl, a.mods.shift, a.mods.mac_cmd) == (b.mods.alt, b.mods.ctrl, b.mods.shift, b.mods.mac_cmd);
+        for (action, chord) in overrides {
+            keymap.bindings.retain(|(c, a)| a != action && !chord.as_ref().is_some_and(|n| same(c, n)));
+            if let Some(c) = chord {
+                // First, so menus show the user's shortcut.
+                keymap.bindings.insert(0, (*c, *action));
+            }
+        }
+        keymap
+    }
+
+    /// The action a shortcut runs, if any.
+    pub fn action_of(&self, chord: Chord) -> Option<Action> {
+        self.lookup(chord.key, chord.mods)
+    }
+
     /// The action bound to `key` with `mods`, if any. Modifiers must match exactly.
     pub fn lookup(&self, key: Key, mods: Modifiers) -> Option<Action> {
         let norm = |x: Modifiers| (x.alt, x.ctrl, x.shift, x.mac_cmd);
@@ -296,6 +317,43 @@ impl Keymap {
     pub fn chord(&self, action: Action) -> Option<Chord> {
         self.bindings.iter().find(|(_, a)| *a == action).map(|(c, _)| *c)
     }
+}
+
+/// A shortcut as stored in the settings: `ctrl+alt+shift+cmd+K`, modifiers in that order and
+/// egui's key name.
+pub fn chord_id(c: Chord) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for (on, name) in [(c.mods.ctrl, "ctrl"), (c.mods.alt, "alt"), (c.mods.shift, "shift"), (c.mods.mac_cmd, "cmd")] {
+        if on {
+            parts.push(name);
+        }
+    }
+    parts.push(c.key.name());
+    parts.join("+")
+}
+
+/// Reads [`chord_id`]'s text; `None` for anything else.
+pub fn parse_chord(text: &str) -> Option<Chord> {
+    let mut parts: Vec<&str> = text.split('+').collect();
+    // `+` itself is a key name ("ctrl++").
+    let key_name = if text.ends_with("++") {
+        parts.truncate(parts.len().saturating_sub(2));
+        "+"
+    } else {
+        parts.pop()?
+    };
+    let key = Key::from_name(key_name)?;
+    let (mut ctrl, mut alt, mut shift, mut cmd) = (false, false, false, false);
+    for p in parts {
+        match p {
+            "ctrl" => ctrl = true,
+            "alt" => alt = true,
+            "shift" => shift = true,
+            "cmd" => cmd = true,
+            _ => return None,
+        }
+    }
+    Some(Chord { key, mods: m(alt, ctrl, shift, cmd) })
 }
 
 pub fn format_chord(c: Chord, mac: bool) -> String {
@@ -953,5 +1011,29 @@ mod tests {
         for action in [Action::Save, Action::Find, Action::Build, Action::Debug, Action::GotoSymbol, Action::NextError] {
             assert!(k.chord(action).is_some() && mac.chord(action).is_some(), "{action:?}");
         }
+    }
+
+    #[test]
+    fn shortcuts_round_trip_and_overrides_move_them() {
+        let ctrl_shift = m(false, true, true, false);
+        let c = Chord { key: Key::K, mods: ctrl_shift };
+        assert_eq!(chord_id(c), "ctrl+shift+K");
+        assert_eq!(parse_chord("ctrl+shift+K"), Some(c));
+        assert_eq!(parse_chord("cmd+F12").map(|c| (c.key, c.mods.mac_cmd)), Some((Key::F12, true)));
+        assert_eq!(parse_chord("hyper+K"), None);
+        assert_eq!(parse_chord("ctrl+NoSuchKey"), None);
+        assert_eq!(parse_chord(""), None);
+
+        // Ctrl+Shift+K is Commit-less on Rider for Windows: give it to Commit, take Ctrl+K away.
+        let k = Keymap::with_overrides(KeymapKind::Rider, &[(Action::Commit, Some(c)), (Action::Save, None)]);
+        assert_eq!(k.action_of(c), Some(Action::Commit));
+        assert_eq!(k.lookup(Key::K, m(false, true, false, false)), None, "the old shortcut is gone");
+        assert_eq!(k.shortcut_text(Action::Commit).as_deref(), Some("Ctrl+Shift+K"));
+        assert_eq!(k.chord(Action::Save), None);
+        // A shortcut taken from another action leaves it without that one.
+        let find = Keymap::new(KeymapKind::Rider).chord(Action::Find).unwrap();
+        let k = Keymap::with_overrides(KeymapKind::Rider, &[(Action::GotoLine, Some(find))]);
+        assert_eq!(k.action_of(find), Some(Action::GotoLine));
+        assert_ne!(k.chord(Action::Find), Some(find));
     }
 }

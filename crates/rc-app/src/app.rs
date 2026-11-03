@@ -174,7 +174,7 @@ impl CrabCraftApp {
         rc_kit::theme::install_fonts(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
         let waker = Waker::new(move || ctx.request_repaint());
-        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let keymap = build_keymap(&settings);
         let native_menu = NativeMenu::install(&cc.egui_ctx, &keymap);
         let mut app = Self::with_settings(settings, waker, native_menu);
         crate::open_files::set_context(&cc.egui_ctx);
@@ -190,7 +190,7 @@ impl CrabCraftApp {
 
     /// Builds the app without a window (tests and headless captures).
     pub fn with_settings(settings: Settings, waker: Waker, native_menu: Option<NativeMenu>) -> Self {
-        let keymap = Keymap::new(keymap_kind(settings.keymap));
+        let keymap = build_keymap(&settings);
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
@@ -2035,7 +2035,7 @@ impl CrabCraftApp {
 
     pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
         let lang_changed = new.language != self.settings.language;
-        let keymap_changed = new.keymap != self.settings.keymap;
+        let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
         self.settings = new;
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
@@ -2043,7 +2043,7 @@ impl CrabCraftApp {
         self.insight.imports_on_paste = self.settings.imports_on_paste;
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
-            self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
+            self.keymap = build_keymap(&self.settings);
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -2231,6 +2231,10 @@ impl CrabCraftApp {
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
     /// fields don't see them.
     fn global_shortcuts(&mut self, ctx: &Context) {
+        // Settings › Keymap is recording a shortcut: the key belongs to it.
+        if ctx.data(|d| d.get_temp::<String>(egui::Id::new("recording_shortcut")).is_some()) {
+            return;
+        }
         let now = ctx.input(|i| i.time);
         // Shift, Shift: Search Everywhere.
         let shift = ctx.input(|i| i.modifiers.shift_only());
@@ -2430,6 +2434,26 @@ impl eframe::App for CrabCraftApp {
         self.save_all_docs();
         self.save_session();
     }
+}
+
+/// The keymap of the settings with the user's shortcuts. Unknown actions or shortcuts in the
+/// settings file are skipped.
+pub fn build_keymap(settings: &Settings) -> Keymap {
+    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts))
+}
+
+/// The user's shortcuts as (action, shortcut) pairs; only actions of Find Action can change.
+pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> Vec<(Action, Option<rc_editor::keymap::Chord>)> {
+    let actions = crate::search::action_items();
+    map.iter()
+        .filter_map(|(id, chord)| {
+            let action = actions.iter().map(|(_, a)| *a).find(|a| format!("{a:?}") == *id)?;
+            if chord.is_empty() {
+                return Some((action, None));
+            }
+            rc_editor::keymap::parse_chord(chord).map(|c| (action, Some(c)))
+        })
+        .collect()
 }
 
 pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {

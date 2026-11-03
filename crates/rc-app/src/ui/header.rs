@@ -103,7 +103,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 }
                 ui.add_space(6.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
-                let keymap = rc_editor::Keymap::new(app.keymap.kind);
+                let keymap = app.keymap.clone();
                 let shortcut = |a: Action| keymap.shortcut_text(a).map(|s| format!(" ({s})")).unwrap_or_default();
                 if theme::icon_button_sized(ui, ico::SETTINGS, true, &format!("{}{}", tr("Settings"), shortcut(Action::ShowSettings)), 30.0).clicked() {
                     app.pending.push(Action::ShowSettings);

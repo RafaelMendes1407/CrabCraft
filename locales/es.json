@@ -978,5 +978,11 @@
     "Scratch file: analysed on its own, outside the project's crates": "Archivo de borrador: se analiza por separado, fuera de los crates del proyecto",
     "Scratch file: open a project to have it analysed": "Archivo de borrador: abre un proyecto para que se analice",
     "Build it with rustc and run it": "Compilarlo con rustc y ejecutarlo"
+  },
+  "shortcuts": {
+    "Shortcuts": "Atajos",
+    "Press a shortcut…": "Pulsa un atajo…",
+    "Record Shortcut": "Grabar atajo",
+    "Reset": "Restablecer"
   }
 }

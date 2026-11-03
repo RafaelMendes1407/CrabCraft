@@ -1571,3 +1571,38 @@ fn a_paste_records_its_range() {
     assert_eq!(doc.editor.last_paste, Some((0, 7)));
     assert!(doc.editor.buffer.rope().to_string().starts_with("use x;\n// The beta crate."));
 }
+
+/// Settings › Keymap records a new shortcut for an action; after OK the app's keymap runs the
+/// action with it, and Remove leaves the action without one.
+#[test]
+fn shortcuts_are_recorded_in_the_settings() {
+    use crate::ui::dialogs::{Dialog, SettingsPage};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_settings(SettingsPage::Keymap);
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    h.run_steps(3);
+    let commit = format!("{:?}", rc_editor::Action::Commit);
+    h.state().keymap.chord(rc_editor::Action::Commit).expect("Commit has a shortcut");
+    // As the Record button of the Commit row does.
+    let ctx = h.ctx.clone();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("recording_shortcut"), commit.clone()));
+    h.run_steps(1);
+    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::K);
+    h.run_steps(3);
+    let Some(Dialog::Settings { draft, .. }) = &h.state().dialog else { panic!("settings closed") };
+    assert_eq!(draft.shortcuts.get(&commit).map(String::as_str), Some("ctrl+shift+K"));
+    h.get_by_label(rc_kit::i18n::tr("OK")).click();
+    h.run_steps(3);
+    let chord = rc_editor::keymap::parse_chord("ctrl+shift+K").unwrap();
+    assert_eq!(h.state().keymap.action_of(chord), Some(rc_editor::Action::Commit));
+    assert_eq!(rc_core::Settings::load().shortcuts.get(&commit).map(String::as_str), Some("ctrl+shift+K"), "saved");
+
+    let mut settings = h.state().settings.clone();
+    settings.shortcuts.insert(commit, String::new());
+    let ctx = h.ctx.clone();
+    h.state_mut().apply_settings(&ctx, settings);
+    assert_eq!(h.state().keymap.chord(rc_editor::Action::Commit), None);
+}

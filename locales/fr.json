@@ -978,5 +978,11 @@
     "Scratch file: analysed on its own, outside the project's crates": "Fichier brouillon : analysé seul, hors des crates du projet",
     "Scratch file: open a project to have it analysed": "Fichier brouillon : ouvrez un projet pour qu'il soit analysé",
     "Build it with rustc and run it": "Le compiler avec rustc et l'exécuter"
+  },
+  "shortcuts": {
+    "Shortcuts": "Raccourcis",
+    "Press a shortcut…": "Appuyez sur un raccourci…",
+    "Record Shortcut": "Enregistrer le raccourci",
+    "Reset": "Réinitialiser"
   }
 }

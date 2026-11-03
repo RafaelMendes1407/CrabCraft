@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 128 |
+| ✅ Pronto | 129 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 98 |
+| ⬜ A fazer | 97 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -361,7 +361,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
 | G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
 | G-03 | Keymaps | 🟢 | M1 | Rider (macOS e Windows/Linux), Visual Studio e VS Code (macOS e Windows/Linux, atalhos padrão da referência pública do VS Code; acordes de duas etapas como Ctrl+K Ctrl+S ainda não existem). VS Code testado headless: Ctrl+P, Ctrl+Shift+P e Ctrl+D. Falta o keymap do RustRover: o herdado é o do Rider |
-| G-04 | Configurar atalhos | ⬜ | M3 | |
+| G-04 | Configurar atalhos | ✅ | M3 | Configurações › Keymap › Atalhos: cada ação do Find Action com seu atalho; Gravar atalho captura a próxima tecla com modificadores (Esc cancela), Remover deixa sem atalho e Restaurar volta ao do keymap; o atalho tomado sai da outra ação; guardado nas configurações e aplicado sem reiniciar. Teste headless. Falta: ações de edição fora do Find Action |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |
 | G-06 | Backup e sincronização de configurações | ⬜ | M6 | Exportar/importar arquivo |
 | G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |

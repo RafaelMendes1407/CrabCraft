@@ -277,6 +277,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                                 ui.selectable_value(&mut draft.keymap, KeymapChoice::VsCode, if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" });
                             });
                         ui.end_row();
+                        shortcut_rows(ui, draft);
                     }
                     SettingsPage::Tools => {
                         app.load_toolchain();
@@ -316,6 +317,62 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
+/// again (the next key pressed with its modifiers) or removed.
+fn shortcut_rows(ui: &mut Ui, draft: &mut Settings) {
+    let keymap = crate::app::build_keymap(draft);
+    let mac = keymap.kind.is_mac();
+    let recording_id = egui::Id::new("recording_shortcut");
+    let recording: Option<String> = ui.ctx().data(|d| d.get_temp(recording_id));
+    // The key pressed while recording: Escape cancels.
+    if let Some(id) = &recording {
+        let pressed = ui.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                _ => None,
+            })
+        });
+        if let Some((key, mods)) = pressed {
+            if key != Key::Escape {
+                let chord = rc_editor::keymap::Chord { key, mods: egui::Modifiers { command: mods.ctrl || mods.mac_cmd, ..mods } };
+                draft.shortcuts.insert(id.clone(), rc_editor::keymap::chord_id(chord));
+            }
+            ui.ctx().data_mut(|d| d.remove::<String>(recording_id));
+        }
+    }
+    ui.label(tr("Shortcuts"));
+    egui::ScrollArea::vertical().id_salt("shortcuts").max_height(260.0).show(ui, |ui| {
+        egui::Grid::new("shortcuts_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
+            let mut items = crate::search::action_items();
+            items.sort_by_key(|(label, _)| label.to_lowercase());
+            for (label, action) in items {
+                let id = format!("{action:?}");
+                ui.label(label);
+                let text = if recording.as_deref() == Some(id.as_str()) {
+                    tr("Press a shortcut…").to_string()
+                } else {
+                    keymap.chord(action).map(|c| rc_editor::keymap::format_chord(c, mac)).unwrap_or_else(|| "—".into())
+                };
+                let changed = draft.shortcuts.contains_key(&id);
+                ui.label(if changed { egui::RichText::new(text).strong() } else { egui::RichText::new(text) });
+                ui.horizontal(|ui| {
+                    if ui.small_button(tr("Record Shortcut")).clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(recording_id, id.clone()));
+                    }
+                    if ui.small_button(tr("Remove")).clicked() {
+                        draft.shortcuts.insert(id.clone(), String::new());
+                    }
+                    if changed && ui.small_button(tr("Reset")).clicked() {
+                        draft.shortcuts.remove(&id);
+                    }
+                });
+                ui.end_row();
+            }
+        });
+    });
+    ui.end_row();
 }
 
 /// Settings › Live Templates: abbreviation, description and body of each template.
