@@ -147,7 +147,7 @@ fn tests_report_each_outcome_with_the_failure_output() {
     let lib = "/// ```\n/// assert_eq!(crabby::two(), 2);\n/// ```\npub fn two() -> u32 { 2 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn good() { assert_eq!(super::two(), 2); }\n    #[test]\n    fn bad() { assert_eq!(super::two(), 3, \"not three\"); }\n    #[test]\n    #[ignore]\n    fn skipped() {}\n}\n";
     project(dir.path(), "fn main() {}\n", lib);
     let inbox = Inbox::new(Waker::noop());
-    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), inbox.sender());
+    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), false, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, TestEvent::Finished(_) | TestEvent::Failed(_)));
     let Some(TestEvent::Finished(r)) = events.last() else { panic!("{events:?}") };
     assert!(!r.success);
@@ -160,11 +160,34 @@ fn tests_report_each_outcome_with_the_failure_output() {
 }
 
 #[test]
+fn nextest_reports_each_outcome_with_the_failure_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = "pub fn two() -> u32 { 2 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn good() { assert_eq!(super::two(), 2); }\n    #[test]\n    fn bad() { println!(\"said\"); assert_eq!(super::two(), 3, \"not three\"); }\n    #[test]\n    #[ignore]\n    fn skipped() {}\n}\n";
+    project(dir.path(), "fn main() {}\n", lib);
+    let inbox = Inbox::new(Waker::noop());
+    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), true, inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, TestEvent::Finished(_) | TestEvent::Failed(_)));
+    let Some(TestEvent::Finished(r)) = events.last() else { panic!("{events:?}") };
+    assert!(!r.success);
+    assert_eq!((r.passed, r.failed, r.skipped), (1, 1, 1), "{:?}", r.results);
+    let bad = r.results.iter().find(|t| t.fully_qualified_name == "tests::bad").unwrap();
+    assert!(bad.error_message.as_deref().unwrap_or("").contains("not three"), "{bad:?}");
+    assert_eq!(bad.stack_trace.first().and_then(|f| f.line), Some(8), "{bad:?}");
+    assert!(bad.stdout.contains("said"), "{bad:?}");
+
+    // A build error is a failed build, as with cargo test.
+    std::fs::write(dir.path().join("src/lib.rs"), "#[test]\nfn t() { nope }\n").unwrap();
+    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), true, inbox.sender());
+    let events = drain(&inbox, |e| matches!(e, TestEvent::Finished(_) | TestEvent::Failed(_)));
+    assert!(events.iter().any(|e| matches!(e, TestEvent::Build(BuildEvent::Finished(r)) if !r.success && r.errors > 0)), "{events:?}");
+}
+
+#[test]
 fn tests_that_do_not_compile_report_a_failed_build() {
     let dir = tempfile::tempdir().unwrap();
     project(dir.path(), "fn main() {}\n", "#[test]\nfn t() { nope }\n");
     let inbox = Inbox::new(Waker::noop());
-    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), inbox.sender());
+    let _op = start_tests(&cargo(), TestRequest::new(dir.path().join("Cargo.toml")), false, inbox.sender());
     let events = drain(&inbox, |e| matches!(e, TestEvent::Finished(_) | TestEvent::Failed(_)));
     assert!(events.iter().any(|e| matches!(e, TestEvent::Build(BuildEvent::Finished(r)) if !r.success && r.errors > 0)), "{events:?}");
 }

@@ -1,0 +1,5 @@
+# Suppress lints. Import: python3 scripts/i18n_tsv.py insight scripts/i18n/suppress.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Suppress `{lint}` for the statement	Suprimir `{lint}` en la sentencia	Supprimer `{lint}` pour l’instruction	Suprimir `{lint}` na instrução	`{lint}` für die Anweisung unterdrücken	Wycisz `{lint}` dla instrukcji	对该语句抑制 `{lint}`	この文で `{lint}` を抑制
+Suppress `{lint}` for {name}	Suprimir `{lint}` en {name}	Supprimer `{lint}` pour {name}	Suprimir `{lint}` em {name}	`{lint}` für {name} unterdrücken	Wycisz `{lint}` dla {name}	对 {name} 抑制 `{lint}`	{name} で `{lint}` を抑制
+Suppress `{lint}` for the file	Suprimir `{lint}` en el archivo	Supprimer `{lint}` pour le fichier	Suprimir `{lint}` no arquivo	`{lint}` für die Datei unterdrücken	Wycisz `{lint}` dla pliku	对该文件抑制 `{lint}`	このファイルで `{lint}` を抑制

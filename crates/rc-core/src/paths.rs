@@ -19,6 +19,16 @@ pub fn sessions_dir() -> PathBuf {
     data_dir().join("sessions")
 }
 
+/// Scratch files, shared by every project.
+pub fn scratches_dir() -> PathBuf {
+    data_dir().join("scratches")
+}
+
+/// Macro expansions shown in read-only tabs.
+pub fn expansions_dir() -> PathBuf {
+    data_dir().join("macro-expansions")
+}
+
 pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }
