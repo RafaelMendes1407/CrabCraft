@@ -51,10 +51,18 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn lists_a_running_child_and_not_itself() {
         let mut child = std::process::Command::new("sleep").arg("30").spawn().expect("sleep");
-        let found = list();
+        let is_child = |p: &Process| p.pid == child.id() && p.name == "sleep" && p.command == "sleep 30";
+        // Right after the fork the child still runs as the test binary until it calls exec.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut found = list();
+        while !found.iter().any(is_child) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            found = list();
+        }
+        let seen = found.iter().any(is_child);
         let _ = child.kill();
         let _ = child.wait();
-        assert!(found.iter().any(|p| p.pid == child.id() && p.name == "sleep" && p.command == "sleep 30"), "{}", found.len());
+        assert!(seen, "{}", found.len());
         assert!(!found.iter().any(|p| p.pid == std::process::id()));
     }
 }
