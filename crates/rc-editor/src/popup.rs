@@ -148,18 +148,41 @@ pub struct Hover {
     pub screen: egui::Pos2,
 }
 
+/// One line of Show Context Info: an enclosing declaration's header with its colours.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextRow {
+    pub line: usize,
+    pub text: String,
+    /// Colour role of each char of `text`.
+    pub roles: Vec<rc_syntax::Hl>,
+}
+
+/// The Show Context Info popup: the declarations around the caret that are out of view.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContextInfo {
+    /// Caret and text version it was opened for: moving the caret or typing closes it.
+    pub caret: usize,
+    pub version: u64,
+    pub rows: Vec<ContextRow>,
+    /// Editor font size, for the rows.
+    pub font_size: f32,
+    /// The rows still visible on screen were dropped (done on the first frame shown).
+    pub(crate) filtered: bool,
+}
+
 #[derive(Default)]
 pub struct Popups {
     pub completion: Option<Completion>,
     pub signature: Option<SignatureHelp>,
     pub hover: Option<Hover>,
+    pub context: Option<ContextInfo>,
     /// The error code whose explanation was asked from the hover, for the IDE to take.
     pub explain_clicked: Option<String>,
 }
 
 impl Popups {
     pub fn any(&self) -> bool {
-        self.completion.is_some() || self.signature.is_some() || self.hover.is_some()
+        self.completion.is_some() || self.signature.is_some() || self.hover.is_some() || self.context.is_some()
     }
 
     pub fn close_all(&mut self) {

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 135 |
+| ✅ Pronto | 136 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 91 |
+| ⬜ A fazer | 90 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -171,7 +171,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-14 | Navegar para a fonte de dependências | ✅ | M3 | Ctrl+B entra na stdlib e abre somente leitura; teste real, crates do registro pelo mesmo caminho |
 | N-15 | Scopes e cores de arquivo | ⬜ | M4 | |
 | N-16 | Navigation bar e Select In | ✅ | M3 | Barra clicável na parte de baixo (pastas, arquivo e símbolos). Select In (Alt+F1) leva ao Explorador ou ao gerenciador de arquivos; sem outros destinos, como a janela Estrutura. |
-| N-17 | Mostrar contexto do código (Alt+Q) | ⬜ | M4 | |
+| N-17 | Mostrar contexto do código (Alt+Q) | ✅ | M4 | Navegar › Mostrar informações de contexto (Alt+Q no keymap Rider; ⌃⇧Q no macOS; sem atalho nos keymaps VS e VS Code; também em Localizar ação): popup acima do cursor com os cabeçalhos das declarações que o envolvem e estão fora da vista (mod, impl, trait, fn, struct, enum, macro_rules!, closures), do mais externo ao mais interno, com número da linha e cores da fonte do editor; assinaturas de várias linhas viram uma (ou primeira linha + …). Clique vai à linha; Esc, digitar ou mover o cursor fecha. Outras linguagens usam os blocos de dobra. Testado em src/app.rs deste repositório (teste headless e captura conferida) |
 | N-18 | Compartilhar no Rust Playground | ⬜ | M4 | Pede confirmação antes de enviar o código |
 
 ## 5. Refatoração e geração de código

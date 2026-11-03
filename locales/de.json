@@ -1102,5 +1102,9 @@
     "Whether the package may be published, or the registries it may go to.": "Ob das Paket veröffentlicht werden darf, oder in welche Registrys.",
     "Whether the package uses the workspace's lint levels.": "Ob das Paket die Lint-Stufen des Workspace verwendet.",
     "Which version of Cargo's dependency feature resolver to use.": "Welche Version von Cargos Feature-Resolver für Abhängigkeiten verwendet wird."
+  },
+  "contextinfo": {
+    "Show Context Info": "Kontextinformationen anzeigen",
+    "No enclosing declarations out of view": "Keine umgebenden Deklarationen außerhalb der Ansicht"
   }
 }

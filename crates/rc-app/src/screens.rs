@@ -1960,3 +1960,84 @@ fn explain_error_capture() {
     h.run_steps(6);
     h.render().unwrap().save(out.join("explain-error-tab.png")).unwrap();
 }
+
+/// Opens this repository's `app.rs` with the caret deep in a method of `impl CrabCraftApp`.
+fn context_info_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, usize) {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs").canonicalize().unwrap();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let at = text.find("Action::ToggleHexValues => self.toggle_hex_values()").expect("the line the test puts the caret on");
+    let line = text[..at].matches('\n').count();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let col = text[..at].rsplit('\n').next().map_or(0, |l| l.chars().count());
+    {
+        let d = h.state_mut().docs.active_doc_mut().unwrap();
+        d.editor.goto(line, col);
+        d.editor.request_scroll_to_caret();
+    }
+    run_frames(&mut h, "the tree of app.rs", |a| a.docs.active_doc().is_some_and(|d| d.editor.syntax.tree().is_some()));
+    (h, line)
+}
+
+/// Alt+Q (⌃⇧Q on macOS) lists the impl and method headers scrolled out of view, outermost
+/// first; a click on one goes to its line, and Escape closes the popup.
+#[test]
+fn alt_q_shows_the_enclosing_declarations_and_goes_to_them() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, caret_line) = context_info_harness(dir.path(), false);
+    h.state_mut().keymap = rc_editor::Keymap::new(rc_editor::KeymapKind::Rider);
+    let chord = h.state().keymap.chord(rc_editor::Action::ShowContextInfo).unwrap();
+    assert_eq!((chord.key, chord.mods.alt), (egui::Key::Q, true), "Alt+Q");
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+    let rows: Vec<(usize, String)> = {
+        let d = h.state().docs.active_doc().unwrap();
+        let ctx = d.editor.popups.context.as_ref().expect("the popup is open");
+        ctx.rows.iter().map(|r| (r.line, r.text.clone())).collect()
+    };
+    let texts: Vec<&str> = rows.iter().map(|(_, t)| t.as_str()).collect();
+    assert_eq!(texts, ["impl CrabCraftApp", "pub fn run_ide_action(&mut self, ctx: &Context, action: Action)"]);
+    assert!(rows.iter().all(|(l, _)| *l < caret_line));
+    // The rows are coloured from the source: `impl` and `pub` are keywords.
+    let d = h.state().docs.active_doc().unwrap();
+    assert!(d.editor.popups.context.as_ref().unwrap().rows.iter().all(|r| r.roles.first() == Some(&rc_syntax::Hl::Keyword)));
+
+    // Escape closes it; moving the caret closes it too.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_none());
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_some());
+    h.key_press(egui::Key::ArrowRight);
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().editor.popups.context.is_none(), "moving the caret closes it");
+
+    // A click on the method's header goes there.
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+    h.get_by_label(&rows[1].1).click();
+    h.run_steps(3);
+    let d = h.state().docs.active_doc().unwrap();
+    assert_eq!(d.editor.caret_line_col().0, rows[1].0, "the caret is on the method's line");
+    assert!(d.editor.popups.context.is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/context-info-*.png"]
+fn context_info_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = context_info_harness(dir.path(), dark);
+        let chord = h.state().keymap.chord(rc_editor::Action::ShowContextInfo).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("context-info-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

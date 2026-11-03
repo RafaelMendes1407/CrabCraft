@@ -473,6 +473,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ShowCallees, || tr("Show Callees")),
             &act(Action::FindUsages, || tr("Find Usages")),
             &act(Action::FileStructure, || tr("File Structure")),
+            &act(Action::ShowContextInfo, || tr("Show Context Info")),
             &sep(),
             &act(Action::NextError, || tr("Next Highlighted Error")),
             &act(Action::PreviousError, || tr("Previous Highlighted Error")),

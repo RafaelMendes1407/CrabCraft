@@ -1102,5 +1102,9 @@
     "Whether the package may be published, or the registries it may go to.": "包是否可以发布，或可发布到哪些注册表。",
     "Whether the package uses the workspace's lint levels.": "包是否使用工作区的 lint 级别。",
     "Which version of Cargo's dependency feature resolver to use.": "使用哪个版本的 Cargo 依赖 feature 解析器。"
+  },
+  "contextinfo": {
+    "Show Context Info": "显示上下文信息",
+    "No enclosing declarations out of view": "没有视图外的外层声明"
   }
 }

@@ -190,7 +190,7 @@ impl<'a> EditorView<'a> {
         }
 
         // ---------------------------------------------------------------- popups
-        if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused) {
+        if let Some(i) = crate::popups_view::show(ui, state, &scheme, &pal, &m, text_rect, focused, &mut out) {
             out.accepted_completion = Some(i);
         }
         if let Some(code) = state.popups.explain_clicked.take() {
@@ -1578,6 +1578,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         }
         FoldAll => state.fold_all(),
         UnfoldAll => state.unfold_all(),
+        ShowContextInfo => crate::popups_view::open_context(state, config.font.size),
         _ => {}
     }
     let _ = config;

@@ -1102,5 +1102,9 @@
     "Whether the package may be published, or the registries it may go to.": "パッケージを公開できるかどうか、または公開先のレジストリ。",
     "Whether the package uses the workspace's lint levels.": "パッケージがワークスペースの lint レベルを使うかどうか。",
     "Which version of Cargo's dependency feature resolver to use.": "使用する Cargo の依存関係フィーチャーリゾルバーのバージョン。"
+  },
+  "contextinfo": {
+    "Show Context Info": "コンテキスト情報を表示",
+    "No enclosing declarations out of view": "表示範囲外の外側の宣言はありません"
   }
 }
