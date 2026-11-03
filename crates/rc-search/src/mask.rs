@@ -1,4 +1,4 @@
-//! File masks for Find in Files, e.g. `*.cs, !*.Designer.cs`: comma- or semicolon-separated
+//! File masks for Find in Files, e.g. `*.rs, !*_test.rs`: comma- or semicolon-separated
 //! globs, `!` excludes, case-insensitive. A glob without `/` matches the file name, one with
 //! `/` the root-relative path.
 
@@ -90,7 +90,7 @@ impl FileMask {
             let glob = glob.replace('\\', "/");
             if glob.contains('/') {
                 let glob = glob.trim_start_matches('/');
-                // `src/*.cs` is anchored at the root; `**/x/*.cs` anywhere.
+                // `src/*.rs` is anchored at the root; `**/x/*.rs` anywhere.
                 sets.paths.push(glob.to_string());
             } else {
                 sets.names.push(glob);
