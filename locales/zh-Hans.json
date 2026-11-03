@@ -879,5 +879,21 @@
     "Files open without a project: only editing, no code insight": "未打开项目的文件：仅编辑，无代码分析",
     "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit：此文件属于 Cargo 项目 {name}。代码分析、运行和构建需要打开项目。",
     "Open Project": "打开项目"
+  },
+  "external-tools": {
+    "External Tools": "外部工具",
+    "Configure External Tools…": "配置外部工具…",
+    "Program": "程序",
+    "Arguments": "参数",
+    "Working folder": "工作文件夹",
+    "Add Tool": "添加工具",
+    "Tool {n}": "工具 {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "从“更多操作 › 外部工具”或“查找操作”运行。宏：{list}",
+    "There is no external tool called {name}": "没有名为 {name} 的外部工具",
+    "Could not run {name}: {error}": "无法运行 {name}：{error}",
+    "{macro} has no value here (open a file or a project)": "{macro} 在此没有值（请打开文件或项目）",
+    "the tool has no program": "该工具没有程序",
+    "the arguments have an unclosed quote": "参数中有未闭合的引号",
+    "the folder {path} does not exist": "文件夹 {path} 不存在"
   }
 }

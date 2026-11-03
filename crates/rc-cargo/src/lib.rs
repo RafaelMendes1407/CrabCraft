@@ -17,7 +17,7 @@ pub mod ops;
 pub mod test_output;
 pub mod toolchain;
 
-pub use format::{FormatError, FormatFile, FormatJob, Rustfmt, format_files};
+pub use format::{FormatError, FormatFile, FormatJob, Rustfmt, format_files, split_args};
 pub use metadata::{CargoWorkspace, Library, LoadLog, Package, Target, TargetKind, find_manifest, load_libraries, load_libraries_logged, load_workspace, load_workspace_logged};
-pub use ops::{CargoOptions, RunTarget, command_line, prepare, start_build, start_command, start_run, start_tests, target_command};
+pub use ops::{CargoOptions, RunTarget, command_line, prepare, start_build, start_command, start_process, start_run, start_tests, target_command};
 pub use toolchain::{Cargo, ToolchainInfo, detect_toolchain, locate_rust_analyzer};

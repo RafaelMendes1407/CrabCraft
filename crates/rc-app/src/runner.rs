@@ -19,6 +19,8 @@ pub enum ConfigKind {
     Compound { members: Vec<String> },
     /// A binary of a Cargo package.
     Cargo { package: String, bin: String },
+    /// An external tool of the settings, started as it is (never listed as a configuration).
+    External { tool: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -34,6 +36,7 @@ impl RunConfig {
             ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
+            ConfigKind::External { .. } => rc_kit::ico::RUN_ANYTHING,
         }
     }
 }
@@ -329,6 +332,8 @@ impl Runner {
             ConfigKind::App { .. } => self.run_app(cfg),
             ConfigKind::Cargo { package, bin } => self.run_cargo(cfg, package, bin),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
+            // Tools start from their menu, with the file and caret of that moment.
+            ConfigKind::External { .. } => Vec::new(),
             ConfigKind::Compound { members } => {
                 let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
                 if apps.is_empty() {
@@ -480,6 +485,23 @@ impl Runner {
         let console = Console::new(&self.waker);
         console.note(&trf("Building {name}…", &[("name", &cfg.name)]));
         let handle = rc_dotnet::start_run(&dotnet, req, inbox.sender());
+        self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
+        self.active_run = self.runs.len() - 1;
+        vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]
+    }
+
+    /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
+    pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
+        let cfg = RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } };
+        if let Some(i) = self.runs.iter().position(|r| r.config == cfg) {
+            let old = self.runs.remove(i);
+            if let Some(h) = old.handle {
+                h.stop();
+            }
+        }
+        let inbox = Inbox::new(self.waker.clone());
+        let console = Console::new(&self.waker);
+        let handle = rc_cargo::start_process(plan, inbox.sender());
         self.runs.push(RunTab { name: cfg.name.clone(), config: cfg, handle: Some(handle), inbox, console, exit: None, urls: Vec::new() });
         self.active_run = self.runs.len() - 1;
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Run)]

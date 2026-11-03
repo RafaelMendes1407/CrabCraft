@@ -879,5 +879,21 @@
     "Files open without a project: only editing, no code insight": "Archivos abiertos sin proyecto: solo edición, sin análisis de código",
     "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit: este archivo pertenece al proyecto Cargo {name}. El análisis de código, la ejecución y la compilación necesitan el proyecto.",
     "Open Project": "Abrir proyecto"
+  },
+  "external-tools": {
+    "External Tools": "Herramientas externas",
+    "Configure External Tools…": "Configurar herramientas externas…",
+    "Program": "Programa",
+    "Arguments": "Argumentos",
+    "Working folder": "Carpeta de trabajo",
+    "Add Tool": "Añadir herramienta",
+    "Tool {n}": "Herramienta {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "Ejecútalas desde Más acciones › Herramientas externas o Buscar acción. Macros: {list}",
+    "There is no external tool called {name}": "No hay ninguna herramienta externa llamada {name}",
+    "Could not run {name}: {error}": "No se pudo ejecutar {name}: {error}",
+    "{macro} has no value here (open a file or a project)": "{macro} no tiene valor aquí (abre un archivo o un proyecto)",
+    "the tool has no program": "la herramienta no tiene programa",
+    "the arguments have an unclosed quote": "los argumentos tienen una comilla sin cerrar",
+    "the folder {path} does not exist": "la carpeta {path} no existe"
   }
 }

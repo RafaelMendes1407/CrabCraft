@@ -1,0 +1,16 @@
+# External tools. Import: python3 scripts/i18n_tsv.py external-tools scripts/i18n/external-tools.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+External Tools	Herramientas externas	Outils externes	Ferramentas externas	Externe Tools	Narzędzia zewnętrzne	外部工具	外部ツール
+Configure External Tools…	Configurar herramientas externas…	Configurer les outils externes…	Configurar ferramentas externas…	Externe Tools konfigurieren…	Konfiguruj narzędzia zewnętrzne…	配置外部工具…	外部ツールを設定…
+Program	Programa	Programme	Programa	Programm	Program	程序	プログラム
+Arguments	Argumentos	Arguments	Argumentos	Argumente	Argumenty	参数	引数
+Working folder	Carpeta de trabajo	Dossier de travail	Pasta de trabalho	Arbeitsordner	Folder roboczy	工作文件夹	作業フォルダー
+Add Tool	Añadir herramienta	Ajouter un outil	Adicionar ferramenta	Tool hinzufügen	Dodaj narzędzie	添加工具	ツールを追加
+Tool {n}	Herramienta {n}	Outil {n}	Ferramenta {n}	Tool {n}	Narzędzie {n}	工具 {n}	ツール {n}
+Run them from More Actions › External Tools or Find Action. Macros: {list}	Ejecútalas desde Más acciones › Herramientas externas o Buscar acción. Macros: {list}	Lancez-les depuis Plus d'actions › Outils externes ou Rechercher une action. Macros : {list}	Execute-as em Mais ações › Ferramentas externas ou em Localizar ação. Macros: {list}	Starten über Weitere Aktionen › Externe Tools oder Aktion suchen. Makros: {list}	Uruchamiaj je z Więcej akcji › Narzędzia zewnętrzne lub Znajdź akcję. Makra: {list}	从“更多操作 › 外部工具”或“查找操作”运行。宏：{list}	「その他の操作 › 外部ツール」または「アクションを検索」から実行します。マクロ: {list}
+There is no external tool called {name}	No hay ninguna herramienta externa llamada {name}	Aucun outil externe ne s'appelle {name}	Não há ferramenta externa chamada {name}	Es gibt kein externes Tool namens {name}	Nie ma narzędzia zewnętrznego o nazwie {name}	没有名为 {name} 的外部工具	{name} という外部ツールはありません
+Could not run {name}: {error}	No se pudo ejecutar {name}: {error}	Impossible de lancer {name} : {error}	Não foi possível executar {name}: {error}	{name} konnte nicht ausgeführt werden: {error}	Nie udało się uruchomić {name}: {error}	无法运行 {name}：{error}	{name} を実行できませんでした: {error}
+{macro} has no value here (open a file or a project)	{macro} no tiene valor aquí (abre un archivo o un proyecto)	{macro} n'a pas de valeur ici (ouvrez un fichier ou un projet)	{macro} não tem valor aqui (abra um arquivo ou um projeto)	{macro} hat hier keinen Wert (öffne eine Datei oder ein Projekt)	{macro} nie ma tu wartości (otwórz plik lub projekt)	{macro} 在此没有值（请打开文件或项目）	{macro} にはここで値がありません（ファイルかプロジェクトを開いてください）
+the tool has no program	la herramienta no tiene programa	l'outil n'a pas de programme	a ferramenta não tem programa	das Tool hat kein Programm	narzędzie nie ma programu	该工具没有程序	ツールにプログラムが設定されていません
+the arguments have an unclosed quote	los argumentos tienen una comilla sin cerrar	les arguments ont un guillemet non fermé	os argumentos têm uma aspa sem fechar	die Argumente haben ein nicht geschlossenes Anführungszeichen	argumenty mają niezamknięty cudzysłów	参数中有未闭合的引号	引数に閉じていない引用符があります
+the folder {path} does not exist	la carpeta {path} no existe	le dossier {path} n'existe pas	a pasta {path} não existe	der Ordner {path} existiert nicht	folder {path} nie istnieje	文件夹 {path} 不存在	フォルダー {path} は存在しません

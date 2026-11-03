@@ -15,6 +15,7 @@ pub enum SettingsPage {
     Editor,
     Keymap,
     Tools,
+    ExternalTools,
 }
 
 pub enum Dialog {
@@ -146,6 +147,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::Editor, tr("Editor")),
                     (SettingsPage::Keymap, tr("Keymap")),
                     (SettingsPage::Tools, tr("Tools")),
+                    (SettingsPage::ExternalTools, tr("External Tools")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -280,6 +282,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         }
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
+                    SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
                 });
             });
         });
@@ -290,6 +293,42 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Settings › External Tools: each tool's name, program, arguments and folder.
+fn external_tools_rows(ui: &mut Ui, tools: &mut Vec<rc_core::external_tools::ExternalTool>, muted: egui::Color32) {
+    let mut remove = None;
+    for (i, tool) in tools.iter_mut().enumerate() {
+        for (label, value, hint) in [
+            (tr("Name"), &mut tool.name, "clippy pedantic"),
+            (tr("Program"), &mut tool.program, "cargo"),
+            (tr("Arguments"), &mut tool.args, "clippy -- -W clippy::pedantic"),
+            (tr("Working folder"), &mut tool.working_dir, "$ProjectFileDir$"),
+        ] {
+            ui.label(label);
+            ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(300.0));
+            ui.end_row();
+        }
+        ui.label("");
+        if ui.button(tr("Remove")).clicked() {
+            remove = Some(i);
+        }
+        ui.end_row();
+    }
+    if let Some(i) = remove {
+        tools.remove(i);
+    }
+    ui.label("");
+    if ui.button(tr("Add Tool")).clicked() {
+        tools.push(rc_core::external_tools::ExternalTool { name: trf("Tool {n}", &[("n", &(tools.len() + 1))]), ..Default::default() });
+    }
+    ui.end_row();
+    ui.label("");
+    ui.scope(|ui| {
+        ui.set_max_width(300.0);
+        ui.add(egui::Label::new(egui::RichText::new(trf("Run them from More Actions › External Tools or Find Action. Macros: {list}", &[("list", &rc_core::external_tools::MACROS.join(" "))])).color(muted)).wrap());
+    });
+    ui.end_row();
 }
 
 /// How rustfmt runs for Reformat Code, on save and at commit.

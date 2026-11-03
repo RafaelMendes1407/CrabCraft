@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 113 |
+| ✅ Pronto | 114 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 112 |
+| ⬜ A fazer | 111 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -335,7 +335,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | F-09 | Docker | ⬜ | M5 | Via CLI `docker` |
 | F-10 | Solana (experimental) | 🚫 | - | Plugin de nicho |
 | F-11 | LinkedIn Connected Apps | 🚫 | - | Sem valor para o foco em Rust |
-| F-12 | Ferramentas externas | ⬜ | M3 | |
+| F-12 | Ferramentas externas | ✅ | M3 | Configurações › Ferramentas externas: nome, programa, argumentos (com aspas) e pasta, com macros `$FilePath$`, `$FileDir$`, `$FileName$`, `$FileNameWithoutExtension$`, `$FileRelativePath$`, `$ProjectFileDir$`, `$LineNumber$`, `$ColumnNumber$`, `$SelectedText$`; roda por Mais ações › Ferramentas externas ou Find Action, numa aba da janela Run com Rerun e Stop; macro sem valor avisa antes de rodar. Testado com `wc` real num caminho com espaço; capturas conferidas |
 | F-13 | Terminal: abas, divisão e busca | 🟢 | M1 | Conferir o que veio do DotCraft |
 | F-14 | Terminal: completar comandos | ⬜ | M6 | |
 

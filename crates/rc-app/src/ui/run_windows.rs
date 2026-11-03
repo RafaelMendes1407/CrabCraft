@@ -239,7 +239,9 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
     ];
     match header(ui, tr("Run"), &actions) {
         Some(0) => {
-            if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
+            if let Some(crate::runner::ConfigKind::External { tool }) = app.runner.runs.get(active).map(|r| r.config.kind.clone()) {
+                app.run_external_tool(&tool);
+            } else if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
                 && let Some(i) = app.runner.configs.iter().position(|c| *c == cfg)
             {
                 app.runner.selected = i;

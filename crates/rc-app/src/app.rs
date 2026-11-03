@@ -1702,6 +1702,41 @@ impl CrabCraftApp {
         (!inside && path.is_file() && path.file_name().is_some_and(|n| n == "Cargo.toml")).then(|| path.parent().map(Path::to_path_buf)).flatten()
     }
 
+    /// Opens the settings on `page`.
+    pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
+        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
+    }
+
+    /// What the external tool macros stand for now: the active file, its caret and selection.
+    pub fn macro_context(&self) -> rc_core::external_tools::MacroContext {
+        let doc = self.docs.active_doc().filter(|d| !d.generated);
+        let caret = doc.map(|d| d.editor.caret_line_col());
+        rc_core::external_tools::MacroContext {
+            file: doc.map(|d| d.path.clone()),
+            project: self.workspace.as_ref().map(|w| w.ws.root.clone()),
+            line: caret.map(|(l, _)| l + 1),
+            column: caret.map(|(_, c)| c + 1),
+            selection: doc.map(|d| d.editor.selected_text()).unwrap_or_default(),
+        }
+    }
+
+    /// Runs the external tool called `name` in the Run window. Unsaved files are saved first,
+    /// since the tool reads them from disk.
+    pub fn run_external_tool(&mut self, name: &str) {
+        let Some(tool) = self.settings.external_tools.iter().find(|t| t.name == name).cloned() else {
+            self.notify(trf("There is no external tool called {name}", &[("name", &name)]), true);
+            return;
+        };
+        self.save_all_docs();
+        match external_plan(&tool, &self.macro_context(), self.runner.project_env_pairs()) {
+            Ok(plan) => {
+                let outs = self.runner.run_external(&tool.name, plan);
+                crate::ui::run_windows::handle_outputs(self, outs);
+            }
+            Err(e) => self.notify(trf("Could not run {name}: {error}", &[("name", &tool.name), ("error", &e)]), true),
+        }
+    }
+
     /// Opens what the command line or the system asked for, at its line and column (1-based).
     pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
         match request.line {
@@ -1999,6 +2034,24 @@ impl CrabCraftApp {
 
 /// What a start opens: files sent by Finder or the command line, otherwise the project open
 /// at the last quit (none after Close Project, as in Rider).
+/// The program, arguments and folder of an external tool, with its macros expanded. The
+/// arguments are split first, so a path with spaces stays one argument.
+pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core::external_tools::MacroContext, env: Vec<(String, String)>) -> Result<rc_dotnet::LaunchPlan, String> {
+    use rc_core::external_tools::{expand, working_dir};
+    let missing = |m: String| trf("{macro} has no value here (open a file or a project)", &[("macro", &m)]);
+    let program = expand(tool.program.trim(), ctx).map_err(missing)?;
+    if program.is_empty() {
+        return Err(tr("the tool has no program").to_string());
+    }
+    let args = rc_cargo::split_args(&tool.args).ok_or_else(|| tr("the arguments have an unclosed quote").to_string())?;
+    let args = args.iter().map(|a| expand(a, ctx)).collect::<Result<Vec<_>, _>>().map_err(missing)?;
+    let dir = working_dir(tool, ctx).map_err(missing)?.or_else(|| std::env::current_dir().ok()).unwrap_or_default();
+    if !dir.is_dir() {
+        return Err(trf("the folder {path} does not exist", &[("path", &dir.display())]));
+    }
+    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
+}
+
 pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
     if !from_system.is_empty() {
         return from_system;

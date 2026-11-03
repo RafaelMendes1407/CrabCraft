@@ -90,6 +90,8 @@ pub struct Settings {
     pub reopen_last: bool,
     /// The project open when CrabCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
+    /// Programs run from More Actions › External Tools and Find Action.
+    pub external_tools: Vec<crate::external_tools::ExternalTool>,
 }
 
 impl Default for Settings {
@@ -125,6 +127,7 @@ impl Default for Settings {
             recent_workspaces: Vec::new(),
             reopen_last: true,
             last_workspace: None,
+            external_tools: Vec::new(),
         }
     }
 }

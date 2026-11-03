@@ -1389,3 +1389,23 @@ fn light_edit_offers_the_files_cargo_project() {
     assert_eq!(h.state().workspace.as_ref().map(|w| w.ws.root.canonicalize().unwrap()), Some(ws));
     assert!(h.query_by_label(rc_kit::i18n::tr("LightEdit")).is_none());
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/external-tools-*.png"]
+fn external_tools_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    h.state_mut().settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
+    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().run_external_tool("Count lines");
+    run_frames(&mut h, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("external-tools-run.png")).unwrap();
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::ExternalTools);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("external-tools-settings.png")).unwrap();
+}

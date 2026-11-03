@@ -277,6 +277,53 @@ pub fn start_run(cargo: &Cargo, target: RunTarget, outbox: Outbox<RunEvent>) -> 
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
+/// Starts a program as it is, with no build first (external tools). Its output, input and
+/// stop work as for a run configuration.
+pub fn start_process(plan: LaunchPlan, outbox: Outbox<RunEvent>) -> RunHandle {
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let (input, input_rx) = mpsc::unbounded_channel();
+    let pid = Arc::new(AtomicU32::new(0));
+    let pid2 = pid.clone();
+    let task = Runtime::spawn(async move {
+        let out = outbox.clone();
+        let end = launch(plan, &token, input_rx, &pid2, &mut |e| {
+            out.send(e);
+        })
+        .await;
+        outbox.send(end.unwrap_or_else(|e| RunEvent::Failed(format!("{e:#}"))));
+    });
+    RunHandle::new(OpHandle::new(cancel, task), input, pid)
+}
+
+async fn launch(plan: LaunchPlan, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+    let mut cmd = tokio::process::Command::new(&plan.program);
+    cmd.args(&plan.args).current_dir(&plan.working_dir);
+    for (k, v) in &plan.env {
+        cmd.env(k, v);
+    }
+    let started = Instant::now();
+    let events = std::sync::Mutex::new(on_event);
+    let report = |e: RunEvent| {
+        if let Ok(mut f) = events.lock() {
+            f(e);
+        }
+    };
+    let opts = StreamOpts { partial_lines: true, grace: STOP_GRACE, stdin: Some(input) };
+    let outcome = run_streaming(
+        cmd,
+        cancel,
+        opts,
+        &mut |p| {
+            pid.store(p, Ordering::SeqCst);
+            report(RunEvent::Started { pid: p, plan: plan.clone() });
+        },
+        &mut |line| report(RunEvent::Output(line)),
+    )
+    .await?;
+    Ok(RunEvent::Exited { code: outcome.code, cancelled: outcome.cancelled, duration: started.elapsed() })
+}
+
 /// Builds the binary and resolves what to start. `Ok(None)` when cancelled.
 pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_build: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<Option<LaunchPlan>> {
     t.options.check().map_err(anyhow::Error::msg)?;

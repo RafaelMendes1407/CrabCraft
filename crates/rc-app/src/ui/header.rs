@@ -119,6 +119,23 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
+                        // The user's external tools, then the settings that list them.
+                        ui.menu_button(tr("External Tools"), |ui| {
+                            let names: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
+                            for name in names {
+                                if theme::menu_item(ui, Some(ico::RUN_ANYTHING), &name, false).clicked() {
+                                    app.run_external_tool(&name);
+                                    ui.close();
+                                }
+                            }
+                            if !app.settings.external_tools.is_empty() {
+                                ui.separator();
+                            }
+                            if theme::menu_item(ui, Some(ico::SETTINGS), tr("Configure External Tools…"), false).clicked() {
+                                app.open_settings(crate::ui::dialogs::SettingsPage::ExternalTools);
+                                ui.close();
+                            }
+                        });
                         if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
                                 let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);

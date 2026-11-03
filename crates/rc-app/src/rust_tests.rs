@@ -2541,3 +2541,34 @@ fn main() {
     assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Find));
     h.state_mut().insight.stop();
 }
+
+/// An external tool runs a real program on the active file, its macros expanded, and its
+/// output and exit code show in the Run window; Rerun starts it again.
+#[cfg(unix)]
+#[test]
+fn an_external_tool_runs_on_the_active_file() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("my proj");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"tooling\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"hi\");\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    app.run_external_tool("Count lines");
+    pump(&mut app, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
+    let run = &app.runner.runs[0];
+    assert_eq!(run.name, "Count lines");
+    assert_eq!(run.exit, Some(Some(0)));
+    let text = run.console.term.screen_lines().join("\n");
+    assert!(text.contains("3 src/main.rs"), "{text}");
+
+    // A macro with no value stops it before anything starts.
+    app.docs.list.clear();
+    app.docs.active = None;
+    app.run_external_tool("Count lines");
+    assert_eq!(app.runner.runs.len(), 1);
+    assert!(app.notices.last().is_some_and(|n| n.text.contains("$FileRelativePath$")), "{:?}", app.notices.last().map(|n| &n.text));
+}

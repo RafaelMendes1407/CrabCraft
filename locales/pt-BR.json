@@ -879,5 +879,21 @@
     "Files open without a project: only editing, no code insight": "Arquivos abertos sem projeto: só edição, sem análise de código",
     "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit: este arquivo pertence ao projeto Cargo {name}. Análise de código, execução e build precisam do projeto.",
     "Open Project": "Abrir projeto"
+  },
+  "external-tools": {
+    "External Tools": "Ferramentas externas",
+    "Configure External Tools…": "Configurar ferramentas externas…",
+    "Program": "Programa",
+    "Arguments": "Argumentos",
+    "Working folder": "Pasta de trabalho",
+    "Add Tool": "Adicionar ferramenta",
+    "Tool {n}": "Ferramenta {n}",
+    "Run them from More Actions › External Tools or Find Action. Macros: {list}": "Execute-as em Mais ações › Ferramentas externas ou em Localizar ação. Macros: {list}",
+    "There is no external tool called {name}": "Não há ferramenta externa chamada {name}",
+    "Could not run {name}: {error}": "Não foi possível executar {name}: {error}",
+    "{macro} has no value here (open a file or a project)": "{macro} não tem valor aqui (abra um arquivo ou um projeto)",
+    "the tool has no program": "a ferramenta não tem programa",
+    "the arguments have an unclosed quote": "os argumentos têm uma aspa sem fechar",
+    "the folder {path} does not exist": "a pasta {path} não existe"
   }
 }
