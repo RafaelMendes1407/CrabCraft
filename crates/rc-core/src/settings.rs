@@ -56,6 +56,8 @@ pub struct Settings {
     pub rust_analyzer_path: Option<PathBuf>,
     /// Clippy instead of `cargo check` on save.
     pub use_clippy: bool,
+    /// Run Rust tests with cargo-nextest instead of `cargo test`.
+    pub use_nextest: bool,
     /// Reformat Rust files when they are saved.
     pub format_on_save: bool,
     /// Reformat the Rust files of a commit before committing them.
@@ -95,6 +97,7 @@ impl Default for Settings {
             netcoredbg_path: None,
             rust_analyzer_path: None,
             use_clippy: false,
+            use_nextest: false,
             format_on_save: false,
             format_on_commit: false,
             run_anything_history: Vec::new(),

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 97 |
+| ✅ Pronto | 98 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 127 |
+| ⬜ A fazer | 126 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -243,7 +243,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-04 | Rodar novamente os que falharam | ✅ | M2 | Só os que falharam rodam de novo, testado com cargo real |
 | T-05 | Ir do erro do teste para o código | ✅ | M2 | Do resultado para a linha do panic, testado com cargo real |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
-| T-07 | Runner nextest | ⬜ | M3 | |
+| T-07 | Runner nextest | ✅ | M3 | Opção em Configurações > Editor; resultados, falha com a linha do panic e rodar de novo os que falharam, testado com cargo-nextest 0.9.150 real. Sem doctests (o nextest não os roda) |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
 | T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |

@@ -743,5 +743,9 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "nextest": {
+    "Run tests with cargo-nextest": "使用 cargo-nextest 运行测试",
+    "Needs cargo-nextest installed. Doctests do not run with it.": "需要安装 cargo-nextest。使用它时不运行文档测试。"
   }
 }

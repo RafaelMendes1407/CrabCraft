@@ -743,5 +743,9 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "nextest": {
+    "Run tests with cargo-nextest": "cargo-nextest でテストを実行",
+    "Needs cargo-nextest installed. Doctests do not run with it.": "cargo-nextest のインストールが必要です。doctest は実行されません。"
   }
 }

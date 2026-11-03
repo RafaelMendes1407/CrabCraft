@@ -743,5 +743,9 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "nextest": {
+    "Run tests with cargo-nextest": "Tests mit cargo-nextest ausführen",
+    "Needs cargo-nextest installed. Doctests do not run with it.": "Erfordert ein installiertes cargo-nextest. Doctests laufen damit nicht."
   }
 }

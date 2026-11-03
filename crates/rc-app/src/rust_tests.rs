@@ -861,6 +861,40 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     assert!(t.results.keys().eq(["checks::bad"].iter().copied()), "{:?}", t.results.keys());
 }
 
+#[test]
+fn tests_run_with_nextest_when_the_setting_is_on() {
+    const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    let mut settings = app.settings.clone();
+    settings.use_nextest = true;
+    app.apply_settings(&egui::Context::default(), settings);
+    assert!(app.runner.nextest);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 1));
+    // nextest names the test binary where cargo test gives its path.
+    assert_eq!(t.results["checks::bad"][0].source.as_deref(), Some(Path::new("demo")), "not run by nextest");
+    // The failure leads to its line, as with cargo test.
+    app.goto_test("checks::bad");
+    assert_eq!(app.docs.active_doc().unwrap().editor.caret_line_col().0, 13);
+    // Only the failed test runs again.
+    let outs = app.runner.rerun_failed();
+    crate::ui::run_windows::handle_outputs(&mut app, outs);
+    pump(&mut app, "the second run", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed, t.skipped), (0, 1, 0));
+}
+
 fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {

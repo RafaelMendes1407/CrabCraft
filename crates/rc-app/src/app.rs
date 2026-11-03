@@ -189,7 +189,11 @@ impl CrabCraftApp {
             dialog: None,
             notices: Vec::new(),
             insight: Insight::new(waker.clone()),
-            runner: Runner::new(waker.clone()),
+            runner: {
+                let mut runner = Runner::new(waker.clone());
+                runner.nextest = settings.use_nextest;
+                runner
+            },
             debugger: crate::debugger::Debugger::new(waker.clone()),
             window_title: String::new(),
             files: crate::search::Files::new(),
@@ -1564,6 +1568,7 @@ impl CrabCraftApp {
         let lang_changed = new.language != self.settings.language;
         let keymap_changed = new.keymap != self.settings.keymap;
         self.settings = new;
+        self.runner.nextest = self.settings.use_nextest;
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
