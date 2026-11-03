@@ -18,11 +18,13 @@ pub struct EditorConfig {
     pub right_margin: Option<usize>,
     pub show_inlays: bool,
     pub caret_blink: bool,
+    /// Lines of the enclosing scopes kept at the top while scrolling (0: none).
+    pub sticky_lines: usize,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true }
+        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5 }
     }
 }
 
@@ -143,6 +145,23 @@ impl<'a> EditorView<'a> {
         painter.rect_filled(rect, CornerRadius::ZERO, pal.editor_bg);
         paint_text_area(ui, state, config, &scheme, &m, text_rect, focused);
         paint_gutter(ui, state, &scheme, &pal, &m, rect, text_rect);
+        let sticky = sticky_lines(state, &m, config.sticky_lines);
+        if let Some(area) = paint_sticky_lines(ui, state, config, &scheme, &pal, &m, rect, text_rect, &sticky) {
+            // A click on a header goes to its line.
+            let pointer = response.interact_pointer_pos().or(response.hover_pos()).filter(|p| area.contains(*p));
+            if let Some(p) = pointer {
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+                let i = (((p.y - area.top()) / m.row_h) as usize).min(sticky.len() - 1);
+                if response.clicked() {
+                    let line = sticky[i];
+                    let indent = state.buffer.line_text(line).chars().take_while(|c| c.is_whitespace()).count();
+                    state.goto(line, indent);
+                    state.scroll_to_caret = false;
+                    state.scroll.y = ((row_of_line(state, line) as f32 - i as f32) * m.row_h).max(0.0);
+                    out.events.push(EditorEvent::CaretMoved);
+                }
+            }
+        }
         let (vbar, hbar) = paint_scrollbars(ui, state, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
         if let Some(r) = vbar.or(hbar) {
             let _ = r;
@@ -174,7 +193,8 @@ impl<'a> EditorView<'a> {
         }
 
         // The gutter and the scrollbars keep the normal pointer.
-        let over_text = response.hover_pos().is_some_and(|p| text_rect.contains(p));
+        let over_sticky = response.hover_pos().is_some_and(|p| p.y < text_rect.top() + sticky.len() as f32 * m.row_h);
+        let over_text = response.hover_pos().is_some_and(|p| text_rect.contains(p)) && !over_sticky;
         if (over_text || response.dragged()) && state.link.is_none() {
             ui.ctx().set_cursor_icon(CursorIcon::Text);
         }
@@ -587,6 +607,56 @@ pub(crate) fn caret_anchor(ui: &Ui, state: &mut EditorState, scheme: &Scheme, m:
     let config = EditorConfig::default();
     let lay = layout_buffer_line(ui, state, &config, scheme, line, &spans);
     pos2(text_rect.left() + TEXT_PAD - state.scroll.x + lay.x_of_col(col), y)
+}
+
+/// The first lines of the blocks the top of the viewport is in, outermost first, at most `max`
+/// (the innermost ones). Each takes a row, so the line they cover moves down: a few rounds settle it.
+fn sticky_lines(state: &mut EditorState, m: &Metrics, max: usize) -> Vec<usize> {
+    if max == 0 || state.scroll.y < m.row_h || state.display_numbers.is_some() {
+        return Vec::new();
+    }
+    let first_row = (state.scroll.y / m.row_h).floor() as usize;
+    let blocks: Vec<(usize, usize)> = state.syntax.folds().iter().filter(|f| f.kind == rc_syntax::FoldKind::Block && f.end_line > f.start_line).map(|f| (f.start_line, f.end_line)).collect();
+    let mut out: Vec<usize> = Vec::new();
+    for _ in 0..3 {
+        let top = line_of_row(state, first_row + out.len());
+        let mut next: Vec<usize> = blocks.iter().filter(|(s, e)| *s < top && top <= *e).map(|(s, _)| *s).collect();
+        next.sort_unstable();
+        next.dedup();
+        if next.len() > max {
+            next.drain(..next.len() - max);
+        }
+        if next == out {
+            break;
+        }
+        out = next;
+    }
+    out
+}
+
+/// Paints the sticky lines over the top of the editor; returns their area.
+#[allow(clippy::too_many_arguments)]
+fn paint_sticky_lines(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, pal: &rc_kit::Palette, m: &Metrics, rect: Rect, text_rect: Rect, lines: &[usize]) -> Option<Rect> {
+    if lines.is_empty() {
+        return None;
+    }
+    let area = Rect::from_min_max(rect.min, pos2(text_rect.right(), rect.top() + lines.len() as f32 * m.row_h));
+    let painter = ui.painter_at(area);
+    painter.rect_filled(area, 0.0, pal.editor_bg);
+    let text_painter = ui.painter_at(Rect::from_min_max(pos2(text_rect.left(), area.top()), area.max));
+    let x0 = text_rect.left() + TEXT_PAD - state.scroll.x;
+    let caret_line = state.caret_line_col().0;
+    for (i, &l) in lines.iter().enumerate() {
+        let y = area.top() + i as f32 * m.row_h;
+        let spans = state.spans_of_line(l);
+        let lay = layout_buffer_line(ui, state, config, scheme, l, &spans);
+        text_painter.galley(pos2(x0, y + m.text_dy), lay.galley, scheme.text);
+        let color = if l == caret_line { pal.gutter_fg_caret } else { pal.gutter_fg };
+        let g = painter.layout_no_wrap((l + 1).to_string(), mono(12.0), color);
+        painter.galley(pos2(m.num_right - g.size().x, (y + m.row_h / 2.0 - g.size().y / 2.0).round()), g, color);
+    }
+    painter.hline(area.x_range(), area.bottom() - 0.5, Stroke::new(1.0, pal.island_border));
+    Some(area)
 }
 
 fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit::Palette, m: &Metrics, rect: Rect, text_rect: Rect) {

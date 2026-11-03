@@ -1,19 +1,35 @@
-//! The editor island: the tab strip and the active editor, or the empty state with the most
-//! useful shortcuts when no file is open.
+//! The editor islands: groups of tabs split in any direction, each with its strip and editor,
+//! in the main window and in floating windows. Tabs drag between groups, onto a group's edge
+//! to split it, or out of the window to float. With no file open, the most useful shortcuts.
 
 use crate::app::CrabCraftApp;
-use egui::{Align2, FontId, Rect, Sense, Ui, pos2, vec2};
+use crate::layout::{Drop, Edge, Group, GroupId, Node};
+use egui::{Align2, FontId, Pos2, Rect, Sense, Ui, pos2, vec2};
 use rc_editor::{Action, EditorEvent, EditorView};
 use rc_kit::i18n::tr;
 use rc_kit::{ico, icons, theme};
 
 const TABS_H: f32 = 38.0;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// A tab being dragged. The window it started in keeps the pointer until the button is
+/// released, so the position is kept in screen points for the other windows to test.
+#[derive(Clone, Debug)]
+pub struct TabDrag {
+    pub doc: u64,
+    pub viewport: egui::ViewportId,
+    pub screen: Option<Pos2>,
+    /// Where the tab goes on release, set by the group under the pointer this frame.
+    pub target: Option<Drop>,
+    /// Whether the pointer is over one of CrabCraft's windows this frame.
+    pub over_window: bool,
+    pub released: bool,
+}
+
+#[derive(Clone, PartialEq)]
 enum TabCommand {
     Close(usize),
     CloseOthers(usize),
-    CloseAll,
+    CloseAll(usize),
     CloseRight(usize),
     Pin(usize),
     CopyPath(usize),
@@ -23,123 +39,227 @@ enum TabCommand {
     Diff(usize),
     Split(usize, bool),
     Float(usize),
+    ToMain(usize),
+    Unsplit(GroupId),
+    UnsplitAll(GroupId),
+    /// A divider moved: the split at `path` (steps into `a`/`b`) of a window's tree.
+    Ratio { window: Option<u64>, path: Vec<bool>, ratio: f32 },
 }
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
-    let p = rc_kit::pal(ui);
     if app.vcs.diff.is_some() {
         crate::ui::git::diff_view(app, ui);
         return;
     }
-    if app.docs.list.is_empty() {
-        empty_state(app, ui);
-        return;
-    }
-    let full = ui.max_rect();
-    let mut commands = Vec::new();
-    let tabs_bottom = tab_strip(app, ui, full, &mut commands);
-    let tabs_rect = Rect::from_min_max(full.min, pos2(full.right(), tabs_bottom));
-    // Separator under the tabs.
-    ui.painter().hline(full.x_range(), tabs_rect.bottom() - 0.5, egui::Stroke::new(1.0, p.island_border));
-
-    run_tab_commands(app, ui, commands);
-    if app.docs.active.is_none() {
-        return;
-    }
-    let body = Rect::from_min_max(pos2(full.left(), tabs_rect.bottom()), full.max);
+    app.sync_layout();
     let focus = std::mem::take(&mut app.focus_editor);
-    let Some(active) = main_doc(app) else { return };
-    // Split: two panes, the focused one is the active document.
-    let split = app.split.clone().filter(|s| s.main != s.other && app.docs.list.iter().any(|d| d.editor.id == s.other) && !app.floating.contains(&s.other));
-    let Some(mut split) = split else {
-        app.split = None;
-        editor_pane(app, ui, active, body, editor_actions, focus, true);
+    app.editor_frame = Some((focus, editor_actions));
+    if let Some(d) = &mut app.tab_drag {
+        d.target = None;
+        d.over_window = false;
+    }
+    track_drag(app, ui.ctx());
+    if app.docs.list.is_empty() {
+        let rect = ui.max_rect();
+        empty_state(app, ui, rect);
         return;
-    };
-    let id_of = |app: &CrabCraftApp, i: usize| app.docs.list[i].editor.id;
-    let index_of = |app: &CrabCraftApp, id: u64| app.docs.list.iter().position(|d| d.editor.id == id);
-    // A tab chosen in the strip goes to the focused pane.
-    let active_id = id_of(app, active);
-    if active_id != split.main && active_id != split.other {
-        if split.focus_second {
-            split.other = active_id;
-        } else {
-            split.main = active_id;
-        }
     }
-    split.focus_second = active_id == split.other;
-    let (Some(a), Some(b)) = (index_of(app, split.main), index_of(app, split.other)) else {
-        app.split = None;
+    let root = app.layout.main.clone();
+    let mut commands = Vec::new();
+    show_node(app, ui, &root, ui.max_rect(), None, &mut Vec::new(), &mut commands);
+    mark_over_window(app, ui);
+    run_tab_commands(app, ui.ctx(), commands);
+}
+
+/// The window the drag started in: where the pointer is, and whether the button is still down.
+fn track_drag(app: &mut CrabCraftApp, ctx: &egui::Context) {
+    let Some(d) = &mut app.tab_drag else { return };
+    if d.viewport != ctx.viewport_id() {
         return;
-    };
-    let p = rc_kit::pal(ui);
-    let (ra, rb) = if split.vertical {
-        let x = (body.left() + body.width() * split.ratio).round();
-        (Rect::from_min_max(body.min, pos2(x - 1.0, body.bottom())), Rect::from_min_max(pos2(x + 1.0, body.top()), body.max))
-    } else {
-        let y = (body.top() + body.height() * split.ratio).round();
-        (Rect::from_min_max(body.min, pos2(body.right(), y - 1.0)), Rect::from_min_max(pos2(body.left(), y + 1.0), body.max))
-    };
-    // The divider drags to resize.
-    let divider = if split.vertical { Rect::from_min_max(pos2(ra.right() - 2.0, body.top()), pos2(rb.left() + 2.0, body.bottom())) } else { Rect::from_min_max(pos2(body.left(), ra.bottom() - 2.0), pos2(body.right(), rb.top() + 2.0)) };
-    let dresp = ui.interact(divider, egui::Id::new("split_divider"), Sense::drag());
-    let line = if dresp.hovered() || dresp.dragged() { p.accent } else { p.island_border };
-    if split.vertical {
-        ui.painter().vline(divider.center().x, body.y_range(), egui::Stroke::new(1.0, line));
-        if dresp.hovered() || dresp.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-        }
-    } else {
-        ui.painter().hline(body.x_range(), divider.center().y, egui::Stroke::new(1.0, line));
-        if dresp.hovered() || dresp.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
-        }
     }
-    if dresp.dragged()
-        && let Some(pos) = dresp.interact_pointer_pos()
-    {
-        split.ratio = if split.vertical { (pos.x - body.left()) / body.width() } else { (pos.y - body.top()) / body.height() }.clamp(0.15, 0.85);
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        app.tab_drag = None;
+        return;
     }
-    app.split = Some(split.clone());
-    let focused_second = split.focus_second;
-    let (actions_a, actions_b) = if focused_second { (Vec::new(), editor_actions) } else { (editor_actions, Vec::new()) };
-    for (idx, rect, actions, second) in [(a, ra, actions_a, false), (b, rb, actions_b, true)] {
-        let header = Rect::from_min_size(rect.min, vec2(rect.width(), 26.0));
-        let focused = second == focused_second;
-        ui.painter().rect_filled(header, 0.0, if focused { theme::blend(p.island_bg, p.selection.gamma_multiply(0.35)) } else { p.island_bg });
-        let name = app.docs.list[idx].name();
-        icons::paint(ui.painter(), Rect::from_center_size(pos2(header.left() + 16.0, header.center().y), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
-        ui.painter().text(pos2(header.left() + 30.0, header.center().y), Align2::LEFT_CENTER, &name, FontId::proportional(12.5), if focused { p.text } else { p.muted });
-        if second {
-            let cr = Rect::from_center_size(pos2(header.right() - 16.0, header.center().y), vec2(22.0, 22.0));
-            let mut c = ui.new_child(egui::UiBuilder::new().max_rect(cr));
-            if theme::icon_button(&mut c, ico::CLOSE_SMALL, true, tr("Unsplit")).clicked() {
-                app.split = None;
-            }
-        }
-        let pane = Rect::from_min_max(pos2(rect.left(), header.bottom()), rect.max);
-        if editor_pane(app, ui, idx, pane, actions, focus && focused, focused) && !focused {
-            // A click in the other pane focuses it.
-            app.docs.activate(idx);
-            if let Some(sp) = &mut app.split {
-                sp.focus_second = second;
-            }
-        }
+    if let Some(p) = ctx.input(|i| i.pointer.latest_pos()) {
+        d.screen = Some(p + origin(ctx).to_vec2());
+    }
+    d.released = ctx.input(|i| !i.pointer.any_down());
+    ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+}
+
+/// Top left of this window's content on the screen (zero when the system does not say, as in
+/// tests or when the window is drawn inside the main one).
+fn origin(ctx: &egui::Context) -> Pos2 {
+    ctx.input(|i| i.viewport().inner_rect.map(|r| r.min)).unwrap_or(Pos2::ZERO)
+}
+
+/// The dragged tab's pointer in this window's points.
+fn drag_pointer(app: &CrabCraftApp, ctx: &egui::Context) -> Option<Pos2> {
+    let screen = app.tab_drag.as_ref()?.screen?;
+    Some(screen - origin(ctx).to_vec2())
+}
+
+fn mark_over_window(app: &mut CrabCraftApp, ui: &Ui) {
+    let inside = drag_pointer(app, ui.ctx()).is_some_and(|p| ui.ctx().viewport_rect().contains(p));
+    if let Some(d) = &mut app.tab_drag {
+        d.over_window |= inside;
     }
 }
 
-/// The document the main pane shows: the active one, unless it is in its own window (then the
-/// last one shown here).
-fn main_doc(app: &mut CrabCraftApp) -> Option<usize> {
-    let active = app.docs.active?;
-    let id = app.docs.list[active].editor.id;
-    if !app.floating.contains(&id) {
-        app.last_main = Some(id);
-        return Some(active);
+/// After every window was drawn: a released tab goes where it was dropped, or into a new
+/// window when it left CrabCraft's windows.
+fn finish_drag(app: &mut CrabCraftApp) {
+    let Some(d) = app.tab_drag.as_ref().filter(|d| d.released) else { return };
+    let d = d.clone();
+    app.tab_drag = None;
+    let to = match (d.target, d.screen) {
+        (Some(t), _) => t,
+        (None, Some(p)) if !d.over_window => Drop::Window(p - vec2(40.0, 20.0)),
+        _ => return,
+    };
+    move_doc(app, d.doc, to);
+}
+
+fn move_doc(app: &mut CrabCraftApp, doc: u64, to: Drop) {
+    if app.layout.move_doc(doc, to) {
+        if let Some(i) = app.docs.list.iter().position(|d| d.editor.id == doc) {
+            app.docs.activate(i);
+        }
+        app.focus_editor = true;
+        app.session_dirty = true;
     }
-    app.last_main
-        .and_then(|m| app.docs.list.iter().position(|d| d.editor.id == m && !app.floating.contains(&m)))
-        .or_else(|| app.docs.list.iter().position(|d| !app.floating.contains(&d.editor.id)))
+}
+
+/// A node of a window's tree in `rect`: a group, or two parts and the divider between them.
+fn show_node(app: &mut CrabCraftApp, ui: &mut Ui, node: &Node, rect: Rect, window: Option<u64>, path: &mut Vec<bool>, commands: &mut Vec<TabCommand>) {
+    let (vertical, ratio, a, b) = match node {
+        Node::Group(g) => return show_group(app, ui, g, rect, window, commands),
+        Node::Split { vertical, ratio, a, b } => (*vertical, *ratio, a, b),
+    };
+    let p = rc_kit::pal(ui);
+    let divider = if vertical {
+        let x = (rect.left() + rect.width() * ratio).round();
+        Rect::from_min_max(pos2(x - 3.0, rect.top()), pos2(x + 3.0, rect.bottom()))
+    } else {
+        let y = (rect.top() + rect.height() * ratio).round();
+        Rect::from_min_max(pos2(rect.left(), y - 3.0), pos2(rect.right(), y + 3.0))
+    };
+    let resp = ui.interact(divider, egui::Id::new(("editor_split", window, path.clone())), Sense::drag());
+    let mut ratio = ratio;
+    if resp.dragged()
+        && let Some(pos) = resp.interact_pointer_pos()
+    {
+        ratio = if vertical { (pos.x - rect.left()) / rect.width() } else { (pos.y - rect.top()) / rect.height() }.clamp(0.1, 0.9);
+        commands.push(TabCommand::Ratio { window, path: path.clone(), ratio });
+    }
+    let (ra, rb) = if vertical {
+        let x = (rect.left() + rect.width() * ratio).round();
+        (Rect::from_min_max(rect.min, pos2(x - 1.0, rect.bottom())), Rect::from_min_max(pos2(x + 1.0, rect.top()), rect.max))
+    } else {
+        let y = (rect.top() + rect.height() * ratio).round();
+        (Rect::from_min_max(rect.min, pos2(rect.right(), y - 1.0)), Rect::from_min_max(pos2(rect.left(), y + 1.0), rect.max))
+    };
+    for (part, r, step) in [(a, ra, false), (b, rb, true)] {
+        path.push(step);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r).id_salt(("editor_part", step)));
+        child.set_clip_rect(r.intersect(ui.clip_rect()));
+        show_node(app, &mut child, part, r, window, path, commands);
+        path.pop();
+    }
+    let line = if resp.hovered() || resp.dragged() { p.accent } else { p.island_border };
+    if vertical {
+        ui.painter().vline(ra.right() + 1.0, rect.y_range(), egui::Stroke::new(1.0, line));
+    } else {
+        ui.painter().hline(rect.x_range(), ra.bottom() + 1.0, egui::Stroke::new(1.0, line));
+    }
+    if resp.hovered() || resp.dragged() {
+        ui.ctx().set_cursor_icon(if vertical { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::ResizeVertical });
+    }
+}
+
+/// One group: its tab strip and the editor of its active tab.
+fn show_group(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, rect: Rect, window: Option<u64>, commands: &mut Vec<TabCommand>) {
+    let p = rc_kit::pal(ui);
+    if g.tabs.is_empty() {
+        // Every file is in another window: the main one waits for tabs.
+        empty_state(app, ui, rect);
+        drop_zones(app, ui, g, rect, None);
+        return;
+    }
+    let (bottom, tabs) = tab_strip(app, ui, g, rect, window, commands);
+    ui.painter().hline(rect.x_range(), bottom - 0.5, egui::Stroke::new(1.0, p.island_border));
+    let strip = Rect::from_min_max(rect.min, pos2(rect.right(), bottom));
+    let body = Rect::from_min_max(pos2(rect.left(), bottom), rect.max);
+    if let Some(idx) = g.active.and_then(|a| app.docs.list.iter().position(|d| d.editor.id == a)) {
+        let active = app.docs.active == Some(idx);
+        let (focus, actions) = if active { app.editor_frame.take().unwrap_or_default() } else { (false, Vec::new()) };
+        let mut pane = ui.new_child(egui::UiBuilder::new().max_rect(body).id_salt(("editor_pane", g.id)));
+        if editor_pane(app, &mut pane, idx, body, actions, focus, active) && !active {
+            // A click in another group makes it the active one.
+            app.docs.activate(idx);
+        }
+    }
+    drop_zones(app, ui, g, body, Some((strip, tabs)));
+}
+
+/// While a tab is dragged over this group: where it would go, highlighted, and remembered as
+/// the drop target. Over the strip it goes between tabs; over the editor, into the group, or
+/// beside it near an edge.
+fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Option<(Rect, Vec<Rect>)>) {
+    let Some(doc) = app.tab_drag.as_ref().map(|d| d.doc) else { return };
+    let Some(pointer) = drag_pointer(app, ui.ctx()) else { return };
+    let over_strip = strip.as_ref().is_some_and(|(s, _)| s.contains(pointer));
+    if !over_strip && !body.contains(pointer) {
+        return;
+    }
+    let p = rc_kit::pal(ui);
+    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new(("tab_drop", g.id))));
+    let from = app.layout.group_of(doc);
+    let alone = from.and_then(|f| app.layout.group(f)).is_some_and(|f| f.tabs.len() == 1);
+    let target = match strip {
+        Some((strip, tabs)) if over_strip => {
+            let index = tabs.iter().position(|r| pointer.x < r.center().x && pointer.y <= r.bottom() + 2.0).unwrap_or(tabs.len());
+            match tabs.get(index.min(tabs.len().saturating_sub(1))) {
+                Some(r) => {
+                    let x = if index < tabs.len() { r.left() - 1.0 } else { r.right() + 1.0 };
+                    painter.vline(x, r.y_range(), egui::Stroke::new(2.0, p.accent));
+                }
+                None => {
+                    painter.rect_stroke(strip.shrink(2.0), 4.0, egui::Stroke::new(1.5, p.accent), egui::StrokeKind::Inside);
+                }
+            }
+            Some(Drop::Group { group: g.id, index: Some(index) })
+        }
+        _ => {
+            let fx = (pointer.x - body.left()) / body.width().max(1.0);
+            let fy = (pointer.y - body.top()) / body.height().max(1.0);
+            let edges = [(fx, Edge::Left), (1.0 - fx, Edge::Right), (fy, Edge::Top), (1.0 - fy, Edge::Bottom)];
+            let near = edges.into_iter().filter(|(d, _)| *d < 0.25).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, e)| e);
+            let (zone, drop) = match near {
+                // An empty group (the main window's, every tab elsewhere) only takes tabs.
+                Some(edge) if !g.tabs.is_empty() && !(from == Some(g.id) && alone) => {
+                    let c = body.center();
+                    let half = match edge {
+                        Edge::Left => Rect::from_min_max(body.min, pos2(c.x, body.bottom())),
+                        Edge::Right => Rect::from_min_max(pos2(c.x, body.top()), body.max),
+                        Edge::Top => Rect::from_min_max(body.min, pos2(body.right(), c.y)),
+                        Edge::Bottom => Rect::from_min_max(pos2(body.left(), c.y), body.max),
+                    };
+                    (Some(half), Some(Drop::Split { group: g.id, edge }))
+                }
+                _ if from != Some(g.id) => (Some(body), Some(Drop::Group { group: g.id, index: None })),
+                _ => (None, None),
+            };
+            if let Some(zone) = zone {
+                painter.rect(zone.shrink(4.0), 6.0, p.accent.gamma_multiply(0.16), egui::Stroke::new(1.5, p.accent), egui::StrokeKind::Inside);
+            }
+            drop
+        }
+    };
+    if let Some(d) = &mut app.tab_drag {
+        d.target = target;
+    }
 }
 
 /// One editor: conflict banner, find bar (when focused), the editor and its events. Returns
@@ -171,6 +291,15 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
                 app.notify(e, true);
             }
         }
+        editor_rect.min.y = banner.bottom();
+    }
+    // A Rust scratch file is outside every Cargo package: say that code insight is missing.
+    if app.docs.list[active].scratch && app.docs.list[active].editor.lang() == rc_syntax::Lang::Rust {
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
+        ui.painter().rect_filled(banner, 0.0, rc_kit::theme::blend(p.island_bg, p.warn.gamma_multiply(0.18)));
+        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        icons::image(&mut b, ico::WARNING, 16.0);
+        b.label(tr("Scratch file: rust-analyzer does not analyze it yet"));
         editor_rect.min.y = banner.bottom();
     }
     // A Rust file no module declares: rust-analyzer knows nothing about its code.
@@ -506,12 +635,11 @@ fn file_color(path: &std::path::Path) -> Option<egui::Color32> {
     }
 }
 
-/// The tab strip: one scrolling row with a list of every tab (Rider's hidden tabs), or several
-/// rows (Settings › Editor). Tabs drag to reorder; returns the strip's bottom.
-fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec<TabCommand>) -> f32 {
+/// A group's tab strip: one scrolling row with a list of every tab (Rider's hidden tabs), or
+/// several rows (Settings › Editor). Returns the strip's bottom and the rectangles of its tabs.
+fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, full: Rect, window: Option<u64>, commands: &mut Vec<TabCommand>) -> (f32, Vec<Rect>) {
     let multirow = app.settings.tabs_multirow;
     let colors = app.settings.tab_colors;
-    let drag_id = egui::Id::new("tab_drag");
     let list_w = if multirow { 0.0 } else { 34.0 };
     // One row: the strip's height, tabs centred. Several rows: from the top, as tall as needed.
     let area = if multirow {
@@ -519,18 +647,18 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec
     } else {
         Rect::from_min_max(full.min + vec2(6.0, 0.0), pos2(full.right() - 6.0 - list_w, full.top() + TABS_H))
     };
+    let several = app.layout.trees().map(|t| t.groups().len()).sum::<usize>() > 1;
+    let focused_group = app.layout.focused == g.id;
     let mut rects: Vec<Rect> = Vec::new();
     let layout = if multirow { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Center) };
-    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area).layout(layout));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area).layout(layout).id_salt(("editor_tabs", g.id)));
     child.set_clip_rect(area.intersect(ui.clip_rect()));
     let mut draw_tabs = |ui: &mut Ui, rects: &mut Vec<Rect>| {
         ui.spacing_mut().item_spacing = vec2(2.0, 4.0);
-        for i in 0..app.docs.list.len() {
+        for &id in &g.tabs {
+            let Some(i) = app.docs.list.iter().position(|d| d.editor.id == id) else { continue };
             let doc = &app.docs.list[i];
-            if app.floating.contains(&doc.editor.id) {
-                continue;
-            }
-            let selected = app.docs.active == Some(i);
+            let selected = g.active == Some(id);
             let mut title = doc.name();
             if doc.is_modified() {
                 title.push_str(" *");
@@ -538,11 +666,16 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec
             let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color: if colors { file_color(&doc.path) } else { None }, draggable: true };
             let (resp, close) = theme::tab_ex(ui, selected, Some(icons::for_file(&doc.name())), &title, true, style);
             rects.push(resp.rect);
+            // With several groups, the one that has the keyboard is underlined.
+            if selected && several && focused_group {
+                let r = resp.rect;
+                ui.painter().hline(r.x_range().shrink(6.0), r.bottom() + 1.0, egui::Stroke::new(2.0, rc_kit::pal(ui).accent));
+            }
             if selected && app.focus_editor {
                 resp.scroll_to_me(None);
             }
             if resp.drag_started() {
-                ui.ctx().data_mut(|d| d.insert_temp(drag_id, i));
+                app.tab_drag = Some(TabDrag { doc: id, viewport: ui.ctx().viewport_id(), screen: None, target: None, over_window: true, released: false });
             }
             let resp = resp.on_hover_text(doc.path.display().to_string());
             if close || resp.middle_clicked() {
@@ -555,7 +688,7 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec
                 app.focus_editor = true;
                 app.session_dirty = true;
             }
-            tab_menu(app, &resp, i, commands);
+            tab_menu(app, &resp, i, g, window, commands);
         }
     };
     if multirow {
@@ -569,51 +702,23 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec
                 }
             });
         }
-        egui::ScrollArea::horizontal().id_salt("editor_tabs").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(&mut child, |ui| {
+        egui::ScrollArea::horizontal().id_salt(("editor_tabs_scroll", g.id)).scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(&mut child, |ui| {
             ui.horizontal_centered(|ui| draw_tabs(ui, &mut rects));
         });
     }
     let bottom = if multirow { rects.iter().map(|r| r.bottom()).fold(full.top() + TABS_H - 5.0, f32::max) + 5.0 } else { full.top() + TABS_H };
-    // Dragging a tab: a marker where it would go, the move on release.
-    if let Some(from) = ui.ctx().data(|d| d.get_temp::<usize>(drag_id)) {
-        let pointer = ui.ctx().pointer_interact_pos();
-        let target = pointer.map(|p| {
-            rects
-                .iter()
-                .enumerate()
-                .filter(|(_, r)| p.y >= r.top() - 2.0 && p.y <= r.bottom() + 2.0 || !multirow)
-                .find(|(_, r)| p.x < r.center().x)
-                .map(|(i, _)| i)
-                .unwrap_or(rects.len())
-        });
-        if let Some(t) = target
-            && let Some(r) = rects.get(t.min(rects.len().saturating_sub(1)))
-        {
-            let x = if t < rects.len() { r.left() - 1.0 } else { r.right() + 1.0 };
-            ui.painter().vline(x, r.y_range(), egui::Stroke::new(2.0, rc_kit::pal(ui).accent));
-        }
-        if !ui.input(|i| i.pointer.any_down()) {
-            ui.ctx().data_mut(|d| d.remove::<usize>(drag_id));
-            if let Some(t) = target {
-                let to = if t > from { t - 1 } else { t };
-                // Pinned tabs stay before the others.
-                let pinned = app.docs.list.iter().filter(|d| d.pinned).count();
-                let to = if app.docs.list[from].pinned { to.min(pinned.saturating_sub(1)) } else { to.max(pinned) };
-                app.docs.move_tab(from, to.min(app.docs.list.len() - 1));
-                app.session_dirty = true;
-            }
-        }
-    }
-    // Every open tab, for the ones scrolled out of sight.
+    // Every tab of the group, for the ones scrolled out of sight.
     if !multirow {
         let br = Rect::from_center_size(pos2(full.right() - 6.0 - 15.0, full.top() + TABS_H / 2.0), vec2(26.0, 26.0));
-        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(br));
+        let mut b = ui.new_child(egui::UiBuilder::new().max_rect(br).id_salt(("editor_tabs_all", g.id)));
         let resp = theme::icon_button(&mut b, ico::CHEVRON_DOWN, true, tr("Show All Tabs"));
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(260.0);
             let mut pick = None;
-            for (i, d) in app.docs.list.iter().enumerate() {
-                if theme::menu_item(ui, Some(icons::for_file(&d.name())), &d.name(), app.docs.active == Some(i)).on_hover_text(d.path.display().to_string()).clicked() {
+            for &id in &g.tabs {
+                let Some(i) = app.docs.list.iter().position(|d| d.editor.id == id) else { continue };
+                let d = &app.docs.list[i];
+                if theme::menu_item(ui, Some(icons::for_file(&d.name())), &d.name(), g.active == Some(id)).on_hover_text(d.path.display().to_string()).clicked() {
                     pick = Some(i);
                     ui.close();
                 }
@@ -624,10 +729,10 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, full: Rect, commands: &mut Vec
             }
         });
     }
-    bottom
+    (bottom, rects)
 }
 
-fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &mut Vec<TabCommand>) {
+fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, window: Option<u64>, commands: &mut Vec<TabCommand>) {
     resp.context_menu(|ui| {
         ui.set_min_width(220.0);
         let shortcut = app.keymap.shortcut_text(Action::CloseTab).unwrap_or_default();
@@ -644,7 +749,7 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::CLOSE), tr("Close All Tabs"), false).clicked() {
-            commands.push(TabCommand::CloseAll);
+            commands.push(TabCommand::CloseAll(i));
             ui.close();
         }
         ui.separator();
@@ -653,16 +758,31 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &
             commands.push(TabCommand::Pin(i));
             ui.close();
         }
-        let others = app.docs.list.len() > 1;
-        if theme::menu_entry(ui, Some(ico::SPLIT_RIGHT), tr("Split Right"), None, false, others).clicked() {
+        // The tab moves to a new group beside this one, so the group needs another tab.
+        let others = g.tabs.len() > 1;
+        if theme::menu_entry(ui, Some(ico::SPLIT_RIGHT), tr("Split and Move Right"), None, false, others).clicked() {
             commands.push(TabCommand::Split(i, true));
             ui.close();
         }
-        if theme::menu_entry(ui, Some(ico::SPLIT_DOWN), tr("Split Down"), None, false, others).clicked() {
+        if theme::menu_entry(ui, Some(ico::SPLIT_DOWN), tr("Split and Move Down"), None, false, others).clicked() {
             commands.push(TabCommand::Split(i, false));
             ui.close();
         }
-        if theme::menu_entry(ui, Some(ico::EXTERNAL_LINK), tr("Open in New Window"), None, false, true).clicked() {
+        let beside = app.layout.groups_beside(g.id) > 1;
+        if theme::menu_entry(ui, None, tr("Unsplit"), None, false, beside).clicked() {
+            commands.push(TabCommand::Unsplit(g.id));
+            ui.close();
+        }
+        if theme::menu_entry(ui, None, tr("Unsplit All"), None, false, beside).clicked() {
+            commands.push(TabCommand::UnsplitAll(g.id));
+            ui.close();
+        }
+        if window.is_some() {
+            if theme::menu_item(ui, Some(ico::EXTERNAL_LINK), tr("Move to Main Window"), false).clicked() {
+                commands.push(TabCommand::ToMain(i));
+                ui.close();
+            }
+        } else if theme::menu_entry(ui, Some(ico::EXTERNAL_LINK), tr("Open in New Window"), None, false, true).clicked() {
             commands.push(TabCommand::Float(i));
             ui.close();
         }
@@ -700,65 +820,87 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &
     });
 }
 
-fn run_tab_commands(app: &mut CrabCraftApp, ui: &Ui, commands: Vec<TabCommand>) {
+/// Closes the documents `ids` (editor ids), skipping pinned ones when `keep_pinned`.
+fn close_docs(app: &mut CrabCraftApp, ids: &[u64], keep_pinned: bool) {
+    for id in ids {
+        if let Some(j) = app.docs.list.iter().position(|d| d.editor.id == *id && !(keep_pinned && d.pinned)) {
+            app.close_tab(j);
+        }
+    }
+}
+
+fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<TabCommand>) {
+    let id_at = |app: &CrabCraftApp, i: usize| app.docs.list.get(i).map(|d| d.editor.id);
+    // The tabs of the group `i` is in, in their order.
+    let group_tabs = |app: &CrabCraftApp, id: u64| app.layout.group_of(id).and_then(|g| app.layout.group(g)).map(|g| g.tabs.clone()).unwrap_or_default();
     for c in commands {
+        if let TabCommand::Ratio { window, path, ratio } = &c {
+            app.layout.set_ratio(*window, path, *ratio);
+            app.session_dirty = true;
+            continue;
+        }
+        if let TabCommand::Unsplit(g) | TabCommand::UnsplitAll(g) = c {
+            if matches!(c, TabCommand::Unsplit(_)) {
+                app.layout.unsplit(g);
+            } else {
+                app.layout.unsplit_all(g);
+            }
+            app.session_dirty = true;
+            continue;
+        }
+        let i = match c {
+            TabCommand::Close(i)
+            | TabCommand::CloseOthers(i)
+            | TabCommand::CloseAll(i)
+            | TabCommand::CloseRight(i)
+            | TabCommand::Pin(i)
+            | TabCommand::CopyPath(i)
+            | TabCommand::Reveal(i)
+            | TabCommand::Locate(i)
+            | TabCommand::Blame(i)
+            | TabCommand::Diff(i)
+            | TabCommand::Split(i, _)
+            | TabCommand::Float(i)
+            | TabCommand::ToMain(i) => i,
+            TabCommand::Unsplit(_) | TabCommand::UnsplitAll(_) | TabCommand::Ratio { .. } => continue,
+        };
+        let Some(id) = id_at(app, i) else { continue };
         match c {
             TabCommand::Close(i) => app.close_tab(i),
-            TabCommand::CloseOthers(i) => {
-                let keep = app.docs.list[i].path.clone();
-                let mut j = app.docs.list.len();
-                while j > 0 {
-                    j -= 1;
-                    if app.docs.list[j].path != keep && !app.docs.list[j].pinned {
-                        app.close_tab(j);
-                    }
-                }
+            TabCommand::CloseOthers(_) => {
+                let others: Vec<u64> = group_tabs(app, id).into_iter().filter(|&t| t != id).collect();
+                close_docs(app, &others, true);
             }
-            TabCommand::CloseRight(i) => {
-                while app.docs.list.len() > i + 1 {
-                    let j = app.docs.list.len() - 1;
-                    app.close_tab(j);
-                }
+            TabCommand::CloseRight(_) => {
+                let tabs = group_tabs(app, id);
+                let right: Vec<u64> = tabs.iter().skip_while(|&&t| t != id).skip(1).copied().collect();
+                close_docs(app, &right, false);
             }
-            TabCommand::CloseAll => {
-                let mut j = app.docs.list.len();
-                while j > 0 {
-                    j -= 1;
-                    if !app.docs.list[j].pinned {
-                        app.close_tab(j);
-                    }
-                }
+            TabCommand::CloseAll(_) => {
+                let tabs = group_tabs(app, id);
+                close_docs(app, &tabs, true);
             }
             TabCommand::Pin(i) => {
+                // Pinned tabs go first in their group.
                 let d = &mut app.docs.list[i];
                 d.pinned = !d.pinned;
-                // Pinned tabs go first.
-                let doc = app.docs.list.remove(i);
-                let pos = if doc.pinned { app.docs.list.iter().filter(|d| d.pinned).count() } else { app.docs.list.iter().filter(|d| d.pinned).count() };
-                app.docs.list.insert(pos, doc);
-                app.docs.active = Some(pos);
+                app.sync_layout();
                 app.session_dirty = true;
             }
-            TabCommand::Split(i, vertical) => {
-                // The tab goes to the new pane; the main pane keeps the current (or another) file.
-                let other = app.docs.list[i].editor.id;
-                let current = app.docs.active.map(|a| app.docs.list[a].editor.id).filter(|&c| c != other);
-                let main = current.or_else(|| app.docs.list.iter().map(|d| d.editor.id).find(|&id| id != other && !app.floating.contains(&id)));
-                if let Some(main) = main {
-                    app.split = Some(crate::app::Split { vertical, main, other, focus_second: true, ratio: 0.5 });
-                    app.docs.activate(i);
+            TabCommand::Split(_, right) => {
+                if let Some(group) = app.layout.group_of(id) {
+                    move_doc(app, id, Drop::Split { group, edge: if right { Edge::Right } else { Edge::Bottom } });
                 }
             }
-            TabCommand::Float(i) => {
-                let id = app.docs.list[i].editor.id;
-                if !app.floating.contains(&id) {
-                    app.floating.push(id);
-                }
-                if app.split.as_ref().is_some_and(|s| s.main == id || s.other == id) {
-                    app.split = None;
-                }
+            TabCommand::Float(_) => {
+                let at = origin(ctx) + vec2(80.0, 80.0);
+                move_doc(app, id, Drop::Window(at));
             }
-            TabCommand::CopyPath(i) => ui.ctx().copy_text(app.docs.list[i].path.display().to_string()),
+            TabCommand::ToMain(_) => {
+                let group = app.layout.main_target();
+                move_doc(app, id, Drop::Group { group, index: None });
+            }
+            TabCommand::CopyPath(i) => ctx.copy_text(app.docs.list[i].path.display().to_string()),
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {
                 let (path, text) = (app.docs.list[i].path.clone(), app.docs.list[i].editor.buffer.rope().to_string());
@@ -775,14 +917,14 @@ fn run_tab_commands(app: &mut CrabCraftApp, ui: &Ui, commands: Vec<TabCommand>) 
                 app.docs.activate(i);
                 app.locate_active();
             }
+            TabCommand::Unsplit(_) | TabCommand::UnsplitAll(_) | TabCommand::Ratio { .. } => {}
         }
     }
 }
 
 /// No open file: the most useful shortcuts, like IntelliJ's empty editor.
-fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui) {
+fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
     let p = rc_kit::pal(ui);
-    let rect = ui.max_rect();
     let lines: Vec<(&str, Option<String>)> = vec![
         (tr("Search Everywhere"), Some("⇧⇧".into())),
         (tr("Go to File"), app.keymap.shortcut_text(Action::GotoFile)),
@@ -813,30 +955,45 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
 }
 
-/// Documents in windows of their own ("Open in New Window"): each an OS window with its
-/// editor; closing it brings the tab back to the main window.
+/// Floating editor windows: each an OS window with its own groups of tabs. Closing one brings
+/// its tabs back to the main window. Runs after the main window, and ends a tab drag.
 pub fn floating_windows(app: &mut CrabCraftApp, ctx: &egui::Context) {
-    let ids = app.floating.clone();
-    for id in ids {
-        let Some(idx) = app.docs.list.iter().position(|d| d.editor.id == id) else {
-            app.floating.retain(|f| *f != id);
-            continue;
-        };
-        let name = app.docs.list[idx].name();
-        let modified = if app.docs.list[idx].is_modified() { " *" } else { "" };
-        let builder = egui::ViewportBuilder::default().with_title(format!("{name}{modified} – CrabCraft")).with_inner_size([960.0, 720.0]);
-        let closed = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("crabcraft_doc", id)), builder, |ui, _| {
+    let windows: Vec<(u64, Node, Option<Rect>)> = app.layout.windows.iter().map(|w| (w.id, w.root.clone(), w.initial)).collect();
+    for (id, root, initial) in windows {
+        let title = root
+            .groups()
+            .iter()
+            .find(|g| g.id == app.layout.focused)
+            .or(root.groups().first())
+            .and_then(|g| g.active)
+            .and_then(|a| app.docs.list.iter().find(|d| d.editor.id == a))
+            .map(|d| format!("{}{} – CrabCraft", d.name(), if d.is_modified() { " *" } else { "" }))
+            .unwrap_or_else(|| "CrabCraft".into());
+        let mut builder = egui::ViewportBuilder::default().with_title(title).with_inner_size(initial.map_or(vec2(960.0, 720.0), |r| r.size()));
+        if let Some(r) = initial {
+            builder = builder.with_position(r.min);
+        }
+        let mut commands = Vec::new();
+        let (closed, rect) = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("crabcraft_editor_window", id)), builder, |ui, _| {
+            track_drag(app, ui.ctx());
             let p = rc_kit::pal(ui);
             let rect = ui.max_rect();
             ui.painter().rect_filled(rect, 0.0, p.island_bg);
-            let focused = app.docs.active == Some(idx);
-            if editor_pane(app, ui, idx, rect.shrink(4.0), Vec::new(), false, focused) && !focused {
-                app.docs.activate(idx);
-            }
-            ui.input(|i| i.viewport().close_requested())
+            show_node(app, ui, &root, rect.shrink(4.0), Some(id), &mut Vec::new(), &mut commands);
+            mark_over_window(app, ui);
+            let info = ui.input(|i| (i.viewport().close_requested(), i.viewport().outer_rect.zip(i.viewport().inner_rect)));
+            (info.0, info.1.map(|(outer, inner)| Rect::from_min_size(outer.min, inner.size())))
         });
+        run_tab_commands(app, ctx, commands);
+        let Some(i) = app.layout.windows.iter().position(|w| w.id == id) else { continue };
         if closed {
-            app.floating.retain(|f| *f != id);
+            app.layout.dock_window(i);
+            app.session_dirty = true;
+        } else if rect.is_some() && app.layout.windows[i].rect != rect {
+            app.layout.windows[i].rect = rect;
+            app.session_dirty = true;
         }
     }
+    finish_drag(app);
+    app.editor_frame = None;
 }

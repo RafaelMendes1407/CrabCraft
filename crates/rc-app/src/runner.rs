@@ -158,11 +158,13 @@ pub struct Runner {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
+    /// Rust tests run with cargo-nextest (a setting).
+    pub nextest: bool,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -515,7 +517,7 @@ impl Runner {
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let started = if manifest.is_some() {
-            self.cargo().map(|cargo| rc_cargo::start_tests(&cargo, req.clone(), inbox.sender()))
+            self.cargo().map(|cargo| rc_cargo::start_tests(&cargo, req.clone(), self.nextest, inbox.sender()))
         } else {
             self.dotnet().map(|dotnet| rc_dotnet::start_tests(&dotnet, req.clone(), inbox.sender()))
         };
