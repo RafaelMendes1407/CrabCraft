@@ -10,6 +10,7 @@ mod layout;
 mod local_history;
 mod run_anything;
 mod runner;
+mod rustfmt;
 mod search;
 mod vcs;
 #[cfg(test)]

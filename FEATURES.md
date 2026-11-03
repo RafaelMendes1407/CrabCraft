@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 105 |
+| ✅ Pronto | 106 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 118 |
+| ⬜ A fazer | 117 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -145,7 +145,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
-| I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
+| I-29 | Configurar rustfmt (argumentos, canal, env) | ✅ | M3 | Configurações > Ferramentas: argumentos, canal (via rustup, +canal) e variáveis de ambiente; valem para Reformat Code, ao salvar e ao commitar (o mesmo comando rustfmt, sem depender do rust-analyzer); erros de configuração aparecem no diálogo e cancelam o commit |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | rust-analyzer não formatou trecho na sonda; hoje a IDE avisa que o rustfmt formata o arquivo inteiro |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |

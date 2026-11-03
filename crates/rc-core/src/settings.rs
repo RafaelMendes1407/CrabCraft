@@ -22,6 +22,18 @@ pub enum KeymapChoice {
     VisualStudio,
 }
 
+/// How rustfmt runs. Kept as the user typed it; `rc_cargo::Rustfmt` reads and checks it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RustfmtSettings {
+    /// Extra arguments, split like a shell does: quotes keep spaces in one argument.
+    pub args: String,
+    /// The rustup toolchain to run (`nightly`, `1.85.0`...); empty runs the default one.
+    pub channel: String,
+    /// Environment variables, one `NAME=value` per line.
+    pub env: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -64,6 +76,8 @@ pub struct Settings {
     pub format_on_save: bool,
     /// Reformat the Rust files of a commit before committing them.
     pub format_on_commit: bool,
+    /// How rustfmt runs, wherever CrabCraft formats Rust.
+    pub rustfmt: RustfmtSettings,
     /// Latest commands of Run Anything, newest first.
     pub run_anything_history: Vec<String>,
     /// Projects whose `build.rs` and procedural macros may run.
@@ -103,6 +117,7 @@ impl Default for Settings {
             use_nextest: false,
             format_on_save: false,
             format_on_commit: false,
+            rustfmt: RustfmtSettings::default(),
             run_anything_history: Vec::new(),
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),

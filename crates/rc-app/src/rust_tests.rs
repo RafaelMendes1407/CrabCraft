@@ -27,6 +27,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(180) {
         app.poll_cargo_workspace();
+        app.poll_rustfmt();
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
         let outs = app.runner.update();
@@ -1649,6 +1650,98 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
     wait(&mut app, "the plain commit", &|a| a.vcs.busy.is_none());
     assert_eq!(app.vcs.error, None);
     assert_eq!(git(&["show", "HEAD:src/lib.rs"]), "pub fn broken( {\n");
+}
+
+#[test]
+fn rustfmt_settings_apply_to_reformat_save_and_commit() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join(".gitignore"), "target\n");
+    let root = root.canonicalize().unwrap();
+    let (main, lib) = (root.join("src/main.rs"), root.join("src/lib.rs"));
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git").args(args).current_dir(&root).output().unwrap();
+        assert!(out.status.success(), "{args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Test"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "First"]);
+    write(&main, "fn main(){\nprintln!(\"x\");\n}\n");
+    // Not trusted: no language server runs, and rustfmt still does.
+    let mut app = new_app(dir.path());
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), channel: "+stable".into(), env: "CRABCRAFT_RUSTFMT=1\n".into() };
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main);
+    let text = |a: &CrabCraftApp| a.docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
+
+    // Reformat Code: the document changes, the file waits for a save.
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "Reformat Code", |a| text(a) == "fn main() {\n   println!(\"x\");\n}\n");
+    assert!(app.docs.active_doc().unwrap().is_modified());
+
+    // On save: the formatted text is written.
+    app.settings.format_on_save = true;
+    let doc = app.docs.active_doc_mut().unwrap();
+    let len = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, len, "fn main(){\nlet a=1;\n}\n");
+    app.save_all_docs();
+    pump(&mut app, "rustfmt on save", |_| std::fs::read_to_string(&main).is_ok_and(|t| t == "fn main() {\n   let a = 1;\n}\n"));
+    assert!(!app.docs.active_doc().unwrap().is_modified());
+    app.settings.format_on_save = false;
+
+    // The environment reaches rustfmt: rustup reads this toolchain from it and fails.
+    app.settings.rustfmt = rc_core::RustfmtSettings { env: "RUSTUP_TOOLCHAIN=crabcraft-missing".into(), ..Default::default() };
+    let doc = app.docs.active_doc_mut().unwrap();
+    doc.editor.replace(0, 0, "\n");
+    let before = text(&app);
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    pump(&mut app, "the rustfmt error", |a| a.notices.iter().any(|n| n.error && n.text.contains("main.rs") && n.text.contains("crabcraft-missing")));
+    assert_eq!(text(&app), before);
+    // Settings that cannot work are reported before rustfmt runs.
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config 'tab_spaces=2".into(), ..Default::default() };
+    app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+    assert_eq!(app.notices.last().map(|n| n.text.clone()), Some(crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments)));
+    assert!(app.rustfmt_jobs.is_empty());
+
+    // At commit: the included file is committed formatted with the same settings.
+    app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), ..Default::default() };
+    app.settings.format_on_commit = true;
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 1, "");
+    std::fs::write(&lib, "pub fn a(){\nlet b=1;\n}\n").unwrap();
+    let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}; error {:?}", app.vcs.error);
+            app.vcs.update(&mut app.docs, true);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    wait(&mut app, "the status", &|a| a.vcs.status.is_some());
+    app.vcs.refresh();
+    wait(&mut app, "the changes", &|a| ["src/lib.rs", "src/main.rs"].iter().all(|p| a.vcs.changes().iter().any(|c| c.path == *p)));
+    app.vcs.message = "Formatted".into();
+    app.commit_changes(false);
+    wait(&mut app, "the commit", &|a| a.vcs.busy.is_none());
+    assert_eq!(app.vcs.error, None);
+    assert_eq!(git(&["show", "HEAD:src/lib.rs"]), "pub fn a() {\n   let b = 1;\n}\n");
+
+    // A bad setting stops the commit.
+    app.settings.rustfmt.channel = "not a channel".into();
+    std::fs::write(&lib, "pub fn c(){}\n").unwrap();
+    app.vcs.refresh();
+    wait(&mut app, "the change", &|a| a.vcs.changes().iter().any(|c| c.path == "src/lib.rs"));
+    let head = git(&["rev-parse", "HEAD"]);
+    app.vcs.message = "Must not exist".into();
+    app.commit_changes(false);
+    wait(&mut app, "the failure", &|a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.as_deref().is_some_and(|e| e.contains("not a channel")), "{:?}", app.vcs.error);
+    assert_eq!(git(&["rev-parse", "HEAD"]), head);
 }
 
 #[test]
