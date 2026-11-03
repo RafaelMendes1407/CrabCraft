@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 97 |
+| ✅ Pronto | 98 |
 | 🚧 Em andamento | 2 |
-| 🟢 Herdado | 24 |
+| 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
 | ⬜ A fazer | 127 |
 | 🚫 Fora do escopo | 5 |
@@ -155,7 +155,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP; Shift duplo corrigido, antes nunca abria com egui 0.36 |
+| N-01 | Search Everywhere (Shift duplo) | ✅ | M1 | Ctrl+P/⌘P e Shift duplo; abas Todos, Classes, Arquivos, Símbolos, Ações e Texto (busca em texto em segundo plano, cancelável); escopo Workspace, Workspace e dependências ou um crate; testado com kittest e rust-analyzer real |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
 | N-03 | Ir para definição | ✅ | M1 | Ctrl+clique (⌘ no macOS) e Ctrl+B levam à definição: método, tipo e item da stdlib (aberto somente leitura), testado com cliques reais e rust-analyzer real |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |

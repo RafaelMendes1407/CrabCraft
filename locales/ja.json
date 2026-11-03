@@ -743,5 +743,16 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "search-everywhere": {
+    "Classes": "クラス",
+    "Text": "テキスト",
+    "Workspace": "ワークスペース",
+    "Workspace and Dependencies": "ワークスペースと依存関係",
+    "Crate {name}": "クレート {name}",
+    "Search scope": "検索範囲",
+    "Type a struct, enum or trait name": "構造体、列挙型またはトレイトの名前を入力",
+    "Type the text to find in the files": "ファイル内で検索するテキストを入力",
+    "Search classes, files, symbols and actions": "クラス、ファイル、シンボル、アクションを検索"
   }
 }

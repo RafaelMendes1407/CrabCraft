@@ -575,3 +575,156 @@ fn screens_readme() {
         h.state_mut().insight.stop();
     }
 }
+
+/// A Cargo workspace of two packages, `alpha` and `beta`, that both mention `needle_text`.
+fn two_crates(root: &Path) {
+    let write = |rel: &str, text: &str| {
+        let p = root.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    write("Cargo.toml", "[workspace]\nmembers = [\"alpha\", \"beta\"]\nresolver = \"2\"\n");
+    write("alpha/Cargo.toml", "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write("alpha/src/lib.rs", "pub mod alpha_util;\n\npub fn alpha() -> &'static str {\n    \"needle_text\"\n}\n");
+    write("alpha/src/alpha_util.rs", "pub fn util() {}\n");
+    write("beta/Cargo.toml", "[package]\nname = \"beta\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write("beta/src/beta_util.rs", "pub fn util() {}\n");
+    write("beta/src/lib.rs", "// The beta crate.\n\n\npub const NEEDLE: &str = \"needle_text\";\n");
+}
+
+/// A harness on [`two_crates`], once Cargo's model and the file index are loaded.
+fn two_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    two_crates(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace and the file index", |a| {
+        a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2) && a.files.index.as_ref().is_some_and(|i| i.snapshot().len() >= 6)
+    });
+    (h, root)
+}
+
+fn press_search_everywhere(h: &mut Harness<'static, CrabCraftApp>) {
+    let chord = h.state().keymap.chord(rc_editor::Action::SearchEverywhere).unwrap();
+    assert_eq!(chord.key, egui::Key::P, "Ctrl+P / ⌘P opens Search Everywhere");
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(3);
+}
+
+fn se<'a>(h: &'a Harness<'static, CrabCraftApp>) -> &'a crate::search::SearchEverywhere {
+    h.state().search_everywhere.as_ref().expect("Search Everywhere is open")
+}
+
+#[test]
+fn ctrl_p_searches_files_and_text_in_the_chosen_scope() {
+    use crate::search::{SeScope, SeTab};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+
+    // Ctrl+P opens on All; Tab goes through Classes to Files and Shift+Tab back.
+    press_search_everywhere(&mut h);
+    assert_eq!(se(&h).tab, SeTab::All);
+    for t in ["All", "Classes", "Files", "Symbols", "Actions", "Text", "Workspace"] {
+        assert!(h.query_by_label(t).is_some(), "{t} is not shown");
+    }
+    h.key_press(egui::Key::Tab);
+    h.run_steps(1);
+    assert_eq!(se(&h).tab, SeTab::Classes);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(1);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(1);
+    assert_eq!(se(&h).tab, SeTab::Symbols);
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+    h.run_steps(1);
+    assert_eq!(se(&h).tab, SeTab::Files);
+
+    // Files: what is typed finds the file.
+    h.input_mut().events.push(egui::Event::Text("alpha_util".into()));
+    h.run_steps(3);
+    assert_eq!(se(&h).text, "alpha_util");
+    assert!(h.query_by_label("alpha_util.rs").is_some(), "alpha_util.rs not found");
+
+    // Text: every line with the text, then Enter opens the first one at its line.
+    h.state_mut().search_everywhere.as_mut().unwrap().text = "needle_text".into();
+    for _ in 0..3 {
+        h.key_press(egui::Key::Tab);
+        h.run_steps(1);
+    }
+    assert_eq!(se(&h).tab, SeTab::Text);
+    run_frames(&mut h, "both text matches", |a| a.search_everywhere.as_ref().is_some_and(|s| s.text_hits.len() == 2 && !s.text_searching()));
+    let hits: Vec<(String, usize)> = se(&h).text_hits.iter().map(|t| (t.rel.clone(), t.line)).collect();
+    assert_eq!(hits, vec![("alpha/src/lib.rs".to_string(), 3), ("beta/src/lib.rs".to_string(), 3)]);
+    assert!(se(&h).text_hits[0].preview.starts_with("\"needle_text\""), "{:?}", se(&h).text_hits[0]);
+    assert!(h.query_by_label("lib.rs:4").is_some() || h.query_all_by_label("\"needle_text\"").count() > 0);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    assert!(h.state().search_everywhere.is_none());
+    let doc = h.state().docs.active_doc().expect("a document");
+    assert_eq!(doc.path, root.join("alpha/src/lib.rs"));
+    assert_eq!(doc.editor.caret_line_col(), (3, 5), "at the match, after the quote");
+
+    // The scope selector offers each crate; `beta` keeps only its own files and lines.
+    press_search_everywhere(&mut h);
+    h.get_by_label("Workspace").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("Workspace and Dependencies").is_some());
+    h.get_by_label("Crate beta").click();
+    h.run_steps(2);
+    assert!(h.state().search_everywhere.is_some(), "choosing a scope keeps the popup open");
+    assert_eq!(se(&h).scope, SeScope::Package { name: "beta".into(), rel: "beta".into() });
+    {
+        let s = h.state_mut().search_everywhere.as_mut().unwrap();
+        s.tab = SeTab::Files;
+        s.text = "util".into();
+    }
+    h.run_steps(3);
+    assert!(h.query_by_label("beta_util.rs").is_some(), "beta's file is in the beta scope");
+    assert!(h.query_by_label("alpha_util.rs").is_none(), "alpha's file is outside the beta scope");
+    {
+        let s = h.state_mut().search_everywhere.as_mut().unwrap();
+        s.tab = SeTab::Text;
+        s.text = "needle_text".into();
+    }
+    run_frames(&mut h, "the text match in beta", |a| a.search_everywhere.as_ref().is_some_and(|s| !s.text_hits.is_empty() && !s.text_searching()));
+    let rels: Vec<&str> = se(&h).text_hits.iter().map(|t| t.rel.as_str()).collect();
+    assert_eq!(rels, vec!["beta/src/lib.rs"]);
+
+    // The scope is remembered when the popup opens again.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert!(h.state().search_everywhere.is_none());
+    press_search_everywhere(&mut h);
+    assert_eq!(se(&h).scope, SeScope::Package { name: "beta".into(), rel: "beta".into() });
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes Search Everywhere captures to target/snapshots"]
+fn screens_search_everywhere() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = two_crates_harness(dir.path(), dark);
+        let suffix = if dark { "dark" } else { "light" };
+        press_search_everywhere(&mut h);
+        {
+            let s = h.state_mut().search_everywhere.as_mut().unwrap();
+            s.tab = crate::search::SeTab::Text;
+            s.text = "needle".into();
+        }
+        run_frames(&mut h, "text matches", |a| a.search_everywhere.as_ref().is_some_and(|s| s.text_hits.len() == 2 && !s.text_searching()));
+        h.render().unwrap().save(out.join(format!("search-everywhere-text-{suffix}.png"))).unwrap();
+        {
+            use egui_kittest::kittest::Queryable;
+            h.get_by_label("Workspace").click();
+        }
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("search-everywhere-scope-{suffix}.png"))).unwrap();
+    }
+}

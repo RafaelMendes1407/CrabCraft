@@ -1,8 +1,8 @@
-//! Search Everywhere (⇧⇧) and its Go to File / Type / Symbol tabs: a popup under the toolbar
-//! with tabs, an input and ranked results.
+//! Search Everywhere (⇧⇧, Ctrl+P) and its Classes / Files / Symbols / Actions / Text tabs: a
+//! popup under the toolbar with tabs, a scope selector, an input and ranked results.
 
 use crate::app::CrabCraftApp;
-use crate::search::{SeTab, SearchEverywhere, action_items};
+use crate::search::{SeTab, SearchEverywhere, TextHit, action_items};
 use egui::{Align2, Color32, Context, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -14,6 +14,7 @@ enum Hit {
     File { path: PathBuf, rel: String, indices: Vec<u32>, line: Option<u32>, col: Option<u32> },
     Symbol(crate::search::SymbolHit),
     Action(&'static str, rc_editor::Action),
+    Text(TextHit),
 }
 
 const ROW_H: f32 = 28.0;
@@ -27,17 +28,21 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
         let limit = if se.tab == SeTab::All { 8 } else { 60 };
         let mut files: Vec<Hit> = Vec::new();
         if text.is_empty() {
-            for p in app.docs.recent.iter().take(limit) {
-                let rel = app.workspace.as_ref().and_then(|w| p.strip_prefix(&w.ws.root).ok()).map(|r| r.display().to_string()).unwrap_or_else(|| p.display().to_string());
-                files.push(Hit::File { path: p.clone(), rel, indices: Vec::new(), line: None, col: None });
+            for p in app.docs.recent.iter() {
+                let rel = app.workspace.as_ref().and_then(|w| p.strip_prefix(&w.ws.root).ok()).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_else(|| p.display().to_string());
+                if files.len() < limit && se.in_scope(&rel) {
+                    files.push(Hit::File { path: p.clone(), rel, indices: Vec::new(), line: None, col: None });
+                }
             }
         } else if let Some(index) = &app.files.index {
             let snap = index.snapshot();
             let q = rc_search::FileQuery::parse(text);
             let recent: Vec<String> = app.docs.recent.iter().filter_map(|p| snap.relative(p)).collect();
             let boost = |e: &rc_search::FileEntry| if recent.iter().any(|r| r == e.rel()) { 5_000 } else { 0 };
-            let res = rc_search::search_files(&snap, &q, &boost, limit);
-            for m in res.matches {
+            // A package scope filters afterwards, so it asks for more.
+            let wanted = if matches!(se.scope, crate::search::SeScope::Package { .. }) { limit * 20 } else { limit };
+            let res = rc_search::search_files(&snap, &q, &boost, wanted);
+            for m in res.matches.into_iter().filter(|m| se.in_scope(m.entry.rel())).take(limit) {
                 files.push(Hit::File { path: snap.abs_path(&m.entry), rel: m.entry.rel().to_string(), indices: m.indices, line: q.line, col: q.column });
             }
         }
@@ -45,18 +50,20 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
             out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Files")), f));
         }
     }
-    if want(SeTab::Types) || want(SeTab::Symbols) {
+    if want(SeTab::Classes) || want(SeTab::Symbols) {
         let mut first_t = true;
         let mut first_s = true;
         let limit = if se.tab == SeTab::All { 8 } else { 80 };
         let mut types = 0;
         let mut syms = 0;
-        for s in &se.symbols {
-            let is_type = s.is_type();
-            if is_type && want(SeTab::Types) && types < limit {
-                out.push(((std::mem::take(&mut first_t) && se.tab == SeTab::All).then_some(tr("Types")), Hit::Symbol(s.clone())));
+        let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
+        for s in se.symbols.iter().filter(|s| se.symbol_in_scope(&root, &s.path)) {
+            // The Symbols tab lists types too; All shows them in their own group.
+            let is_type = s.is_type() && se.tab != SeTab::Symbols;
+            if is_type && want(SeTab::Classes) && types < limit {
+                out.push(((std::mem::take(&mut first_t) && se.tab == SeTab::All).then_some(tr("Classes")), Hit::Symbol(s.clone())));
                 types += 1;
-            } else if !is_type && want(SeTab::Symbols) && se.tab != SeTab::Types && syms < limit {
+            } else if !is_type && want(SeTab::Symbols) && se.tab != SeTab::Classes && syms < limit {
                 out.push(((std::mem::take(&mut first_s) && se.tab == SeTab::All).then_some(tr("Symbols")), Hit::Symbol(s.clone())));
                 syms += 1;
             }
@@ -70,13 +77,22 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
             out.push(((i == 0 && se.tab == SeTab::All).then_some(tr("Actions")), Hit::Action(l, a)));
         }
     }
+    // Text only on its tab: a full-text search for every keystroke of All would cost too much.
+    if se.tab == SeTab::Text {
+        out.extend(se.text_hits.iter().map(|t| (None, Hit::Text(t.clone()))));
+    }
     out
 }
 
 pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut se) = app.search_everywhere.take() else { return };
     se.update_symbols(&app.insight);
-    if !se.symbols.is_empty() || !se.text.is_empty() {
+    let now = ctx.input(|i| i.time);
+    let waiting = match app.workspace.as_ref().map(|w| w.ws.root.clone()) {
+        Some(root) => se.update_text(&root, &app.waker, now),
+        None => false,
+    };
+    if !se.symbols.is_empty() || !se.text.is_empty() || waiting {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
     let hits = collect(app, &se);
@@ -95,15 +111,18 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         if i.consume_key(egui::Modifiers::NONE, Key::ArrowUp) {
             se.selected = se.selected.saturating_sub(1);
         }
-        if i.consume_key(egui::Modifiers::NONE, Key::Tab) {
-            let k = SeTab::ALL.iter().position(|t| *t == se.tab).unwrap_or(0);
-            se.tab = SeTab::ALL[(k + 1) % SeTab::ALL.len()];
-            se.selected = 0;
-        }
+        // Shift+Tab first: `consume_key` ignores an extra Shift, so plain Tab would take it.
         if i.consume_key(egui::Modifiers::SHIFT, Key::Tab) {
             let k = SeTab::ALL.iter().position(|t| *t == se.tab).unwrap_or(0);
             se.tab = SeTab::ALL[(k + SeTab::ALL.len() - 1) % SeTab::ALL.len()];
             se.selected = 0;
+            se.focus = true;
+        }
+        if i.consume_key(egui::Modifiers::NONE, Key::Tab) {
+            let k = SeTab::ALL.iter().position(|t| *t == se.tab).unwrap_or(0);
+            se.tab = SeTab::ALL[(k + 1) % SeTab::ALL.len()];
+            se.selected = 0;
+            se.focus = true;
         }
         if i.consume_key(egui::Modifiers::NONE, Key::Escape) {
             close = true;
@@ -121,7 +140,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
             .inner_margin(egui::Margin::same(8))
             .show(ui, |ui| {
                 ui.set_width(width);
-                // Tabs.
+                // Tabs, and the scope at the right.
                 ui.horizontal(|ui| {
                     for t in SeTab::ALL {
                         let selected = se.tab == t;
@@ -134,12 +153,36 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         if selected {
                             ui.painter().hline(r.x_range().shrink(6.0), r.bottom() - 1.0, egui::Stroke::new(2.0, p.accent));
                         }
+                        let resp = match t.action().and_then(|a| app.keymap.shortcut_text(a)) {
+                            Some(k) => resp.on_hover_text(format!("{} ({k})", t.title())),
+                            None => resp,
+                        };
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, t.title()));
                         if resp.clicked() {
                             se.tab = t;
                             se.selected = 0;
                             se.focus = true;
                         }
                     }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let scopes = se.scopes();
+                        let mut chosen = None;
+                        let resp = egui::ComboBox::from_id_salt("search_everywhere_scope").selected_text(se.scope.title()).show_ui(ui, |ui| {
+                            for s in scopes {
+                                if ui.selectable_label(s == se.scope, s.title()).clicked() {
+                                    chosen = Some(s);
+                                }
+                            }
+                        }).response;
+                        let title = se.scope.title();
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &title));
+                        resp.on_hover_text(tr("Search scope"));
+                        if let Some(s) = chosen {
+                            se.scope = s;
+                            se.selected = 0;
+                            se.focus = true;
+                        }
+                    });
                 });
                 ui.add_space(6.0);
                 // Input.
@@ -149,12 +192,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(ir.left() + 34.0, ir.top() + 4.0), pos2(ir.right() - 8.0, ir.bottom() - 4.0))));
                 let hint = match se.tab {
                     SeTab::Files => tr("Type a file name, path or name:line"),
-                    SeTab::Types => tr("Type a class, interface or struct name"),
+                    SeTab::Classes => tr("Type a struct, enum or trait name"),
+                    SeTab::Text => tr("Type the text to find in the files"),
                     SeTab::Symbols => tr("Type a member name"),
                     SeTab::Actions => tr("Type an action name"),
-                    SeTab::All => tr("Search files, types, symbols and actions"),
+                    SeTab::All => tr("Search classes, files, symbols and actions"),
                 };
-                let te = child.add(egui::TextEdit::singleline(&mut se.text).frame(egui::Frame::NONE).hint_text(hint).font(FontId::proportional(14.0)).desired_width(f32::INFINITY));
+                let te = child.add(egui::TextEdit::singleline(&mut se.text).frame(egui::Frame::NONE).hint_text(hint).font(FontId::proportional(14.0)).desired_width(f32::INFINITY).lock_focus(true));
                 if std::mem::take(&mut se.focus) {
                     te.request_focus();
                 }
@@ -165,7 +209,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 ui.add_space(6.0);
                 // Results.
                 if hits.is_empty() {
-                    let msg = if se.text.trim().is_empty() { tr("Type to search") } else { tr("Nothing found") };
+                    let msg = if se.text.trim().is_empty() {
+                        tr("Type to search")
+                    } else if se.text_searching() {
+                        tr("Searching…")
+                    } else {
+                        tr("Nothing found")
+                    };
                     let (r, _) = ui.allocate_exact_size(vec2(width, 40.0), Sense::hover());
                     ui.painter().text(r.center(), Align2::CENTER_CENTER, msg, FontId::proportional(13.0), p.muted);
                     return;
@@ -193,6 +243,10 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             }
                             Hit::Symbol(s) => (crate::convert::symbol_icon(s.kind), s.name.clone(), s.container.clone(), s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), Vec::new()),
                             Hit::Action(l, a) => (crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING), l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
+                            Hit::Text(t) => {
+                                let file = t.rel.rsplit('/').next().unwrap_or(&t.rel);
+                                (icons::for_file(file), t.preview.clone(), String::new(), format!("{file}:{}", t.line + 1), t.highlight.clone())
+                            }
                         };
                         icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
                         // Name with the matched chars in bold accent.
@@ -217,7 +271,8 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 });
             });
     });
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer() && choose.is_none() {
+    // A click in the open scope list is not a click outside.
+    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer() && choose.is_none() && !egui::Popup::is_any_open(ctx) {
         close = true;
     }
     match choose {
@@ -236,8 +291,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
             app.pending.push(a);
             close = true;
         }
+        Some(Hit::Text(t)) => {
+            app.open_at(&t.path, t.line, t.col);
+            close = true;
+        }
         None => {}
     }
+    app.se_scope = se.scope.clone();
     if !close {
         app.search_everywhere = Some(se);
     } else {

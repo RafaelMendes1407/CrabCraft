@@ -743,5 +743,16 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "search-everywhere": {
+    "Classes": "Klassen",
+    "Text": "Text",
+    "Workspace": "Arbeitsbereich",
+    "Workspace and Dependencies": "Arbeitsbereich und Abhängigkeiten",
+    "Crate {name}": "Crate {name}",
+    "Search scope": "Suchbereich",
+    "Type a struct, enum or trait name": "Namen eines Structs, Enums oder Traits eingeben",
+    "Type the text to find in the files": "Text eingeben, der in den Dateien gesucht wird",
+    "Search classes, files, symbols and actions": "Klassen, Dateien, Symbole und Aktionen suchen"
   }
 }

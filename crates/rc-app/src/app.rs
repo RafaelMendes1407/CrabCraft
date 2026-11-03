@@ -71,6 +71,8 @@ pub struct CrabCraftApp {
     pub last_main: Option<u64>,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
+    /// The scope Search Everywhere used last (kept for the session).
+    pub se_scope: crate::search::SeScope,
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
     pub terminals: rc_term::Terminals,
@@ -205,6 +207,7 @@ impl CrabCraftApp {
             last_main: None,
             new_project: None,
             search_everywhere: None,
+            se_scope: crate::search::SeScope::Project,
             find_bar: None,
             find_in_files: None,
             terminals: rc_term::Terminals::new(),
@@ -1041,17 +1044,30 @@ impl CrabCraftApp {
             Action::ShowBookmarks => self.dialog = Some(Dialog::Bookmarks { list: self.bookmark_list(), selected: 0 }),
             Action::RunAnything => self.dialog = Some(Dialog::RunAnything { text: String::new(), selected: 0 }),
             Action::SearchEverywhere | Action::FindAction | Action::GotoFile | Action::GotoClass | Action::GotoSymbol => {
-                if self.workspace.is_some() {
+                if let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) {
                     let tab = match action {
                         Action::GotoFile => crate::search::SeTab::Files,
-                        Action::GotoClass => crate::search::SeTab::Types,
+                        Action::GotoClass => crate::search::SeTab::Classes,
                         Action::GotoSymbol => crate::search::SeTab::Symbols,
                         Action::FindAction => crate::search::SeTab::Actions,
                         _ => crate::search::SeTab::All,
                     };
-                    // The selected text (or the word at the caret) pre-fills the search.
-                    let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
-                    self.search_everywhere = Some(crate::search::SearchEverywhere::new(tab, text));
+                    if let Some(se) = &mut self.search_everywhere {
+                        // Already open: the same shortcut again adds (or drops) the libraries,
+                        // another one switches the tab and keeps the text.
+                        if se.tab == tab {
+                            se.scope = if se.scope.libraries() { crate::search::SeScope::Project } else { crate::search::SeScope::ProjectAndLibraries };
+                        } else {
+                            se.tab = tab;
+                        }
+                        se.selected = 0;
+                        se.focus = true;
+                    } else {
+                        // The selected text (or the word at the caret) pre-fills the search.
+                        let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.contains('\n')).unwrap_or_default();
+                        let packages = crate::search::package_scopes(&root, self.runner.cargo_workspace.as_ref());
+                        self.search_everywhere = Some(crate::search::SearchEverywhere::new(tab, text).with_scope(self.se_scope.clone(), packages));
+                    }
                 }
             }
             Action::FindInFiles | Action::ReplaceInFiles => {

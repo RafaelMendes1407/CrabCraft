@@ -1380,7 +1380,7 @@ impl Insight {
         self.signature = Some((doc.editor.id, anchor, p));
     }
 
-    /// ⌘P: parameter info for the call around the caret.
+    /// ⌃⇧Space: parameter info for the call around the caret.
     pub fn parameter_info(&mut self, doc: &mut Doc) {
         match call_open_paren(doc.editor.buffer.rope(), doc.editor.caret()) {
             Some(anchor) => self.request_signature(doc, anchor),
@@ -1531,10 +1531,14 @@ impl Insight {
         self.format = Some((doc.editor.id, (doc.editor.buffer.version(), p)));
     }
 
-    /// `workspace/symbol` for Search Everywhere (`None` when the server is not ready).
-    pub fn workspace_symbols(&self, query: &str) -> Option<Pending<Value>> {
+    /// `workspace/symbol` for Search Everywhere (`None` when the server is not ready). By
+    /// default rust-analyzer returns only types of the workspace; `searchKind` and
+    /// `searchScope` (its extension of the request) ask for every symbol and for dependencies.
+    pub fn workspace_symbols(&self, query: &str, all_symbols: bool, libraries: bool) -> Option<Pending<Value>> {
         let s = self.session.as_ref().filter(|s| s.is_initialized())?;
-        Some(s.client.request_raw("workspace/symbol", json!({ "query": query })))
+        let kind = if all_symbols { "allSymbols" } else { "onlyTypes" };
+        let scope = if libraries { "workspaceAndDependencies" } else { "workspace" };
+        Some(s.client.request_raw("workspace/symbol", json!({ "query": query, "searchKind": kind, "searchScope": scope })))
     }
 
     pub fn did_save(&mut self, path: &Path) {

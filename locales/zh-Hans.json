@@ -743,5 +743,16 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "search-everywhere": {
+    "Classes": "类",
+    "Text": "文本",
+    "Workspace": "工作区",
+    "Workspace and Dependencies": "工作区和依赖项",
+    "Crate {name}": "Crate {name}",
+    "Search scope": "搜索范围",
+    "Type a struct, enum or trait name": "输入结构体、枚举或 trait 的名称",
+    "Type the text to find in the files": "输入要在文件中查找的文本",
+    "Search classes, files, symbols and actions": "搜索类、文件、符号和操作"
   }
 }

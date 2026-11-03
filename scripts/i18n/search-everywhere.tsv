@@ -1,0 +1,11 @@
+# Search Everywhere tabs and scopes. Import: python3 scripts/i18n_tsv.py search-everywhere scripts/i18n/search-everywhere.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Classes	Clases	Classes	Classes	Klassen	Klasy	类	クラス
+Text	Texto	Texte	Texto	Text	Tekst	文本	テキスト
+Workspace	Espacio de trabajo	Espace de travail	Workspace	Arbeitsbereich	Obszar roboczy	工作区	ワークスペース
+Workspace and Dependencies	Espacio de trabajo y dependencias	Espace de travail et dépendances	Workspace e dependências	Arbeitsbereich und Abhängigkeiten	Obszar roboczy i zależności	工作区和依赖项	ワークスペースと依存関係
+Crate {name}	Crate {name}	Crate {name}	Crate {name}	Crate {name}	Crate {name}	Crate {name}	クレート {name}
+Search scope	Ámbito de búsqueda	Portée de la recherche	Escopo da pesquisa	Suchbereich	Zakres wyszukiwania	搜索范围	検索範囲
+Type a struct, enum or trait name	Escribe el nombre de un struct, enum o trait	Saisissez le nom d’une struct, d’un enum ou d’un trait	Digite o nome de uma struct, enum ou trait	Namen eines Structs, Enums oder Traits eingeben	Wpisz nazwę struktury, wyliczenia lub traitu	输入结构体、枚举或 trait 的名称	構造体、列挙型またはトレイトの名前を入力
+Type the text to find in the files	Escribe el texto que buscar en los archivos	Saisissez le texte à chercher dans les fichiers	Digite o texto a procurar nos arquivos	Text eingeben, der in den Dateien gesucht wird	Wpisz tekst do wyszukania w plikach	输入要在文件中查找的文本	ファイル内で検索するテキストを入力
+Search classes, files, symbols and actions	Buscar clases, archivos, símbolos y acciones	Rechercher des classes, fichiers, symboles et actions	Pesquisar classes, arquivos, símbolos e ações	Klassen, Dateien, Symbole und Aktionen suchen	Szukaj klas, plików, symboli i akcji	搜索类、文件、符号和操作	クラス、ファイル、シンボル、アクションを検索
