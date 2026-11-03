@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 99 |
+| ✅ Pronto | 101 |
 | 🚧 Em andamento | 3 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 125 |
+| ⬜ A fazer | 123 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -135,7 +135,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
-| I-19 | Suprimir inspeções (`#[allow]`) | ⬜ | M3 | |
+| I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
@@ -188,7 +188,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-08 | Mover itens entre módulos | ⬜ | M4 | |
 | R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
-| R-11 | Gerar `derive` | ⬜ | M3 | |
+| R-11 | Gerar `derive` | ✅ | M3 | Alt+Insert sobre struct, enum ou union mostra Derive…: marca os traits comuns e outros digitados; junta no #[derive] existente ou cria acima do item. Testado com rust-analyzer real e tree-sitter |
 
 ## 6. Cargo.toml e conditional compilation
 

@@ -1621,7 +1621,21 @@ fn generate_offers_only_what_writes_code() {
         _ => None,
     });
     assert!(found.iter().any(|t| t == "Generate `new`"), "{found:?}");
-    assert!(found.iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // The IDE's own Derive row comes first on a type.
+    assert_eq!(found[0], "Derive…", "{found:?}");
+    assert!(found[1..].iter().all(|t| t.starts_with("Generate") || t.starts_with("Implement") || t.starts_with("Add missing")), "{found:?}");
+    // Deriving writes the attribute above the type, and a second time merges into it.
+    for traits in [vec!["Debug", "Clone"], vec!["Debug", "Clone", "PartialEq"]] {
+        let d = &mut app.docs.list[i];
+        let t = crate::insight::derive_target_of(d).unwrap();
+        let (a, b, new) = t.edit(&traits.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        d.editor.replace(a, b, &new);
+        d.editor.parse_blocking();
+    }
+    let edited = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(edited.starts_with("#[derive(Debug, Clone, PartialEq)]\nstruct A {"), "{edited}");
+    app.docs.list[i].editor.reload(text);
+    app.docs.list[i].editor.parse_blocking();
 
     // Refactor This offers Rename and the refactorings, and no generators.
     let at = text.find("1 + 2").unwrap();
@@ -1852,5 +1866,47 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     app.save_all_docs();
     pump(&mut app, "rustfmt to change the file on disk", |_| std::fs::read_to_string(&main).is_ok_and(|t| t.starts_with("fn main() {\n")));
     pump(&mut app, "the lint of Clippy", |a| lint(a));
+    app.insight.stop();
+}
+
+#[test]
+fn a_warning_is_suppressed_for_its_statement_or_the_file() {
+    use crate::insight::{InsightOutput, SUPPRESS_COMMAND};
+    const SOURCE: &str = "fn main() {\n    let unused = 1;\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs").canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // rustc's warning arrives with `cargo check` on save, named by its lint.
+    app.insight.did_save(&main);
+    pump(&mut app, "the warning of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("unused_variables"))));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("unused =").unwrap());
+    app.insight.code_actions(&app.docs.list[i]);
+    let rows = output(&mut app, "the context actions", |o| match o {
+        InsightOutput::Actions(list) => Some(
+            list.iter()
+                .filter_map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) if c.command == SUPPRESS_COMMAND => Some(c.title.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    });
+    assert_eq!(rows, vec!["Suppress `unused_variables` for the statement", "Suppress `unused_variables` for the file"]);
+    let (a, b, text) = crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "item").unwrap();
+    app.docs.list[i].editor.replace(a, b, &text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    #[allow(unused_variables)]\n    let unused = 1;\n}\n");
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "file").map(|e| e.2), Some("#![allow(unused_variables)]\n".into()));
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unresolved-import", "item"), None);
     app.insight.stop();
 }

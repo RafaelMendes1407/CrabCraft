@@ -31,6 +31,8 @@ pub enum Dialog {
     RecentFiles { selected: usize, filter: String },
     /// ⌥⏎ context actions for the active editor.
     CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
+    /// Generate › Derive: the traits a Rust type derives (checked) and others typed in.
+    Derive { doc: u64, name: String, traits: Vec<(String, bool)>, other: String },
     /// Shift+F6 on a symbol.
     RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
     /// Confirm rolling back files to HEAD.
@@ -74,6 +76,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
+        Dialog::Derive { doc, name, traits, other } => derive(app, ctx, *doc, name, traits, other),
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
@@ -1043,6 +1046,27 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     app.locate_active();
                     true
                 }
+                crate::insight::DERIVE_COMMAND => {
+                    if let Some(d) = app.docs.active_doc()
+                        && let Some(t) = crate::insight::derive_target_of(d)
+                    {
+                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
+                        let other = t.items.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
+                        traits.sort_by_key(|(_, on)| !on);
+                        app.dialog = Some(Dialog::Derive { doc: d.editor.id, name: t.name, traits, other });
+                    }
+                    return Outcome::Keep;
+                }
+                crate::insight::SUPPRESS_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let arg = |i: usize| args.get(i).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    if let Some(i) = app.docs.active
+                        && let Some((a, b, text)) = crate::insight::suppress_edit(&app.docs.list[i], &arg(0), &arg(1))
+                    {
+                        app.docs.list[i].editor.replace(a, b, &text);
+                    }
+                    true
+                }
                 crate::insight::REVEAL_FILE => {
                     if let Some(doc) = app.docs.active_doc() {
                         crate::app::reveal_in_file_manager(&doc.path);
@@ -1176,6 +1200,44 @@ fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outco
     });
     if ok {
         app.vcs.new_branch(name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Generate › Derive: check the traits; OK rewrites the type's `#[derive]` (or adds one).
+fn derive(app: &mut CrabCraftApp, ctx: &Context, doc: u64, name: &str, traits: &mut [(String, bool)], other: &mut String) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "derive", 380.0, |ui| {
+        title(ui, &rc_kit::i18n::trf("Derive for {name}", &[("name", &name)]));
+        egui::Grid::new("derive_traits").num_columns(3).spacing(vec2(16.0, 6.0)).show(ui, |ui| {
+            for (i, (t, on)) in traits.iter_mut().enumerate() {
+                ui.checkbox(on, t.as_str());
+                if i % 3 == 2 {
+                    ui.end_row();
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.add(egui::TextEdit::singleline(other).hint_text(tr("Other traits, separated by commas")).desired_width(f32::INFINITY));
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("OK"), true);
+        (ok || enter, cancel)
+    });
+    if ok {
+        let mut list: Vec<String> = traits.iter().filter(|(_, on)| *on).map(|(t, _)| t.clone()).collect();
+        for t in other.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+            if !list.iter().any(|x| x == t) {
+                list.push(t.to_string());
+            }
+        }
+        // The text may have changed while the dialog was open: find the type again.
+        if let Some(d) = app.docs.list.iter_mut().find(|d| d.editor.id == doc)
+            && let Some(t) = crate::insight::derive_target_of(d).filter(|t| t.name == name)
+            && let Some((a, b, text)) = t.edit(&list)
+        {
+            d.editor.replace(a, b, &text);
+            app.focus_editor = true;
+        }
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
