@@ -251,7 +251,8 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
         });
     });
     // Documentation of the selected item, to the right of the list.
-    if let Some(doc) = c.doc.clone().filter(|d| !d.trim().is_empty()) {
+    let doc = c.doc.clone().or_else(|| c.selected_item().and_then(|i| i.doc.clone()));
+    if let Some(doc) = doc.filter(|d| !d.trim().is_empty()) {
         let doc_pos = pos2(pos.x + LIST_W + 14.0, pos.y);
         egui::Area::new(Id::new(("completion_doc", state.id))).order(Order::Foreground).fixed_pos(doc_pos).show(ui.ctx(), |ui| {
             popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {

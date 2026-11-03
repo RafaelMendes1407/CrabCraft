@@ -1285,6 +1285,11 @@ impl CrabCraftApp {
                 return;
             }
         }
+        // Cargo.toml is completed here: the Rust server does not complete TOML.
+        if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+            crate::manifest_completion::complete(&mut self.docs.list[i], true);
+            return;
+        }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);

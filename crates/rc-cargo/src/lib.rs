@@ -10,6 +10,7 @@
 
 pub mod explain;
 pub mod format;
+pub mod manifest_complete;
 pub mod messages;
 pub mod metadata;
 pub mod modules;

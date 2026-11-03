@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 134 |
+| ✅ Pronto | 135 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 92 |
+| ⬜ A fazer | 91 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -195,7 +195,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| C-01 | Completar chaves do manifesto | ⬜ | M4 | |
+| C-01 | Completar chaves do manifesto | ✅ | M4 | Local, sem rede nem rust-analyzer: cabeçalhos após `[`/`[[` (sem repetir tabelas que já existem), chaves da tabela atual (package, alvos, profile, workspace, lints, dependência em tabela ou inline) e valores fixos (edition, resolver, panic, lto, opt-level, strip, debug, booleanos). Abre ao digitar e com Ctrl+Espaço, com descrição traduzida no popup. Teste kittest digitando no Cargo.toml de um workspace Cargo real; análise em `rc_cargo::manifest_complete` com testes. Não completa nomes de crates, versões nem features dentro de listas |
 | C-02 | Completar nome e versão de crates (crates.io) | ⬜ | M4 | Índice esparso; porta o cliente NuGet |
 | C-03 | Mostrar versão do lock e a mais recente | ⬜ | M4 | |
 | C-04 | Avisar crates inexistentes ou desatualizados | ⬜ | M4 | |

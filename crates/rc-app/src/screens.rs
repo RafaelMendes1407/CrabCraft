@@ -1486,6 +1486,91 @@ fn live_templates_expand_with_tab_and_visit_their_stops() {
     assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("assert!(true);  \n"));
 }
 
+/// Types `text` one character at a time, as a user would (each one may open completion).
+fn type_chars(h: &mut Harness<'static, CrabCraftApp>, text: &str) {
+    for c in text.chars() {
+        h.event(egui::Event::Text(c.to_string()));
+        h.run_steps(2);
+    }
+}
+
+fn completion_labels(h: &Harness<'static, CrabCraftApp>) -> Vec<String> {
+    let doc = h.state().docs.active_doc().unwrap();
+    doc.editor.popups.completion.as_ref().map(|c| c.filtered.iter().map(|&i| c.items[i].label.clone()).collect()).unwrap_or_default()
+}
+
+/// Cargo.toml of a real Cargo workspace is completed without the language server: typing a
+/// key, a table header after `[`, ⌃Space for the keys of that table, then the value of a key
+/// with a fixed set, each accepted with Enter.
+#[test]
+fn cargo_toml_completes_tables_keys_and_values() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    let file = root.join("alpha/Cargo.toml");
+    h.state_mut().open_file(&file);
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+
+    // Typing a key opens the list of [package] keys, with its description; `-` keeps it open.
+    type_chars(&mut h, "rust-v");
+    assert_eq!(completion_labels(&h).first().map(String::as_str), Some("rust-version"));
+    let c = h.state().docs.active_doc().unwrap().editor.popups.completion.clone().unwrap();
+    assert!(c.selected_item().and_then(|i| i.doc.as_deref()).is_some_and(|d| d.contains("Rust")));
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("edition = \"2021\"\nrust-version = \"\""), "{}", text(&h));
+    type_chars(&mut h, "1.80");
+
+    // `[` on a new line offers the tables the file does not have yet.
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "[");
+    let labels = completion_labels(&h);
+    assert!(labels.contains(&"dependencies".to_string()) && !labels.contains(&"package".to_string()), "{labels:?}");
+    type_chars(&mut h, "profile.rel");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("rust-version = \"1.80\"\n[profile.release]"), "{}", text(&h));
+
+    // ⌃Space lists the profile's keys; choosing `panic` goes on to its values.
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();
+    h.key_press_modifiers(chord.mods, chord.key);
+    h.run_steps(2);
+    assert!(completion_labels(&h).contains(&"codegen-units".to_string()), "{:?}", completion_labels(&h));
+    type_chars(&mut h, "pan");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(completion_labels(&h), vec!["unwind", "abort"]);
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).ends_with("[profile.release]\npanic = \"abort\""), "{}", text(&h));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-toml-completion.png"]
+fn cargo_toml_completion_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    h.state_mut().open_file(&root.join("alpha/Cargo.toml"));
+    let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
+    h.run_steps(3);
+    type_chars(&mut h, "re");
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("cargo-toml-completion.png")).unwrap();
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/live-templates.png"]
 fn live_templates_capture() {

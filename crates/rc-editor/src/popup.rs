@@ -19,6 +19,8 @@ pub struct CompletionItem {
     pub deprecated: bool,
     /// Opaque index back into the server's list.
     pub data: usize,
+    /// Documentation known up front (local items); the server's comes in [`Completion::doc`].
+    pub doc: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -34,6 +36,9 @@ pub struct Completion {
     pub doc: Option<String>,
     /// Set while the server has not answered yet.
     pub loading: bool,
+    /// Characters besides letters, digits and `_` that typing adds to the prefix (`-` in
+    /// Cargo.toml keys) instead of closing the list.
+    pub extra_word_chars: &'static str,
     pub(crate) scroll_to_selected: bool,
 }
 

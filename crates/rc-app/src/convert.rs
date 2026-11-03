@@ -93,6 +93,7 @@ pub fn completion_item(rope: &Rope, item: &lsp::CompletionItem, index: usize, de
         replace,
         deprecated: item.deprecated.unwrap_or(false) || item.tags.as_ref().is_some_and(|t| t.contains(&lsp::CompletionItemTag::DEPRECATED)),
         data: index,
+        doc: None,
     }
 }
 

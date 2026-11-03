@@ -400,7 +400,14 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
     // Before the insertion reaches the server, which resolves the item's import on the old text.
     if let Some(data) = out.accepted_completion {
-        app.insight.completion_accepted(doc, data);
+        if data >= crate::manifest_completion::LOCAL_ITEM_THEN_VALUE {
+            crate::manifest_completion::accepted(doc, data);
+        } else {
+            app.insight.completion_accepted(doc, data);
+        }
+    }
+    if crate::manifest_completion::is_manifest(doc) {
+        crate::manifest_completion::on_editor_events(doc, &out.events);
     }
     if app.debugger.stopped() {
         let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();

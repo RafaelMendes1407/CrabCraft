@@ -1228,7 +1228,7 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
         // Typing filters an open completion list.
         if let Some(c) = &mut state.popups.completion {
             let caret = state.selection.primary().head;
-            if caret < c.anchor || !(ch.is_alphanumeric() || ch == '_') {
+            if caret < c.anchor || !(ch.is_alphanumeric() || ch == '_' || c.extra_word_chars.contains(ch)) {
                 state.popups.completion = None;
             } else {
                 let prefix = state.buffer.rope().slice(c.anchor..caret).to_string();
