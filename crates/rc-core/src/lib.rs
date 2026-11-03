@@ -13,5 +13,5 @@ pub mod workspace;
 pub use inbox::{Inbox, Waker};
 pub use runtime::Runtime;
 pub use session::Session;
-pub use settings::Settings;
+pub use settings::{RustfmtSettings, Settings};
 pub use workspace::{FileNode, Workspace, WorkspaceKind};

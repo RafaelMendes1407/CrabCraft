@@ -274,6 +274,30 @@ fn closed_projects_are_not_reopened_on_startup() {
 }
 
 #[test]
+fn the_rustfmt_settings_show_what_is_wrong_with_them() {
+    use crate::ui::dialogs::{Dialog, SettingsPage};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut app = test_app(home.path(), true);
+    let mut draft = app.settings.clone();
+    draft.rustfmt.env = "RUST_LOG=debug\nnot a pair".into();
+    app.dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools });
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    for label in ["rustfmt arguments", "rustfmt channel", "rustfmt environment"] {
+        h.get_by_label(rc_kit::i18n::tr(label));
+    }
+    let wrong = crate::vcs::rustfmt_failure(rc_cargo::FormatError::Environment("not a pair".into()));
+    h.get_by_label(&wrong);
+    if let Some(Dialog::Settings { draft, .. }) = &mut h.state_mut().dialog {
+        draft.rustfmt.env = "RUST_LOG=debug".into();
+    }
+    h.run_steps(3);
+    assert!(h.query_by_label(&wrong).is_none());
+}
+
+#[test]
 fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();

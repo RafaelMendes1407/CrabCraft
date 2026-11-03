@@ -743,5 +743,18 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "rustfmt-config": {
+    "rustfmt failed on {file}: {error}": "rustfmt が {file} で失敗しました: {error}",
+    "Not committed: {error}": "コミットしていません: {error}",
+    "The rustfmt arguments have a quote that is not closed (Settings › Tools).": "rustfmt の引数に閉じていない引用符があります (設定 › ツール)。",
+    "The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).": "rustfmt のチャンネル「{channel}」はツールチェーン名ではありません (設定 › ツール)。",
+    "The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).": "rustfmt の環境変数は NAME=値 の行で指定します。「{line}」は使えません (設定 › ツール)。",
+    "rustfmt arguments": "rustfmt の引数",
+    "rustfmt channel": "rustfmt のチャンネル",
+    "rustfmt environment": "rustfmt の環境変数",
+    "Default toolchain": "デフォルトのツールチェーン",
+    "NAME=value, one per line": "NAME=値 を 1 行に 1 つ",
+    "Used by Reformat Code, on save and at commit. The channel runs through rustup.": "「コードの再フォーマット」、保存時、コミット時に使われます。チャンネルは rustup 経由で実行します。"
   }
 }

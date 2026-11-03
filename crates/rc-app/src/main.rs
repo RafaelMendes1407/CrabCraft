@@ -8,6 +8,7 @@ mod call_tree;
 mod item_templates;
 mod run_anything;
 mod runner;
+mod rustfmt;
 mod search;
 mod vcs;
 #[cfg(test)]

@@ -252,6 +252,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                             });
                             ui.end_row();
                         }
+                        rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                 });
             });
@@ -263,6 +264,25 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// How rustfmt runs for Reformat Code, on save and at commit.
+fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui::Color32, muted: egui::Color32) {
+    ui.label(tr("rustfmt arguments"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width(300.0));
+    ui.end_row();
+    ui.label(tr("rustfmt channel"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width(300.0));
+    ui.end_row();
+    ui.label(tr("rustfmt environment"));
+    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width(300.0));
+    ui.end_row();
+    ui.label("");
+    match rc_cargo::Rustfmt::check(rustfmt) {
+        Ok(()) => ui.label(egui::RichText::new(tr("Used by Reformat Code, on save and at commit. The channel runs through rustup.")).color(muted)),
+        Err(e) => ui.label(egui::RichText::new(crate::vcs::rustfmt_failure(e)).color(error)),
+    };
+    ui.end_row();
 }
 
 /// The versions in use, read from the tools themselves.

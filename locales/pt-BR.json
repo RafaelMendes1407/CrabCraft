@@ -743,5 +743,18 @@
     "Remove once hit": "Remover ao atingir",
     "Refactor This…": "Refatorar isto…",
     "Select In…": "Selecionar em…"
+  },
+  "rustfmt-config": {
+    "rustfmt failed on {file}: {error}": "O rustfmt falhou em {file}: {error}",
+    "Not committed: {error}": "Commit não feito: {error}",
+    "The rustfmt arguments have a quote that is not closed (Settings › Tools).": "Os argumentos do rustfmt têm uma aspa não fechada (Configurações › Ferramentas).",
+    "The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).": "O canal do rustfmt \"{channel}\" não é um nome de toolchain (Configurações › Ferramentas).",
+    "The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).": "O ambiente do rustfmt usa linhas NOME=valor, não \"{line}\" (Configurações › Ferramentas).",
+    "rustfmt arguments": "Argumentos do rustfmt",
+    "rustfmt channel": "Canal do rustfmt",
+    "rustfmt environment": "Ambiente do rustfmt",
+    "Default toolchain": "Toolchain padrão",
+    "NAME=value, one per line": "NOME=valor, um por linha",
+    "Used by Reformat Code, on save and at commit. The channel runs through rustup.": "Usado em Reformatar código, ao salvar e ao commitar. O canal roda via rustup."
   }
 }

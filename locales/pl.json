@@ -743,5 +743,18 @@
     "Remove once hit": "Usuń po trafieniu",
     "Refactor This…": "Refaktoryzuj to…",
     "Select In…": "Zaznacz w…"
+  },
+  "rustfmt-config": {
+    "rustfmt failed on {file}: {error}": "rustfmt nie powiódł się dla {file}: {error}",
+    "Not committed: {error}": "Nie zatwierdzono: {error}",
+    "The rustfmt arguments have a quote that is not closed (Settings › Tools).": "Argumenty rustfmt zawierają niezamknięty cudzysłów (Ustawienia › Narzędzia).",
+    "The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).": "Kanał rustfmt „{channel}” nie jest nazwą toolchaina (Ustawienia › Narzędzia).",
+    "The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).": "Środowisko rustfmt przyjmuje wiersze NAZWA=wartość, a nie „{line}” (Ustawienia › Narzędzia).",
+    "rustfmt arguments": "Argumenty rustfmt",
+    "rustfmt channel": "Kanał rustfmt",
+    "rustfmt environment": "Środowisko rustfmt",
+    "Default toolchain": "Domyślny toolchain",
+    "NAME=value, one per line": "NAZWA=wartość, po jednym w wierszu",
+    "Used by Reformat Code, on save and at commit. The channel runs through rustup.": "Używane przez Przeformatuj kod, przy zapisie i przy zatwierdzaniu. Kanał działa przez rustup."
   }
 }

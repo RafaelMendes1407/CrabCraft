@@ -214,7 +214,7 @@ impl Vcs {
 
     /// Commits the included changes (and pushes when `push`), formatting `format` first; if
     /// that fails nothing is committed.
-    pub fn commit(&mut self, push: bool, format: Option<(rc_cargo::Cargo, Vec<rc_cargo::FormatFile>)>) {
+    pub fn commit(&mut self, push: bool, format: Option<(Result<rc_cargo::Rustfmt, String>, Vec<rc_cargo::FormatFile>)>) {
         let Some(repo) = self.repo.clone() else { return };
         let only = self.included();
         if only.is_empty() && !self.amend {
@@ -227,8 +227,9 @@ impl Vcs {
         }
         let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, ..Default::default() };
         self.op(if push { "commit_push" } else { "commit" }, async move {
-            if let Some((cargo, files)) = format {
-                rc_cargo::format_files(&cargo, &files).await.map_err(|e| rc_vcs::GitError::BeforeCommit(format_failure(e)))?;
+            if let Some((rustfmt, files)) = format {
+                let rustfmt = rustfmt.map_err(|e| rc_vcs::GitError::BeforeCommit(trf("Not committed: {error}", &[("error", &e)])))?;
+                rc_cargo::format_files(&rustfmt, &files).await.map_err(|e| rc_vcs::GitError::BeforeCommit(format_failure(e)))?;
             }
             repo.commit(&opts).await?;
             if push {
@@ -547,11 +548,26 @@ mod tests {
 
 fn format_failure(error: rc_cargo::FormatError) -> String {
     match error {
-        rc_cargo::FormatError::Missing => tr("rustfmt was not found. Install it with: rustup component add rustfmt").to_string(),
         rc_cargo::FormatError::File { path, message } => {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let first = message.lines().next().unwrap_or_default().to_string();
             trf("Not committed: rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)])
+        }
+        other => rustfmt_failure(other),
+    }
+}
+
+/// Why rustfmt cannot run: the tool is missing or its settings are wrong.
+pub fn rustfmt_failure(error: rc_cargo::FormatError) -> String {
+    match error {
+        rc_cargo::FormatError::Missing => tr("rustfmt was not found. Install it with: rustup component add rustfmt").to_string(),
+        rc_cargo::FormatError::Arguments => tr("The rustfmt arguments have a quote that is not closed (Settings › Tools).").to_string(),
+        rc_cargo::FormatError::Channel(channel) => trf("The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).", &[("channel", &channel)]),
+        rc_cargo::FormatError::Environment(line) => trf("The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).", &[("line", &line)]),
+        rc_cargo::FormatError::File { path, message } => {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let first = message.lines().next().unwrap_or_default().to_string();
+            trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)])
         }
     }
 }

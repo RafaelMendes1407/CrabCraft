@@ -96,6 +96,8 @@ pub struct CrabCraftApp {
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
     libraries_load: Option<Inbox<Vec<rc_cargo::Library>>>,
+    /// rustfmt running on open documents (Reformat Code, reformatting on save).
+    pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
@@ -198,6 +200,7 @@ impl CrabCraftApp {
             cargo_input: String::new(),
             toolchain: None,
             libraries_load: None,
+            rustfmt_jobs: Default::default(),
             toolchain_load: None,
             cargo_folded: Default::default(),
             split: None,
@@ -371,7 +374,7 @@ impl CrabCraftApp {
     }
 
     /// The tool and the files to format before a commit.
-    fn commit_format(&self) -> Option<(rc_cargo::Cargo, Vec<rc_cargo::FormatFile>)> {
+    fn commit_format(&self) -> Option<(Result<rc_cargo::Rustfmt, String>, Vec<rc_cargo::FormatFile>)> {
         if !self.settings.format_on_commit {
             return None;
         }
@@ -383,7 +386,60 @@ impl CrabCraftApp {
             let edition = workspace.edition_of(&path).filter(|_| rust)?.to_string();
             Some(rc_cargo::FormatFile { path, edition })
         });
-        Some((self.runner.cargo_tool().ok()?, files.collect()))
+        Some((self.rustfmt_tool(), files.collect()))
+    }
+
+    /// rustfmt as the settings say, or why it cannot run.
+    fn rustfmt_tool(&self) -> Result<rc_cargo::Rustfmt, String> {
+        let cargo = self.runner.cargo_tool()?;
+        rc_cargo::Rustfmt::new(&cargo, &self.settings.rustfmt).map_err(crate::vcs::rustfmt_failure)
+    }
+
+    /// Runs rustfmt in the background on a Rust document of the Cargo workspace; `save` writes it
+    /// again once formatted. False when the file is not in the workspace, so another formatter
+    /// applies.
+    pub fn rustfmt_document(&mut self, i: usize, save: bool) -> bool {
+        let doc = &self.docs.list[i];
+        let rust = doc.path.extension().is_some_and(|e| e == "rs");
+        let Some(edition) = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path)).filter(|_| rust).map(str::to_string) else { return false };
+        match self.rustfmt_tool() {
+            Ok(rustfmt) => {
+                let doc = &self.docs.list[i];
+                let job = rustfmt.start(doc.path.clone(), edition, doc.editor.buffer.rope().to_string(), self.waker.clone());
+                self.rustfmt_jobs.push(doc.editor.id, doc.editor.buffer.version(), save, job);
+            }
+            Err(e) => self.notify(e, true),
+        }
+        true
+    }
+
+    /// Applies what rustfmt returned for open documents.
+    pub fn poll_rustfmt(&mut self) {
+        if self.rustfmt_jobs.is_empty() {
+            return;
+        }
+        for done in self.rustfmt_jobs.poll(&mut self.docs) {
+            match done {
+                crate::rustfmt::Done::Applied { index, save } => {
+                    self.insight.flush(&mut self.docs.list[index]);
+                    if save && self.docs.list[index].is_modified() {
+                        match self.docs.save(index) {
+                            Ok(()) => {
+                                let path = self.docs.list[index].path.clone();
+                                self.insight.did_save(&path);
+                            }
+                            Err(e) => self.notify(e, true),
+                        }
+                    }
+                }
+                // Saving half-written code is common; only an explicit Reformat Code reports.
+                crate::rustfmt::Done::Failed { save: true, .. } => {}
+                crate::rustfmt::Done::Failed { name, error, save: false } => {
+                    let first = error.lines().find(|l| !l.trim().is_empty()).unwrap_or_default().to_string();
+                    self.notify(trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)]), true);
+                }
+            }
+        }
     }
 
     /// Reads the versions of the toolchain in the background, once.
@@ -582,6 +638,7 @@ impl CrabCraftApp {
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
         self.libraries_load = None;
+        self.rustfmt_jobs = Default::default();
         self.dock = Dock::default();
         self.nav_back.clear();
         self.nav_forward.clear();
@@ -728,6 +785,7 @@ impl CrabCraftApp {
             self.insight.did_save(&p);
             if self.settings.format_on_save
                 && let Some(i) = self.docs.index_of(&p)
+                && !self.rustfmt_document(i, true)
             {
                 self.insight.format_saved(&self.docs.list[i]);
             }
@@ -765,6 +823,16 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
+        if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
+            if !self.docs.list[i].editor.selection.primary().is_empty() {
+                self.notify(tr("rustfmt formats whole files. Clear the selection to reformat this one."), false);
+                return;
+            }
+            if self.rustfmt_document(i, false) {
+                return;
+            }
+        }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);
@@ -1631,6 +1699,7 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         self.poll_cargo_workspace();
+        self.poll_rustfmt();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);

@@ -743,5 +743,18 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "rustfmt-config": {
+    "rustfmt failed on {file}: {error}": "rustfmt 处理 {file} 失败：{error}",
+    "Not committed: {error}": "未提交：{error}",
+    "The rustfmt arguments have a quote that is not closed (Settings › Tools).": "rustfmt 参数中有未闭合的引号（设置 › 工具）。",
+    "The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).": "rustfmt 通道“{channel}”不是工具链名称（设置 › 工具）。",
+    "The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).": "rustfmt 环境变量应为 名称=值 格式的行，而不是“{line}”（设置 › 工具）。",
+    "rustfmt arguments": "rustfmt 参数",
+    "rustfmt channel": "rustfmt 通道",
+    "rustfmt environment": "rustfmt 环境变量",
+    "Default toolchain": "默认工具链",
+    "NAME=value, one per line": "名称=值，每行一个",
+    "Used by Reformat Code, on save and at commit. The channel runs through rustup.": "用于“重新格式化代码”、保存时和提交时。通道通过 rustup 运行。"
   }
 }
