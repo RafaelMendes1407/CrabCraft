@@ -2834,3 +2834,30 @@ fn inspect_code_runs_clippy_over_the_whole_workspace() {
     assert!(codes.iter().any(|(c, f)| c.contains("ptr_arg") && f.ends_with("lib.rs")), "{codes:?}");
     assert!(app.problems_tab_inspection && app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
 }
+
+/// A compound configuration starts several Cargo binaries of the workspace together, and it
+/// stays after the Cargo model is read again.
+#[test]
+fn a_compound_configuration_starts_several_cargo_binaries() {
+    use crate::runner::ConfigKind;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("pair");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"pair\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("src/bin/server.rs"), "fn main() {\n    println!(\"server up\");\n}\n");
+    write(&root.join("src/bin/client.rs"), "fn main() {\n    println!(\"client up\");\n}\n");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.app_names().len() == 2);
+    app.runner.save_compound(None, "Both".into(), app.runner.app_names());
+    assert!(matches!(app.runner.selected_config().map(|c| &c.kind), Some(ConfigKind::Compound { .. })));
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "both programs", |a| a.runner.runs.len() == 2 && a.runner.runs.iter().all(|r| r.exit.is_some()));
+    for (name, text) in [("server", "server up"), ("client", "client up")] {
+        let r = app.runner.runs.iter().find(|r| r.name == name).unwrap();
+        assert_eq!(r.exit, Some(Some(0)));
+        assert!(r.console.term.screen_lines().join("\n").contains(text));
+    }
+    app.reload_cargo();
+    pump(&mut app, "the reload", |a| a.runner.configs.iter().any(|c| c.name == "Both"));
+}

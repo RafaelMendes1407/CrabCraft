@@ -326,6 +326,7 @@ impl Runner {
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
         self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
         self.cargo_workspace = Some(workspace);
+        self.insert_compounds();
         self.insert_test_configs();
         let wanted = selected.as_deref().or(remembered);
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
@@ -444,13 +445,17 @@ impl Runner {
                 self.run_process(cfg, plan)
             }
             ConfigKind::Compound { members } => {
-                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. })).cloned()).collect();
+                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).cloned()).collect();
                 if apps.is_empty() {
                     return vec![RunnerOutput::Notify(tr("The compound configuration has no applications to run").into(), true)];
                 }
                 let mut out = Vec::new();
                 for a in apps {
-                    out.extend(self.run_app(a));
+                    out.extend(match a.kind.clone() {
+                        // Cargo builds them one after the other (it locks the target folder).
+                        ConfigKind::Cargo { package, bin } => self.run_cargo(a, package, bin),
+                        _ => self.run_app(a),
+                    });
                 }
                 out
             }
@@ -525,7 +530,7 @@ impl Runner {
     fn insert_compounds(&mut self) {
         let selected = self.selected_config().map(|c| c.name.clone());
         self.configs.retain(|c| !matches!(c.kind, ConfigKind::Compound { .. }));
-        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::App { .. })).map_or(0, |i| i + 1);
+        let at = self.configs.iter().rposition(|c| matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).map_or(0, |i| i + 1);
         for (i, (name, members)) in self.compounds.iter().enumerate() {
             self.configs.insert(at + i, RunConfig { name: name.clone(), kind: ConfigKind::Compound { members: members.clone() } });
         }
@@ -556,7 +561,7 @@ impl Runner {
 
     /// Names of the application configurations (members a compound can have).
     pub fn app_names(&self) -> Vec<String> {
-        self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. })).map(|c| c.name.clone()).collect()
+        self.configs.iter().filter(|c| matches!(c.kind, ConfigKind::App { .. } | ConfigKind::Cargo { .. })).map(|c| c.name.clone()).collect()
     }
 
     /// What to run for an application configuration, with the user's edits applied.

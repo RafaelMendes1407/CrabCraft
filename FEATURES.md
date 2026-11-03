@@ -24,10 +24,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 122 |
+| ✅ Pronto | 123 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
-| 🔁 Portar | 2 |
+| 🔁 Portar | 1 |
 | ⬜ A fazer | 102 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
@@ -222,7 +222,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-09 | Emular terminal na saída | ✅ | M3 | Opção da configuração Cargo Emular terminal no console de saída: compila (e roda as tarefas antes de executar) e inicia o programa num pseudoterminal na aba Run, com cores, `isatty` verdadeiro e entrada pelo teclado; Stop e o código de saída funcionam. Testado com Cargo real (`is_terminal`, leitura de linha, saída 3). Falta: depurar com terminal emulado |
 | B-10 | Executar como root | ⬜ | M6 | |
 | B-11 | Múltiplas instâncias e configuração no projeto | ✅ | M3 | Na configuração de execução: Permitir várias instâncias (rodar de novo abre outra aba numerada, `server (2)`, sem parar a anterior) e Guardar como arquivo do projeto (`.crabcraft/runConfigurations/*.json`, versionável; ao abrir o projeto o arquivo prevalece sobre a sessão; arquivos quebrados ou grandes são ignorados). Testado com Cargo real |
-| B-12 | Configurações compostas | 🔁 | M3 | |
+| B-12 | Configurações compostas | ✅ | M3 | Configuração composta (seletor › Adicionar configuração composta…) aceita binários Cargo: Run inicia todos, cada um na sua aba da janela Run (o Cargo compila um de cada vez); editar e excluir pelo seletor; guardada na sessão e mantida ao recarregar o Cargo. Testado com dois binários reais |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |
 | B-15 | Run Anything (Ctrl duplo) | ✅ | M3 | Comandos Cargo, configurações de execução e histórico; só roda Cargo, não comandos do sistema; visto na janela nativa |
