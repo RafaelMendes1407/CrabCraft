@@ -88,11 +88,11 @@ impl LanguageSession {
         })
     }
 
-    /// Starts rust-analyzer for `root`.
-    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, waker: Waker) -> std::io::Result<Self> {
+    /// Starts rust-analyzer for `root` with the project's environment `env`.
+    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
-        let client = crate::rust_analyzer::start(program, root, inbox.sender())?;
+        let client = crate::rust_analyzer::start(program, root, env, inbox.sender())?;
         let init = crate::rust_analyzer::initialize(&client, root, clippy, &exclude);
         Ok(LanguageSession {
             client,

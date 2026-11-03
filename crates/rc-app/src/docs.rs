@@ -1,5 +1,6 @@
 //! Open documents: one editor per file, opened from disk, saved back with the file's line
-//! endings and BOM, reloaded when changed outside, and parsed in the background.
+//! endings and BOM, reloaded when changed outside, and parsed in the background. Saved and
+//! reloaded versions go to the local history.
 
 use rc_editor::EditorState;
 use rc_kit::i18n::trf;
@@ -26,6 +27,13 @@ pub struct Doc {
     pub conflict: bool,
     /// Markdown files: editor, preview or both side by side.
     pub md_view: Option<MdView>,
+    /// The text as last loaded or saved (an O(1) copy): the version the local history keeps
+    /// when the file is saved or reloaded.
+    pub saved: rc_text::Rope,
+    /// A scratch file (outside every project): rust-analyzer is not asked about it.
+    pub scratch: bool,
+    /// Written by the IDE (a macro expansion): read-only and never sent to the language server.
+    pub generated: bool,
 }
 
 /// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
@@ -57,6 +65,8 @@ pub struct Docs {
     pub recent: Vec<PathBuf>,
     /// Folders whose files open read-only: the dependencies Cargo downloaded.
     pub read_only_roots: Vec<PathBuf>,
+    /// Where saved and reloaded versions go (none in unit tests).
+    pub history: Option<crate::local_history::HistoryService>,
 }
 
 /// Reads a text file: (text without BOM, had BOM). Binary files are refused.
@@ -82,7 +92,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new() }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -123,7 +133,8 @@ impl Docs {
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view });
+        let saved = editor.buffer.snapshot();
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch: rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path), generated: false, saved });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -149,17 +160,6 @@ impl Docs {
             }
             None => Ok(i),
         }
-    }
-
-    /// Moves tab `from` to `to` (drag and drop), keeping the active document.
-    pub fn move_tab(&mut self, from: usize, to: usize) {
-        if from >= self.list.len() || to >= self.list.len() || from == to {
-            return;
-        }
-        let active = self.active.map(|a| self.list[a].editor.id);
-        let doc = self.list.remove(from);
-        self.list.insert(to, doc);
-        self.active = active.and_then(|id| self.list.iter().position(|d| d.editor.id == id));
     }
 
     pub fn activate(&mut self, i: usize) {
@@ -224,7 +224,36 @@ impl Docs {
         doc.editor.buffer.mark_saved();
         doc.mtime = std::fs::metadata(&doc.path).and_then(|m| m.modified()).ok();
         doc.conflict = false;
+        // The version on disk before this save, then the saved one (equal ones are skipped).
+        let previous = std::mem::replace(&mut doc.saved, doc.editor.buffer.snapshot());
+        if let Some(h) = &self.history {
+            h.record(&doc.path, previous);
+            h.record(&doc.path, doc.saved.clone());
+        }
         Ok(())
+    }
+
+    /// Keeps the current text of document `i` (saved or not) in the local history: before it is
+    /// replaced by the version on disk.
+    pub fn remember(&self, i: usize) {
+        if let (Some(h), Some(doc)) = (&self.history, self.list.get(i)) {
+            h.record(&doc.path, doc.editor.buffer.snapshot());
+        }
+    }
+
+    /// Document `i` now shows `text`, loaded from disk.
+    pub fn reloaded(&mut self, i: usize, text: &str, bom: bool, mtime: Option<SystemTime>) {
+        let Some(doc) = self.list.get_mut(i) else { return };
+        let previous = doc.saved.clone();
+        doc.editor.reload(text);
+        doc.bom = bom;
+        doc.mtime = mtime;
+        doc.conflict = false;
+        doc.saved = doc.editor.buffer.snapshot();
+        if let Some(h) = &self.history {
+            h.record(&doc.path, previous);
+            h.record(&doc.path, doc.saved.clone());
+        }
     }
 
     /// Saves every modified document; returns the errors.
@@ -248,12 +277,29 @@ impl Docs {
         }
         if doc.is_modified() {
             doc.conflict = true;
+            // Keep the version on disk too: the user may keep theirs and overwrite it.
+            if let Some(h) = &self.history {
+                h.record(path, rc_text::Rope::from_str(&text.replace("\r\n", "\n")));
+            }
             return;
         }
-        doc.editor.reload(&text);
-        doc.bom = bom;
-        doc.mtime = mtime;
-        doc.editor.request_parse(&self.pool);
+        self.reloaded(i, &text, bom, mtime);
+        self.list[i].editor.request_parse(&self.pool);
+    }
+
+    /// Reads every document from disk again (the unmodified ones change; the modified ones are
+    /// flagged when the file differs) and parses them all afresh.
+    pub fn reload_all(&mut self) {
+        let paths: Vec<PathBuf> = self.list.iter().map(|d| d.path.clone()).collect();
+        for path in paths {
+            if let Some(i) = self.index_of(&path) {
+                self.list[i].mtime = None;
+            }
+            self.on_disk_change(&path);
+        }
+        for d in &mut self.list {
+            d.editor.request_parse(&self.pool);
+        }
     }
 
     /// Takes finished background parses; returns whether any arrived (repaint).
@@ -318,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn preview_tabs_are_replaced_until_kept_and_tabs_reorder() {
+    fn preview_tabs_are_replaced_until_kept() {
         let dir = tempfile::tempdir().unwrap();
         for f in ["a.cs", "b.cs", "c.cs", "d.cs"] {
             std::fs::write(dir.path().join(f), "class X {}\n").unwrap();
@@ -335,8 +381,6 @@ mod tests {
         docs.list[1].preview = false;
         docs.open_preview(&dir.path().join("d.cs")).unwrap();
         assert_eq!(docs.list.len(), 3);
-        docs.move_tab(2, 0);
-        assert_eq!(docs.list.iter().map(|d| d.name()).collect::<Vec<_>>(), ["d.cs", "a.cs", "c.cs"]);
         assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
     }
 }

@@ -1,5 +1,5 @@
 //! Modal dialogs and small popups: Settings, About, Go to Line, New File/Folder, Rename,
-//! Delete and Recent Files.
+//! Delete, Recent Files and Local History.
 
 use crate::app::CrabCraftApp;
 use egui::{Align2, Context, FontId, Id, Key, Ui, vec2};
@@ -28,9 +28,15 @@ pub enum Dialog {
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
+    /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
+    InvalidateCaches { clean: bool },
     RecentFiles { selected: usize, filter: String },
+    /// New Scratch File: the kinds to create, then the scratch files there are.
+    Scratches { selected: usize, filter: String, files: Vec<PathBuf> },
     /// ⌥⏎ context actions for the active editor.
     CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
+    /// Generate › Derive: the traits a Rust type derives (checked) and others typed in.
+    Derive { doc: u64, name: String, traits: Vec<(String, bool)>, other: String },
     /// Shift+F6 on a symbol.
     RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
     /// Confirm rolling back files to HEAD.
@@ -48,6 +54,10 @@ pub enum Dialog {
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
     Evaluate { expression: String, focus: bool },
+    /// The earlier versions of a file kept by the IDE.
+    LocalHistory(Box<LocalHistoryView>),
+    /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
+    ProjectEnv { text: String },
 }
 
 impl Dialog {
@@ -72,8 +82,11 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
+        Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
+        Dialog::Scratches { selected, filter, files } => scratches(app, ctx, selected, filter, files),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
+        Dialog::Derive { doc, name, traits, other } => derive(app, ctx, *doc, name, traits, other),
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
@@ -84,6 +97,8 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::LocalHistory(v) => local_history(app, ctx, v),
+        Dialog::ProjectEnv { text } => project_env(app, ctx, text),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -184,6 +199,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label(tr("Rust"));
                         ui.checkbox(&mut draft.format_on_save, tr("Reformat with rustfmt on save"));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.use_nextest, tr("Run tests with cargo-nextest")).on_hover_text(tr("Needs cargo-nextest installed. Doctests do not run with it."));
+                        ui.end_row();
                         ui.label(tr("Font size"));
                         ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
                         ui.end_row();
@@ -198,6 +216,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
+                        ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
@@ -252,6 +273,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                             });
                             ui.end_row();
                         }
+                        rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                 });
             });
@@ -263,6 +285,25 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// How rustfmt runs for Reformat Code, on save and at commit.
+fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui::Color32, muted: egui::Color32) {
+    ui.label(tr("rustfmt arguments"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width(300.0));
+    ui.end_row();
+    ui.label(tr("rustfmt channel"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width(300.0));
+    ui.end_row();
+    ui.label(tr("rustfmt environment"));
+    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width(300.0));
+    ui.end_row();
+    ui.label("");
+    match rc_cargo::Rustfmt::check(rustfmt) {
+        Ok(()) => ui.label(egui::RichText::new(tr("Used by Reformat Code, on save and at commit. The channel runs through rustup.")).color(muted)),
+        Err(e) => ui.label(egui::RichText::new(crate::vcs::rustfmt_failure(e)).color(error)),
+    };
+    ui.end_row();
 }
 
 /// The versions in use, read from the tools themselves.
@@ -447,6 +488,27 @@ fn goto_line(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, focus: &m
                 d.editor.goto(line.saturating_sub(1), col.saturating_sub(1));
             }
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The project's environment variables, checked as they are typed.
+fn project_env(app: &mut CrabCraftApp, ctx: &Context, text: &mut String) -> Outcome {
+    let parsed = rc_core::session::parse_env(text);
+    let ((ok, cancel), esc) = modal(ctx, "project_env", 520.0, |ui| {
+        title(ui, tr("Project Environment Variables"));
+        let p = rc_kit::pal(ui);
+        ui.add(egui::TextEdit::multiline(text).hint_text("RUST_LOG=debug\nDATABASE_URL=postgres://localhost/dev").font(egui::TextStyle::Monospace).desired_rows(8).desired_width(f32::INFINITY));
+        ui.add_space(6.0);
+        if let Err(rc_core::session::BadEnvLine(line)) = parsed {
+            ui.colored_label(p.error, trf("Line {line} is not NAME=value with a valid name.", &[("line", &line.to_string())]));
+        }
+        ui.label(egui::RichText::new(tr("One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.")).size(12.0).color(p.muted));
+        buttons(ui, tr("OK"), parsed.is_ok())
+    });
+    if ok && parsed.is_ok() {
+        app.set_project_env(text.trim().to_string());
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
@@ -913,6 +975,24 @@ fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+fn invalidate_caches(app: &mut CrabCraftApp, ctx: &Context, clean: &mut bool) -> Outcome {
+    let rust = app.runner.cargo_workspace.is_some();
+    let ((ok, cancel), esc) = modal(ctx, "invalidate_caches", 460.0, |ui| {
+        title(ui, tr("Invalidate Caches"));
+        ui.label(tr("Open files are read from disk again, and the file index, Git status, the Cargo project and the language server are rebuilt. Tabs, terminals and running programs stay open."));
+        ui.add_space(6.0);
+        if rust {
+            ui.checkbox(clean, tr("Also delete the build output (cargo clean)"));
+        }
+        buttons(ui, tr("Invalidate"), true)
+    });
+    if ok {
+        app.invalidate_caches(rust && *clean);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn trash(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     {
@@ -981,6 +1061,89 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
     if esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// The name a kind of scratch file has in the New Scratch File list.
+pub fn scratch_kind_name(kind: rc_core::scratch::Kind) -> &'static str {
+    use rc_core::scratch::Kind;
+    match kind {
+        Kind::Rust => "Rust",
+        Kind::Toml => "TOML",
+        Kind::Markdown => "Markdown",
+        Kind::Json => "JSON",
+        Kind::Text => tr("Plain Text"),
+    }
+}
+
+/// New Scratch File: a filterable list of the kinds to create, then the existing scratch files.
+fn scratches(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, filter: &mut String, files: &[PathBuf]) -> Outcome {
+    use rc_core::scratch::Kind;
+    enum Row<'a> {
+        New(Kind),
+        Open(&'a PathBuf),
+    }
+    let needle = filter.to_lowercase();
+    let mut rows: Vec<Row> = Kind::ALL.into_iter().filter(|k| needle.is_empty() || scratch_kind_name(*k).to_lowercase().contains(&needle)).map(Row::New).collect();
+    rows.extend(files.iter().filter(|p| needle.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&needle))).map(Row::Open));
+    *selected = (*selected).min(rows.len().saturating_sub(1));
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut chosen = None;
+    let (_, esc) = modal(ctx, "scratches", 480.0, |ui| {
+        title(ui, tr("New Scratch File"));
+        let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(rows.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) && !rows.is_empty() {
+            chosen = Some(*selected);
+        }
+        ui.add_space(6.0);
+        let mut header = false;
+        for (i, row) in rows.iter().enumerate().take(30) {
+            if matches!(row, Row::Open(_)) && !header {
+                header = true;
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(tr("Scratches")).size(11.5).color(p.muted));
+            }
+            let (icon, name) = match row {
+                Row::New(k) => (icons::for_file(&format!("x.{}", k.extension())), scratch_kind_name(*k).to_string()),
+                Row::Open(path) => {
+                    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    (icons::for_file(&name), name)
+                }
+            };
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+            if i == *selected {
+                ui.painter().rect_filled(r, 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 4.0, p.row_hover);
+            }
+            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
+            ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
+            if resp.clicked() {
+                chosen = Some(i);
+            }
+        }
+    });
+    match chosen.and_then(|i| rows.get(i)) {
+        Some(Row::New(kind)) => {
+            match rc_core::scratch::create(&rc_core::paths::scratches_dir(), *kind) {
+                Ok(path) => app.open_file(&path),
+                Err(e) => app.notify(trf("Could not create the scratch file: {error}", &[("error", &e)]), true),
+            }
+            Outcome::Close
+        }
+        Some(Row::Open(path)) => {
+            app.open_file(path);
+            Outcome::Close
+        }
+        None if esc => Outcome::Close,
+        None => Outcome::Keep,
+    }
+}
+
 /// The list of context actions, under the caret like IntelliJ's bulb popup.
 fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: &mut usize) -> Outcome {
     use rc_lsp::lsp_types::CodeActionOrCommand as A;
@@ -1038,6 +1201,27 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                 }
                 crate::insight::SELECT_IN_EXPLORER => {
                     app.locate_active();
+                    true
+                }
+                crate::insight::DERIVE_COMMAND => {
+                    if let Some(d) = app.docs.active_doc()
+                        && let Some(t) = crate::insight::derive_target_of(d)
+                    {
+                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
+                        let other = t.items.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
+                        traits.sort_by_key(|(_, on)| !on);
+                        app.dialog = Some(Dialog::Derive { doc: d.editor.id, name: t.name, traits, other });
+                    }
+                    return Outcome::Keep;
+                }
+                crate::insight::SUPPRESS_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let arg = |i: usize| args.get(i).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    if let Some(i) = app.docs.active
+                        && let Some((a, b, text)) = crate::insight::suppress_edit(&app.docs.list[i], &arg(0), &arg(1))
+                    {
+                        app.docs.list[i].editor.replace(a, b, &text);
+                    }
                     true
                 }
                 crate::insight::REVEAL_FILE => {
@@ -1178,6 +1362,44 @@ fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outco
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// Generate › Derive: check the traits; OK rewrites the type's `#[derive]` (or adds one).
+fn derive(app: &mut CrabCraftApp, ctx: &Context, doc: u64, name: &str, traits: &mut [(String, bool)], other: &mut String) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "derive", 380.0, |ui| {
+        title(ui, &rc_kit::i18n::trf("Derive for {name}", &[("name", &name)]));
+        egui::Grid::new("derive_traits").num_columns(3).spacing(vec2(16.0, 6.0)).show(ui, |ui| {
+            for (i, (t, on)) in traits.iter_mut().enumerate() {
+                ui.checkbox(on, t.as_str());
+                if i % 3 == 2 {
+                    ui.end_row();
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.add(egui::TextEdit::singleline(other).hint_text(tr("Other traits, separated by commas")).desired_width(f32::INFINITY));
+        let enter = ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("OK"), true);
+        (ok || enter, cancel)
+    });
+    if ok {
+        let mut list: Vec<String> = traits.iter().filter(|(_, on)| *on).map(|(t, _)| t.clone()).collect();
+        for t in other.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+            if !list.iter().any(|x| x == t) {
+                list.push(t.to_string());
+            }
+        }
+        // The text may have changed while the dialog was open: find the type again.
+        if let Some(d) = app.docs.list.iter_mut().find(|d| d.editor.id == doc)
+            && let Some(t) = crate::insight::derive_target_of(d).filter(|t| t.name == name)
+            && let Some((a, b, text)) = t.edit(&list)
+        {
+            d.editor.replace(a, b, &text);
+            app.focus_editor = true;
+        }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 /// ⌘F12: the members of the active file, filtered by typing.
 fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, selected: &mut usize) -> Outcome {
     let Some(doc) = app.docs.active_doc() else { return Outcome::Close };
@@ -1243,6 +1465,184 @@ fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, se
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The Local History dialog: the stored versions of one file, newest first, what changed since
+/// the selected one, and Revert (an undoable edit of the open document).
+pub struct LocalHistoryView {
+    pub path: PathBuf,
+    inbox: rc_core::Inbox<crate::local_history::Loaded>,
+    pub revisions: Option<Vec<rc_core::history::Revision>>,
+    pub selected: usize,
+    pub texts: std::collections::HashMap<u64, Result<String, String>>,
+    requested: std::collections::HashSet<u64>,
+    /// For (revision time, buffer version): preview lines, added and removed line counts.
+    preview: Option<PreviewCache>,
+}
+
+type PreviewCache = ((u64, u64), Vec<crate::local_history::PreviewLine>, usize, usize);
+
+impl LocalHistoryView {
+    pub fn new(path: PathBuf, inbox: rc_core::Inbox<crate::local_history::Loaded>) -> Self {
+        LocalHistoryView { path, inbox, revisions: None, selected: 0, texts: Default::default(), requested: Default::default(), preview: None }
+    }
+}
+
+/// "3 min ago", or the date for old versions.
+fn history_age(now_ms: u64, time_ms: u64) -> String {
+    let secs = now_ms.saturating_sub(time_ms) / 1000;
+    match secs {
+        0..60 => tr("just now").to_string(),
+        60..3600 => trf("{n} min ago", &[("n", &(secs / 60))]),
+        3600..86_400 => trf("{n} h ago", &[("n", &(secs / 3600))]),
+        _ => crate::vcs::format_date((time_ms / 1000) as i64),
+    }
+}
+
+fn byte_size(len: u64) -> String {
+    match len {
+        0..1024 => format!("{len} B"),
+        1024..1_048_576 => format!("{:.1} KB", len as f64 / 1024.0),
+        _ => format!("{:.1} MB", len as f64 / 1_048_576.0),
+    }
+}
+
+fn local_history(app: &mut CrabCraftApp, ctx: &Context, v: &mut LocalHistoryView) -> Outcome {
+    for msg in v.inbox.drain() {
+        match msg {
+            crate::local_history::Loaded::List(list) => {
+                v.revisions = Some(list);
+                v.selected = 0;
+            }
+            crate::local_history::Loaded::Text(time, text) => {
+                v.texts.insert(time, text);
+            }
+        }
+    }
+    // The file was closed meanwhile: nothing to revert.
+    let Some(doc_i) = app.docs.index_of(&v.path) else { return Outcome::Close };
+    let revisions = v.revisions.clone().unwrap_or_default();
+    v.selected = v.selected.min(revisions.len().saturating_sub(1));
+    let current = revisions.get(v.selected).cloned();
+    if let (Some(rev), Some(h)) = (&current, &app.docs.history)
+        && v.requested.insert(rev.time_ms)
+    {
+        h.read(rev, v.inbox.sender());
+    }
+    let version = app.docs.list[doc_i].editor.buffer.version();
+    if let Some(rev) = &current
+        && let Some(Ok(old)) = v.texts.get(&rev.time_ms)
+        && v.preview.as_ref().is_none_or(|p| p.0 != (rev.time_ms, version))
+    {
+        let now = app.docs.list[doc_i].editor.buffer.rope().to_string();
+        let (lines, added, removed) = crate::local_history::preview(old, &now, 2000);
+        v.preview = Some(((rev.time_ms, version), lines, added, removed));
+    }
+    let text = current.as_ref().and_then(|r| v.texts.get(&r.time_ms));
+    let preview = v.preview.as_ref().filter(|p| current.as_ref().is_some_and(|r| p.0 == (r.time_ms, version)));
+    let read_only = app.docs.list[doc_i].editor.read_only;
+    let can_revert = !read_only && preview.is_some_and(|p| p.2 + p.3 > 0);
+    let dark = ctx.global_style().visuals.dark_mode;
+    let p = rc_kit::theme::palette(dark);
+    let s = rc_kit::theme::scheme(dark);
+    let now_ms = rc_core::history::now_ms();
+    let name = app.docs.list[doc_i].name();
+    let loading = v.revisions.is_none();
+    let mut selected = v.selected;
+    let (mut revert, mut show_diff, mut close) = (false, false, false);
+    let (_, esc) = modal(ctx, "local_history", 880.0, |ui| {
+        title(ui, &trf("Local History: {file}", &[("file", &name)]));
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            selected = (selected + 1).min(revisions.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            selected = selected.saturating_sub(1);
+        }
+        let height = 360.0;
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(vec2(240.0, height), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(vec2(240.0, height));
+                if loading {
+                    ui.label(egui::RichText::new(tr("Loading…")).color(p.muted));
+                } else if revisions.is_empty() {
+                    ui.label(egui::RichText::new(tr("No local history for this file yet. Versions are kept when it is saved.")).color(p.muted));
+                }
+                egui::ScrollArea::vertical().id_salt("local_history_list").max_height(height).show(ui, |ui| {
+                    for (i, r) in revisions.iter().enumerate() {
+                        let (rect, resp) = ui.allocate_exact_size(vec2(236.0, 40.0), egui::Sense::click());
+                        if i == selected {
+                            ui.painter().rect_filled(rect, 4.0, p.selection);
+                        } else if resp.hovered() {
+                            ui.painter().rect_filled(rect, 4.0, p.row_hover);
+                        }
+                        icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(16.0, 13.0), vec2(16.0, 16.0)), rc_kit::ico::HISTORY, &p, true);
+                        ui.painter().text(rect.left_top() + vec2(32.0, 13.0), Align2::LEFT_CENTER, history_age(now_ms, r.time_ms), FontId::proportional(13.0), p.text);
+                        ui.painter().text(rect.left_top() + vec2(32.0, 30.0), Align2::LEFT_CENTER, byte_size(r.len), FontId::proportional(11.5), p.muted);
+                        if resp.clicked() {
+                            selected = i;
+                        }
+                    }
+                });
+            });
+            // A fixed-height divider (a separator would take the whole window height).
+            let (line, _) = ui.allocate_exact_size(vec2(13.0, height), egui::Sense::hover());
+            ui.painter().vline(line.center().x, line.y_range(), egui::Stroke::new(1.0, p.island_border));
+            let width = ui.available_width();
+            ui.allocate_ui_with_layout(vec2(width, height), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(vec2(width, height));
+                match (text, preview) {
+                    (Some(Err(e)), _) => {
+                        ui.label(egui::RichText::new(trf("Could not read this version: {error}", &[("error", e)])).color(p.error));
+                    }
+                    (_, Some((_, lines, added, removed))) => {
+                        let summary = if added + removed == 0 { tr("Same as the current text").to_string() } else { trf("Changed since this version: +{added} −{removed} lines", &[("added", added), ("removed", removed)]) };
+                        ui.label(egui::RichText::new(summary).color(p.muted));
+                        ui.add_space(4.0);
+                        egui::ScrollArea::both().id_salt("local_history_preview").max_height(height - 24.0).auto_shrink([false, false]).show_rows(ui, 18.0, lines.len(), |ui, range| {
+                            for (kind, line) in &lines[range] {
+                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width().max(560.0), 18.0), egui::Sense::hover());
+                                let (bg, sign, text) = match kind {
+                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                };
+                                ui.painter().rect_filled(rect, 0.0, bg);
+                                ui.painter().text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), if sign.is_empty() { p.muted } else { p.text });
+                            }
+                        });
+                    }
+                    _ if current.is_some() => {
+                        ui.label(egui::RichText::new(tr("Loading…")).color(p.muted));
+                    }
+                    _ => {}
+                }
+            });
+        });
+        ui.add_space(14.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            revert = ui.add_enabled_ui(can_revert, |ui| theme::primary_button(ui, tr("Revert to This Version"))).inner.clicked();
+            close = theme::secondary_button(ui, tr("Close")).clicked();
+            show_diff = ui.add_enabled_ui(preview.is_some(), |ui| theme::secondary_button(ui, tr("Show Diff"))).inner.clicked();
+        });
+    });
+    let old = current.as_ref().and_then(|r| v.texts.get(&r.time_ms)).and_then(|t| t.as_ref().ok()).cloned();
+    v.selected = selected;
+    if revert && let Some(old) = old {
+        // One undoable edit of the whole text: Undo brings the current version back.
+        let e = &mut app.docs.list[doc_i].editor;
+        let len = e.buffer.len_chars();
+        e.replace(0, len, &old);
+        app.docs.list[doc_i].preview = false;
+        app.docs.activate(doc_i);
+        return Outcome::Close;
+    }
+    if show_diff && let (Some(old), Some(rev)) = (old, &current) {
+        let now = app.docs.list[doc_i].editor.buffer.rope().to_string();
+        let title = format!("{name} ({} ↔ {})", history_age(now_ms, rev.time_ms), tr("Current"));
+        app.vcs.show_diff(title, v.path.clone(), &old, &now, dark);
+        return Outcome::Close;
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 #[cfg(test)]

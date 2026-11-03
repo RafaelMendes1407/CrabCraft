@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 98 |
-| 🚧 Em andamento | 2 |
-| 🟢 Herdado | 24 |
+| ✅ Pronto | 107 |
+| 🚧 Em andamento | 4 |
+| 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 126 |
+| ⬜ A fazer | 116 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -56,12 +56,12 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
-| P-06 | Variáveis de ambiente do projeto | ⬜ | M3 | Aplicadas a cargo e ao rust-analyzer |
+| P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |
 | P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
-| P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde` |
+| P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde`. Ícones de `.rs`, `.toml`, `Cargo.toml`, `Cargo.lock` e `.lock`; ao lado de um `Cargo.toml`, `src`/`examples` com ícone de fontes, `tests`/`benches` de testes e `target` de excluída; captura offscreen clara e escura conferida |
 | P-12 | Dependências externas na árvore do projeto | ✅ | M3 | Nó Bibliotecas externas, ver P-11 |
 | P-13 | Novo arquivo Rust com anexar ao módulo (`mod x;`) | ✅ | M3 | Menu Adicionar em projetos Cargo; escreve o `mod` no pai, no editor se estiver aberto; visto na janela nativa |
 | P-14 | Novo módulo (arquivo/diretório, público/privado) | ✅ | M3 | Arquivo Rust ou Módulo Rust (`x/mod.rs`), com opção `pub mod`; `#[path]` não é considerado |
@@ -75,7 +75,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
 | P-24 | Excluir pastas e arquivos da análise | ✅ | M3 | Menu de contexto do explorador (Excluir da análise / Incluir novamente), salvo por projeto na sessão; pastas e arquivos excluídos ficam fora do índice (Ir para arquivo, Search Everywhere), do Find in Files e dos eventos enviados ao servidor, aparecem esmaecidos no explorador e vão para o rust-analyzer em files.exclude (reinicia o servidor ao mudar). target/ já era oculto. |
-| P-25 | Invalidar caches | ⬜ | M3 | |
+| P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
@@ -93,11 +93,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-06 | Múltiplos cursores e seleção | 🟢 | M1 | |
 | E-07 | Colchetes pareados e fechamento automático | 🟢 | M1 | Conferir `'` em lifetimes e `|` em closures |
 | E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
-| E-09 | Sticky lines | ⬜ | M3 | |
+| E-09 | Sticky lines | ✅ | M3 | Até 5 linhas de abertura dos blocos em volta do topo (dobras do tree-sitter) ficam fixas; clique leva à linha; opção em Configurações > Editor. Teste de UI em código Rust e captura conferida |
 | E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🟢 | M1 | |
-| E-13 | Local History | ⬜ | M3 | |
+| E-13 | Local History | ✅ | M3 | Cada salvamento e recarga guarda a versão anterior e a nova em history/ na pasta de dados (rc-core::history: hash do caminho, sem duplicatas consecutivas, até 100 versões e 30 dias), gravadas numa thread própria. "Show Local History" (menu da aba, Find Action, menu File) lista as versões com prévia das linhas alteradas, "Show Diff" lado a lado e "Revert to This Version" como edição desfazível. Teste de UI num projeto Cargo: screens::local_history_lists_saved_versions_and_reverts_as_an_undoable_edit. |
 | E-14 | LightEdit (arquivo sem projeto) | ⬜ | M3 | |
 | E-15 | Corretor ortográfico e gramática | ⬜ | M6 | |
 | E-16 | Live templates e variáveis | ⬜ | M3 | Reaproveitar snippets do LSP |
@@ -110,8 +110,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
-| E-26 | Abas: fixar, dividir, destacar, pré-visualização | 🟢 | M1 | Divisão herdada; conferir o restante |
-| E-27 | Scratch files | ⬜ | M3 | |
+| E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
+| E-27 | Scratch files | 🚧 | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Falta: análise do rust-analyzer e Run de rascunhos Rust |
 
 ## 3. Inteligência de código
 
@@ -135,17 +135,17 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
 | I-17 | Inspeções em todo o projeto | ⬜ | M3 | |
 | I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
-| I-19 | Suprimir inspeções (`#[allow]`) | ⬜ | M3 | |
+| I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
 | I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
 | I-24 | Explicações inline de erros | ⬜ | M4 | |
-| I-25 | Expandir macro (recursivo e um passo) | ⬜ | M4 | `rust-analyzer/expandMacro` |
+| I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |
 | I-26 | Testador interativo de macros declarativas (2026.2) | ⬜ | M4 | |
 | I-27 | Reformatar com rustfmt | ✅ | M3 | Reformat Code via rust-analyzer testado |
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
-| I-29 | Configurar rustfmt (argumentos, canal, env) | ⬜ | M3 | |
+| I-29 | Configurar rustfmt (argumentos, canal, env) | ✅ | M3 | Configurações > Ferramentas: argumentos, canal (via rustup, +canal) e variáveis de ambiente; valem para Reformat Code, ao salvar e ao commitar (o mesmo comando rustfmt, sem depender do rust-analyzer); erros de configuração aparecem no diálogo e cancelam o commit |
 | I-30 | Formatador embutido para trechos | ⬜ | M3 | rust-analyzer não formatou trecho na sonda; hoje a IDE avisa que o rustfmt formata o arquivo inteiro |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
@@ -157,7 +157,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP; Shift duplo corrigido, antes nunca abria com egui 0.36 |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
-| N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
+| N-03 | Ir para definição | ✅ | M1 | Ctrl+clique (⌘ no macOS) e Ctrl+B levam à definição: método, tipo e item da stdlib (aberto somente leitura), testado com cliques reais e rust-analyzer real |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
 | N-05 | Encontrar usos | ✅ | M1 | Usos testados com rust-analyzer real |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
@@ -188,7 +188,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-08 | Mover itens entre módulos | ⬜ | M4 | |
 | R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
-| R-11 | Gerar `derive` | ⬜ | M3 | |
+| R-11 | Gerar `derive` | ✅ | M3 | Alt+Insert sobre struct, enum ou union mostra Derive…: marca os traits comuns e outros digitados; junta no #[derive] existente ou cria acima do item. Testado com rust-analyzer real e tree-sitter |
 
 ## 6. Cargo.toml e conditional compilation
 
@@ -243,7 +243,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-04 | Rodar novamente os que falharam | ✅ | M2 | Só os que falharam rodam de novo, testado com cargo real |
 | T-05 | Ir do erro do teste para o código | ✅ | M2 | Do resultado para a linha do panic, testado com cargo real |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
-| T-07 | Runner nextest | ⬜ | M3 | |
+| T-07 | Runner nextest | ✅ | M3 | Opção em Configurações > Editor; resultados, falha com a linha do panic e rodar de novo os que falharam, testado com cargo-nextest 0.9.150 real. Sem doctests (o nextest não os roda) |
 | T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
 | T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
 | T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |
