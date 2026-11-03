@@ -984,5 +984,9 @@
     "Press a shortcut…": "ショートカットを押してください…",
     "Record Shortcut": "ショートカットを記録",
     "Reset": "リセット"
+  },
+  "cargotree": {
+    "Retry": "再試行",
+    "listed above": "上に表示済み"
   }
 }

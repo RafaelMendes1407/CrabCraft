@@ -984,5 +984,9 @@
     "Press a shortcut…": "Tastenkürzel drücken…",
     "Record Shortcut": "Tastenkürzel aufnehmen",
     "Reset": "Zurücksetzen"
+  },
+  "cargotree": {
+    "Retry": "Erneut versuchen",
+    "listed above": "oben aufgeführt"
   }
 }

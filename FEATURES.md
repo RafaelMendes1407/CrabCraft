@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 129 |
+| ✅ Pronto | 130 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 97 |
+| ⬜ A fazer | 96 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -200,7 +200,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | C-03 | Mostrar versão do lock e a mais recente | ⬜ | M4 | |
 | C-04 | Avisar crates inexistentes ou desatualizados | ⬜ | M4 | |
 | C-05 | Gerenciador visual de dependências | 🔁 | M4 | Reescrever a janela NuGet com `cargo add`/`remove` |
-| C-06 | `cargo tree` integrado | ⬜ | M4 | |
+| C-06 | `cargo tree` integrado | ✅ | M4 | Cada membro da janela Cargo tem um nó Dependências: ao abrir, roda `cargo tree --offline --locked` em segundo plano (não compila nem grava o `Cargo.lock`) e mostra a árvore dobrável, com versão, seção build/dev e repetições. A execução entra na aba Sync. Testado com o cargo real num projeto gerado e na árvore do próprio CrabCraft (1140 nós) |
 | C-07 | Ligar/desligar features pela margem | ⬜ | M4 | `rust-analyzer.cargo.features` |
 | C-08 | Atenuar código desativado por `cfg` | ⬜ | M4 | |
 | C-09 | Seletor de target (triple) na barra de status | ⬜ | M4 | |

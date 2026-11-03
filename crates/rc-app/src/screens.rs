@@ -1606,3 +1606,64 @@ fn shortcuts_are_recorded_in_the_settings() {
     h.state_mut().apply_settings(&ctx, settings);
     assert_eq!(h.state().keymap.chord(rc_editor::Action::Commit), None);
 }
+
+/// [`two_crates`] where `alpha` uses `beta`, locked, with the Cargo window open.
+fn dependent_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    two_crates(&root);
+    std::fs::write(root.join("alpha/Cargo.toml"), "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nbeta = { path = \"../beta\" }\n\n[dev-dependencies]\nbeta = { path = \"../beta\" }\n").unwrap();
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    assert!(cargo.std_command().args(["generate-lockfile", "--offline"]).current_dir(&root).status().unwrap().success());
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2));
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(3);
+    (h, root)
+}
+
+/// Each member of the Cargo window has a Dependencies node; unfolding it reads `cargo tree`
+/// in the background and lists the dependencies, logged in the Sync tab.
+#[test]
+fn the_cargo_window_shows_the_dependency_tree() {
+    use crate::ui::cargo_window::DepTree;
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dependent_crates_harness(dir.path(), false);
+    assert!(h.state().cargo_trees.is_empty(), "nothing is read before the node is unfolded");
+    let before = h.get_all_by_label("beta").count();
+    // One Dependencies node per member: alpha's comes first.
+    h.get_all_by_label(rc_kit::i18n::tr("Dependencies")).next().unwrap().click();
+    h.run_steps(2);
+    run_frames(&mut h, "the dependency tree", |a| a.cargo_trees.values().any(|t| matches!(t, DepTree::Ready(_))));
+    let (key, tree) = h.state().cargo_trees.iter().next().unwrap();
+    assert_eq!(key, &(root.join("Cargo.toml"), "alpha".to_string()));
+    let DepTree::Ready(nodes) = tree else { panic!() };
+    let names: Vec<_> = nodes.iter().map(|n| (n.depth, n.name.as_str(), n.kind)).collect();
+    assert_eq!(names, vec![(0, "alpha", rc_cargo::DepKind::Normal), (1, "beta", rc_cargo::DepKind::Normal), (1, "beta", rc_cargo::DepKind::Dev)]);
+    h.run_steps(2);
+    assert_eq!(h.get_all_by_label("beta").count(), before + 2, "alpha's normal and dev dependency on beta");
+    assert!(h.state().sync_log.entries.iter().any(|e| e.log.command.starts_with("cargo tree")));
+    assert!(!root.join("target").exists());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-tree-*.png"]
+fn cargo_tree_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = dependent_crates_harness(dir.path(), dark);
+        h.get_all_by_label(rc_kit::i18n::tr("Dependencies")).next().unwrap().click();
+        h.run_steps(2);
+        run_frames(&mut h, "the tree", |a| a.cargo_trees.values().any(|t| matches!(t, crate::ui::cargo_window::DepTree::Ready(_))));
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-tree-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

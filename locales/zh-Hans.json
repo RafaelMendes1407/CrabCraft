@@ -984,5 +984,9 @@
     "Press a shortcut…": "请按快捷键…",
     "Record Shortcut": "录制快捷键",
     "Reset": "重置"
+  },
+  "cargotree": {
+    "Retry": "重试",
+    "listed above": "已在上方列出"
   }
 }

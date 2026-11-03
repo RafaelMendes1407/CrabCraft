@@ -1,5 +1,6 @@
 //! The Cargo window: the members of the workspace with their targets, and a field to run any
-//! Cargo command. Output goes to the Build window, binaries to the Run window.
+//! Cargo command. Output goes to the Build window, binaries to the Run window. Each member also
+//! shows its dependency tree from `cargo tree`, read when its node is first unfolded.
 
 use crate::app::CrabCraftApp;
 use crate::toolwindow::ToolWindow;
@@ -9,6 +10,17 @@ use egui::{Align2, FontId, Sense, Ui, pos2, vec2};
 use rc_cargo::TargetKind;
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons};
+use std::path::PathBuf;
+
+/// What a background `cargo tree` sends back.
+pub type TreeResult = (Result<Vec<rc_cargo::DepNode>, String>, Option<rc_cargo::LoadLog>);
+
+/// The dependency tree of one package.
+pub enum DepTree {
+    Loading(rc_core::Inbox<TreeResult>),
+    Ready(Vec<rc_cargo::DepNode>),
+    Failed(String),
+}
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
@@ -41,6 +53,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         packages.extend(w.packages.iter().cloned().map(|p| (p, Some(w.manifest.clone()))));
     }
     let mut chosen = None;
+    let mut load: Option<(PathBuf, String)> = None;
+    let workspace_manifest = app.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()).unwrap_or_default();
     egui::ScrollArea::both().id_salt("cargo_targets").auto_shrink([false, false]).show(ui, |ui| {
         for (package, manifest) in &packages {
             let folded = app.cargo_folded.contains(&package.name);
@@ -54,6 +68,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
             if folded {
                 continue;
+            }
+            let key = (manifest.clone().unwrap_or_else(|| workspace_manifest.clone()), package.name.clone());
+            if dependencies(app, ui, &key) {
+                load = Some(key);
             }
             for target in &package.targets {
                 let (icon, kind) = look(target.kind);
@@ -75,6 +93,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
         }
     });
+    if let Some((manifest, package)) = load {
+        app.load_dep_tree(manifest, package);
+    }
     if let Some((package, target, manifest)) = chosen {
         let ctx = ui.ctx().clone();
         match manifest {
@@ -82,6 +103,96 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             Some(m) => app.run_attached_target(&ctx, &m, &package, &target),
         }
     }
+}
+
+/// The Dependencies node of a member and, unfolded, its tree. True when the tree must be read.
+fn dependencies(app: &mut CrabCraftApp, ui: &mut Ui, key: &(PathBuf, String)) -> bool {
+    let id = format!("{}#{}", key.0.display(), key.1);
+    let open = app.cargo_open.contains(&id);
+    if row(ui, 1, Some(open), ico::FOLDER, tr("Dependencies"), "", true).clicked() {
+        toggle(&mut app.cargo_open, &id);
+        return !open && !matches!(app.cargo_trees.get(key), Some(DepTree::Loading(_) | DepTree::Ready(_)));
+    }
+    if !open {
+        return false;
+    }
+    let p = rc_kit::pal(ui);
+    match app.cargo_trees.get(key) {
+        None => false,
+        Some(DepTree::Loading(_)) => {
+            message(ui, tr("Loading…"), p.muted);
+            false
+        }
+        Some(DepTree::Failed(e)) => {
+            let first = e.lines().find(|l| !l.trim().is_empty()).unwrap_or(e.as_str()).to_string();
+            message(ui, &first, p.error).on_hover_text(e.as_str());
+            let mut retry = false;
+            ui.horizontal(|ui| {
+                ui.add_space(14.0 + 2.0 * 18.0 + 20.0);
+                retry = ui.small_button(tr("Retry")).clicked();
+            });
+            retry
+        }
+        Some(DepTree::Ready(nodes)) => {
+            let kids = rc_cargo::has_children(nodes);
+            let mut toggled = None;
+            // Rows below a folded node are hidden until the depth climbs back to it.
+            let mut hidden_below: Option<usize> = None;
+            for (i, node) in nodes.iter().enumerate().skip(1) {
+                if hidden_below.is_some_and(|d| node.depth > d) {
+                    continue;
+                }
+                hidden_below = None;
+                let node_id = format!("{id}#{i}");
+                let unfolded = app.cargo_open.contains(&node_id);
+                let mut note = format!("v{}", node.version);
+                match node.kind {
+                    rc_cargo::DepKind::Normal => {}
+                    rc_cargo::DepKind::Build => note += " · build",
+                    rc_cargo::DepKind::Dev => note += " · dev",
+                }
+                if !node.detail.is_empty() {
+                    note += &format!(" {}", short_detail(&node.detail, &key.0));
+                }
+                if node.repeated {
+                    note += &format!(" · {}", tr("listed above"));
+                }
+                let response = row(ui, node.depth + 1, kids[i].then_some(unfolded), ico::PACKAGE, &node.name, &note, !node.repeated);
+                if kids[i] && response.clicked() {
+                    toggled = Some(node_id);
+                }
+                if !(kids[i] && unfolded) {
+                    hidden_below = Some(node.depth);
+                }
+            }
+            if let Some(node_id) = toggled {
+                toggle(&mut app.cargo_open, &node_id);
+            }
+            false
+        }
+    }
+}
+
+/// A local path dependency's folder relative to the workspace, other details as Cargo wrote them.
+fn short_detail(detail: &str, manifest: &std::path::Path) -> String {
+    let inner = detail.strip_prefix('(').and_then(|d| d.strip_suffix(')'));
+    let root = manifest.parent().unwrap_or(manifest);
+    match inner.map(std::path::Path::new).and_then(|p| p.strip_prefix(root).ok()) {
+        Some(rel) if !rel.as_os_str().is_empty() => format!("({})", rel.display()),
+        _ => detail.to_string(),
+    }
+}
+
+fn toggle(set: &mut std::collections::BTreeSet<String>, id: &str) {
+    if !set.remove(id) {
+        set.insert(id.to_string());
+    }
+}
+
+fn message(ui: &mut Ui, text: &str, color: egui::Color32) -> egui::Response {
+    let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 22.0), Sense::hover());
+    ui.painter().text(pos2(r.left() + 14.0 + 2.0 * 18.0 + 20.0, r.center().y), Align2::LEFT_CENTER, text, FontId::proportional(12.0), color);
+    response
 }
 
 /// The icon and the short name of a kind of target.
@@ -96,9 +207,21 @@ fn look(kind: TargetKind) -> (Ico, &'static str) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn local_paths_are_shown_from_the_workspace() {
+        let m = std::path::Path::new("/w/Cargo.toml");
+        assert_eq!(super::short_detail("(/w/crates/beta)", m), "(crates/beta)");
+        assert_eq!(super::short_detail("(/elsewhere/x)", m), "(/elsewhere/x)");
+        assert_eq!(super::short_detail("(proc-macro)", m), "(proc-macro)");
+    }
+}
+
 fn row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str, note: &str, enabled: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 24.0), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
     if response.hovered() {
         ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
     }

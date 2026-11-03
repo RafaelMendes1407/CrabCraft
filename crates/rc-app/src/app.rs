@@ -60,6 +60,10 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
+    /// Dependency trees of the Cargo window, by `(manifest, package)`.
+    pub cargo_trees: std::collections::BTreeMap<(PathBuf, String), crate::ui::cargo_window::DepTree>,
+    /// Rows unfolded in the Cargo window's dependency trees (they start folded).
+    pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
     pub layout: crate::layout::Layout,
     /// A tab being dragged to another place.
@@ -235,6 +239,8 @@ impl CrabCraftApp {
             rustup_run: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
+            cargo_trees: Default::default(),
+            cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
             editor_frame: None,
@@ -630,8 +636,46 @@ impl CrabCraftApp {
 
     /// Reads the Cargo project again.
     pub fn reload_cargo(&mut self) {
+        self.cargo_trees.clear();
         if let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) {
             self.load_cargo_workspace(manifest);
+        }
+    }
+
+    /// Reads the dependency tree of `package` in the background; `cargo tree` builds nothing.
+    pub fn load_dep_tree(&mut self, manifest: PathBuf, package: String) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
+        let (m, p) = (manifest.clone(), package.clone());
+        std::thread::spawn(move || {
+            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
+                Some(cargo) => {
+                    let (result, log) = rc_cargo::load_tree_logged(&cargo, &m, &p);
+                    (result.map_err(|e| e.to_string()), Some(log))
+                }
+                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
+            };
+            out.send(result);
+        });
+        self.cargo_trees.insert((manifest, package), crate::ui::cargo_window::DepTree::Loading(inbox));
+    }
+
+    /// Takes the dependency trees that finished loading.
+    pub(crate) fn poll_dep_trees(&mut self) {
+        use crate::ui::cargo_window::DepTree;
+        let mut logs = Vec::new();
+        for tree in self.cargo_trees.values_mut() {
+            let DepTree::Loading(inbox) = tree else { continue };
+            let Some((result, log)) = inbox.drain().into_iter().last() else { continue };
+            logs.extend(log);
+            *tree = match result {
+                Ok(nodes) => DepTree::Ready(nodes),
+                Err(e) => DepTree::Failed(e),
+            };
+        }
+        for log in logs {
+            self.sync_log.push(crate::sync_log::SyncKind::Dependencies, log);
         }
     }
 
@@ -2163,6 +2207,7 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         self.poll_cargo_workspace();
+        self.poll_dep_trees();
         self.poll_rustfmt();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();

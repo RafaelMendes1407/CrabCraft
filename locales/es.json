@@ -984,5 +984,9 @@
     "Press a shortcut…": "Pulsa un atajo…",
     "Record Shortcut": "Grabar atajo",
     "Reset": "Restablecer"
+  },
+  "cargotree": {
+    "Retry": "Reintentar",
+    "listed above": "mostrado arriba"
   }
 }

@@ -134,7 +134,6 @@ pub fn parse_libraries(text: &str) -> anyhow::Result<Vec<Library>> {
     Ok(libraries)
 }
 
-/// Runs `cargo metadata` to its end and returns what it printed.
 /// Runs `cargo metadata` and keeps what it printed on stderr, also when it fails.
 fn run_metadata_logged(cargo: &Cargo, manifest: &Path, options: &[&str]) -> (anyhow::Result<String>, LoadLog) {
     let mut command = format!("cargo metadata {} --format-version 1 --manifest-path {}", options.join(" "), manifest.display());
@@ -147,14 +146,21 @@ fn run_metadata_logged(cargo: &Cargo, manifest: &Path, options: &[&str]) -> (any
 }
 
 fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str], stderr_text: &mut String) -> anyhow::Result<String> {
+    let mut args: Vec<std::ffi::OsString> = vec!["metadata".into()];
+    args.extend(options.iter().map(Into::into));
+    args.extend(["--format-version".into(), "1".into(), "--manifest-path".into(), manifest.as_os_str().to_owned()]);
+    run_to_end(cargo, manifest, &args, stderr_text)
+}
+
+/// Runs a Cargo command that only reads the project, from the manifest's folder, and returns what
+/// it printed. It is killed after [`LOAD_TIMEOUT`]. This blocks.
+pub(crate) fn run_to_end(cargo: &Cargo, manifest: &Path, args: &[std::ffi::OsString], stderr_text: &mut String) -> anyhow::Result<String> {
     use std::process::Stdio;
     let dir = manifest.parent().context("the manifest has no folder")?;
+    let name = args.first().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
     let mut child = cargo
         .std_command()
-        .arg("metadata")
-        .args(options)
-        .args(["--format-version", "1", "--manifest-path"])
-        .arg(manifest)
+        .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -181,7 +187,7 @@ fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str], stderr_text: &
         if started.elapsed() > LOAD_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            anyhow::bail!("cargo metadata did not finish in {} s", LOAD_TIMEOUT.as_secs());
+            anyhow::bail!("cargo {name} did not finish in {} s", LOAD_TIMEOUT.as_secs());
         }
         std::thread::sleep(Duration::from_millis(10));
     };

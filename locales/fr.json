@@ -984,5 +984,9 @@
     "Press a shortcut…": "Appuyez sur un raccourci…",
     "Record Shortcut": "Enregistrer le raccourci",
     "Reset": "Réinitialiser"
+  },
+  "cargotree": {
+    "Retry": "Réessayer",
+    "listed above": "affiché plus haut"
   }
 }
