@@ -1115,5 +1115,10 @@
     "project": "项目",
     "not installed": "未安装",
     "The standard library of this target is not installed: rust-analyzer may not resolve std": "此目标的标准库未安装：rust-analyzer 可能无法解析 std"
+  },
+  "depversions": {
+    "{locked} · {latest} available": "{locked} · 可用 {latest}",
+    "Show newer versions of dependencies from crates.io": "显示 crates.io 上依赖项的较新版本",
+    "Only crate names are sent to crates.io.": "仅向 crates.io 发送 crate 名称。"
   }
 }

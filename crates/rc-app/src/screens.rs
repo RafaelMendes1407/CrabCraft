@@ -1814,6 +1814,90 @@ fn cargo_features_capture() {
     }
 }
 
+/// A crate with a crates.io dependency, a path dependency, two locked versions of a dev
+/// dependency and a feature, with a hand-written `Cargo.lock`; its `Cargo.toml` open. crates.io
+/// answers are given beforehand, so nothing goes to the network.
+fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::create_dir_all(root.join("helper/src")).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\nhelper = { path = \"helper\" }\n\n[dev-dependencies]\nrand = \"0.7\"\n\n[features]\nextra = []\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").unwrap();
+    std::fs::write(root.join("helper/Cargo.toml"), "[package]\nname = \"helper\"\nversion = \"0.2.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("helper/src/lib.rs"), "").unwrap();
+    let reg = "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n";
+    std::fs::write(
+        root.join("Cargo.lock"),
+        format!("version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"helper\"\nversion = \"0.2.0\"\n\n[[package]]\nname = \"rand\"\nversion = \"0.7.3\"\n{reg}\n[[package]]\nname = \"rand\"\nversion = \"0.8.5\"\n{reg}\n[[package]]\nname = \"serde\"\nversion = \"1.0.100\"\n{reg}"),
+    )
+    .unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.dep_versions.set_published("serde", rc_cargo::versions::parse_index("{\"vers\":\"1.0.229\",\"yanked\":false}\n{\"vers\":\"1.0.230\",\"yanked\":true}"));
+    app.dep_versions.set_published("rand", rc_cargo::versions::parse_index("{\"vers\":\"0.7.3\",\"yanked\":false}"));
+    app.open_workspace(&root);
+    app.open_file(&root.join("Cargo.toml"));
+    let mut h = harness(app, vec2(1100.0, 520.0));
+    run_frames(&mut h, "the Cargo workspace and the lock", |a| a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty()));
+    (h, root)
+}
+
+/// Each dependency line shows its locked version, and the newest on crates.io when newer; a
+/// crates.io dependency gets a docs.rs icon for its locked version. Path dependencies get
+/// neither, and the feature switch keeps its line.
+#[test]
+fn cargo_toml_shows_locked_versions_and_docs_rs_icons() {
+    use rc_editor::GutterIcon;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    let hints = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.end_hints.clone();
+    let icon = |h: &Harness<'static, CrabCraftApp>, line| h.state().docs.active_doc().and_then(|d| d.editor.gutter_icons.get(&line).copied());
+    let available = rc_kit::i18n::trf("{locked} · {latest} available", &[("locked", &"1.0.100"), ("latest", &"1.0.229")]);
+    // serde (line 6) is behind crates.io; rand 0.7 picks 0.7.3 of the two locked versions.
+    assert_eq!(hints(&h).into_iter().collect::<Vec<_>>(), vec![(6, available), (10, "0.7.3".to_string())]);
+    assert_eq!(icon(&h, 6), Some(GutterIcon::DocsRs));
+    assert_eq!(icon(&h, 7), None, "path dependency");
+    assert_eq!(icon(&h, 10), Some(GutterIcon::DocsRs));
+    assert_eq!(icon(&h, 13), Some(GutterIcon::FeatureOff));
+    h.state_mut().open_docs_rs_at(6);
+    assert_eq!(h.state().opened_url.as_deref(), Some("https://docs.rs/serde/1.0.100"));
+    h.state_mut().open_docs_rs_at(10);
+    assert_eq!(h.state().opened_url.as_deref(), Some("https://docs.rs/rand/0.7.3"));
+    // The online check off: only the locked version.
+    h.state_mut().settings.check_crates_io = false;
+    h.run_steps(2);
+    assert_eq!(hints(&h).get(&6).map(String::as_str), Some("1.0.100"));
+    // An edited requirement is read again from the unsaved text.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("\"0.7\"").unwrap();
+        editor.replace(at, at + 5, "\"0.8\"");
+    }
+    h.run_steps(2);
+    assert_eq!(hints(&h).get(&10).map(String::as_str), Some("0.8.5"));
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
+fn cargo_dep_versions_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = dep_versions_harness(dir.path(), dark);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-dep-versions-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
 #[test]
 #[ignore = "Requires a GPU; opens CrabCraft's own instance.rs and writes target/snapshots/cfg-inactive.png"]
 fn cfg_inactive_capture() {
@@ -1836,6 +1920,40 @@ fn cfg_inactive_capture() {
     h.run_steps(6);
     assert!(!h.state_mut().docs.active_doc_mut().unwrap().editor.inactive().is_empty());
     h.render().unwrap().save(out.join("cfg-inactive.png")).unwrap();
+}
+
+/// C-03/C-11 on a real project: CrabCraft's own `crates/rc-cargo/Cargo.toml` against the
+/// repository's `Cargo.lock` (members inherit from `[workspace.dependencies]`), with the live
+/// crates.io check.
+#[test]
+#[ignore = "Needs the network and a GPU; writes target/snapshots/cargo-dep-versions-crabcraft.png"]
+fn cargo_dep_versions_on_crabcraft_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&repo);
+    let file = repo.join("crates/rc-cargo/Cargo.toml");
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 600.0));
+    let text = std::fs::read_to_string(&file).unwrap();
+    let line_of = |key: &str| text.lines().position(|l| l.starts_with(key)).unwrap();
+    let (anyhow, semver) = (line_of("anyhow"), line_of("semver"));
+    run_frames(&mut h, "the locked versions", |a| a.docs.active_doc().is_some_and(|d| d.editor.end_hints.contains_key(&anyhow) && d.editor.end_hints.contains_key(&semver)));
+    // Give crates.io a few seconds.
+    for _ in 0..100 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let editor = &h.state().docs.active_doc().unwrap().editor;
+    eprintln!("hints: {:?}", editor.end_hints);
+    assert_eq!(editor.gutter_icons.get(&semver), Some(&rc_editor::GutterIcon::DocsRs));
+    h.state_mut().open_docs_rs_at(semver);
+    eprintln!("docs.rs: {:?}", h.state().opened_url);
+    assert!(h.state().opened_url.as_deref().is_some_and(|u| u.starts_with("https://docs.rs/semver/1.")));
+    h.render().unwrap().save(out.join("cargo-dep-versions-crabcraft.png")).unwrap();
 }
 
 /// I-24: rustc's explanation of an error code opens in a read-only Markdown tab, from the

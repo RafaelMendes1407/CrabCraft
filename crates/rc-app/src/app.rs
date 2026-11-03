@@ -84,6 +84,11 @@ pub struct CrabCraftApp {
     triple_load: Option<Inbox<(Option<String>, Vec<rc_cargo::TripleChoice>)>>,
     /// What is typed in the filter of the target list.
     pub triple_filter: String,
+    /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
+    /// docs.rs icons.
+    pub dep_versions: crate::dep_versions::DepVersions,
+    /// The last external page opened from the editor (docs.rs).
+    pub opened_url: Option<String>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -283,6 +288,8 @@ impl CrabCraftApp {
             triple_choices: Vec::new(),
             triple_load: None,
             triple_filter: String::new(),
+            dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            opened_url: None,
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -782,6 +789,16 @@ impl CrabCraftApp {
         let doc = &mut self.docs.list[i];
         doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::FeatureOn | GutterIcon::FeatureOff));
         doc.editor.gutter_icons.extend(icons);
+    }
+
+    /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
+    /// locked version in the browser.
+    pub fn open_docs_rs_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let Some(url) = self.dep_versions.links.get(&doc.editor.id).and_then(|l| l.get(&line)).cloned() else { return };
+        #[cfg(not(test))]
+        crate::ui::run_windows::open_url(&url);
+        self.opened_url = Some(url);
     }
 
     /// Reads the Cargo project again.
@@ -2809,6 +2826,7 @@ impl eframe::App for CrabCraftApp {
         }
         self.update_test_markers();
         self.update_feature_icons();
+        self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

@@ -1115,5 +1115,10 @@
     "project": "projet",
     "not installed": "non installée",
     "The standard library of this target is not installed: rust-analyzer may not resolve std": "La bibliothèque standard de cette cible n'est pas installée : rust-analyzer risque de ne pas résoudre std"
+  },
+  "depversions": {
+    "{locked} · {latest} available": "{locked} · {latest} disponible",
+    "Show newer versions of dependencies from crates.io": "Afficher les versions plus récentes des dépendances depuis crates.io",
+    "Only crate names are sent to crates.io.": "Seuls les noms des crates sont envoyés à crates.io."
   }
 }

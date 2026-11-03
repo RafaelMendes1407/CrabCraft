@@ -38,6 +38,8 @@ pub enum VirtualKind {
     FoldPlaceholder,
     /// Why a test failed on this line, after its text.
     FailureNote,
+    /// A muted note after the text, without a box (dependency versions in `Cargo.toml`).
+    EndNote,
 }
 
 pub struct LineLayout {
@@ -169,6 +171,7 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
     };
     let fold_fmt = TextFormat { font_id: mono(size), color: scheme.folded_fg, ..Default::default() };
     let note_fmt = TextFormat { font_id: mono(size), color: scheme.error, ..Default::default() };
+    let end_fmt = TextFormat { font_id: mono(size - 1.0), color: scheme.hint_fg, ..Default::default() };
 
     // Colour role of each column: spans first, dimmed ranges override.
     let role_at = |spans: &[Span], col: usize| -> Hl {
@@ -196,6 +199,7 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
                 VirtualKind::InlayHint => (format!("\u{2009}{}\u{2009}", v.text), hint_fmt.clone()),
                 VirtualKind::FoldPlaceholder => (v.text.clone(), fold_fmt.clone()),
                 VirtualKind::FailureNote => (format!("   {}", v.text), note_fmt.clone()),
+                VirtualKind::EndNote => (format!("   {}", v.text), end_fmt.clone()),
             };
             job.text.push_str(&text);
             nchars += text.chars().count();
@@ -253,6 +257,7 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
             VirtualKind::InlayHint => (format!("\u{2009}{}\u{2009}", v.text), hint_fmt.clone()),
             VirtualKind::FoldPlaceholder => (v.text.clone(), fold_fmt.clone()),
             VirtualKind::FailureNote => (format!("   {}", v.text), note_fmt.clone()),
+            VirtualKind::EndNote => (format!("   {}", v.text), end_fmt.clone()),
         };
         if v.kind == VirtualKind::FoldPlaceholder {
             cut_at = Some(len);

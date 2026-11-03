@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 137 |
+| ✅ Pronto | 139 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 89 |
+| ⬜ A fazer | 87 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -197,7 +197,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | C-01 | Completar chaves do manifesto | ✅ | M4 | Local, sem rede nem rust-analyzer: cabeçalhos após `[`/`[[` (sem repetir tabelas que já existem), chaves da tabela atual (package, alvos, profile, workspace, lints, dependência em tabela ou inline) e valores fixos (edition, resolver, panic, lto, opt-level, strip, debug, booleanos). Abre ao digitar e com Ctrl+Espaço, com descrição traduzida no popup. Teste kittest digitando no Cargo.toml de um workspace Cargo real; análise em `rc_cargo::manifest_complete` com testes. Não completa nomes de crates, versões nem features dentro de listas |
 | C-02 | Completar nome e versão de crates (crates.io) | ⬜ | M4 | Índice esparso; porta o cliente NuGet |
-| C-03 | Mostrar versão do lock e a mais recente | ⬜ | M4 | |
+| C-03 | Mostrar versão do lock e a mais recente | ✅ | M4 | No `Cargo.toml` aberto, cada dependência (`[dependencies]`, dev, build, `target.*`, `[workspace.dependencies]`, `[dependencies.x]`, chaves pontuadas e `workspace = true`, que herda do manifesto do workspace) mostra no fim da linha a versão resolvida no `Cargo.lock` (com várias versões travadas, a mais nova que atende ao requisito) e, se houver, a mais recente do crates.io (`1.0.100 · 1.0.229 available`). O lock é lido localmente numa thread, com limite de tamanho; o crates.io é consultado pelo índice esparso (só o nome do crate vai na requisição), em segundo plano, com timeout e cache por sessão, ignorando versões yanked e pré-lançamentos (salvo se a atual for um). Dependências de path e git não mostram nada. Opção em Configurações › Editor para desligar a consulta online (ligada por padrão). Testado no app com um projeto gerado e lock real (teste headless) e no `crates/rc-cargo/Cargo.toml` do próprio CrabCraft com o crates.io de verdade. Falta: atualizar a versão pela dica (quick-fix) e consultar registros alternativos |
 | C-04 | Avisar crates inexistentes ou desatualizados | ⬜ | M4 | |
 | C-05 | Gerenciador visual de dependências | 🔁 | M4 | Reescrever a janela NuGet com `cargo add`/`remove` |
 | C-06 | `cargo tree` integrado | ✅ | M4 | Cada membro da janela Cargo tem um nó Dependências: ao abrir, roda `cargo tree --offline --locked` em segundo plano (não compila nem grava o `Cargo.lock`) e mostra a árvore dobrável, com versão, seção build/dev e repetições. A execução entra na aba Sync. Testado com o cargo real num projeto gerado e na árvore do próprio CrabCraft (1140 nós) |
@@ -205,7 +205,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | C-08 | Atenuar código desativado por `cfg` | ✅ | M4 | O editor avalia cada `#[cfg(...)]` (itens, instruções, campos, variantes e braços de `match`) com os cfgs de `rustc --print cfg` e as features do `default` do pacote mais as ligadas pelo usuário (C-07), e atenua o que fica desligado. Não depende do rust-analyzer (o 1.99 não publica `inactive-code`) nem de confiar no projeto. Testado no app com um projeto gerado e no `instance.rs` do próprio CrabCraft. Falta: dica ao passar o mouse |
 | C-09 | Seletor de target (triple) na barra de status | ✅ | M4 | A barra de status mostra o triple usado na análise (o `[build] target` do `.cargo/config.toml`, senão o host); o clique abre a lista com o host marcado, os targets do projeto, os instalados pelo rustup e os não instalados (`rustup target list`, rodado fora do projeto), com filtro quando a lista é longa. O triple é validado (`[A-Za-z0-9_.-]`) antes de ir a qualquer processo, fica na sessão do projeto, vai para o rust-analyzer como `cargo.target` via `didChangeConfiguration` (sem reiniciar) e recarrega `rustc --print cfg --target` para a atenuação (C-08). Testado com rustc, rustup e rust-analyzer reais num projeto gerado: ao escolher `x86_64-pc-windows-msvc` o `#[cfg(windows)]` deixa de ser atenuado e o `#[cfg(unix)]` passa a ser, e o build script do rust-analyzer vê `TARGET` mudar. Falta: passar `--target` em builds/checks iniciados pela IDE (escolha deliberada: mudaria a pasta dos binários usados por executar e depurar) |
 | C-10 | Quick fix para habilitar feature | ⬜ | M4 | |
-| C-11 | Ícone da margem para abrir docs.rs do crate | ⬜ | M4 | |
+| C-11 | Ícone da margem para abrir docs.rs do crate | ✅ | M4 | Cada dependência do crates.io no `Cargo.toml` aberto tem um ícone de link na margem que abre `https://docs.rs/<nome>/<versão do lock>` no navegador (`latest` se o crate não está no lock). Dependências de path, git e de outros registros não têm ícone; convive com os interruptores de features (C-07). Testado no app com um projeto gerado e no `crates/rc-cargo/Cargo.toml` do CrabCraft (abre `docs.rs/semver/1.0.28`). Falta: dica ao passar o mouse sobre o ícone |
 
 ## 7. Build e execução
 

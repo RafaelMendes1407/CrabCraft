@@ -55,6 +55,8 @@ pub enum GutterIcon {
     FeatureOn,
     /// A Cargo feature that is off (click: turn on).
     FeatureOff,
+    /// A crates.io dependency of a `Cargo.toml` (click: open its page on docs.rs).
+    DocsRs,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,6 +157,8 @@ pub struct EditorState {
     pub debug_values: BTreeMap<usize, String>,
     /// Why a test failed on this line, shown after its text.
     pub failure_notes: BTreeMap<usize, String>,
+    /// A muted note after the text of a line (the locked and newest version of a dependency).
+    pub end_hints: BTreeMap<usize, String>,
     /// Semantic colours per line (from the language server), char columns.
     pub semantic: Vec<Vec<Span>>,
     pub breakpoints: BTreeMap<usize, BreakpointKind>,
@@ -222,6 +226,7 @@ impl EditorState {
             inlays: Vec::new(),
             debug_values: BTreeMap::new(),
             failure_notes: BTreeMap::new(),
+            end_hints: BTreeMap::new(),
             semantic: Vec::new(),
             breakpoints: BTreeMap::new(),
             gutter_icons: BTreeMap::new(),
@@ -473,6 +478,7 @@ impl EditorState {
             let row = e.start_point.row;
             shift_lines(&mut self.breakpoints, row, added);
             shift_lines(&mut self.gutter_icons, row, added);
+            shift_lines(&mut self.end_hints, row, added);
             shift_line_set(&mut self.bookmarks, row, added);
             shift_line_set(&mut self.folded, row, added);
             if added != 0 && row < self.semantic.len() {

@@ -3552,9 +3552,13 @@ dependencies = [
  "anyhow",
  "rc-core",
  "rc-dotnet",
+ "reqwest",
+ "semver",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "toml",
 ]
 
 [[package]]

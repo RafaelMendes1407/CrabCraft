@@ -5,6 +5,7 @@ mod cli;
 mod instance;
 mod convert;
 mod debugger;
+mod dep_versions;
 mod insight;
 mod call_tree;
 mod item_templates;

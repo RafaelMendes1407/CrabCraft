@@ -309,6 +309,9 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
     if let Some(values) = state.debug_values.get(&line) {
         virtuals.push(Virtual { col: text.chars().count(), text: values.clone(), kind: VirtualKind::InlayHint });
     }
+    if let Some(hint) = state.end_hints.get(&line) {
+        virtuals.push(Virtual { col: text.chars().count(), text: hint.clone(), kind: VirtualKind::EndNote });
+    }
     if let Some(note) = state.failure_notes.get(&line) {
         virtuals.push(Virtual { col: text.chars().count(), text: note.clone(), kind: VirtualKind::FailureNote });
     }
@@ -497,7 +500,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
                 VirtualKind::InlayHint => {
                     painter.rect_filled(bx.shrink2(vec2(1.0, 1.0)), 3.0, scheme.hint_bg);
                 }
-                VirtualKind::FailureNote => {}
+                VirtualKind::FailureNote | VirtualKind::EndNote => {}
             }
         }
         // Hints carry their own background in the galley; strip it by painting with the
@@ -745,6 +748,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 GutterIcon::Implementing => ico::GUTTER_IMPLEMENTING,
                 GutterIcon::Overridden => ico::GUTTER_OVERRIDDEN,
                 GutterIcon::Overriding => ico::GUTTER_OVERRIDING,
+                GutterIcon::DocsRs => ico::EXTERNAL_LINK,
                 GutterIcon::Bookmark | GutterIcon::FeatureOn | GutterIcon::FeatureOff => ico::GUTTER_BOOKMARK,
             };
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));

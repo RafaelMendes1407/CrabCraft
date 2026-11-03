@@ -1115,5 +1115,10 @@
     "project": "プロジェクト",
     "not installed": "未インストール",
     "The standard library of this target is not installed: rust-analyzer may not resolve std": "このターゲットの標準ライブラリはインストールされていません：rust-analyzer が std を解決できない場合があります"
+  },
+  "depversions": {
+    "{locked} · {latest} available": "{locked} · {latest} が利用可能",
+    "Show newer versions of dependencies from crates.io": "crates.io の依存関係の新しいバージョンを表示",
+    "Only crate names are sent to crates.io.": "crates.io に送信されるのは crate 名だけです。"
   }
 }

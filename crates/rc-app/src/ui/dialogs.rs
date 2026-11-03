@@ -217,6 +217,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label("");
                         ui.checkbox(&mut draft.use_nextest, tr("Run tests with cargo-nextest")).on_hover_text(tr("Needs cargo-nextest installed. Doctests do not run with it."));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.check_crates_io, tr("Show newer versions of dependencies from crates.io")).on_hover_text(tr("Only crate names are sent to crates.io."));
+                        ui.end_row();
                         ui.label(tr("Font size"));
                         ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
                         ui.end_row();

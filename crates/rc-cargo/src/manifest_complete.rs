@@ -322,7 +322,7 @@ fn string_end(chars: &[char], start: usize, limit: usize, quote: char, triple: b
 }
 
 /// The parts of a dotted key, unquoted: `target.'cfg(unix)'.dependencies` → three parts.
-fn split_key(s: &str) -> Vec<String> {
+pub(crate) fn split_key(s: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut cur = String::new();
     let mut quote = None;

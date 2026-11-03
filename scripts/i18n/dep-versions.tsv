@@ -1,0 +1,5 @@
+# Dependency versions in Cargo.toml (C-03). Import: python3 scripts/i18n_tsv.py depversions scripts/i18n/dep-versions.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+{locked} · {latest} available	{locked} · {latest} disponible	{locked} · {latest} disponible	{locked} · {latest} disponível	{locked} · {latest} verfügbar	{locked} · dostępna {latest}	{locked} · 可用 {latest}	{locked} · {latest} が利用可能
+Show newer versions of dependencies from crates.io	Mostrar versiones más recientes de las dependencias desde crates.io	Afficher les versions plus récentes des dépendances depuis crates.io	Mostrar versões mais recentes das dependências do crates.io	Neuere Versionen der Abhängigkeiten von crates.io anzeigen	Pokazuj nowsze wersje zależności z crates.io	显示 crates.io 上依赖项的较新版本	crates.io の依存関係の新しいバージョンを表示
+Only crate names are sent to crates.io.	Solo se envían a crates.io los nombres de los crates.	Seuls les noms des crates sont envoyés à crates.io.	Apenas os nomes dos crates são enviados ao crates.io.	Nur die Namen der Crates werden an crates.io gesendet.	Do crates.io wysyłane są tylko nazwy crate'ów.	仅向 crates.io 发送 crate 名称。	crates.io に送信されるのは crate 名だけです。
