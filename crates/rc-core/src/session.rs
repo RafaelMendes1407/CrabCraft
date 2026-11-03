@@ -81,11 +81,30 @@ impl Default for ToolWindowState {
     }
 }
 
+/// How the editors are arranged: groups of tabs (indexes into `Session::files`) split side by
+/// side or one above the other.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum EditorNode {
+    Group { tabs: Vec<usize>, active: Option<usize> },
+    Split { vertical: bool, ratio: f32, a: Box<EditorNode>, b: Box<EditorNode> },
+}
+
+/// A floating editor window: its groups and where it was on screen (x, y, width, height).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EditorWindow {
+    pub root: EditorNode,
+    pub rect: Option<[f32; 4]>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Session {
     pub files: Vec<OpenFile>,
     pub active: Option<usize>,
+    /// The editor groups of the main window (none: every file in one group).
+    pub editor_layout: Option<EditorNode>,
+    /// Floating editor windows.
+    pub editor_windows: Vec<EditorWindow>,
     /// Tool window id → state.
     pub tool_windows: BTreeMap<String, ToolWindowState>,
     /// Explorer nodes expanded (paths relative to the workspace root, or node keys).

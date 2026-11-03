@@ -151,7 +151,6 @@ fn screens() {
             }
             let i = app.docs.index_of(&fixtures().join("Shop/src/Shop.Core/Order.cs").canonicalize().unwrap()).unwrap();
             app.docs.list[i].pinned = true;
-            app.docs.move_tab(i, 0);
             app.docs.open_preview(&fixtures().join("Shop/src/Shop.Core/Shop.Core.csproj")).unwrap();
         }
         h.run_steps(4);
@@ -223,25 +222,27 @@ fn screens() {
         // Split right, then a tab in its own window.
         {
             let app = h.state_mut();
-            let calc = app.docs.index_of(&fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs").canonicalize().unwrap()).unwrap();
-            let program = app.docs.index_of(&fixtures().join("Shop/src/Shop.Cli/Program.cs").canonicalize().unwrap()).unwrap();
-            app.docs.activate(calc);
-            let (main, other) = (app.docs.list[calc].editor.id, app.docs.list[program].editor.id);
-            app.split = Some(crate::app::Split { vertical: true, main, other, focus_second: true, ratio: 0.5 });
-            app.docs.activate(program);
+            let program = app.docs.list.iter().find(|d| d.name() == "Program.cs").map(|d| d.editor.id).unwrap();
+            let group = app.layout.group_of(program).unwrap();
+            app.layout.move_doc(program, crate::layout::Drop::Split { group, edge: crate::layout::Edge::Right });
         }
         h.run_steps(5);
         h.render().unwrap().save(out.join(format!("split-{suffix}.png"))).unwrap();
         {
             let app = h.state_mut();
-            app.split = None;
-            let json = app.docs.list.iter().position(|d| d.name() == "appsettings.json").unwrap();
-            let id = app.docs.list[json].editor.id;
-            app.floating.push(id);
+            let group = app.layout.main_target();
+            app.layout.unsplit_all(group);
+            let json = app.docs.list.iter().find(|d| d.name() == "appsettings.json").map(|d| d.editor.id).unwrap();
+            app.layout.move_doc(json, crate::layout::Drop::Window(egui::pos2(80.0, 80.0)));
         }
         h.run_steps(5);
         h.render().unwrap().save(out.join(format!("floating-{suffix}.png"))).unwrap();
-        h.state_mut().floating.clear();
+        {
+            let app = h.state_mut();
+            while !app.layout.windows.is_empty() {
+                app.layout.dock_window(0);
+            }
+        }
         // The explorer moved to the right side.
         h.state_mut().dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
         h.run_steps(4);
@@ -333,6 +334,70 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     assert_eq!(app.docs.list[0].editor.caret_line_col(), (2, 8));
     assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
     assert!(app.explorer.expanded.contains("sf:/src"));
+}
+
+/// Drags with the primary button from `from` to `to` in a few steps, like a hand would.
+fn drag(h: &mut Harness<'static, CrabCraftApp>, from: egui::Pos2, to: egui::Pos2) {
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    h.input_mut().events.push(egui::Event::PointerMoved(from));
+    h.run_steps(1);
+    h.input_mut().events.push(button(from, true));
+    h.run_steps(1);
+    for i in 1..=8 {
+        h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (i as f32 / 8.0)));
+        h.run_steps(1);
+    }
+    h.input_mut().events.push(button(to, false));
+    h.run_steps(3);
+}
+
+#[test]
+fn tabs_drag_into_splits_and_floating_windows_and_the_layout_is_restored() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    for f in ["lib.rs", "main.rs", "util.rs"] {
+        std::fs::write(root.join("src").join(f), "fn f() {}\n").unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace(&root);
+    for f in ["lib.rs", "main.rs", "util.rs"] {
+        app.open_file(&root.join("src").join(f));
+    }
+    let size = vec2(1280.0, 800.0);
+    let mut h = harness(app, size);
+    let id = |h: &Harness<'static, CrabCraftApp>, name: &str| h.state().docs.list.iter().find(|d| d.name() == name).map(|d| d.editor.id).unwrap();
+    let tab = |h: &Harness<'static, CrabCraftApp>, name: &str| h.get_by_label(name).rect().center();
+
+    // main.rs onto the right edge of the editor: a second group beside the first.
+    let editor = h.state().layout.main.groups()[0].id;
+    let from = tab(&h, "main.rs");
+    drag(&mut h, from, egui::pos2(size.x - 120.0, size.y / 2.0));
+    let app = h.state();
+    assert!(matches!(app.layout.main, crate::layout::Node::Split { vertical: true, .. }), "{:?}", app.layout.main);
+    assert_ne!(app.layout.group_of(id(&h, "main.rs")), Some(editor));
+    assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".into()));
+
+    // util.rs out of the window: a floating window with it.
+    let from = tab(&h, "util.rs");
+    drag(&mut h, from, egui::pos2(size.x + 200.0, 100.0));
+    let app = h.state();
+    assert_eq!(app.layout.windows.len(), 1);
+    assert_eq!(app.layout.windows[0].root.groups()[0].tabs, vec![id(&h, "util.rs")]);
+    assert_eq!(app.layout.main.groups().len(), 2);
+
+    // Reopening the project brings the groups and the window back.
+    let mut app = h.into_state();
+    app.close_workspace();
+    app.open_workspace(&root);
+    let names = |app: &CrabCraftApp, g: &crate::layout::Group| g.tabs.iter().filter_map(|t| app.docs.list.iter().find(|d| d.editor.id == *t)).map(|d| d.name()).collect::<Vec<_>>();
+    let main: Vec<Vec<String>> = app.layout.main.groups().into_iter().map(|g| names(&app, g)).collect();
+    assert_eq!(main, vec![vec!["lib.rs".to_string()], vec!["main.rs".to_string()]]);
+    assert_eq!(names(&app, app.layout.windows[0].root.groups()[0]), vec!["util.rs".to_string()]);
 }
 
 fn run_frames(h: &mut Harness<'static, CrabCraftApp>, what: &str, mut done: impl FnMut(&CrabCraftApp) -> bool) {
