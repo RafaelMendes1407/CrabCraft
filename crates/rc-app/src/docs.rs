@@ -26,6 +26,8 @@ pub struct Doc {
     pub conflict: bool,
     /// Markdown files: editor, preview or both side by side.
     pub md_view: Option<MdView>,
+    /// A scratch file (outside every project): rust-analyzer is not asked about it.
+    pub scratch: bool,
     /// Written by the IDE (a macro expansion): read-only and never sent to the language server.
     pub generated: bool,
 }
@@ -125,7 +127,7 @@ impl Docs {
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, generated: false });
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch: rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path), generated: false });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)

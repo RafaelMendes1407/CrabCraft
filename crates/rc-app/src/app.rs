@@ -1127,6 +1127,7 @@ impl CrabCraftApp {
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
+            Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {

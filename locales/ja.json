@@ -674,6 +674,14 @@
     "{title} failed with exit code {code}": "{title} は終了コード {code} で失敗しました",
     "{title} finished in {secs} s": "{title} は {secs} 秒で完了しました"
   },
+  "scratch": {
+    "Could not create the scratch file: {error}": "スクラッチファイルを作成できませんでした: {error}",
+    "New Scratch File": "新規スクラッチファイル",
+    "New Scratch File…": "新規スクラッチファイル…",
+    "Plain Text": "プレーンテキスト",
+    "Scratch file: rust-analyzer does not analyze it yet": "スクラッチファイル: rust-analyzer はまだ解析しません",
+    "Scratches": "スクラッチ"
+  },
   "search": {
     "0 results": "0 件",
     "Actions": "アクション",

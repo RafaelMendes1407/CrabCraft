@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 101 |
-| 🚧 Em andamento | 3 |
+| 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 123 |
+| ⬜ A fazer | 122 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -111,7 +111,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ⬜ | M6 | |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
-| E-27 | Scratch files | ⬜ | M3 | |
+| E-27 | Scratch files | 🚧 | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Falta: análise do rust-analyzer e Run de rascunhos Rust |
 
 ## 3. Inteligência de código
 

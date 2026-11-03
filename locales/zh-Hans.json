@@ -674,6 +674,14 @@
     "{title} failed with exit code {code}": "{title} 失败,退出代码 {code}",
     "{title} finished in {secs} s": "{title} 在 {secs} 秒内完成"
   },
+  "scratch": {
+    "Could not create the scratch file: {error}": "无法创建草稿文件：{error}",
+    "New Scratch File": "新建草稿文件",
+    "New Scratch File…": "新建草稿文件…",
+    "Plain Text": "纯文本",
+    "Scratch file: rust-analyzer does not analyze it yet": "草稿文件：rust-analyzer 暂不分析此文件",
+    "Scratches": "草稿文件"
+  },
   "search": {
     "0 results": "0 个结果",
     "Actions": "操作",

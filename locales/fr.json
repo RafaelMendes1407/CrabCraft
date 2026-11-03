@@ -674,6 +674,14 @@
     "{title} failed with exit code {code}": "{title} a échoué avec le code de sortie {code}",
     "{title} finished in {secs} s": "{title} terminé en {secs} s"
   },
+  "scratch": {
+    "Could not create the scratch file: {error}": "Impossible de créer le fichier brouillon : {error}",
+    "New Scratch File": "Nouveau fichier brouillon",
+    "New Scratch File…": "Nouveau fichier brouillon…",
+    "Plain Text": "Texte brut",
+    "Scratch file: rust-analyzer does not analyze it yet": "Fichier brouillon : rust-analyzer ne l’analyse pas encore",
+    "Scratches": "Brouillons"
+  },
   "search": {
     "0 results": "0 résultat",
     "Actions": "Actions",

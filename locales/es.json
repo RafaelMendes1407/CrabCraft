@@ -674,6 +674,14 @@
     "{title} failed with exit code {code}": "{title} falló con el código de salida {code}",
     "{title} finished in {secs} s": "{title} terminó en {secs} s"
   },
+  "scratch": {
+    "Could not create the scratch file: {error}": "No se pudo crear el archivo temporal: {error}",
+    "New Scratch File": "Nuevo archivo temporal",
+    "New Scratch File…": "Nuevo archivo temporal…",
+    "Plain Text": "Texto sin formato",
+    "Scratch file: rust-analyzer does not analyze it yet": "Archivo temporal: rust-analyzer aún no lo analiza",
+    "Scratches": "Archivos temporales"
+  },
   "search": {
     "0 results": "0 resultados",
     "Actions": "Acciones",

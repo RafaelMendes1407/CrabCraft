@@ -674,6 +674,14 @@
     "{title} failed with exit code {code}": "{title} falhou com código de saída {code}",
     "{title} finished in {secs} s": "{title} terminou em {secs} s"
   },
+  "scratch": {
+    "Could not create the scratch file: {error}": "Não foi possível criar o arquivo de rascunho: {error}",
+    "New Scratch File": "Novo arquivo de rascunho",
+    "New Scratch File…": "Novo arquivo de rascunho…",
+    "Plain Text": "Texto simples",
+    "Scratch file: rust-analyzer does not analyze it yet": "Arquivo de rascunho: o rust-analyzer ainda não o analisa",
+    "Scratches": "Rascunhos"
+  },
   "search": {
     "0 results": "0 resultados",
     "Actions": "Ações",

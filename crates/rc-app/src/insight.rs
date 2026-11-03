@@ -1674,7 +1674,7 @@ pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
 }
 
 pub fn has_insight(d: &Doc) -> bool {
-    !d.generated && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
+    !d.generated && !d.scratch && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.
