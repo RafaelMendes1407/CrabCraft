@@ -62,6 +62,7 @@ pub enum Action {
     ParameterInfo,
     QuickDoc,
     ExternalDocs,
+    ExpandMacro,
     ShowIntentions,
     Generate,
     RefactorThis,
@@ -142,6 +143,7 @@ impl Action {
                 | ParameterInfo
                 | QuickDoc
                 | ExternalDocs
+                | ExpandMacro
                 | ShowIntentions
                 | Generate
                 | RefactorThis

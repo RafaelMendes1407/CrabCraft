@@ -26,18 +26,6 @@ pub struct Notice {
     pub at: f64,
 }
 
-/// The editor split in two panes (documents by editor id).
-#[derive(Clone, Debug, PartialEq)]
-pub struct Split {
-    /// Side by side (else one above the other).
-    pub vertical: bool,
-    pub main: u64,
-    pub other: u64,
-    pub focus_second: bool,
-    /// Size of the first pane (0..1).
-    pub ratio: f32,
-}
-
 pub struct WorkspaceState {
     pub ws: Workspace,
     pub solution: Option<Solution>,
@@ -64,11 +52,12 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
-    pub split: Option<Split>,
-    /// Documents shown in windows of their own (editor ids).
-    pub floating: Vec<u64>,
-    /// The last document of the main pane (when the active one is in another window).
-    pub last_main: Option<u64>,
+    /// Editor groups, splits and floating editor windows.
+    pub layout: crate::layout::Layout,
+    /// A tab being dragged to another place.
+    pub tab_drag: Option<crate::ui::editor_area::TabDrag>,
+    /// Keyboard focus and menu actions for the active editor, wherever it is shown this frame.
+    pub editor_frame: Option<(bool, Vec<Action>)>,
     pub new_project: Option<crate::ui::new_project::NewProjectDialog>,
     pub search_everywhere: Option<crate::search::SearchEverywhere>,
     pub find_bar: Option<crate::search::FindBar>,
@@ -200,9 +189,9 @@ impl CrabCraftApp {
             libraries_load: None,
             toolchain_load: None,
             cargo_folded: Default::default(),
-            split: None,
-            floating: Vec::new(),
-            last_main: None,
+            layout: Default::default(),
+            tab_drag: None,
+            editor_frame: None,
             new_project: None,
             search_everywhere: None,
             find_bar: None,
@@ -325,7 +314,8 @@ impl CrabCraftApp {
     pub(crate) fn poll_cargo_workspace(&mut self) {
         if let Some(libraries) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
             self.libraries_load = None;
-            self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.clone()).collect();
+            // Canonical like the documents' paths (`\\?\C:\…` on Windows).
+            self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.canonicalize().unwrap_or_else(|_| l.root.clone())).collect();
             self.explorer.libraries = libraries;
         }
         let Some(inbox) = &self.cargo_load else { return };
@@ -578,6 +568,8 @@ impl CrabCraftApp {
         self.find_results = None;
         self.docs.list.clear();
         self.docs.active = None;
+        self.layout = Default::default();
+        self.tab_drag = None;
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
         self.libraries_load = None;
@@ -601,11 +593,17 @@ impl CrabCraftApp {
                 }
             }
         }
+        // Editor id of each file of the session, for the layout.
+        let mut ids = Vec::with_capacity(s.files.len());
         for f in &s.files {
+            ids.push(None);
             if !f.path.exists() {
                 continue;
             }
             if let Ok(i) = self.docs.open(&f.path) {
+                if let Some(last) = ids.last_mut() {
+                    *last = Some(self.docs.list[i].editor.id);
+                }
                 let d = &mut self.docs.list[i];
                 d.pinned = f.pinned;
                 let pos = d.editor.buffer.pos_at(f.line, f.col);
@@ -620,6 +618,8 @@ impl CrabCraftApp {
             }
         }
         self.docs.active = s.active.filter(|&a| a < self.docs.list.len()).or(if self.docs.list.is_empty() { None } else { Some(0) });
+        self.layout = crate::layout::Layout::from_session(s.editor_layout.as_ref(), &s.editor_windows, |i| ids.get(i).copied().flatten());
+        self.sync_layout();
         for (path, lines) in &s.bookmarks {
             let lines: std::collections::BTreeSet<usize> = lines.iter().copied().collect();
             match self.docs.index_of(path) {
@@ -677,9 +677,12 @@ impl CrabCraftApp {
             .filter(|d| !d.editor.breakpoints.is_empty())
             .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
             .collect();
+        let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
             files,
             active: self.docs.active,
+            editor_layout: Some(editor_layout),
+            editor_windows,
             tool_windows: self.dock.to_session(),
             expanded: {
                 let mut v: Vec<String> = self.explorer.expanded.iter().cloned().collect();
@@ -744,6 +747,7 @@ impl CrabCraftApp {
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
+                InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {
@@ -787,6 +791,7 @@ impl CrabCraftApp {
             Action::ParameterInfo => self.insight.parameter_info(doc),
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
+            Action::ExpandMacro => self.insight.expand_macro(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::RefactorThis => self.insight.refactor_actions(doc),
@@ -921,6 +926,36 @@ impl CrabCraftApp {
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
+    /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
+    pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
+        // Only the name's word characters reach the file name.
+        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
+        let path = rc_core::paths::expansions_dir().join(format!("{}.rs", if safe.is_empty() { "macro" } else { &safe }));
+        let body = format!("// {}
+
+{text}
+", trf("Recursive expansion of {name}!", &[("name", &name)]));
+        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
+            self.notify(trf("Could not show the expansion: {error}", &[("error", &e.to_string())]), true);
+            return;
+        }
+        match self.docs.open(&path) {
+            Ok(i) => {
+                let d = &mut self.docs.list[i];
+                d.generated = true;
+                // Already open from an earlier expansion: show the new text.
+                if d.editor.buffer.rope() != body.as_str() {
+                    d.editor.reload(&body);
+                    d.editor.parse_blocking();
+                }
+                d.editor.read_only = true;
+                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
+                self.focus_editor = true;
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
     pub fn close_tab(&mut self, i: usize) {
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
@@ -928,8 +963,22 @@ impl CrabCraftApp {
             self.notify(e, true);
             return;
         }
+        // The tab beside it in the same group takes its place.
+        let id = self.docs.list.get(i).map(|d| d.editor.id);
+        let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
         self.docs.close(i);
+        if let Some(n) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
+            self.docs.active = Some(n);
+        }
+        self.sync_layout();
         self.session_dirty = true;
+    }
+
+    /// Brings the editor layout in step with the open documents and the active one.
+    pub fn sync_layout(&mut self) {
+        let docs: Vec<(u64, bool)> = self.docs.list.iter().map(|d| (d.editor.id, d.pinned)).collect();
+        let active = self.docs.active_doc().map(|d| d.editor.id);
+        self.layout.sync(&docs, active);
     }
 
     // ------------------------------------------------------------------ actions
@@ -947,10 +996,10 @@ impl CrabCraftApp {
                 }
             }
             Action::NextTab | Action::PreviousTab => {
-                if let Some(a) = self.docs.active {
-                    let n = self.docs.list.len();
-                    let next = if action == Action::NextTab { (a + 1) % n } else { (a + n - 1) % n };
-                    self.docs.activate(next);
+                // Within the group of the active tab.
+                let next = self.docs.active_doc().and_then(|d| self.layout.next_tab(d.editor.id, action == Action::NextTab));
+                if let Some(i) = next.and_then(|n| self.docs.list.iter().position(|d| d.editor.id == n)) {
+                    self.docs.activate(i);
                     self.focus_editor = true;
                 }
             }
@@ -1865,6 +1914,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         font: rc_editor::layout::EditorFont { size: s.editor_font_size.clamp(8.0, 32.0), line_spacing: s.editor_line_spacing.clamp(1.0, 2.0) },
         show_indent_guides: s.show_indent_guides,
         show_inlays: s.show_inlay_hints,
+        sticky_lines: if s.sticky_lines { 5 } else { 0 },
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         ..EditorConfig::default()
     }
