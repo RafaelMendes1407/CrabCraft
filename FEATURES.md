@@ -157,7 +157,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | N-01 | Search Everywhere (Shift duplo) | 🟢 | M1 | Trocar a parte de símbolos para LSP; Shift duplo corrigido, antes nunca abria com egui 0.36 |
 | N-02 | Ir para arquivo, tipo e símbolo | ✅ | M1 | workspace/symbol testado com rust-analyzer real |
-| N-03 | Ir para definição | ✅ | M1 | Testado com rust-analyzer real, abre o arquivo da biblioteca |
+| N-03 | Ir para definição | ✅ | M1 | Ctrl+clique (⌘ no macOS) e Ctrl+B levam à definição: método, tipo e item da stdlib (aberto somente leitura), testado com cliques reais e rust-analyzer real |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
 | N-05 | Encontrar usos | ✅ | M1 | Usos testados com rust-analyzer real |
 | N-06 | Find in Files e Replace in Files | 🟢 | M1 | |

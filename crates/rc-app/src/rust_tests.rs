@@ -861,6 +861,82 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     assert!(t.results.keys().eq(["checks::bad"].iter().copied()), "{:?}", t.results.keys());
 }
 
+/// A real Ctrl+click (⌘ on macOS) in the rendered editor, as a mouse sends it.
+fn command_click(h: &mut egui_kittest::Harness<'static, CrabCraftApp>, at: egui::Pos2) {
+    let mods = egui::Modifiers::COMMAND;
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run_steps(2);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: mods });
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(mods));
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: mods });
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+}
+
+#[test]
+fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "use demo::Greeter;\n\nfn main() {\n    let text: String = Greeter.hello().to_string();\n    println!(\"{text}\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.trust_project();
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    let ready = |a: &CrabCraftApp| a.insight.status == InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty());
+    let start = Instant::now();
+    while !ready(h.state()) {
+        assert!(start.elapsed() < Duration::from_secs(180), "timed out waiting for rust-analyzer: {:?}", h.state().insight.status);
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    // Where a word of main.rs is drawn: put the caret in it and read the caret's place.
+    let place = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, line: usize, col: usize| {
+        let i = h.state().docs.index_of(&main).unwrap();
+        h.state_mut().docs.activate(i);
+        h.state_mut().docs.list[i].editor.goto(line, col);
+        h.run_steps(3);
+        h.state().caret_screen.unwrap() + egui::vec2(1.0, -6.0)
+    };
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(h.state()) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+    let at = |a: &CrabCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0));
+
+    // The method: to `pub fn hello` in lib.rs.
+    let p = place(&mut h, 3, "    let text: String = Greeter.he".len());
+    command_click(&mut h, p);
+    wait(&mut h, "hello in lib.rs", &|a| at(a) == Some((root.join("src/lib.rs"), 3)));
+
+    // The type, from its `use`: to `pub struct Greeter`.
+    let p = place(&mut h, 0, "use demo::Gre".len());
+    command_click(&mut h, p);
+    wait(&mut h, "Greeter in lib.rs", &|a| at(a) == Some((root.join("src/lib.rs"), 0)));
+
+    // A standard library type opens read-only.
+    let p = place(&mut h, 3, "    let text: Str".len());
+    command_click(&mut h, p);
+    wait(&mut h, "String in the standard library", &|a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("string.rs") && d.editor.read_only));
+
+    // Back returns to the click.
+    h.state_mut().run_ide_action(&egui::Context::default(), rc_editor::Action::NavigateBack);
+    assert_eq!(at(h.state()).map(|(p, l)| (p, l)), Some((main.clone(), 3)));
+    h.state_mut().insight.stop();
+}
+
 fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {
