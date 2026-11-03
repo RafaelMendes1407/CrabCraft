@@ -1,0 +1,3 @@
+# Find Action synonym of Go to Declaration. Import: python3 scripts/i18n_tsv.py search-everywhere scripts/i18n/goto-definition.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Go to Definition	Ir a la definición	Aller à la définition	Ir para a definição	Zur Definition	Przejdź do definicji	转到定义	定義へ移動

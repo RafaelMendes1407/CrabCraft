@@ -983,6 +983,72 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
     h.state_mut().insight.stop();
 }
 
+/// A real right click in the rendered editor, as a mouse sends it.
+fn right_click(h: &mut egui_kittest::Harness<'static, CrabCraftApp>, at: egui::Pos2) {
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(2);
+}
+
+#[test]
+fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
+    use egui_kittest::kittest::Queryable;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "use demo::Greeter;\n\nfn main() {\n    let text: String = Greeter.hello().to_string();\n    println!(\"{text}\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.trust_project();
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, secs: u64, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(h.state()) {
+            assert!(start.elapsed() < Duration::from_secs(secs), "timed out waiting for {what}: {:?}", h.state().insight.status);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+    wait(&mut h, "rust-analyzer", 180, &|a| a.insight.status == InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
+    let at = |a: &CrabCraftApp| a.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0));
+    // Where `hello` is drawn; the caret is elsewhere when the user right-clicks it.
+    let i = h.state().docs.index_of(&main).unwrap();
+    h.state_mut().docs.list[i].editor.goto(3, "    let text: String = Greeter.he".len());
+    h.run_steps(3);
+    let p = h.state().caret_screen.unwrap() + egui::vec2(1.0, -6.0);
+    h.state_mut().docs.list[i].editor.goto(5, 0);
+    h.run_steps(3);
+    right_click(&mut h, p);
+    h.get_by_label("Go to Declaration").click();
+    h.run_steps(1);
+    wait(&mut h, "hello in lib.rs", 60, &|a| at(a) == Some((root.join("src/lib.rs"), 3)));
+
+    // Find Action has it, also under the name other editors give it.
+    for name in ["Go to Declaration", "Go to Definition"] {
+        let i = h.state().docs.index_of(&main).unwrap();
+        h.state_mut().docs.activate(i);
+        h.state_mut().docs.list[i].editor.goto(0, "use demo::Gre".len());
+        h.run_steps(3);
+        let chord = h.state().keymap.chord(rc_editor::Action::FindAction).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(3);
+        h.input_mut().events.push(egui::Event::Text(name.into()));
+        h.run_steps(3);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(1);
+        wait(&mut h, &format!("{name}: Greeter in lib.rs"), 60, &|a| at(a) == Some((root.join("src/lib.rs"), 0)));
+    }
+    h.state_mut().insight.stop();
+}
+
 #[test]
 fn tests_run_with_nextest_when_the_setting_is_on() {
     const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
