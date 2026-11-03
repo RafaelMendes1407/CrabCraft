@@ -604,7 +604,7 @@ fn a_macro_call_expands_recursively_into_a_read_only_tab() {
     let d = app.docs.active_doc().unwrap();
     assert_eq!(d.name(), "twice.rs");
     assert!(d.editor.read_only && d.generated && !crate::insight::has_insight(d));
-    assert!(d.editor.buffer.rope().to_string().contains(&text));
+    assert!(d.editor.buffer.rope().to_string().contains(&text), "{:?} / {text:?}", d.editor.buffer.rope().to_string());
     app.insight.stop();
 }
 

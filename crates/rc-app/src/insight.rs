@@ -1760,8 +1760,10 @@ const OPTIMIZE_STEPS: [&str; 2] = ["Remove all unused imports", "Merge imports"]
 /// The macro's name and its expansion in a `rust-analyzer/expandMacro` reply (`null` when the
 /// caret is not on a macro call).
 fn macro_expansion(v: &Value) -> Option<(String, String)> {
-    let name = v.get("name")?.as_str()?.to_string();
-    let text = v.get("expansion")?.as_str()?.to_string();
+    // rust-analyzer writes the name with its `!`.
+    let name = v.get("name")?.as_str()?.trim_end_matches('!').to_string();
+    // On Windows the expansion comes with `\r\n`, and with blank lines around it.
+    let text = v.get("expansion")?.as_str()?.replace("\r\n", "\n").trim_matches('\n').to_string();
     Some((name, text))
 }
 
