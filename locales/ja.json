@@ -858,5 +858,8 @@
     "--line and --column must come before a file": "--line と --column はファイルの前に指定してください",
     "{option} needs a number": "{option} には数値が必要です",
     "{option} needs a number from 1 up, not {value}": "{option} には 1 以上の数値が必要です（{value} ではなく）"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "インデント（プロジェクトのコードスタイル: {files}）"
   }
 }

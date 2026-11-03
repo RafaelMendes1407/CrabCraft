@@ -48,7 +48,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                 }
                 let indent = if e.indent.unit == "\t" { tr("Tab").to_string() } else { trf("{n} spaces", &[("n", &e.indent.unit.len())]) };
-                widget(ui, indent, tr("Indentation"));
+                let tip = match doc.style.sources.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect::<Vec<_>>() {
+                    files if files.is_empty() => tr("Indentation").to_string(),
+                    files => trf("Indentation, from the project's code style: {files}", &[("files", &files.join(", "))]),
+                };
+                widget(ui, indent, &tip);
                 widget(ui, if doc.bom { "UTF-8 BOM".into() } else { "UTF-8".into() }, tr("File encoding"));
                 widget(ui, e.buffer.line_ending().label().into(), tr("Line separator"));
                 let (line, col) = e.caret_line_col();

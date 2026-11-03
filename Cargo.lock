@@ -3564,6 +3564,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "dirs",
+ "globset",
  "notify",
  "parking_lot",
  "serde",

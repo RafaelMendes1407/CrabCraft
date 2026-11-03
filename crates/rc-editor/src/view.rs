@@ -471,7 +471,7 @@ fn paint_text_area(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     }
 
     // Right margin.
-    if let Some(col) = config.right_margin {
+    if let Some(col) = state.right_margin.or(config.right_margin) {
         let x = (x0 + col as f32 * m.char_w).round() + 0.5;
         if x > text_rect.left() {
             painter.vline(x, text_rect.y_range(), Stroke::new(1.0, scheme.right_margin));

@@ -858,5 +858,8 @@
     "--line and --column must come before a file": "--line et --column doivent précéder un fichier",
     "{option} needs a number": "{option} attend un nombre",
     "{option} needs a number from 1 up, not {value}": "{option} attend un nombre à partir de 1, pas {value}"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "Indentation, selon le style de code du projet : {files}"
   }
 }

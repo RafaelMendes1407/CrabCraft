@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 110 |
+| ✅ Pronto | 111 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 115 |
+| ⬜ A fazer | 114 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -77,7 +77,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-24 | Excluir pastas e arquivos da análise | ✅ | M3 | Menu de contexto do explorador (Excluir da análise / Incluir novamente), salvo por projeto na sessão; pastas e arquivos excluídos ficam fora do índice (Ir para arquivo, Search Everywhere), do Find in Files e dos eventos enviados ao servidor, aparecem esmaecidos no explorador e vão para o rust-analyzer em files.exclude (reinicia o servidor ao mudar). target/ já era oculto. |
 | P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
-| P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
+| P-27 | Estilo de código compartilhado no projeto | ✅ | M3 | `.editorconfig` (seções com globs, `root`, indentação, `tab_width`, `max_line_length`, `trim_trailing_whitespace`, `insert_final_newline`, `end_of_line` em arquivo novo) e, para `.rs`, `rustfmt.toml`/`.rustfmt.toml` (`hard_tabs`, `tab_spaces`, `max_width`, `newline_style`), lidos só dentro do projeto; o rustfmt prevalece em Rust. Indentação e margem direita ao abrir, limpeza ao salvar (menos na linha do cursor); a barra de status diz de onde veio. Visto na janela nativa com `hard_tabs` e `max_width = 60` |
 | P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
 | P-29 | Abrir projeto por `Cargo.toml` ou pasta | ✅ | M1 | Abrir pasta ou Cargo.toml testado; dentro do projeto o Cargo.toml abre para edição |
 

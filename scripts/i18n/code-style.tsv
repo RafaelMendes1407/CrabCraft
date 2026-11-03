@@ -1,0 +1,3 @@
+# Project code style. Import: python3 scripts/i18n_tsv.py code-style scripts/i18n/code-style.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Indentation, from the project's code style: {files}	Sangría, del estilo de código del proyecto: {files}	Indentation, selon le style de code du projet : {files}	Indentação, do estilo de código do projeto: {files}	Einrückung, aus dem Codestil des Projekts: {files}	Wcięcie, ze stylu kodu projektu: {files}	缩进，来自项目的代码样式：{files}	インデント（プロジェクトのコードスタイル: {files}）

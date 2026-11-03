@@ -1242,3 +1242,51 @@ fn vscode_shortcuts_reach_their_actions() {
     let texts: Vec<String> = doc.editor.selection.ranges().iter().map(|r| rope.slice(r.start()..r.end()).to_string()).collect();
     assert_eq!(texts, ["NEEDLE"], "Ctrl+D selects the word at the caret first");
 }
+
+/// The project's `.editorconfig` and `rustfmt.toml` set the indentation and right margin of
+/// its files, and saving trims trailing whitespace and ends the file with one newline.
+#[test]
+fn the_project_code_style_applies_on_open_and_save() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("styled");
+    let write = |name: &str, text: &str| {
+        let p = root.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    write("Cargo.toml", "[package]\nname = \"styled\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(".editorconfig", "root = true\n[*]\nindent_style = space\nindent_size = 2\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n[*.md]\ntrim_trailing_whitespace = false\n");
+    write("rustfmt.toml", "hard_tabs = true\nmax_width = 90\n");
+    // Four-space lines: detection alone would pick four spaces.
+    write("notes.txt", "a  \n    b\t\n    c");
+    write("src/main.rs", "fn main() {\n    let x = 1;\n}\n");
+    write("README.md", "keep  \n");
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+
+    app.open_file(&root.join("notes.txt"));
+    let doc = app.docs.active_doc().unwrap();
+    assert_eq!(doc.editor.indent.unit, "  ");
+    assert_eq!(doc.editor.right_margin, None);
+    app.open_file(&root.join("src/main.rs"));
+    let doc = app.docs.active_doc().unwrap();
+    assert_eq!(doc.editor.indent.unit, "\t", "rustfmt.toml wins for Rust files");
+    assert_eq!(doc.editor.right_margin, Some(90));
+
+    app.open_file(&root.join("notes.txt"));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.goto(0, 0);
+    app.docs.list[i].editor.replace(0, 0, "z");
+    app.docs.save(i).unwrap();
+    // The caret's line keeps its spaces; the others lose theirs, and a newline ends the file.
+    assert_eq!(std::fs::read_to_string(root.join("notes.txt")).unwrap(), "za  \n    b\n    c\n");
+
+    app.open_file(&root.join("README.md"));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.replace(0, 0, "x");
+    app.docs.list[i].editor.goto(0, 0);
+    app.docs.save(i).unwrap();
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "xkeep  \n");
+}

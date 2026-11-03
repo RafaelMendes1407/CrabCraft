@@ -111,6 +111,8 @@ pub struct EditorState {
     pub selection: Selection,
     pub syntax: Syntax,
     pub indent: Indent,
+    /// The right margin set by the project's code style, over the editor setting.
+    pub right_margin: Option<usize>,
     pub read_only: bool,
     // --- view
     pub(crate) scroll: egui::Vec2,
@@ -177,6 +179,7 @@ impl EditorState {
             id,
             path,
             buffer,
+            right_margin: None,
             selection: Selection::point(0),
             syntax: Syntax::new(lang),
             indent,

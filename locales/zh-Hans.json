@@ -858,5 +858,8 @@
     "--line and --column must come before a file": "--line 和 --column 必须位于文件之前",
     "{option} needs a number": "{option} 需要一个数字",
     "{option} needs a number from 1 up, not {value}": "{option} 需要从 1 开始的数字，而不是 {value}"
+  },
+  "code-style": {
+    "Indentation, from the project's code style: {files}": "缩进，来自项目的代码样式：{files}"
   }
 }

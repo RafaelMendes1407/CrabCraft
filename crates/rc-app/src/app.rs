@@ -308,6 +308,7 @@ impl CrabCraftApp {
         self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
+        self.docs.style_root = Some(ws.root.canonicalize().unwrap_or_else(|_| ws.root.clone()));
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
         if let Some(manifest) = manifest {
@@ -683,6 +684,7 @@ impl CrabCraftApp {
         self.tab_drag = None;
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
+        self.docs.style_root = None;
         self.libraries_load = None;
         self.rustfmt_jobs = Default::default();
         self.dock = Dock::default();
