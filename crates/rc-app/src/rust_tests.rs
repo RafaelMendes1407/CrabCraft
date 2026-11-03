@@ -2909,3 +2909,32 @@ fn an_attached_cargo_project_is_analysed() {
     assert!(app.explorer.attached.is_empty());
     assert!(!app.runner.configs.iter().any(|c| c.name == "gen (gen)"));
 }
+
+/// Paths in Settings › Editor › Never import drop out of completion's import suggestions,
+/// on a running rust-analyzer.
+#[test]
+fn excluded_paths_are_not_offered_for_import() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let paths = |c: &rc_editor::Completion| c.items.iter().filter(|i| i.label.starts_with("Ordering")).map(|i| format!("{} {}", i.label, i.detail)).collect::<Vec<_>>();
+
+    let c = complete_at_end(&mut app, "fn main() {\n    let _o: Orderin|;\n}\n");
+    let before = paths(&c);
+    assert!(before.iter().any(|p| p.contains("atomic")) && before.iter().any(|p| p.contains("cmp")), "{before:?}");
+
+    let mut settings = app.settings.clone();
+    settings.autoimport_exclude = vec!["std::sync::atomic::Ordering".into(), "  ".into()];
+    app.apply_settings(&egui::Context::default(), settings);
+    let c = complete_at_end(&mut app, "fn main() {\n    let _o: Orderin|;\n}\n");
+    let after = paths(&c);
+    assert!(!after.iter().any(|p| p.contains("atomic")) && after.iter().any(|p| p.contains("cmp")), "{after:?}");
+    app.insight.stop();
+}

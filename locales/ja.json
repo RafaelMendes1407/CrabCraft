@@ -964,5 +964,9 @@
     "Detached the Cargo project {name}": "Cargo プロジェクト {name} をデタッチしました",
     "Attached project": "アタッチしたプロジェクト",
     "attached": "アタッチ済み"
+  },
+  "autoimport-exclude": {
+    "Never import": "インポートしない",
+    "Items or modules completion never offers to import, one path per line": "補完でインポートを提案しない項目やモジュール（1 行に 1 パス）"
   }
 }

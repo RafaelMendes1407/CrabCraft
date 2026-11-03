@@ -964,5 +964,9 @@
     "Detached the Cargo project {name}": "已分离 Cargo 项目 {name}",
     "Attached project": "附加项目",
     "attached": "已附加"
+  },
+  "autoimport-exclude": {
+    "Never import": "从不导入",
+    "Items or modules completion never offers to import, one path per line": "补全永不建议导入的项或模块，每行一个路径"
   }
 }

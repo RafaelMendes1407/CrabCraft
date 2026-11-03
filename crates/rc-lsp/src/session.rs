@@ -55,12 +55,8 @@ pub struct LanguageSession {
     /// Recent stderr lines, for the error message when the server dies.
     stderr: Vec<String>,
     rust: bool,
-    /// The linter of rust-analyzer: Clippy instead of `cargo check`.
-    clippy: bool,
-    /// Folders and files rust-analyzer leaves out (relative to the root).
-    exclude: Vec<String>,
-    /// rust-analyzer's `linkedProjects` (empty: its own discovery).
-    linked: Vec<std::path::PathBuf>,
+    /// What is set in rust-analyzer (sent again when it asks).
+    ra: crate::rust_analyzer::RaSettings,
 }
 
 impl LanguageSession {
@@ -85,18 +81,16 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: false,
-            clippy: false,
-            exclude: Vec::new(),
-            linked: Vec::new(),
+            ra: Default::default(),
         })
     }
 
     /// Starts rust-analyzer for `root` with the project's environment `env`.
-    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, linked: Vec<std::path::PathBuf>, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
+    pub fn start_rust(program: &Path, root: &Path, ra: crate::rust_analyzer::RaSettings, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
         let client = crate::rust_analyzer::start(program, root, env, inbox.sender())?;
-        let init = crate::rust_analyzer::initialize(&client, root, clippy, &exclude, &linked);
+        let init = crate::rust_analyzer::initialize(&client, root, &ra);
         Ok(LanguageSession {
             client,
             inbox,
@@ -112,9 +106,7 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: true,
-            clippy,
-            exclude,
-            linked,
+            ra,
         })
     }
 
@@ -157,7 +149,7 @@ impl LanguageSession {
             match msg {
                 Incoming::Request { id, method, params } => {
                     if self.rust && method == "workspace/configuration" {
-                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy, &self.exclude, &self.linked)));
+                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, &self.ra)));
                     } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));
@@ -310,7 +302,13 @@ impl LanguageSession {
     /// Files created/changed/deleted on disk (so the server reloads closed files).
     /// Changes the linter of rust-analyzer, which then asks for its settings again.
     pub fn set_clippy(&mut self, clippy: bool) {
-        self.clippy = clippy;
+        self.ra.clippy = clippy;
+        self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
+    }
+
+    /// Changes what completion never imports; the server asks for its settings again.
+    pub fn set_autoimport_exclude(&mut self, list: Vec<String>) {
+        self.ra.autoimport_exclude = list;
         self.client.notify_raw("workspace/didChangeConfiguration", json!({ "settings": {} }));
     }
 

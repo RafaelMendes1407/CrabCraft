@@ -94,6 +94,8 @@ pub struct Settings {
     pub external_tools: Vec<crate::external_tools::ExternalTool>,
     /// Abbreviations expanded with Tab in Rust files.
     pub live_templates: Vec<crate::live_templates::LiveTemplate>,
+    /// Items and modules completion never offers to import (`std::sync::atomic::Ordering`).
+    pub autoimport_exclude: Vec<String>,
 }
 
 impl Default for Settings {
@@ -131,6 +133,7 @@ impl Default for Settings {
             last_workspace: None,
             external_tools: Vec::new(),
             live_templates: crate::live_templates::defaults(),
+            autoimport_exclude: Vec::new(),
         }
     }
 }

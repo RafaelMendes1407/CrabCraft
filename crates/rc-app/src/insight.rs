@@ -158,6 +158,8 @@ pub struct Insight {
     exclude: Vec<String>,
     /// `Cargo.toml` files rust-analyzer analyses besides what it finds (attached projects).
     linked: Vec<PathBuf>,
+    /// Paths completion never offers to import.
+    autoimport_exclude: Vec<String>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
@@ -281,6 +283,7 @@ impl Insight {
             clippy: false,
             exclude: Vec::new(),
             linked: Vec::new(),
+            autoimport_exclude: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -354,6 +357,19 @@ impl Insight {
         }
     }
 
+    /// Paths completion never imports (Settings › Editor); applied to a running server.
+    pub fn set_autoimport_exclude(&mut self, list: Vec<String>) {
+        if list == self.autoimport_exclude {
+            return;
+        }
+        self.autoimport_exclude = list.clone();
+        if self.rust
+            && let Some(s) = &mut self.session
+        {
+            s.set_autoimport_exclude(list);
+        }
+    }
+
     /// The folders and files rust-analyzer leaves out (`files.exclude`). A running server is
     /// restarted: rust-analyzer 1.99 keeps its file set after `workspace/didChangeConfiguration`.
     pub fn set_exclude(&mut self, exclude: Vec<String>) {
@@ -393,7 +409,8 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), self.linked.clone(), &self.env, self.waker.clone()) {
+            let ra = rc_lsp::rust_analyzer::RaSettings { clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone() };
+            match LanguageSession::start_rust(&program, &root, ra, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;

@@ -250,6 +250,15 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label("");
                         ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
                         ui.end_row();
+                        ui.label(tr("Never import"));
+                        ui.vertical(|ui| {
+                            let mut text = draft.autoimport_exclude.join("\n");
+                            if ui.add(egui::TextEdit::multiline(&mut text).hint_text("std::sync::atomic::Ordering").font(egui::TextStyle::Monospace).desired_rows(3).desired_width(300.0)).changed() {
+                                draft.autoimport_exclude = text.lines().map(str::to_string).collect();
+                            }
+                            ui.label(egui::RichText::new(tr("Items or modules completion never offers to import, one path per line")).size(12.0).color(p.text_muted));
+                        });
+                        ui.end_row();
                     }
                     SettingsPage::Keymap => {
                         ui.label(tr("Keymap"));

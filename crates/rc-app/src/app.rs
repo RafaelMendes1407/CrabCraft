@@ -206,7 +206,11 @@ impl CrabCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
-            insight: Insight::new(waker.clone()),
+            insight: {
+                let mut insight = Insight::new(waker.clone());
+                insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
+                insight
+            },
             runner: {
                 let mut runner = Runner::new(waker.clone());
                 runner.nextest = settings.use_nextest;
@@ -2023,6 +2027,7 @@ impl CrabCraftApp {
         self.settings = new;
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
+        self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));
@@ -2270,6 +2275,18 @@ pub fn linked_projects(root: &Path, attached: &[PathBuf]) -> Vec<PathBuf> {
     }
     let own = root.join("Cargo.toml");
     own.is_file().then_some(own).into_iter().chain(attached.iter().cloned()).collect()
+}
+
+/// Import paths as typed: trimmed, without blanks or `::` at either end, each once.
+pub fn clean_paths(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in list {
+        let p = p.trim().trim_matches(':').trim().to_string();
+        if !p.is_empty() && !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
 }
 
 pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 124 |
+| ✅ Pronto | 125 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 101 |
+| ⬜ A fazer | 100 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -122,7 +122,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Derive e macro testados com rust-analyzer real; em doctest ele não trouxe sugestões na sonda, exige solução própria |
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
 | I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
-| I-06 | Excluir itens do auto-import | ⬜ | M3 | |
+| I-06 | Excluir itens do auto-import | ✅ | M3 | Configurações › Editor › Nunca importar: caminhos (item ou módulo, um por linha) que a completação nunca oferece importar, via `completion.autoimport.exclude` do rust-analyzer, aplicados sem reiniciar o servidor. Testado com rust-analyzer real: `std::sync::atomic::Ordering` some das sugestões e `std::cmp::Ordering` fica |
 | I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
 | I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |
 | I-09 | Ordenação de completar por ML | 🚫 | - | Sem modelo próprio; rust-analyzer ordena |

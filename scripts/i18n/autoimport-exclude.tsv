@@ -1,0 +1,4 @@
+# Auto-import exclusions. Import: python3 scripts/i18n_tsv.py autoimport-exclude scripts/i18n/autoimport-exclude.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Never import	No importar nunca	Ne jamais importer	Nunca importar	Nie importieren	Nigdy nie importuj	从不导入	インポートしない
+Items or modules completion never offers to import, one path per line	Elementos o módulos que la completación nunca ofrece importar, una ruta por línea	Éléments ou modules que la complétion ne propose jamais d'importer, un chemin par ligne	Itens ou módulos que a completação nunca oferece importar, um caminho por linha	Elemente oder Module, die die Vervollständigung nie zum Import anbietet, ein Pfad pro Zeile	Elementy lub moduły, których uzupełnianie nigdy nie proponuje importować, jedna ścieżka w wierszu	补全永不建议导入的项或模块，每行一个路径	補完でインポートを提案しない項目やモジュール（1 行に 1 パス）

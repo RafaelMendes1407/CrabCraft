@@ -964,5 +964,9 @@
     "Detached the Cargo project {name}": "Projet Cargo {name} détaché",
     "Attached project": "Projet attaché",
     "attached": "attaché"
+  },
+  "autoimport-exclude": {
+    "Never import": "Ne jamais importer",
+    "Items or modules completion never offers to import, one path per line": "Éléments ou modules que la complétion ne propose jamais d'importer, un chemin par ligne"
   }
 }
