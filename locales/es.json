@@ -861,5 +861,17 @@
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "Sangría, del estilo de código del proyecto: {files}"
+  },
+  "sync-log": {
+    "Cargo project": "Proyecto Cargo",
+    "Output": "Salida",
+    "Sync": "Sincronización",
+    "{name} (failed)": "{name} (falló)",
+    "How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed": "Cómo cargó CrabCraft el proyecto Cargo: cada ejecución de cargo metadata y lo que mostró",
+    "No sync yet": "Aún no hay sincronización",
+    "The Cargo project is being loaded.": "Se está cargando el proyecto Cargo.",
+    "(Cargo printed nothing)": "(Cargo no mostró nada)",
+    "Finished in {time}": "Terminó en {time}",
+    "Failed after {time}": "Falló después de {time}"
   }
 }

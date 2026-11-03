@@ -14,6 +14,7 @@ mod run_anything;
 mod runner;
 mod rustfmt;
 mod search;
+mod sync_log;
 mod vcs;
 #[cfg(test)]
 mod vcs_tests;

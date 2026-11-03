@@ -1,0 +1,12 @@
+# Sync tab of the Build window. Import: python3 scripts/i18n_tsv.py sync-log scripts/i18n/sync-log.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Cargo project	Proyecto Cargo	Projet Cargo	Projeto Cargo	Cargo-Projekt	Projekt Cargo	Cargo 项目	Cargo プロジェクト
+Output	Salida	Sortie	Saída	Ausgabe	Wyjście	输出	出力
+Sync	Sincronización	Synchronisation	Sync	Synchronisierung	Synchronizacja	同步	同期
+{name} (failed)	{name} (falló)	{name} (échec)	{name} (falhou)	{name} (fehlgeschlagen)	{name} (niepowodzenie)	{name}（失败）	{name}（失敗）
+How CrabCraft loaded the Cargo project: each cargo metadata run and what it printed	Cómo cargó CrabCraft el proyecto Cargo: cada ejecución de cargo metadata y lo que mostró	Comment CrabCraft a chargé le projet Cargo : chaque exécution de cargo metadata et ce qu'elle a affiché	Como o CrabCraft carregou o projeto Cargo: cada execução do cargo metadata e o que ela imprimiu	Wie CrabCraft das Cargo-Projekt geladen hat: jeder Lauf von cargo metadata und seine Ausgabe	Jak CrabCraft wczytał projekt Cargo: każde uruchomienie cargo metadata i to, co wypisało	CrabCraft 如何加载 Cargo 项目：每次 cargo metadata 运行及其输出	CrabCraft が Cargo プロジェクトを読み込んだ方法: cargo metadata の各実行とその出力
+No sync yet	Aún no hay sincronización	Aucune synchronisation pour l'instant	Nenhum sync ainda	Noch keine Synchronisierung	Brak synchronizacji	尚未同步	まだ同期していません
+The Cargo project is being loaded.	Se está cargando el proyecto Cargo.	Le projet Cargo est en cours de chargement.	O projeto Cargo está sendo carregado.	Das Cargo-Projekt wird geladen.	Projekt Cargo jest wczytywany.	正在加载 Cargo 项目。	Cargo プロジェクトを読み込んでいます。
+(Cargo printed nothing)	(Cargo no mostró nada)	(Cargo n'a rien affiché)	(O Cargo não imprimiu nada)	(Cargo hat nichts ausgegeben)	(Cargo nic nie wypisał)	（Cargo 没有输出）	（Cargo の出力はありません）
+Finished in {time}	Terminó en {time}	Terminé en {time}	Concluído em {time}	Fertig in {time}	Zakończono w {time}	用时 {time} 完成	{time} で完了
+Failed after {time}	Falló después de {time}	Échec après {time}	Falhou após {time}	Fehlgeschlagen nach {time}	Niepowodzenie po {time}	{time} 后失败	{time} 後に失敗

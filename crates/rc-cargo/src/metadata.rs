@@ -73,7 +73,30 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Loads the workspace of `manifest`. This blocks: call it from a background thread.
 pub fn load_workspace(cargo: &Cargo, manifest: &Path) -> anyhow::Result<CargoWorkspace> {
-    parse_metadata(&run_metadata(cargo, manifest, &["--no-deps"])?)
+    load_workspace_logged(cargo, manifest).0
+}
+
+/// What one `cargo metadata` run did, for the Sync log.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoadLog {
+    /// The command line, as a user would type it.
+    pub command: String,
+    /// What cargo printed on stderr (downloads, warnings, the error).
+    pub stderr: String,
+    pub duration: Duration,
+    pub success: bool,
+}
+
+/// [`load_workspace`], with the log of the run.
+pub fn load_workspace_logged(cargo: &Cargo, manifest: &Path) -> (anyhow::Result<CargoWorkspace>, LoadLog) {
+    let (out, log) = run_metadata_logged(cargo, manifest, &["--no-deps"]);
+    (out.and_then(|text| parse_metadata(&text)), log)
+}
+
+/// [`load_libraries`], with the log of the run.
+pub fn load_libraries_logged(cargo: &Cargo, manifest: &Path) -> (anyhow::Result<Vec<Library>>, LoadLog) {
+    let (out, log) = run_metadata_logged(cargo, manifest, &["--offline", "--locked"]);
+    (out.and_then(|text| parse_libraries(&text)), log)
 }
 
 /// A dependency of the workspace, with its sources on disk.
@@ -90,7 +113,7 @@ pub struct Library {
 /// The dependencies recorded in `Cargo.lock`, without touching the network or that file. It fails
 /// when the lock file is missing, stale or names a crate that was not downloaded yet.
 pub fn load_libraries(cargo: &Cargo, manifest: &Path) -> anyhow::Result<Vec<Library>> {
-    parse_libraries(&run_metadata(cargo, manifest, &["--offline", "--locked"])?)
+    load_libraries_logged(cargo, manifest).0
 }
 
 /// Every package of the metadata that is not a workspace member, by name.
@@ -112,7 +135,18 @@ pub fn parse_libraries(text: &str) -> anyhow::Result<Vec<Library>> {
 }
 
 /// Runs `cargo metadata` to its end and returns what it printed.
-fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str]) -> anyhow::Result<String> {
+/// Runs `cargo metadata` and keeps what it printed on stderr, also when it fails.
+fn run_metadata_logged(cargo: &Cargo, manifest: &Path, options: &[&str]) -> (anyhow::Result<String>, LoadLog) {
+    let mut command = format!("cargo metadata {} --format-version 1 --manifest-path {}", options.join(" "), manifest.display());
+    command = command.replace("  ", " ");
+    let started = Instant::now();
+    let mut stderr = String::new();
+    let result = run_metadata(cargo, manifest, options, &mut stderr);
+    let log = LoadLog { command, stderr, duration: started.elapsed(), success: result.is_ok() };
+    (result, log)
+}
+
+fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str], stderr_text: &mut String) -> anyhow::Result<String> {
     use std::process::Stdio;
     let dir = manifest.parent().context("the manifest has no folder")?;
     let mut child = cargo
@@ -153,6 +187,7 @@ fn run_metadata(cargo: &Cargo, manifest: &Path, options: &[&str]) -> anyhow::Res
     };
     let stdout = reader.join().unwrap_or_default();
     let stderr = err_reader.join().unwrap_or_default();
+    *stderr_text = String::from_utf8_lossy(&stderr).into_owned();
     if !status.success() {
         anyhow::bail!("{}", String::from_utf8_lossy(&stderr).trim());
     }

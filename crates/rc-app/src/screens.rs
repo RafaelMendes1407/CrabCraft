@@ -1290,3 +1290,56 @@ fn the_project_code_style_applies_on_open_and_save() {
     app.docs.save(i).unwrap();
     assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "xkeep  \n");
 }
+
+/// The Build window's Sync tab lists each load of the Cargo model with what Cargo printed;
+/// a broken manifest shows Cargo's error there.
+#[test]
+fn the_sync_tab_shows_each_cargo_load() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    run_frames(&mut h, "the project and dependency loads", |a| a.sync_log.entries.len() >= 2);
+    let kinds: Vec<_> = h.state().sync_log.entries.iter().map(|e| e.kind).collect();
+    assert!(kinds.contains(&crate::sync_log::SyncKind::Project) && kinds.contains(&crate::sync_log::SyncKind::Dependencies), "{kinds:?}");
+    let project = h.state().sync_log.entries.iter().find(|e| e.kind == crate::sync_log::SyncKind::Project).unwrap().clone();
+    assert!(project.log.success);
+    assert!(project.log.command.starts_with("cargo metadata --no-deps"), "{}", project.log.command);
+
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Build);
+    h.run_steps(3);
+    h.get_by_label(rc_kit::i18n::tr("Sync")).click();
+    h.run_steps(3);
+    assert!(h.state().sync_log.tab_open);
+    h.get_by_label(rc_kit::i18n::tr("Cargo project"));
+
+    // A broken manifest: the reload fails and the tab says so, with Cargo's message.
+    std::fs::write(root.join("Cargo.toml"), "[workspace\nmembers = [\n").unwrap();
+    h.state_mut().reload_cargo();
+    run_frames(&mut h, "the failed reload", |a| a.sync_log.last_failed());
+    let last = h.state().sync_log.entries.last().unwrap().clone();
+    assert_eq!(last.kind, crate::sync_log::SyncKind::Project);
+    assert!(last.log.stderr.contains("Cargo.toml"), "{}", last.log.stderr);
+    h.run_steps(3);
+    h.get_by_label(&rc_kit::i18n::trf("{name} (failed)", &[("name", &rc_kit::i18n::tr("Sync"))]));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/sync-tab-*.png"]
+fn sync_tab_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = two_crates_harness(dir.path(), dark);
+        run_frames(&mut h, "both loads", |a| a.sync_log.entries.len() >= 2);
+        std::fs::write(root.join("Cargo.toml"), "[workspace\nmembers = [\n").unwrap();
+        h.state_mut().reload_cargo();
+        run_frames(&mut h, "the failed reload", |a| a.sync_log.last_failed());
+        h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Build);
+        h.state_mut().sync_log.tab_open = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("sync-tab-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

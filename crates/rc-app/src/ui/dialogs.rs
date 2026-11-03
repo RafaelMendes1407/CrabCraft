@@ -1584,7 +1584,7 @@ impl LocalHistoryView {
 }
 
 /// "3 min ago", or the date for old versions.
-fn history_age(now_ms: u64, time_ms: u64) -> String {
+pub(crate) fn history_age(now_ms: u64, time_ms: u64) -> String {
     let secs = now_ms.saturating_sub(time_ms) / 1000;
     match secs {
         0..60 => tr("just now").to_string(),

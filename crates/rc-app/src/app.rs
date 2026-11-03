@@ -83,10 +83,12 @@ pub struct CrabCraftApp {
     pub waker: Waker,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
-    cargo_load: Option<Inbox<Result<rc_cargo::CargoWorkspace, String>>>,
+    cargo_load: Option<Inbox<(Result<rc_cargo::CargoWorkspace, String>, Option<rc_cargo::LoadLog>)>>,
+    /// Every load of the Cargo model, newest last (the Build window's Sync tab).
+    pub sync_log: crate::sync_log::SyncLog,
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
-    libraries_load: Option<Inbox<Vec<rc_cargo::Library>>>,
+    libraries_load: Option<Inbox<(Vec<rc_cargo::Library>, Option<rc_cargo::LoadLog>)>>,
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
@@ -224,6 +226,7 @@ impl CrabCraftApp {
             waker,
             _watcher: None,
             cargo_load: None,
+            sync_log: Default::default(),
             cargo_remembered: None,
             pending: Vec::new(),
             focus_editor: false,
@@ -324,8 +327,11 @@ impl CrabCraftApp {
         let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
             let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
-                Some(cargo) => rc_cargo::load_workspace(&cargo, &manifest).map_err(|e| e.to_string()),
-                None => Err(tr("Cargo was not found. Install Rust with rustup.").to_string()),
+                Some(cargo) => {
+                    let (result, log) = rc_cargo::load_workspace_logged(&cargo, &manifest);
+                    (result.map_err(|e| e.to_string()), Some(log))
+                }
+                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
             };
             out.send(result);
         });
@@ -333,14 +339,20 @@ impl CrabCraftApp {
     }
 
     pub(crate) fn poll_cargo_workspace(&mut self) {
-        if let Some(libraries) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
+        if let Some((libraries, log)) = self.libraries_load.as_ref().and_then(|inbox| inbox.drain().into_iter().last()) {
             self.libraries_load = None;
+            if let Some(log) = log {
+                self.sync_log.push(crate::sync_log::SyncKind::Dependencies, log);
+            }
             // Canonical like the documents' paths (`\\?\C:\…` on Windows).
             self.docs.read_only_roots = libraries.iter().filter(|l| l.read_only).map(|l| l.root.canonicalize().unwrap_or_else(|_| l.root.clone())).collect();
             self.explorer.libraries = libraries;
         }
         let Some(inbox) = &self.cargo_load else { return };
-        for result in inbox.drain() {
+        for (result, log) in inbox.drain() {
+            if let Some(log) = log {
+                self.sync_log.push(crate::sync_log::SyncKind::Project, log);
+            }
             match result {
                 Ok(workspace) => {
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
@@ -363,13 +375,14 @@ impl CrabCraftApp {
         let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
             let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
-            let mut list = rc_cargo::load_libraries(&cargo, &manifest).unwrap_or_default();
+            let (list, log) = rc_cargo::load_libraries_logged(&cargo, &manifest);
+            let mut list = list.unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
             if let Some(root) = info.stdlib {
                 let version = info.rustc.as_deref().and_then(|v| v.split_whitespace().nth(1)).unwrap_or_default().to_string();
                 list.insert(0, rc_cargo::Library { name: "stdlib".into(), version, root, read_only: true });
             }
-            out.send(list);
+            out.send((list, Some(log)));
         });
         self.libraries_load = Some(inbox);
     }
@@ -685,6 +698,7 @@ impl CrabCraftApp {
         self.explorer = ExplorerState::default();
         self.docs.read_only_roots.clear();
         self.docs.style_root = None;
+        self.sync_log.clear();
         self.libraries_load = None;
         self.rustfmt_jobs = Default::default();
         self.dock = Dock::default();
