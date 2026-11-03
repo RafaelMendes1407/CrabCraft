@@ -171,6 +171,9 @@ pub struct SearchEverywhere {
     pub text: String,
     pub tab: SeTab,
     pub selected: usize,
+    /// Scroll the results to the selected row on the next frame. Set when the keyboard or a new
+    /// query moves the selection, so a wheel scroll stays where the user left it.
+    pub reveal: bool,
     pub focus: bool,
     pub scope: SeScope,
     /// The Cargo packages offered as scopes (only with two or more).
@@ -194,6 +197,7 @@ impl SearchEverywhere {
             text,
             tab,
             selected: 0,
+            reveal: false,
             focus: true,
             scope: SeScope::Project,
             packages: Vec::new(),
