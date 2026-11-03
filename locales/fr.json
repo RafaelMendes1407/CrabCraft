@@ -214,7 +214,8 @@
     "netcoredbg debugger": "Débogueur netcoredbg",
     "not found": "introuvable",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} caractères)",
-    "{n} spaces": "{n} espaces"
+    "{n} spaces": "{n} espaces",
+    "Show sticky lines while scrolling": "Afficher les lignes épinglées pendant le défilement"
   },
   "terminal": {
     "Local": "Local",

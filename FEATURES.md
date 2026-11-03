@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 97 |
+| ✅ Pronto | 98 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 24 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 127 |
+| ⬜ A fazer | 126 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -93,7 +93,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-06 | Múltiplos cursores e seleção | 🟢 | M1 | |
 | E-07 | Colchetes pareados e fechamento automático | 🟢 | M1 | Conferir `'` em lifetimes e `|` em closures |
 | E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
-| E-09 | Sticky lines | ⬜ | M3 | |
+| E-09 | Sticky lines | ✅ | M3 | Até 5 linhas de abertura dos blocos em volta do topo (dobras do tree-sitter) ficam fixas; clique leva à linha; opção em Configurações > Editor. Teste de UI em código Rust e captura conferida |
 | E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🟢 | M1 | |

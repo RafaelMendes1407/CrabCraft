@@ -214,7 +214,8 @@
     "netcoredbg debugger": "netcoredbg-Debugger",
     "not found": "nicht gefunden",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} Zeichen)",
-    "{n} spaces": "{n} Leerzeichen"
+    "{n} spaces": "{n} Leerzeichen",
+    "Show sticky lines while scrolling": "Fixierte Zeilen beim Scrollen anzeigen"
   },
   "terminal": {
     "Local": "Lokal",
