@@ -873,5 +873,11 @@
     "(Cargo printed nothing)": "（Cargo の出力はありません）",
     "Finished in {time}": "{time} で完了",
     "Failed after {time}": "{time} 後に失敗"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "プロジェクトなしで開いたファイル: 編集のみで、コード解析はありません",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit: このファイルは Cargo プロジェクト {name} に属しています。コード解析、実行、ビルドにはプロジェクトが必要です。",
+    "Open Project": "プロジェクトを開く"
   }
 }

@@ -873,5 +873,11 @@
     "(Cargo printed nothing)": "（Cargo 没有输出）",
     "Finished in {time}": "用时 {time} 完成",
     "Failed after {time}": "{time} 后失败"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "未打开项目的文件：仅编辑，无代码分析",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit：此文件属于 Cargo 项目 {name}。代码分析、运行和构建需要打开项目。",
+    "Open Project": "打开项目"
   }
 }

@@ -24,6 +24,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             theme::Side::Left => {
                 ui.add_space(12.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
+                if app.workspace.is_none() && !app.docs.list.is_empty() {
+                    ui.label(egui::RichText::new(tr("LightEdit")).strong().size(12.5)).on_hover_text(tr("Files open without a project: only editing, no code insight"));
+                    ui.add_space(10.0);
+                }
                 breadcrumbs(app, ui);
                 if let Some(n) = app.notices.last() {
                     ui.add_space(16.0);

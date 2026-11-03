@@ -1343,3 +1343,49 @@ fn sync_tab_capture() {
         h.render().unwrap().save(out.join(format!("sync-tab-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/light-edit-*.png"]
+fn light_edit_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        two_crates(&dir.path().join("ws"));
+        let mut app = test_app(&dir.path().join("home"), dark);
+        app.open_path(&dir.path().join("ws/beta/src/lib.rs"));
+        assert!(app.workspace.is_none());
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("light-edit-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A Rust file opened without its project is in LightEdit: the editor says which Cargo
+/// project it belongs to and opens it on request.
+#[test]
+fn light_edit_offers_the_files_cargo_project() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let ws = dir.path().join("ws");
+    two_crates(&ws);
+    let ws = ws.canonicalize().unwrap();
+    assert_eq!(crate::docs::cargo_project_of(&ws.join("beta/src/lib.rs")), Some(ws.clone()), "the workspace, not the member");
+    let loose = dir.path().join("notes.txt");
+    std::fs::write(&loose, "plain\n").unwrap();
+
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_path(&loose);
+    app.open_path(&ws.join("beta/src/lib.rs"));
+    assert!(app.workspace.is_none());
+    assert_eq!(app.docs.list[0].light_project, None);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    h.get_by_label(rc_kit::i18n::tr("LightEdit"));
+    h.get_by_label(rc_kit::i18n::tr("Open Project")).click();
+    h.run_steps(4);
+    assert_eq!(h.state().workspace.as_ref().map(|w| w.ws.root.canonicalize().unwrap()), Some(ws));
+    assert!(h.query_by_label(rc_kit::i18n::tr("LightEdit")).is_none());
+}

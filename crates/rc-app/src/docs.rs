@@ -36,6 +36,8 @@ pub struct Doc {
     pub generated: bool,
     /// What the project's `.editorconfig` and `rustfmt.toml` say about this file.
     pub style: rc_core::code_style::CodeStyle,
+    /// Opened with no project (LightEdit): the Cargo project the file belongs to, if any.
+    pub light_project: Option<PathBuf>,
 }
 
 /// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
@@ -71,6 +73,25 @@ pub struct Docs {
     pub history: Option<crate::local_history::HistoryService>,
     /// The open project: code style files are read up to it.
     pub style_root: Option<PathBuf>,
+}
+
+/// The folder of the Cargo project `file` belongs to: the outermost `Cargo.toml` above it that
+/// declares a `[workspace]`, or else the nearest one.
+pub fn cargo_project_of(file: &Path) -> Option<PathBuf> {
+    let mut nearest = None;
+    let mut workspace = None;
+    for dir in file.ancestors().skip(1) {
+        let manifest = dir.join("Cargo.toml");
+        let Ok(meta) = std::fs::metadata(&manifest) else { continue };
+        if !meta.is_file() || meta.len() > 1 << 20 {
+            continue;
+        }
+        nearest.get_or_insert_with(|| dir.to_path_buf());
+        if std::fs::read_to_string(&manifest).is_ok_and(|t| t.lines().any(|l| l.trim() == "[workspace]")) {
+            workspace = Some(dir.to_path_buf());
+        }
+    }
+    workspace.or(nearest)
 }
 
 /// The indentation and right margin of the project's style; detection decides what it leaves
@@ -196,7 +217,8 @@ impl Docs {
             _ => Default::default(),
         };
         apply_style(&mut editor, &style);
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style });
+        let light_project = if self.style_root.is_none() && !scratch { cargo_project_of(&path) } else { None };
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)

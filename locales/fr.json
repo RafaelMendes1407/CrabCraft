@@ -873,5 +873,11 @@
     "(Cargo printed nothing)": "(Cargo n'a rien affiché)",
     "Finished in {time}": "Terminé en {time}",
     "Failed after {time}": "Échec après {time}"
+  },
+  "light-edit": {
+    "LightEdit": "LightEdit",
+    "Files open without a project: only editing, no code insight": "Fichiers ouverts sans projet : édition seule, sans analyse du code",
+    "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.": "LightEdit : ce fichier appartient au projet Cargo {name}. L'analyse du code, l'exécution et la compilation nécessitent le projet.",
+    "Open Project": "Ouvrir le projet"
   }
 }
