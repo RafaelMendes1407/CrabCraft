@@ -841,5 +841,8 @@
     "The patch does not apply": "补丁无法应用",
     "The push was rejected (fetch first)": "推送被拒绝（请先获取）",
     "{path} is not inside a Git repository": "{path} 不在 Git 仓库中"
+  },
+  "search-results": {
+    "… more": "… 更多"
   }
 }

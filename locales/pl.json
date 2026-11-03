@@ -841,5 +841,8 @@
     "The patch does not apply": "Nie można zastosować poprawki",
     "The push was rejected (fetch first)": "Push został odrzucony (najpierw wykonaj fetch)",
     "{path} is not inside a Git repository": "{path} nie znajduje się w repozytorium Git"
+  },
+  "search-results": {
+    "… more": "… więcej"
   }
 }
