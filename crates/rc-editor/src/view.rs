@@ -1188,8 +1188,8 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
                 paste(state, &text);
                 out.events.push(EditorEvent::Pasted);
             }
-            Event::Copy => copy(ui, state, false),
-            Event::Cut => copy(ui, state, true),
+            Event::Copy => copy(ui.ctx(), state, false),
+            Event::Cut => copy(ui.ctx(), state, true),
             Event::Ime(ime) => match ime {
                 egui::ImeEvent::Preedit { text, .. } => state.ime_preedit = Some(text),
                 egui::ImeEvent::Commit(text) => {
@@ -1291,7 +1291,9 @@ fn electric_close_brace(rope: &rc_text::Rope, state: &EditorState) -> Option<com
     Some(commands::Edited { changes: cs, selection: Selection::point(ls + text.chars().count()) })
 }
 
-fn copy(ui: &Ui, state: &mut EditorState, cut: bool) {
+/// Copies the selection (the caret's lines without one) to the clipboard, as Ctrl+C does; with
+/// `cut`, also deletes it. For commands from outside the widget, such as its context menu.
+pub fn copy(ctx: &egui::Context, state: &mut EditorState, cut: bool) {
     let rope = state.buffer.rope().clone();
     let sel = state.selection.clone();
     let any_selected = sel.ranges().iter().any(|r| !r.is_empty());
@@ -1313,7 +1315,7 @@ fn copy(ui: &Ui, state: &mut EditorState, cut: bool) {
         state.line_clipboard = Some(t.clone());
         t
     };
-    ui.ctx().copy_text(text);
+    ctx.copy_text(text);
     if cut && !state.read_only {
         let edited = if any_selected { commands::delete_forward(&rope, &sel) } else { commands::delete_lines(&rope, &sel) };
         state.apply(edited, EditKind::Other);

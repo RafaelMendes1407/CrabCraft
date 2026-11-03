@@ -366,7 +366,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         app.gutter_menu = opened;
     }
     if app.gutter_menu.is_none() {
-        editor_context_menu(app, &out.response);
+        editor_context_menu(app, active, &out.response);
     }
     let doc = &mut app.docs.list[active];
     // While paused, hovering shows the debugger's value instead of the symbol's documentation.
@@ -550,7 +550,7 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
     }
 }
 
-fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
+fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let insight = app.docs.active_doc().is_some_and(crate::insight::has_insight);
     let is_csharp = app.docs.active_doc().is_some_and(|d| d.editor.lang() == rc_syntax::Lang::CSharp);
@@ -592,8 +592,16 @@ fn editor_context_menu(app: &mut CrabCraftApp, resp: &egui::Response) {
         ui.separator();
         entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
     });
-    if let Some(cmd) = edit {
-        forward_edit(&resp.ctx, cmd);
+    // The editor has already read this frame's input, so it copies and cuts here.
+    match edit {
+        Some(MenuCommand::Copy) => rc_editor::copy_selection(&resp.ctx, &mut app.docs.list[active].editor, false),
+        Some(MenuCommand::Cut) => rc_editor::copy_selection(&resp.ctx, &mut app.docs.list[active].editor, true),
+        // The clipboard's text arrives as an event next frame: the editor must have the keyboard.
+        Some(cmd) => {
+            resp.request_focus();
+            forward_edit(&resp.ctx, cmd);
+        }
+        None => {}
     }
     if usings && let Some(i) = app.docs.active {
         app.insight.add_missing_usings(&app.docs.list[i]);
