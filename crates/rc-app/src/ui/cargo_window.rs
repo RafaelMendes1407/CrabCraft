@@ -257,17 +257,6 @@ fn look(kind: TargetKind) -> (Ico, &'static str) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn local_paths_are_shown_from_the_workspace() {
-        let m = std::path::Path::new("/w/Cargo.toml");
-        assert_eq!(super::short_detail("(/w/crates/beta)", m), "(crates/beta)");
-        assert_eq!(super::short_detail("(/elsewhere/x)", m), "(/elsewhere/x)");
-        assert_eq!(super::short_detail("(proc-macro)", m), "(proc-macro)");
-    }
-}
-
 fn row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str, note: &str, enabled: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 24.0), Sense::click());
@@ -287,4 +276,15 @@ fn row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str, not
     let name = ui.painter().text(pos2(x, r.center().y), Align2::LEFT_CENTER, text, FontId::proportional(13.0), color);
     ui.painter().text(pos2(name.right() + 8.0, r.center().y), Align2::LEFT_CENTER, note, FontId::proportional(12.0), p.muted);
     response
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn local_paths_are_shown_from_the_workspace() {
+        let m = std::path::Path::new("/w/Cargo.toml");
+        assert_eq!(super::short_detail("(/w/crates/beta)", m), "(crates/beta)");
+        assert_eq!(super::short_detail("(/elsewhere/x)", m), "(/elsewhere/x)");
+        assert_eq!(super::short_detail("(proc-macro)", m), "(proc-macro)");
+    }
 }
