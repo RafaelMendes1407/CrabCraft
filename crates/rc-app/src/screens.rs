@@ -963,3 +963,247 @@ fn screens_search_everywhere() {
     }
 }
 
+
+/// A project of `n` files that all match `item_`, with Search Everywhere open on them.
+fn many_files_harness(home: &Path, n: usize, tab: crate::search::SeTab) -> Harness<'static, CrabCraftApp> {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"many\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    for i in 0..n {
+        std::fs::write(root.join(format!("src/item_{i:03}.rs")), "pub fn f() {}\n").unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), true);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 900.0));
+    run_frames(&mut h, "the file index", |a| a.files.index.as_ref().is_some_and(|i| i.is_ready() && i.snapshot().len() > n));
+    press_search_everywhere(&mut h);
+    h.state_mut().search_everywhere.as_mut().unwrap().tab = tab;
+    h.input_mut().events.push(egui::Event::Text("item_".into()));
+    h.run_steps(3);
+    h
+}
+
+fn wheel(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2, dy: f32) {
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+    h.run_steps(1);
+}
+
+#[test]
+fn search_everywhere_results_grow_and_keep_their_wheel_scroll() {
+    use crate::search::SeTab;
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = many_files_harness(dir.path(), 150, SeTab::Files);
+
+    // The Files tab lists them all, and the popup grows to most of the window.
+    assert!(h.query_by_label("item_000.rs").is_some(), "item_000.rs is not listed");
+    assert!(h.query_by_label("item_149.rs").is_some(), "the Files tab stops before 150 files");
+    let popup = h.ctx.memory(|m| m.area_rect(egui::Id::new("search_everywhere"))).unwrap();
+    assert!(popup.height() > 600.0, "the popup does not grow: {popup:?}");
+
+    // A wheel scroll stays where it is left: the first row moves up and does not snap back.
+    let top = h.get_by_label("item_000.rs").rect().top();
+    wheel(&mut h, popup.center(), -300.0);
+    h.run_steps(10);
+    let scrolled = h.get_by_label("item_000.rs").rect().top();
+    assert!(scrolled < top - 100.0, "the wheel did not scroll: {top} -> {scrolled}");
+    h.run_steps(10);
+    assert_eq!(h.get_by_label("item_000.rs").rect().top(), scrolled, "the scroll snapped back");
+
+    // The keyboard still scrolls the selected row into view, here back to the first one.
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::ArrowUp);
+    h.run_steps(5);
+    assert_eq!(h.state().search_everywhere.as_ref().unwrap().selected, 0);
+    assert_eq!(h.get_by_label("item_000.rs").rect().top(), top, "the selected row is not revealed");
+    for _ in 0..60 {
+        h.key_press(egui::Key::ArrowDown);
+    }
+    h.run_steps(5);
+    assert_eq!(h.state().search_everywhere.as_ref().unwrap().selected, 60);
+    assert!(h.get_by_label("item_000.rs").rect().top() < top - 600.0, "ArrowDown does not follow the selection");
+
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    h.render().unwrap().save(out.join("search-everywhere-many-files-dark.png")).unwrap();
+}
+
+#[test]
+fn search_everywhere_all_tab_offers_more_files() {
+    use crate::search::SeTab;
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = many_files_harness(dir.path(), 30, SeTab::All);
+
+    // All shows the first files and a row that opens the Files tab with the rest.
+    assert!(h.query_by_label("item_000.rs").is_some());
+    assert!(h.query_by_label("item_029.rs").is_none(), "All lists every file");
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    h.render().unwrap().save(out.join("search-everywhere-all-more-dark.png")).unwrap();
+    h.get_by_label(tr("… more")).click();
+    h.run_steps(3);
+    let se = h.state().search_everywhere.as_ref().expect("Search Everywhere stays open");
+    assert_eq!(se.tab, SeTab::Files);
+    assert_eq!(se.text, "item_");
+    assert!(h.query_by_label("item_029.rs").is_some(), "the Files tab does not list the rest");
+}
+
+#[test]
+fn find_in_files_suggests_a_rust_file_mask() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]
+name = \"mask\"
+version = \"0.1.0\"
+edition = \"2021\"
+
+[workspace]
+").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}
+").unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root.canonicalize().unwrap());
+    app.pending.push(rc_editor::Action::FindInFiles);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    assert!(h.state().find_in_files.is_some(), "Find in Files did not open");
+    let hint = |h: &Harness<'static, CrabCraftApp>, mask: &'static str| h.query_by(|n| n.placeholder() == Some(mask)).is_some();
+    assert!(hint(&h, "*.rs"), "the file mask does not suggest *.rs");
+    assert!(!hint(&h, "*.cs"), "the file mask still suggests *.cs");
+}
+
+/// Sixty branches in a small window: the branches popup stays inside it, its actions stay at the
+/// top and the list scrolls down to the last branch.
+#[test]
+fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
+    git(&["init", "-q", "-b", "trunk"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Start"]);
+    for n in 0..60 {
+        git(&["branch", &format!("feature/topic-{n:02}")]);
+    }
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let size = vec2(900.0, 500.0);
+    let mut h = harness(app, size);
+    run_frames(&mut h, "the branches", |a| a.vcs.branch_name().as_deref() == Some("trunk") && a.vcs.branches.len() >= 61);
+    let last = h.state().vcs.branches.iter().filter(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).last().map(|b| b.name.clone()).unwrap();
+    h.get_by_label("trunk").click();
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("branches-popup-top.png")).unwrap();
+    // The popup ends inside the window, with New Branch… still there.
+    let popups: Vec<egui::Rect> = h.ctx.memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order == egui::Order::Foreground).filter_map(|l| m.area_rect(l.id)).collect());
+    assert!(!popups.is_empty());
+    for r in &popups {
+        assert!(r.bottom() <= size.y && r.top() >= 0.0, "the popup leaves the window: {r:?}");
+    }
+    let new_branch = h.get_by_label("New Branch…").rect();
+    assert!(new_branch.bottom() <= size.y);
+    // The last branch is below the visible part of the list until the list is scrolled.
+    assert!(h.get_by_label(&last).rect().top() > size.y, "{:?}", h.get_by_label(&last).rect());
+    let over = h.get_by_label("feature/topic-00").rect().center();
+    for _ in 0..40 {
+        h.input_mut().events.push(egui::Event::PointerMoved(over));
+        h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, -3.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+        h.run_steps(1);
+    }
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("branches-popup-bottom.png")).unwrap();
+    let r = h.get_by_label(&last).rect();
+    assert!(r.top() >= 0.0 && r.bottom() <= size.y, "the last branch is out of view: {r:?}");
+    // The actions above the list did not scroll away.
+    assert_eq!(h.get_by_label("New Branch…").rect(), new_branch);
+}
+
+/// A right click at `at` in the rendered window, as a mouse sends it.
+fn right_click(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+}
+
+/// Clicks the context menu's `entry` and returns the text the frames after it copied.
+fn click_entry(h: &mut Harness<'static, CrabCraftApp>, entry: &str) -> (Vec<String>, bool) {
+    use egui_kittest::kittest::Queryable;
+    h.get_by_label(entry).click();
+    let (mut copied, mut paste) = (Vec::new(), false);
+    for _ in 0..3 {
+        h.run_steps(1);
+        for c in &h.output().platform_output.commands {
+            if let egui::OutputCommand::CopyText(t) = c {
+                copied.push(t.clone());
+            }
+        }
+        paste |= h.output().viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
+    }
+    (copied, paste)
+}
+
+#[test]
+fn cut_copy_and_paste_from_the_editor_context_menu() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let file = home.path().join("notes.txt");
+    std::fs::write(&file, "alpha beta\ngamma\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_file(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
+    // Select "alpha" and right-click on it: the selection stays.
+    let select_alpha = |h: &mut Harness<'static, CrabCraftApp>| {
+        let doc = &mut h.state_mut().docs.list[0];
+        doc.editor.set_selection(rc_text::Selection::single(rc_text::Range::new(0, 5)));
+        h.run_steps(2);
+        h.state().caret_screen.unwrap() + vec2(-8.0, -6.0)
+    };
+    let at = select_alpha(&mut h);
+    right_click(&mut h, at);
+    let (copied, _) = click_entry(&mut h, "Copy");
+    assert_eq!(copied, vec!["alpha".to_string()]);
+    assert_eq!(text(&h), "alpha beta\ngamma\n");
+
+    let at = select_alpha(&mut h);
+    right_click(&mut h, at);
+    let (copied, _) = click_entry(&mut h, "Cut");
+    assert_eq!(copied, vec!["alpha".to_string()]);
+    assert_eq!(text(&h), " beta\ngamma\n");
+
+    // Paste asks the platform for the clipboard; its answer goes into the editor.
+    h.state_mut().docs.list[0].editor.goto(1, 0);
+    h.run_steps(2);
+    let at = h.state().caret_screen.unwrap() + vec2(2.0, -6.0);
+    right_click(&mut h, at);
+    let (_, requested) = click_entry(&mut h, "Paste");
+    assert!(requested, "the clipboard was not requested");
+    h.event(egui::Event::Paste("alpha".into()));
+    h.run_steps(2);
+    assert_eq!(text(&h), " beta\nalphagamma\n");
+}
+

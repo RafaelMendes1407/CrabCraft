@@ -2469,3 +2469,75 @@ fn a_warning_is_suppressed_for_its_statement_or_the_file() {
     assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unresolved-import", "item"), None);
     app.insight.stop();
 }
+
+/// Alt+F7 on one function, a click on another and Alt+F7 again: the Find window shows the
+/// usages of the second, also when it has a single one.
+#[test]
+fn find_usages_again_on_another_function_replaces_the_results() {
+    const SOURCE: &str = "fn first() {}
+fn second() {}
+fn third() {}
+
+fn a() {
+    first();
+    first();
+}
+fn b() {
+    second();
+    second();
+    second();
+}
+fn c() {
+    third();
+}
+
+fn main() {
+    a();
+    b();
+    c();
+}
+";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    let lines = |a: &CrabCraftApp| a.find_results.as_ref().map(|(_, t)| t.iter().map(|t| t.line).collect::<Vec<_>>());
+    // A click on the function's name in the rendered editor, then Alt+F7.
+    let find = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, line: usize, want: Vec<usize>| {
+        let i = h.state().docs.index_of(&main).unwrap();
+        h.state_mut().docs.activate(i);
+        h.state_mut().docs.list[i].editor.goto(line, 5);
+        h.run_steps(3);
+        let at = h.state().caret_screen.unwrap() + egui::vec2(1.0, -6.0);
+        h.state_mut().docs.list[i].editor.goto(0, 0);
+        h.input_mut().events.push(egui::Event::PointerMoved(at));
+        h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.run_steps(1);
+        h.input_mut().events.push(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        h.run_steps(2);
+        assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret_line_col().0), Some(line));
+        h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::F7);
+        let start = Instant::now();
+        while lines(h.state()).as_ref() != Some(&want) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {want:?}, the window shows {:?}", lines(h.state()));
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+    find(&mut h, 0, vec![5, 6]);
+    // Another function: its usages replace those of the first.
+    find(&mut h, 1, vec![9, 10, 11]);
+    // A single usage lands in the window too instead of leaving the previous list there.
+    find(&mut h, 2, vec![14]);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Find));
+    h.state_mut().insight.stop();
+}
