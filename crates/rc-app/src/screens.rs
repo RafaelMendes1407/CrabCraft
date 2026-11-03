@@ -640,3 +640,39 @@ fn screens_readme() {
         h.state_mut().insight.stop();
     }
 }
+
+/// Rust and Cargo file icons and the source/test root folders in the explorer and the tabs.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/rust-icons-*.png"]
+fn screens_rust_icons() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let project = tempfile::Builder::new().prefix("crabcraft-icons").tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    for d in ["src", "tests", "examples", "benches", "docs"] {
+        std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"icons\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    std::fs::write(root.join("rustfmt.toml"), "max_width = 100\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(root.join("tests/it.rs"), "#[test]\nfn it() {}\n").unwrap();
+    std::fs::write(root.join("docs/notes.md"), "# Notes\n").unwrap();
+    for dark in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&root);
+        for d in ["src", "tests"] {
+            app.explorer.expanded.insert(format!("dir:{}", root.join(d).display()));
+        }
+        app.open_file(&root.join("Cargo.toml"));
+        app.open_file(&root.join("Cargo.lock"));
+        app.open_file(&root.join("src/main.rs"));
+        let mut h = harness(app, vec2(1100.0, 600.0));
+        h.run_steps(10);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("rust-icons-{suffix}.png"))).unwrap();
+        h.state_mut().insight.stop();
+    }
+}
