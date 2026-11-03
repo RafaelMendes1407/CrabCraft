@@ -316,6 +316,7 @@ impl CrabCraftApp {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.runner.compounds = session.compounds.clone();
+        self.runner.test_configs = session.test_configs.clone();
         self.runner.options = session.run_options.clone();
         // Configurations stored in the project win over the session's copy.
         self.runner.options.extend(rc_core::run_files::load(&ws.root));
@@ -878,6 +879,7 @@ impl CrabCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
+            test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),
             project_env: self.runner.project_env.clone(),
@@ -1659,6 +1661,9 @@ impl CrabCraftApp {
                 Some(Err(e)) => self.notify(e, true),
                 None => {}
             },
+            Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::TestSelection { .. }, .. }) => {
+                self.notify(tr("Test configurations cannot be debugged yet: use Debug in the gutter of the test"), false);
+            }
             Some(config) => {
                 let dotnet = dotnet_path(&self.settings);
                 let request = self.runner.request_for(&config);
@@ -1734,6 +1739,10 @@ impl CrabCraftApp {
         };
         self.save_all_docs();
         let filter = if m.is_class { rc_dotnet::TestFilter::Class(m.name.clone()) } else { rc_dotnet::TestFilter::Tests(vec![m.name.clone()]) };
+        // The run becomes a temporary configuration: Run and Debug start it again.
+        let short = m.name.rsplit("::").next().unwrap_or(&m.name).rsplit('.').next().unwrap_or(&m.name).to_string();
+        self.runner.select_tests(short, project.clone(), filter.clone());
+        self.session_dirty = true;
         let outs = self.runner.run_tests(&project, Some(filter));
         crate::ui::run_windows::handle_outputs(self, outs);
     }

@@ -2682,3 +2682,49 @@ fn run_configurations_allow_instances_and_live_in_the_project() {
     assert!(loaded.in_project && loaded.allow_parallel);
     assert_eq!(loaded.args, "--port 1");
 }
+
+/// A gutter test run leaves a temporary configuration that Run starts again; at most five are
+/// kept, Save makes one permanent (kept in the session), and reloading the Cargo model keeps
+/// them.
+#[test]
+fn test_runs_become_temporary_configurations() {
+    use crate::runner::ConfigKind;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("lib");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"lib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(test)]\nmod tests {\n    #[test]\n    fn one() {}\n    #[test]\n    fn two() {}\n}\n").unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    let manifest = app.runner.cargo_workspace.as_ref().unwrap().manifest.clone();
+    let filter = |n: &str| rc_dotnet::TestFilter::Tests(vec![n.to_string()]);
+
+    app.runner.select_tests("one".into(), manifest.clone(), filter("tests::one"));
+    assert_eq!(app.runner.selected_config().map(|c| c.name.as_str()), Some("one"));
+    assert!(app.runner.is_temporary("one"));
+    // The same tests again select the same configuration.
+    app.runner.select_tests("one".into(), manifest.clone(), filter("tests::one"));
+    assert_eq!(app.runner.temporary.len(), 1);
+
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the test", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 0), "only tests::one runs: {:?}", t.results.keys());
+
+    for i in 0..6 {
+        app.runner.select_tests(format!("t{i}"), manifest.clone(), filter(&format!("tests::t{i}")));
+    }
+    assert_eq!(app.runner.temporary.len(), 5, "the oldest go");
+    assert!(!app.runner.configs.iter().any(|c| c.name == "one"));
+
+    app.runner.save_temporary("t5");
+    assert!(!app.runner.is_temporary("t5"));
+    app.reload_cargo();
+    pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some() && a.runner.configs.iter().any(|c| c.name == "t5"));
+    assert!(app.runner.configs.iter().any(|c| c.name == "t4" && matches!(c.kind, ConfigKind::TestSelection { .. })), "temporary ones survive a reload");
+    app.save_session();
+    let session = rc_core::session::Session::load(&root);
+    assert_eq!(session.test_configs.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["t5"]);
+}

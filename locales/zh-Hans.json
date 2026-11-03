@@ -916,5 +916,10 @@
     "Store as project file": "存储为项目文件",
     "Saved in .crabcraft/runConfigurations to be committed and shared": "保存在 .crabcraft/runConfigurations 中，便于提交和共享",
     "Could not save the run configuration in the project: {error}": "无法将运行配置保存到项目中：{error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name}（临时）",
+    "Save “{name}” Configuration": "保存“{name}”配置",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "测试配置暂不能调试：请使用测试旁边的“调试”"
   }
 }

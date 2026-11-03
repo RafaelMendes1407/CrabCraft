@@ -18,6 +18,18 @@ pub struct OpenFile {
     pub pinned: bool,
 }
 
+/// A run configuration for some tests: by full name, or every test of a module/class.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedTestConfig {
+    pub name: String,
+    /// The project (`Cargo.toml`, solution or test project) the tests belong to.
+    pub target: PathBuf,
+    pub tests: Vec<String>,
+    /// `tests` holds one module or class: all of its tests run.
+    pub class: bool,
+}
+
 /// What the user changed in an application run configuration (Run › Edit Configuration).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -128,6 +140,8 @@ pub struct Session {
     pub bookmarks: BTreeMap<PathBuf, Vec<usize>>,
     /// Compound run configurations: name and the configurations they start.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Test configurations made from a gutter run and saved (Save Configuration).
+    pub test_configs: Vec<SavedTestConfig>,
     /// Edited application configurations, by name.
     pub run_options: BTreeMap<String, RunOptions>,
     /// Folders and files left out of the index, Find in Files and the analysis (root-relative,

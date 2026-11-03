@@ -916,5 +916,10 @@
     "Store as project file": "Als Projektdatei speichern",
     "Saved in .crabcraft/runConfigurations to be committed and shared": "Wird in .crabcraft/runConfigurations gespeichert, um sie zu committen und zu teilen",
     "Could not save the run configuration in the project: {error}": "Die Ausführungskonfiguration konnte nicht im Projekt gespeichert werden: {error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name} (temporär)",
+    "Save “{name}” Configuration": "Konfiguration „{name}“ speichern",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "Testkonfigurationen können noch nicht debuggt werden: Nutze Debuggen am Rand des Tests"
   }
 }

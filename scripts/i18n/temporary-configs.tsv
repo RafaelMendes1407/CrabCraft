@@ -1,0 +1,5 @@
+# Temporary run configurations. Import: python3 scripts/i18n_tsv.py temporary-configs scripts/i18n/temporary-configs.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+{name} (temporary)	{name} (temporal)	{name} (temporaire)	{name} (temporária)	{name} (temporär)	{name} (tymczasowa)	{name}（临时）	{name}（一時）
+Save “{name}” Configuration	Guardar la configuración «{name}»	Enregistrer la configuration « {name} »	Salvar a configuração “{name}”	Konfiguration „{name}“ speichern	Zapisz konfigurację „{name}”	保存“{name}”配置	構成「{name}」を保存
+Test configurations cannot be debugged yet: use Debug in the gutter of the test	Las configuraciones de prueba aún no se pueden depurar: usa Depurar en el margen de la prueba	Les configurations de test ne peuvent pas encore être déboguées : utilisez Déboguer dans la marge du test	Configurações de teste ainda não podem ser depuradas: use Depurar na margem do teste	Testkonfigurationen können noch nicht debuggt werden: Nutze Debuggen am Rand des Tests	Konfiguracji testów nie można jeszcze debugować: użyj Debuguj na marginesie testu	测试配置暂不能调试：请使用测试旁边的“调试”	テスト構成はまだデバッグできません。テストの横の「デバッグ」を使ってください

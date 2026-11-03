@@ -916,5 +916,10 @@
     "Store as project file": "プロジェクトファイルとして保存",
     "Saved in .crabcraft/runConfigurations to be committed and shared": "コミットして共有できるよう .crabcraft/runConfigurations に保存されます",
     "Could not save the run configuration in the project: {error}": "実行構成をプロジェクトに保存できませんでした: {error}"
+  },
+  "temporary-configs": {
+    "{name} (temporary)": "{name}（一時）",
+    "Save “{name}” Configuration": "構成「{name}」を保存",
+    "Test configurations cannot be debugged yet: use Debug in the gutter of the test": "テスト構成はまだデバッグできません。テストの横の「デバッグ」を使ってください"
   }
 }

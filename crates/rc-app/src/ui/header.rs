@@ -183,7 +183,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                         }
                         let mut chosen = None;
                         for (i, c) in app.runner.configs.iter().enumerate() {
-                            if theme::menu_item(ui, Some(c.icon()), &c.name, i == app.runner.selected).clicked() {
+                            // Temporary configurations are told apart, as in RustRover.
+                            let temporary = app.runner.is_temporary(&c.name);
+                            let label = if temporary { trf("{name} (temporary)", &[("name", &c.name)]) } else { c.name.clone() };
+                            if theme::menu_item(ui, Some(c.icon()), &label, i == app.runner.selected).clicked() {
                                 chosen = Some(i);
                                 ui.close();
                             }
@@ -196,6 +199,19 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
+                                ui.close();
+                            }
+                        }
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::TestSelection { .. } }) = app.runner.selected_config().cloned() {
+                            ui.separator();
+                            if app.runner.is_temporary(&name) && theme::menu_item(ui, Some(ico::SAVE), &trf("Save “{name}” Configuration", &[("name", &name)]), false).clicked() {
+                                app.runner.save_temporary(&name);
+                                app.session_dirty = true;
+                                ui.close();
+                            }
+                            if theme::menu_item(ui, Some(ico::DELETE), &trf("Delete “{name}”", &[("name", &name)]), false).clicked() {
+                                app.runner.remove_test_config(&name);
+                                app.session_dirty = true;
                                 ui.close();
                             }
                         }

@@ -23,6 +23,8 @@ pub enum ConfigKind {
     External { tool: String },
     /// A command the IDE runs for the user (`rustup update`…), started again by Rerun.
     Command { program: PathBuf, args: Vec<String> },
+    /// Some tests of a project (a gutter run, kept as a temporary or saved configuration).
+    TestSelection { target: PathBuf, filter: TestFilter },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,6 +39,7 @@ impl RunConfig {
             ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
+            ConfigKind::TestSelection { .. } => rc_kit::ico::TEST_UNKNOWN,
             ConfigKind::Compound { .. } => rc_kit::ico::TW_SERVICES,
             ConfigKind::External { .. } | ConfigKind::Command { .. } => rc_kit::ico::RUN_ANYTHING,
         }
@@ -165,6 +168,10 @@ pub struct Runner {
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
+    /// Saved test configurations (from the session).
+    pub test_configs: Vec<rc_core::session::SavedTestConfig>,
+    /// Temporary test configurations, oldest first.
+    pub temporary: Vec<RunConfig>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
     /// Environment of every Cargo command, `NAME=value` per line (kept in the session).
@@ -175,7 +182,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -220,6 +227,7 @@ impl Runner {
                 self.configs.push(RunConfig { name, kind: ConfigKind::Tests { target: t } });
             }
         }
+        self.insert_test_configs();
         self.selected = remembered.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
@@ -230,6 +238,7 @@ impl Runner {
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
         self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
         self.cargo_workspace = Some(workspace);
+        self.insert_test_configs();
         let wanted = selected.as_deref().or(remembered);
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
@@ -250,6 +259,7 @@ impl Runner {
     pub fn clear(&mut self) {
         self.cargo_workspace = None;
         self.configs.clear();
+        self.temporary.clear();
         self.build = None;
         self.runs.clear();
         self.tests = None;
@@ -338,6 +348,7 @@ impl Runner {
             ConfigKind::App { .. } => self.run_app(cfg),
             ConfigKind::Cargo { package, bin } => self.run_cargo(cfg, package, bin),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
+            ConfigKind::TestSelection { target, filter } => self.run_tests(&target, Some(filter)),
             // Tools start from their menu, with the file and caret of that moment.
             ConfigKind::External { .. } => Vec::new(),
             ConfigKind::Command { program, args } => {
@@ -356,6 +367,70 @@ impl Runner {
                 out
             }
         }
+    }
+
+    /// The most temporary configurations kept; older ones go.
+    const MAX_TEMPORARY: usize = 5;
+
+    /// Saved and temporary test configurations go last.
+    fn insert_test_configs(&mut self) {
+        let selected = self.selected_config().map(|c| c.name.clone());
+        self.configs.retain(|c| !matches!(c.kind, ConfigKind::TestSelection { .. }));
+        for t in &self.test_configs {
+            let filter = if t.class { TestFilter::Class(t.tests.first().cloned().unwrap_or_default()) } else { TestFilter::Tests(t.tests.clone()) };
+            self.configs.push(RunConfig { name: t.name.clone(), kind: ConfigKind::TestSelection { target: t.target.clone(), filter } });
+        }
+        self.configs.extend(self.temporary.iter().cloned());
+        if let Some(n) = selected
+            && let Some(i) = self.configs.iter().position(|c| c.name == n)
+        {
+            self.selected = i;
+        }
+    }
+
+    /// Selects the configuration for these tests, making a temporary one when there is none.
+    pub fn select_tests(&mut self, name: String, target: PathBuf, filter: TestFilter) {
+        let kind = ConfigKind::TestSelection { target, filter };
+        if let Some(i) = self.configs.iter().position(|c| c.kind == kind) {
+            self.selected = i;
+            return;
+        }
+        // Another selection with the same name (in another project) gets the next free name.
+        let name = (1..).map(|n| if n == 1 { name.clone() } else { format!("{name} ({n})") }).find(|n| !self.configs.iter().any(|c| &c.name == n)).unwrap_or(name);
+        if self.temporary.len() >= Self::MAX_TEMPORARY {
+            let oldest = self.temporary.remove(0);
+            self.configs.retain(|c| *c != oldest);
+        }
+        let cfg = RunConfig { name, kind };
+        self.temporary.push(cfg.clone());
+        self.configs.push(cfg);
+        self.selected = self.configs.len() - 1;
+    }
+
+    pub fn is_temporary(&self, name: &str) -> bool {
+        self.temporary.iter().any(|c| c.name == name)
+    }
+
+    /// Makes a temporary test configuration permanent (kept in the session).
+    pub fn save_temporary(&mut self, name: &str) {
+        let Some(cfg) = self.temporary.iter().find(|c| c.name == name).cloned() else { return };
+        let ConfigKind::TestSelection { target, filter } = cfg.kind else { return };
+        let (tests, class) = match filter {
+            TestFilter::Class(c) => (vec![c], true),
+            TestFilter::Tests(t) => (t, false),
+            TestFilter::Namespace(n) | TestFilter::Raw(n) => (vec![n], true),
+        };
+        self.temporary.retain(|c| c.name != name);
+        self.test_configs.push(rc_core::session::SavedTestConfig { name: cfg.name, target, tests, class });
+        self.insert_test_configs();
+    }
+
+    /// Removes a saved or temporary test configuration.
+    pub fn remove_test_config(&mut self, name: &str) {
+        self.temporary.retain(|c| c.name != name);
+        self.test_configs.retain(|t| t.name != name);
+        self.configs.retain(|c| !(c.name == name && matches!(c.kind, ConfigKind::TestSelection { .. })));
+        self.selected = self.selected.min(self.configs.len().saturating_sub(1));
     }
 
     /// Compound configurations go right after the applications (before the tests).
