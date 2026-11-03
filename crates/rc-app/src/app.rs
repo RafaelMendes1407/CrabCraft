@@ -310,6 +310,9 @@ impl CrabCraftApp {
         // The user's exclusions come first: the index, the analysis and the explorer follow them.
         self.explorer.excluded = rc_core::workspace::clean_excluded(&session.excluded);
         self.insight.set_exclude(self.explorer.excluded.clone());
+        // Attached Cargo projects that still exist (the session is from an earlier run).
+        self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
+        self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root);
         let projects = match &ws.kind {
@@ -897,6 +900,7 @@ impl CrabCraftApp {
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),
+            attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
@@ -2009,6 +2013,7 @@ impl CrabCraftApp {
                     self.dock.show(ToolWindow::Nuget);
                 }
                 ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
+                ExplorerAction::SetAttached(path, on) => self.set_attached(&path, on),
             }
         }
     }
@@ -2036,6 +2041,25 @@ impl CrabCraftApp {
         }
         self.insight.set_exclude(list);
         self.session_dirty = true;
+    }
+
+    /// Attaches the Cargo project of `manifest` (analysed by rust-analyzer with the workspace,
+    /// though not a member), or detaches it. rust-analyzer restarts with the new list.
+    pub fn set_attached(&mut self, manifest: &Path, on: bool) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let mut list = self.explorer.attached.clone();
+        list.retain(|p| p != manifest);
+        if on {
+            list.push(manifest.to_path_buf());
+        }
+        if list == self.explorer.attached {
+            return;
+        }
+        self.explorer.attached = list;
+        self.insight.set_linked(linked_projects(&root, &self.explorer.attached));
+        self.session_dirty = true;
+        let name = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        self.notify(if on { trf("Attached the Cargo project {name}", &[("name", &name)]) } else { trf("Detached the Cargo project {name}", &[("name", &name)]) }, false);
     }
 
     pub fn locate_active(&mut self) {
@@ -2174,6 +2198,16 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
         return Err(trf("the folder {path} does not exist", &[("path", &dir.display())]));
     }
     Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
+}
+
+/// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects;
+/// otherwise the workspace's `Cargo.toml`, when there is one, and the attached ones.
+pub fn linked_projects(root: &Path, attached: &[PathBuf]) -> Vec<PathBuf> {
+    if attached.is_empty() {
+        return Vec::new();
+    }
+    let own = root.join("Cargo.toml");
+    own.is_file().then_some(own).into_iter().chain(attached.iter().cloned()).collect()
 }
 
 pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {

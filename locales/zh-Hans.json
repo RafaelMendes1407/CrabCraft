@@ -955,5 +955,12 @@
     "No problems found": "未发现问题",
     "Clippy found nothing to report.": "Clippy 没有发现需要报告的问题。",
     "Other": "其他"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "附加 Cargo 项目",
+    "Detach Cargo Project": "分离 Cargo 项目",
+    "Analyse this Cargo project with the workspace, though it is not a member": "与工作区一起分析此 Cargo 项目，即使它不是成员",
+    "Attached the Cargo project {name}": "已附加 Cargo 项目 {name}",
+    "Detached the Cargo project {name}": "已分离 Cargo 项目 {name}"
   }
 }

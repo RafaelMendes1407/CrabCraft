@@ -149,6 +149,8 @@ pub struct Session {
     /// Folders and files left out of the index, Find in Files and the analysis (root-relative,
     /// `/`-separated). Read with [`crate::workspace::clean_excluded`].
     pub excluded: Vec<String>,
+    /// `Cargo.toml` files of other Cargo projects analysed with the workspace (root-relative).
+    pub attached_projects: Vec<String>,
     /// Environment of every Cargo command and of rust-analyzer: `NAME=value` per line.
     pub project_env: String,
 }

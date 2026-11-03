@@ -60,6 +60,8 @@ pub struct ExplorerState {
     /// Folders and files the user excluded from the index, Find in Files and the analysis
     /// (root-relative, `/`-separated, sorted). Saved in the session.
     pub excluded: Vec<String>,
+    /// `Cargo.toml` files of other Cargo projects analysed with the workspace (absolute).
+    pub attached: Vec<PathBuf>,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -82,6 +84,8 @@ pub enum ExplorerAction {
     /// Exclude the folder or file from the index, Find in Files and the analysis (`true`), or
     /// include it again (`false`).
     SetExcluded(PathBuf, bool),
+    /// Attaches (or detaches) the Cargo project of a `Cargo.toml` outside the workspace.
+    SetAttached(PathBuf, bool),
     Collapse,
     LocateActive,
 }
@@ -435,6 +439,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
     }
 
     let rows = state.rows(solution, root, root_name);
+    let attached = state.attached.clone();
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
     let tree_id = Id::new("explorer_tree");
     let mut open_row: Option<usize> = None;
@@ -509,7 +514,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if !in_library {
                 resp.context_menu(|ui| {
                     let rust = rc_cargo::find_manifest(root).is_some();
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, exclusion, &mut actions);
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, exclusion, &attached, &mut actions);
                 });
             }
         }
@@ -604,7 +609,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, exclusion: Exclusion, actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
@@ -710,6 +715,16 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
     }
+    // A Cargo.toml other than the workspace's: its project can be analysed with it.
+    if matches!(row.kind, NodeKind::File(_)) && path.file_name().is_some_and(|n| n == "Cargo.toml") && path.parent() != Some(root) {
+        ui.separator();
+        let attached = state_attached.contains(&path);
+        let (label, on) = if attached { (tr("Detach Cargo Project"), false) } else { (tr("Attach Cargo Project"), true) };
+        if theme::menu_item(ui, Some(ico::CARGO_TOML), label, false).on_hover_text(tr("Analyse this Cargo project with the workspace, though it is not a member")).clicked() {
+            actions.push(ExplorerAction::SetAttached(path.clone(), on));
+            ui.close();
+        }
+    }
     // Exclusion: folders and files inside the workspace (an excluded folder's contents follow it).
     if matches!(row.kind, NodeKind::Dir(_) | NodeKind::File(_)) && rc_core::workspace::relative_path(root, &path).is_some() {
         ui.separator();
@@ -743,7 +758,7 @@ mod tests {
     fn click_in_menu(exclusion: Exclusion, label: &str, absent: &str) -> Vec<ExplorerAction> {
         let root = Path::new("/ws");
         let row = Row { key: "dir:/ws/gen".into(), kind: NodeKind::Dir(root.join("gen")), depth: 1, label: "gen".into(), secondary: String::new(), icon: ico::FOLDER, expandable: true };
-        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, exclusion, actions), Vec::new());
+        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, exclusion, &[], actions), Vec::new());
         h.run();
         assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
         h.get_by_label(label).click();

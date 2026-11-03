@@ -2861,3 +2861,40 @@ fn a_compound_configuration_starts_several_cargo_binaries() {
     app.reload_cargo();
     pump(&mut app, "the reload", |a| a.runner.configs.iter().any(|c| c.name == "Both"));
 }
+
+/// A Cargo project nested too deep for rust-analyzer to find is analysed once attached (its
+/// type error shows up), not before; the attachment is kept in the session.
+#[test]
+fn an_attached_cargo_project_is_analysed() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("src/main.rs"), "fn main() {}\n");
+    let gen_manifest = root.join("tools/gen/Cargo.toml");
+    write(&gen_manifest, "[package]\nname = \"gen\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("tools/gen/src/lib.rs"), "pub fn wrong() -> u32 {\n    \"text\"\n}\n");
+    let root = root.canonicalize().unwrap();
+    let gen_manifest = gen_manifest.canonicalize().unwrap();
+    let lib = root.join("tools/gen/src/lib.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&lib);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let mismatch = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("mismatched types") || x.code.as_deref() == Some("E0308")));
+    // Give the server time to say what it knows about the file.
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(3) {
+        pump(&mut app, "a frame", |_| true);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(!mismatch(&app), "not analysed before it is attached");
+
+    app.set_attached(&gen_manifest, true);
+    pump(&mut app, "the analysis of the attached project", |a| mismatch(a));
+    app.save_session();
+    assert_eq!(rc_core::session::Session::load(&root).attached_projects, ["tools/gen/Cargo.toml"]);
+    app.set_attached(&gen_manifest, false);
+    assert!(app.explorer.attached.is_empty());
+}

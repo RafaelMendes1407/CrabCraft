@@ -955,5 +955,12 @@
     "No problems found": "Nie znaleziono problemów",
     "Clippy found nothing to report.": "Clippy nie znalazł nic do zgłoszenia.",
     "Other": "Inne"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "Dołącz projekt Cargo",
+    "Detach Cargo Project": "Odłącz projekt Cargo",
+    "Analyse this Cargo project with the workspace, though it is not a member": "Analizuj ten projekt Cargo razem z obszarem roboczym, choć nie jest jego członkiem",
+    "Attached the Cargo project {name}": "Dołączono projekt Cargo {name}",
+    "Detached the Cargo project {name}": "Odłączono projekt Cargo {name}"
   }
 }

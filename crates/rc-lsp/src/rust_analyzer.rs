@@ -17,8 +17,20 @@ pub fn start(program: &Path, workspace: &Path, env: &[(String, String)], incomin
 }
 
 /// The settings sent at start and when the server asks for them. `exclude`: folders and files
-/// relative to the workspace root that the server leaves out (`files.exclude`).
-pub fn config(clippy: bool, exclude: &[String]) -> Value {
+/// relative to the workspace root that the server leaves out (`files.exclude`). `linked`:
+/// the `Cargo.toml` files to analyse (`linkedProjects`, which replaces the server's own
+/// discovery); empty lets the server find them.
+pub fn config(clippy: bool, exclude: &[String], linked: &[std::path::PathBuf]) -> Value {
+    let mut value = config_base(clippy, exclude);
+    if !linked.is_empty()
+        && let Some(map) = value.as_object_mut()
+    {
+        map.insert("linkedProjects".into(), json!(linked.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()));
+    }
+    value
+}
+
+fn config_base(clippy: bool, exclude: &[String]) -> Value {
     json!({
         "checkOnSave": true,
         "files": { "exclude": exclude },
@@ -56,7 +68,7 @@ fn capabilities() -> Value {
     caps
 }
 
-pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String]) -> Pending<lsp_types::InitializeResult> {
+pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String], linked: &[std::path::PathBuf]) -> Pending<lsp_types::InitializeResult> {
     let uri = path_to_uri(root);
     let name = root.file_name().map_or_else(|| "workspace".to_string(), |n| n.to_string_lossy().into_owned());
     client.request_raw(
@@ -68,15 +80,15 @@ pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String]
             "rootUri": uri.as_str(),
             "workspaceFolders": [{ "uri": uri.as_str(), "name": name }],
             "capabilities": capabilities(),
-            "initializationOptions": config(clippy, exclude)
+            "initializationOptions": config(clippy, exclude, linked)
         }),
     )
 }
 
 /// `workspace/configuration` of rust-analyzer: the settings once per requested section.
-pub fn configuration_reply(params: &Value, clippy: bool, exclude: &[String]) -> Value {
+pub fn configuration_reply(params: &Value, clippy: bool, exclude: &[String], linked: &[std::path::PathBuf]) -> Value {
     let count = params.get("items").and_then(Value::as_array).map_or(0, Vec::len);
-    Value::Array(vec![config(clippy, exclude); count])
+    Value::Array(vec![config(clippy, exclude, linked); count])
 }
 
 /// Whether an `experimental/serverStatus` notification means analysis finished.
@@ -199,20 +211,22 @@ mod tests {
 
     #[test]
     fn the_configuration_answers_every_section() {
-        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false, &[]).as_array().map(Vec::len), Some(2));
-        assert_eq!(configuration_reply(&json!({}), false, &[]).as_array().map(Vec::len), Some(0));
+        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false, &[], &[]).as_array().map(Vec::len), Some(2));
+        assert_eq!(configuration_reply(&json!({}), false, &[], &[]).as_array().map(Vec::len), Some(0));
     }
 
     #[test]
     fn the_linter_is_the_check_command() {
-        assert_eq!(config(false, &[])["check"]["command"], json!("check"));
-        assert_eq!(config(true, &[])["check"]["command"], json!("clippy"));
+        assert_eq!(config(false, &[], &[])["check"]["command"], json!("check"));
+        assert_eq!(config(true, &[], &[])["check"]["command"], json!("clippy"));
     }
 
     #[test]
     fn excluded_paths_are_the_files_exclude_setting() {
-        assert_eq!(config(false, &["gen".into(), "src/old.rs".into()])["files"]["exclude"], json!(["gen", "src/old.rs"]));
-        assert_eq!(config(false, &[])["files"]["exclude"], json!([]));
+        assert_eq!(config(false, &["gen".into(), "src/old.rs".into()], &[])["files"]["exclude"], json!(["gen", "src/old.rs"]));
+        assert_eq!(config(false, &[], &[])["files"]["exclude"], json!([]));
+        assert!(config(false, &[], &[]).get("linkedProjects").is_none(), "the server finds the projects itself");
+        assert_eq!(config(false, &[], &["/w/Cargo.toml".into(), "/w/tools/x/Cargo.toml".into()])["linkedProjects"], json!(["/w/Cargo.toml", "/w/tools/x/Cargo.toml"]));
     }
 
     #[test]

@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 123 |
-| 🚧 Em andamento | 5 |
+| 🚧 Em andamento | 6 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 102 |
+| ⬜ A fazer | 101 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -70,7 +70,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-17 | Janela Cargo: membros e targets | ✅ | M3 | Lê `cargo metadata`, com recarregar; vista na janela nativa |
 | P-18 | Executar target com duplo clique | ✅ | M3 | bin na janela Run; lib, example, test e bench no console de Compilar; `lib` clicado na janela nativa, demais por teste real |
 | P-19 | Executar comando Cargo pela janela Cargo | ✅ | M3 | Campo com Enter; `cargo` no início é opcional; falha mostra o código de saída |
-| P-20 | Anexar/desanexar projetos Cargo | ⬜ | M3 | |
+| P-20 | Anexar/desanexar projetos Cargo | 🚧 | M3 | Feito: no explorador, um `Cargo.toml` que não é o do workspace tem Anexar/Desanexar projeto Cargo; o rust-analyzer passa a analisá-lo (`linkedProjects`, com o `Cargo.toml` do workspace) e reinicia; guardado na sessão. Testado com rust-analyzer real num crate em `tools/gen`. Falta: alvos e janela Cargo dos projetos anexados |
 | P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
 | P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
 | P-23 | Aba Sync com o log do carregamento | ✅ | M3 | Aba Sync na janela Build (projetos Cargo): cada `cargo metadata` do modelo e das dependências, com duração, hora e o que o Cargo imprimiu (o comando e o erro, quando falha); a aba diz "falhou" quando o modelo não carregou. Testado com Cargo real e um `Cargo.toml` quebrado; captura clara e escura conferida |

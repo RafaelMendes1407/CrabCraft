@@ -156,6 +156,8 @@ pub struct Insight {
     clippy: bool,
     /// Folders and files rust-analyzer leaves out (root-relative, `/`-separated).
     exclude: Vec<String>,
+    /// `Cargo.toml` files rust-analyzer analyses besides what it finds (attached projects).
+    linked: Vec<PathBuf>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
@@ -278,6 +280,7 @@ impl Insight {
             accepted_resolve: None,
             clippy: false,
             exclude: Vec::new(),
+            linked: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -363,6 +366,18 @@ impl Insight {
         }
     }
 
+    /// The Cargo projects rust-analyzer analyses (`linkedProjects`); empty lets it find them.
+    /// A running server is restarted.
+    pub fn set_linked(&mut self, linked: Vec<PathBuf>) {
+        if linked == self.linked {
+            return;
+        }
+        self.linked = linked;
+        if self.rust && self.session.is_some() {
+            self.restart();
+        }
+    }
+
     /// Stays off until the user trusts `root`.
     pub fn wait_for_trust(&mut self, root: &Path) {
         self.stop();
@@ -378,7 +393,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), &self.env, self.waker.clone()) {
+            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), self.linked.clone(), &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;

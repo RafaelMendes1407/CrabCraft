@@ -59,6 +59,8 @@ pub struct LanguageSession {
     clippy: bool,
     /// Folders and files rust-analyzer leaves out (relative to the root).
     exclude: Vec<String>,
+    /// rust-analyzer's `linkedProjects` (empty: its own discovery).
+    linked: Vec<std::path::PathBuf>,
 }
 
 impl LanguageSession {
@@ -85,15 +87,16 @@ impl LanguageSession {
             rust: false,
             clippy: false,
             exclude: Vec::new(),
+            linked: Vec::new(),
         })
     }
 
     /// Starts rust-analyzer for `root` with the project's environment `env`.
-    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
+    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, linked: Vec<std::path::PathBuf>, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
         let client = crate::rust_analyzer::start(program, root, env, inbox.sender())?;
-        let init = crate::rust_analyzer::initialize(&client, root, clippy, &exclude);
+        let init = crate::rust_analyzer::initialize(&client, root, clippy, &exclude, &linked);
         Ok(LanguageSession {
             client,
             inbox,
@@ -111,6 +114,7 @@ impl LanguageSession {
             rust: true,
             clippy,
             exclude,
+            linked,
         })
     }
 
@@ -153,7 +157,7 @@ impl LanguageSession {
             match msg {
                 Incoming::Request { id, method, params } => {
                     if self.rust && method == "workspace/configuration" {
-                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy, &self.exclude)));
+                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy, &self.exclude, &self.linked)));
                     } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));

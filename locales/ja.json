@@ -955,5 +955,12 @@
     "No problems found": "問題は見つかりませんでした",
     "Clippy found nothing to report.": "Clippy が報告する問題はありませんでした。",
     "Other": "その他"
+  },
+  "attach-projects": {
+    "Attach Cargo Project": "Cargo プロジェクトをアタッチ",
+    "Detach Cargo Project": "Cargo プロジェクトをデタッチ",
+    "Analyse this Cargo project with the workspace, though it is not a member": "メンバーでなくても、この Cargo プロジェクトをワークスペースと一緒に解析します",
+    "Attached the Cargo project {name}": "Cargo プロジェクト {name} をアタッチしました",
+    "Detached the Cargo project {name}": "Cargo プロジェクト {name} をデタッチしました"
   }
 }
