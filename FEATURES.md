@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 125 |
+| ✅ Pronto | 126 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 100 |
+| ⬜ A fazer | 99 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -121,7 +121,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
 | I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Derive e macro testados com rust-analyzer real; em doctest ele não trouxe sugestões na sonda, exige solução própria |
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
-| I-05 | Auto-import ao digitar e ao colar | ⬜ | M3 | |
+| I-05 | Auto-import ao digitar e ao colar | ✅ | M3 | Ao digitar: aceitar uma sugestão da completação de um item de outro módulo adiciona o `use` (testado). Ao colar código Rust: para cada nome tipo-tipo do trecho, o rust-analyzer é consultado; os que têm uma só importação ganham a linha `use` (após os `use` do arquivo, ou após comentários e atributos iniciais) e os ambíguos são avisados para escolher em Mostrar ações de contexto; opção em Configurações › Editor. Testado com rust-analyzer real (`HashMap` importado, `Ordering` ambíguo). Falta: importar sem completação enquanto digita |
 | I-06 | Excluir itens do auto-import | ✅ | M3 | Configurações › Editor › Nunca importar: caminhos (item ou módulo, um por linha) que a completação nunca oferece importar, via `completion.autoimport.exclude` do rust-analyzer, aplicados sem reiniciar o servidor. Testado com rust-analyzer real: `std::sync::atomic::Ordering` some das sugestões e `std::cmp::Ordering` fica |
 | I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
 | I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |

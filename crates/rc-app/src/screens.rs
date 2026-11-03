@@ -1555,3 +1555,19 @@ fn attached_project_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("attached-project.png")).unwrap();
 }
+
+/// A real paste in the editor records where the text went (for the imports it needs).
+#[test]
+fn a_paste_records_its_range() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), false);
+    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(0);
+    h.run_steps(3);
+    h.event(egui::Event::Paste("use x;\n".into()));
+    h.run_steps(2);
+    let doc = h.state().docs.active_doc().unwrap();
+    assert_eq!(doc.editor.last_paste, Some((0, 7)));
+    assert!(doc.editor.buffer.rope().to_string().starts_with("use x;\n// The beta crate."));
+}

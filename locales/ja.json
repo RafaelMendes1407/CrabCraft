@@ -968,5 +968,10 @@
   "autoimport-exclude": {
     "Never import": "インポートしない",
     "Items or modules completion never offers to import, one path per line": "補完でインポートを提案しない項目やモジュール（1 行に 1 パス）"
+  },
+  "paste-imports": {
+    "Imported {list}": "{list} をインポートしました",
+    "Several imports fit {names}: choose one with Show Context Actions": "{names} に合うインポートが複数あります。コンテキストアクションで選んでください",
+    "Add the imports pasted Rust code needs (when only one fits)": "貼り付けた Rust コードに必要なインポートを追加（候補が 1 つの場合）"
   }
 }

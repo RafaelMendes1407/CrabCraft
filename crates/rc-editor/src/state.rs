@@ -115,6 +115,8 @@ pub struct EditorState {
     pub right_margin: Option<usize>,
     /// A snippet being filled in: Tab goes to its next stop.
     pub snippet: Option<crate::snippet::SnippetSession>,
+    /// Where the last paste went, with one caret (the IDE adds the imports it needs).
+    pub last_paste: Option<(usize, usize)>,
     pub read_only: bool,
     // --- view
     pub(crate) scroll: egui::Vec2,
@@ -181,6 +183,7 @@ impl EditorState {
             id,
             path,
             buffer,
+            last_paste: None,
             snippet: None,
             right_margin: None,
             selection: Selection::point(0),

@@ -1331,6 +1331,12 @@ fn paste(state: &mut EditorState, text: &str) {
     let text = text.replace("\r\n", "\n");
     let rope = state.buffer.rope().clone();
     let sel = state.selection.clone();
+    let n = text.chars().count();
+    state.last_paste = (sel.len() == 1).then(|| {
+        let r = sel.primary();
+        let start = if state.line_clipboard.as_deref() == Some(text.as_str()) && r.is_empty() { rope.line_to_char(rope.char_to_line(r.head)) } else { r.start() };
+        (start, start + n)
+    });
     // A whole line copied without selection goes above the caret's line.
     if state.line_clipboard.as_deref() == Some(text.as_str()) && sel.ranges().iter().all(|r| r.is_empty()) {
         let changes: Vec<rc_text::Change> = sel
@@ -1339,7 +1345,6 @@ fn paste(state: &mut EditorState, text: &str) {
             .map(|r| rc_text::Change::insert(rope.line_to_char(rope.char_to_line(r.head)), text.clone()))
             .collect();
         let cs = rc_text::ChangeSet::new(changes);
-        let n = text.chars().count();
         let after = sel.transform(|r| Range::point(r.head + n));
         state.apply(commands::Edited { changes: cs, selection: after }, EditKind::Other);
         return;

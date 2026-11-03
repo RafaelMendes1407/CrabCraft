@@ -96,6 +96,8 @@ pub struct Settings {
     pub live_templates: Vec<crate::live_templates::LiveTemplate>,
     /// Items and modules completion never offers to import (`std::sync::atomic::Ordering`).
     pub autoimport_exclude: Vec<String>,
+    /// Add the `use` lines pasted Rust code needs, when only one import fits.
+    pub imports_on_paste: bool,
 }
 
 impl Default for Settings {
@@ -134,6 +136,7 @@ impl Default for Settings {
             external_tools: Vec::new(),
             live_templates: crate::live_templates::defaults(),
             autoimport_exclude: Vec::new(),
+            imports_on_paste: true,
         }
     }
 }

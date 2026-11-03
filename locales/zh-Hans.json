@@ -968,5 +968,10 @@
   "autoimport-exclude": {
     "Never import": "从不导入",
     "Items or modules completion never offers to import, one path per line": "补全永不建议导入的项或模块，每行一个路径"
+  },
+  "paste-imports": {
+    "Imported {list}": "已导入 {list}",
+    "Several imports fit {names}: choose one with Show Context Actions": "{names} 有多个可用导入：请通过“显示上下文操作”选择一个",
+    "Add the imports pasted Rust code needs (when only one fits)": "添加粘贴的 Rust 代码所需的导入（仅一个匹配时）"
   }
 }

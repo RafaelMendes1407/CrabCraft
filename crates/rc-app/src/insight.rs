@@ -214,6 +214,10 @@ pub struct Insight {
     usings: Option<UsingsRequest>,
     /// Documents to import usings for once their diagnostics catch up (after a paste).
     auto_usings: HashMap<u64, u64>,
+    /// Rust: after a paste, the import fixes asked for each name of the pasted code.
+    paste_imports: Option<PasteImports>,
+    /// Rust: add the imports pasted code needs (Settings › Editor).
+    pub imports_on_paste: bool,
     semantic: HashMap<u64, Versioned<Option<lsp::SemanticTokensResult>>>,
     inlay: HashMap<u64, Versioned<Option<Vec<lsp::InlayHint>>>>,
     runnables_request: HashMap<u64, Versioned<Value>>,
@@ -292,6 +296,8 @@ impl Insight {
             auto_insert: None,
             usings: None,
             auto_usings: HashMap::new(),
+            paste_imports: None,
+            imports_on_paste: true,
             semantic: HashMap::new(),
             inlay: HashMap::new(),
             runnables_request: HashMap::new(),
@@ -484,6 +490,7 @@ impl Insight {
         self.auto_insert = None;
         self.usings = None;
         self.auto_usings.clear();
+        self.paste_imports = None;
         self.semantic.clear();
         self.inlay.clear();
         self.runnables_request.clear();
@@ -774,6 +781,7 @@ impl Insight {
         }
         self.poll_completion(docs);
         self.poll_popups(docs);
+        self.poll_paste_imports(docs, out);
         self.poll_navigation(docs, out);
     }
 
@@ -1265,6 +1273,7 @@ impl Insight {
             match ev {
                 EditorEvent::Typed(c) => self.on_typed(doc, *c),
                 // Pasted code gets its usings once the server has seen it (Rider, VS).
+                EditorEvent::Pasted if self.rust => self.ask_paste_imports(doc),
                 EditorEvent::Pasted => {
                     self.auto_usings.insert(doc.editor.id, doc.editor.buffer.version());
                 }
@@ -1375,6 +1384,62 @@ impl Insight {
         }
         if !pending.is_empty() {
             self.usings = Some((doc.editor.id, doc.editor.buffer.version(), pending, Vec::new()));
+        }
+    }
+
+    /// Rust: asks rust-analyzer how to import each type-like name of the pasted code. The
+    /// server already has the paste (requests follow the change in order).
+    fn ask_paste_imports(&mut self, doc: &Doc) {
+        let Some((start, end)) = doc.editor.last_paste.filter(|_| self.imports_on_paste) else { return };
+        let Some(session) = &self.session else { return };
+        let rope = doc.editor.buffer.rope();
+        let end = end.min(rope.len_chars());
+        let names = pasted_names(&rope.slice(start.min(end)..end).to_string());
+        let mut asked = Vec::new();
+        for (name, offset) in names {
+            let pos = convert::lsp_position(rope, start + offset + 1);
+            let pending = session.client.request_raw(
+                "textDocument/codeAction",
+                json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "range": { "start": pos, "end": pos }, "context": { "diagnostics": [], "only": ["quickfix"], "triggerKind": 1 } }),
+            );
+            asked.push((name, pending));
+        }
+        if !asked.is_empty() {
+            self.paste_imports = Some(PasteImports { doc: doc.editor.id, version: doc.editor.buffer.version(), asked, paths: Vec::new(), ambiguous: Vec::new() });
+        }
+    }
+
+    /// Adds the `use` lines for the names with exactly one import; the others are named.
+    fn poll_paste_imports(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        let Some(p) = &mut self.paste_imports else { return };
+        let mut i = 0;
+        while i < p.asked.len() {
+            match p.asked[i].1.poll() {
+                Some(r) => {
+                    let (name, _) = p.asked.remove(i);
+                    let mut paths: Vec<String> = r.ok().as_ref().and_then(Value::as_array).into_iter().flatten().filter_map(|a| a.get("title")?.as_str()?.strip_prefix("Import `")?.strip_suffix('`').map(str::to_string)).collect();
+                    paths.dedup();
+                    match paths.len() {
+                        0 => {}
+                        1 => p.paths.extend(paths),
+                        _ => p.ambiguous.push(name),
+                    }
+                }
+                None => i += 1,
+            }
+        }
+        if !p.asked.is_empty() {
+            return;
+        }
+        let Some(p) = self.paste_imports.take() else { return };
+        // Edits made since the paste win: nothing is added then.
+        let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == p.doc).filter(|d| d.editor.buffer.version() == p.version) else { return };
+        let added = insert_rust_uses(d, &p.paths);
+        if !added.is_empty() {
+            out.push(InsightOutput::Message(trf("Imported {list}", &[("list", &added.join(", "))])));
+        }
+        if !p.ambiguous.is_empty() {
+            out.push(InsightOutput::Message(trf("Several imports fit {names}: choose one with Show Context Actions", &[("names", &p.ambiguous.join(", "))])));
         }
     }
 
@@ -2076,6 +2141,84 @@ fn apply_auto_insert(d: &mut Doc, edit: &lsp::TextEdit) {
 
 /// The namespace of the only `using X;` fix among `actions` (Roslyn titles them exactly so);
 /// `None` when there is none or the name is ambiguous.
+/// A paste waiting for rust-analyzer's import fixes.
+struct PasteImports {
+    doc: u64,
+    version: u64,
+    asked: Vec<(String, Pending<Value>)>,
+    paths: Vec<String>,
+    ambiguous: Vec<String>,
+}
+
+/// Type-like names of pasted Rust code (capitalised identifiers that are not after `::` or `.`,
+/// nor macros), each once with the offset of its first use. At most 30.
+pub fn pasted_names(text: &str) -> Vec<(String, usize)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<(String, usize)> = Vec::new();
+    let mut i = 0;
+    let mut in_string = false;
+    while i < chars.len() && out.len() < 30 {
+        let c = chars[i];
+        if c == '"' && (i == 0 || chars[i - 1] != '\\') {
+            in_string = !in_string;
+            i += 1;
+            continue;
+        }
+        if c == '/' && chars.get(i + 1) == Some(&'/') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if in_string || !(c.is_alphabetic() || c == '_') {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+            i += 1;
+        }
+        let word: String = chars[start..i].iter().collect();
+        let qualified = start >= 1 && (chars[start - 1] == '.' || (start >= 2 && chars[start - 1] == ':' && chars[start - 2] == ':'));
+        let lifetime = start >= 1 && chars[start - 1] == '\'';
+        let mac = chars.get(i) == Some(&'!');
+        let type_like = word.chars().next().is_some_and(char::is_uppercase) && word.chars().any(char::is_lowercase) && word != "Self";
+        if type_like && !qualified && !lifetime && !mac && !out.iter().any(|(w, _)| *w == word) {
+            out.push((word, start));
+        }
+    }
+    out
+}
+
+/// Adds `use path;` lines that are missing: after the last top-level `use`, or else after the
+/// file's leading comments and inner attributes. Returns the paths added.
+pub fn insert_rust_uses(d: &mut Doc, paths: &[String]) -> Vec<String> {
+    let rope = d.editor.buffer.rope().clone();
+    let lines: Vec<String> = (0..rope.len_lines()).map(|l| rope.line(l).to_string()).collect();
+    let mut add: Vec<String> = paths.iter().filter(|p| !lines.iter().any(|l| l.trim() == format!("use {p};"))).cloned().collect();
+    add.sort();
+    add.dedup();
+    if add.is_empty() {
+        return add;
+    }
+    let after_use = lines.iter().rposition(|l| l.starts_with("use ") && l.trim_end().ends_with(';'));
+    let line = match after_use {
+        Some(l) => l + 1,
+        None => lines.iter().position(|l| {
+            let t = l.trim();
+            !(t.starts_with("//") || t.starts_with("#![") || t.is_empty())
+        }).unwrap_or(lines.len()),
+    };
+    let mut text: String = add.iter().map(|p| format!("use {p};\n")).collect();
+    // A blank line between the imports and the code that follows them.
+    if after_use.is_none() && lines.get(line).is_some_and(|l| !l.trim().is_empty()) {
+        text.push('\n');
+    }
+    let at = rope.line_to_char(line.min(rope.len_lines()));
+    d.editor.apply_text_edits(vec![rc_text::Change::new(at, at, text)]);
+    add
+}
+
 fn single_using(actions: &Value) -> Option<String> {
     let mut found: Vec<String> = actions
         .as_array()?

@@ -250,6 +250,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.label("");
                         ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
                         ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.imports_on_paste, tr("Add the imports pasted Rust code needs (when only one fits)"));
+                        ui.end_row();
                         ui.label(tr("Never import"));
                         ui.vertical(|ui| {
                             let mut text = draft.autoimport_exclude.join("\n");

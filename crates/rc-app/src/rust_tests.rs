@@ -2938,3 +2938,59 @@ fn excluded_paths_are_not_offered_for_import() {
     assert!(!after.iter().any(|p| p.contains("atomic")) && after.iter().any(|p| p.contains("cmp")), "{after:?}");
     app.insight.stop();
 }
+
+/// Type-like names of pasted code: not after `::` or `.`, not macros, strings or comments.
+#[test]
+fn pasted_names_are_the_type_like_ones() {
+    let names: Vec<String> = crate::insight::pasted_names("let m: HashMap<String, Vec<u8>> = HashMap::new(); // Foo\nlet s = \"Bar\"; x.Baz; std::fmt::Display; Self; 'Life; vec![]; Some(1); println!(\"{}\", Ordering::Less);").into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["HashMap", "String", "Vec", "Some", "Ordering"]);
+}
+
+/// After a paste, the names with exactly one import get their `use` line; the ambiguous ones
+/// are named instead.
+#[test]
+fn pasted_code_gets_its_unambiguous_imports() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+
+    let before = "use demo::Greeter;\n\nfn main() {\n    \n}\n";
+    let pasted = "let m: HashMap<String, Ordering> = HashMap::new();";
+    let i = app.docs.active.unwrap();
+    let doc = &mut app.docs.list[i];
+    let end = doc.editor.buffer.len_chars();
+    doc.editor.replace(0, end, before);
+    let at = before.find("    \n}").unwrap() + 4;
+    doc.editor.replace(at, at, pasted);
+    doc.editor.last_paste = Some((at, at + pasted.chars().count()));
+    app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed, rc_editor::EditorEvent::Pasted]);
+    pump(&mut app, "the import", |a| a.docs.active_doc().is_some_and(|d| d.editor.buffer.rope().to_string().contains("use std::collections::HashMap;")));
+    let text = app.docs.list[i].editor.buffer.rope().to_string();
+    assert!(text.starts_with("use demo::Greeter;\nuse std::collections::HashMap;\n"), "{text}");
+    assert!(!text.contains("Ordering;"), "two imports fit Ordering: none is chosen\n{text}");
+    pump(&mut app, "the ambiguity message", |a| a.notices.iter().any(|n| n.text.contains("Ordering")));
+    app.insight.stop();
+}
+
+/// Without imports, the `use` lines go after the file's leading comments and attributes.
+#[test]
+fn imports_go_after_the_leading_comments() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("lib.rs");
+    write(&file, "//! Crate docs.\n#![allow(dead_code)]\n\nfn f() {}\n");
+    let mut app = new_app(dir.path());
+    app.open_file(&file);
+    let i = app.docs.active.unwrap();
+    let added = crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into(), "std::fmt::Write".into()]);
+    assert_eq!(added, ["std::fmt::Write"]);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "//! Crate docs.\n#![allow(dead_code)]\n\nuse std::fmt::Write;\n\nfn f() {}\n");
+    assert!(crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into()]).is_empty(), "already there");
+}

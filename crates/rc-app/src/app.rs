@@ -209,6 +209,7 @@ impl CrabCraftApp {
             insight: {
                 let mut insight = Insight::new(waker.clone());
                 insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
+                insight.imports_on_paste = settings.imports_on_paste;
                 insight
             },
             runner: {
@@ -2028,6 +2029,7 @@ impl CrabCraftApp {
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
         self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
+        self.insight.imports_on_paste = self.settings.imports_on_paste;
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = Keymap::new(keymap_kind(self.settings.keymap));

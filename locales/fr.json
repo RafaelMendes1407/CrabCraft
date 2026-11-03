@@ -968,5 +968,10 @@
   "autoimport-exclude": {
     "Never import": "Ne jamais importer",
     "Items or modules completion never offers to import, one path per line": "Éléments ou modules que la complétion ne propose jamais d'importer, un chemin par ligne"
+  },
+  "paste-imports": {
+    "Imported {list}": "Importé : {list}",
+    "Several imports fit {names}: choose one with Show Context Actions": "Plusieurs imports conviennent à {names} : choisissez-en un avec Afficher les actions contextuelles",
+    "Add the imports pasted Rust code needs (when only one fits)": "Ajouter les imports dont le code Rust collé a besoin (quand un seul convient)"
   }
 }
