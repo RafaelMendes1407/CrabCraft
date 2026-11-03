@@ -1,0 +1,6 @@
+# Explorer: folders and files excluded from the index and the analysis. Import: python3 scripts/i18n_tsv.py exclude scripts/i18n/exclude.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Exclude from Analysis	Excluir del análisis	Exclure de l’analyse	Excluir da análise	Von der Analyse ausschließen	Wyklucz z analizy	从分析中排除	解析から除外
+Include in Analysis Again	Volver a incluir en el análisis	Réintégrer dans l’analyse	Incluir novamente na análise	Wieder in die Analyse aufnehmen	Ponownie uwzględnij w analizie	重新纳入分析	解析に再び含める
+Excluded with its folder	Excluido junto con su carpeta	Exclu avec son dossier	Excluído junto com a pasta	Mit seinem Ordner ausgeschlossen	Wykluczony wraz z folderem	随所在文件夹一起排除	フォルダーごと除外されています
+excluded	excluido	exclu	excluído	ausgeschlossen	wykluczony	已排除	除外

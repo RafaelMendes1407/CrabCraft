@@ -743,5 +743,11 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "exclude": {
+    "Exclude from Analysis": "从分析中排除",
+    "Include in Analysis Again": "重新纳入分析",
+    "Excluded with its folder": "随所在文件夹一起排除",
+    "excluded": "已排除"
   }
 }

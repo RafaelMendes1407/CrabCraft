@@ -277,9 +277,12 @@ impl CrabCraftApp {
         self.settings.last_workspace = Some(ws.key_path().to_path_buf());
         let _ = self.settings.save();
         self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
-        self.files.open(&ws.root, self.waker.clone());
-        self.vcs.open(&ws.root);
         let session = Session::load(ws.key_path());
+        // The user's exclusions come first: the index, the analysis and the explorer follow them.
+        self.explorer.excluded = rc_core::workspace::clean_excluded(&session.excluded);
+        self.insight.set_exclude(self.explorer.excluded.clone());
+        self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
+        self.vcs.open(&ws.root);
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
             rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
@@ -690,6 +693,7 @@ impl CrabCraftApp {
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
+            excluded: self.explorer.excluded.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1058,6 +1062,7 @@ impl CrabCraftApp {
                 if let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.is_empty() && !t.contains('\n'));
                     let fif = self.find_in_files.get_or_insert_with(|| crate::search::FindInFiles::new(&root, self.waker.clone(), String::new()));
+                    fif.excluded = self.explorer.excluded.clone();
                     if let Some(t) = text {
                         fif.query = t;
                     }
@@ -1615,8 +1620,34 @@ impl CrabCraftApp {
                     self.nuget.focus_project(&project);
                     self.dock.show(ToolWindow::Nuget);
                 }
+                ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
             }
         }
+    }
+
+    /// Excludes a folder or file of the workspace from the file index (Go to File, Search
+    /// Everywhere), Find in Files and rust-analyzer (`excluded`), or includes it again. The
+    /// index is rebuilt in the background and the server reloads with the new list.
+    pub fn set_excluded(&mut self, path: &Path, excluded: bool) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let Some(rel) = rc_core::workspace::relative_path(&root, path) else { return };
+        let mut list = self.explorer.excluded.clone();
+        if excluded {
+            list.push(rel);
+        } else {
+            list.retain(|e| *e != rel);
+        }
+        let list = rc_core::workspace::clean_excluded(&list);
+        if list == self.explorer.excluded {
+            return;
+        }
+        self.explorer.excluded = list.clone();
+        self.files.open(&root, self.waker.clone(), list.clone());
+        if let Some(f) = &mut self.find_in_files {
+            f.excluded = list.clone();
+        }
+        self.insight.set_exclude(list);
+        self.session_dirty = true;
     }
 
     pub fn locate_active(&mut self) {
@@ -1677,8 +1708,12 @@ impl CrabCraftApp {
         {
             self.load_cargo_workspace(manifest);
         }
+        let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
+        let excluded = &self.explorer.excluded;
         let changes: Vec<(PathBuf, u8)> = events
             .iter()
+            // Excluded folders are not the server's business.
+            .filter(|e| root.as_deref().and_then(|r| rc_core::workspace::relative_path(r, e.path())).is_none_or(|rel| !rc_core::workspace::is_excluded(&rel, excluded)))
             .filter(|e| e.path().extension().is_some_and(|x| x == "rs" || x == "toml" || x == "cs" || x == "csproj" || x == "props" || x == "targets"))
             .map(|e| match e {
                 FsEvent::Created(p) => (p.clone(), 1),

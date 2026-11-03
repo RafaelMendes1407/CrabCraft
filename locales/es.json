@@ -743,5 +743,11 @@
     "Remove once hit": "Quitar al alcanzarlo",
     "Refactor This…": "Refactorizar esto…",
     "Select In…": "Seleccionar en…"
+  },
+  "exclude": {
+    "Exclude from Analysis": "Excluir del análisis",
+    "Include in Analysis Again": "Volver a incluir en el análisis",
+    "Excluded with its folder": "Excluido junto con su carpeta",
+    "excluded": "excluido"
   }
 }

@@ -15,10 +15,12 @@ pub fn start(program: &Path, workspace: &Path, incoming: Outbox<Incoming>) -> st
     Client::spawn(program, &[], workspace, &[], incoming)
 }
 
-/// The settings sent at start and when the server asks for them.
-pub fn config(clippy: bool) -> Value {
+/// The settings sent at start and when the server asks for them. `exclude`: folders and files
+/// relative to the workspace root that the server leaves out (`files.exclude`).
+pub fn config(clippy: bool, exclude: &[String]) -> Value {
     json!({
         "checkOnSave": true,
+        "files": { "exclude": exclude },
         "check": { "command": if clippy { "clippy" } else { "check" } },
         "cargo": { "buildScripts": { "enable": true } },
         "procMacro": { "enable": true },
@@ -49,7 +51,7 @@ fn capabilities() -> Value {
     caps
 }
 
-pub fn initialize(client: &Client, root: &Path, clippy: bool) -> Pending<lsp_types::InitializeResult> {
+pub fn initialize(client: &Client, root: &Path, clippy: bool, exclude: &[String]) -> Pending<lsp_types::InitializeResult> {
     let uri = path_to_uri(root);
     let name = root.file_name().map_or_else(|| "workspace".to_string(), |n| n.to_string_lossy().into_owned());
     client.request_raw(
@@ -61,15 +63,15 @@ pub fn initialize(client: &Client, root: &Path, clippy: bool) -> Pending<lsp_typ
             "rootUri": uri.as_str(),
             "workspaceFolders": [{ "uri": uri.as_str(), "name": name }],
             "capabilities": capabilities(),
-            "initializationOptions": config(clippy)
+            "initializationOptions": config(clippy, exclude)
         }),
     )
 }
 
 /// `workspace/configuration` of rust-analyzer: the settings once per requested section.
-pub fn configuration_reply(params: &Value, clippy: bool) -> Value {
+pub fn configuration_reply(params: &Value, clippy: bool, exclude: &[String]) -> Value {
     let count = params.get("items").and_then(Value::as_array).map_or(0, Vec::len);
-    Value::Array(vec![config(clippy); count])
+    Value::Array(vec![config(clippy, exclude); count])
 }
 
 /// Whether an `experimental/serverStatus` notification means analysis finished.
@@ -192,14 +194,20 @@ mod tests {
 
     #[test]
     fn the_configuration_answers_every_section() {
-        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false).as_array().map(Vec::len), Some(2));
-        assert_eq!(configuration_reply(&json!({}), false).as_array().map(Vec::len), Some(0));
+        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), false, &[]).as_array().map(Vec::len), Some(2));
+        assert_eq!(configuration_reply(&json!({}), false, &[]).as_array().map(Vec::len), Some(0));
     }
 
     #[test]
     fn the_linter_is_the_check_command() {
-        assert_eq!(config(false)["check"]["command"], json!("check"));
-        assert_eq!(config(true)["check"]["command"], json!("clippy"));
+        assert_eq!(config(false, &[])["check"]["command"], json!("check"));
+        assert_eq!(config(true, &[])["check"]["command"], json!("clippy"));
+    }
+
+    #[test]
+    fn excluded_paths_are_the_files_exclude_setting() {
+        assert_eq!(config(false, &["gen".into(), "src/old.rs".into()])["files"]["exclude"], json!(["gen", "src/old.rs"]));
+        assert_eq!(config(false, &[])["files"]["exclude"], json!([]));
     }
 
     #[test]

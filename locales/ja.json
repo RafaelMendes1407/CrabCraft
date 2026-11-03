@@ -743,5 +743,11 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "exclude": {
+    "Exclude from Analysis": "解析から除外",
+    "Include in Analysis Again": "解析に再び含める",
+    "Excluded with its folder": "フォルダーごと除外されています",
+    "excluded": "除外"
   }
 }

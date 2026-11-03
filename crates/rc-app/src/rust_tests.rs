@@ -1733,3 +1733,89 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     pump(&mut app, "the lint of Clippy", |a| lint(a));
     app.insight.stop();
 }
+
+/// Asks rust-analyzer for the workspace symbols named `query` until `want` holds for the names.
+fn wait_symbols(app: &mut CrabCraftApp, query: &str, what: &str, want: impl Fn(&[String]) -> bool) {
+    let start = Instant::now();
+    let mut last = Vec::new();
+    while start.elapsed() < Duration::from_secs(120) {
+        let mut pending = app.insight.workspace_symbols(query);
+        let asked = Instant::now();
+        while let Some(p) = &mut pending
+            && asked.elapsed() < Duration::from_secs(30)
+        {
+            let out = app.insight.update(&mut app.docs, true);
+            app.handle_insight(out);
+            if let Some(r) = p.poll() {
+                last = r.ok().and_then(|v| v.as_array().cloned()).unwrap_or_default().iter().filter_map(|s| s.get("name")?.as_str().map(str::to_string)).collect();
+                pending = None;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if want(&last) {
+            return;
+        }
+        let out = app.insight.update(&mut app.docs, true);
+        app.handle_insight(out);
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    panic!("timed out waiting for {what}; last symbols {last:?}");
+}
+
+#[test]
+fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
+    use crate::ui::explorer::Exclusion;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), &format!("pub mod generated;\n{LIB}"));
+    write(&root.join("src/generated/mod.rs"), "pub fn only_in_generated_code() -> u32 {\n    7\n}\n");
+    let root = root.canonicalize().unwrap();
+    let generated = root.join("src/generated");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let indexed = |a: &CrabCraftApp| a.files.index.as_ref().filter(|i| i.is_ready()).map(|i| i.snapshot().get("src/generated/mod.rs").is_some());
+    pump(&mut app, "the file index", |a| indexed(a).is_some());
+    assert_eq!(indexed(&app), Some(true));
+    wait_symbols(&mut app, "only_in_generated", "the symbol of the folder", |names| names.iter().any(|n| n == "only_in_generated_code"));
+
+    // Excluded: out of the index, Find in Files and the server; dimmed in the explorer; saved.
+    app.set_excluded(&generated, true);
+    assert_eq!(app.explorer.excluded, ["src/generated"]);
+    assert_eq!(app.explorer.exclusion(&root, &generated), Exclusion::Itself);
+    assert_eq!(app.explorer.exclusion(&root, &generated.join("mod.rs")), Exclusion::Inherited);
+    assert_eq!(app.explorer.exclusion(&root, &root.join("src/lib.rs")), Exclusion::No);
+    pump(&mut app, "the new file index", |a| indexed(a) == Some(false));
+    let mut find = crate::search::FindInFiles::new(&root, Waker::noop(), "generated".into());
+    find.excluded = app.explorer.excluded.clone();
+    find.search();
+    pump(&mut app, "Find in Files", |_| {
+        find.poll();
+        find.summary.is_some()
+    });
+    let found: Vec<&str> = find.results.iter().map(|f| f.rel.as_str()).collect();
+    assert_eq!(found, ["src/lib.rs"]);
+    wait_symbols(&mut app, "only_in_generated", "rust-analyzer to drop the folder", |names| names.is_empty());
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).excluded, ["src/generated"]);
+
+    // Included again: everything comes back.
+    app.set_excluded(&generated, false);
+    assert!(app.explorer.excluded.is_empty());
+    pump(&mut app, "the file index again", |a| indexed(a) == Some(true));
+    wait_symbols(&mut app, "only_in_generated", "the symbol again", |names| names.iter().any(|n| n == "only_in_generated_code"));
+    app.insight.stop();
+
+    // Reopened: the exclusion list comes from the session.
+    let mut app = new_app(dir.path());
+    std::fs::write(rc_core::Session::file_for(&root), r#"{ "excluded": ["src\\generated", "../outside"] }"#).unwrap();
+    app.open_workspace(&root);
+    assert_eq!(app.explorer.excluded, ["src/generated"]);
+    pump(&mut app, "the reopened file index", |a| indexed(a) == Some(false));
+    app.insight.stop();
+}

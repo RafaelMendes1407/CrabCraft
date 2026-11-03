@@ -57,6 +57,8 @@ pub struct LanguageSession {
     rust: bool,
     /// The linter of rust-analyzer: Clippy instead of `cargo check`.
     clippy: bool,
+    /// Folders and files rust-analyzer leaves out (relative to the root).
+    exclude: Vec<String>,
 }
 
 impl LanguageSession {
@@ -82,15 +84,16 @@ impl LanguageSession {
             stderr: Vec::new(),
             rust: false,
             clippy: false,
+            exclude: Vec::new(),
         })
     }
 
     /// Starts rust-analyzer for `root`.
-    pub fn start_rust(program: &Path, root: &Path, clippy: bool, waker: Waker) -> std::io::Result<Self> {
+    pub fn start_rust(program: &Path, root: &Path, clippy: bool, exclude: Vec<String>, waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
         let _rt = rc_core::Runtime::handle().enter();
         let client = crate::rust_analyzer::start(program, root, inbox.sender())?;
-        let init = crate::rust_analyzer::initialize(&client, root, clippy);
+        let init = crate::rust_analyzer::initialize(&client, root, clippy, &exclude);
         Ok(LanguageSession {
             client,
             inbox,
@@ -107,6 +110,7 @@ impl LanguageSession {
             stderr: Vec::new(),
             rust: true,
             clippy,
+            exclude,
         })
     }
 
@@ -149,7 +153,7 @@ impl LanguageSession {
             match msg {
                 Incoming::Request { id, method, params } => {
                     if self.rust && method == "workspace/configuration" {
-                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy)));
+                        self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, self.clippy, &self.exclude)));
                     } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));

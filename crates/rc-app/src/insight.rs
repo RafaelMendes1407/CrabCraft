@@ -146,6 +146,8 @@ pub struct Insight {
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
     clippy: bool,
+    /// Folders and files rust-analyzer leaves out (root-relative, `/`-separated).
+    exclude: Vec<String>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
@@ -260,6 +262,7 @@ impl Insight {
             optimizing: None,
             accepted_resolve: None,
             clippy: false,
+            exclude: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -322,6 +325,18 @@ impl Insight {
         }
     }
 
+    /// The folders and files rust-analyzer leaves out (`files.exclude`). A running server is
+    /// restarted: rust-analyzer 1.99 keeps its file set after `workspace/didChangeConfiguration`.
+    pub fn set_exclude(&mut self, exclude: Vec<String>) {
+        if exclude == self.exclude {
+            return;
+        }
+        self.exclude = exclude;
+        if self.rust && self.session.is_some() {
+            self.restart();
+        }
+    }
+
     /// Stays off until the user trusts `root`.
     pub fn wait_for_trust(&mut self, root: &Path) {
         self.stop();
@@ -337,7 +352,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.waker.clone()) {
+            match LanguageSession::start_rust(&program, &root, self.clippy, self.exclude.clone(), self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;
