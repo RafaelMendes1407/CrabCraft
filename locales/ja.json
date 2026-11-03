@@ -214,7 +214,8 @@
     "netcoredbg debugger": "netcoredbg デバッガー",
     "not found": "見つかりません",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} 文字)",
-    "{n} spaces": "{n} スペース"
+    "{n} spaces": "{n} スペース",
+    "Show sticky lines while scrolling": "スクロール中に固定行を表示"
   },
   "terminal": {
     "Local": "ローカル",
@@ -606,7 +607,11 @@
     "Open in New Window": "新しいウィンドウで開く",
     "Split Down": "下に分割",
     "Split Right": "右に分割",
-    "Unsplit": "分割を解除"
+    "Unsplit": "分割を解除",
+    "Split and Move Right": "分割して右へ移動",
+    "Split and Move Down": "分割して下へ移動",
+    "Unsplit All": "すべての分割を解除",
+    "Move to Main Window": "メインウィンドウへ移動"
   },
   "settings": {
     "Reopen the last project on startup": "起動時に前回のプロジェクトを開く"

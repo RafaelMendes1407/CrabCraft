@@ -214,7 +214,8 @@
     "netcoredbg debugger": "Debuger netcoredbg",
     "not found": "nie znaleziono",
     "{line}:{col} ({n} chars)": "{line}:{col} ({n} znaków)",
-    "{n} spaces": "{n} spacji"
+    "{n} spaces": "{n} spacji",
+    "Show sticky lines while scrolling": "Pokazuj przypięte wiersze podczas przewijania"
   },
   "terminal": {
     "Local": "Lokalny",
@@ -606,7 +607,11 @@
     "Open in New Window": "Otwórz w nowym oknie",
     "Split Down": "Podziel w dół",
     "Split Right": "Podziel w prawo",
-    "Unsplit": "Cofnij podział"
+    "Unsplit": "Cofnij podział",
+    "Split and Move Right": "Podziel i przenieś w prawo",
+    "Split and Move Down": "Podziel i przenieś w dół",
+    "Unsplit All": "Cofnij wszystkie podziały",
+    "Move to Main Window": "Przenieś do okna głównego"
   },
   "settings": {
     "Reopen the last project on startup": "Otwieraj ostatni projekt przy uruchomieniu"

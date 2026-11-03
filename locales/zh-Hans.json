@@ -214,7 +214,8 @@
     "netcoredbg debugger": "netcoredbg 调试器",
     "not found": "未找到",
     "{line}:{col} ({n} chars)": "{line}:{col}（{n} 个字符）",
-    "{n} spaces": "{n} 个空格"
+    "{n} spaces": "{n} 个空格",
+    "Show sticky lines while scrolling": "滚动时显示粘性行"
   },
   "terminal": {
     "Local": "本地",
@@ -606,7 +607,11 @@
     "Open in New Window": "在新窗口中打开",
     "Split Down": "向下拆分",
     "Split Right": "向右拆分",
-    "Unsplit": "取消拆分"
+    "Unsplit": "取消拆分",
+    "Split and Move Right": "拆分并移到右侧",
+    "Split and Move Down": "拆分并移到下方",
+    "Unsplit All": "取消所有拆分",
+    "Move to Main Window": "移到主窗口"
   },
   "settings": {
     "Reopen the last project on startup": "启动时重新打开上一个项目"
