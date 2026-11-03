@@ -275,7 +275,11 @@
     "This element cannot be renamed": "Este elemento não pode ser renomeado",
     "Usages": "Usos",
     "{n} problems": "{n} problemas",
-    "The C# server is still loading the solution; navigation continues when it is ready": "O servidor C# ainda está carregando a solução; a navegação continua quando estiver pronto"
+    "The C# server is still loading the solution; navigation continues when it is ready": "O servidor C# ainda está carregando a solução; a navegação continua quando estiver pronto",
+    "Expand Macro Recursively": "Expandir macro recursivamente",
+    "No macro call at the caret": "Nenhuma chamada de macro no cursor",
+    "Recursive expansion of {name}!": "Expansão recursiva de {name}!",
+    "Could not show the expansion: {error}": "Não foi possível mostrar a expansão: {error}"
   },
   "runner": {
     "All Tests": "Todos os testes",

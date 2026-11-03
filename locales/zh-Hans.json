@@ -275,7 +275,11 @@
     "This element cannot be renamed": "无法重命名此元素",
     "Usages": "用法",
     "{n} problems": "{n} 个问题",
-    "The C# server is still loading the solution; navigation continues when it is ready": "C# 服务器仍在加载解决方案；准备就绪后将继续导航"
+    "The C# server is still loading the solution; navigation continues when it is ready": "C# 服务器仍在加载解决方案；准备就绪后将继续导航",
+    "Expand Macro Recursively": "递归展开宏",
+    "No macro call at the caret": "光标处没有宏调用",
+    "Recursive expansion of {name}!": "{name}! 的递归展开",
+    "Could not show the expansion: {error}": "无法显示展开结果：{error}"
   },
   "runner": {
     "All Tests": "所有测试",

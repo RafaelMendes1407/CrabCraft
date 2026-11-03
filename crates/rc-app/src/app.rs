@@ -747,6 +747,7 @@ impl CrabCraftApp {
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
+                InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 InsightOutput::Usages { title, targets } => {
                     if targets.len() == 1 {
@@ -790,6 +791,7 @@ impl CrabCraftApp {
             Action::ParameterInfo => self.insight.parameter_info(doc),
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
+            Action::ExpandMacro => self.insight.expand_macro(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::RefactorThis => self.insight.refactor_actions(doc),
@@ -924,6 +926,36 @@ impl CrabCraftApp {
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
+    /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
+    pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
+        // Only the name's word characters reach the file name.
+        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
+        let path = rc_core::paths::expansions_dir().join(format!("{}.rs", if safe.is_empty() { "macro" } else { &safe }));
+        let body = format!("// {}
+
+{text}
+", trf("Recursive expansion of {name}!", &[("name", &name)]));
+        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
+            self.notify(trf("Could not show the expansion: {error}", &[("error", &e.to_string())]), true);
+            return;
+        }
+        match self.docs.open(&path) {
+            Ok(i) => {
+                let d = &mut self.docs.list[i];
+                d.generated = true;
+                // Already open from an earlier expansion: show the new text.
+                if d.editor.buffer.rope() != body.as_str() {
+                    d.editor.reload(&body);
+                    d.editor.parse_blocking();
+                }
+                d.editor.read_only = true;
+                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
+                self.focus_editor = true;
+            }
+            Err(e) => self.notify(e, true),
+        }
+    }
+
     pub fn close_tab(&mut self, i: usize) {
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
