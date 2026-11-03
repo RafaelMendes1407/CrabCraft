@@ -10,9 +10,16 @@ use std::str::FromStr;
 /// Characters escaped in a `file://` URI path (like VS Code: keep `/` and `:` readable).
 const PATH: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'%').add(b'<').add(b'>').add(b'?').add(b'`').add(b'{').add(b'}').add(b'[').add(b']').add(b'^').add(b'|');
 
-/// `file:///Users/me/A B.cs` from a path (Windows: `file:///C:/x.cs`).
+/// `file:///Users/me/A B.cs` from a path (Windows: `file:///C:/x.cs`). Windows' verbatim paths
+/// (what `canonicalize` returns there) lose their `\\?\` prefix: in a URI it reads as a
+/// host-less `//?/C:/…` that language servers do not recognise.
 pub fn path_to_uri(path: &Path) -> Uri {
-    let s = path.to_string_lossy().replace('\\', "/");
+    let raw = path.to_string_lossy();
+    let raw = match raw.strip_prefix(r"\\?\UNC\") {
+        Some(share) => format!(r"\\{share}"),
+        None => raw.strip_prefix(r"\\?\").unwrap_or(&raw).to_string(),
+    };
+    let s = raw.replace('\\', "/");
     let s = if s.starts_with('/') { s } else { format!("/{s}") };
     let encoded = utf8_percent_encode(&s, PATH).to_string();
     Uri::from_str(&format!("file://{encoded}")).unwrap_or_else(|_| Uri::from_str("file:///").expect("valid"))
@@ -89,6 +96,13 @@ impl OpenDocs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verbatim_windows_paths_give_plain_file_uris() {
+        assert_eq!(path_to_uri(Path::new(r"\\?\C:\Users\me\src\main.rs")).as_str(), "file:///C:/Users/me/src/main.rs");
+        assert_eq!(path_to_uri(Path::new(r"C:\Users\me\src\main.rs")).as_str(), "file:///C:/Users/me/src/main.rs");
+        assert_eq!(path_to_uri(Path::new(r"\\?\UNC\server\share\a.rs")).as_str(), path_to_uri(Path::new(r"\\server\share\a.rs")).as_str());
+    }
 
     #[test]
     fn uris_round_trip_with_spaces_and_unicode() {
