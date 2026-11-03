@@ -743,5 +743,19 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "renamefile": {
+    "The name cannot contain a path separator": "Der Name darf kein Pfadtrennzeichen enthalten",
+    "Rename '{old}' to '{new}'": "'{old}' in '{new}' umbenennen",
+    "Searching for references…": "Verweise werden gesucht…",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{n} Änderungen in {files} Dateien nennen den alten Namen. Wählen Sie, welche mit der Umbenennung erfolgen.",
+    "No language server checked the code: only text matches are listed.": "Kein Sprachserver hat den Code geprüft: Es werden nur Textfunde angezeigt.",
+    "The language server could not list the references: {error}": "Der Sprachserver konnte die Verweise nicht auflisten: {error}",
+    "code reference": "Codeverweis",
+    "text match": "Textfund",
+    "Rename and Update References": "Umbenennen und Verweise aktualisieren",
+    "Rename Only": "Nur umbenennen",
+    "Renamed; updated {n} files": "Umbenannt; {n} Dateien aktualisiert",
+    "Rename File…": "Datei umbenennen…"
   }
 }

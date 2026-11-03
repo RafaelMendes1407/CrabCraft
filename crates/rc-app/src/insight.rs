@@ -1543,6 +1543,25 @@ impl Insight {
         }
     }
 
+    /// Asks the server for the edits that renaming `from` to `to` needs
+    /// (`workspace/willRenameFiles`; rust-analyzer renames the module and its paths). `None`
+    /// when no started server offers it.
+    pub fn will_rename_files(&self, from: &Path, to: &Path) -> Option<Pending<Option<lsp::WorkspaceEdit>>> {
+        let session = self.session.as_ref().filter(|s| s.is_initialized())?;
+        let ops = session.capabilities.as_ref()?.workspace.as_ref()?.file_operations.as_ref()?;
+        ops.will_rename.as_ref()?;
+        Some(session.client.request_raw("workspace/willRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] })))
+    }
+
+    /// Tells the server a file or folder was renamed, when it asked to know.
+    pub fn did_rename_files(&self, from: &Path, to: &Path) {
+        let Some(session) = self.session.as_ref().filter(|s| s.is_initialized()) else { return };
+        let wanted = session.capabilities.as_ref().and_then(|c| c.workspace.as_ref()).and_then(|w| w.file_operations.as_ref()).is_some_and(|o| o.did_rename.is_some());
+        if wanted {
+            session.client.notify_raw("workspace/didRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] }));
+        }
+    }
+
     /// Tells the server about files changed on disk (closed files it has loaded).
     pub fn files_changed(&self, changes: &[(PathBuf, u8)]) {
         if let Some(s) = &self.session
@@ -1782,6 +1801,11 @@ fn use_block(text: &str) -> Option<(usize, usize)> {
 /// Applies a workspace edit: open documents through their editor (one undo step each),
 /// closed files on disk. Returns the number of files changed.
 pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Result<usize, String> {
+    apply_file_edits(docs, workspace_edit_files(edit))
+}
+
+/// The text edits of a workspace edit, per file (file operations are left out).
+pub fn workspace_edit_files(edit: &lsp::WorkspaceEdit) -> BTreeMap<PathBuf, Vec<lsp::TextEdit>> {
     let mut per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>> = BTreeMap::new();
     if let Some(changes) = &edit.changes {
         for (uri, edits) in changes {
@@ -1810,6 +1834,12 @@ pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Resul
             }
         }
     }
+    per_file
+}
+
+/// Applies text edits per file: open documents through their editor (one undo step each),
+/// closed files on disk. Returns the number of files changed.
+pub fn apply_file_edits(docs: &mut Docs, per_file: BTreeMap<PathBuf, Vec<lsp::TextEdit>>) -> Result<usize, String> {
     let mut count = 0;
     for (path, edits) in per_file {
         if let Some(d) = docs.list.iter_mut().find(|d| d.path == path) {

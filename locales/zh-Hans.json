@@ -743,5 +743,19 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "renamefile": {
+    "The name cannot contain a path separator": "名称不能包含路径分隔符",
+    "Rename '{old}' to '{new}'": "将“{old}”重命名为“{new}”",
+    "Searching for references…": "正在查找引用…",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{files} 个文件中有 {n} 处提到旧名称。请选择要随重命名一起进行的更改。",
+    "No language server checked the code: only text matches are listed.": "没有语言服务器检查代码：仅列出文本匹配项。",
+    "The language server could not list the references: {error}": "语言服务器无法列出引用：{error}",
+    "code reference": "代码引用",
+    "text match": "文本匹配",
+    "Rename and Update References": "重命名并更新引用",
+    "Rename Only": "仅重命名",
+    "Renamed; updated {n} files": "已重命名；更新了 {n} 个文件",
+    "Rename File…": "重命名文件…"
   }
 }

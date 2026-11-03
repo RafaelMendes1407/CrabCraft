@@ -743,5 +743,19 @@
     "Remove once hit": "Remover ao atingir",
     "Refactor This…": "Refatorar isto…",
     "Select In…": "Selecionar em…"
+  },
+  "renamefile": {
+    "The name cannot contain a path separator": "O nome não pode conter um separador de caminho",
+    "Rename '{old}' to '{new}'": "Renomear '{old}' para '{new}'",
+    "Searching for references…": "Procurando referências…",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{n} alterações em {files} arquivos citam o nome antigo. Escolha as que serão feitas junto com a renomeação.",
+    "No language server checked the code: only text matches are listed.": "Nenhum servidor de linguagem verificou o código: só as ocorrências de texto aparecem.",
+    "The language server could not list the references: {error}": "O servidor de linguagem não conseguiu listar as referências: {error}",
+    "code reference": "referência no código",
+    "text match": "ocorrência de texto",
+    "Rename and Update References": "Renomear e atualizar referências",
+    "Rename Only": "Só renomear",
+    "Renamed; updated {n} files": "Renomeado; {n} arquivos atualizados",
+    "Rename File…": "Renomear arquivo…"
   }
 }

@@ -401,6 +401,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
     let mut toggle_row: Option<usize> = None;
     let mut select_row: Option<usize> = None;
     let mut context: Option<(usize, egui::Response)> = None;
+    // The tree takes the keyboard focus, so it is a widget of its own (accessibility needs a
+    // node for the focused id).
+    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive()).widget_info(|| egui::WidgetInfo::new(egui::WidgetType::Other));
 
     let scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
     scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {

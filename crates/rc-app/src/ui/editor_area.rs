@@ -23,6 +23,7 @@ enum TabCommand {
     Diff(usize),
     Split(usize, bool),
     Float(usize),
+    Rename(usize),
 }
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
@@ -677,6 +678,11 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, commands: &
             commands.push(TabCommand::CopyPath(i));
             ui.close();
         }
+        let renamable = !app.docs.list[i].editor.read_only;
+        if theme::menu_entry(ui, Some(ico::EDIT), tr("Rename File…"), None, false, renamable).clicked() {
+            commands.push(TabCommand::Rename(i));
+            ui.close();
+        }
         if app.vcs.repo.is_some() {
             let on = app.vcs.blame_for.as_deref() == Some(app.docs.list[i].path.as_path());
             if theme::menu_entry(ui, Some(ico::HISTORY), tr("Annotate with Git Blame"), None, on, true).clicked() {
@@ -759,6 +765,11 @@ fn run_tab_commands(app: &mut CrabCraftApp, ui: &Ui, commands: Vec<TabCommand>) 
                 }
             }
             TabCommand::CopyPath(i) => ui.ctx().copy_text(app.docs.list[i].path.display().to_string()),
+            TabCommand::Rename(i) => {
+                let path = app.docs.list[i].path.clone();
+                let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                app.dialog = Some(crate::ui::dialogs::Dialog::Rename { path, name, error: None });
+            }
             TabCommand::Reveal(i) => crate::app::reveal_in_file_manager(&app.docs.list[i].path),
             TabCommand::Blame(i) => {
                 let (path, text) = (app.docs.list[i].path.clone(), app.docs.list[i].editor.buffer.rope().to_string());

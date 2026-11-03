@@ -27,6 +27,8 @@ pub enum Dialog {
     RunAnything { text: String, selected: usize },
     NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
     Rename { path: PathBuf, name: String, error: Option<String> },
+    /// After the new name of a file: the other changes the rename brings.
+    RenameFile(Box<crate::file_rename::FileRename>),
     ConfirmDelete { path: PathBuf },
     RecentFiles { selected: usize, filter: String },
     /// ⌥⏎ context actions for the active editor.
@@ -71,6 +73,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),
         Dialog::NewFile { dir, name, kind, attach, public, error } => new_file(app, ctx, dir, name, *kind, attach, public, error),
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
+        Dialog::RenameFile(r) => rename_file(app, ctx, r),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
@@ -857,30 +860,120 @@ fn rename(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf, name: &mut 
         if target == *path {
             return Outcome::Close;
         }
+        if name.trim().contains(['/', '\\']) {
+            *error = Some(tr("The name cannot contain a path separator").to_string());
+            return Outcome::Keep;
+        }
         if target.exists() {
             *error = Some(tr("A file or folder with this name already exists").to_string());
             return Outcome::Keep;
         }
-        match std::fs::rename(&*path, &target) {
-            Ok(()) => {
-                app.explorer.invalidate(path);
-                app.explorer.invalidate(&target);
-                // Open editors follow the file.
-                for d in &mut app.docs.list {
-                    if let Ok(rest) = d.path.strip_prefix(&*path) {
-                        d.path = target.join(rest);
-                        d.editor.path = Some(d.path.clone());
-                    }
-                }
-                return Outcome::Close;
-            }
-            Err(e) => {
-                *error = Some(e.to_string());
-                return Outcome::Keep;
-            }
-        }
+        // Nothing changes yet: first the references to the old name are looked for.
+        let r = crate::file_rename::FileRename::start(app, path.clone(), target);
+        app.dialog = Some(Dialog::RenameFile(Box::new(r)));
+        return Outcome::Keep;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The changes a file rename brings (module declarations and paths from the language server,
+/// mentions of the old name as text), each one picked or not, then the rename.
+fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename::FileRename) -> Outcome {
+    r.update(&app.docs);
+    let searching = r.searching();
+    if searching {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    // Nothing else mentions the file: renamed right away.
+    if !searching && r.changes.is_empty() && r.server_error.is_none() && r.error.is_none() {
+        return finish_rename(app, r, false);
+    }
+    let old = r.from.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let new = r.to.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let ((update, only, cancel), esc) = modal(ctx, "rename_file", 680.0, |ui| {
+        title(ui, &trf("Rename '{old}' to '{new}'", &[("old", &old), ("new", &new)]));
+        if searching {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(tr("Searching for references…"));
+            });
+        } else {
+            let mut files: Vec<&PathBuf> = r.changes.iter().map(|c| &c.path).collect();
+            files.dedup();
+            let files = files.len();
+            ui.label(trf("{n} changes in {files} files mention the old name. Pick the ones to make with the rename.", &[("n", &r.changes.len()), ("files", &files)]));
+            if !r.asked_server {
+                ui.label(egui::RichText::new(tr("No language server checked the code: only text matches are listed.")).size(12.0).color(p.muted));
+            }
+            if let Some(e) = &r.server_error {
+                ui.label(egui::RichText::new(trf("The language server could not list the references: {error}", &[("error", e)])).size(12.0).color(p.warn));
+            }
+            ui.add_space(6.0);
+            egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+                let mut i = 0;
+                while i < r.changes.len() {
+                    let path = r.changes[i].path.clone();
+                    let end = (i..r.changes.len()).find(|&j| r.changes[j].path != path).unwrap_or(r.changes.len());
+                    let shown = root.as_ref().and_then(|root| path.strip_prefix(root).ok()).unwrap_or(&path).display().to_string();
+                    let mut all = r.changes[i..end].iter().all(|c| c.checked);
+                    if ui.checkbox(&mut all, egui::RichText::new(&shown).strong()).changed() {
+                        for c in &mut r.changes[i..end] {
+                            c.checked = all;
+                        }
+                    }
+                    for c in &mut r.changes[i..end] {
+                        ui.horizontal(|ui| {
+                            ui.add_space(22.0);
+                            let kind = if c.from_server { tr("code reference") } else { tr("text match") };
+                            let label = format!("{}: {} \u{2192} {}", c.line + 1, clip(c.before.trim()), clip(c.after.trim()));
+                            ui.checkbox(&mut c.checked, egui::RichText::new(label).monospace().size(12.0));
+                            ui.label(egui::RichText::new(kind).size(11.0).color(p.muted));
+                        });
+                    }
+                    i = end;
+                }
+            });
+        }
+        if let Some(e) = &r.error {
+            ui.colored_label(p.error, e);
+        }
+        ui.add_space(14.0);
+        let mut res = (false, false, false);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let any = r.changes.iter().any(|c| c.checked);
+            res.0 = ui.add_enabled_ui(!searching && any, |ui| theme::primary_button(ui, tr("Rename and Update References"))).inner.clicked();
+            res.1 = theme::secondary_button(ui, tr("Rename Only")).clicked();
+            res.2 = theme::secondary_button(ui, tr("Cancel")).clicked();
+        });
+        res
+    });
+    if update || only {
+        return finish_rename(app, r, update);
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Renames on disk with the picked changes (`update`) or none.
+fn finish_rename(app: &mut CrabCraftApp, r: &mut crate::file_rename::FileRename, update: bool) -> Outcome {
+    let changes: &[crate::file_rename::Change] = if update { &r.changes } else { &[] };
+    match crate::file_rename::apply(app, &r.from, &r.to, changes) {
+        Ok(0) => Outcome::Close,
+        Ok(n) => {
+            app.notify(trf("Renamed; updated {n} files", &[("n", &n)]), false);
+            Outcome::Close
+        }
+        Err(e) => {
+            r.error = Some(e);
+            Outcome::Keep
+        }
+    }
+}
+
+/// A line of code short enough for one row.
+fn clip(s: &str) -> String {
+    if s.chars().count() > 60 { format!("{}…", s.chars().take(59).collect::<String>()) } else { s.to_string() }
 }
 
 fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> Outcome {

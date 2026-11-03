@@ -743,5 +743,19 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "renamefile": {
+    "The name cannot contain a path separator": "名前にパス区切り文字は使えません",
+    "Rename '{old}' to '{new}'": "'{old}' を '{new}' に名前変更",
+    "Searching for references…": "参照を検索しています…",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{files} 個のファイルの {n} 箇所が古い名前を参照しています。名前変更と一緒に行う変更を選んでください。",
+    "No language server checked the code: only text matches are listed.": "言語サーバーはコードを確認していません。テキストの一致のみを表示します。",
+    "The language server could not list the references: {error}": "言語サーバーが参照を一覧できませんでした: {error}",
+    "code reference": "コード参照",
+    "text match": "テキストの一致",
+    "Rename and Update References": "名前を変更して参照を更新",
+    "Rename Only": "名前の変更のみ",
+    "Renamed; updated {n} files": "名前を変更しました。{n} 個のファイルを更新しました",
+    "Rename File…": "ファイル名を変更…"
   }
 }

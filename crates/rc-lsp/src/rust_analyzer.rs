@@ -37,6 +37,10 @@ fn capabilities() -> Value {
     if let Some(map) = caps.as_object_mut() {
         map.insert("experimental".into(), json!({ "serverStatusNotification": true }));
     }
+    // Renaming a file asks the server first, which renames the module and its paths.
+    if let Some(workspace) = caps.get_mut("workspace").and_then(Value::as_object_mut) {
+        workspace.insert("fileOperations".into(), json!({ "willRename": true, "didRename": true }));
+    }
     // Without this capability the server pushes its diagnostics, which include `cargo check`'s.
     if let Some(text) = caps.get_mut("textDocument").and_then(Value::as_object_mut) {
         text.remove("diagnostic");
