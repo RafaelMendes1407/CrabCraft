@@ -522,6 +522,20 @@
     "Project Environment Variables": "Umgebungsvariablen des Projekts",
     "Project Environment Variables…": "Umgebungsvariablen des Projekts…"
   },
+  "renamefile": {
+    "No language server checked the code: only text matches are listed.": "Kein Sprachserver hat den Code geprüft: Es werden nur Textfunde angezeigt.",
+    "Rename '{old}' to '{new}'": "'{old}' in '{new}' umbenennen",
+    "Rename File…": "Datei umbenennen…",
+    "Rename Only": "Nur umbenennen",
+    "Rename and Update References": "Umbenennen und Verweise aktualisieren",
+    "Renamed; updated {n} files": "Umbenannt; {n} Dateien aktualisiert",
+    "Searching for references…": "Verweise werden gesucht…",
+    "The language server could not list the references: {error}": "Der Sprachserver konnte die Verweise nicht auflisten: {error}",
+    "The name cannot contain a path separator": "Der Name darf kein Pfadtrennzeichen enthalten",
+    "code reference": "Codeverweis",
+    "text match": "Textfund",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{n} Änderungen in {files} Dateien nennen den alten Namen. Wählen Sie, welche mit der Umbenennung erfolgen."
+  },
   "runconfig": {
     "Edit Run Configuration…": "Ausführungskonfiguration bearbeiten…",
     "Test configurations have nothing to edit": "Testkonfigurationen haben nichts zu bearbeiten",

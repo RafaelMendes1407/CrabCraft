@@ -522,6 +522,20 @@
     "Project Environment Variables": "项目环境变量",
     "Project Environment Variables…": "项目环境变量…"
   },
+  "renamefile": {
+    "No language server checked the code: only text matches are listed.": "没有语言服务器检查代码：仅列出文本匹配项。",
+    "Rename '{old}' to '{new}'": "将“{old}”重命名为“{new}”",
+    "Rename File…": "重命名文件…",
+    "Rename Only": "仅重命名",
+    "Rename and Update References": "重命名并更新引用",
+    "Renamed; updated {n} files": "已重命名；更新了 {n} 个文件",
+    "Searching for references…": "正在查找引用…",
+    "The language server could not list the references: {error}": "语言服务器无法列出引用：{error}",
+    "The name cannot contain a path separator": "名称不能包含路径分隔符",
+    "code reference": "代码引用",
+    "text match": "文本匹配",
+    "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.": "{files} 个文件中有 {n} 处提到旧名称。请选择要随重命名一起进行的更改。"
+  },
   "runconfig": {
     "Edit Run Configuration…": "编辑运行配置…",
     "Test configurations have nothing to edit": "测试配置没有可编辑的内容",

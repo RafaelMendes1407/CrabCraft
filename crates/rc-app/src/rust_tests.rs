@@ -1142,6 +1142,120 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     app.insight.stop();
 }
 
+/// Looks for what renaming `from` to `to` changes until `want` holds for the found changes.
+fn rename_changes(app: &mut CrabCraftApp, from: &Path, to: &Path, want: impl Fn(&[crate::file_rename::Change]) -> bool) -> crate::file_rename::FileRename {
+    let start = Instant::now();
+    loop {
+        let mut r = crate::file_rename::FileRename::start(app, from.to_path_buf(), to.to_path_buf());
+        assert!(r.asked_server, "rust-analyzer offers willRenameFiles");
+        pump(app, "the changes of the rename", |a| {
+            r.update(&a.docs);
+            !r.searching()
+        });
+        if want(&r.changes) {
+            return r;
+        }
+        // The server may still be loading the last rename.
+        assert!(start.elapsed() < Duration::from_secs(60), "{:?} {:?}", r.server_error, r.changes);
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+#[test]
+fn renaming_a_module_file_updates_its_declaration_and_paths() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "pub mod util;\npub use util::helper;\n");
+    write(&root.join("src/util.rs"), "pub fn helper() {}\n");
+    write(&root.join("src/main.rs"), "fn main() {\n    demo::util::helper();\n}\n");
+    write(&root.join("README.md"), "See src/util.rs.\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let src = root.join("src");
+    app.open_file(&src.join("util.rs"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let read = |name: &str| std::fs::read_to_string(src.join(name)).unwrap();
+
+    // The declaration and the path in lib.rs, the path in main.rs, and the README as text.
+    let mentions = |name: &'static str| move |c: &[crate::file_rename::Change]| c.iter().filter(|c| c.from_server && c.after.contains(name)).count() >= 3;
+    let mut r = rename_changes(&mut app, &src.join("util.rs"), &src.join("tools.rs"), mentions("tools"));
+    let lib: Vec<_> = r.changes.iter().filter(|c| c.path == src.join("lib.rs")).map(|c| (c.line, c.before.clone(), c.after.clone(), c.checked)).collect();
+    assert!(lib.contains(&(0, "pub mod util;".into(), "pub mod tools;".into(), true)), "{lib:?}");
+    let readme = r.changes.iter().find(|c| c.path == root.join("README.md")).expect("the README's mention");
+    assert!(!readme.from_server && !readme.checked && readme.after == "See src/tools.rs.", "{readme:?}");
+    let changes = std::mem::take(&mut r.changes);
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &changes), Ok(2));
+    assert!(!src.join("util.rs").exists() && src.join("tools.rs").exists());
+    assert_eq!(read("lib.rs"), "pub mod tools;\npub use tools::helper;\n");
+    assert!(read("main.rs").contains("demo::tools::helper();"));
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "See src/util.rs.\n");
+    // The open tab follows the file.
+    assert!(app.docs.list.iter().any(|d| d.path == src.join("tools.rs")));
+    let check = std::process::Command::new("cargo").args(["check", "--quiet"]).current_dir(&root).output().unwrap();
+    assert!(check.status.success(), "{}", String::from_utf8_lossy(&check.stderr));
+
+    // A file left unchecked keeps its text.
+    let mut r = rename_changes(&mut app, &src.join("tools.rs"), &src.join("gear.rs"), mentions("gear"));
+    for c in r.changes.iter_mut().filter(|c| c.path == src.join("main.rs")) {
+        c.checked = false;
+    }
+    let changes = std::mem::take(&mut r.changes);
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &changes), Ok(1));
+    assert_eq!(read("lib.rs"), "pub mod gear;\npub use gear::helper;\n");
+    assert!(read("main.rs").contains("demo::tools::helper();"));
+
+    // Rename only: nothing else changes.
+    let r = rename_changes(&mut app, &src.join("gear.rs"), &src.join("wheel.rs"), |c| !c.is_empty());
+    assert_eq!(crate::file_rename::apply(&mut app, &r.from, &r.to, &[]), Ok(0));
+    assert!(src.join("wheel.rs").exists());
+    assert_eq!(read("lib.rs"), "pub mod gear;\npub use gear::helper;\n");
+    app.insight.stop();
+}
+
+#[test]
+fn f2_in_the_explorer_renames_a_file_and_offers_its_text_mentions() {
+    use egui_kittest::kittest::Queryable;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("notes");
+    write(&root.join("notes.txt"), "plain\n");
+    write(&root.join("README.md"), "Read notes.txt first.\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = crate::screens::test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.get_by_label("notes.txt").click();
+    h.run_steps(2);
+    h.key_press(egui::Key::F2);
+    h.run_steps(2);
+    match &mut h.state_mut().dialog {
+        Some(crate::ui::dialogs::Dialog::Rename { name, .. }) => *name = "todo.txt".into(),
+        _ => panic!("F2 opens the Rename dialog; focus {} docs {}", h.state().explorer.has_focus, h.state().docs.list.len()),
+    }
+    h.run_steps(1);
+    h.key_press(egui::Key::Enter);
+    let start = Instant::now();
+    while h.query_by_label("Rename Only").is_none() || h.state().dialog.as_ref().is_some_and(|d| matches!(d, crate::ui::dialogs::Dialog::RenameFile(r) if r.searching())) {
+        assert!(start.elapsed() < Duration::from_secs(30), "the list of changes");
+        h.run_steps(1);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // A text match is not picked until the user picks it.
+    assert!(h.query_by_label("No language server checked the code: only text matches are listed.").is_some());
+    assert!(!root.join("todo.txt").exists());
+    h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "README.md").click();
+    h.run_steps(2);
+    h.get_by_label("Rename and Update References").click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert!(root.join("todo.txt").exists() && !root.join("notes.txt").exists());
+    assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "Read todo.txt first.\n");
+}
+
 fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(120) {

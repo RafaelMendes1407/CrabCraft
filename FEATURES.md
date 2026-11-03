@@ -24,13 +24,13 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 107 |
+| ✅ Pronto | 108 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
 | ⬜ A fazer | 116 |
 | 🚫 Fora do escopo | 5 |
-| **Total** | **257** |
+| **Total** | **258** |
 <!-- summary:end -->
 
 ## Marcos
@@ -189,6 +189,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
 | R-11 | Gerar `derive` | ✅ | M3 | Alt+Insert sobre struct, enum ou union mostra Derive…: marca os traits comuns e outros digitados; junta no #[derive] existente ou cria acima do item. Testado com rust-analyzer real e tree-sitter |
+| R-12 | Renomear arquivo ou módulo com as referências | ✅ | M3 | F2 no Explorador (ou menu da aba): `workspace/willRenameFiles` do rust-analyzer (`mod`, caminhos `use`) e ocorrências do nome em texto, em segundo plano; lista com caixas por arquivo e linha, Renomear e atualizar / Só renomear. Teste real com rust-analyzer e `cargo check`; F2 testado com kittest. Pastas: só pelo servidor e por `nome/` em texto, sem teste real. |
 
 ## 6. Cargo.toml e conditional compilation
 
