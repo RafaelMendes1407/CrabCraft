@@ -158,11 +158,13 @@ pub struct Runner {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
+    /// Environment of every Cargo command, `NAME=value` per line (kept in the session).
+    pub project_env: String,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new() }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -226,7 +228,12 @@ impl Runner {
     }
 
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
-        self.cargo.clone().ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+        self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+    }
+
+    /// The project's environment; nothing when the session holds an invalid one.
+    pub fn project_env_pairs(&self) -> Vec<(String, String)> {
+        rc_core::session::parse_env(&self.project_env).unwrap_or_default()
     }
 
     pub fn clear(&mut self) {

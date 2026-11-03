@@ -747,5 +747,12 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "project-env": {
+    "Project Environment Variables": "项目环境变量",
+    "Project Environment Variables…": "项目环境变量…",
+    "Line {line} is not NAME=value with a valid name.": "第 {line} 行不是名称有效的 NAME=value 格式。",
+    "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "每行一个 NAME=value。应用于每个 Cargo 命令、其启动的程序以及 rust-analyzer；运行配置中的变量优先。",
+    "Open a project to set its environment variables": "打开一个项目以设置其环境变量"
   }
 }

@@ -379,6 +379,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),
             &sep(),
+            &act(Action::ProjectEnvironment, || tr("Project Environment Variables…")),
+            &sep(),
             &act(Action::SaveAll, || tr("Save All")),
             &act(Action::CloseTab, || tr("Close Tab")),
         ],

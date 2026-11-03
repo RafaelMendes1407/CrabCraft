@@ -124,6 +124,37 @@ pub struct Session {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name.
     pub run_options: BTreeMap<String, RunOptions>,
+    /// Environment of every Cargo command and of rust-analyzer: `NAME=value` per line.
+    pub project_env: String,
+}
+
+/// A line of an environment that is not `NAME=value` with a valid name (1-based).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BadEnvLine(pub usize);
+
+/// Whether `name` can be an environment variable: not empty, without `=`, spaces or NUL.
+pub fn valid_env_name(name: &str) -> bool {
+    !name.is_empty() && !name.chars().any(|c| c == '=' || c == '\0' || c.is_whitespace())
+}
+
+/// `NAME=value` lines as pairs (blank lines and `#` comments skipped); the first invalid line
+/// is an error. A later line wins over an earlier one with the same name.
+pub fn parse_env(text: &str) -> Result<Vec<(String, String)>, BadEnvLine> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else { return Err(BadEnvLine(i + 1)) };
+        let (name, value) = (name.trim(), value.trim());
+        if !valid_env_name(name) || value.contains('\0') {
+            return Err(BadEnvLine(i + 1));
+        }
+        pairs.retain(|(n, _)| n != name);
+        pairs.push((name.to_string(), value.to_string()));
+    }
+    Ok(pairs)
 }
 
 impl Session {
@@ -166,5 +197,16 @@ mod tests {
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
         assert_eq!(Session::load(&dir.path().join("Other")), Session::default());
+    }
+
+    #[test]
+    fn project_environments_are_validated() {
+        let pairs = parse_env("# comment\n\n A = 1 \nPATH_X=a=b\nA=2\nEMPTY=\n").unwrap();
+        assert_eq!(pairs, vec![("PATH_X".to_string(), "a=b".to_string()), ("A".to_string(), "2".to_string()), ("EMPTY".to_string(), String::new())]);
+        assert_eq!(parse_env("OK=1\nno value"), Err(BadEnvLine(2)));
+        assert_eq!(parse_env("=x"), Err(BadEnvLine(1)));
+        assert_eq!(parse_env("TWO WORDS=x"), Err(BadEnvLine(1)));
+        assert_eq!(parse_env("NUL=a\0b"), Err(BadEnvLine(1)));
+        assert_eq!(parse_env(""), Ok(Vec::new()));
     }
 }

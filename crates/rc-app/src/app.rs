@@ -275,6 +275,8 @@ impl CrabCraftApp {
             rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner.project_env = session.project_env.clone();
+        self.insight.set_env(self.runner.project_env_pairs());
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
@@ -301,8 +303,9 @@ impl CrabCraftApp {
     fn load_cargo_workspace(&mut self, manifest: PathBuf) {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
-            let result = match rc_cargo::Cargo::locate() {
+            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
                 Some(cargo) => rc_cargo::load_workspace(&cargo, &manifest).map_err(|e| e.to_string()),
                 None => Err(tr("Cargo was not found. Install Rust with rustup.").to_string()),
             };
@@ -338,8 +341,9 @@ impl CrabCraftApp {
         let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
+        let env = self.runner.project_env_pairs();
         std::thread::spawn(move || {
-            let Some(cargo) = rc_cargo::Cargo::locate() else { return };
+            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
             let mut list = rc_cargo::load_libraries(&cargo, &manifest).unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
             if let Some(root) = info.stdlib {
@@ -395,6 +399,18 @@ impl CrabCraftApp {
             out.send(rc_cargo::detect_toolchain(rc_cargo::Cargo::locate().as_ref(), analyzer.as_deref(), project.as_deref()));
         });
         self.toolchain_load = Some(inbox);
+    }
+
+    /// Changes the project's environment: rust-analyzer restarts with it and the Cargo project
+    /// is read again (nothing restarts when it did not change).
+    pub fn set_project_env(&mut self, text: String) {
+        if self.runner.project_env == text {
+            return;
+        }
+        self.runner.project_env = text;
+        self.session_dirty = true;
+        self.insight.set_env(self.runner.project_env_pairs());
+        self.reload_cargo();
     }
 
     /// Reads the Cargo project again.
@@ -691,6 +707,7 @@ impl CrabCraftApp {
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             run_options: self.runner.options.clone(),
+            project_env: self.runner.project_env.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -973,6 +990,10 @@ impl CrabCraftApp {
             Action::NavigateBack => self.navigate(true),
             Action::NavigateForward => self.navigate(false),
             Action::ShowSettings => self.dialog = Some(Dialog::settings(&self.settings)),
+            Action::ProjectEnvironment => match self.workspace {
+                Some(_) => self.dialog = Some(Dialog::ProjectEnv { text: self.runner.project_env.clone() }),
+                None => self.notify(tr("Open a project to set its environment variables"), false),
+            },
             Action::ToggleProjectWindow => self.toggle_tool(ToolWindow::Explorer),
             Action::ToggleTerminal => self.toggle_tool(ToolWindow::Terminal),
             Action::ToggleGitWindow => self.toggle_tool(ToolWindow::Git),

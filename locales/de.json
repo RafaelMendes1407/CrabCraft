@@ -747,5 +747,12 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "project-env": {
+    "Project Environment Variables": "Umgebungsvariablen des Projekts",
+    "Project Environment Variables…": "Umgebungsvariablen des Projekts…",
+    "Line {line} is not NAME=value with a valid name.": "Zeile {line} ist kein NAME=Wert mit gültigem Namen.",
+    "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Ein NAME=Wert pro Zeile. Gilt für jeden Cargo-Befehl, die davon gestarteten Programme und rust-analyzer; die Variablen einer Ausführungskonfiguration haben Vorrang.",
+    "Open a project to set its environment variables": "Öffnen Sie ein Projekt, um seine Umgebungsvariablen festzulegen"
   }
 }

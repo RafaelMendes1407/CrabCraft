@@ -48,6 +48,8 @@ pub enum Dialog {
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
     /// ⌥F8: evaluate an expression in the selected frame.
     Evaluate { expression: String, focus: bool },
+    /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
+    ProjectEnv { text: String },
 }
 
 impl Dialog {
@@ -84,6 +86,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
+        Dialog::ProjectEnv { text } => project_env(app, ctx, text),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -447,6 +450,27 @@ fn goto_line(app: &mut CrabCraftApp, ctx: &Context, text: &mut String, focus: &m
                 d.editor.goto(line.saturating_sub(1), col.saturating_sub(1));
             }
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The project's environment variables, checked as they are typed.
+fn project_env(app: &mut CrabCraftApp, ctx: &Context, text: &mut String) -> Outcome {
+    let parsed = rc_core::session::parse_env(text);
+    let ((ok, cancel), esc) = modal(ctx, "project_env", 520.0, |ui| {
+        title(ui, tr("Project Environment Variables"));
+        let p = rc_kit::pal(ui);
+        ui.add(egui::TextEdit::multiline(text).hint_text("RUST_LOG=debug\nDATABASE_URL=postgres://localhost/dev").font(egui::TextStyle::Monospace).desired_rows(8).desired_width(f32::INFINITY));
+        ui.add_space(6.0);
+        if let Err(rc_core::session::BadEnvLine(line)) = parsed {
+            ui.colored_label(p.error, trf("Line {line} is not NAME=value with a valid name.", &[("line", &line.to_string())]));
+        }
+        ui.label(egui::RichText::new(tr("One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.")).size(12.0).color(p.muted));
+        buttons(ui, tr("OK"), parsed.is_ok())
+    });
+    if ok && parsed.is_ok() {
+        app.set_project_env(text.trim().to_string());
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

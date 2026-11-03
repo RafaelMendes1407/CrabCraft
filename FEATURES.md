@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 98 |
+| ✅ Pronto | 99 |
 | 🚧 Em andamento | 2 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 127 |
+| ⬜ A fazer | 126 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -56,7 +56,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-03 | Avisar e aplicar atualização da toolchain | ⬜ | M3 | `rustup check` / `rustup update` |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
-| P-06 | Variáveis de ambiente do projeto | ⬜ | M3 | Aplicadas a cargo e ao rust-analyzer |
+| P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |
 | P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
 | P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |

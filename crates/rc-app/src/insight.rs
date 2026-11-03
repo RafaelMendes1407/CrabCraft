@@ -151,6 +151,8 @@ pub struct Insight {
     /// Reformatted on save, waiting to be written.
     save_again: Option<u64>,
     configured: Option<PathBuf>,
+    /// The project's environment, given to rust-analyzer.
+    env: Vec<(String, String)>,
     /// Diagnostics per file, for the Problems window (also closed files the server reports).
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     /// The text the positions of `problems` refer to, for files that are not open.
@@ -236,6 +238,7 @@ impl Insight {
             dotnet: PathBuf::from("dotnet"),
             rust: false,
             configured: None,
+            env: Vec::new(),
             problems: BTreeMap::new(),
             problem_text: BTreeMap::new(),
             raw_items: Vec::new(),
@@ -314,6 +317,17 @@ impl Insight {
         self.launch();
     }
 
+    /// Sets the project's environment; a running rust-analyzer restarts to take it.
+    pub fn set_env(&mut self, env: Vec<(String, String)>) {
+        if self.env == env {
+            return;
+        }
+        self.env = env;
+        if self.rust && self.session.is_some() {
+            self.restart();
+        }
+    }
+
     /// Switches the linter that runs on save between Clippy and `cargo check`.
     pub fn set_clippy(&mut self, clippy: bool) {
         self.clippy = clippy;
@@ -337,7 +351,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            match LanguageSession::start_rust(&program, &root, self.clippy, self.waker.clone()) {
+            match LanguageSession::start_rust(&program, &root, self.clippy, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
                     self.status = InsightStatus::Starting;

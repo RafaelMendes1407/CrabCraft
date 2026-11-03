@@ -291,7 +291,11 @@ pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_buil
     };
     let working_dir = t.working_dir.clone().or_else(|| folder(&t.manifest).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
     let backtrace = if t.options.backtrace.is_empty() { "short" } else { t.options.backtrace.as_str() };
-    let mut env = vec![("RUST_BACKTRACE".to_string(), backtrace.to_string())];
+    // The project's variables, then the configuration's, which win.
+    let mut env = cargo.env().to_vec();
+    if !t.options.backtrace.is_empty() || !env.iter().any(|(k, _)| k == "RUST_BACKTRACE") {
+        env.push(("RUST_BACKTRACE".to_string(), backtrace.to_string()));
+    }
     env.extend(t.env.iter().cloned());
     Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None }))
 }

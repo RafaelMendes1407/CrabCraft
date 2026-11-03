@@ -1167,6 +1167,74 @@ fn a_rust_run_configuration_takes_arguments_and_environment() {
 }
 
 #[test]
+fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    // `env!` needs the variable in the compiler's environment, so Cargo must have it.
+    write(&root.join("src/main.rs"), "fn main() {\n    println!(\"built={} run={} shared={}\", env!(\"CRAB_PROJECT\"), std::env::var(\"CRAB_PROJECT\").unwrap_or_default(), std::env::var(\"CRAB_SHARED\").unwrap_or_default());\n}\n");
+    write(&root.join("src/lib.rs"), "#[test]\nfn sees_the_project_environment() {\n    assert_eq!(option_env!(\"CRAB_PROJECT\"), Some(\"from-project\"));\n    assert_eq!(std::env::var(\"CRAB_SHARED\").as_deref(), Ok(\"project\"));\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+
+    // The action opens the dialog with the current variables.
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::ProjectEnvironment);
+    assert!(matches!(&app.dialog, Some(crate::ui::dialogs::Dialog::ProjectEnv { text }) if text.is_empty()));
+    app.dialog = None;
+    app.set_project_env("CRAB_PROJECT=from-project\nCRAB_SHARED=project".to_string());
+    assert!(app.session_dirty);
+    pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some());
+
+    // The run configuration's variables win over the project's.
+    let name = app.runner.selected_config().unwrap().name.clone();
+    app.runner.options.insert(name, rc_core::session::RunOptions { env: "CRAB_SHARED=config".to_string(), ..Default::default() });
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::Run);
+    pump(&mut app, "the output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("built=from-project run=from-project shared=config")));
+
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
+    let t = app.runner.tests.as_ref().unwrap();
+    assert_eq!((t.passed, t.failed), (1, 0), "{:?}", t.failure);
+
+    // A command typed in the Cargo window has it too.
+    app.run_cargo_command("run --bin demo");
+    let console = |a: &CrabCraftApp| a.runner.build.as_ref().map(|b| b.console.term.screen_lines().join("\n")).unwrap_or_default();
+    pump(&mut app, "the typed command", |a| console(a).contains("built=from-project run=from-project shared=project"));
+
+    // It is kept in the session of the workspace.
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).project_env, "CRAB_PROJECT=from-project\nCRAB_SHARED=project");
+}
+
+#[test]
+fn rust_analyzer_runs_build_scripts_with_the_project_environment() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("build.rs"), "fn main() {\n    println!(\"cargo:rerun-if-env-changed=CRAB_PROJECT\");\n    std::fs::write(\"BUILD_ENV\", std::env::var(\"CRAB_PROJECT\").unwrap_or_default()).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    // Setting it runs nothing while the project is not trusted.
+    app.set_project_env("CRAB_PROJECT=first".to_string());
+    assert!(app.insight.session.is_none());
+    app.trust_project();
+    pump(&mut app, "the build script", |_| std::fs::read_to_string(root.join("BUILD_ENV")).is_ok_and(|t| t == "first"));
+
+    // A change restarts the server, whose build scripts see the new value.
+    std::fs::remove_file(root.join("BUILD_ENV")).unwrap();
+    app.set_project_env("CRAB_PROJECT=second".to_string());
+    assert!(app.insight.session.is_some());
+    pump(&mut app, "the build script again", |_| std::fs::read_to_string(root.join("BUILD_ENV")).is_ok_and(|t| t == "second"));
+    app.insight.stop();
+}
+
+#[test]
 fn reformat_code_runs_rustfmt() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
