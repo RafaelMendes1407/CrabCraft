@@ -48,6 +48,13 @@ pub fn build_args(manifest: &Path, action: BuildAction) -> Vec<String> {
     a
 }
 
+/// Inspect Code: Clippy over every member and target, with its findings as diagnostics.
+pub fn inspect_args(manifest: &Path) -> Vec<String> {
+    let mut a: Vec<String> = vec!["clippy".into(), "--workspace".into(), "--all-targets".into(), MESSAGE_FORMAT.into()];
+    a.extend(manifest_arg(manifest));
+    a
+}
+
 /// What one Cargo invocation left behind.
 #[derive(Default)]
 struct Collected {

@@ -2805,3 +2805,32 @@ fn a_rename_preview_applies_only_the_checked_changes() {
     let lib = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
     assert!(lib.contains("pub fn greet(") && lib.contains("Greeter.hello(), \"hello\""), "the unchecked test line stays:\n{lib}");
 }
+
+/// Inspect Code runs Clippy over every member and target, also files never opened, and its
+/// findings land in the Problems window's Inspection tab with their lint names.
+#[test]
+fn inspect_code_runs_clippy_over_the_whole_workspace() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("ws");
+    write(&root.join("Cargo.toml"), "[workspace]\nmembers = [\"app\", \"util\"]\nresolver = \"2\"\n");
+    write(&root.join("app/Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("app/src/main.rs"), "fn main() {\n    let v = vec![1, 2];\n    println!(\"{}\", v.len() == 0);\n}\n");
+    write(&root.join("util/Cargo.toml"), "[package]\nname = \"util\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
+    write(&root.join("util/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    x.len() * 2\n}\n");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::InspectCode);
+    assert!(app.inspection.as_ref().is_some_and(|i| i.running));
+    pump(&mut app, "the inspection", |a| {
+        a.poll_inspection();
+        a.inspection.as_ref().is_some_and(|i| !i.running)
+    });
+    let insp = app.inspection.as_ref().unwrap();
+    assert_eq!(insp.failed, None);
+    let codes: Vec<(&str, String)> = insp.diagnostics.iter().map(|d| (d.code.as_str(), d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default())).collect();
+    assert!(codes.iter().any(|(c, f)| c.contains("len_zero") && f.ends_with("main.rs")), "{codes:?}");
+    assert!(codes.iter().any(|(c, f)| c.contains("ptr_arg") && f.ends_with("lib.rs")), "{codes:?}");
+    assert!(app.problems_tab_inspection && app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
+}

@@ -1521,3 +1521,18 @@ fn refactor_preview_capture() {
     h.run_steps(3);
     h.render().unwrap().save(out.join("refactor-preview.png")).unwrap();
 }
+
+#[test]
+#[ignore = "Requires a GPU and Clippy; writes target/snapshots/inspection.png"]
+fn inspection_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    std::fs::write(root.join("beta/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    if x.len() == 0 { 0 } else { x.len() * 2 }\n}\n").unwrap();
+    h.state_mut().inspect_code();
+    run_frames(&mut h, "the inspection", |a| a.inspection.as_ref().is_some_and(|i| !i.running));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("inspection.png")).unwrap();
+}

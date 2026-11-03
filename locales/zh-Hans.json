@@ -941,5 +941,19 @@
     "Listing the changes…": "正在列出更改…",
     "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 个文件中有 {n} 处更改。取消勾选要排除的更改。",
     "Refactor": "重构"
+  },
+  "inspect-code": {
+    "Inspect Code": "检查代码",
+    "Open a Cargo project to inspect its code": "打开 Cargo 项目以检查其代码",
+    "Inspection cancelled": "检查已取消",
+    "Current Files": "当前文件",
+    "Inspection": "检查",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "检查代码：对 Cargo 项目的所有成员和目标运行 Clippy",
+    "No inspection yet": "尚未检查",
+    "Inspect Code runs Clippy over the whole project.": "“检查代码”会对整个项目运行 Clippy。",
+    "Inspecting with Clippy…": "正在用 Clippy 检查…",
+    "No problems found": "未发现问题",
+    "Clippy found nothing to report.": "Clippy 没有发现需要报告的问题。",
+    "Other": "其他"
   }
 }

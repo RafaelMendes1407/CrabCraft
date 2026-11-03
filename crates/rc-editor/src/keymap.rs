@@ -130,6 +130,7 @@ pub enum Action {
     ShowLocalHistory,
     OpenFolder,
     InvalidateCaches,
+    InspectCode,
     NewScratchFile,
     ZoomIn,
     ZoomOut,
@@ -221,6 +222,7 @@ impl Action {
                 | ShowLocalHistory
                 | OpenFolder
                 | InvalidateCaches
+                | InspectCode
                 | NewScratchFile
                 | ZoomIn
                 | ZoomOut

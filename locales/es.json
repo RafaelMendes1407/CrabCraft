@@ -941,5 +941,19 @@
     "Listing the changes…": "Listando los cambios…",
     "{n} changes in {files} files. Uncheck the ones to leave out.": "{n} cambios en {files} archivos. Desmarca los que quieras dejar fuera.",
     "Refactor": "Refactorizar"
+  },
+  "inspect-code": {
+    "Inspect Code": "Inspeccionar código",
+    "Open a Cargo project to inspect its code": "Abre un proyecto Cargo para inspeccionar su código",
+    "Inspection cancelled": "Inspección cancelada",
+    "Current Files": "Archivos actuales",
+    "Inspection": "Inspección",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "Inspeccionar código: Clippy en todos los miembros y destinos del proyecto Cargo",
+    "No inspection yet": "Aún no hay inspección",
+    "Inspect Code runs Clippy over the whole project.": "Inspeccionar código ejecuta Clippy en todo el proyecto.",
+    "Inspecting with Clippy…": "Inspeccionando con Clippy…",
+    "No problems found": "No se encontraron problemas",
+    "Clippy found nothing to report.": "Clippy no encontró nada que señalar.",
+    "Other": "Otros"
   }
 }

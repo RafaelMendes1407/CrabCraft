@@ -20,6 +20,14 @@ use std::path::{Path, PathBuf};
 
 /// A message in the status bar / notification balloon.
 #[derive(Clone, Debug)]
+/// The findings of Inspect Code (Clippy over the workspace).
+pub struct Inspection {
+    pub running: bool,
+    pub diagnostics: Vec<rc_dotnet::Diagnostic>,
+    /// Why it did not finish (Clippy missing, cancelled).
+    pub failed: Option<String>,
+}
+
 pub struct Notice {
     pub text: String,
     pub error: bool,
@@ -97,6 +105,10 @@ pub struct CrabCraftApp {
     toolchain_updates_load: Option<Inbox<Result<Vec<rc_cargo::ToolchainUpdate>, String>>>,
     /// The Run tab of a rustup command: when it ends, the toolchain is read again.
     rustup_run: Option<String>,
+    /// The last Inspect Code run.
+    pub inspection: Option<Inspection>,
+    /// The Problems window shows the inspection instead of the open files' problems.
+    pub problems_tab_inspection: bool,
     cargo_remembered: Option<String>,
     /// Actions waiting for the UI pass (from the native menu or global shortcuts).
     pub pending: Vec<Action>,
@@ -208,6 +220,8 @@ impl CrabCraftApp {
             toolchain: None,
             libraries_load: None,
             rustfmt_jobs: Default::default(),
+            inspection: None,
+            problems_tab_inspection: false,
             toolchain_updates: None,
             toolchain_updates_load: None,
             rustup_run: None,
@@ -759,6 +773,7 @@ impl CrabCraftApp {
         self.docs.read_only_roots.clear();
         self.docs.style_root = None;
         self.sync_log.clear();
+        self.inspection = None;
         self.libraries_load = None;
         self.rustfmt_jobs = Default::default();
         self.dock = Dock::default();
@@ -1371,6 +1386,7 @@ impl CrabCraftApp {
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
+            Action::InspectCode => self.inspect_code(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
@@ -1783,6 +1799,35 @@ impl CrabCraftApp {
     /// Opens the settings on `page`.
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
         self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
+    }
+
+    /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the
+    /// Problems window's Inspection tab, grouped by lint.
+    pub fn inspect_code(&mut self) {
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
+            self.notify(tr("Open a Cargo project to inspect its code"), false);
+            return;
+        };
+        self.save_all_docs();
+        let outs = self.runner.cargo_command_in(&manifest, rc_cargo::inspect_args(&manifest));
+        if self.runner.build.as_ref().is_some_and(|b| b.handle.is_some()) {
+            self.inspection = Some(Inspection { running: true, diagnostics: Vec::new(), failed: None });
+        }
+        crate::ui::run_windows::handle_outputs(self, outs);
+    }
+
+    /// Picks up the end of an inspection.
+    pub(crate) fn poll_inspection(&mut self) {
+        let Some(i) = self.inspection.as_mut().filter(|i| i.running) else { return };
+        let Some(b) = &self.runner.build else { return };
+        if b.handle.is_some() && b.result.is_none() && b.failed.is_none() {
+            return;
+        }
+        i.running = false;
+        i.diagnostics = b.diagnostics.clone();
+        i.failed = b.failed.clone().or_else(|| b.result.as_ref().filter(|r| r.cancelled).map(|_| tr("Inspection cancelled").to_string()));
+        self.problems_tab_inspection = true;
+        self.dock.show(ToolWindow::Problems);
     }
 
     /// What the external tool macros stand for now: the active file, its caret and selection.
@@ -2220,6 +2265,7 @@ impl eframe::App for CrabCraftApp {
         self.handle_insight(outputs);
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
+        self.poll_inspection();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         for (_, ev) in self.terminals.poll() {

@@ -941,5 +941,19 @@
     "Listing the changes…": "変更を一覧にしています…",
     "{n} changes in {files} files. Uncheck the ones to leave out.": "{files} 個のファイルに {n} 件の変更があります。除外するものはチェックを外してください。",
     "Refactor": "リファクタリング"
+  },
+  "inspect-code": {
+    "Inspect Code": "コードを検査",
+    "Open a Cargo project to inspect its code": "コードを検査するには Cargo プロジェクトを開いてください",
+    "Inspection cancelled": "検査をキャンセルしました",
+    "Current Files": "現在のファイル",
+    "Inspection": "検査",
+    "Inspect Code: Clippy over every member and target of the Cargo project": "コードを検査: Cargo プロジェクトのすべてのメンバーとターゲットに Clippy を実行",
+    "No inspection yet": "まだ検査していません",
+    "Inspect Code runs Clippy over the whole project.": "「コードを検査」はプロジェクト全体に Clippy を実行します。",
+    "Inspecting with Clippy…": "Clippy で検査中…",
+    "No problems found": "問題は見つかりませんでした",
+    "Clippy found nothing to report.": "Clippy が報告する問題はありませんでした。",
+    "Other": "その他"
   }
 }
