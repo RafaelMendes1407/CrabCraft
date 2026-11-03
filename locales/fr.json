@@ -743,5 +743,13 @@
     "Remove once hit": "Supprimer une fois atteint",
     "Refactor This…": "Refactoriser ceci…",
     "Select In…": "Sélectionner dans…"
+  },
+  "scratch": {
+    "New Scratch File": "Nouveau fichier brouillon",
+    "New Scratch File…": "Nouveau fichier brouillon…",
+    "Scratches": "Brouillons",
+    "Plain Text": "Texte brut",
+    "Could not create the scratch file: {error}": "Impossible de créer le fichier brouillon : {error}",
+    "Scratch file: rust-analyzer does not analyze it yet": "Fichier brouillon : rust-analyzer ne l’analyse pas encore"
   }
 }

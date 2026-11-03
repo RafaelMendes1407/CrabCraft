@@ -743,5 +743,13 @@
     "Remove once hit": "Remover ao atingir",
     "Refactor This…": "Refatorar isto…",
     "Select In…": "Selecionar em…"
+  },
+  "scratch": {
+    "New Scratch File": "Novo arquivo de rascunho",
+    "New Scratch File…": "Novo arquivo de rascunho…",
+    "Scratches": "Rascunhos",
+    "Plain Text": "Texto simples",
+    "Could not create the scratch file: {error}": "Não foi possível criar o arquivo de rascunho: {error}",
+    "Scratch file: rust-analyzer does not analyze it yet": "Arquivo de rascunho: o rust-analyzer ainda não o analisa"
   }
 }

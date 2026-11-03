@@ -743,5 +743,13 @@
     "Remove once hit": "ヒット時に削除",
     "Refactor This…": "これをリファクタリング…",
     "Select In…": "選択先…"
+  },
+  "scratch": {
+    "New Scratch File": "新規スクラッチファイル",
+    "New Scratch File…": "新規スクラッチファイル…",
+    "Scratches": "スクラッチ",
+    "Plain Text": "プレーンテキスト",
+    "Could not create the scratch file: {error}": "スクラッチファイルを作成できませんでした: {error}",
+    "Scratch file: rust-analyzer does not analyze it yet": "スクラッチファイル: rust-analyzer はまだ解析しません"
   }
 }

@@ -299,6 +299,50 @@ fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
 }
 
 #[test]
+fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    let dir = rc_core::paths::scratches_dir();
+    assert!(dir.starts_with(home.path()));
+    // The first row is a Rust scratch file.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let first = dir.join("scratch_1.rs").canonicalize().unwrap();
+    assert!(h.state().dialog.is_none());
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
+    // Outside every Cargo package, so rust-analyzer never gets it.
+    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && !crate::insight::has_insight(d)));
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()), Some("fn main() {
+    
+}
+".into()));
+    // Filtering by kind creates a Markdown one.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    h.input_mut().events.push(egui::Event::Text("mark".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), dir.join("scratch_1.md").canonicalize().ok());
+    // The existing ones are listed after the kinds and open again.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    match &h.state().dialog {
+        Some(crate::ui::dialogs::Dialog::Scratches { files, .. }) => assert_eq!(files.len(), 2),
+        _ => panic!("no scratch list"),
+    }
+    h.input_mut().events.push(egui::Event::Text("scratch_1.rs".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first));
+    assert_eq!(h.state().docs.list.len(), 2);
+}
+
+#[test]
 fn ten_project_solution_opens_and_its_session_is_restored() {
     use egui_kittest::kittest::Queryable;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

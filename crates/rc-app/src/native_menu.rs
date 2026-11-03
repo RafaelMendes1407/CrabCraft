@@ -375,6 +375,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         &[
             &item(MenuCommand::NewSolution, || tr("New Project…"), None),
             &item(MenuCommand::NewFile, || tr("New File…"), None),
+            &act(Action::NewScratchFile, || tr("New Scratch File…")),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
             &item(MenuCommand::OpenFile, || tr("Open File…"), None),
             &item(MenuCommand::CloseProject, || tr("Close Project"), None),

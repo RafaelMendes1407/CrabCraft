@@ -743,5 +743,13 @@
     "Remove once hit": "命中后移除",
     "Refactor This…": "重构此项…",
     "Select In…": "选择位置…"
+  },
+  "scratch": {
+    "New Scratch File": "新建草稿文件",
+    "New Scratch File…": "新建草稿文件…",
+    "Scratches": "草稿文件",
+    "Plain Text": "纯文本",
+    "Could not create the scratch file: {error}": "无法创建草稿文件：{error}",
+    "Scratch file: rust-analyzer does not analyze it yet": "草稿文件：rust-analyzer 暂不分析此文件"
   }
 }

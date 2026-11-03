@@ -29,6 +29,8 @@ pub enum Dialog {
     Rename { path: PathBuf, name: String, error: Option<String> },
     ConfirmDelete { path: PathBuf },
     RecentFiles { selected: usize, filter: String },
+    /// New Scratch File: the kinds to create, then the scratch files there are.
+    Scratches { selected: usize, filter: String, files: Vec<PathBuf> },
     /// ⌥⏎ context actions for the active editor.
     CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
     /// Shift+F6 on a symbol.
@@ -73,6 +75,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
+        Dialog::Scratches { selected, filter, files } => scratches(app, ctx, selected, filter, files),
         Dialog::CodeActions { list, selected } => code_actions(app, ctx, list, selected),
         Dialog::RenameSymbol { doc, pos, original, name, focus } => rename_symbol(app, ctx, *doc, *pos, original, name, focus),
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
@@ -979,6 +982,89 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The name a kind of scratch file has in the New Scratch File list.
+pub fn scratch_kind_name(kind: rc_core::scratch::Kind) -> &'static str {
+    use rc_core::scratch::Kind;
+    match kind {
+        Kind::Rust => "Rust",
+        Kind::Toml => "TOML",
+        Kind::Markdown => "Markdown",
+        Kind::Json => "JSON",
+        Kind::Text => tr("Plain Text"),
+    }
+}
+
+/// New Scratch File: a filterable list of the kinds to create, then the existing scratch files.
+fn scratches(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, filter: &mut String, files: &[PathBuf]) -> Outcome {
+    use rc_core::scratch::Kind;
+    enum Row<'a> {
+        New(Kind),
+        Open(&'a PathBuf),
+    }
+    let needle = filter.to_lowercase();
+    let mut rows: Vec<Row> = Kind::ALL.into_iter().filter(|k| needle.is_empty() || scratch_kind_name(*k).to_lowercase().contains(&needle)).map(Row::New).collect();
+    rows.extend(files.iter().filter(|p| needle.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&needle))).map(Row::Open));
+    *selected = (*selected).min(rows.len().saturating_sub(1));
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut chosen = None;
+    let (_, esc) = modal(ctx, "scratches", 480.0, |ui| {
+        title(ui, tr("New Scratch File"));
+        let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
+        resp.request_focus();
+        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(rows.len().saturating_sub(1));
+        }
+        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|i| i.key_pressed(Key::Enter)) && !rows.is_empty() {
+            chosen = Some(*selected);
+        }
+        ui.add_space(6.0);
+        let mut header = false;
+        for (i, row) in rows.iter().enumerate().take(30) {
+            if matches!(row, Row::Open(_)) && !header {
+                header = true;
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(tr("Scratches")).size(11.5).color(p.muted));
+            }
+            let (icon, name) = match row {
+                Row::New(k) => (icons::for_file(&format!("x.{}", k.extension())), scratch_kind_name(*k).to_string()),
+                Row::Open(path) => {
+                    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    (icons::for_file(&name), name)
+                }
+            };
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+            if i == *selected {
+                ui.painter().rect_filled(r, 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r, 4.0, p.row_hover);
+            }
+            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
+            ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
+            if resp.clicked() {
+                chosen = Some(i);
+            }
+        }
+    });
+    match chosen.and_then(|i| rows.get(i)) {
+        Some(Row::New(kind)) => {
+            match rc_core::scratch::create(&rc_core::paths::scratches_dir(), *kind) {
+                Ok(path) => app.open_file(&path),
+                Err(e) => app.notify(trf("Could not create the scratch file: {error}", &[("error", &e)]), true),
+            }
+            Outcome::Close
+        }
+        Some(Row::Open(path)) => {
+            app.open_file(path);
+            Outcome::Close
+        }
+        None if esc => Outcome::Close,
+        None => Outcome::Keep,
+    }
 }
 
 /// The list of context actions, under the caret like IntelliJ's bulb popup.

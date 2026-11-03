@@ -19,6 +19,11 @@ pub fn sessions_dir() -> PathBuf {
     data_dir().join("sessions")
 }
 
+/// Scratch files, shared by every project.
+pub fn scratches_dir() -> PathBuf {
+    data_dir().join("scratches")
+}
+
 pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }

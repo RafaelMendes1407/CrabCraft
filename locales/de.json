@@ -743,5 +743,13 @@
     "Remove once hit": "Nach Erreichen entfernen",
     "Refactor This…": "Dies refaktorisieren…",
     "Select In…": "Auswählen in…"
+  },
+  "scratch": {
+    "New Scratch File": "Neue Scratch-Datei",
+    "New Scratch File…": "Neue Scratch-Datei…",
+    "Scratches": "Scratch-Dateien",
+    "Plain Text": "Nur-Text",
+    "Could not create the scratch file: {error}": "Scratch-Datei konnte nicht erstellt werden: {error}",
+    "Scratch file: rust-analyzer does not analyze it yet": "Scratch-Datei: rust-analyzer analysiert sie noch nicht"
   }
 }

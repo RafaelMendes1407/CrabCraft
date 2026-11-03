@@ -1587,7 +1587,7 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
 
 /// Whether the language server covers this document.
 pub fn has_insight(d: &Doc) -> bool {
-    matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)
+    matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp) && !d.scratch
 }
 
 /// Removes Roslyn's markdown escapes that render oddly in our small viewer.
