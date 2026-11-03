@@ -1082,3 +1082,59 @@ edition = \"2021\"
     assert!(!hint(&h, "*.cs"), "the file mask still suggests *.cs");
 }
 
+/// Sixty branches in a small window: the branches popup stays inside it, its actions stay at the
+/// top and the list scrolls down to the last branch.
+#[test]
+fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
+    git(&["init", "-q", "-b", "trunk"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Start"]);
+    for n in 0..60 {
+        git(&["branch", &format!("feature/topic-{n:02}")]);
+    }
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let size = vec2(900.0, 500.0);
+    let mut h = harness(app, size);
+    run_frames(&mut h, "the branches", |a| a.vcs.branch_name().as_deref() == Some("trunk") && a.vcs.branches.len() >= 61);
+    let last = h.state().vcs.branches.iter().filter(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).last().map(|b| b.name.clone()).unwrap();
+    h.get_by_label("trunk").click();
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("branches-popup-top.png")).unwrap();
+    // The popup ends inside the window, with New Branch… still there.
+    let popups: Vec<egui::Rect> = h.ctx.memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order == egui::Order::Foreground).filter_map(|l| m.area_rect(l.id)).collect());
+    assert!(!popups.is_empty());
+    for r in &popups {
+        assert!(r.bottom() <= size.y && r.top() >= 0.0, "the popup leaves the window: {r:?}");
+    }
+    let new_branch = h.get_by_label("New Branch…").rect();
+    assert!(new_branch.bottom() <= size.y);
+    // The last branch is below the visible part of the list until the list is scrolled.
+    assert!(h.get_by_label(&last).rect().top() > size.y, "{:?}", h.get_by_label(&last).rect());
+    let over = h.get_by_label("feature/topic-00").rect().center();
+    for _ in 0..40 {
+        h.input_mut().events.push(egui::Event::PointerMoved(over));
+        h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, -3.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+        h.run_steps(1);
+    }
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("branches-popup-bottom.png")).unwrap();
+    let r = h.get_by_label(&last).rect();
+    assert!(r.top() >= 0.0 && r.bottom() <= size.y, "the last branch is out of view: {r:?}");
+    // The actions above the list did not scroll away.
+    assert_eq!(h.get_by_label("New Branch…").rect(), new_branch);
+}
+

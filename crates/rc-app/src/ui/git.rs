@@ -282,28 +282,36 @@ pub fn branches_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.close();
     }
     let p = rc_kit::pal(ui);
-    for (title, kind) in [(tr("Local"), rc_vcs::BranchKind::Local), (tr("Remote"), rc_vcs::BranchKind::Remote)] {
-        let list: Vec<rc_vcs::Branch> = app.vcs.branches.iter().filter(|b| b.kind == kind).cloned().collect();
-        if list.is_empty() {
-            continue;
+    // Every branch, in a list that scrolls inside the window; the actions above stay in view.
+    let room = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 24.0).max(120.0);
+    egui::ScrollArea::vertical().id_salt("branches_menu").max_height(room).show(ui, |ui| {
+        for (title, kind) in [(tr("Local"), rc_vcs::BranchKind::Local), (tr("Remote"), rc_vcs::BranchKind::Remote)] {
+            let list: Vec<rc_vcs::Branch> = app.vcs.branches.iter().filter(|b| b.kind == kind).cloned().collect();
+            if list.is_empty() {
+                continue;
+            }
+            ui.separator();
+            ui.label(egui::RichText::new(title).size(11.5).color(p.muted));
+            for b in list {
+                let mut text = b.name.clone();
+                if b.ahead > 0 {
+                    text.push_str(&format!("  ↑{}", b.ahead));
+                }
+                if b.behind > 0 {
+                    text.push_str(&format!("  ↓{}", b.behind));
+                }
+                let resp = ui.add_enabled(!busy, egui::Button::selectable(b.is_head, text));
+                // Tab / arrow keys move through the list: keep the focused branch in view.
+                if resp.gained_focus() {
+                    resp.scroll_to_me(None);
+                }
+                if resp.clicked() && !b.is_head {
+                    app.vcs.checkout(&b);
+                    ui.close();
+                }
+            }
         }
-        ui.separator();
-        ui.label(egui::RichText::new(title).size(11.5).color(p.muted));
-        for b in list.into_iter().take(30) {
-            let mut text = b.name.clone();
-            if b.ahead > 0 {
-                text.push_str(&format!("  ↑{}", b.ahead));
-            }
-            if b.behind > 0 {
-                text.push_str(&format!("  ↓{}", b.behind));
-            }
-            let resp = ui.add_enabled(!busy, egui::Button::selectable(b.is_head, text));
-            if resp.clicked() && !b.is_head {
-                app.vcs.checkout(&b);
-                ui.close();
-            }
-        }
-    }
+    });
 }
 
 /// The side-by-side diff in the editor area (two read-only editors scrolled together).
