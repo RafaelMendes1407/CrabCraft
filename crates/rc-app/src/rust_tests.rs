@@ -3238,3 +3238,77 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     app.reload_cargo();
     pump(&mut app, "the feature dropped", |a| a.cargo_features.is_empty());
 }
+
+/// The target picked in the status bar list flips the cfg fading (`windows` on, `unix` off), is
+/// saved with the session and reaches rust-analyzer as `cargo.target`, whose build script run
+/// sees it as `TARGET`, live.
+#[test]
+fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
+    const WINDOWS: &str = "x86_64-pc-windows-msvc";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), "#[cfg(windows)]\npub fn on_windows() {}\n\n#[cfg(unix)]\npub fn on_unix() {}\n\npub fn always() -> u32 {\n    2\n}\n");
+    write(&root.join(".cargo/config.toml"), "[build]\n# a board\ntarget = \"thumbv7em-none-eabihf\"\n");
+    write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_TARGET\", std::env::var(\"TARGET\").unwrap()).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let faded = |a: &mut CrabCraftApp| -> Vec<String> {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.inactive().iter().map(|r| text.chars().skip(r.start).take(r.end - r.start).collect()).collect()
+    };
+    pump(&mut app, "the cfg and the targets", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some()) && !a.triple_choices.is_empty()
+    });
+    // The project builds for a board by default: neither unix nor windows.
+    pump(&mut app, "the cfg of the board", |a| faded(a).len() == 2);
+    assert_eq!(app.analysis_triple(), Some("thumbv7em-none-eabihf"));
+    // The list: the host first, then the project's target, then rustup's.
+    let host = app.host_triple.clone().expect("rustc -vV gives the host");
+    assert!(app.triple_choices[0].host && app.triple_choices[0].installed && app.triple_choices[0].triple == host);
+    assert!(app.triple_choices[1].from_config && app.triple_choices[1].triple == "thumbv7em-none-eabihf");
+    let windows = app.triple_choices.iter().find(|c| c.triple == WINDOWS).expect("rustup lists the targets it can install");
+    assert!(!windows.installed);
+
+    // An invalid triple never reaches a process.
+    app.set_cargo_target(Some("--print=sysroot".into()));
+    assert_eq!(app.cargo_target, None);
+    app.set_cargo_target(Some(WINDOWS.into()));
+    assert_eq!(app.analysis_triple(), Some(WINDOWS));
+    pump(&mut app, "the cfg of Windows", |a| faded(a) == vec!["#[cfg(unix)]\npub fn on_unix() {}".to_string()]);
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_target, WINDOWS);
+
+    // Opened again, the session brings the target back.
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(again.cargo_target.as_deref(), Some(WINDOWS));
+    drop(again);
+
+    // Trusted, rust-analyzer analyses for the target: its build script run sees it.
+    app.trust_project();
+    pump(&mut app, "the build script for Windows", |_| std::fs::read_to_string(root.join("BUILD_TARGET")).is_ok_and(|t| t == WINDOWS));
+    let settings = app.insight.session.as_ref().map(|s| s.ra_settings().clone()).unwrap();
+    assert_eq!(rc_lsp::rust_analyzer::configuration_reply(&serde_json::json!({ "items": [{ "section": "rust-analyzer" }] }), &settings)[0]["cargo"]["target"], serde_json::json!(WINDOWS));
+    // The host, the running server reloads the workspace without restarting.
+    let started = app.insight.session.as_ref().map(|s| s.started);
+    std::fs::remove_file(root.join("BUILD_TARGET")).unwrap();
+    app.set_cargo_target(Some(host.clone()));
+    assert_eq!(app.cargo_target.as_deref(), Some(host.as_str()));
+    assert_eq!(app.insight.session.as_ref().map(|s| s.started), started);
+    assert_eq!(app.insight.session.as_ref().and_then(|s| s.ra_settings().target.clone()), Some(host.clone()));
+    pump(&mut app, "the build script for the host", |_| std::fs::read_to_string(root.join("BUILD_TARGET")).is_ok_and(|t| t == host));
+    pump(&mut app, "the cfg of the host", |a| faded(a) == vec!["#[cfg(windows)]\npub fn on_windows() {}".to_string()]);
+    // Back to the default (the board): nothing is sent, rust-analyzer reads the config.
+    app.set_cargo_target(None);
+    assert_eq!(app.insight.session.as_ref().and_then(|s| s.ra_settings().target.clone()), None);
+    pump(&mut app, "the cfg of the board again", |a| faded(a).len() == 2);
+    app.insight.stop();
+}

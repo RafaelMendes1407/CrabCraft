@@ -156,6 +156,9 @@ pub struct Session {
     /// Cargo features the user turned on for analysis, as `package/feature`. Read with
     /// `rc_cargo::valid_feature_entry`: the file is untrusted.
     pub cargo_features: Vec<String>,
+    /// The target triple the code is analysed for; empty: the host. Read with
+    /// `rc_cargo::valid_triple`: the file is untrusted.
+    pub cargo_target: String,
 }
 
 /// A line of an environment that is not `NAME=value` with a valid name (1-based).

@@ -1106,5 +1106,14 @@
   "contextinfo": {
     "Show Context Info": "显示上下文信息",
     "No enclosing declarations out of view": "没有视图外的外层声明"
+  },
+  "cargotarget": {
+    "Target the code is analysed for. Click to pick another one.": "分析代码所用的目标。点击选择其他目标。",
+    "No targets found": "未找到目标",
+    "Filter targets": "筛选目标",
+    "host": "主机",
+    "project": "项目",
+    "not installed": "未安装",
+    "The standard library of this target is not installed: rust-analyzer may not resolve std": "此目标的标准库未安装：rust-analyzer 可能无法解析 std"
   }
 }

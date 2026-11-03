@@ -30,6 +30,9 @@ pub struct RaSettings {
     pub autoimport_exclude: Vec<String>,
     /// Cargo features the user turned on, as `package/feature` (`cargo.features`).
     pub features: Vec<String>,
+    /// The target triple to analyse for (`cargo.target`); `None`: the host, or the project's
+    /// `[build] target`.
+    pub target: Option<String>,
 }
 
 /// The settings sent at start and when the server asks for them.
@@ -43,6 +46,7 @@ pub fn config(s: &RaSettings) -> Value {
         map.insert("completion".into(), json!({ "autoimport": { "enable": true, "exclude": exclude }, "postfix": { "enable": true } }));
         if let Some(cargo) = map.get_mut("cargo").and_then(Value::as_object_mut) {
             cargo.insert("features".into(), json!(s.features));
+            cargo.insert("target".into(), json!(s.target));
         }
     }
     value
@@ -255,6 +259,13 @@ mod tests {
         let on = config(&RaSettings { features: vec!["demo/extra".into()], ..Default::default() });
         assert_eq!(on["cargo"]["features"], json!(["demo/extra"]));
         assert_eq!(on["cargo"]["buildScripts"]["enable"], json!(true));
+    }
+
+    #[test]
+    fn the_chosen_target_is_cargo_target() {
+        assert_eq!(config(&RaSettings::default())["cargo"]["target"], Value::Null);
+        let windows = config(&RaSettings { target: Some("x86_64-pc-windows-msvc".into()), ..Default::default() });
+        assert_eq!(windows["cargo"]["target"], json!("x86_64-pc-windows-msvc"));
     }
 
     #[test]

@@ -76,6 +76,14 @@ pub struct CrabCraftApp {
     pub cargo_features: Vec<String>,
     /// The `(text version, cfg_epoch)` each `Cargo.toml` editor got its feature icons for.
     feature_icons_given: std::collections::HashMap<u64, (u64, u64)>,
+    /// The target triple the code is analysed for; `None`: the host (saved with the session).
+    pub cargo_target: Option<String>,
+    /// The host triple and the targets offered in the status bar, once read.
+    pub host_triple: Option<String>,
+    pub triple_choices: Vec<rc_cargo::TripleChoice>,
+    triple_load: Option<Inbox<(Option<String>, Vec<rc_cargo::TripleChoice>)>>,
+    /// What is typed in the filter of the target list.
+    pub triple_filter: String,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -270,6 +278,11 @@ impl CrabCraftApp {
             cfg_given: Default::default(),
             cargo_features: Vec::new(),
             feature_icons_given: Default::default(),
+            cargo_target: None,
+            host_triple: None,
+            triple_choices: Vec::new(),
+            triple_load: None,
+            triple_filter: String::new(),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -369,6 +382,8 @@ impl CrabCraftApp {
         self.insight.set_env(self.runner.project_env_pairs());
         self.cargo_features = clean_features(&session.cargo_features);
         self.insight.set_features(self.cargo_features.clone());
+        self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
+        self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
@@ -451,7 +466,8 @@ impl CrabCraftApp {
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
                     self.prune_features();
                     self.cfg_epoch += 1;
-                    self.load_rustc_cfg(root);
+                    self.load_rustc_cfg(root.clone());
+                    self.load_triples(root);
                     self.load_libraries();
                     self.load_attached();
                 }
@@ -776,16 +792,69 @@ impl CrabCraftApp {
         }
     }
 
-    /// Asks rustc for the target's `cfg` in the background (it compiles nothing).
+    /// Asks rustc for the `cfg` of the chosen target (or the host) in the background; it
+    /// compiles nothing.
     fn load_rustc_cfg(&mut self, dir: PathBuf) {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
-        std::thread::spawn(move || out.send(rc_cargo::Cargo::locate().and_then(|c| rc_cargo::print_cfg(&c, &dir))));
+        let target = self.cargo_target.clone();
+        std::thread::spawn(move || {
+            // Without a choice, what Cargo and rust-analyzer build for: the project's
+            // `[build] target`, else the host.
+            let target = target.or_else(|| rc_cargo::project_build_targets(&dir).into_iter().next());
+            out.send(rc_cargo::Cargo::locate().and_then(|c| rc_cargo::print_cfg(&c, &dir, target.as_deref())))
+        });
         self.rustc_cfg_load = Some(inbox);
+    }
+
+    /// Reads the host triple and the targets to offer (rustup's, the project's `[build] target`)
+    /// in the background. Nothing of the project runs.
+    fn load_triples(&mut self, root: PathBuf) {
+        let inbox = Inbox::new(self.waker.clone());
+        let out = inbox.sender();
+        std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(rc_cargo::Cargo::locate().as_ref(), &root)));
+        self.triple_load = Some(inbox);
+    }
+
+    /// Analyses the code for `target` (`None` or the default one: the default): rust-analyzer
+    /// gets it as `cargo.target` and the code under `#[cfg]` is faded for that target. An
+    /// invalid triple is ignored.
+    pub fn set_cargo_target(&mut self, target: Option<String>) {
+        let target = target.filter(|t| self.default_triple() != Some(t.as_str()));
+        if target.as_deref().is_some_and(|t| !rc_cargo::valid_triple(t)) || target == self.cargo_target {
+            return;
+        }
+        self.cargo_target = target;
+        self.session_dirty = true;
+        self.insight.set_target(self.cargo_target.clone());
+        if let Some(root) = self.runner.cargo_workspace.as_ref().map(|w| w.root.clone()) {
+            self.load_rustc_cfg(root);
+        }
+    }
+
+    /// The target triple shown in the status bar: the chosen one or the default one.
+    pub fn analysis_triple(&self) -> Option<&str> {
+        self.cargo_target.as_deref().or(self.default_triple())
+    }
+
+    /// What the code is built and analysed for without a choice: the project's
+    /// `[build] target`, else the host.
+    pub fn default_triple(&self) -> Option<&str> {
+        self.triple_choices.iter().find(|c| c.from_config).map(|c| c.triple.as_str()).or(self.host_triple.as_deref())
     }
 
     /// Gives each Rust document the `cfg` set of its crate, so the code it turns off is faded.
     pub(crate) fn update_cfg_sets(&mut self) {
+        if let Some((host, list)) = self.triple_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
+            self.triple_load = None;
+            self.host_triple = host;
+            self.triple_choices = list;
+            // The target chosen in an earlier session may be the default now.
+            if self.cargo_target.is_some() && self.cargo_target.as_deref() == self.default_triple() {
+                self.cargo_target = None;
+                self.insight.set_target(None);
+            }
+        }
         if let Some(cfg) = self.rustc_cfg_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
             self.rustc_cfg_load = None;
             self.rustc_cfg = cfg;
@@ -1188,6 +1257,7 @@ impl CrabCraftApp {
             attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
             cargo_features: self.cargo_features.clone(),
+            cargo_target: self.cargo_target.clone().unwrap_or_default(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),

@@ -2041,3 +2041,68 @@ fn context_info_capture() {
         h.render().unwrap().save(out.join(format!("context-info-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// A crate with `#[cfg(windows)]` and `#[cfg(unix)]` code, `src/lib.rs` open, once the target
+/// list is read.
+fn targets_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(windows)]\npub fn on_windows() {}\n\n#[cfg(unix)]\npub fn on_unix() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the target list", |a| !a.triple_choices.is_empty() && a.runner.cargo_workspace.is_some());
+    h.run_steps(3);
+    (h, root)
+}
+
+/// The status bar shows the host triple; its list picks another target, which is saved.
+#[test]
+fn the_status_bar_picks_the_analysis_target() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = targets_harness(dir.path(), false);
+    let host = h.state().host_triple.clone().unwrap();
+    h.get_by_label(host.as_str()).click();
+    h.run_steps(3);
+    // rustup lists every target it knows: the list is long enough to have a filter.
+    assert!(h.state().triple_choices.len() > 8);
+    h.state_mut().triple_filter = "windows-msvc".into();
+    h.run_steps(2);
+    h.get_by_label("x86_64-pc-windows-msvc").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
+    assert!(h.state().triple_filter.is_empty());
+    h.state_mut().save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/target-picker-*.png"]
+fn target_picker_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = targets_harness(dir.path(), dark);
+        let host = h.state().host_triple.clone().unwrap();
+        h.get_by_label(host.as_str()).click();
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("target-picker-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        // Windows picked: the unix code is faded.
+        h.state_mut().set_cargo_target(Some("x86_64-pc-windows-msvc".into()));
+        egui::Popup::close_all(&h.ctx);
+        run_frames(&mut h, "the cfg of Windows", |a| {
+            a.docs.active_doc().is_some_and(|d| d.editor.cfg.as_ref().is_some_and(|c| c.eval("windows") == Some(true)))
+        });
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("target-picker-windows-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

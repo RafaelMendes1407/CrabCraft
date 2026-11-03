@@ -1106,5 +1106,14 @@
   "contextinfo": {
     "Show Context Info": "Mostrar información de contexto",
     "No enclosing declarations out of view": "No hay declaraciones contenedoras fuera de la vista"
+  },
+  "cargotarget": {
+    "Target the code is analysed for. Click to pick another one.": "Target para el que se analiza el código. Haz clic para elegir otro.",
+    "No targets found": "No se encontraron targets",
+    "Filter targets": "Filtrar targets",
+    "host": "host",
+    "project": "proyecto",
+    "not installed": "no instalado",
+    "The standard library of this target is not installed: rust-analyzer may not resolve std": "La biblioteca estándar de este target no está instalada: rust-analyzer puede no resolver std"
   }
 }

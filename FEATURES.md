@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 136 |
+| ✅ Pronto | 137 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 90 |
+| ⬜ A fazer | 89 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -203,7 +203,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | C-06 | `cargo tree` integrado | ✅ | M4 | Cada membro da janela Cargo tem um nó Dependências: ao abrir, roda `cargo tree --offline --locked` em segundo plano (não compila nem grava o `Cargo.lock`) e mostra a árvore dobrável, com versão, seção build/dev e repetições. A execução entra na aba Sync. Testado com o cargo real num projeto gerado e na árvore do próprio CrabCraft (1140 nós) |
 | C-07 | Ligar/desligar features pela margem | ✅ | M4 | No `Cargo.toml` aberto, cada entrada de `[features]` tem um interruptor na margem; a janela Cargo tem um nó Features por membro com os mesmos interruptores. As escolhidas ficam na sessão do projeto (`pacote/feature`, validadas ao ler), vão para o rust-analyzer como `cargo.features` via `didChangeConfiguration` (sem reiniciar o servidor) e entram na atenuação de `cfg` (C-08). Features ligadas pelo `default` ou por outra feature aparecem ligadas e não se desligam pela margem; as que somem do manifesto são descartadas. Testado com o cargo e o rust-analyzer reais num projeto gerado: o build script vê `CARGO_FEATURE_EXTRA` ao ligar e deixa de ver ao desligar. Falta: passar `--features` em builds e configurações de execução, e `noDefaultFeatures` |
 | C-08 | Atenuar código desativado por `cfg` | ✅ | M4 | O editor avalia cada `#[cfg(...)]` (itens, instruções, campos, variantes e braços de `match`) com os cfgs de `rustc --print cfg` e as features do `default` do pacote mais as ligadas pelo usuário (C-07), e atenua o que fica desligado. Não depende do rust-analyzer (o 1.99 não publica `inactive-code`) nem de confiar no projeto. Testado no app com um projeto gerado e no `instance.rs` do próprio CrabCraft. Falta: dica ao passar o mouse |
-| C-09 | Seletor de target (triple) na barra de status | ⬜ | M4 | |
+| C-09 | Seletor de target (triple) na barra de status | ✅ | M4 | A barra de status mostra o triple usado na análise (o `[build] target` do `.cargo/config.toml`, senão o host); o clique abre a lista com o host marcado, os targets do projeto, os instalados pelo rustup e os não instalados (`rustup target list`, rodado fora do projeto), com filtro quando a lista é longa. O triple é validado (`[A-Za-z0-9_.-]`) antes de ir a qualquer processo, fica na sessão do projeto, vai para o rust-analyzer como `cargo.target` via `didChangeConfiguration` (sem reiniciar) e recarrega `rustc --print cfg --target` para a atenuação (C-08). Testado com rustc, rustup e rust-analyzer reais num projeto gerado: ao escolher `x86_64-pc-windows-msvc` o `#[cfg(windows)]` deixa de ser atenuado e o `#[cfg(unix)]` passa a ser, e o build script do rust-analyzer vê `TARGET` mudar. Falta: passar `--target` em builds/checks iniciados pela IDE (escolha deliberada: mudaria a pasta dos binários usados por executar e depurar) |
 | C-10 | Quick fix para habilitar feature | ⬜ | M4 | |
 | C-11 | Ícone da margem para abrir docs.rs do crate | ⬜ | M4 | |
 

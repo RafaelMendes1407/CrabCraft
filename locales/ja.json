@@ -1106,5 +1106,14 @@
   "contextinfo": {
     "Show Context Info": "コンテキスト情報を表示",
     "No enclosing declarations out of view": "表示範囲外の外側の宣言はありません"
+  },
+  "cargotarget": {
+    "Target the code is analysed for. Click to pick another one.": "コードを解析するターゲット。クリックして別のものを選択します。",
+    "No targets found": "ターゲットが見つかりません",
+    "Filter targets": "ターゲットを絞り込む",
+    "host": "ホスト",
+    "project": "プロジェクト",
+    "not installed": "未インストール",
+    "The standard library of this target is not installed: rust-analyzer may not resolve std": "このターゲットの標準ライブラリはインストールされていません：rust-analyzer が std を解決できない場合があります"
   }
 }
