@@ -369,6 +369,12 @@ pub mod ico {
         FILE_CSV = "fileTypes/csv",
         FILE_BINARY = "fileTypes/binaryData",
         FILE_WINDOWS = "fileTypes/microsoftWindows",
+        FILE_TOML = "fileTypes/toml",
+        FILE_LOCK = "general/locked",
+        // Rust and Cargo (IntelliJ Rust plugin, MIT)
+        FILE_RUST = "rust/rustFile",
+        CARGO_TOML = "rust/cargo",
+        CARGO_LOCK = "rust/cargoLock",
         // tree nodes
         FOLDER = "nodes/folder",
         SOLUTION = "nodes/ideaProject",
@@ -447,13 +453,18 @@ pub mod ico {
     }
 }
 
-/// Icon for a file in the explorer and the editor tabs.
+/// Icon for a file in the explorer and the editor tabs. Takes a file name or a path.
 pub fn for_file(name: &str) -> Ico {
-    let lower = name.to_ascii_lowercase();
+    let lower = name.rsplit(['/', '\\']).next().unwrap_or(name).to_ascii_lowercase();
     let ext = lower.rsplit_once('.').map_or("", |(_, e)| e);
     match ext {
         _ if lower == ".gitignore" || lower == ".gitattributes" => ico::FILE_GITIGNORE,
         _ if lower == ".editorconfig" => ico::FILE_EDITORCONFIG,
+        _ if lower == "cargo.toml" => ico::CARGO_TOML,
+        _ if lower == "cargo.lock" => ico::CARGO_LOCK,
+        "rs" => ico::FILE_RUST,
+        "toml" => ico::FILE_TOML,
+        "lock" => ico::FILE_LOCK,
         "cs" | "csx" => ico::FILE_CS,
         "sln" | "slnx" | "slnf" => ico::SOLUTION,
         "csproj" | "fsproj" | "vbproj" | "proj" => ico::PROJECT,
@@ -479,6 +490,19 @@ pub fn for_file(name: &str) -> Ico {
     }
 }
 
+/// Icon for a folder in the explorer. `in_cargo_package` says whether the folder sits next to a
+/// `Cargo.toml`: then Cargo's conventional target folders get root icons (`src` and `examples`
+/// hold sources, `tests` and `benches` hold tests, `target` is build output).
+pub fn for_dir(name: &str, in_cargo_package: bool) -> Ico {
+    match name {
+        "src" | "examples" if in_cargo_package => ico::SOURCE_ROOT,
+        "tests" | "benches" if in_cargo_package => ico::TEST_ROOT,
+        "target" if in_cargo_package => ico::EXCLUDED,
+        "Properties" => ico::FILE_CONFIG,
+        _ => ico::FOLDER,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,6 +519,38 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn rust_and_cargo_files_get_their_icons() {
+        assert_eq!(for_file("main.rs"), ico::FILE_RUST);
+        assert_eq!(for_file("LIB.RS"), ico::FILE_RUST);
+        assert_eq!(for_file("Cargo.toml"), ico::CARGO_TOML);
+        assert_eq!(for_file("Cargo.lock"), ico::CARGO_LOCK);
+        assert_eq!(for_file("rustfmt.toml"), ico::FILE_TOML);
+        assert_eq!(for_file("rust-toolchain.toml"), ico::FILE_TOML);
+        assert_eq!(for_file("yarn.lock"), ico::FILE_LOCK);
+        // Paths too (Recent Files passes them), with either separator.
+        assert_eq!(for_file("/home/u/app/Cargo.toml"), ico::CARGO_TOML);
+        assert_eq!(for_file(r"C:\app\crates\core\Cargo.lock"), ico::CARGO_LOCK);
+        assert_eq!(for_file(r"C:\app.rs\notes"), ico::FILE_TEXT);
+        assert_eq!(for_file("dir/Cargo.toml.bak"), ico::FILE_TEXT);
+        assert_eq!(for_file(""), ico::FILE_TEXT);
+    }
+
+    #[test]
+    fn cargo_target_folders_get_root_icons_only_inside_a_package() {
+        assert_eq!(for_dir("src", true), ico::SOURCE_ROOT);
+        assert_eq!(for_dir("examples", true), ico::SOURCE_ROOT);
+        assert_eq!(for_dir("tests", true), ico::TEST_ROOT);
+        assert_eq!(for_dir("benches", true), ico::TEST_ROOT);
+        assert_eq!(for_dir("target", true), ico::EXCLUDED);
+        assert_eq!(for_dir("docs", true), ico::FOLDER);
+        for name in ["src", "tests", "examples", "benches", "target"] {
+            assert_eq!(for_dir(name, false), ico::FOLDER, "{name}");
+        }
+        assert_eq!(for_dir("Src", true), ico::FOLDER);
+        assert_eq!(for_dir("Properties", false), ico::FILE_CONFIG);
     }
 
     #[test]

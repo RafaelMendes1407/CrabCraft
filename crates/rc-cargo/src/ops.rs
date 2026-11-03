@@ -291,7 +291,11 @@ pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_buil
     };
     let working_dir = t.working_dir.clone().or_else(|| folder(&t.manifest).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
     let backtrace = if t.options.backtrace.is_empty() { "short" } else { t.options.backtrace.as_str() };
-    let mut env = vec![("RUST_BACKTRACE".to_string(), backtrace.to_string())];
+    // The project's variables, then the configuration's, which win.
+    let mut env = cargo.env().to_vec();
+    if !t.options.backtrace.is_empty() || !env.iter().any(|(k, _)| k == "RUST_BACKTRACE") {
+        env.push(("RUST_BACKTRACE".to_string(), backtrace.to_string()));
+    }
     env.extend(t.env.iter().cloned());
     Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None }))
 }
@@ -359,14 +363,35 @@ pub fn test_args(req: &TestRequest) -> Vec<String> {
     a
 }
 
-/// Runs the tests of the workspace `req.target`.
-pub fn start_tests(cargo: &Cargo, req: TestRequest, outbox: Outbox<TestEvent>) -> OpHandle {
+/// Arguments after `cargo` for a test run with cargo-nextest. It takes libtest's name filters
+/// after `--`; it has no doctests.
+pub fn nextest_args(req: &TestRequest) -> Vec<String> {
+    let mut a: Vec<String> = ["nextest", "run", "--workspace", "--no-fail-fast", "--color", "never", "--cargo-message-format", "json-diagnostic-rendered-ansi", "--final-status-level", "none"].map(String::from).to_vec();
+    // Ignored tests are listed only without a filter: with one, nextest lists every test the
+    // filter leaves out as skipped too.
+    if req.filter.is_none() {
+        a.extend(["--status-level".into(), "skip".into()]);
+    }
+    a.extend(manifest_arg(&req.target));
+    match &req.filter {
+        Some(TestFilter::Tests(names)) => {
+            a.extend(["--".into(), "--exact".into()]);
+            a.extend(names.iter().cloned());
+        }
+        Some(TestFilter::Class(module)) => a.extend(["--".into(), format!("{module}::")]),
+        _ => {}
+    }
+    a
+}
+
+/// Runs the tests of the workspace `req.target`, with cargo-nextest when `nextest` is set.
+pub fn start_tests(cargo: &Cargo, req: TestRequest, nextest: bool, outbox: Outbox<TestEvent>) -> OpHandle {
     let cancel = CancelToken::new();
     let token = cancel.clone();
     let cargo = cargo.clone();
     let task = Runtime::spawn(async move {
         let out = outbox.clone();
-        match tests(&cargo, &req, &token, &mut |e| {
+        match tests(&cargo, &req, nextest, &token, &mut |e| {
             out.send(e);
         })
         .await
@@ -378,13 +403,13 @@ pub fn start_tests(cargo: &Cargo, req: TestRequest, outbox: Outbox<TestEvent>) -
     OpHandle::new(cancel, task)
 }
 
-async fn tests(cargo: &Cargo, req: &TestRequest, cancel: &CancelToken, on_event: &mut (dyn FnMut(TestEvent) + Send)) -> anyhow::Result<TestRunResult> {
+async fn tests(cargo: &Cargo, req: &TestRequest, nextest: bool, cancel: &CancelToken, on_event: &mut (dyn FnMut(TestEvent) + Send)) -> anyhow::Result<TestRunResult> {
     let started = Instant::now();
-    let args = test_args(req);
+    let args = if nextest { nextest_args(req) } else { test_args(req) };
     let root = folder(&req.target).unwrap_or(Path::new(".")).to_path_buf();
     on_event(TestEvent::ProjectStarted { project: req.target.clone() });
     let mut collected = Collected::default();
-    let mut parser = TestParser::new();
+    let mut parser = if nextest { TestParser::nextest() } else { TestParser::new() };
     let cmd = cargo_command(cargo, folder(&req.target), &args);
     let outcome = {
         let (collected, parser) = (&mut collected, &mut parser);
@@ -487,5 +512,12 @@ mod tests_args {
         assert!(test_args(&r).ends_with(&["--exact".into(), "a::b".into(), "c".into()]));
         r.filter = Some(TestFilter::Class("a::tests".into()));
         assert_eq!(test_args(&r).last().unwrap(), "a::tests::");
+        assert_eq!(nextest_args(&r)[..2], ["nextest", "run"]);
+        assert!(nextest_args(&r).ends_with(&["--".into(), "a::tests::".into()]));
+        r.filter = Some(TestFilter::Tests(vec!["a::b".into()]));
+        assert!(nextest_args(&r).ends_with(&["--".into(), "--exact".into(), "a::b".into()]));
+        assert!(!nextest_args(&r).contains(&"--status-level".to_string()));
+        r.filter = None;
+        assert!(nextest_args(&r).contains(&"--status-level".to_string()));
     }
 }

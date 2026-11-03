@@ -158,11 +158,15 @@ pub struct Runner {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name (kept in the session).
     pub options: BTreeMap<String, rc_core::session::RunOptions>,
+    /// Environment of every Cargo command, `NAME=value` per line (kept in the session).
+    pub project_env: String,
+    /// Rust tests run with cargo-nextest (a setting).
+    pub nextest: bool,
 }
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new() }
+        Runner { configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -226,7 +230,12 @@ impl Runner {
     }
 
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
-        self.cargo.clone().ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+        self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+    }
+
+    /// The project's environment; nothing when the session holds an invalid one.
+    pub fn project_env_pairs(&self) -> Vec<(String, String)> {
+        rc_core::session::parse_env(&self.project_env).unwrap_or_default()
     }
 
     pub fn clear(&mut self) {
@@ -279,10 +288,16 @@ impl Runner {
 
     /// Runs a Cargo command in the workspace, shown in the Build window.
     pub fn cargo_command(&mut self, args: Vec<String>) -> Vec<RunnerOutput> {
+        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        self.cargo_command_in(&manifest, args)
+    }
+
+    /// Runs `cargo <args>` for `manifest`, which need not be loaded yet.
+    pub fn cargo_command_in(&mut self, manifest: &Path, args: Vec<String>) -> Vec<RunnerOutput> {
         if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
             return vec![RunnerOutput::Notify(tr("Wait for the running build to finish").into(), false)];
         }
-        let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
+        let manifest = manifest.to_path_buf();
         let cargo = match self.cargo() {
             Ok(cargo) => cargo,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
@@ -509,7 +524,7 @@ impl Runner {
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let started = if manifest.is_some() {
-            self.cargo().map(|cargo| rc_cargo::start_tests(&cargo, req.clone(), inbox.sender()))
+            self.cargo().map(|cargo| rc_cargo::start_tests(&cargo, req.clone(), self.nextest, inbox.sender()))
         } else {
             self.dotnet().map(|dotnet| rc_dotnet::start_tests(&dotnet, req.clone(), inbox.sender()))
         };

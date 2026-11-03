@@ -300,6 +300,50 @@ fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
 }
 
 #[test]
+fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    let dir = rc_core::paths::scratches_dir();
+    assert!(dir.starts_with(home.path()));
+    // The first row is a Rust scratch file.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let first = dir.join("scratch_1.rs").canonicalize().unwrap();
+    assert!(h.state().dialog.is_none());
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
+    // Outside every Cargo package, so rust-analyzer never gets it.
+    assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && !crate::insight::has_insight(d)));
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()), Some("fn main() {
+    
+}
+".into()));
+    // Filtering by kind creates a Markdown one.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    h.input_mut().events.push(egui::Event::Text("mark".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), dir.join("scratch_1.md").canonicalize().ok());
+    // The existing ones are listed after the kinds and open again.
+    h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
+    h.run_steps(2);
+    match &h.state().dialog {
+        Some(crate::ui::dialogs::Dialog::Scratches { files, .. }) => assert_eq!(files.len(), 2),
+        _ => panic!("no scratch list"),
+    }
+    h.input_mut().events.push(egui::Event::Text("scratch_1.rs".into()));
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first));
+    assert_eq!(h.state().docs.list.len(), 2);
+}
+
+#[test]
 fn ten_project_solution_opens_and_its_session_is_restored() {
     use egui_kittest::kittest::Queryable;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -641,6 +685,42 @@ fn screens_readme() {
     }
 }
 
+/// Rust and Cargo file icons and the source/test root folders in the explorer and the tabs.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/rust-icons-*.png"]
+fn screens_rust_icons() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let project = tempfile::Builder::new().prefix("crabcraft-icons").tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    for d in ["src", "tests", "examples", "benches", "docs"] {
+        std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"icons\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    std::fs::write(root.join("rustfmt.toml"), "max_width = 100\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(root.join("tests/it.rs"), "#[test]\nfn it() {}\n").unwrap();
+    std::fs::write(root.join("docs/notes.md"), "# Notes\n").unwrap();
+    for dark in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace(&root);
+        for d in ["src", "tests"] {
+            app.explorer.expanded.insert(format!("dir:{}", root.join(d).display()));
+        }
+        app.open_file(&root.join("Cargo.toml"));
+        app.open_file(&root.join("Cargo.lock"));
+        app.open_file(&root.join("src/main.rs"));
+        let mut h = harness(app, vec2(1100.0, 600.0));
+        h.run_steps(10);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("rust-icons-{suffix}.png"))).unwrap();
+        h.state_mut().insight.stop();
+    }
+}
+
 /// Local history on a Cargo project: every save keeps a version, the dialog lists them newest
 /// first, and Revert puts an older text in the editor as one undoable edit (the file on disk
 /// stays as it was until the next save).
@@ -705,3 +785,4 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), TWO);
     assert!(!h.state().docs.active_doc().unwrap().is_modified());
 }
+

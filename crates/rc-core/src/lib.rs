@@ -5,6 +5,7 @@ pub mod history;
 pub mod inbox;
 pub mod paths;
 pub mod runtime;
+pub mod scratch;
 pub mod session;
 pub mod settings;
 pub mod processes;

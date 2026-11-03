@@ -30,6 +30,10 @@ pub struct Doc {
     /// The text as last loaded or saved (an O(1) copy): the version the local history keeps
     /// when the file is saved or reloaded.
     pub saved: rc_text::Rope,
+    /// A scratch file (outside every project): rust-analyzer is not asked about it.
+    pub scratch: bool,
+    /// Written by the IDE (a macro expansion): read-only and never sent to the language server.
+    pub generated: bool,
 }
 
 /// How a Markdown file is shown (Rider's editor / editor and preview / preview switch).
@@ -130,7 +134,7 @@ impl Docs {
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
         let saved = editor.buffer.snapshot();
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, saved });
+        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch: rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path), generated: false, saved });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -281,6 +285,21 @@ impl Docs {
         }
         self.reloaded(i, &text, bom, mtime);
         self.list[i].editor.request_parse(&self.pool);
+    }
+
+    /// Reads every document from disk again (the unmodified ones change; the modified ones are
+    /// flagged when the file differs) and parses them all afresh.
+    pub fn reload_all(&mut self) {
+        let paths: Vec<PathBuf> = self.list.iter().map(|d| d.path.clone()).collect();
+        for path in paths {
+            if let Some(i) = self.index_of(&path) {
+                self.list[i].mtime = None;
+            }
+            self.on_disk_change(&path);
+        }
+        for d in &mut self.list {
+            d.editor.request_parse(&self.pool);
+        }
     }
 
     /// Takes finished background parses; returns whether any arrived (repaint).

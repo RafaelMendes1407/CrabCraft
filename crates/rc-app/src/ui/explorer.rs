@@ -316,31 +316,35 @@ impl ExplorerState {
         }
         let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
         let children = self.children_of_dir(&dir);
+        let cargo = has_cargo_toml(&children);
         for c in children {
             if c.path == path {
                 continue;
             }
-            self.push_node(rows, &c, depth + 1);
+            self.push_node(rows, &c, depth + 1, cargo);
         }
     }
 
     fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize) {
-        for c in self.children_of_dir(dir) {
-            self.push_node(rows, &c, depth);
+        let children = self.children_of_dir(dir);
+        // From the cached listing: no file system access while drawing.
+        let cargo = has_cargo_toml(&children);
+        for c in children {
+            self.push_node(rows, &c, depth, cargo);
         }
     }
 
-    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize) {
+    /// `in_cargo_package`: the node's folder has a `Cargo.toml` (picks the source/test root icons).
+    fn push_node(&mut self, rows: &mut Vec<Row>, node: &FileNode, depth: usize, in_cargo_package: bool) {
         if node.is_dir {
             let key = format!("dir:{}", node.path.display());
-            let special = node.name == "Properties";
             rows.push(Row {
                 key: key.clone(),
                 kind: NodeKind::Dir(node.path.clone()),
                 depth,
                 label: node.name.clone(),
                 secondary: String::new(),
-                icon: if special { ico::FILE_CONFIG } else { ico::FOLDER },
+                icon: icons::for_dir(&node.name, in_cargo_package),
                 expandable: true,
             });
             if self.expanded.contains(&key) {
@@ -350,6 +354,10 @@ impl ExplorerState {
             rows.push(file_row(&node.path, depth));
         }
     }
+}
+
+fn has_cargo_toml(children: &[FileNode]) -> bool {
+    children.iter().any(|c| !c.is_dir && c.name == "Cargo.toml")
 }
 
 fn file_row(path: &Path, depth: usize) -> Row {
@@ -659,5 +667,33 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
     if theme::menu_item(ui, Some(ico::FILE_SHELL), tr("Open in Terminal"), false).clicked() {
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_packages_show_source_and_test_root_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for d in ["src", "tests", "docs/src"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        for f in ["Cargo.toml", "Cargo.lock", "src/main.rs", "tests/it.rs", "docs/src/a.md"] {
+            std::fs::write(root.join(f), "").unwrap();
+        }
+        let mut state = ExplorerState::default();
+        state.expanded.extend(["sln".to_string(), format!("dir:{}", root.join("docs").display())]);
+        let rows = state.rows(None, root, "app");
+        let icon = |label: &str, depth: usize| rows.iter().find(|r| r.label == label && r.depth == depth).map(|r| r.icon);
+        assert_eq!(icon("src", 1), Some(ico::SOURCE_ROOT));
+        assert_eq!(icon("tests", 1), Some(ico::TEST_ROOT));
+        assert_eq!(icon("docs", 1), Some(ico::FOLDER));
+        // No Cargo.toml next to it: an ordinary folder.
+        assert_eq!(icon("src", 2), Some(ico::FOLDER));
+        assert_eq!(icon("Cargo.toml", 1), Some(ico::CARGO_TOML));
+        assert_eq!(icon("Cargo.lock", 1), Some(ico::CARGO_LOCK));
     }
 }

@@ -120,5 +120,6 @@ Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT l
 at your option.
 
 Icons in `assets/icons` come from the [IntelliJ Platform](https://github.com/JetBrains/intellij-community)
-(Apache 2.0); see [assets/icons/NOTICE.md](assets/icons/NOTICE.md). CrabCraft is not affiliated with
+(Apache 2.0) and, for the Rust and Cargo file icons, the
+[IntelliJ Rust plugin](https://github.com/intellij-rust/intellij-rust) (MIT); see [assets/icons/NOTICE.md](assets/icons/NOTICE.md). CrabCraft is not affiliated with
 JetBrains, the Rust Foundation or Microsoft.

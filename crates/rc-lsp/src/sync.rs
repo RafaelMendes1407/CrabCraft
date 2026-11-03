@@ -10,9 +10,16 @@ use std::str::FromStr;
 /// Characters escaped in a `file://` URI path (like VS Code: keep `/` and `:` readable).
 const PATH: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'%').add(b'<').add(b'>').add(b'?').add(b'`').add(b'{').add(b'}').add(b'[').add(b']').add(b'^').add(b'|');
 
-/// `file:///Users/me/A B.cs` from a path (Windows: `file:///C:/x.cs`).
+/// `file:///Users/me/A B.cs` from a path (Windows: `file:///C:/x.cs`). Windows' verbatim paths
+/// (what `canonicalize` returns there) lose their `\\?\` prefix: in a URI it reads as a
+/// host-less `//?/C:/…` that language servers do not recognise.
 pub fn path_to_uri(path: &Path) -> Uri {
-    let s = path.to_string_lossy().replace('\\', "/");
+    let raw = path.to_string_lossy();
+    let raw = match raw.strip_prefix(r"\\?\UNC\") {
+        Some(share) => format!(r"\\{share}"),
+        None => raw.strip_prefix(r"\\?\").unwrap_or(&raw).to_string(),
+    };
+    let s = raw.replace('\\', "/");
     let s = if s.starts_with('/') { s } else { format!("/{s}") };
     let encoded = utf8_percent_encode(&s, PATH).to_string();
     Uri::from_str(&format!("file://{encoded}")).unwrap_or_else(|_| Uri::from_str("file:///").expect("valid"))
@@ -24,7 +31,10 @@ pub fn uri_to_path(uri: &Uri) -> Option<PathBuf> {
     let decoded = percent_decode_str(rest).decode_utf8().ok()?.into_owned();
     // `file:///C:/x` → `C:/x` on Windows.
     if cfg!(windows) && decoded.len() > 2 && decoded.as_bytes()[2] == b':' {
-        return Some(PathBuf::from(&decoded[1..]));
+        let path = PathBuf::from(&decoded[1..]);
+        // Open documents are kept by canonical path (`\\?\C:\x` there); a server's `c:/x`
+        // must name the same document.
+        return Some(path.canonicalize().unwrap_or(path));
     }
     Some(PathBuf::from(decoded))
 }
@@ -91,11 +101,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn verbatim_windows_paths_give_plain_file_uris() {
+        assert_eq!(path_to_uri(Path::new(r"\\?\C:\Users\me\src\main.rs")).as_str(), "file:///C:/Users/me/src/main.rs");
+        assert_eq!(path_to_uri(Path::new(r"C:\Users\me\src\main.rs")).as_str(), "file:///C:/Users/me/src/main.rs");
+        assert_eq!(path_to_uri(Path::new(r"\\?\UNC\server\share\a.rs")).as_str(), path_to_uri(Path::new(r"\\server\share\a.rs")).as_str());
+    }
+
+    #[test]
     fn uris_round_trip_with_spaces_and_unicode() {
         let p = Path::new("/Users/me/My Projects/Café/A#1.cs");
         let u = path_to_uri(p);
         assert_eq!(u.as_str(), "file:///Users/me/My%20Projects/Caf%C3%A9/A%231.cs");
         assert_eq!(uri_to_path(&u).unwrap(), p);
+    }
+
+    /// A server's `file:///c%3A/...` names the same document as the canonical path it was
+    /// opened with.
+    #[test]
+    #[cfg(windows)]
+    fn uris_of_existing_files_come_back_canonical() {
+        let dir = std::env::temp_dir().canonicalize().unwrap();
+        let uri = path_to_uri(&dir);
+        let lower = uri.as_str().replacen("file:///C:", "file:///c%3A", 1);
+        assert_eq!(uri_to_path(&Uri::from_str(&lower).unwrap()).unwrap(), dir);
     }
 
     #[test]
