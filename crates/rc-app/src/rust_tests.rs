@@ -3100,3 +3100,71 @@ fn code_disabled_by_cfg_is_faded() {
     // Untrusted: no language server ran.
     assert!(app.insight.session.is_none());
 }
+
+/// A feature turned on from the gutter of `Cargo.toml` stops the fading of its code, is saved
+/// with the session and reaches rust-analyzer, whose build script run sees it.
+#[test]
+fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
+    use rc_editor::GutterIcon;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() -> u32 {\n    1\n}\n\npub fn always() -> u32 {\n    2\n}\n");
+    // Build scripts see the enabled features as `CARGO_FEATURE_*`.
+    write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_FEATURES\", format!(\"extra={}\", std::env::var(\"CARGO_FEATURE_EXTRA\").is_ok())).unwrap();\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/lib.rs"));
+    pump(&mut app, "the cfg of the crate", |a| {
+        a.update_cfg_sets();
+        a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some())
+    });
+    let faded = |a: &mut CrabCraftApp| -> usize {
+        a.update_cfg_sets();
+        let doc = a.docs.active_doc_mut().unwrap();
+        doc.editor.syntax.parse_blocking(&doc.editor.buffer.rope().clone(), doc.editor.buffer.version());
+        doc.editor.inactive().len()
+    };
+    assert_eq!(faded(&mut app), 1, "extra is off");
+
+    app.open_file(&root.join("Cargo.toml"));
+    app.update_feature_icons();
+    let icons = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.gutter_icons.clone();
+    // default, std (on through default) and extra (off), on lines 6 to 8.
+    assert_eq!(icons(&app).into_iter().collect::<Vec<_>>(), vec![(6, GutterIcon::FeatureOn), (7, GutterIcon::FeatureOn), (8, GutterIcon::FeatureOff)]);
+    // A feature that default turns on stays on.
+    app.toggle_feature_at(7);
+    assert!(app.cargo_features.is_empty());
+    app.toggle_feature_at(8);
+    assert_eq!(app.cargo_features, vec!["demo/extra".to_string()]);
+    app.update_feature_icons();
+    assert_eq!(icons(&app).get(&8), Some(&GutterIcon::FeatureOn));
+
+    app.open_file(&root.join("src/lib.rs"));
+    assert_eq!(faded(&mut app), 0, "extra is on");
+    app.save_session();
+    assert_eq!(rc_core::Session::load(&root).cargo_features, vec!["demo/extra".to_string()]);
+
+    // Trusted, rust-analyzer builds with the feature.
+    app.trust_project();
+    pump(&mut app, "the build script with extra", |_| std::fs::read_to_string(root.join("BUILD_FEATURES")).is_ok_and(|t| t == "extra=true"));
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // Turned off, the running server reloads the workspace without restarting.
+    let started = app.insight.session.as_ref().map(|s| s.started);
+    std::fs::remove_file(root.join("BUILD_FEATURES")).unwrap();
+    app.open_file(&root.join("Cargo.toml"));
+    app.toggle_feature_at(8);
+    assert!(app.cargo_features.is_empty());
+    assert_eq!(app.insight.session.as_ref().map(|s| s.started), started);
+    pump(&mut app, "the build script without extra", |_| std::fs::read_to_string(root.join("BUILD_FEATURES")).is_ok_and(|t| t == "extra=false"));
+    app.insight.stop();
+
+    // A feature removed from the manifest is dropped once the project is read again.
+    app.set_cargo_feature("demo", "extra", true);
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\n\n[workspace]\n");
+    app.reload_cargo();
+    pump(&mut app, "the feature dropped", |a| a.cargo_features.is_empty());
+}

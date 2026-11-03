@@ -996,5 +996,11 @@
   "cargotree": {
     "Retry": "Ponów",
     "listed above": "pokazane wyżej"
+  },
+  "cargofeatures": {
+    "implied": "pośrednio",
+    "Turned on by default or by another enabled feature": "Włączona domyślnie lub przez inną włączoną funkcję",
+    "Click to turn on or off for the analysis": "Kliknij, aby włączyć lub wyłączyć w analizie",
+    "The feature {name} is turned on by default or by another enabled feature": "Funkcja {name} jest włączona domyślnie lub przez inną włączoną funkcję"
   }
 }

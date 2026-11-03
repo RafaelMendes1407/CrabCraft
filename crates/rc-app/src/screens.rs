@@ -1668,6 +1668,67 @@ fn cargo_tree_capture() {
     }
 }
 
+/// A crate with `[features]`, its `Cargo.toml` open and the Cargo window shown.
+fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("Cargo.toml"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
+    h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
+    h.run_steps(3);
+    (h, root)
+}
+
+/// The Cargo window lists each member's features with a switch; the gutter of `Cargo.toml`
+/// shows the same state.
+#[test]
+fn the_cargo_window_turns_features_on_and_off() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = features_harness(dir.path(), false);
+    let icon = |h: &Harness<'static, CrabCraftApp>, line| h.state().docs.active_doc().and_then(|d| d.editor.gutter_icons.get(&line).copied());
+    assert_eq!(icon(&h, 8), Some(rc_editor::GutterIcon::FeatureOff));
+    h.get_by_label(rc_kit::i18n::tr("Features")).click();
+    h.run_steps(3);
+    h.get_by_label("extra").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_features, vec!["demo/extra".to_string()]);
+    assert_eq!(icon(&h, 8), Some(rc_editor::GutterIcon::FeatureOn));
+    // std is on through default: clicking it changes nothing.
+    h.get_by_label("std").click();
+    h.run_steps(3);
+    assert_eq!(h.state().cargo_features, vec!["demo/extra".to_string()]);
+    h.get_by_label("extra").click();
+    h.run_steps(3);
+    assert!(h.state().cargo_features.is_empty());
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/cargo-features-*.png"]
+fn cargo_features_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = features_harness(dir.path(), dark);
+        h.get_by_label(rc_kit::i18n::tr("Features")).click();
+        h.run_steps(3);
+        h.state_mut().set_cargo_feature("demo", "extra", true);
+        h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("cargo-features-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
 #[test]
 #[ignore = "Requires a GPU; opens CrabCraft's own instance.rs and writes target/snapshots/cfg-inactive.png"]
 fn cfg_inactive_capture() {

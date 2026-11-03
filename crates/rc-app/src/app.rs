@@ -72,6 +72,10 @@ pub struct CrabCraftApp {
     /// its `cfg` set was given for.
     cfg_epoch: u64,
     cfg_given: std::collections::HashMap<u64, u64>,
+    /// Cargo features the user turned on, as `package/feature` (saved with the session).
+    pub cargo_features: Vec<String>,
+    /// The `(text version, cfg_epoch)` each `Cargo.toml` editor got its feature icons for.
+    feature_icons_given: std::collections::HashMap<u64, (u64, u64)>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -260,6 +264,8 @@ impl CrabCraftApp {
             rustc_cfg_load: None,
             cfg_epoch: 0,
             cfg_given: Default::default(),
+            cargo_features: Vec::new(),
+            feature_icons_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -357,6 +363,9 @@ impl CrabCraftApp {
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.runner.project_env = session.project_env.clone();
         self.insight.set_env(self.runner.project_env_pairs());
+        self.cargo_features = clean_features(&session.cargo_features);
+        self.insight.set_features(self.cargo_features.clone());
+        self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
@@ -424,6 +433,7 @@ impl CrabCraftApp {
                 }
             }
             self.runner.set_attached(workspaces);
+            self.prune_features();
             self.cfg_epoch += 1;
         }
         let Some(inbox) = &self.cargo_load else { return };
@@ -435,6 +445,7 @@ impl CrabCraftApp {
                 Ok(workspace) => {
                     let root = workspace.root.clone();
                     self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
+                    self.prune_features();
                     self.cfg_epoch += 1;
                     self.load_rustc_cfg(root);
                     self.load_libraries();
@@ -658,6 +669,101 @@ impl CrabCraftApp {
         self.reload_cargo();
     }
 
+    /// Turns the Cargo feature `feature` of `package` on or off for the analysis: rust-analyzer
+    /// gets it as `cargo.features` and the code under `#[cfg(feature = …)]` is faded again.
+    pub fn set_cargo_feature(&mut self, package: &str, feature: &str, on: bool) {
+        let entry = format!("{package}/{feature}");
+        if !rc_cargo::valid_feature_entry(&entry) || self.cargo_features.contains(&entry) == on {
+            return;
+        }
+        if on {
+            self.cargo_features.push(entry);
+            self.cargo_features.sort();
+        } else {
+            self.cargo_features.retain(|e| *e != entry);
+        }
+        self.session_dirty = true;
+        self.cfg_epoch += 1;
+        self.insight.set_features(self.cargo_features.clone());
+    }
+
+    /// Whether `feature` of `package` is on: chosen by the user, or enabled by `default`.
+    /// `None` when the package has no such feature.
+    pub fn feature_state(&self, package: &rc_cargo::Package, feature: &str) -> Option<FeatureState> {
+        if !package.features.contains_key(feature) {
+            return None;
+        }
+        let chosen = package.chosen_features(&self.cargo_features);
+        Some(if chosen.iter().any(|f| f == feature) {
+            FeatureState::Chosen
+        } else if package.enabled_features(&chosen).iter().any(|f| f == feature) {
+            FeatureState::Implied
+        } else {
+            FeatureState::Off
+        })
+    }
+
+    /// Click on the feature icon of a `Cargo.toml` line: turns that feature on or off. One that
+    /// another enabled feature (or `default`) turns on cannot be turned off from here.
+    pub fn toggle_feature_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let Some(package) = self.package_of_manifest(&doc.path) else { return };
+        let Some(name) = rc_cargo::feature_lines(&doc.editor.buffer.rope().to_string()).into_iter().find(|(l, _)| *l == line).map(|(_, n)| n) else { return };
+        match self.feature_state(&package, &name) {
+            Some(FeatureState::Off) => self.set_cargo_feature(&package.name, &name, true),
+            Some(FeatureState::Chosen) => self.set_cargo_feature(&package.name, &name, false),
+            Some(FeatureState::Implied) => self.notify(trf("The feature {name} is turned on by default or by another enabled feature", &[("name", &name)]), false),
+            None => {}
+        }
+    }
+
+    /// Drops chosen features that a loaded package no longer has: Cargo, and so rust-analyzer,
+    /// refuse a `--features` entry the package does not define. Entries of packages not loaded
+    /// (yet) are kept.
+    fn prune_features(&mut self) {
+        let packages: Vec<&rc_cargo::Package> = self.runner.cargo_workspace.iter().chain(&self.runner.attached).flat_map(|w| &w.packages).collect();
+        let before = self.cargo_features.len();
+        self.cargo_features.retain(|e| {
+            let Some((p, f)) = e.split_once('/') else { return false };
+            packages.iter().filter(|pk| pk.name == p).all(|pk| pk.features.contains_key(f))
+        });
+        if self.cargo_features.len() != before {
+            self.session_dirty = true;
+            self.insight.set_features(self.cargo_features.clone());
+        }
+    }
+
+    /// The member (or attached package) whose manifest is `path`.
+    pub fn package_of_manifest(&self, path: &Path) -> Option<rc_cargo::Package> {
+        let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let path = canon(path);
+        self.runner.cargo_workspace.iter().chain(&self.runner.attached).flat_map(|w| &w.packages).find(|p| canon(&p.manifest) == path).cloned()
+    }
+
+    /// Feature switches in the gutter of an open `Cargo.toml`, one per `[features]` entry.
+    pub(crate) fn update_feature_icons(&mut self) {
+        use rc_editor::GutterIcon;
+        let Some(i) = self.docs.active else { return };
+        let doc = &self.docs.list[i];
+        if doc.path.file_name().is_none_or(|n| n != "Cargo.toml") {
+            return;
+        }
+        let stamp = (doc.editor.buffer.version(), self.cfg_epoch);
+        if self.feature_icons_given.get(&doc.editor.id) == Some(&stamp) {
+            return;
+        }
+        self.feature_icons_given.insert(doc.editor.id, stamp);
+        let package = self.package_of_manifest(&doc.path);
+        let lines = rc_cargo::feature_lines(&doc.editor.buffer.rope().to_string());
+        let icons: Vec<(usize, GutterIcon)> = match &package {
+            Some(p) => lines.into_iter().filter_map(|(line, name)| self.feature_state(p, &name).map(|s| (line, if s == FeatureState::Off { GutterIcon::FeatureOff } else { GutterIcon::FeatureOn }))).collect(),
+            None => Vec::new(),
+        };
+        let doc = &mut self.docs.list[i];
+        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::FeatureOn | GutterIcon::FeatureOff));
+        doc.editor.gutter_icons.extend(icons);
+    }
+
     /// Reads the Cargo project again.
     pub fn reload_cargo(&mut self) {
         self.cargo_trees.clear();
@@ -690,7 +796,7 @@ impl CrabCraftApp {
             self.cfg_given.insert(doc.editor.id, epoch);
             let package = self.runner.cargo_workspace.iter().chain(&self.runner.attached).find_map(|w| w.package_of(&doc.path));
             let set = match (package, &self.rustc_cfg) {
-                (Some(p), Some(cfg)) => Some(sets.entry(p.manifest.clone()).or_insert_with(|| std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&[])))).clone()),
+                (Some(p), Some(cfg)) => Some(sets.entry(p.manifest.clone()).or_insert_with(|| std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&p.chosen_features(&self.cargo_features))))).clone()),
                 _ => None,
             };
             doc.editor.set_cfg(set);
@@ -1077,6 +1183,7 @@ impl CrabCraftApp {
             excluded: self.explorer.excluded.clone(),
             attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
+            cargo_features: self.cargo_features.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -2473,6 +2580,24 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
     Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
 }
 
+/// Whether a Cargo feature of a package is on for the analysis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeatureState {
+    /// Turned on by the user.
+    Chosen,
+    /// On because `default` or another enabled feature turns it on.
+    Implied,
+    Off,
+}
+
+/// The session's chosen features that are valid `package/feature` entries, sorted, once each.
+fn clean_features(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = list.iter().filter(|e| rc_cargo::valid_feature_entry(e)).cloned().collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// What rust-analyzer analyses: nothing listed (its own discovery) without attached projects
 /// or scratch files; otherwise the workspace's `Cargo.toml`, when there is one, the attached
 /// ones and the open Rust scratch files (analysed on their own).
@@ -2595,6 +2720,7 @@ impl eframe::App for CrabCraftApp {
             }
         }
         self.update_test_markers();
+        self.update_feature_icons();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

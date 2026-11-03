@@ -996,5 +996,11 @@
   "cargotree": {
     "Retry": "再試行",
     "listed above": "上に表示済み"
+  },
+  "cargofeatures": {
+    "implied": "暗黙",
+    "Turned on by default or by another enabled feature": "デフォルト、または有効な別の feature によって有効",
+    "Click to turn on or off for the analysis": "クリックして解析で有効／無効を切り替え",
+    "The feature {name} is turned on by default or by another enabled feature": "feature {name} はデフォルト、または有効な別の feature によって有効です"
   }
 }

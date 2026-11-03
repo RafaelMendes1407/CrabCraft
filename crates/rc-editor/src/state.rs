@@ -51,6 +51,10 @@ pub enum GutterIcon {
     Overridden,
     Overriding,
     Bookmark,
+    /// A Cargo feature of a `Cargo.toml` that is on for the analysis (click: turn off).
+    FeatureOn,
+    /// A Cargo feature that is off (click: turn on).
+    FeatureOff,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

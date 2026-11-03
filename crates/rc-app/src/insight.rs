@@ -160,6 +160,8 @@ pub struct Insight {
     linked: Vec<PathBuf>,
     /// Paths completion never offers to import.
     autoimport_exclude: Vec<String>,
+    /// Cargo features the user turned on (`package/feature`).
+    features: Vec<String>,
     /// The saved document being reformatted, which is saved again when its edits apply.
     format_on_save: Option<u64>,
     /// Reformatted on save, waiting to be written.
@@ -288,6 +290,7 @@ impl Insight {
             exclude: Vec::new(),
             linked: Vec::new(),
             autoimport_exclude: Vec::new(),
+            features: Vec::new(),
             format_on_save: None,
             save_again: None,
             completion_anchor: 0,
@@ -376,6 +379,20 @@ impl Insight {
         }
     }
 
+    /// The Cargo features rust-analyzer analyses (`cargo.features`); a running server reloads
+    /// the workspace with them.
+    pub fn set_features(&mut self, list: Vec<String>) {
+        if list == self.features {
+            return;
+        }
+        self.features = list.clone();
+        if self.rust
+            && let Some(s) = &mut self.session
+        {
+            s.set_features(list);
+        }
+    }
+
     /// The folders and files rust-analyzer leaves out (`files.exclude`). A running server is
     /// restarted: rust-analyzer 1.99 keeps its file set after `workspace/didChangeConfiguration`.
     pub fn set_exclude(&mut self, exclude: Vec<String>) {
@@ -415,7 +432,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            let ra = rc_lsp::rust_analyzer::RaSettings { clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone() };
+            let ra = rc_lsp::rust_analyzer::RaSettings { clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone(), features: self.features.clone() };
             match LanguageSession::start_rust(&program, &root, ra, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);

@@ -996,5 +996,11 @@
   "cargotree": {
     "Retry": "Erneut versuchen",
     "listed above": "oben aufgeführt"
+  },
+  "cargofeatures": {
+    "implied": "impliziert",
+    "Turned on by default or by another enabled feature": "Standardmäßig oder durch ein anderes aktives Feature eingeschaltet",
+    "Click to turn on or off for the analysis": "Klicken, um es für die Analyse ein- oder auszuschalten",
+    "The feature {name} is turned on by default or by another enabled feature": "Das Feature {name} ist standardmäßig oder durch ein anderes aktives Feature eingeschaltet"
   }
 }

@@ -732,6 +732,9 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         if Some(l) == state.execution_line {
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ico::EXECUTION_POINT, pal, true);
+        } else if let Some(icon @ (GutterIcon::FeatureOn | GutterIcon::FeatureOff)) = state.gutter_icons.get(&l) {
+            let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
+            icons::paint_switch(&painter, r, *icon == GutterIcon::FeatureOn, pal);
         } else if let Some(icon) = state.gutter_icons.get(&l) {
             let ic = match icon {
                 GutterIcon::RunTest => ico::GUTTER_RUN,
@@ -742,7 +745,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 GutterIcon::Implementing => ico::GUTTER_IMPLEMENTING,
                 GutterIcon::Overridden => ico::GUTTER_OVERRIDDEN,
                 GutterIcon::Overriding => ico::GUTTER_OVERRIDING,
-                GutterIcon::Bookmark => ico::GUTTER_BOOKMARK,
+                GutterIcon::Bookmark | GutterIcon::FeatureOn | GutterIcon::FeatureOff => ico::GUTTER_BOOKMARK,
             };
             let r = Rect::from_center_size(pos2(m.icons_x + 8.0, center_y), Vec2::splat(16.0));
             icons::paint(&painter, r, ic, pal, true);

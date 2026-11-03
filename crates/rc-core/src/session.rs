@@ -153,6 +153,9 @@ pub struct Session {
     pub attached_projects: Vec<String>,
     /// Environment of every Cargo command and of rust-analyzer: `NAME=value` per line.
     pub project_env: String,
+    /// Cargo features the user turned on for analysis, as `package/feature`. Read with
+    /// `rc_cargo::valid_feature_entry`: the file is untrusted.
+    pub cargo_features: Vec<String>,
 }
 
 /// A line of an environment that is not `NAME=value` with a valid name (1-based).

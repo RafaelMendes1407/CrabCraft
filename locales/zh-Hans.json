@@ -996,5 +996,11 @@
   "cargotree": {
     "Retry": "重试",
     "listed above": "已在上方列出"
+  },
+  "cargofeatures": {
+    "implied": "隐含",
+    "Turned on by default or by another enabled feature": "默认启用，或由另一个已启用的 feature 启用",
+    "Click to turn on or off for the analysis": "单击以在分析中启用或停用",
+    "The feature {name} is turned on by default or by another enabled feature": "feature {name} 默认启用，或由另一个已启用的 feature 启用"
   }
 }

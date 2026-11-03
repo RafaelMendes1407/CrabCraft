@@ -1,8 +1,9 @@
 //! The Cargo window: the members of the workspace with their targets, and a field to run any
 //! Cargo command. Output goes to the Build window, binaries to the Run window. Each member also
-//! shows its dependency tree from `cargo tree`, read when its node is first unfolded.
+//! shows its dependency tree from `cargo tree`, read when its node is first unfolded, and its
+//! `[features]`, which can be turned on and off for the analysis.
 
-use crate::app::CrabCraftApp;
+use crate::app::{CrabCraftApp, FeatureState};
 use crate::toolwindow::ToolWindow;
 use crate::ui::run_windows::header;
 use crate::ui::toolwindows::empty_state;
@@ -70,6 +71,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 continue;
             }
             let key = (manifest.clone().unwrap_or_else(|| workspace_manifest.clone()), package.name.clone());
+            features(app, ui, package, &key);
             if dependencies(app, ui, &key) {
                 load = Some(key);
             }
@@ -103,6 +105,54 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             Some(m) => app.run_attached_target(&ctx, &m, &package, &target),
         }
     }
+}
+
+/// The Features node of a member and, unfolded, a switch per feature.
+fn features(app: &mut CrabCraftApp, ui: &mut Ui, package: &rc_cargo::Package, key: &(PathBuf, String)) {
+    if package.features.is_empty() {
+        return;
+    }
+    let id = format!("{}#{}#features", key.0.display(), key.1);
+    let open = app.cargo_open.contains(&id);
+    if row(ui, 1, Some(open), ico::SETTINGS, tr("Features"), "", true).clicked() {
+        toggle(&mut app.cargo_open, &id);
+    }
+    if !open {
+        return;
+    }
+    let mut change = None;
+    for name in package.features.keys() {
+        let Some(state) = app.feature_state(package, name) else { continue };
+        let (on, note) = match state {
+            FeatureState::Chosen => (true, ""),
+            FeatureState::Implied => (true, tr("implied")),
+            FeatureState::Off => (false, ""),
+        };
+        let response = feature_row(ui, name, note, on, state != FeatureState::Implied);
+        if state == FeatureState::Implied {
+            response.on_hover_text(tr("Turned on by default or by another enabled feature"));
+        } else if response.on_hover_text(tr("Click to turn on or off for the analysis")).clicked() {
+            change = Some((name.clone(), state == FeatureState::Off));
+        }
+    }
+    if let Some((name, on)) = change {
+        app.set_cargo_feature(&package.name, &name, on);
+    }
+}
+
+/// A feature with its switch, two levels in.
+fn feature_row(ui: &mut Ui, name: &str, note: &str, on: bool, enabled: bool) -> egui::Response {
+    let p = rc_kit::pal(ui);
+    let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 24.0), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, name));
+    if response.hovered() && enabled {
+        ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+    }
+    let x = r.left() + 14.0 + 2.0 * 18.0 + 20.0;
+    icons::paint_switch(ui.painter(), egui::Rect::from_center_size(pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)), on, &p);
+    let text = ui.painter().text(pos2(x + 24.0, r.center().y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), if enabled { p.text } else { p.muted });
+    ui.painter().text(pos2(text.right() + 8.0, r.center().y), Align2::LEFT_CENTER, note, FontId::proportional(12.0), p.muted);
+    response
 }
 
 /// The Dependencies node of a member and, unfolded, its tree. True when the tree must be read.
