@@ -82,6 +82,10 @@ fn build_result(events: &[BuildEvent]) -> rc_dotnet::BuildResult {
 
 #[test]
 fn locates_the_sdk_and_lists_sdks_and_runtimes() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let d = dotnet();
     assert!(d.path.is_file());
     let sdks = d.list_sdks().unwrap();
@@ -97,6 +101,10 @@ fn locates_the_sdk_and_lists_sdks_and_runtimes() {
 
 #[test]
 fn evaluates_msbuild_properties() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let d = dotnet();
     Runtime::block_on(async {
         let cli = shop().join("src/Shop.Cli/Shop.Cli.csproj");
@@ -131,6 +139,10 @@ fn evaluates_msbuild_properties() {
 
 #[test]
 fn builds_the_solution_with_no_errors() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _g = lock();
     let inbox = Inbox::new(Waker::noop());
     let _h = start_build(&dotnet(), BuildRequest::new(shop().join("Shop.sln"), BuildAction::Build), inbox.sender());
@@ -145,6 +157,10 @@ fn builds_the_solution_with_no_errors() {
 
 #[test]
 fn a_broken_copy_reports_parsed_diagnostics() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let (_tmp, root) = temp_copy();
     let file = root.join("src/Shop.Core/PriceCalculator.cs");
     let text = std::fs::read_to_string(&file).unwrap();
@@ -173,6 +189,10 @@ fn a_broken_copy_reports_parsed_diagnostics() {
 
 #[test]
 fn cancelling_a_build_kills_it() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let (_tmp, root) = temp_copy();
     let inbox = Inbox::new(Waker::noop());
     let started = Instant::now();
@@ -190,6 +210,10 @@ fn cancelling_a_build_kills_it() {
 
 #[test]
 fn runs_the_cli_and_captures_its_output() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _g = lock();
     let d = dotnet();
     let project = shop().join("src/Shop.Cli/Shop.Cli.csproj");
@@ -235,6 +259,10 @@ fn http_get(port: u16, path: &str) -> Option<String> {
 
 #[test]
 fn starts_the_api_answers_http_and_stops() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _g = lock();
     let port = free_port();
     let url = format!("http://127.0.0.1:{port}");
@@ -275,6 +303,10 @@ fn starts_the_api_answers_http_and_stops() {
 
 #[test]
 fn runs_the_three_test_projects_from_trx() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _g = lock();
     let d = dotnet();
     let inbox = Inbox::new(Waker::noop());
@@ -316,6 +348,10 @@ fn runs_the_three_test_projects_from_trx() {
 
 #[test]
 fn a_failing_test_reports_message_and_stack_location() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let (_tmp, root) = temp_copy();
     let file = root.join("tests/Shop.Core.XunitTests/PriceCalculatorTests.cs");
     let text = std::fs::read_to_string(&file).unwrap().replace("Assert.Equal(0m, price.Total);", "Assert.Equal(1m, price.Total);");
@@ -339,6 +375,10 @@ fn a_failing_test_reports_message_and_stack_location() {
 
 #[test]
 fn discovers_tests_with_fully_qualified_names() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     let _g = lock();
     let tests = Runtime::block_on(discover_tests(&dotnet(), &shop().join("Shop.sln"), "Debug", true, &CancelToken::new())).unwrap();
     let names: Vec<&str> = tests.iter().map(|t| t.name.as_str()).collect();
@@ -353,6 +393,10 @@ fn discovers_tests_with_fully_qualified_names() {
 
 #[test]
 fn adds_and_removes_a_cached_package() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     // Newtonsoft.Json 13.0.3 is in the global packages folder, so no network is needed.
     let (_tmp, root) = temp_copy();
     let project = root.join("src/Shop.Core/Shop.Core.csproj");
@@ -388,6 +432,10 @@ fn searches_nuget_org_and_lists_versions() {
 /// added to it; the solution builds.
 #[test]
 fn creates_a_solution_and_adds_a_project() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     use rc_dotnet::new_project::{NewProject, Target};
     let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
     let dir = tempfile::tempdir().unwrap();
@@ -414,6 +462,10 @@ fn creates_a_solution_and_adds_a_project() {
 /// does, and serves its page.
 #[test]
 fn runs_a_blazor_webassembly_app_with_its_dev_server() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     use std::io::{Read, Write};
     let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
     // Not a hidden folder: Razor skips sources under paths with a `.` segment.
@@ -461,6 +513,10 @@ fn runs_a_blazor_webassembly_app_with_its_dev_server() {
 /// started again (Hot Reload, or a restart for edits it cannot apply).
 #[test]
 fn watch_reloads_a_web_app_after_a_change() {
+    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: the .NET SDK is not installed");
+        return;
+    }
     use std::io::{Read, Write};
     let dotnet = rc_dotnet::Dotnet::locate(None).expect("dotnet");
     let dir = tempfile::Builder::new().prefix("crabcraft-watch").tempdir().unwrap();

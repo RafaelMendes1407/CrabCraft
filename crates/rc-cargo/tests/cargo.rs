@@ -161,6 +161,10 @@ fn tests_report_each_outcome_with_the_failure_output() {
 
 #[test]
 fn nextest_reports_each_outcome_with_the_failure_output() {
+    if std::process::Command::new("cargo").args(["nextest", "--version"]).output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: cargo-nextest is not installed");
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let lib = "pub fn two() -> u32 { 2 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn good() { assert_eq!(super::two(), 2); }\n    #[test]\n    fn bad() { println!(\"said\"); assert_eq!(super::two(), 3, \"not three\"); }\n    #[test]\n    #[ignore]\n    fn skipped() {}\n}\n";
     project(dir.path(), "fn main() {}\n", lib);

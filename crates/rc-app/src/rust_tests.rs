@@ -1253,6 +1253,10 @@ fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
 
 #[test]
 fn tests_run_with_nextest_when_the_setting_is_on() {
+    if std::process::Command::new("cargo").args(["nextest", "--version"]).output().map_or(true, |o| !o.status.success()) {
+        eprintln!("skipped: cargo-nextest is not installed");
+        return;
+    }
     const LIB: &str = "pub fn one() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod checks {\n    #[test]\n    fn good() {\n        assert_eq!(super::one(), 1);\n    }\n\n    #[test]\n    fn bad() {\n        assert_eq!(super::one(), 2);\n    }\n}\n";
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
