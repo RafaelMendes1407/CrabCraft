@@ -105,6 +105,44 @@ pub fn is_hidden(name: &str, is_dir: bool) -> bool {
     if is_dir { HIDDEN_DIRS.contains(&name) } else { HIDDEN_FILES.contains(&name) || name.ends_with(".user") || name.ends_with(".suo") }
 }
 
+/// Whether the root-relative, `/`-separated path `rel` is one of the folders or files the user
+/// excluded, or lies inside one of them.
+pub fn is_excluded(rel: &str, excluded: &[String]) -> bool {
+    excluded.iter().any(|e| !e.is_empty() && rel.strip_prefix(e.as_str()).is_some_and(|rest| rest.is_empty() || rest.starts_with('/')))
+}
+
+/// Cleans a list of excluded paths read from a session file: each must be relative to the root,
+/// without `.`/`..` parts; backslashes count as `/`. Duplicates and paths inside another entry go.
+pub fn clean_excluded(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = list
+        .iter()
+        .filter_map(|e| {
+            let e = e.replace('\\', "/");
+            let parts: Vec<&str> = e.split('/').filter(|p| !p.is_empty()).collect();
+            let valid = !parts.is_empty() && !e.starts_with('/') && !e.contains(':') && parts.iter().all(|p| *p != "." && *p != "..");
+            valid.then(|| parts.join("/"))
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    let all = out.clone();
+    out.retain(|e| !all.iter().any(|o| o != e && is_excluded(e, std::slice::from_ref(o))));
+    out
+}
+
+/// The root-relative, `/`-separated form of `path` (`None` outside `root` or for the root itself).
+pub fn relative_path(root: &Path, path: &Path) -> Option<String> {
+    let rel = path.strip_prefix(root).ok()?;
+    let parts: Vec<String> = rel
+        .components()
+        .map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Option<_>>()?;
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileNode {
     pub path: PathBuf,
@@ -143,5 +181,27 @@ mod tests {
         assert_eq!(ws.name(), "App");
         let names: Vec<String> = list_dir(dir.path()).into_iter().map(|n| n.name).collect();
         assert_eq!(names, vec!["Src", "a.cs", "App.sln"]);
+    }
+
+    #[test]
+    fn excluded_paths_cover_their_contents_only() {
+        let ex = vec!["gen".to_string(), "docs/old.md".to_string()];
+        assert!(is_excluded("gen", &ex));
+        assert!(is_excluded("gen/a/b.rs", &ex));
+        assert!(!is_excluded("generated/b.rs", &ex));
+        assert!(is_excluded("docs/old.md", &ex));
+        assert!(!is_excluded("docs/old.md.bak", &ex));
+        assert!(!is_excluded("src/gen", &ex));
+        assert!(!is_excluded("x", &[String::new()]));
+    }
+
+    #[test]
+    fn excluded_paths_from_a_session_are_cleaned() {
+        let raw: Vec<String> = ["gen\\sub", "gen", "../outside", "/abs", "C:/x", "a/./b", "", "docs/", "docs"].into_iter().map(String::from).collect();
+        assert_eq!(clean_excluded(&raw), vec!["docs".to_string(), "gen".to_string()]);
+        let root = Path::new("/ws");
+        assert_eq!(relative_path(root, Path::new("/ws/a/b.rs")).as_deref(), Some("a/b.rs"));
+        assert_eq!(relative_path(root, root), None);
+        assert_eq!(relative_path(root, Path::new("/other/a")), None);
     }
 }

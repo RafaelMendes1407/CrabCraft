@@ -308,6 +308,12 @@
     "Editor and Preview": "Éditeur et aperçu",
     "Preview Only": "Aperçu seul"
   },
+  "exclude": {
+    "Exclude from Analysis": "Exclure de l’analyse",
+    "Excluded with its folder": "Exclu avec son dossier",
+    "Include in Analysis Again": "Réintégrer dans l’analyse",
+    "excluded": "exclu"
+  },
   "files": {
     "Could not create {path}: {error}": "Impossible de créer {path} : {error}",
     "New File": "Nouveau fichier",

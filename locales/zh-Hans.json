@@ -308,6 +308,12 @@
     "Editor and Preview": "编辑器和预览",
     "Preview Only": "仅预览"
   },
+  "exclude": {
+    "Exclude from Analysis": "从分析中排除",
+    "Excluded with its folder": "随所在文件夹一起排除",
+    "Include in Analysis Again": "重新纳入分析",
+    "excluded": "已排除"
+  },
   "files": {
     "Could not create {path}: {error}": "无法创建 {path}：{error}",
     "New File": "新建文件",

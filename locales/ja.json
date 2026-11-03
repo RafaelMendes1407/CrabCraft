@@ -308,6 +308,12 @@
     "Editor and Preview": "エディターとプレビュー",
     "Preview Only": "プレビューのみ"
   },
+  "exclude": {
+    "Exclude from Analysis": "解析から除外",
+    "Excluded with its folder": "フォルダーごと除外されています",
+    "Include in Analysis Again": "解析に再び含める",
+    "excluded": "除外"
+  },
   "files": {
     "Could not create {path}: {error}": "{path} を作成できませんでした: {error}",
     "New File": "新規ファイル",

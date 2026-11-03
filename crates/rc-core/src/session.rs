@@ -124,6 +124,9 @@ pub struct Session {
     pub compounds: Vec<(String, Vec<String>)>,
     /// Edited application configurations, by name.
     pub run_options: BTreeMap<String, RunOptions>,
+    /// Folders and files left out of the index, Find in Files and the analysis (root-relative,
+    /// `/`-separated). Read with [`crate::workspace::clean_excluded`].
+    pub excluded: Vec<String>,
     /// Environment of every Cargo command and of rust-analyzer: `NAME=value` per line.
     pub project_env: String,
 }

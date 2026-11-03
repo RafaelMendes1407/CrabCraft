@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 106 |
+| ✅ Pronto | 107 |
 | 🚧 Em andamento | 4 |
 | 🟢 Herdado | 23 |
 | 🔁 Portar | 2 |
-| ⬜ A fazer | 117 |
+| ⬜ A fazer | 116 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **257** |
 <!-- summary:end -->
@@ -74,7 +74,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-21 | Recarregar modelo ao mudar `Cargo.toml` (automático) | ✅ | M1 | Editar Cargo.toml recarrega os alvos, testado com cargo real |
 | P-22 | Botão Load Cargo Changes (manual) | ✅ | M3 | Botão recarregar na janela Cargo; alterar `Cargo.toml` também recarrega sozinho |
 | P-23 | Aba Sync com o log do carregamento | ⬜ | M3 | |
-| P-24 | Excluir pastas e arquivos da análise | ⬜ | M3 | |
+| P-24 | Excluir pastas e arquivos da análise | ✅ | M3 | Menu de contexto do explorador (Excluir da análise / Incluir novamente), salvo por projeto na sessão; pastas e arquivos excluídos ficam fora do índice (Ir para arquivo, Search Everywhere), do Find in Files e dos eventos enviados ao servidor, aparecem esmaecidos no explorador e vão para o rust-analyzer em files.exclude (reinicia o servidor ao mudar). target/ já era oculto. |
 | P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ⬜ | M3 | `rustfmt.toml`, `.editorconfig` |
