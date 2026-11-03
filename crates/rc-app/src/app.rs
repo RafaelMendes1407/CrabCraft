@@ -872,14 +872,15 @@ impl CrabCraftApp {
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
                 InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
-                InsightOutput::Usages { title, targets } => {
-                    if targets.len() == 1 {
-                        let t = &targets[0];
-                        self.open_at(&t.path.clone(), t.line, t.col);
-                    } else {
+                // Every new list replaces the previous one, even with a single result or none.
+                InsightOutput::Usages { title, targets } if targets.is_empty() => {
+                    if self.find_results.is_some() {
                         self.find_results = Some((title, targets));
-                        self.dock.show(ToolWindow::Find);
                     }
+                }
+                InsightOutput::Usages { title, targets } => {
+                    self.find_results = Some((title, targets));
+                    self.dock.show(ToolWindow::Find);
                 }
                 InsightOutput::Actions(list) => self.dialog = Some(Dialog::CodeActions { list, selected: 0 }),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
