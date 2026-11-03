@@ -97,6 +97,8 @@ pub const SELECT_IN_EXPLORER: &str = "crabcraft.select_in_explorer";
 pub const REVEAL_FILE: &str = "crabcraft.reveal_file";
 /// The Derive row of the Generate popup, run by the IDE.
 pub const DERIVE_COMMAND: &str = "crabcraft.derive";
+/// The Suppress rows of Alt+Enter (arguments: the lint, then `item` or `file`), run by the IDE.
+pub const SUPPRESS_COMMAND: &str = "crabcraft.suppress";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
@@ -1065,7 +1067,7 @@ impl Insight {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {
                 out.push(InsightOutput::Actions(refactorings(list)));
-            } else if list.is_empty() && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some())) {
+            } else if list.is_empty() && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some())) && (self.generate_only || docs.active_doc().is_none_or(|d| suppress_commands(d).is_empty())) {
                 self.generate_only = false;
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
@@ -1077,6 +1079,9 @@ impl Insight {
                     }
                     out.push(if list.is_empty() { InsightOutput::Message(tr("Nothing to generate here").into()) } else { InsightOutput::Actions(list) });
                 } else {
+                    // The server's fixes first, then allowing the warning's lint.
+                    let mut list = list;
+                    list.extend(docs.active_doc().map(suppress_commands).unwrap_or_default());
                     out.push(InsightOutput::Actions(list));
                 }
             }
@@ -1593,6 +1598,49 @@ fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) 
 }
 
 /// Whether the language server covers this document.
+/// Alt+Enter on a rustc or Clippy warning: allow its lint for the statement or item around the
+/// caret, or for the whole file.
+pub fn suppress_commands(d: &Doc) -> Vec<lsp::CodeActionOrCommand> {
+    if d.editor.lang() != rc_syntax::Lang::Rust || d.editor.read_only {
+        return Vec::new();
+    }
+    let line = d.editor.caret_line_col().0;
+    let buffer = &d.editor.buffer;
+    let mut lints: Vec<String> = d
+        .editor
+        .diagnostics
+        .iter()
+        .filter(|x| x.severity != rc_editor::Severity::Error && buffer.line_col(x.start).0 <= line && line <= buffer.line_col(x.end).0)
+        .filter_map(|x| x.code.clone())
+        .filter(|c| rc_syntax::is_lint_name(c))
+        .collect();
+    lints.sort();
+    lints.dedup();
+    let target = d.editor.syntax.tree().and_then(|t| rc_syntax::allow_target(t, buffer.rope(), d.editor.caret()));
+    let command = |title: String, lint: &str, scope: &str| lsp::CodeActionOrCommand::Command(lsp::Command { title, command: SUPPRESS_COMMAND.into(), arguments: Some(vec![json!(lint), json!(scope)]) });
+    let mut out = Vec::new();
+    for lint in &lints {
+        match &target {
+            Some(t) if t.name.is_empty() => out.push(command(trf("Suppress `{lint}` for the statement", &[("lint", lint)]), lint, "item")),
+            Some(t) => out.push(command(trf("Suppress `{lint}` for {name}", &[("lint", lint), ("name", &t.name)]), lint, "item")),
+            None => {}
+        }
+        out.push(command(trf("Suppress `{lint}` for the file", &[("lint", lint)]), lint, "file"));
+    }
+    out
+}
+
+/// The edit a Suppress row makes in `d`: `#[allow]` on the item at the caret, or `#![allow]`.
+pub fn suppress_edit(d: &Doc, lint: &str, scope: &str) -> Option<(usize, usize, String)> {
+    if !rc_syntax::is_lint_name(lint) {
+        return None;
+    }
+    if scope == "file" {
+        return Some(rc_syntax::allow_in_file(lint));
+    }
+    rc_syntax::allow_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())?.add(lint)
+}
+
 /// The Rust struct, enum or union the caret of `d` is in.
 pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
     if d.editor.lang() != rc_syntax::Lang::Rust || d.editor.read_only {

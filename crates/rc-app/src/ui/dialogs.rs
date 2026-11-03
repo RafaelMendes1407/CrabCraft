@@ -1047,12 +1047,22 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     if let Some(d) = app.docs.active_doc()
                         && let Some(t) = crate::insight::derive_target_of(d)
                     {
-                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.traits.iter().any(|x| x == c))).collect();
-                        let other = t.traits.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
+                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
+                        let other = t.items.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
                         traits.sort_by_key(|(_, on)| !on);
                         app.dialog = Some(Dialog::Derive { doc: d.editor.id, name: t.name, traits, other });
                     }
                     return Outcome::Keep;
+                }
+                crate::insight::SUPPRESS_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let arg = |i: usize| args.get(i).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    if let Some(i) = app.docs.active
+                        && let Some((a, b, text)) = crate::insight::suppress_edit(&app.docs.list[i], &arg(0), &arg(1))
+                    {
+                        app.docs.list[i].editor.replace(a, b, &text);
+                    }
+                    true
                 }
                 crate::insight::REVEAL_FILE => {
                     if let Some(doc) = app.docs.active_doc() {

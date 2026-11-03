@@ -277,7 +277,10 @@
     "The C# server is still loading the solution; navigation continues when it is ready": "C# サーバーはまだソリューションを読み込んでいます。準備ができ次第ナビゲーションを続行します",
     "Derive…": "Derive…",
     "Derive for {name}": "{name} の derive",
-    "Other traits, separated by commas": "その他のトレイト（カンマ区切り）"
+    "Other traits, separated by commas": "その他のトレイト（カンマ区切り）",
+    "Suppress `{lint}` for the statement": "この文で `{lint}` を抑制",
+    "Suppress `{lint}` for {name}": "{name} で `{lint}` を抑制",
+    "Suppress `{lint}` for the file": "このファイルで `{lint}` を抑制"
   },
   "runner": {
     "All Tests": "すべてのテスト",

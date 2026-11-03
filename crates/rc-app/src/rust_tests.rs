@@ -1747,3 +1747,45 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     pump(&mut app, "the lint of Clippy", |a| lint(a));
     app.insight.stop();
 }
+
+#[test]
+fn a_warning_is_suppressed_for_its_statement_or_the_file() {
+    use crate::insight::{InsightOutput, SUPPRESS_COMMAND};
+    const SOURCE: &str = "fn main() {\n    let unused = 1;\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let main = root.join("src/main.rs").canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    // rustc's warning arrives with `cargo check` on save, named by its lint.
+    app.insight.did_save(&main);
+    pump(&mut app, "the warning of cargo check", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("unused_variables"))));
+    let i = app.docs.active.unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("unused =").unwrap());
+    app.insight.code_actions(&app.docs.list[i]);
+    let rows = output(&mut app, "the context actions", |o| match o {
+        InsightOutput::Actions(list) => Some(
+            list.iter()
+                .filter_map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) if c.command == SUPPRESS_COMMAND => Some(c.title.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    });
+    assert_eq!(rows, vec!["Suppress `unused_variables` for the statement", "Suppress `unused_variables` for the file"]);
+    let (a, b, text) = crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "item").unwrap();
+    app.docs.list[i].editor.replace(a, b, &text);
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    #[allow(unused_variables)]\n    let unused = 1;\n}\n");
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unused_variables", "file").map(|e| e.2), Some("#![allow(unused_variables)]\n".into()));
+    assert_eq!(crate::insight::suppress_edit(&app.docs.list[i], "unresolved-import", "item"), None);
+    app.insight.stop();
+}
