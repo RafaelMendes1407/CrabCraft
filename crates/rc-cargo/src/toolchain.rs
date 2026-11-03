@@ -5,11 +5,23 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cargo {
     path: PathBuf,
+    /// The project's environment, set on every command.
+    env: Vec<(String, String)>,
 }
 
 impl Cargo {
     pub fn new(path: impl Into<PathBuf>) -> Cargo {
-        Cargo { path: path.into() }
+        Cargo { path: path.into(), env: Vec::new() }
+    }
+
+    /// The same `cargo`, with `env` set on every command it starts.
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Cargo {
+        self.env = env;
+        self
+    }
+
+    pub fn env(&self) -> &[(String, String)] {
+        &self.env
     }
 
     /// The first `cargo` found: `$PATH`, then `~/.cargo/bin` (apps opened from a desktop launcher
@@ -23,11 +35,15 @@ impl Cargo {
     }
 
     pub fn command(&self) -> tokio::process::Command {
-        tokio::process::Command::new(&self.path)
+        let mut cmd = tokio::process::Command::new(&self.path);
+        cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        cmd
     }
 
     pub fn std_command(&self) -> std::process::Command {
-        std::process::Command::new(&self.path)
+        let mut cmd = std::process::Command::new(&self.path);
+        cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        cmd
     }
 
     /// `cargo 1.99.0 (...)`, as printed.

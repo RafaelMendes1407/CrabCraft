@@ -114,6 +114,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Run Tests"), RunTests),
         (tr("Attach to Process…"), AttachToProcess),
         (tr("Settings…"), ShowSettings),
+        (tr("Project Environment Variables…"), ProjectEnvironment),
         (tr("Find in Files…"), FindInFiles),
         (tr("Replace in Files…"), ReplaceInFiles),
         (tr("Go to File…"), GotoFile),
@@ -121,6 +122,8 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Go to Symbol…"), GotoSymbol),
         (tr("Go to Line…"), GotoLine),
         (tr("Recent Files"), RecentFiles),
+        (tr("Invalidate Caches…"), InvalidateCaches),
+        (tr("New Scratch File…"), NewScratchFile),
         (tr("Select In…"), SelectIn),
         (tr("Reformat Code"), Reformat),
         (tr("Generate…"), Generate),
@@ -134,6 +137,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Problems"), ToggleProblems),
         (tr("Git"), ToggleGitWindow),
         (tr("Commit…"), Commit),
+        (tr("Show Local History"), ShowLocalHistory),
         (tr("Hide All Tool Windows"), HideToolWindows),
         (tr("Save All"), SaveAll),
         (tr("Zoom In"), ZoomIn),
@@ -155,8 +159,10 @@ impl Files {
         Files { index: None, _scan: None }
     }
 
-    pub fn open(&mut self, root: &Path, waker: Waker) {
-        let index = FileIndex::new(root);
+    /// Indexes `root` in the background, leaving out the `excluded` folders and files; an index
+    /// already open is replaced (its scan is cancelled).
+    pub fn open(&mut self, root: &Path, waker: Waker, excluded: Vec<String>) {
+        let index = FileIndex::with_excluded(root, excluded);
         self._scan = Some(index.start_scan(waker));
         self.index = Some(index);
     }
@@ -196,6 +202,8 @@ pub struct FindInFiles {
     pub word: bool,
     pub regex: bool,
     pub mask: String,
+    /// Folders and files the user excluded (root-relative); never searched.
+    pub excluded: Vec<String>,
     pub results: Vec<FileMatches>,
     pub summary: Option<FindSummary>,
     pub error: Option<String>,
@@ -217,6 +225,7 @@ impl FindInFiles {
             word: false,
             regex: false,
             mask: String::new(),
+            excluded: Vec::new(),
             results: Vec::new(),
             summary: None,
             error: None,
@@ -253,7 +262,7 @@ impl FindInFiles {
                 return;
             }
         };
-        let opts = FindOptions { query: self.options(), mask, max_results: 5000, ..Default::default() };
+        let opts = FindOptions { query: self.options(), mask, max_results: 5000, excluded: self.excluded.clone(), ..Default::default() };
         if let Some(f) = &mut self.finder
             && let Err(e) = f.start(opts)
         {
@@ -302,11 +311,13 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         Evaluate => ico::EVALUATE,
         ToggleBreakpoint => ico::BREAKPOINT,
         ToggleBookmark | ShowBookmarks => ico::BOOKMARK,
-        ShowSettings => ico::SETTINGS,
+        ShowSettings | ProjectEnvironment => ico::SETTINGS,
         Find | SearchEverywhere => ico::SEARCH,
         Replace | ReplaceInFiles => ico::REPLACE,
         FindInFiles => ico::TW_FIND,
         GotoFile => ico::FILE_TEXT,
+        InvalidateCaches => ico::REFRESH,
+        NewScratchFile => ico::NEW_FILE,
         GotoClass => ico::CLASS,
         GotoSymbol => ico::METHOD,
         GotoLine => ico::ARROW_RIGHT,
@@ -321,6 +332,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         ToggleProblems => ico::TW_PROBLEMS,
         ToggleGitWindow => ico::TW_VCS,
         Commit => ico::COMMIT,
+        ShowLocalHistory => ico::HISTORY,
         HideToolWindows => ico::HIDE,
         SaveAll | Save => ico::SAVE,
         CloseTab => ico::CLOSE,
@@ -330,7 +342,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         FindUsages => ico::TW_FIND,
         GotoDeclaration | GotoImplementation | GotoTypeDeclaration | GotoSuperMethod | ShowCallers | ShowCallees => ico::ARROW_RIGHT,
         ShowIntentions | Generate | RefactorThis => ico::BULB,
-        QuickDoc | ExternalDocs => ico::INFO,
+        QuickDoc | ExternalDocs | ExpandMacro => ico::INFO,
         Complete => ico::METHOD,
         CommentLine | CommentBlock => ico::EDIT,
         DuplicateLine => ico::COPY,

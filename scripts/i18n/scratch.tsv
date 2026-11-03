@@ -1,0 +1,8 @@
+# Scratch files. Import: python3 scripts/i18n_tsv.py scratch scripts/i18n/scratch.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+New Scratch File	Nuevo archivo temporal	Nouveau fichier brouillon	Novo arquivo de rascunho	Neue Scratch-Datei	Nowy plik roboczy	新建草稿文件	新規スクラッチファイル
+New Scratch File…	Nuevo archivo temporal…	Nouveau fichier brouillon…	Novo arquivo de rascunho…	Neue Scratch-Datei…	Nowy plik roboczy…	新建草稿文件…	新規スクラッチファイル…
+Scratches	Archivos temporales	Brouillons	Rascunhos	Scratch-Dateien	Pliki robocze	草稿文件	スクラッチ
+Plain Text	Texto sin formato	Texte brut	Texto simples	Nur-Text	Zwykły tekst	纯文本	プレーンテキスト
+Could not create the scratch file: {error}	No se pudo crear el archivo temporal: {error}	Impossible de créer le fichier brouillon : {error}	Não foi possível criar o arquivo de rascunho: {error}	Scratch-Datei konnte nicht erstellt werden: {error}	Nie udało się utworzyć pliku roboczego: {error}	无法创建草稿文件：{error}	スクラッチファイルを作成できませんでした: {error}
+Scratch file: rust-analyzer does not analyze it yet	Archivo temporal: rust-analyzer aún no lo analiza	Fichier brouillon : rust-analyzer ne l’analyse pas encore	Arquivo de rascunho: o rust-analyzer ainda não o analisa	Scratch-Datei: rust-analyzer analysiert sie noch nicht	Plik roboczy: rust-analyzer jeszcze go nie analizuje	草稿文件：rust-analyzer 暂不分析此文件	スクラッチファイル: rust-analyzer はまだ解析しません

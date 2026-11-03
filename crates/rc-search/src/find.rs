@@ -32,6 +32,8 @@ pub struct FindOptions {
     pub context_lines: usize,
     /// Larger files are skipped.
     pub max_file_size: u64,
+    /// Folders and files the user excluded (root-relative, `/`-separated); never searched.
+    pub excluded: Vec<String>,
 }
 
 impl Default for FindOptions {
@@ -43,6 +45,7 @@ impl Default for FindOptions {
             max_results: 10_000,
             context_lines: 0,
             max_file_size: 8 << 20,
+            excluded: Vec::new(),
         }
     }
 }
@@ -226,10 +229,14 @@ fn run_search(root: &Path, opts: &FindOptions, query: &Query, cancel: &AtomicBoo
                 return WalkState::Quit;
             }
             let Ok(e) = res else { return WalkState::Continue };
+            let rel = relative_to(root, e.path());
+            if rel.as_deref().is_some_and(|r| rc_core::workspace::is_excluded(r, &opts.excluded)) {
+                return WalkState::Skip;
+            }
             if !e.file_type().is_some_and(|t| t.is_file()) {
                 return WalkState::Continue;
             }
-            let Some(rel) = relative_to(root, e.path()) else { return WalkState::Continue };
+            let Some(rel) = rel else { return WalkState::Continue };
             if !opts.mask.matches(&rel) || e.metadata().map_or(true, |m| m.len() > opts.max_file_size) {
                 return WalkState::Continue;
             }

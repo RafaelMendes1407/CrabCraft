@@ -76,6 +76,27 @@ fn background_scan_wakes_the_ui() {
     assert_eq!(index.snapshot().len(), 9);
 }
 
+#[test]
+fn excluded_folders_and_files_stay_out_of_the_index_and_find_in_files() {
+    let dir = tree();
+    let r = dir.path();
+    let excluded = vec!["src/Shop.Core".to_string(), "sub/public.cs".to_string()];
+    let index = FileIndex::with_excluded(r, excluded.clone());
+    index.start_scan(Waker::noop()).wait();
+    assert_eq!(rels(&index), [".gitignore", "Shop.slnx", "src/Shop.Web/OrderController.cs", "src/Shop.Web/notes.txt", "sub/.ignore"]);
+    // Files created later inside an excluded folder stay out too.
+    write(r, "src/Shop.Core/New.cs", "");
+    write(r, "src/Shop.Core/Deep/More.cs", "");
+    write(r, "src/Shop.Web/New.cs", "");
+    index.apply(&[FsEvent::Created(r.join("src/Shop.Core/New.cs")), FsEvent::Created(r.join("src/Shop.Core/Deep")), FsEvent::Created(r.join("src/Shop.Web/New.cs"))]);
+    assert!(!rels(&index).iter().any(|p| p.starts_with("src/Shop.Core")), "{:?}", rels(&index));
+    assert!(rels(&index).contains(&"src/Shop.Web/New.cs".to_string()));
+
+    let (files, _) = run_find(r, FindOptions { excluded, ..opts("todo") });
+    let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
+    assert_eq!(rels, ["src/Shop.Web/notes.txt"]);
+}
+
 #[cfg(unix)]
 #[test]
 fn symlink_loops_are_skipped() {

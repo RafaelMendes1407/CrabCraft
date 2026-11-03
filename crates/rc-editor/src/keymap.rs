@@ -62,6 +62,7 @@ pub enum Action {
     ParameterInfo,
     QuickDoc,
     ExternalDocs,
+    ExpandMacro,
     ShowIntentions,
     Generate,
     RefactorThis,
@@ -119,13 +120,17 @@ pub enum Action {
     AttachToProcess,
     Evaluate,
     ShowSettings,
+    ProjectEnvironment,
     ToggleProjectWindow,
     ToggleTerminal,
     ToggleGitWindow,
     ToggleProblems,
     HideToolWindows,
     Commit,
+    ShowLocalHistory,
     OpenFolder,
+    InvalidateCaches,
+    NewScratchFile,
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -141,6 +146,7 @@ impl Action {
                 | ParameterInfo
                 | QuickDoc
                 | ExternalDocs
+                | ExpandMacro
                 | ShowIntentions
                 | Generate
                 | RefactorThis
@@ -205,13 +211,17 @@ impl Action {
                 | AttachToProcess
                 | Evaluate
                 | ShowSettings
+                | ProjectEnvironment
                 | ToggleProjectWindow
                 | ToggleTerminal
                 | ToggleGitWindow
                 | ToggleProblems
                 | HideToolWindows
                 | Commit
+                | ShowLocalHistory
                 | OpenFolder
+                | InvalidateCaches
+                | NewScratchFile
                 | ZoomIn
                 | ZoomOut
                 | ZoomReset
@@ -487,6 +497,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F12, cs, HideToolWindows),
         b(Key::K, c, Commit),
         b(Key::O, ca, OpenFolder),
+        b(Key::N, cs, NewScratchFile),
         b(Key::Equals, ca, ZoomIn),
         b(Key::Plus, ca, ZoomIn),
         b(Key::Minus, ca, ZoomOut),
@@ -587,6 +598,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F11, s, StepOut),
         b(Key::F10, c, RunToCursor),
         b(Key::F9, s, Evaluate),
+        b(Key::Insert, cas, NewScratchFile),
     ];
     if visual_studio {
         v.extend([
