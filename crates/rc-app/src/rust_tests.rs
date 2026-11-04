@@ -3796,3 +3796,45 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     assert_eq!(here(&app), ("src/lib.rs".into(), 0));
     assert!(!root.join("target/debug").exists(), "nothing was built");
 }
+
+#[test]
+fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
+    use egui_kittest::kittest::Queryable;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let location = dir.path().canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.new_project_location = Some(location.clone());
+    app.new_project_dialog(None);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.run_steps(2);
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&mut egui_kittest::Harness<'static, CrabCraftApp>) -> bool| {
+        let start = Instant::now();
+        while !done(h) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+
+    // WebAssembly: the missing tools are named, nothing is installed.
+    h.get_by_label("WebAssembly").click();
+    h.run_steps(2);
+    wait(&mut h, "the WebAssembly tools", &|h| h.query_by_label("Looking for the WebAssembly tools…").is_none());
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    let tools = rc_cargo::new_project::WasmTools::detect(&cargo);
+    let target_note = "The wasm32-unknown-unknown target is not installed. Add it with: rustup target add wasm32-unknown-unknown";
+    assert_eq!(h.query_by_label(target_note).is_some(), !tools.target);
+    assert_eq!(h.query_by_label("wasm-pack was not found: install it to package the library for JavaScript").is_some(), !tools.wasm_pack);
+
+    // Procedural Macro: created in the background, then opened.
+    h.get_by_label("Procedural Macro").click();
+    h.run_steps(2);
+    h.get_by_label("Create").click();
+    let project = location.join("project1");
+    wait(&mut h, "the new project", &|h| h.state().new_project.is_none() && h.state().runner.cargo_workspace.is_some());
+    let manifest = std::fs::read_to_string(project.join("Cargo.toml")).unwrap();
+    assert!(manifest.contains("proc-macro = true") && manifest.contains("syn = "), "{manifest}");
+    assert!(project.join("tests/describe.rs").is_file());
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(project.join("src/lib.rs")));
+}

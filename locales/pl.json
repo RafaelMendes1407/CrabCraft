@@ -1275,5 +1275,14 @@
     "Stash applied": "Zastosowano schowek",
     "Stash applied and dropped": "Zastosowano i usunięto schowek",
     "Stash dropped": "Usunięto schowek"
+  },
+  "newproject-templates": {
+    "Procedural Macro": "Makro proceduralne",
+    "A derive macro built with syn and quote, and an integration test in tests/": "Makro derive zbudowane z syn i quote oraz test integracyjny w tests/",
+    "WebAssembly": "WebAssembly",
+    "A cdylib library for the web with wasm-bindgen": "Biblioteka cdylib dla sieci z wasm-bindgen",
+    "Looking for the WebAssembly tools…": "Wyszukiwanie narzędzi WebAssembly…",
+    "The {target} target is not installed. Add it with: rustup target add {target}": "Cel {target} nie jest zainstalowany. Dodaj go poleceniem: rustup target add {target}",
+    "wasm-pack was not found: install it to package the library for JavaScript": "Nie znaleziono wasm-pack: zainstaluj go, aby spakować bibliotekę dla JavaScriptu"
   }
 }

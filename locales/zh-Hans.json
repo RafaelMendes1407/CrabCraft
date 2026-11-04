@@ -1275,5 +1275,14 @@
     "Stash applied": "已应用贮藏",
     "Stash applied and dropped": "已应用并删除贮藏",
     "Stash dropped": "已删除贮藏"
+  },
+  "newproject-templates": {
+    "Procedural Macro": "过程宏",
+    "A derive macro built with syn and quote, and an integration test in tests/": "使用 syn 和 quote 构建的 derive 宏，以及 tests/ 中的集成测试",
+    "WebAssembly": "WebAssembly",
+    "A cdylib library for the web with wasm-bindgen": "使用 wasm-bindgen 的 Web cdylib 库",
+    "Looking for the WebAssembly tools…": "正在查找 WebAssembly 工具…",
+    "The {target} target is not installed. Add it with: rustup target add {target}": "未安装 {target} 目标。请使用以下命令添加：rustup target add {target}",
+    "wasm-pack was not found: install it to package the library for JavaScript": "未找到 wasm-pack：安装它以便为 JavaScript 打包该库"
   }
 }

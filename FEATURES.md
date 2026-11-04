@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 148 |
-| 🚧 Em andamento | 6 |
+| 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 76 |
+| ⬜ A fazer | 75 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -58,7 +58,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
 | P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |
 | P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
-| P-08 | Novo projeto: WebAssembly e Procedural Macro | ⬜ | M4 | |
+| P-08 | Novo projeto: WebAssembly e Procedural Macro | 🚧 | M4 | Feito: modelos Procedural Macro (`proc-macro = true`, syn/quote/proc-macro2, derive de exemplo e teste em `tests/`) e WebAssembly (`cdylib` + `rlib`, wasm-bindgen, função `#[wasm_bindgen]`) no diálogo Novo projeto; o diálogo avisa se faltam o target `wasm32-unknown-unknown` ou o wasm-pack, sem instalar nada. Testado com Cargo real: a macro passa em `cargo check` e `cargo test`; a biblioteca WebAssembly passa em `cargo test` nativo. Falta: verificar `cargo check --target wasm32-unknown-unknown` com o target instalado |
 | P-09 | Modelos cargo-generate (repositório Git) | ⬜ | M4 | |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
 | P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde`. Ícones de `.rs`, `.toml`, `Cargo.toml`, `Cargo.lock` e `.lock`; ao lado de um `Cargo.toml`, `src`/`examples` com ícone de fontes, `tests`/`benches` de testes e `target` de excluída; captura offscreen clara e escura conferida |

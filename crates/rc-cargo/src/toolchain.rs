@@ -153,6 +153,26 @@ pub fn rustup_check(rustup: &Path) -> anyhow::Result<Vec<ToolchainUpdate>> {
     Ok(list)
 }
 
+/// A tool installed where Cargo's are: in `$PATH` or `~/.cargo/bin` (`wasm-pack`...).
+pub fn find_tool(name: &str) -> Option<PathBuf> {
+    candidates(std::env::var_os("PATH"), home()).into_iter().filter_map(|p| p.parent().map(|d| d.join(exe(name)))).find(|p| p.is_file())
+}
+
+/// Whether the standard library for `target` is installed in the sysroot of the toolchain that
+/// runs in `dir`. `dir` must not be an untrusted project: rustup installs what its
+/// `rust-toolchain` file names. This blocks.
+pub fn has_target(cargo: &Cargo, dir: &Path, target: &str) -> bool {
+    if !crate::triple::valid_triple(target) {
+        return false;
+    }
+    let rustc = cargo.path().with_file_name(exe("rustc"));
+    let Ok(out) = std::process::Command::new(rustc).args(["--print", "sysroot"]).current_dir(dir).stdin(std::process::Stdio::null()).output() else {
+        return false;
+    };
+    let sysroot = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    out.status.success() && !sysroot.is_empty() && Path::new(&sysroot).join("lib").join("rustlib").join(target).join("lib").is_dir()
+}
+
 pub(crate) fn home() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }

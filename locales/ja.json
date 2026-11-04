@@ -1275,5 +1275,14 @@
     "Stash applied": "スタッシュを適用しました",
     "Stash applied and dropped": "スタッシュを適用して削除しました",
     "Stash dropped": "スタッシュを削除しました"
+  },
+  "newproject-templates": {
+    "Procedural Macro": "手続き型マクロ",
+    "A derive macro built with syn and quote, and an integration test in tests/": "syn と quote で作る derive マクロと、tests/ の統合テスト",
+    "WebAssembly": "WebAssembly",
+    "A cdylib library for the web with wasm-bindgen": "wasm-bindgen を使う Web 向け cdylib ライブラリ",
+    "Looking for the WebAssembly tools…": "WebAssembly ツールを探しています…",
+    "The {target} target is not installed. Add it with: rustup target add {target}": "{target} ターゲットがインストールされていません。追加するには: rustup target add {target}",
+    "wasm-pack was not found: install it to package the library for JavaScript": "wasm-pack が見つかりません: JavaScript 向けにライブラリをパッケージ化するにはインストールしてください"
   }
 }
