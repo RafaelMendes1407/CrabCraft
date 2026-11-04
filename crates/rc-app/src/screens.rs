@@ -3463,6 +3463,9 @@ fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
     let home = tempfile::tempdir().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let mut h = playground_harness(home.path(), dir.path(), true);
+    // A program that runs long enough to be sampled (the harness's own ends at once).
+    let main_rs = dir.path().join("demo/src/main.rs");
+    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    println!(\"{}\", fib(std::hint::black_box(34)));\n}\n").unwrap();
     assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::Profile));
     h.state_mut().pending.push(rc_editor::Action::Profile);
     h.run_steps(2);
@@ -3470,7 +3473,11 @@ fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
     assert!(h.state().profiler.busy());
     run_frames(&mut h, "the profile", |a| !a.profiler.busy());
     match h.state().profiler.result.as_ref().unwrap() {
-        Ok(p) => assert!(p.frames.iter().any(|f| f.own), "{p:?}"),
+        Ok(p) => {
+            assert!(p.samples > 10, "{p:?}");
+            let fib = p.frames.iter().find(|f| f.name.ends_with("demo::fib")).expect("demo::fib sampled");
+            assert!(fib.own && fib.source.as_ref().is_some_and(|(path, _)| path.ends_with("src/main.rs")), "{fib:?}");
+        }
         Err(crate::profiler::ProfError::Restricted(level)) => {
             assert!(level.is_some_and(|l| l > 2));
             assert!(h.get_all_by_label_contains("sudo sysctl kernel.perf_event_paranoid=2").next().is_some());

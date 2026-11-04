@@ -843,7 +843,7 @@ tokio-runtime-w  4322 81234.004200:    1000 cpu-clock:u: \n\
         let dir = std::env::temp_dir().join(format!("crabcraft-perf-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("fib.rs");
-        std::fs::write(&src, "fn f(n: u64) -> u64 { if n < 2 { n } else { f(n - 1) + f(n - 2) } }\nfn main() { println!(\"{}\", f(std::hint::black_box(30))); }\n").unwrap();
+        std::fs::write(&src, "fn f(n: u64) -> u64 { if n < 2 { n } else { f(n - 1) + f(n - 2) } }\nfn main() { println!(\"{}\", f(std::hint::black_box(34))); }\n").unwrap();
         let bin = dir.join("fib");
         let rustc = std::process::Command::new("rustc").args(["-g", "-o"]).arg(&bin).arg(&src).status();
         if !rustc.is_ok_and(|s| s.success()) {

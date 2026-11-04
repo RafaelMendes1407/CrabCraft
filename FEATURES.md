@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 167 |
-| 🚧 Em andamento | 8 |
+| ✅ Pronto | 168 |
+| 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
 | ⬜ A fazer | 55 |
@@ -292,7 +292,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| A-01 | Profiler | 🚧 | M4 | Feito: ação Profile (Find Action, menu Run e janela Profiler) compila a configuração de execução Rust selecionada e grava com `perf record` (`cpu-clock:u`, pilhas por DWARF) em segundo plano; Stop and Analyze encerra a gravação e mantém as amostras, Cancel mata o `perf` e o programa (grupo de processos). `perf script` é lido em segundo plano, com limites de amostras, profundidade e nós, e vira flame graph (clique amplia, duplo clique abre o código) e árvore de chamadas com total e self; funções do binário são ligadas ao código-fonte por `nm -l`. Com `kernel.perf_event_paranoid` acima de 2 a janela explica o bloqueio e como liberar. Testado: o caminho real até o `perf` neste computador (paranoid = 4, recusado com a mensagem), cancelamento, o mapeamento por `nm` num binário Rust real e o leitor com saída no formato do `perf script`; capturas conferidas. Falta: verificar uma gravação real (o `perf` não pode gravar aqui sem mudar o sistema), perfis de alocação/memória, comparar perfis, inline frames e informações de linha em builds release sem debug |
+| A-01 | Profiler | ✅ | M4 | Ação Profile (Find Action, menu Run e janela Profiler) compila a configuração de execução Rust selecionada e grava com `perf record` (`cpu-clock:u`, pilhas por DWARF) em segundo plano; Stop and Analyze encerra a gravação e mantém as amostras, Cancel mata o `perf` e o programa (grupo de processos). `perf script` é lido em segundo plano, com limites de amostras, profundidade e nós, e vira flame graph (clique amplia, duplo clique abre o código) e árvore de chamadas com total e self; funções do binário são ligadas ao código-fonte por `nm -l`. Com `kernel.perf_event_paranoid` acima de 2 a janela explica o bloqueio e como liberar. Testado com o `perf` real (paranoid = 1): gravação de um binário Rust real e de um projeto Cargo pela ação Profile, com `fib` amostrado e ligado a `src/main.rs`; com paranoid = 4, recusa com a mensagem; cancelamento e o leitor da saída do `perf script`; capturas conferidas. Ainda não há: perfis de alocação/memória, comparar perfis, inline frames e informações de linha em builds release sem debug |
 | A-02 | Console REPL | ⬜ | M4 | `evcxr_repl` em `rc-term` |
 | A-03 | REPL: painel de variáveis | ⬜ | M4 | |
 | A-04 | REPL: comando `:dep` | ⬜ | M4 | |
