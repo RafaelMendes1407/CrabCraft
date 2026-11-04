@@ -1641,5 +1641,31 @@
     "Conflicts resolved": "Rozwiązano konflikty",
     "Stopped on conflicts: resolve them, then continue": "Zatrzymano na konfliktach: rozwiąż je, a potem kontynuuj",
     "{file} still has conflict markers": "{file} nadal zawiera znaczniki konfliktów"
+  },
+  "mergetool": {
+    "Resolve the file's changes side by side": "Rozwiąż zmiany pliku obok siebie",
+    "Select one file": "Wybierz jeden plik",
+    "Accept Both": "Akceptuj oba",
+    "Accept Left": "Akceptuj lewą",
+    "Accept Right": "Akceptuj prawą",
+    "All changes resolved": "Wszystkie zmiany rozwiązane",
+    "All from Left": "Wszystko z lewej",
+    "All from Right": "Wszystko z prawej",
+    "Apply Non-Conflicting Changes": "Zastosuj zmiany bez konfliktów",
+    "Keep Base": "Zachowaj bazę",
+    "Left, then right": "Lewa, potem prawa",
+    "Merge {file}": "Scal {file}",
+    "Neither change: the text both sides started from": "Żadna zmiana: tekst, od którego wyszły obie strony",
+    "Next Change": "Następna zmiana",
+    "Previous Change": "Poprzednia zmiana",
+    "Result": "Wynik",
+    "Save Anyway": "Zapisz mimo to",
+    "Save and Mark Resolved": "Zapisz i oznacz jako rozwiązane",
+    "{n} changes are not resolved.": "{n} zmian nie jest rozwiązanych.",
+    "{n} changes not taken": "{n} zmian nie przyjęto",
+    "{n} conflicts left": "Pozostało konfliktów: {n}",
+    "Binary files cannot be merged here; accept one side instead": "Plików binarnych nie można tu scalić; zaakceptuj jedną stronę",
+    "One side deleted the file; accept one side instead": "Jedna ze stron usunęła plik; zaakceptuj jedną stronę",
+    "{file} resolved": "Rozwiązano {file}"
   }
 }

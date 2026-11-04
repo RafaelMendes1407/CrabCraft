@@ -680,3 +680,79 @@ fn merge_rebase_and_cherry_pick_stop_on_conflicts_and_go_on() {
         assert!(!app.vcs.sequence_running());
     }
 }
+
+/// V-08: a conflicted file opens in the three-pane merge tool with the one-sided changes taken;
+/// one conflict takes a side, the other is edited by hand, and saving writes the result and
+/// marks the file resolved. A file deleted on one side is refused.
+#[test]
+fn the_merge_tool_resolves_a_conflicted_file() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let base = "fn a() {}\n\nfn b() {}\n\nfn c() {}\n\nfn d() {}\n";
+    std::fs::write(root.join("lib.rs"), base).unwrap();
+    std::fs::write(root.join("gone.rs"), "x\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "Base"]);
+    git(&root, &["switch", "-q", "-c", "side"]);
+    // Theirs: changes a (conflict), c (conflict) and d (theirs only); edits gone.rs.
+    std::fs::write(root.join("lib.rs"), "fn a() { theirs }\n\nfn b() {}\n\nfn c() { theirs }\n\nfn d() { theirs }\n").unwrap();
+    std::fs::write(root.join("gone.rs"), "y\n").unwrap();
+    git(&root, &["commit", "-qam", "Theirs"]);
+    git(&root, &["switch", "-q", "main"]);
+    // Ours: changes a and c differently, b only here; deletes gone.rs.
+    std::fs::write(root.join("lib.rs"), "fn a() { ours }\n\nfn b() { ours }\n\nfn c() { ours }\n\nfn d() {}\n").unwrap();
+    git(&root, &["rm", "-q", "gone.rs"]);
+    git(&root, &["commit", "-qam", "Ours"]);
+    let mut app = open_app(&root);
+    app.vcs.merge("side", rc_vcs::MergeOptions::default());
+    pump(&mut app, "conflicts", |a| a.vcs.busy.is_none() && a.vcs.conflicts().len() == 2 && a.vcs.operation.state.is_some());
+
+    // A file one side deleted cannot be merged line by line.
+    app.vcs.open_merge_tool("gone.rs");
+    pump(&mut app, "refusal", |a| a.vcs.merge_loading.is_none() && a.vcs.error.is_some());
+    assert_eq!(app.vcs.error.as_deref(), Some("One side deleted the file; accept one side instead"));
+    assert!(app.vcs.merge_tool.is_none());
+
+    app.vcs.open_merge_tool("lib.rs");
+    pump(&mut app, "merge tool", |a| a.vcs.merge_tool.is_some());
+    let tool = app.vcs.merge_tool.as_mut().unwrap();
+    assert_eq!(tool.names, ("Yours (main)".to_string(), "Theirs (side)".to_string()));
+    let kinds: Vec<_> = tool.model.chunks.iter().map(|c| (c.kind, c.resolved)).collect();
+    use rc_vcs::ChunkKind::*;
+    assert_eq!(kinds, [(Conflict, false), (Ours, true), (Conflict, false), (Theirs, true)]);
+    assert_eq!(tool.center.buffer.rope().to_string(), "fn a() {}\n\nfn b() { ours }\n\nfn c() {}\n\nfn d() { theirs }\n");
+    assert_eq!(tool.current, Some(0));
+    assert_eq!(tool.left.buffer.rope().to_string(), std::fs::read_to_string(root.join("lib.rs")).ok().map(|_| "fn a() { ours }\n\nfn b() { ours }\n\nfn c() { ours }\n\nfn d() {}\n".to_string()).unwrap());
+
+    // Both sides for the first conflict; then the second is typed by hand.
+    tool.take(0, rc_vcs::Take::Both);
+    assert_eq!(tool.model.conflicts_left(), 1);
+    let line = tool.model.chunks[2].result.start;
+    let start = tool.center.buffer.pos_at(line, 0);
+    let end = tool.center.buffer.pos_at(line + 1, 0);
+    tool.center.replace(start, end, "fn c() { both }\n");
+    tool.sync();
+    assert_eq!(tool.model.unresolved(), 0);
+    let expected = "fn a() { ours }\nfn a() { theirs }\n\nfn b() { ours }\n\nfn c() { both }\n\nfn d() { theirs }\n";
+    assert_eq!(tool.center.buffer.rope().to_string(), expected);
+    // Undo works on the result like in any editor.
+    tool.center.undo();
+    tool.sync();
+    assert_eq!(tool.model.conflicts_left(), 1);
+    tool.center.redo();
+    tool.sync();
+    assert_eq!(tool.model.unresolved(), 0);
+
+    app.vcs.save_merge_tool();
+    pump(&mut app, "saved", |a| a.vcs.merge_tool.is_none() && a.vcs.conflicts() == ["gone.rs"]);
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), expected);
+    assert!(app.notices.iter().any(|n| n.text == "lib.rs resolved"));
+    app.vcs.resolve_conflicts(vec!["gone.rs".into()], false);
+    pump(&mut app, "all resolved", |a| a.vcs.busy.is_none() && a.vcs.conflicts().is_empty());
+    app.vcs.continue_operation();
+    pump(&mut app, "merged", |a| a.vcs.busy.is_none() && a.vcs.operation.state.is_none() && a.vcs.log.first().is_some_and(|c| c.is_merge()));
+    assert_eq!(git_out(&root, &["show", "HEAD:lib.rs"]), expected);
+}

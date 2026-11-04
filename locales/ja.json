@@ -1641,5 +1641,31 @@
     "Conflicts resolved": "競合を解決しました",
     "Stopped on conflicts: resolve them, then continue": "競合で停止しました。解決してから続行してください",
     "{file} still has conflict markers": "{file} にはまだ競合マーカーがあります"
+  },
+  "mergetool": {
+    "Resolve the file's changes side by side": "ファイルの変更を並べて解決",
+    "Select one file": "ファイルを 1 つ選択してください",
+    "Accept Both": "両方を採用",
+    "Accept Left": "左を採用",
+    "Accept Right": "右を採用",
+    "All changes resolved": "すべての変更を解決しました",
+    "All from Left": "すべて左から",
+    "All from Right": "すべて右から",
+    "Apply Non-Conflicting Changes": "競合しない変更を適用",
+    "Keep Base": "ベースを維持",
+    "Left, then right": "左、次に右",
+    "Merge {file}": "{file} をマージ",
+    "Neither change: the text both sides started from": "どちらの変更も採用しない（両側の元のテキスト）",
+    "Next Change": "次の変更",
+    "Previous Change": "前の変更",
+    "Result": "結果",
+    "Save Anyway": "このまま保存",
+    "Save and Mark Resolved": "保存して解決済みにする",
+    "{n} changes are not resolved.": "{n} 件の変更が未解決です。",
+    "{n} changes not taken": "{n} 件の変更が未採用",
+    "{n} conflicts left": "残りの競合 {n} 件",
+    "Binary files cannot be merged here; accept one side instead": "バイナリファイルはここではマージできません。どちらか一方を採用してください",
+    "One side deleted the file; accept one side instead": "一方がファイルを削除しました。どちらか一方を採用してください",
+    "{file} resolved": "{file} を解決しました"
   }
 }

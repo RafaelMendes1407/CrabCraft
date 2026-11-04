@@ -3544,3 +3544,47 @@ fn screens_git_merge_and_rebase() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-rebase-conflicts-dark.png")).unwrap();
 }
+
+/// V-08: the three-pane merge tool on a conflicted Rust file.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/merge-tool-dark.png"]
+fn screens_merge_tool() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&["config", k, v]);
+    }
+    let lib = |price: &str, tax: &str, extra: &str| {
+        format!("/// Prices an order.\npub fn price(n: u32) -> u32 {{\n    {price}\n}}\n\n/// The tax on a price.\npub fn tax(p: u32) -> u32 {{\n    {tax}\n}}\n{extra}\n#[cfg(test)]\nmod tests {{\n    #[test]\n    fn prices() {{\n        assert!(super::price(10) > 0);\n    }}\n}}\n")
+    };
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), lib("n * 2", "p / 5", "")).unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["switch", "-q", "-c", "feature/discount"]);
+    std::fs::write(root.join("src/lib.rs"), lib("n * 2 - n / 10", "p / 5", "\n/// A discount.\npub fn discount(p: u32) -> u32 {\n    p / 10\n}\n")).unwrap();
+    git(&["commit", "-qam", "Give a discount"]);
+    git(&["switch", "-q", "main"]);
+    std::fs::write(root.join("src/lib.rs"), lib("n * 3", "p / 4", "")).unwrap();
+    git(&["commit", "-qam", "Raise prices and taxes"]);
+    let _ = std::process::Command::new("git").args(["merge", "feature/discount"]).current_dir(&root).output();
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "conflict", |a| a.vcs.conflicts().len() == 1 && a.vcs.operation.state.is_some());
+    h.state_mut().vcs.open_merge_tool("src/lib.rs");
+    run_frames(&mut h, "merge tool", |a| a.vcs.merge_tool.is_some());
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("merge-tool-dark.png")).unwrap();
+    h.state_mut().vcs.merge_tool.as_mut().unwrap().confirm_save = true;
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("merge-tool-confirm-dark.png")).unwrap();
+}

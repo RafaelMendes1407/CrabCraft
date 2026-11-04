@@ -1641,5 +1641,31 @@
     "Conflicts resolved": "Konflikte gelöst",
     "Stopped on conflicts: resolve them, then continue": "Bei Konflikten angehalten: lösen Sie sie und fahren Sie dann fort",
     "{file} still has conflict markers": "{file} enthält noch Konfliktmarkierungen"
+  },
+  "mergetool": {
+    "Resolve the file's changes side by side": "Die Änderungen der Datei nebeneinander lösen",
+    "Select one file": "Wählen Sie eine Datei",
+    "Accept Both": "Beide übernehmen",
+    "Accept Left": "Links übernehmen",
+    "Accept Right": "Rechts übernehmen",
+    "All changes resolved": "Alle Änderungen gelöst",
+    "All from Left": "Alles von links",
+    "All from Right": "Alles von rechts",
+    "Apply Non-Conflicting Changes": "Konfliktfreie Änderungen übernehmen",
+    "Keep Base": "Basis behalten",
+    "Left, then right": "Links, dann rechts",
+    "Merge {file}": "{file} zusammenführen",
+    "Neither change: the text both sides started from": "Keine der Änderungen: der Text, von dem beide Seiten ausgingen",
+    "Next Change": "Nächste Änderung",
+    "Previous Change": "Vorherige Änderung",
+    "Result": "Ergebnis",
+    "Save Anyway": "Trotzdem speichern",
+    "Save and Mark Resolved": "Speichern und als gelöst markieren",
+    "{n} changes are not resolved.": "{n} Änderungen sind nicht gelöst.",
+    "{n} changes not taken": "{n} Änderungen nicht übernommen",
+    "{n} conflicts left": "{n} Konflikte übrig",
+    "Binary files cannot be merged here; accept one side instead": "Binärdateien können hier nicht zusammengeführt werden; übernehmen Sie stattdessen eine Seite",
+    "One side deleted the file; accept one side instead": "Eine Seite hat die Datei gelöscht; übernehmen Sie stattdessen eine Seite",
+    "{file} resolved": "{file} gelöst"
   }
 }

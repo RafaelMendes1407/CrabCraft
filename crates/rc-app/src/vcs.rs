@@ -51,6 +51,10 @@ enum VcsEvent {
     OpProgress(String),
     /// What the last merge, rebase or cherry-pick printed.
     OpOutput(OpOutput),
+    /// The base, ours and theirs of a conflicted file for the merge tool (V-08), or why not.
+    MergeLoaded(String, Result<(String, String, String), String>),
+    /// The merge tool's result was written and staged (or why not).
+    MergeSaved(String, Option<String>),
 }
 
 /// What a new patch is made of.
@@ -231,6 +235,10 @@ pub struct Vcs {
     pub op_output: Option<OpOutput>,
     /// Cancels the running merge, rebase or cherry-pick (kills git).
     op_cancel: Option<rc_vcs::CancelToken>,
+    /// The three-pane merge tool shown in the editor area (V-08).
+    pub merge_tool: Option<crate::merge_tool::MergeTool>,
+    /// A conflicted file is being read for the merge tool.
+    pub merge_loading: Option<String>,
     /// Status requests made, and the newest whose operation was applied (reads can overlap).
     status_seq: u64,
     operation_seq: u64,
@@ -295,6 +303,8 @@ impl Vcs {
             op_progress: None,
             op_output: None,
             op_cancel: None,
+            merge_tool: None,
+            merge_loading: None,
             status_seq: 0,
             operation_seq: 0,
             inbox: Inbox::new(waker.clone()),
@@ -660,6 +670,46 @@ impl Vcs {
                 return Err(rc_vcs::GitError::BeforeCommit(trf("{file} still has conflict markers", &[("file", &path)])));
             }
             repo.mark_resolved(&paths).await
+        });
+    }
+
+    /// Opens the three-pane merge tool on a conflicted file (V-08).
+    pub fn open_merge_tool(&mut self, rel: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        let rel = rel.to_string();
+        self.merge_loading = Some(rel.clone());
+        Runtime::spawn(async move {
+            let loaded = match repo.conflict_versions(&rel).await {
+                Err(e) => Err(user_error(&e)),
+                Ok(v) if [&v.base, &v.ours, &v.theirs].iter().any(|c| c.as_ref().is_some_and(|c| c.binary)) => Err(tr("Binary files cannot be merged here; accept one side instead").to_string()),
+                Ok(rc_vcs::ConflictVersions { ours: None, .. } | rc_vcs::ConflictVersions { theirs: None, .. }) => {
+                    Err(tr("One side deleted the file; accept one side instead").to_string())
+                }
+                Ok(v) => {
+                    let text = |c: Option<rc_vcs::FileContent>| c.map(|c| c.text().into_owned()).unwrap_or_default();
+                    Ok((text(v.base), text(v.ours), text(v.theirs)))
+                }
+            };
+            out.send(VcsEvent::MergeLoaded(rel, loaded));
+        });
+    }
+
+    /// Writes the merge tool's result to the file and marks it resolved.
+    pub fn save_merge_tool(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let Some(tool) = &mut self.merge_tool else { return };
+        tool.saving = true;
+        tool.error = None;
+        let (rel, abs, text) = (tool.rel.clone(), tool.abs.clone(), tool.output());
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let written = Runtime::handle().spawn_blocking(move || std::fs::write(abs, text)).await.map_err(std::io::Error::other).and_then(|r| r);
+            let result = match written {
+                Err(e) => Some(e.to_string()),
+                Ok(()) => repo.mark_resolved(std::slice::from_ref(&rel)).await.err().map(|e| user_error(&e)),
+            };
+            out.send(VcsEvent::MergeSaved(rel, result));
         });
     }
 
@@ -1212,6 +1262,38 @@ impl Vcs {
                     }
                 }
                 VcsEvent::OpOutput(o) => self.op_output = Some(o),
+                VcsEvent::MergeLoaded(rel, loaded) => {
+                    if self.merge_loading.as_deref() != Some(rel.as_str()) {
+                        continue;
+                    }
+                    self.merge_loading = None;
+                    match (loaded, self.repo.clone()) {
+                        (Ok((base, ours, theirs)), Some(repo)) => {
+                            let names = crate::ui::git::side_names(self);
+                            let abs = repo.abs_path(&rel);
+                            self.diff = None;
+                            self.merge_tool = Some(crate::merge_tool::MergeTool::new(&mut self.next_doc_id, rel, abs, &base, &ours, &theirs, names, dark));
+                        }
+                        (Err(e), _) => {
+                            self.error = Some(e.clone());
+                            notices.push(e);
+                        }
+                        (Ok(_), None) => {}
+                    }
+                }
+                VcsEvent::MergeSaved(rel, err) => {
+                    if let Some(tool) = self.merge_tool.as_mut().filter(|t| t.rel == rel) {
+                        tool.saving = false;
+                        match err {
+                            Some(e) => tool.error = Some(e),
+                            None => {
+                                self.merge_tool = None;
+                                notices.push(trf("{file} resolved", &[("file", &rel)]));
+                            }
+                        }
+                    }
+                    self.refresh();
+                }
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {

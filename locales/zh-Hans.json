@@ -1641,5 +1641,31 @@
     "Conflicts resolved": "冲突已解决",
     "Stopped on conflicts: resolve them, then continue": "因冲突而停止：请解决后继续",
     "{file} still has conflict markers": "{file} 仍有冲突标记"
+  },
+  "mergetool": {
+    "Resolve the file's changes side by side": "并排解决文件的更改",
+    "Select one file": "选择一个文件",
+    "Accept Both": "接受两者",
+    "Accept Left": "接受左侧",
+    "Accept Right": "接受右侧",
+    "All changes resolved": "所有更改均已解决",
+    "All from Left": "全部取左侧",
+    "All from Right": "全部取右侧",
+    "Apply Non-Conflicting Changes": "应用无冲突的更改",
+    "Keep Base": "保留基础版本",
+    "Left, then right": "先左后右",
+    "Merge {file}": "合并 {file}",
+    "Neither change: the text both sides started from": "都不采用：双方共同的起始文本",
+    "Next Change": "下一处更改",
+    "Previous Change": "上一处更改",
+    "Result": "结果",
+    "Save Anyway": "仍然保存",
+    "Save and Mark Resolved": "保存并标记为已解决",
+    "{n} changes are not resolved.": "{n} 处更改尚未解决。",
+    "{n} changes not taken": "{n} 处更改未采用",
+    "{n} conflicts left": "剩余 {n} 个冲突",
+    "Binary files cannot be merged here; accept one side instead": "此处无法合并二进制文件；请改为接受其中一方",
+    "One side deleted the file; accept one side instead": "一方删除了该文件；请改为接受其中一方",
+    "{file} resolved": "{file} 已解决"
   }
 }

@@ -110,13 +110,19 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                 }
                 if resp.double_clicked() {
-                    if c.untracked || c.state == FileState::Added {
+                    if c.state == FileState::Unmerged {
+                        app.vcs.open_merge_tool(&c.path);
+                    } else if c.untracked || c.state == FileState::Added {
                         open_file = Some(root.join(&c.path));
                     } else {
                         open_diff = Some(c.path.clone());
                     }
                 }
                 resp.context_menu(|ui| {
+                    if c.state == FileState::Unmerged && theme::menu_item(ui, Some(ico::DIFF), tr("Merge…"), false).clicked() {
+                        app.vcs.open_merge_tool(&c.path);
+                        ui.close();
+                    }
                     if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
                         open_diff = Some(c.path.clone());
                         ui.close();
@@ -1302,5 +1308,215 @@ pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
         }
         Some(rc_vcs::RepoState::CherryPicking | rc_vcs::RepoState::Reverting) => (trf("Yours ({branch})", &[("branch", &branch)]), trf("Commit {rev}", &[("rev", &short(&op.target))])),
         _ => (tr("Yours").to_string(), tr("Theirs").to_string()),
+    }
+}
+
+/// The three-pane merge tool in the editor area (V-08): ours | result | theirs, with arrows to
+/// take a side for each change, a toolbar for the selected change and the whole file, and
+/// Save and Mark Resolved.
+pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
+    use rc_vcs::{Pane, Take};
+    let p = rc_kit::pal(ui);
+    let full = ui.max_rect();
+    let Some(tool) = &mut app.vcs.merge_tool else { return };
+    tool.sync();
+    let busy = tool.saving;
+    let conflicts = tool.model.conflicts_left();
+    let unresolved = tool.model.unresolved();
+    let mut close = false;
+    let mut save = false;
+    // Header: the file, what is left, Close.
+    let head = Rect::from_min_size(full.min, vec2(full.width(), 38.0));
+    let mut hu = ui.new_child(egui::UiBuilder::new().max_rect(head.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    icons::image(&mut hu, ico::DIFF, 16.0);
+    hu.label(egui::RichText::new(trf("Merge {file}", &[("file", &tool.rel)])).font(theme::bold(13.0)));
+    let (status, color) = if unresolved == 0 {
+        (tr("All changes resolved").to_string(), p.ok)
+    } else if conflicts > 0 {
+        (trf("{n} conflicts left", &[("n", &conflicts)]), p.error)
+    } else {
+        (trf("{n} changes not taken", &[("n", &unresolved)]), p.muted)
+    };
+    hu.label(egui::RichText::new(status).size(12.5).color(color));
+    hu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
+            close = true;
+        }
+        if let Some(e) = &tool.error {
+            ui.label(egui::RichText::new(e).size(12.5).color(p.error));
+        } else if tool.confirm_save {
+            ui.label(egui::RichText::new(trf("{n} changes are not resolved.", &[("n", &unresolved)])).size(12.5).color(p.error));
+        }
+    });
+    ui.painter().hline(full.x_range(), head.bottom() - 0.5, egui::Stroke::new(1.0, p.island_border));
+    // Toolbar: the selected change, the whole file, save.
+    let bar = Rect::from_min_size(pos2(full.left(), head.bottom()), vec2(full.width(), 36.0));
+    let mut bu = ui.new_child(egui::UiBuilder::new().max_rect(bar.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    let has_current = tool.current.is_some_and(|c| c < tool.model.chunks.len());
+    let none = tool.model.chunks.is_empty();
+    if theme::icon_button(&mut bu, ico::CHEVRON_UP, !none, tr("Previous Change")).clicked() {
+        tool.step(false);
+    }
+    if theme::icon_button(&mut bu, ico::CHEVRON_DOWN, !none, tr("Next Change")).clicked() {
+        tool.step(true);
+    }
+    bu.add_enabled_ui(has_current && !busy, |ui| {
+        let cur = tool.current.unwrap_or(0);
+        if theme::secondary_button(ui, tr("Accept Left")).on_hover_text(tool.names.0.as_str()).clicked() {
+            tool.take(cur, Take::Ours);
+        }
+        if theme::secondary_button(ui, tr("Accept Right")).on_hover_text(tool.names.1.as_str()).clicked() {
+            tool.take(cur, Take::Theirs);
+        }
+        if theme::secondary_button(ui, tr("Accept Both")).on_hover_text(tr("Left, then right")).clicked() {
+            tool.take(cur, Take::Both);
+        }
+        if theme::secondary_button(ui, tr("Keep Base")).on_hover_text(tr("Neither change: the text both sides started from")).clicked() {
+            tool.take(cur, Take::Base);
+        }
+    });
+    bu.separator();
+    bu.add_enabled_ui(!busy, |ui| {
+        if theme::secondary_button(ui, tr("Apply Non-Conflicting Changes")).clicked() {
+            tool.take_non_conflicting();
+        }
+        if theme::secondary_button(ui, tr("All from Left")).on_hover_text(tool.names.0.as_str()).clicked() {
+            tool.take_file(false);
+        }
+        if theme::secondary_button(ui, tr("All from Right")).on_hover_text(tool.names.1.as_str()).clicked() {
+            tool.take_file(true);
+        }
+    });
+    bu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if busy {
+            ui.add(egui::Spinner::new().size(14.0));
+        } else if tool.confirm_save {
+            if theme::primary_button(ui, tr("Save Anyway")).clicked() {
+                save = true;
+            }
+            if theme::secondary_button(ui, tr("Cancel")).clicked() {
+                tool.confirm_save = false;
+            }
+        } else if theme::primary_button(ui, tr("Save and Mark Resolved")).clicked() {
+            if unresolved > 0 {
+                tool.confirm_save = true;
+            } else {
+                save = true;
+            }
+        }
+    });
+    // Column titles.
+    let gap = 26.0;
+    let titles = Rect::from_min_size(pos2(full.left(), bar.bottom()), vec2(full.width(), 24.0));
+    ui.painter().rect_filled(titles, 0.0, p.header_bg);
+    let col = (full.width() - 2.0 * gap) / 3.0;
+    let xs = [full.left(), full.left() + col + gap, full.left() + 2.0 * (col + gap)];
+    for (x, name) in xs.iter().zip([tool.names.0.as_str(), tr("Result"), tool.names.1.as_str()]) {
+        ui.painter().text(pos2(x + 10.0, titles.center().y), Align2::LEFT_CENTER, name, theme::bold(12.0), p.text);
+    }
+    let body = Rect::from_min_max(pos2(full.left(), titles.bottom()), full.max);
+    let rects = xs.map(|x| Rect::from_min_max(pos2(x, body.top()), pos2(x + col, body.bottom())));
+    // Scroll: the pane under the pointer leads; the others follow through the changes.
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    let panes = [Pane::Ours, Pane::Result, Pane::Theirs];
+    let lead = rects.iter().position(|r| pointer.is_some_and(|pt| r.contains(pt))).unwrap_or(1);
+    let row_h = tool.center.row_height();
+    if tool.reveal && row_h > 0.0 {
+        tool.reveal = false;
+        if let Some(c) = tool.current.filter(|c| *c < tool.model.chunks.len()) {
+            for (i, pane) in panes.iter().enumerate() {
+                let line = tool.line_of(c, *pane);
+                let e = match i {
+                    0 => &mut tool.left,
+                    1 => &mut tool.center,
+                    _ => &mut tool.right,
+                };
+                e.set_scroll_offset(vec2(0.0, (line.saturating_sub(4) as f32 * row_h).max(0.0)));
+            }
+        }
+    } else if row_h > 0.0 {
+        let lead_state = match lead {
+            0 => &tool.left,
+            1 => &tool.center,
+            _ => &tool.right,
+        };
+        let y = lead_state.scroll_offset().y;
+        let top = (y / row_h).floor();
+        let frac = y - top * row_h;
+        for (i, pane) in panes.iter().enumerate() {
+            if i == lead {
+                continue;
+            }
+            let line = tool.model.map_line(panes[lead], top as usize, *pane);
+            let e = match i {
+                0 => &mut tool.left,
+                1 => &mut tool.center,
+                _ => &mut tool.right,
+            };
+            let x = e.scroll_offset().x;
+            e.set_scroll_offset(vec2(x, line as f32 * row_h + frac));
+        }
+    }
+    let mut config = app.editor_config.clone();
+    config.sticky_lines = 0;
+    for (rect, i) in rects.iter().zip(0..3) {
+        let state = match i {
+            0 => &mut tool.left,
+            1 => &mut tool.center,
+            _ => &mut tool.right,
+        };
+        let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(*rect));
+        eu.set_clip_rect(rect.intersect(ui.clip_rect()));
+        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+    }
+    // The arrows between the panes: take the left side (») or the right side («) of a change.
+    let mut act: Option<(usize, Take)> = None;
+    for (g, gx) in [(0usize, rects[0].right()), (1, rects[1].right())] {
+        let strip = Rect::from_min_max(pos2(gx, body.top()), pos2(gx + gap, body.bottom()));
+        ui.painter().rect_filled(strip, 0.0, p.header_bg);
+        let (state, pane, take, glyph, tip) =
+            if g == 0 { (&tool.left, Pane::Ours, Take::Ours, "»", tool.names.0.as_str()) } else { (&tool.right, Pane::Theirs, Take::Theirs, "«", tool.names.1.as_str()) };
+        let rh = state.row_height();
+        if rh <= 0.0 {
+            continue;
+        }
+        let scroll = state.scroll_offset().y;
+        for (ci, c) in tool.model.chunks.iter().enumerate() {
+            let changed = match c.kind {
+                rc_vcs::ChunkKind::Conflict | rc_vcs::ChunkKind::Same => true,
+                rc_vcs::ChunkKind::Ours => g == 0,
+                rc_vcs::ChunkKind::Theirs => g == 1,
+            };
+            if !changed || c.resolved {
+                continue;
+            }
+            let line = tool.line_of(ci, pane);
+            let y = body.top() + line as f32 * rh - scroll + rh / 2.0;
+            if y < body.top() + 4.0 || y > body.bottom() - 4.0 {
+                continue;
+            }
+            let r = Rect::from_center_size(pos2(strip.center().x, y), vec2(20.0, rh.min(20.0)));
+            let id = ui.id().with(("merge_take", g, ci));
+            let resp = ui.interact(r, id, Sense::click()).on_hover_text(trf("Accept {side}", &[("side", &tip)]));
+            let color = if resp.hovered() { p.accent } else { p.text };
+            if resp.hovered() {
+                ui.painter().rect_filled(r, 3.0, p.row_hover);
+            }
+            ui.painter().text(r.center(), Align2::CENTER_CENTER, glyph, FontId::proportional(15.0), color);
+            if resp.clicked() && !busy {
+                act = Some((ci, take));
+            }
+        }
+    }
+    if let Some((ci, take)) = act {
+        tool.take(ci, take);
+    }
+    if close || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        app.vcs.merge_tool = None;
+        app.focus_editor = true;
+        return;
+    }
+    if save {
+        app.vcs.save_merge_tool();
     }
 }

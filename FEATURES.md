@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 164 |
+| ✅ Pronto | 165 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 58 |
+| ⬜ A fazer | 57 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -308,7 +308,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-05 | Fetch, pull e push | 🟢 | M1 | Confirmar a cobertura |
 | V-06 | Log e histórico de arquivo | ✅ | M5 | Log com filtros de texto da mensagem (literal), autor e branch (ou todos), "Carregar mais" depois de 500 commits e mensagem quando nada corresponde. Mostrar histórico do Git (aba do editor e Explorer, também para pastas) abre o Log só daquele caminho, seguindo renomeações. Testado num repositório real; captura conferida. |
 | V-07 | Merge, rebase e cherry-pick | ✅ | M5 | Merge… e Rebase… na janela Git, no popup de branches e no menu de contexto do Log (com o branch ou commit escolhido); merge com fast-forward, `--no-ff`, `--ff-only`, `--squash` e `--no-commit`; rebase com `--autostash` e aviso de reescrita; Cherry-Pick de um ou vários commits marcados no Log (commits de merge recusados). Tudo em segundo plano, com o progresso do git, Cancelar (mata o git) e a saída mostrada. Faixa da operação em andamento (merge, rebase com passo n de m, cherry-pick, revert) nas janelas Git e Commit, com os arquivos em conflito, Resolver conflitos… (aceitar um lado por arquivo, abrir, marcar como resolvido recusando marcadores restantes), Continuar, Pular commit e Abortar com confirmação. Erros tipados (alterações locais, commit vazio, sem fast-forward, históricos sem relação, operação já em andamento). Testado com repositórios git reais; capturas conferidas. Fora: cherry-pick de merge (`-m`), rebase interativo (V-15) e `rebase --onto` com três argumentos |
-| V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
+| V-08 | Resolução de conflitos em 3 painéis | ✅ | M5 | Merge… (diálogo Conflitos, menu de contexto ou duplo clique de arquivo em conflito na janela Commit) abre a ferramenta na área do editor: seus (estágio 2) \| resultado editável \| deles (estágio 3), com nomes certos para merge, rebase e cherry-pick. Mudanças de um lado só já vêm aplicadas; conflitos em vermelho, aplicados em verde. Setas » e « entre os painéis e barra para a mudança atual (aceitar esquerda, direita, ambos ou manter a base; anterior/próxima), aplicar as sem conflito e tudo de um lado para o arquivo. Edição livre do resultado (desfazer/refazer devolvem o estado das mudanças), rolagem sincronizada e "Salvar e marcar como resolvido" (`git add`), com confirmação se faltar algo; CRLF preservado. Arquivo binário ou apagado de um lado: recusado, com aceitar um lado (que agora remove o arquivo quando o lado o apagou). Testado com repositórios git reais (inclui teste de propriedade do merge de 3 vias); capturas conferidas. Fora: painel da base visível, destaque por caractere e curvas ligando os painéis |
 | V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |
 | V-10 | Changelists | ⬜ | M5 | |
 | V-11 | Worktrees | ✅ | M5 | Aba Worktrees na janela Git: lista (atual, branch ou HEAD destacado, bloqueado, podável), adicionar com branch nova, existente ou HEAD destacado (pasta sugerida ao lado do repositório), abrir nesta janela ou em outra, bloquear com motivo/desbloquear, remover (com mudanças locais pede confirmação para forçar; o branch fica) e podar mostrando a saída do Git. Testado com repositórios reais; capturas conferidas. |

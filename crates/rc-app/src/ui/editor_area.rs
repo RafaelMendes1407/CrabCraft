@@ -54,6 +54,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         crate::ui::git::diff_view(app, ui);
         return;
     }
+    if app.vcs.merge_tool.is_some() {
+        crate::ui::git::merge_view(app, ui);
+        return;
+    }
     app.sync_layout();
     let focus = std::mem::take(&mut app.focus_editor);
     app.editor_frame = Some((focus, editor_actions));

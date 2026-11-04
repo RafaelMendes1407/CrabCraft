@@ -2925,7 +2925,11 @@ fn conflicts_dialog(app: &mut CrabCraftApp, ctx: &Context, selected: &mut std::c
                 for (path, kind) in &entries {
                     ui.horizontal(|ui| {
                         let mut on = selected.contains(path);
-                        if ui.checkbox(&mut on, path.as_str()).changed() {
+                        let check = ui.checkbox(&mut on, path.as_str());
+                        if check.double_clicked() && !busy {
+                            action = Some(ConflictAction::Merge(path.clone()));
+                        }
+                        if check.changed() {
                             if on {
                                 selected.insert(path.clone());
                             } else {
@@ -2941,6 +2945,14 @@ fn conflicts_dialog(app: &mut CrabCraftApp, ctx: &Context, selected: &mut std::c
         let targets: Vec<String> = if selected.is_empty() { entries.iter().map(|(p, _)| p.clone()).collect() } else { selected.iter().cloned().collect() };
         let some = !targets.is_empty() && !busy;
         ui.horizontal_wrapped(|ui| {
+            // V-08: the three-pane merge tool, for one file.
+            let single = (targets.len() == 1 && !busy).then(|| targets[0].clone());
+            let merge = ui.add_enabled_ui(single.is_some(), |ui| theme::primary_button(ui, tr("Merge…"))).inner;
+            if single.is_none() {
+                merge.on_disabled_hover_text(tr("Select one file"));
+            } else if merge.on_hover_text(tr("Resolve the file's changes side by side")).clicked() {
+                action = single.map(ConflictAction::Merge);
+            }
             if ui.add_enabled_ui(some, |ui| theme::secondary_button(ui, &trf("Accept {side}", &[("side", &ours)]))).inner.clicked() {
                 action = Some(ConflictAction::Take(targets.clone(), false));
             }
@@ -2964,6 +2976,10 @@ fn conflicts_dialog(app: &mut CrabCraftApp, ctx: &Context, selected: &mut std::c
     match action {
         Some(ConflictAction::Take(paths, theirs)) => app.vcs.resolve_conflicts(paths, theirs),
         Some(ConflictAction::MarkResolved(paths)) => app.vcs.mark_resolved(paths),
+        Some(ConflictAction::Merge(path)) => {
+            app.vcs.open_merge_tool(&path);
+            return Outcome::Close;
+        }
         Some(ConflictAction::Open(path)) => {
             if let Some(root) = app.vcs.root().map(|r| r.to_path_buf()) {
                 app.open_file(&root.join(path));
@@ -2980,6 +2996,8 @@ enum ConflictAction {
     Take(Vec<String>, bool),
     MarkResolved(Vec<String>),
     Open(String),
+    /// Open the three-pane merge tool.
+    Merge(String),
 }
 
 /// A short description of a kind of conflict.

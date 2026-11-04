@@ -21,6 +21,7 @@ mod local_history;
 mod manifest_completion;
 mod manifest_inspect;
 mod memory_view;
+mod merge_tool;
 mod playground;
 mod profiler;
 mod refactor_conflicts;
