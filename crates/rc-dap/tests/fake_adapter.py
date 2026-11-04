@@ -13,6 +13,8 @@ seq = 0
 x = 1
 bp_ids = []
 stops = 0
+# The instruction pointer of the top frame: 4-byte instructions from 0x2000 (Calc) to 0x2100.
+ip = 0x2010
 
 
 def read():
@@ -86,6 +88,8 @@ while True:
             "supportsSetVariable": "noset" not in MODE,
             "supportsSetExpression": True,
             "supportsReadMemoryRequest": True,
+            "supportsDisassembleRequest": True,
+            "supportsSteppingGranularity": True,
             "exceptionBreakpointFilters": [
                 {"filter": "all", "label": "All"},
                 {"filter": "user-unhandled", "label": "User-Unhandled", "default": True},
@@ -119,7 +123,7 @@ while True:
         respond(m, {"threads": [{"id": 1, "name": "Main"}]})
     elif cmd == "stackTrace":
         frames = [
-            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.cs"}},
+            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.cs"}, "instructionPointerReference": hex(ip)},
             {"id": stops * 10 + 1, "name": "Main", "line": 5, "column": 1, "source": {"path": "/w/Program.cs"}},
         ]
         start = a.get("startFrame", 0)
@@ -164,6 +168,10 @@ while True:
         respond(m, {"allThreadsContinued": True})
         event("continued", {"threadId": 1, "allThreadsContinued": True})
         run_on()
+    elif cmd in ("next", "stepIn") and a.get("granularity") == "instruction":
+        respond(m)
+        ip += 4
+        stop("step", cur_line)
     elif cmd == "next":
         respond(m)
         event("continued", {"threadId": 1})
@@ -185,6 +193,24 @@ while True:
         else:
             data = memory[lo - 0x1000:hi - 0x1000]
             respond(m, {"address": hex(lo), "data": base64.b64encode(data).decode(), "unreadableBytes": start + a["count"] - hi})
+    elif cmd == "disassemble":
+        # Instructions exist only at multiples of 4 in [0x2000, 0x2100); like GDB 15, a
+        # negative instructionOffset is not supported.
+        start = int(a["memoryReference"], 0) + a.get("offset", 0)
+        start += a.get("instructionOffset", 0) * 4
+        out = []
+        addr = start
+        for _ in range(a["instructionCount"]):
+            if 0x2000 <= addr < 0x2100 and addr % 4 == 0:
+                insn = {"address": hex(addr), "instruction": "op %d" % ((addr - 0x2000) // 4), "instructionBytes": "%08x" % addr,
+                        "line": 9 + (addr - 0x2000) // 16, "location": {"name": "Calc.cs", "path": "/w/Calc.cs"}}
+                if addr == 0x2000:
+                    insn["symbol"] = "Calc"
+            else:
+                insn = {"address": hex(addr), "instruction": "??", "presentationHint": "invalid"}
+            out.append(insn)
+            addr += 4
+        respond(m, {"instructions": out})
     elif cmd == "exceptionInfo":
         respond(m, {"exceptionId": "System.Exception", "breakMode": "always"})
     elif cmd == "disconnect":

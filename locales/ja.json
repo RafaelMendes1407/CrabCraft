@@ -314,7 +314,18 @@
     "This debugger cannot read memory": "このデバッガーはメモリを読み取れません",
     "Cannot read memory: {error}": "メモリを読み取れません: {error}",
     "{expression} has no address. Try &{expression}.": "{expression} にはアドレスがありません。&{expression} を試してください。",
-    "Cannot evaluate {expression}: {error}": "{expression} を評価できません: {error}"
+    "Cannot evaluate {expression}: {error}": "{expression} を評価できません: {error}",
+    "Disassembly": "逆アセンブル",
+    "Step Over Instruction": "命令をステップオーバー",
+    "Step Into Instruction": "命令をステップイン",
+    "This debugger cannot disassemble": "このデバッガーは逆アセンブルできません",
+    "This frame has no instruction address": "このフレームには命令アドレスがありません",
+    "Cannot disassemble: {error}": "逆アセンブルできません: {error}",
+    "Loading instructions…": "命令を読み込み中…",
+    "Instructions are shown when the program is paused": "プログラムが一時停止しているときに命令が表示されます",
+    "Earlier instructions could not be found. Try again": "前の命令が見つかりません。再試行",
+    "Load earlier instructions": "前の命令を読み込む",
+    "Load later instructions": "後の命令を読み込む"
   },
   "editor": {
     "Editor Only": "エディターのみ",

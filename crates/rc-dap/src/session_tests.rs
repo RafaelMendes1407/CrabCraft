@@ -389,6 +389,75 @@ fn memory_is_read_decoded_and_partly_unreadable() {
     s.stop();
 }
 
+/// Pumps until the disassembly `id` answers.
+fn disassembled(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<Vec<crate::disassembly::Instruction>, String> {
+    let mut got = None;
+    pump_until(s, ev, |e, _| match e {
+        DebugEvent::Disassembled { id: i, result } if *i == id => {
+            got = Some(result.clone());
+            true
+        }
+        _ => false,
+    });
+    got.unwrap()
+}
+
+#[test]
+fn code_is_disassembled_around_the_frame_and_stepped_by_instruction() {
+    use crate::disassembly::{instructions_before, rows, BACK_BYTES, DisasmRow};
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    let early = s.disassemble("0x2000", 0, 0, 4);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::Disassembled { id, result: Err(_) } if *id == early));
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, |s| s.selected_frame().is_some());
+    assert!(s.capabilities().supports_disassemble_request && s.capabilities().supports_stepping_granularity);
+    let ip = s.selected_frame().and_then(|f| f.instruction_pointer_reference.clone()).unwrap();
+    assert_eq!(ip, "0x2010");
+
+    // Below: from the instruction pointer on; addresses past the code are dropped.
+    let id = s.disassemble(&ip, 0, 0, 1000);
+    let below = disassembled(&mut s, &mut ev, id).unwrap();
+    assert_eq!(below.len(), (0x2100 - 0x2010) / 4);
+    assert_eq!((below[0].address, below[0].text.as_str(), below[0].bytes.as_deref()), (0x2010, "op 4", Some("00 00 20 10")));
+    let req = requests(&log).into_iter().find(|r| r["command"] == "disassemble" && r["arguments"]["instructionCount"] == 1000).unwrap();
+    assert_eq!(req["arguments"]["resolveSymbols"], true);
+    assert_eq!(req["arguments"]["memoryReference"], "0x2010");
+
+    // Above: read from bytes before the anchor and kept when the decoding lands on it.
+    let id = s.disassemble(&ip, -BACK_BYTES, 0, 64);
+    let back = disassembled(&mut s, &mut ev, id).unwrap();
+    let above = instructions_before(&back, 0x2010).unwrap();
+    // The first three decoded (0x2000..0x2008) may be out of step and are dropped.
+    assert_eq!(above.iter().map(|i| i.address).collect::<Vec<_>>(), [0x200c]);
+    // One byte off: nothing lands on an instruction.
+    let id = s.disassemble(&ip, -BACK_BYTES + 1, 0, 64);
+    assert!(disassembled(&mut s, &mut ev, id).is_err());
+
+    // The whole function from its symbol: headers for the symbol and each line.
+    let id = s.disassemble("0x2000", 0, 0, 8);
+    let all = disassembled(&mut s, &mut ev, id).unwrap();
+    let r = rows(&all, Some(0x2010));
+    assert_eq!(r[0], DisasmRow::Header { symbol: Some("Calc".into()), location: Some("/w/Calc.cs:9".into()) });
+    assert!(r.contains(&DisasmRow::Instruction { index: 4, current: true }));
+    assert_eq!(r.iter().filter(|r| matches!(r, DisasmRow::Header { .. })).count(), 2);
+
+    // Step Over Instruction: `next` by instruction; the frame moves to the next one.
+    s.step_instruction(true);
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, |s| s.selected_frame().is_some());
+    assert_eq!(s.selected_frame().and_then(|f| f.instruction_pointer_reference.as_deref()), Some("0x2014"));
+    s.step_instruction(false);
+    pump_until(&mut s, &mut ev, stopped);
+    let steps: Vec<Value> = requests(&log).into_iter().filter(|r| r["arguments"]["granularity"] == "instruction").collect();
+    assert_eq!(steps.iter().map(|r| r["command"].as_str().unwrap()).collect::<Vec<_>>(), ["next", "stepIn"]);
+    s.stop();
+}
+
 #[test]
 fn logpoints_and_hit_conditions_are_emulated() {
     let dir = tempfile::tempdir().unwrap();

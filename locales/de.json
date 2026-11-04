@@ -314,7 +314,18 @@
     "This debugger cannot read memory": "Dieser Debugger kann keinen Speicher lesen",
     "Cannot read memory: {error}": "Speicher kann nicht gelesen werden: {error}",
     "{expression} has no address. Try &{expression}.": "{expression} hat keine Adresse. Versuchen Sie &{expression}.",
-    "Cannot evaluate {expression}: {error}": "{expression} kann nicht ausgewertet werden: {error}"
+    "Cannot evaluate {expression}: {error}": "{expression} kann nicht ausgewertet werden: {error}",
+    "Disassembly": "Disassemblierung",
+    "Step Over Instruction": "Anweisung überspringen",
+    "Step Into Instruction": "In Anweisung springen",
+    "This debugger cannot disassemble": "Dieser Debugger kann nicht disassemblieren",
+    "This frame has no instruction address": "Dieser Frame hat keine Befehlsadresse",
+    "Cannot disassemble: {error}": "Disassemblierung nicht möglich: {error}",
+    "Loading instructions…": "Anweisungen werden geladen…",
+    "Instructions are shown when the program is paused": "Anweisungen werden angezeigt, wenn das Programm angehalten ist",
+    "Earlier instructions could not be found. Try again": "Frühere Anweisungen nicht gefunden. Erneut versuchen",
+    "Load earlier instructions": "Frühere Anweisungen laden",
+    "Load later instructions": "Spätere Anweisungen laden"
   },
   "editor": {
     "Editor Only": "Nur Editor",

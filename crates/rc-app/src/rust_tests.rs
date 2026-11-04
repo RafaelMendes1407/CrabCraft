@@ -955,16 +955,21 @@ const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad
 
 /// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
 fn paused_on_bytes(dir: &Path) -> CrabCraftApp {
+    paused_at(dir, MEMORY_MAIN, 3)
+}
+
+/// An app paused under GDB at the 0-based `line` of `main_rs`.
+fn paused_at(dir: &Path, main_rs: &str, line: usize) -> CrabCraftApp {
     use rc_editor::{Action, BreakpointKind};
     let root = dir.join("project");
     write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
-    write(&root.join("src/main.rs"), MEMORY_MAIN);
+    write(&root.join("src/main.rs"), main_rs);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
-    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     app.run_ide_action(&egui::Context::default(), Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
     app
@@ -1068,6 +1073,135 @@ fn memory_view_capture() {
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
         h.run_steps(6);
         h.render().unwrap().save(out.join(format!("memory-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
+/// A function called from main: GDB shows no frame past `main`, so the caller is `demo::main`.
+const DISASSEMBLY_MAIN: &str = "#[inline(never)]\nfn twice(n: u32) -> u32 {\n    let m = std::hint::black_box(n).wrapping_mul(2);\n    m.wrapping_add(1)\n}\n\nfn main() {\n    println!(\"{}\", twice(std::hint::black_box(20)));\n}\n";
+
+/// An app paused under GDB at `let m = …` (line 3) of [`DISASSEMBLY_MAIN`].
+fn paused_in_twice(dir: &Path) -> CrabCraftApp {
+    paused_at(dir, DISASSEMBLY_MAIN, 2)
+}
+
+/// Opens the Disassembly tab and waits for the instructions around the current one.
+fn show_disassembly(app: &mut CrabCraftApp) {
+    app.debugger.show_disassembly = true;
+    settle_debugger(app, "the disassembly", &|a| {
+        let d = &a.debugger.disassembly;
+        !d.loading() && d.instructions.iter().any(|i| Some(i.address) == d.current) || d.error.is_some()
+    });
+    assert_eq!(app.debugger.disassembly.error, None);
+}
+
+/// The selected frame's instruction pointer.
+fn frame_ip(app: &CrabCraftApp) -> Option<u64> {
+    app.debugger.session.as_ref()?.selected_frame()?.instruction_pointer_reference.as_deref().and_then(rc_dap::memory::parse_address)
+}
+
+/// The symbol of the last header at or before the current instruction's row.
+fn current_function(app: &CrabCraftApp) -> Option<String> {
+    use rc_dap::disassembly::{DisasmRow, rows};
+    let d = &app.debugger.disassembly;
+    let layout = rows(&d.instructions, d.current);
+    let at = layout.iter().position(|r| matches!(r, DisasmRow::Instruction { current: true, .. }))?;
+    layout[..at].iter().rev().find_map(|r| match r {
+        DisasmRow::Header { symbol: Some(s), .. } => Some(s.clone()),
+        _ => None,
+    })
+}
+
+#[test]
+fn the_disassembly_view_marks_the_current_instruction_of_the_function() {
+    use rc_dap::disassembly::{DisasmRow, rows};
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_in_twice(dir.path());
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    assert!(caps.supports_disassemble_request, "GDB should answer disassemble");
+    assert!(caps.supports_stepping_granularity, "GDB should step by instruction");
+
+    show_disassembly(&mut app);
+    let ip = frame_ip(&app).unwrap();
+    let d = &app.debugger.disassembly;
+    assert_eq!(d.current, Some(ip));
+    // The current instruction is marked once, belongs to line 3 of main.rs and has its bytes.
+    let layout = rows(&d.instructions, d.current);
+    assert_eq!(layout.iter().filter(|r| matches!(r, DisasmRow::Instruction { current: true, .. })).count(), 1);
+    let i = d.instructions.iter().find(|i| i.address == ip).unwrap();
+    assert_eq!(i.line, Some(3), "{i:?}");
+    assert!(i.file.as_deref().is_some_and(|f| f.ends_with("main.rs")), "{i:?}");
+    assert!(i.bytes.is_some() && !i.text.is_empty(), "{i:?}");
+    // Instructions were found above the current one (GDB cannot disassemble backwards).
+    assert!(d.instructions.first().is_some_and(|f| f.address < ip), "nothing above the current instruction");
+    // GDB names the function at its first instruction: load earlier until it shows.
+    for _ in 0..5 {
+        if current_function(&app).is_some() {
+            break;
+        }
+        app.debugger.disassembly_more(true);
+        settle_debugger(&mut app, "earlier instructions", &|a| !a.debugger.disassembly.loading());
+    }
+    assert_eq!(current_function(&app).as_deref(), Some("demo::twice"));
+
+    // Load later adds instructions after the last one.
+    let (count, last) = (app.debugger.disassembly.instructions.len(), app.debugger.disassembly.instructions.last().map(|i| i.address));
+    app.debugger.disassembly_more(false);
+    settle_debugger(&mut app, "later instructions", &|a| !a.debugger.disassembly.loading());
+    assert!(app.debugger.disassembly.instructions.len() > count);
+    assert!(app.debugger.disassembly.instructions.last().map(|i| i.address) > last);
+
+    // Step Over Instruction: one instruction further, still in twice; the view follows.
+    app.debugger.step_instruction(true);
+    settle_debugger(&mut app, "the instruction step", &|a| a.debugger.stopped() && frame_ip(a).is_some_and(|n| n != ip));
+    show_disassembly(&mut app);
+    let next = frame_ip(&app).unwrap();
+    assert!(next > ip && next - ip <= 15, "{ip:#x} → {next:#x}");
+    assert_eq!(app.debugger.disassembly.current, Some(next));
+    assert_eq!(current_function(&app).as_deref(), Some("demo::twice"));
+
+    // Selecting the caller frame shows the code at its return address.
+    let tid = app.debugger.session.as_ref().and_then(|s| s.stop_info()).unwrap().thread_id;
+    let caller = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.frames(tid)).and_then(|f| f.frames.get(1).cloned());
+    if caller(&app).is_none() {
+        app.debugger.session.as_mut().unwrap().request_frames(tid);
+        settle_debugger(&mut app, "the caller frame", &|a| caller(a).is_some());
+    }
+    let caller = caller(&app).unwrap();
+    app.debugger.session.as_mut().unwrap().select_frame(caller.id);
+    let ret = caller.instruction_pointer_reference.as_deref().and_then(rc_dap::memory::parse_address).unwrap();
+    assert_eq!(caller.name, "demo::main");
+    settle_debugger(&mut app, "the caller's code", &|a| a.debugger.disassembly.current == Some(ret) && !a.debugger.disassembly.loading());
+    let at = app.debugger.disassembly.instructions.iter().find(|i| i.address == ret).unwrap();
+    assert_eq!(at.line, Some(8), "{at:?}");
+    // The instruction before the return address is the call to twice.
+    let call = app.debugger.disassembly.instructions.iter().rev().find(|i| i.address < ret).unwrap();
+    assert!(call.text.contains("call") && call.text.contains("twice"), "{call:?}");
+    app.debugger.stop();
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/disassembly-view-*.png"]
+fn disassembly_view_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_in_twice(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        show_disassembly(&mut app);
+        app.debugger.disassembly.scroll_to_current = true;
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("disassembly-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
         h.state_mut().debugger.stop();
     }
 }

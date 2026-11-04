@@ -8,9 +8,11 @@
 //! - [`breakpoints`]: breakpoints by file and line, hit conditions and logpoints.
 //! - [`format`]: integers in hexadecimal for adapters that cannot print them so.
 //! - [`memory`]: `readMemory` answers decoded and laid out as a hex dump.
+//! - [`disassembly`]: `disassemble` answers decoded, merged and laid out as rows.
 
 pub mod breakpoints;
 pub mod client;
+pub mod disassembly;
 pub mod format;
 pub mod gdb;
 pub mod launch;

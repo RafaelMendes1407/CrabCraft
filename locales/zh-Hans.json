@@ -314,7 +314,18 @@
     "This debugger cannot read memory": "此调试器无法读取内存",
     "Cannot read memory: {error}": "无法读取内存：{error}",
     "{expression} has no address. Try &{expression}.": "{expression} 没有地址。请尝试 &{expression}。",
-    "Cannot evaluate {expression}: {error}": "无法求值 {expression}：{error}"
+    "Cannot evaluate {expression}: {error}": "无法求值 {expression}：{error}",
+    "Disassembly": "反汇编",
+    "Step Over Instruction": "单步跳过指令",
+    "Step Into Instruction": "单步进入指令",
+    "This debugger cannot disassemble": "此调试器无法反汇编",
+    "This frame has no instruction address": "此帧没有指令地址",
+    "Cannot disassemble: {error}": "无法反汇编：{error}",
+    "Loading instructions…": "正在加载指令…",
+    "Instructions are shown when the program is paused": "程序暂停时显示指令",
+    "Earlier instructions could not be found. Try again": "找不到更早的指令。重试",
+    "Load earlier instructions": "加载更早的指令",
+    "Load later instructions": "加载后续的指令"
   },
   "editor": {
     "Editor Only": "仅编辑器",

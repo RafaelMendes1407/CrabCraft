@@ -1,0 +1,13 @@
+# Disassembly view in the debugger (D-18). Import: python3 scripts/i18n_tsv.py debugger scripts/i18n/disassembly-view.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Disassembly	Desensamblado	Désassemblage	Desmontagem	Disassemblierung	Deasemblacja	反汇编	逆アセンブル
+Step Over Instruction	Pasar sobre instrucción	Passer l'instruction	Passar sobre instrução	Anweisung überspringen	Przekrocz instrukcję	单步跳过指令	命令をステップオーバー
+Step Into Instruction	Entrar en instrucción	Entrer dans l'instruction	Entrar na instrução	In Anweisung springen	Wejdź w instrukcję	单步进入指令	命令をステップイン
+This debugger cannot disassemble	Este depurador no puede desensamblar	Ce débogueur ne peut pas désassembler	Este depurador não consegue desmontar	Dieser Debugger kann nicht disassemblieren	Ten debuger nie potrafi deasemblować	此调试器无法反汇编	このデバッガーは逆アセンブルできません
+This frame has no instruction address	Este marco no tiene dirección de instrucción	Ce cadre n'a pas d'adresse d'instruction	Este quadro não tem endereço de instrução	Dieser Frame hat keine Befehlsadresse	Ta ramka nie ma adresu instrukcji	此帧没有指令地址	このフレームには命令アドレスがありません
+Cannot disassemble: {error}	No se puede desensamblar: {error}	Impossible de désassembler : {error}	Não é possível desmontar: {error}	Disassemblierung nicht möglich: {error}	Nie można deasemblować: {error}	无法反汇编：{error}	逆アセンブルできません: {error}
+Loading instructions…	Cargando instrucciones…	Chargement des instructions…	Carregando instruções…	Anweisungen werden geladen…	Wczytywanie instrukcji…	正在加载指令…	命令を読み込み中…
+Instructions are shown when the program is paused	Las instrucciones se muestran cuando el programa está en pausa	Les instructions s'affichent quand le programme est en pause	As instruções aparecem quando o programa está pausado	Anweisungen werden angezeigt, wenn das Programm angehalten ist	Instrukcje są widoczne, gdy program jest wstrzymany	程序暂停时显示指令	プログラムが一時停止しているときに命令が表示されます
+Earlier instructions could not be found. Try again	No se encontraron instrucciones anteriores. Reintentar	Instructions précédentes introuvables. Réessayer	Não foi possível encontrar instruções anteriores. Tentar novamente	Frühere Anweisungen nicht gefunden. Erneut versuchen	Nie znaleziono wcześniejszych instrukcji. Ponów	找不到更早的指令。重试	前の命令が見つかりません。再試行
+Load earlier instructions	Cargar instrucciones anteriores	Charger les instructions précédentes	Carregar instruções anteriores	Frühere Anweisungen laden	Wczytaj wcześniejsze instrukcje	加载更早的指令	前の命令を読み込む
+Load later instructions	Cargar instrucciones posteriores	Charger les instructions suivantes	Carregar instruções seguintes	Spätere Anweisungen laden	Wczytaj dalsze instrukcje	加载后续的指令	後の命令を読み込む

@@ -314,7 +314,18 @@
     "This debugger cannot read memory": "Este depurador não consegue ler a memória",
     "Cannot read memory: {error}": "Não foi possível ler a memória: {error}",
     "{expression} has no address. Try &{expression}.": "{expression} não tem endereço. Tente &{expression}.",
-    "Cannot evaluate {expression}: {error}": "Não foi possível avaliar {expression}: {error}"
+    "Cannot evaluate {expression}: {error}": "Não foi possível avaliar {expression}: {error}",
+    "Disassembly": "Desmontagem",
+    "Step Over Instruction": "Passar sobre instrução",
+    "Step Into Instruction": "Entrar na instrução",
+    "This debugger cannot disassemble": "Este depurador não consegue desmontar",
+    "This frame has no instruction address": "Este quadro não tem endereço de instrução",
+    "Cannot disassemble: {error}": "Não é possível desmontar: {error}",
+    "Loading instructions…": "Carregando instruções…",
+    "Instructions are shown when the program is paused": "As instruções aparecem quando o programa está pausado",
+    "Earlier instructions could not be found. Try again": "Não foi possível encontrar instruções anteriores. Tentar novamente",
+    "Load earlier instructions": "Carregar instruções anteriores",
+    "Load later instructions": "Carregar instruções seguintes"
   },
   "editor": {
     "Editor Only": "Somente editor",

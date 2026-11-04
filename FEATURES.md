@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 144 |
+| ✅ Pronto | 145 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 81 |
+| ⬜ A fazer | 80 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -273,7 +273,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |
 | D-17 | Memory view | ✅ | M4 | Aba "Memory" na janela Debug: "Show in Memory View" no menu de contexto de Variables/Watches (usa o `memoryReference` da variável ou o endereço de `&expr`) ou um endereço/expressão digitado (`&x`, `0x7ffd…`). Dump hex com coluna de endereço, 16 bytes por linha e ASCII; bytes ilegíveis aparecem como `??`; páginas de 512 bytes lidas sob demanda (anterior/próxima) com `readMemory`. Relê a página a cada parada e destaca os bytes que mudaram desde a parada anterior. O GDB 15.1 anuncia `supportsReadMemoryRequest` e dá `memoryReference` só para ponteiros (arrays usam `&nome`); quando a leitura falha ele recusa a página inteira, sem leitura parcial. Testado num programa Rust real sob GDB (`the_memory_view_shows_bytes_and_highlights_what_a_step_changed`). Escrever na memória fica fora do escopo |
-| D-18 | Disassembly view | ⬜ | M4 | |
+| D-18 | Disassembly view | ✅ | M4 | Aba "Disassembly" na janela Debug: instruções em volta da instrução atual do frame selecionado (endereço, bytes, instrução) lidas com `disassemble`, com cabeçalho quando muda a função ou a linha do fonte e a instrução atual marcada. Segue o frame selecionado (num chamador mostra o endereço de retorno) e relê a cada parada; "carregar anteriores/seguintes" sob demanda. O GDB 15 não desmonta para trás (`instructionOffset` negativo dá instruções erradas), então as anteriores são lidas de bytes antes do endereço e só aceitas quando a decodificação cai exatamente nele. Step Over/Into Instruction (`next`/`stepIn` com `granularity: instruction`) quando o adaptador anuncia `supportsSteppingGranularity`; adaptador sem `supportsDisassembleRequest` mostra "Este depurador não consegue desmontar". Testado num programa Rust real sob GDB (`the_disassembly_view_marks_the_current_instruction_of_the_function`). Breakpoints em instruções e sintaxe Intel ficam fora do escopo |
 | D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
 | D-20 | Parallel stacks | ⬜ | M4 | |
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |

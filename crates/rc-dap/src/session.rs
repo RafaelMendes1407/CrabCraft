@@ -241,6 +241,8 @@ pub enum DebugEvent {
     VariableSet { id: u64, reference: i64, name: String, result: Result<String, String> },
     /// The answer of [`DebugSession::read_memory`] with its id.
     MemoryRead { id: u64, result: Result<crate::memory::MemoryBlock, String> },
+    /// The answer of [`DebugSession::disassemble`] with its id: instructions in address order.
+    Disassembled { id: u64, result: Result<Vec<crate::disassembly::Instruction>, String> },
     /// The exception the program stopped on.
     Exception(ExceptionInfo),
     Module(ModuleEvent),
@@ -276,6 +278,7 @@ enum Purpose {
     Evaluate { id: u64, expression: String, context: EvalContext, hex: bool },
     SetVariable { id: u64, generation: u64, reference: i64, name: String, expression: Option<String>, hex: bool },
     ReadMemory { id: u64, requested: Option<u64>, count: usize },
+    Disassemble { id: u64 },
     ExceptionInfo { generation: u64 },
     LogPoint { generation: u64, index: usize, part: usize },
     Command(&'static str),
@@ -839,6 +842,13 @@ impl DebugSession {
                     .and_then(|reply| crate::memory::decode_read(requested, count, &reply).map_err(|e| e.to_string()));
                 self.events.push(DebugEvent::MemoryRead { id, result });
             }
+            Purpose::Disassemble { id } => {
+                let result = r
+                    .and_then(|v| serde_json::from_value::<DisassembleResponse>(v).map_err(|e| DapError::new(e.to_string())))
+                    .map_err(|e| e.message)
+                    .and_then(|reply| crate::disassembly::decode(&reply).map_err(|e| e.to_string()));
+                self.events.push(DebugEvent::Disassembled { id, result });
+            }
             Purpose::ExceptionInfo { generation } => {
                 if generation != self.generation {
                     return;
@@ -1121,10 +1131,19 @@ impl DebugSession {
     }
 
     fn resume(&mut self, command: &'static str) {
+        self.resume_with(command, None);
+    }
+
+    /// Resumes with `command`, stepping by `granularity` (`"instruction"`) when given.
+    fn resume_with(&mut self, command: &'static str, granularity: Option<&str>) {
         let SessionState::Stopped(info) = &self.state else { return };
         let tid = info.thread_id;
         let Some(c) = &self.client else { return };
-        self.in_flight.push((c.request(command, json!({"threadId": tid})), Purpose::Command(command)));
+        let arguments = match granularity {
+            Some(g) => json!({"threadId": tid, "granularity": g}),
+            None => json!({"threadId": tid}),
+        };
+        self.in_flight.push((c.request(command, arguments), Purpose::Command(command)));
         self.invalidate();
         self.set_state(SessionState::Running);
         self.events.push(DebugEvent::Continued);
@@ -1216,6 +1235,15 @@ impl DebugSession {
 
     pub fn step_out(&mut self) {
         self.resume("stepOut");
+    }
+
+    /// Runs one machine instruction, stepping over calls (`over`) or into them. Does nothing
+    /// when the adapter cannot step by instruction.
+    pub fn step_instruction(&mut self, over: bool) {
+        if !self.capabilities.supports_stepping_granularity {
+            return;
+        }
+        self.resume_with(if over { "next" } else { "stepIn" }, Some("instruction"));
     }
 
     /// Breaks into the running program.
@@ -1605,6 +1633,32 @@ impl DebugSession {
                 self.in_flight.push((p, Purpose::ReadMemory { id, requested, count }));
             }
             (_, refuse) => self.events.push(DebugEvent::MemoryRead { id, result: Err(refuse.unwrap_or("the debugger is not running").into()) }),
+        }
+        id
+    }
+
+    /// Disassembles `count` instructions (at most [`crate::disassembly::MAX_COUNT`]) from
+    /// `memory_reference` plus `offset` bytes, skipping `instruction_offset` instructions,
+    /// while stopped; the answer comes as [`DebugEvent::Disassembled`] with the returned id.
+    pub fn disassemble(&mut self, memory_reference: &str, offset: i64, instruction_offset: i64, count: usize) -> u64 {
+        let id = self.next_id();
+        let count = count.clamp(1, crate::disassembly::MAX_COUNT);
+        let refuse = if !self.state.is_stopped() {
+            Some("the program is not paused")
+        } else if !self.capabilities.supports_disassemble_request {
+            Some("the debugger cannot disassemble")
+        } else {
+            None
+        };
+        match (&self.client, refuse) {
+            (Some(c), None) => {
+                let p = c.request(
+                    "disassemble",
+                    json!({"memoryReference": memory_reference, "offset": offset, "instructionOffset": instruction_offset, "instructionCount": count, "resolveSymbols": true}),
+                );
+                self.in_flight.push((p, Purpose::Disassemble { id }));
+            }
+            (_, refuse) => self.events.push(DebugEvent::Disassembled { id, result: Err(refuse.unwrap_or("the debugger is not running").into()) }),
         }
         id
     }

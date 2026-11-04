@@ -8,6 +8,7 @@ mod copyright;
 mod debugger;
 mod dep_versions;
 mod feature_nav;
+mod disassembly_view;
 mod insight;
 mod call_tree;
 mod item_templates;

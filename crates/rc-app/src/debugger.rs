@@ -100,6 +100,9 @@ pub struct Debugger {
     /// The Memory tab is shown (instead of Threads & Variables or the Console).
     pub show_memory: bool,
     pub memory: crate::memory_view::MemoryView,
+    /// The Disassembly tab is shown (when neither the Console nor the Memory tab is).
+    pub show_disassembly: bool,
+    pub disassembly: crate::disassembly_view::DisassemblyView,
     /// Breakpoint set by Run to Cursor, removed at the next stop (file, 1-based line).
     temp: Option<(PathBuf, u32)>,
     /// URLs the debugged web app listens on.
@@ -137,6 +140,8 @@ impl Debugger {
             show_console: false,
             show_memory: false,
             memory: Default::default(),
+            show_disassembly: false,
+            disassembly: Default::default(),
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),
@@ -193,6 +198,7 @@ impl Debugger {
         self.name = name.to_string();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
         self.session = Some(session);
@@ -215,6 +221,7 @@ impl Debugger {
         self.name = config.name.clone();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
@@ -253,6 +260,7 @@ impl Debugger {
         self.name = config.name.clone();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
@@ -338,6 +346,24 @@ impl Debugger {
     pub fn memory_page(&mut self, pages: i64) {
         if let Some(s) = &mut self.session {
             self.memory.page(s, pages);
+        }
+    }
+
+    /// Loads the instructions before (`earlier`) or after the ones in the Disassembly tab.
+    pub fn disassembly_more(&mut self, earlier: bool) {
+        if let Some(s) = &mut self.session {
+            if earlier {
+                self.disassembly.load_earlier(s);
+            } else {
+                self.disassembly.load_later(s);
+            }
+        }
+    }
+
+    /// Runs one machine instruction, over calls (`over`) or into them.
+    pub fn step_instruction(&mut self, over: bool) {
+        if let Some(s) = self.session.as_mut().filter(|s| s.state().is_stopped()) {
+            s.step_instruction(over);
         }
     }
 
@@ -450,6 +476,7 @@ impl Debugger {
         let events = session.pump();
         for ev in events {
             self.memory.on_event(&ev, session);
+            self.disassembly.on_event(&ev, session);
             match ev {
                 DebugEvent::VariableSet { id, name, result, .. } => {
                     let mine = self.edit.as_ref().is_some_and(|e| e.pending == Some(id));
@@ -594,6 +621,10 @@ impl Debugger {
                 }
                 _ => {}
             }
+        }
+        // The Disassembly tab follows the selected frame and reads again at each stop.
+        if self.show_disassembly && !self.show_console && !self.show_memory {
+            self.disassembly.sync(session);
         }
         // Execution point and breakpoint state in the editors.
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
