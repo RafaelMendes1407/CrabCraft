@@ -1436,10 +1436,19 @@ impl CrabCraftApp {
                     let preview = crate::refactor_preview::RefactorPreview::start(title, &edit, open, self.waker.clone());
                     self.dialog = Some(Dialog::RefactorPreview(Box::new(preview)));
                 }
+                InsightOutput::RefactorConflicts(review) => self.dialog = Some(Dialog::RefactorConflicts(review)),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
             }
         }
+    }
+
+    /// "Continue anyway" on a rename's conflicts: applies its edits, or previews them.
+    pub fn continue_refactoring(&mut self, review: crate::refactor_conflicts::Review) {
+        let Some(edit) = review.edit else { return };
+        let mut out = Vec::new();
+        crate::insight::finish_rename(&mut self.docs, edit, review.preview, &mut out);
+        self.handle_insight(out);
     }
 
     /// Runs a code-insight action from the editor's keymap on the active document.

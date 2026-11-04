@@ -1284,5 +1284,23 @@
     "Looking for the WebAssembly tools…": "Wyszukiwanie narzędzi WebAssembly…",
     "The {target} target is not installed. Add it with: rustup target add {target}": "Cel {target} nie jest zainstalowany. Dodaj go poleceniem: rustup target add {target}",
     "wasm-pack was not found: install it to package the library for JavaScript": "Nie znaleziono wasm-pack: zainstaluj go, aby spakować bibliotekę dla JavaScriptu"
+  },
+  "refactor-conflicts": {
+    "Refactoring Conflicts": "Konflikty refaktoryzacji",
+    "Renaming to '{name}' may cause problems:": "Zmiana nazwy na '{name}' może spowodować problemy:",
+    "Open this place": "Otwórz to miejsce",
+    "Nothing can be renamed until these are fixed.": "Nie można zmienić nazwy, dopóki te problemy nie zostaną naprawione.",
+    "Continue Anyway": "Kontynuuj mimo to",
+    "Could not check for conflicts: {error}": "Nie udało się sprawdzić konfliktów: {error}",
+    "rust-analyzer could not rename: {error}": "rust-analyzer nie mógł zmienić nazwy: {error}",
+    "This file is read-only": "Ten plik jest tylko do odczytu",
+    "This file cannot be read: {error}": "Nie można odczytać tego pliku: {error}",
+    "The edits do not match the file's current text": "Zmiany nie pasują do bieżącej treści pliku",
+    "'{name}' is already used here": "'{name}' jest już tu używane",
+    "'{name}' is not a valid identifier": "'{name}' nie jest poprawnym identyfikatorem",
+    "'{name}' is a keyword": "'{name}' jest słowem kluczowym",
+    "This file belongs to a dependency or the toolchain": "Ten plik należy do zależności lub zestawu narzędzi",
+    "This file is generated (in the build output folder)": "Ten plik jest generowany (w folderze wyników kompilacji)",
+    "This file is outside the project": "Ten plik znajduje się poza projektem"
   }
 }

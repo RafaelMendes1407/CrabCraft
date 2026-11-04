@@ -1284,5 +1284,23 @@
     "Looking for the WebAssembly tools…": "WebAssembly ツールを探しています…",
     "The {target} target is not installed. Add it with: rustup target add {target}": "{target} ターゲットがインストールされていません。追加するには: rustup target add {target}",
     "wasm-pack was not found: install it to package the library for JavaScript": "wasm-pack が見つかりません: JavaScript 向けにライブラリをパッケージ化するにはインストールしてください"
+  },
+  "refactor-conflicts": {
+    "Refactoring Conflicts": "リファクタリングの競合",
+    "Renaming to '{name}' may cause problems:": "'{name}' に名前を変更すると問題が起きる可能性があります:",
+    "Open this place": "この場所を開く",
+    "Nothing can be renamed until these are fixed.": "これらを修正するまで名前を変更できません。",
+    "Continue Anyway": "このまま続行",
+    "Could not check for conflicts: {error}": "競合を確認できませんでした: {error}",
+    "rust-analyzer could not rename: {error}": "rust-analyzer は名前を変更できませんでした: {error}",
+    "This file is read-only": "このファイルは読み取り専用です",
+    "This file cannot be read: {error}": "このファイルを読み取れません: {error}",
+    "The edits do not match the file's current text": "編集内容がファイルの現在のテキストと一致しません",
+    "'{name}' is already used here": "'{name}' はここで既に使われています",
+    "'{name}' is not a valid identifier": "'{name}' は有効な識別子ではありません",
+    "'{name}' is a keyword": "'{name}' はキーワードです",
+    "This file belongs to a dependency or the toolchain": "このファイルは依存関係またはツールチェーンに属しています",
+    "This file is generated (in the build output folder)": "このファイルは生成されたものです (ビルド出力フォルダー内)",
+    "This file is outside the project": "このファイルはプロジェクトの外にあります"
   }
 }

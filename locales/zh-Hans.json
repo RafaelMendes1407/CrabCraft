@@ -1284,5 +1284,23 @@
     "Looking for the WebAssembly tools…": "正在查找 WebAssembly 工具…",
     "The {target} target is not installed. Add it with: rustup target add {target}": "未安装 {target} 目标。请使用以下命令添加：rustup target add {target}",
     "wasm-pack was not found: install it to package the library for JavaScript": "未找到 wasm-pack：安装它以便为 JavaScript 打包该库"
+  },
+  "refactor-conflicts": {
+    "Refactoring Conflicts": "重构冲突",
+    "Renaming to '{name}' may cause problems:": "重命名为 '{name}' 可能会导致问题：",
+    "Open this place": "打开此位置",
+    "Nothing can be renamed until these are fixed.": "在修复这些问题之前无法重命名。",
+    "Continue Anyway": "仍然继续",
+    "Could not check for conflicts: {error}": "无法检查冲突：{error}",
+    "rust-analyzer could not rename: {error}": "rust-analyzer 无法重命名：{error}",
+    "This file is read-only": "此文件为只读",
+    "This file cannot be read: {error}": "无法读取此文件：{error}",
+    "The edits do not match the file's current text": "这些编辑与文件的当前文本不匹配",
+    "'{name}' is already used here": "'{name}' 已在此处使用",
+    "'{name}' is not a valid identifier": "'{name}' 不是有效的标识符",
+    "'{name}' is a keyword": "'{name}' 是关键字",
+    "This file belongs to a dependency or the toolchain": "此文件属于依赖项或工具链",
+    "This file is generated (in the build output folder)": "此文件是生成的（位于构建输出文件夹中）",
+    "This file is outside the project": "此文件位于项目之外"
   }
 }

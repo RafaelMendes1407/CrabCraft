@@ -3838,3 +3838,64 @@ fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
     assert!(project.join("tests/describe.rs").is_file());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(project.join("src/lib.rs")));
 }
+
+/// Before a rename is made, its conflicts are listed (R-04): a name already used in a file
+/// the rename touches, a keyword. "Continue anyway" makes it (or previews it); a rename
+/// without conflicts is made at once.
+#[test]
+fn a_rename_lists_its_conflicts_before_it_is_made() {
+    use crate::ui::dialogs::Dialog;
+    const LIB: &str = "pub struct Greeter;\n\nimpl Greeter {\n    pub fn hello(&self) -> &'static str {\n        \"hello\"\n    }\n\n    pub fn bye(&self) -> &'static str {\n        \"bye\"\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    let root = root.canonicalize().unwrap();
+    let lib = root.join("src/lib.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
+    let i = app.docs.active.unwrap();
+    let conflicts = |app: &mut CrabCraftApp, name: &str, preview: Option<String>| {
+        app.dialog = None;
+        app.insight.rename(&app.docs.list[i], pos, name, preview);
+        pump(app, "the conflicts", |a| matches!(a.dialog, Some(Dialog::RefactorConflicts(_))));
+        let Some(Dialog::RefactorConflicts(review)) = app.dialog.take() else { unreachable!() };
+        review
+    };
+
+    // A name another method of the type already has.
+    let review = conflicts(&mut app, "bye", None);
+    let found: Vec<(Option<&Path>, usize, &str)> = review.conflicts.iter().map(|c| (c.path.as_deref(), c.line, c.message.as_str())).collect();
+    assert_eq!(found, [(Some(lib.as_path()), 7, "'bye' is already used here")], "{review:#?}");
+    assert!(std::fs::read_to_string(&lib).unwrap().contains("pub fn hello("), "nothing is renamed before the user continues");
+
+    // A keyword: listed, whether or not rust-analyzer accepts it.
+    let review = conflicts(&mut app, "fn", None);
+    assert!(review.conflicts.iter().any(|c| c.path.is_none() && c.message == "'fn' is a keyword"), "{review:#?}");
+    assert!(std::fs::read_to_string(&lib).unwrap().contains("pub fn hello("));
+
+    // Continue anyway with a preview: the preview opens with the edits.
+    let review = conflicts(&mut app, "bye", Some("Rename".into()));
+    app.continue_refactoring(*review);
+    assert!(matches!(app.dialog, Some(Dialog::RefactorPreview(_))));
+
+    // Without conflicts nothing is asked: the preview of a rename to a new name opens at once.
+    app.dialog = None;
+    app.insight.rename(&app.docs.list[i], pos, "farewell", Some("Rename".into()));
+    pump(&mut app, "the preview", |a| a.dialog.is_some());
+    assert!(matches!(app.dialog, Some(Dialog::RefactorPreview(_))));
+
+    // Continue anyway: the rename is made.
+    let review = conflicts(&mut app, "bye", None);
+    app.continue_refactoring(*review);
+    let main_text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(main_text.contains("Greeter.bye()"), "{main_text}");
+    assert_eq!(std::fs::read_to_string(&lib).unwrap().matches("pub fn bye(").count(), 2);
+    assert!(app.dialog.is_none());
+}

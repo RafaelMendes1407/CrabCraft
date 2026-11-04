@@ -17,6 +17,7 @@ mod local_history;
 mod manifest_completion;
 mod memory_view;
 mod playground;
+mod refactor_conflicts;
 mod refactor_preview;
 mod run_anything;
 mod runner;

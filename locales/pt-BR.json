@@ -1284,5 +1284,23 @@
     "Looking for the WebAssembly tools…": "Procurando as ferramentas de WebAssembly…",
     "The {target} target is not installed. Add it with: rustup target add {target}": "O target {target} não está instalado. Adicione-o com: rustup target add {target}",
     "wasm-pack was not found: install it to package the library for JavaScript": "O wasm-pack não foi encontrado: instale-o para empacotar a biblioteca para JavaScript"
+  },
+  "refactor-conflicts": {
+    "Refactoring Conflicts": "Conflitos da refatoração",
+    "Renaming to '{name}' may cause problems:": "Renomear para '{name}' pode causar problemas:",
+    "Open this place": "Abrir este local",
+    "Nothing can be renamed until these are fixed.": "Nada pode ser renomeado até que isso seja corrigido.",
+    "Continue Anyway": "Continuar mesmo assim",
+    "Could not check for conflicts: {error}": "Não foi possível verificar os conflitos: {error}",
+    "rust-analyzer could not rename: {error}": "O rust-analyzer não conseguiu renomear: {error}",
+    "This file is read-only": "Este arquivo é somente leitura",
+    "This file cannot be read: {error}": "Não é possível ler este arquivo: {error}",
+    "The edits do not match the file's current text": "As edições não correspondem ao texto atual do arquivo",
+    "'{name}' is already used here": "'{name}' já é usado aqui",
+    "'{name}' is not a valid identifier": "'{name}' não é um identificador válido",
+    "'{name}' is a keyword": "'{name}' é uma palavra-chave",
+    "This file belongs to a dependency or the toolchain": "Este arquivo pertence a uma dependência ou ao toolchain",
+    "This file is generated (in the build output folder)": "Este arquivo é gerado (na pasta de saída da compilação)",
+    "This file is outside the project": "Este arquivo está fora do projeto"
   }
 }

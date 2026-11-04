@@ -2756,3 +2756,25 @@ fn copyright_capture() {
         h.render().unwrap().save(out.join(format!("copyright-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/refactor-conflicts.png"]
+fn refactor_conflicts_capture() {
+    use crate::refactor_conflicts::{Conflict, Review};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    let file = root.join("beta/src/lib.rs");
+    let conflicts = vec![
+        Conflict { path: Some(file.clone()), line: 3, col: 7, message: "'NEEDLE_NAME' is already used here".into() },
+        Conflict { path: Some(root.join("target/debug/build/out.rs")), line: 0, col: 3, message: "This file is generated (in the build output folder)".into() },
+        Conflict { path: None, line: 0, col: 0, message: "'fn' is a keyword".into() },
+    ];
+    let review = Review { name: "NEEDLE_NAME".into(), conflicts, edit: Some(Default::default()), preview: None };
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorConflicts(Box::new(review)));
+    h.run_steps(4);
+    assert!(matches!(h.state().dialog, Some(crate::ui::dialogs::Dialog::RefactorConflicts(_))));
+    h.render().unwrap().save(out.join("refactor-conflicts.png")).unwrap();
+}

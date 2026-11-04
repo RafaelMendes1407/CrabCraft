@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 148 |
+| ✅ Pronto | 149 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 75 |
+| ⬜ A fazer | 74 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -181,7 +181,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-01 | Lista de refatorações (Ctrl+Alt+Shift+T) | ✅ | M3 | Popup com Renomear e as refatorações do rust-analyzer (tipo `refactor*`); também no menu de contexto e no menu Refatorar. |
 | R-02 | Renomear em todo o projeto | ✅ | M1 | Rename entre arquivos testado com rust-analyzer real |
 | R-03 | Pré-visualização de refatoração | ✅ | M3 | Renomear símbolo › Pré-visualizar lista as edições do rust-analyzer por arquivo, cada linha antes → depois com caixa de seleção (por arquivo e por mudança); Refatorar aplica só as marcadas (arquivos abertos como um passo de desfazer, fechados no disco). Renomear arquivo já mostrava a lista. Testado com rust-analyzer real; captura conferida. Falta: prévia das demais refatorações (ações de código) |
-| R-04 | Lista de conflitos da refatoração | ⬜ | M3 | |
+| R-04 | Lista de conflitos da refatoração | ✅ | M3 | Antes de aplicar (ou pré-visualizar) um Renomear em Rust, as edições do rust-analyzer são verificadas numa thread: nome já usado num arquivo tocado (fora de comentários e strings), palavra-chave ou identificador inválido, arquivo fora do projeto, em `target/`, em dependência/toolchain (`.cargo/registry`, `.rustup`), somente leitura ou com texto que não bate mais com a edição, e erro do rust-analyzer. A caixa lista cada conflito (arquivo:linha clicável que abre o local) com Continuar mesmo assim / Cancelar; sem conflitos o rename segue direto. Testado com rust-analyzer real; captura conferida. Falta: conflitos das demais refatorações (ações de código) e checagem de escopo exata (o choque de nome é por arquivo) |
 | R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
 | R-07 | Mudar assinatura | ⬜ | M4 | |

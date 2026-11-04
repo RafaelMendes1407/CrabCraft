@@ -34,6 +34,8 @@ pub enum Dialog {
     RenameFile(Box<crate::file_rename::FileRename>),
     /// The edits of a refactoring, to review before applying them.
     RefactorPreview(Box<crate::refactor_preview::RefactorPreview>),
+    /// The conflicts of a refactoring, to continue anyway or cancel.
+    RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     ConfirmDelete { path: PathBuf },
     /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
     InvalidateCaches { clean: bool },
@@ -104,6 +106,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::RenameFile(r) => rename_file(app, ctx, r),
         Dialog::RefactorPreview(r) => refactor_preview(app, ctx, r),
+        Dialog::RefactorConflicts(r) => refactor_conflicts(app, ctx, r),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -1391,6 +1394,53 @@ fn refactor_preview(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refact
                 Outcome::Keep
             }
         };
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// What may go wrong with a rename, each conflict with its place (a click opens it);
+/// "Continue anyway" makes the rename (or previews it), Cancel leaves everything as it is.
+fn refactor_conflicts(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refactor_conflicts::Review) -> Outcome {
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut open = None;
+    let can_continue = r.edit.is_some();
+    let ((go, cancel), esc) = modal(ctx, "refactor_conflicts", 640.0, |ui| {
+        title(ui, tr("Refactoring Conflicts"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 32.0);
+            ui.label(trf("Renaming to '{name}' may cause problems:", &[("name", &r.name)]));
+        });
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().max_height(320.0).auto_shrink([false, true]).show(ui, |ui| {
+            for (i, c) in r.conflicts.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if let Some(path) = &c.path {
+                        let shown = root.as_deref().and_then(|root| path.strip_prefix(root).ok()).unwrap_or(path).display().to_string();
+                        let place = format!("{shown}:{}", c.line + 1);
+                        if ui.link(egui::RichText::new(place).monospace().size(12.0)).on_hover_text(tr("Open this place")).clicked() {
+                            open = Some(i);
+                        }
+                    }
+                    ui.label(egui::RichText::new(&c.message).color(if c.path.is_some() { p.text } else { p.error }));
+                });
+            }
+        });
+        if !can_continue {
+            ui.label(egui::RichText::new(tr("Nothing can be renamed until these are fixed.")).size(12.0).color(p.muted));
+        }
+        buttons(ui, tr("Continue Anyway"), can_continue)
+    });
+    if let Some(c) = open.and_then(|i| r.conflicts.get(i))
+        && let Some(path) = c.path.clone()
+    {
+        app.open_at(&path, c.line, c.col);
+    }
+    if go && can_continue {
+        let review = std::mem::replace(r, crate::refactor_conflicts::Review { name: String::new(), conflicts: Vec::new(), edit: None, preview: None });
+        // The preview, when asked for, takes this dialog's place.
+        app.continue_refactoring(review);
+        return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
