@@ -1667,5 +1667,22 @@
     "Binary files cannot be merged here; accept one side instead": "此处无法合并二进制文件；请改为接受其中一方",
     "One side deleted the file; accept one side instead": "一方删除了该文件；请改为接受其中一方",
     "{file} resolved": "{file} 已解决"
+  },
+  "intentionpreview": {
+    "No preview: the language server is not running": "无预览：语言服务器未运行",
+    "Also runs a command of the language server": "还会运行语言服务器的一个命令",
+    "Runs a command of the language server; there is no text to preview": "运行语言服务器的命令；没有可预览的文本",
+    "This action changes no text": "此操作不更改任何文本",
+    "Creates {file}": "创建 {file}",
+    "Renames {from} to {to}": "将 {from} 重命名为 {to}",
+    "Deletes {file}": "删除 {file}",
+    "The fix no longer applies to this text": "该修复已不适用于此文本",
+    "The edit does not fit the file's text": "该编辑与文件文本不符",
+    "No preview: no file is open": "无预览：没有打开的文件",
+    "Turns the feature on for code analysis; no file changes": "为代码分析启用该 feature；不更改任何文件",
+    "Opens a dialog to choose the changes": "打开对话框以选择更改",
+    "Loading preview…": "正在加载预览…",
+    "Could not preview this action: {error}": "无法预览此操作：{error}",
+    "{n} more changed lines": "另有 {n} 行更改"
   }
 }

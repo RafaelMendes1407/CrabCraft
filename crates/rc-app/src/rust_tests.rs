@@ -4256,3 +4256,104 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
     assert!(again.auto_attach.is_none(), "watching starts only when asked");
     drop((before, after, third));
 }
+
+/// I-33: the highlighted Alt+Enter action is previewed before it is applied. rust-analyzer's
+/// import fix comes without its edit, so it is resolved in the background; moving to another
+/// row drops the pending answer; the resolved row is applied without asking again.
+#[test]
+fn the_highlighted_intention_is_previewed_before_it_is_applied() {
+    use crate::intention_preview::State;
+    use rc_lsp::lsp_types::CodeActionOrCommand as A;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    const SOURCE: &str = "fn main() {\n    let mut m = HashMap::new();\n    m.insert(1, 2);\n    println!(\"{m:?}\");\n}\n";
+    write(&root.join("src/main.rs"), SOURCE);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    pump(&mut app, "the unresolved name", |a| a.docs.active_doc().is_some_and(|d| !d.editor.diagnostics.is_empty()));
+    let i = app.docs.index_of(&main).unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(SOURCE.find("HashMap").unwrap() + 1);
+    app.run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::ZERO);
+    pump(&mut app, "the actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    let Some(crate::ui::dialogs::Dialog::CodeActions { mut list, .. }) = app.dialog.take() else { unreachable!() };
+    let title = |a: &A| match a {
+        A::Command(c) => c.title.clone(),
+        A::CodeAction(c) => c.title.clone(),
+    };
+    let import = list.iter().position(|a| title(a).contains("Import `std::collections::HashMap`")).unwrap_or_else(|| panic!("{:?}", list.iter().map(title).collect::<Vec<_>>()));
+    assert!(matches!(&list[import], A::CodeAction(a) if a.edit.is_none()), "rust-analyzer resolves the edit lazily");
+    let other = (import + 1) % list.len();
+    assert_ne!(other, import, "{:?}", list.iter().map(title).collect::<Vec<_>>());
+
+    // Highlighted, then left before the answer: its resolve is dropped.
+    app.update_intention_preview(&mut list, import);
+    assert_eq!(app.intention_preview.state, State::Resolving);
+    let settle = |app: &mut CrabCraftApp, list: &mut Vec<A>, row: usize| {
+        let start = Instant::now();
+        loop {
+            app.update_intention_preview(list, row);
+            if !app.intention_preview.busy() || start.elapsed() > Duration::from_secs(60) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    settle(&mut app, &mut list, other);
+    // The import's late answer went nowhere: its row is still unresolved, and the preview is the
+    // other row's.
+    assert!(matches!(&list[import], A::CodeAction(a) if a.edit.is_none()));
+    assert!(!matches!(&app.intention_preview.state, State::Ready { files, .. } if files.iter().any(|f| f.lines.contains(&('+', "use std::collections::HashMap;".to_string())))));
+    // Back on the import: resolved in the background, then diffed.
+    settle(&mut app, &mut list, import);
+    let State::Ready { files, .. } = app.intention_preview.state.clone() else { panic!("{:?}", app.intention_preview.state) };
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, main);
+    assert!(files[0].lines.contains(&('+', "use std::collections::HashMap;".to_string())), "{:?}", files[0].lines);
+    assert_eq!(files[0].removed, 0);
+    // Nothing was applied, and the row now carries its edit.
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), SOURCE);
+    assert!(matches!(&list[import], A::CodeAction(a) if a.edit.is_some()));
+
+    // Applying it needs no second request: the text changes at once.
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, list.swap_remove(import), &mut out);
+    assert!(app.docs.list[i].editor.buffer.rope().to_string().starts_with("use std::collections::HashMap;\n"));
+    app.intention_preview.clear();
+    app.insight.stop();
+}
+
+/// I-33: the IDE's own quick fixes (here the update of a Cargo.toml requirement) are previewed
+/// from the edit they make, without a language server.
+#[test]
+fn an_ide_quick_fix_is_previewed_without_a_server() {
+    use crate::intention_preview::State;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    const MANIFEST: &str = "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = \"1.0.100\"\n";
+    write(&root.join("Cargo.toml"), MANIFEST);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_file(&root.join("Cargo.toml"));
+    let command = rc_lsp::lsp_types::Command { title: "Update to 1.0.200".into(), command: crate::insight::UPDATE_DEPENDENCY_COMMAND.into(), arguments: Some(vec![serde_json::json!(6), serde_json::json!("1.0.200")]) };
+    let mut list = vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(rc_lsp::lsp_types::CodeAction { title: command.title.clone(), command: Some(command), ..Default::default() })];
+    let start = Instant::now();
+    loop {
+        app.update_intention_preview(&mut list, 0);
+        if !app.intention_preview.busy() || start.elapsed() > Duration::from_secs(10) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let State::Ready { files, .. } = app.intention_preview.state.clone() else { panic!("{:?}", app.intention_preview.state) };
+    assert_eq!(files[0].lines, vec![('@', "7".to_string()), ('-', "serde = \"1.0.100\"".to_string()), ('+', "serde = \"1.0.200\"".to_string())]);
+    assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), MANIFEST);
+}

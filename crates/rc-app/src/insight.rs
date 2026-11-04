@@ -1755,6 +1755,13 @@ impl Insight {
         self.run_code_action_now(docs, action, out);
     }
 
+    /// Asks the server to resolve a context action's edit, for its preview (I-33).
+    pub fn resolve_code_action(&self, action: &lsp::CodeAction) -> Option<Pending<lsp::CodeAction>> {
+        let session = self.session.as_ref().filter(|_| self.ready())?;
+        let params = serde_json::to_value(action).ok()?;
+        Some(session.client.request_raw("codeAction/resolve", params))
+    }
+
     fn run_code_action_now(&mut self, docs: &mut Docs, action: lsp::CodeActionOrCommand, out: &mut Vec<InsightOutput>) {
         let command = match action {
             lsp::CodeActionOrCommand::Command(c) => Some(c),

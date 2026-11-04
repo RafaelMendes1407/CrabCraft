@@ -2174,8 +2174,17 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
             }
         });
     });
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && chosen.is_none() {
+    // The highlighted action's changes, beside the list (I-33).
+    app.update_intention_preview(list, *selected);
+    if app.intention_preview.busy() {
+        ctx.request_repaint_after(std::time::Duration::from_millis(50));
+    }
+    let preview = intention_preview(app, ctx, area.response.rect);
+    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && !preview.hovered() && chosen.is_none() {
         close = true;
+    }
+    if close || chosen.is_some() {
+        app.intention_preview.clear();
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
@@ -2261,6 +2270,81 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         return Outcome::Close;
     }
     if close { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The diff of the highlighted Alt+Enter row, right of the list (or under it when the window
+/// is too narrow).
+fn intention_preview(app: &CrabCraftApp, ctx: &Context, list: egui::Rect) -> egui::Response {
+    use crate::intention_preview::State;
+    const WIDTH: f32 = 480.0;
+    let dark = ctx.global_style().visuals.dark_mode;
+    let (p, s) = (rc_kit::theme::palette(dark), rc_kit::theme::scheme(dark));
+    let screen = ctx.content_rect();
+    let pos = if list.right() + 6.0 + WIDTH <= screen.right() { list.right_top() + vec2(6.0, 0.0) } else { list.left_bottom() + vec2(0.0, 6.0) };
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let state = &app.intention_preview.state;
+    let area = egui::Area::new(Id::new("intention_preview")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+            ui.set_width(WIDTH);
+            let muted = |ui: &mut Ui, text: &str| {
+                ui.label(egui::RichText::new(text).size(12.0).color(p.muted));
+            };
+            match state {
+                State::Idle => {}
+                State::Resolving | State::Computing => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        muted(ui, tr("Loading preview…"));
+                    });
+                }
+                State::Note(n) => muted(ui, n),
+                State::Failed(e) => {
+                    ui.label(egui::RichText::new(trf("Could not preview this action: {error}", &[("error", e)])).size(12.0).color(p.error));
+                }
+                State::Ready { files, notes } => {
+                    egui::ScrollArea::vertical().id_salt("intention_preview_scroll").max_height(360.0).min_scrolled_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+                        for note in notes {
+                            muted(ui, note);
+                        }
+                        if files.is_empty() && notes.is_empty() {
+                            muted(ui, tr("This action changes no text"));
+                        }
+                        for f in files {
+                            let shown = root.as_deref().and_then(|r| f.path.strip_prefix(r).ok()).unwrap_or(&f.path);
+                            let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                            ui.horizontal(|ui| {
+                                icons::image(ui, icons::for_file(&name), 16.0);
+                                ui.label(egui::RichText::new(shown.display().to_string()).size(12.5).strong());
+                                if f.error.is_none() {
+                                    ui.label(egui::RichText::new(format!("+{} −{}", f.added, f.removed)).size(12.0).color(p.muted));
+                                }
+                            });
+                            if let Some(e) = &f.error {
+                                ui.label(egui::RichText::new(e).size(12.0).color(p.error));
+                            }
+                            for (kind, line) in &f.lines {
+                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), egui::Sense::hover());
+                                let (bg, sign, text) = match kind {
+                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                };
+                                ui.painter().rect_filled(rect, 0.0, bg);
+                                let color = if sign.is_empty() { p.muted } else { p.text };
+                                ui.painter().with_clip_rect(rect).text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), color);
+                            }
+                            let shown_lines = f.lines.iter().filter(|(k, _)| *k != '@').count();
+                            if shown_lines < f.added + f.removed {
+                                muted(ui, &trf("{n} more changed lines", &[("n", &(f.added + f.removed - shown_lines))]));
+                            }
+                            ui.add_space(6.0);
+                        }
+                    });
+                }
+            }
+        });
+    });
+    area.response
 }
 
 fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {

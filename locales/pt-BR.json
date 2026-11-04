@@ -1667,5 +1667,22 @@
     "Binary files cannot be merged here; accept one side instead": "Arquivos binários não podem ser mesclados aqui; aceite um dos lados",
     "One side deleted the file; accept one side instead": "Um dos lados excluiu o arquivo; aceite um dos lados",
     "{file} resolved": "{file} resolvido"
+  },
+  "intentionpreview": {
+    "No preview: the language server is not running": "Sem prévia: o servidor de linguagem não está rodando",
+    "Also runs a command of the language server": "Também executa um comando do servidor de linguagem",
+    "Runs a command of the language server; there is no text to preview": "Executa um comando do servidor de linguagem; não há texto para pré-visualizar",
+    "This action changes no text": "Esta ação não altera nenhum texto",
+    "Creates {file}": "Cria {file}",
+    "Renames {from} to {to}": "Renomeia {from} para {to}",
+    "Deletes {file}": "Exclui {file}",
+    "The fix no longer applies to this text": "A correção não se aplica mais a este texto",
+    "The edit does not fit the file's text": "A edição não corresponde ao texto do arquivo",
+    "No preview: no file is open": "Sem prévia: nenhum arquivo aberto",
+    "Turns the feature on for code analysis; no file changes": "Liga a feature na análise de código; nenhum arquivo muda",
+    "Opens a dialog to choose the changes": "Abre um diálogo para escolher as mudanças",
+    "Loading preview…": "Carregando prévia…",
+    "Could not preview this action: {error}": "Não foi possível pré-visualizar esta ação: {error}",
+    "{n} more changed lines": "Mais {n} linhas alteradas"
   }
 }

@@ -42,6 +42,26 @@ impl FeatureFix {
         }
     }
 
+    /// The `Cargo.toml` the fix edits (`None`: it changes the analysis settings only).
+    pub fn manifest(&self) -> Option<&Path> {
+        match self {
+            FeatureFix::Analysis { .. } => None,
+            FeatureFix::Default { manifest, .. } | FeatureFix::Dependency { manifest, .. } => Some(manifest),
+        }
+    }
+
+    /// The edit the fix makes in the text of its manifest (`None`: already there, or no place).
+    pub fn manifest_edit(&self, text: &str) -> Option<TextEdit> {
+        match self {
+            FeatureFix::Analysis { .. } => None,
+            FeatureFix::Default { feature, .. } => feature_fix::add_default_feature(text, feature),
+            FeatureFix::Dependency { key, feature, .. } => {
+                let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.key == *key && !d.in_workspace)?;
+                feature_fix::add_dependency_feature(text, &dep, feature)
+            }
+        }
+    }
+
     pub fn action(&self) -> lsp::CodeActionOrCommand {
         let command = lsp::Command { title: self.title(), command: ENABLE_FEATURE_COMMAND.to_string(), arguments: Some(vec![serde_json::to_value(self).unwrap_or_default()]) };
         lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction { title: command.title.clone(), kind: Some(lsp::CodeActionKind::QUICKFIX), command: Some(command), ..Default::default() })
@@ -107,11 +127,10 @@ impl CrabCraftApp {
                 self.set_cargo_feature(&package, &feature, true);
                 self.notify(trf("Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml", &[("feature", &feature), ("package", &package)]), false);
             }
-            FeatureFix::Default { manifest, feature, .. } => self.edit_manifest(&manifest, |text| feature_fix::add_default_feature(text, &feature)),
-            FeatureFix::Dependency { manifest, key, feature, .. } => self.edit_manifest(&manifest, |text| {
-                let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.key == key && !d.in_workspace)?;
-                feature_fix::add_dependency_feature(text, &dep, &feature)
-            }),
+            FeatureFix::Default { ref manifest, .. } | FeatureFix::Dependency { ref manifest, .. } => {
+                let manifest = manifest.clone();
+                self.edit_manifest(&manifest, |text| fix.manifest_edit(text));
+            }
         }
     }
 

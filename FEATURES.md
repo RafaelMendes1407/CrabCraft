@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 165 |
+| ✅ Pronto | 166 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 57 |
+| ⬜ A fazer | 56 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -149,7 +149,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-30 | Formatador embutido para trechos | ✅ | M3 | Reformatar código com seleção num arquivo Rust: o rustfmt (com as configurações do usuário) formata o arquivo em segundo plano e só os blocos de mudança que tocam as linhas selecionadas são aplicados (um bloco que cruza a borda vai inteiro). Testado com rustfmt real: só a função selecionada mudou |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
-| I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
+| I-33 | Pré-visualizar intention antes de aplicar | ✅ | M4 | No Alt+Enter (e nos popups Gerar e Refatorar), a ação destacada mostra ao lado o diff das linhas que muda, arquivo por arquivo quando a edição toca vários (arquivos fechados lidos numa thread). Ações do rust-analyzer sem edição são resolvidas com `codeAction/resolve` em segundo plano; mudar a seleção cancela o pedido e descarta o diff em andamento, e a ação resolvida é aplicada sem novo pedido. As correções próprias (versão e inspeções do `Cargo.toml`, ligar feature, `#[allow]`) também têm diff. Testado com rust-analyzer real (import do `HashMap`) e com a correção de versão do `Cargo.toml`; captura conferida. Operações de arquivo (criar/renomear/apagar) aparecem só como nota; ações que abrem diálogo ou só rodam comando do servidor dizem que não há texto para mostrar |
 
 ## 4. Navegação e busca
 

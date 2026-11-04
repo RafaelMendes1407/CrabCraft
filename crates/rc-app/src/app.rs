@@ -102,6 +102,8 @@ pub struct CrabCraftApp {
     pub dep_versions: crate::dep_versions::DepVersions,
     /// Offline inspections of the open `Cargo.toml` (I-22).
     pub manifest_inspections: crate::manifest_inspect::ManifestInspections,
+    /// The diff of the highlighted Alt+Enter action (I-33).
+    pub intention_preview: crate::intention_preview::IntentionPreview,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
@@ -322,6 +324,7 @@ impl CrabCraftApp {
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             manifest_inspections: crate::manifest_inspect::ManifestInspections::new(waker.clone()),
+            intention_preview: crate::intention_preview::IntentionPreview::new(waker.clone()),
             feature_search: Default::default(),
             copyright: Default::default(),
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
@@ -847,13 +850,11 @@ impl CrabCraftApp {
     /// The quick fix of an outdated dependency: writes `version` as the requirement of the
     /// dependency declared on `line` of the active `Cargo.toml`, in its editor (undoable).
     pub fn update_dependency(&mut self, line: usize, version: &str) {
-        let Ok(version) = semver::Version::parse(version) else { return };
         let Some(doc) = self.docs.active_doc_mut() else { return };
         let text = doc.editor.buffer.rope().to_string();
-        let Some(dep) = rc_cargo::dependency_lines(&text).into_iter().find(|d| d.line == line) else { return };
-        let Some((start, end)) = rc_cargo::versions::dep_spans(&text, &dep).req else { return };
-        let req = rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version);
-        doc.editor.replace(start, end, &req);
+        if let Some((start, end, req)) = dependency_update_edit(&text, line, version) {
+            doc.editor.replace(start, end, &req);
+        }
     }
 
     /// Run icons on the requests of the active `.http` file, and its parts that are not
@@ -3379,4 +3380,13 @@ mod double_tap_tests {
         // Ctrl+click, then Ctrl alone.
         assert!(!run(&[(true, false, 1.0), (true, true, 1.05), (false, false, 1.1), (true, false, 1.2)]).contains(&true));
     }
+}
+
+/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
+/// `version`: chars `start..end` and the new requirement.
+pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
+    let version = semver::Version::parse(version).ok()?;
+    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
+    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
+    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
 }

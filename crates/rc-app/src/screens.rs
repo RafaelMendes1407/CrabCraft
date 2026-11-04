@@ -1773,6 +1773,34 @@ fn refactor_preview_capture() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/intention-preview-*.png"]
+fn intention_preview_capture() {
+    use rc_lsp::lsp_types as lsp;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = two_crates_harness(dir.path(), dark);
+        let lib = root.join("alpha/src/lib.rs");
+        h.state_mut().open_file(&lib);
+        h.run_steps(3);
+        let edit = |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
+        let mut changes = std::collections::HashMap::new();
+        changes.insert(rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]);
+        changes.insert(rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]);
+        let action = lsp::CodeAction { title: "Rename and import".into(), kind: Some(lsp::CodeActionKind::QUICKFIX), edit: Some(lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() }), ..Default::default() };
+        let other = lsp::Command { title: "Run a server command".into(), command: "server.command".into(), arguments: None };
+        h.state_mut().caret_screen = Some(egui::pos2(260.0, 160.0));
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CodeActions { list: vec![lsp::CodeActionOrCommand::CodeAction(action), lsp::CodeActionOrCommand::Command(other)], selected: 0 });
+        run_frames(&mut h, "the preview", |a| matches!(a.intention_preview.state, crate::intention_preview::State::Ready { .. }));
+        h.run_steps(3);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("intention-preview-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU and Clippy; writes target/snapshots/inspection.png"]
 fn inspection_capture() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

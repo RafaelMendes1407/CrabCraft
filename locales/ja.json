@@ -1667,5 +1667,22 @@
     "Binary files cannot be merged here; accept one side instead": "バイナリファイルはここではマージできません。どちらか一方を採用してください",
     "One side deleted the file; accept one side instead": "一方がファイルを削除しました。どちらか一方を採用してください",
     "{file} resolved": "{file} を解決しました"
+  },
+  "intentionpreview": {
+    "No preview: the language server is not running": "プレビューなし: 言語サーバーが動いていません",
+    "Also runs a command of the language server": "言語サーバーのコマンドも実行します",
+    "Runs a command of the language server; there is no text to preview": "言語サーバーのコマンドを実行します。プレビューするテキストはありません",
+    "This action changes no text": "この操作はテキストを変更しません",
+    "Creates {file}": "{file} を作成します",
+    "Renames {from} to {to}": "{from} の名前を {to} に変更します",
+    "Deletes {file}": "{file} を削除します",
+    "The fix no longer applies to this text": "この修正はもうこのテキストに適用できません",
+    "The edit does not fit the file's text": "この編集はファイルのテキストに合いません",
+    "No preview: no file is open": "プレビューなし: 開いているファイルがありません",
+    "Turns the feature on for code analysis; no file changes": "コード解析でこの feature を有効にします。ファイルは変わりません",
+    "Opens a dialog to choose the changes": "変更を選ぶダイアログを開きます",
+    "Loading preview…": "プレビューを読み込み中…",
+    "Could not preview this action: {error}": "この操作をプレビューできません: {error}",
+    "{n} more changed lines": "ほかに {n} 行の変更"
   }
 }
