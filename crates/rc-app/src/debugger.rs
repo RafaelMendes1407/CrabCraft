@@ -431,6 +431,17 @@ impl Debugger {
         }
     }
 
+    /// Moves the execution point to `line` (0-based) of `path` without running the code in
+    /// between (Set Execution Point to Cursor).
+    pub fn set_execution_point(&mut self, path: &Path, line: usize) {
+        if !self.stopped() {
+            return;
+        }
+        if let Some(s) = self.session.as_mut().filter(|s| s.can_set_execution_point()) {
+            s.set_execution_point(path, line as u32 + 1);
+        }
+    }
+
     /// Evaluates the expression under the mouse while stopped (hover values).
     pub fn hover(&mut self, doc: u64, pos: usize, screen: egui::Pos2, expression: String) {
         if expression.is_empty() || !self.stopped() {
@@ -603,6 +614,14 @@ impl Debugger {
                     if let Some(c) = &self.console {
                         c.note(&msg);
                     }
+                    out.push(DebugOutput::Notify(msg, true));
+                }
+                DebugEvent::ExecutionPointFailed(e) => {
+                    let msg = match e {
+                        rc_dap::GotoError::OtherFunction => tr("The execution point can only move within the current function").to_string(),
+                        rc_dap::GotoError::NoCode => tr("No statement starts at this line").to_string(),
+                        rc_dap::GotoError::Adapter(m) => trf("Cannot move the execution point: {message}", &[("message", &m)]),
+                    };
                     out.push(DebugOutput::Notify(msg, true));
                 }
                 DebugEvent::Evaluated { id, result, .. } => {

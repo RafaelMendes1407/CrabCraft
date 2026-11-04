@@ -176,17 +176,22 @@ fn forced_steps_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.set_min_width(240.0);
     let stopped = app.debugger.stopped();
     let can_force_in = app.debugger.session.as_ref().is_some_and(|s| s.can_force_step_in());
+    let can_jump = app.debugger.session.as_ref().is_some_and(|s| s.can_set_execution_point());
     let ctx = ui.ctx().clone();
     let entries = [
         (Action::ForceStepInto, ico::STEP_INTO, tr("Force Step Into"), stopped && can_force_in),
         (Action::ForceStepOver, ico::STEP_OVER, tr("Force Step Over"), stopped),
         (Action::ForceRunToCursor, ico::RUN_TO_CURSOR, tr("Force Run to Cursor"), stopped),
+        (Action::SetExecutionPoint, ico::RUN_TO_CURSOR, tr("Set Execution Point to Cursor"), stopped && can_jump),
     ];
     for (action, icon, text, enabled) in entries {
         let shortcut = app.keymap.shortcut_text(action);
         let mut resp = theme::menu_entry(ui, Some(icon), text, shortcut.as_deref(), false, enabled);
         if action == Action::ForceStepInto && !can_force_in {
             resp = resp.on_disabled_hover_text(tr("This debugger cannot force step into"));
+        }
+        if action == Action::SetExecutionPoint && !can_jump {
+            resp = resp.on_disabled_hover_text(tr("This debugger cannot move the execution point"));
         }
         if resp.clicked() {
             ui.close();

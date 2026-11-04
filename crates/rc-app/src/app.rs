@@ -2027,6 +2027,11 @@ impl CrabCraftApp {
                     self.debugger.run_to_cursor(&path, line, action == Action::ForceRunToCursor);
                 }
             }
+            Action::SetExecutionPoint => {
+                if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
+                    self.debugger.set_execution_point(&path, line);
+                }
+            }
             Action::ForceStepOver => {
                 if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
                     s.force_step_over();

@@ -592,3 +592,15 @@ fn reads_the_gdb_version() {
     assert_eq!(gdb_major(&json!({ "result": "void" })), None);
     assert_eq!(gdb_major(&json!({})), None);
 }
+
+#[test]
+fn gdb_jumps_only_where_it_was_checked() {
+    let c = gdb_jump(Path::new("/w/src/main.rs"), 6).unwrap();
+    assert!(c.starts_with("python exec(\""));
+    assert!(c.contains(r#"gdb.decode_line(\"\\\"/w/src/main.rs\\\":6\")"#), "{c}");
+    assert!(c.contains("sals[0].line != 6"));
+    assert!(gdb_jump(Path::new("/w/a\"b.rs"), 1).is_none());
+    assert_eq!(goto_error("Python Exception: crabcraft-goto: other function".into()), GotoError::OtherFunction);
+    assert_eq!(goto_error("crabcraft-goto: no code".into()), GotoError::NoCode);
+    assert_eq!(goto_error("boom".into()), GotoError::Adapter("boom".into()));
+}

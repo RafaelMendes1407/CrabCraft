@@ -259,6 +259,19 @@ pub enum DebugEvent {
     Failed(Failure),
     /// A command (step, continue, pause…) the adapter refused.
     CommandFailed { command: String, message: String },
+    /// Set Execution Point did not move the program.
+    ExecutionPointFailed(GotoError),
+}
+
+/// Why Set Execution Point did not move the program.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GotoError {
+    /// GDB moves the execution point only within the function the program is in.
+    OtherFunction,
+    /// No statement starts at that line.
+    NoCode,
+    /// The adapter refused (its message).
+    Adapter(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -272,6 +285,10 @@ enum Purpose {
     Initialize,
     /// `$_gdb_major`, asked before a GDB `launch`.
     GdbVersion,
+    /// `gotoTargets`, then `goto` for the first target in this thread.
+    GotoTargets { thread_id: i64 },
+    /// `goto`, or GDB's jump.
+    Goto,
     Launch,
     Config,
     ConfigurationDone,
@@ -639,7 +656,8 @@ impl DebugSession {
                 match self.breakpoints.apply_event(&e.breakpoint) {
                     Some(path) => self.events.push(DebugEvent::BreakpointsChanged(path)),
                     None if e.reason != "removed" => self.orphan_breakpoint_events.push(e.breakpoint),
-                    None => {}
+                    // A one-shot breakpoint of the session's own (Set Execution Point).
+                    None => self.orphan_breakpoint_events.retain(|b| b.id.is_none() || b.id != e.breakpoint.id),
                 }
             }
             "thread" => {
@@ -903,6 +921,23 @@ impl DebugSession {
                     eval.outstanding -= 1;
                 }
                 self.flush_logpoints();
+            }
+            Purpose::GotoTargets { thread_id } => {
+                let target = r.as_ref().ok().and_then(|v| v.get("targets")?.as_array()?.first()?.get("id")?.as_i64());
+                match (r, target, &self.client) {
+                    (Err(e), _, _) => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::Adapter(e.message))),
+                    (Ok(_), None, _) => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::NoCode)),
+                    (Ok(_), Some(id), Some(c)) => {
+                        let p = c.request("goto", json!({ "threadId": thread_id, "targetId": id }));
+                        self.in_flight.push((p, Purpose::Goto));
+                    }
+                    (Ok(_), Some(_), None) => {}
+                }
+            }
+            Purpose::Goto => {
+                if let Err(e) = r {
+                    self.events.push(DebugEvent::ExecutionPointFailed(goto_error(e.message)));
+                }
             }
             Purpose::Command(command) => {
                 if let Err(e) = r {
@@ -1367,6 +1402,35 @@ impl DebugSession {
         if let Some(c) = &self.client {
             let p = c.request("evaluate", args::evaluate(command, None, EvalContext::Repl, false));
             self.in_flight.push((p, Purpose::Ignore));
+        }
+    }
+
+    /// Whether Set Execution Point works with this adapter: GDB jumps, others answer
+    /// `gotoTargets`.
+    pub fn can_set_execution_point(&self) -> bool {
+        self.is_gdb() || self.capabilities.supports_goto_targets_request
+    }
+
+    /// Moves the execution point of the stopped thread to `line` (1-based) of `path` without
+    /// running the code in between. With GDB, only within the function the program is in, and
+    /// only to a line where a statement starts. A failure comes as
+    /// [`DebugEvent::ExecutionPointFailed`]; the move itself as a stop.
+    pub fn set_execution_point(&mut self, path: &Path, line: u32) {
+        let SessionState::Stopped(info) = &self.state else { return };
+        let thread_id = info.thread_id;
+        let Some(c) = &self.client else { return };
+        if self.is_gdb() {
+            match gdb_jump(path, line) {
+                Some(command) => {
+                    let p = c.request("evaluate", args::evaluate(&command, None, EvalContext::Repl, false));
+                    self.in_flight.push((p, Purpose::Goto));
+                }
+                None => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::NoCode)),
+            }
+        } else if self.capabilities.supports_goto_targets_request {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+            let p = c.request("gotoTargets", json!({ "source": { "name": name, "path": path }, "line": line }));
+            self.in_flight.push((p, Purpose::GotoTargets { thread_id }));
         }
     }
 
@@ -1858,6 +1922,55 @@ fn hex_result(mut v: EvaluateResponse, hex: bool) -> EvaluateResponse {
 impl Drop for DebugSession {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+/// Marks the errors of [`gdb_jump`].
+const GOTO_NO_CODE: &str = "crabcraft-goto: no code";
+const GOTO_OTHER_FUNCTION: &str = "crabcraft-goto: other function";
+
+/// The GDB command for Set Execution Point: a Python check that `line` of `path` starts a
+/// statement of the function the program is in (GDB would jump anywhere, asking nobody under
+/// DAP), then a one-shot breakpoint there and `jump`. `None` for a path GDB cannot be given.
+fn gdb_jump(path: &Path, line: u32) -> Option<String> {
+    let path = path.to_str()?;
+    if path.contains(['"', '\n', '\r']) {
+        return None;
+    }
+    let location = serde_json::to_string(&format!("\"{path}\":{line}")).ok()?;
+    let script = format!(
+        "import gdb
+try:
+    sals = gdb.decode_line({location})[1]
+except gdb.error:
+    sals = None
+if not sals or sals[0].line != {line}:
+    raise gdb.GdbError(\"{GOTO_NO_CODE}\")
+pc = sals[0].pc
+def function(block):
+    while block is not None and block.function is None:
+        block = block.superblock
+    return block
+here = function(gdb.newest_frame().block())
+there = function(gdb.block_for_pc(pc))
+if here is None or there is None or (here.start, here.end) != (there.start, there.end):
+    raise gdb.GdbError(\"{GOTO_OTHER_FUNCTION}\")
+if pc == there.start:
+    raise gdb.GdbError(\"{GOTO_NO_CODE}\")
+gdb.execute(\"tbreak *%d\" % pc)
+gdb.execute(\"jump *%d\" % pc)
+"
+    );
+    Some(format!("python exec({})", serde_json::to_string(&script).ok()?))
+}
+
+fn goto_error(message: String) -> GotoError {
+    if message.contains(GOTO_OTHER_FUNCTION) {
+        GotoError::OtherFunction
+    } else if message.contains(GOTO_NO_CODE) {
+        GotoError::NoCode
+    } else {
+        GotoError::Adapter(message)
     }
 }
 

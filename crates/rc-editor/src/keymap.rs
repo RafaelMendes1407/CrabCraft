@@ -127,6 +127,8 @@ pub enum Action {
     ForceRunToCursor,
     /// The list of every breakpoint and their groups.
     ViewBreakpoints,
+    /// Moves the execution point to the caret line without running the code in between.
+    SetExecutionPoint,
     AttachToProcess,
     Evaluate,
     /// Integers in hexadecimal or decimal in the debugger.
@@ -229,6 +231,7 @@ impl Action {
                 | ForceStepOver
                 | ForceRunToCursor
                 | ViewBreakpoints
+                | SetExecutionPoint
                 | AttachToProcess
                 | Evaluate
                 | ToggleHexValues
@@ -712,6 +715,8 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
     ];
     if visual_studio {
         v.extend([
+            // Visual Studio's Set Next Statement.
+            b(Key::F10, cs, SetExecutionPoint),
             b(Key::F12, none, GotoDeclaration),
             b(Key::F12, c, GotoImplementation),
             b(Key::L, cs, DeleteLine),

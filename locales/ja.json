@@ -1486,5 +1486,12 @@
     "Ungroup": "グループ解除",
     "logs {message}": "{message} を記録",
     "when {condition}": "{condition} のとき"
+  },
+  "executionpoint": {
+    "Set Execution Point to Cursor": "実行ポイントをカーソル位置に設定",
+    "This debugger cannot move the execution point": "このデバッガーは実行ポイントを移動できません",
+    "The execution point can only move within the current function": "実行ポイントは現在の関数内でのみ移動できます",
+    "No statement starts at this line": "この行で始まる文はありません",
+    "Cannot move the execution point: {message}": "実行ポイントを移動できません: {message}"
   }
 }

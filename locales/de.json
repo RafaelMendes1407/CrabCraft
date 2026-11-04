@@ -1486,5 +1486,12 @@
     "Ungroup": "Gruppierung aufheben",
     "logs {message}": "protokolliert {message}",
     "when {condition}": "wenn {condition}"
+  },
+  "executionpoint": {
+    "Set Execution Point to Cursor": "Ausführungspunkt auf Cursor setzen",
+    "This debugger cannot move the execution point": "Dieser Debugger kann den Ausführungspunkt nicht verschieben",
+    "The execution point can only move within the current function": "Der Ausführungspunkt kann nur innerhalb der aktuellen Funktion verschoben werden",
+    "No statement starts at this line": "In dieser Zeile beginnt keine Anweisung",
+    "Cannot move the execution point: {message}": "Ausführungspunkt kann nicht verschoben werden: {message}"
   }
 }

@@ -4112,3 +4112,71 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     again.open_workspace(&root);
     assert_eq!(listed(&again), before);
 }
+
+/// D-13: Set Execution Point to Cursor moves the program forward and back within the function
+/// without running the lines in between, and refuses lines in other functions and lines without
+/// code.
+#[test]
+fn set_execution_point_skips_and_repeats_lines_with_gdb() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), "mod other;\n\nfn main() {\n    let mut n = 1;\n    n += 10;\n    n += 100;\n    n += 1000;\n    other::show(n);\n}\n");
+    write(&root.join("src/other.rs"), "pub fn show(n: u32) {\n    println!(\"{n}\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let main_rs = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main_rs);
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(5, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    assert!(app.debugger.session.as_ref().unwrap().can_set_execution_point());
+    assert_eq!(local(&mut app, "n"), "11");
+    let at = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.execution_point());
+    let jump_to = |app: &mut CrabCraftApp, line: usize| {
+        app.docs.active_doc_mut().unwrap().editor.goto(line, 0);
+        app.run_ide_action(&egui::Context::default(), Action::SetExecutionPoint);
+    };
+
+    // Forward: n += 100 and n += 1000 do not run.
+    jump_to(&mut app, 7);
+    settle_debugger(&mut app, "the jump forward", &|a| a.debugger.stopped() && at(a) == Some((main_rs.clone(), 8)));
+    assert_eq!(local(&mut app, "n"), "11");
+
+    // Refused: a line in another function, and a line without code. The program stays.
+    let notices = app.notices.len();
+    app.open_file(&root.join("src/other.rs"));
+    jump_to(&mut app, 1);
+    settle_debugger(&mut app, "the refusal", &|a| a.notices.len() > notices);
+    assert!(app.notices.last().unwrap().text.contains("current function"), "{}", app.notices.last().unwrap().text);
+    app.open_file(&main_rs);
+    jump_to(&mut app, 1);
+    settle_debugger(&mut app, "the second refusal", &|a| a.notices.len() > notices + 1);
+    assert!(app.notices.last().unwrap().text.contains("No statement"), "{}", app.notices.last().unwrap().text);
+    assert_eq!(at(&app), Some((main_rs.clone(), 8)));
+
+    // Back: n += 100 runs again from 11.
+    jump_to(&mut app, 5);
+    settle_debugger(&mut app, "the jump back", &|a| a.debugger.stopped() && at(a) == Some((main_rs.clone(), 6)));
+    // Overflow checks split `n += 100` in two ranges: GDB stops on it twice, as without a jump.
+    for _ in 0..3 {
+        if at(&app) == Some((main_rs.clone(), 7)) {
+            break;
+        }
+        let generation = app.debugger.session.as_ref().unwrap().generation();
+        app.run_ide_action(&egui::Context::default(), Action::StepOver);
+        settle_debugger(&mut app, "the step", &|a| a.debugger.stopped() && a.debugger.session.as_ref().is_some_and(|s| s.generation() > generation + 1) && at(a).is_some());
+    }
+    assert_eq!(at(&app), Some((main_rs.clone(), 7)));
+    assert_eq!(local(&mut app, "n"), "111");
+    app.run_ide_action(&egui::Context::default(), Action::Resume);
+    settle_debugger(&mut app, "the end", &|a| a.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()));
+}

@@ -1486,5 +1486,12 @@
     "Ungroup": "取消分组",
     "logs {message}": "记录 {message}",
     "when {condition}": "当 {condition}"
+  },
+  "executionpoint": {
+    "Set Execution Point to Cursor": "将执行点设置到光标处",
+    "This debugger cannot move the execution point": "此调试器无法移动执行点",
+    "The execution point can only move within the current function": "执行点只能在当前函数内移动",
+    "No statement starts at this line": "此行没有语句开始",
+    "Cannot move the execution point: {message}": "无法移动执行点：{message}"
   }
 }

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 160 |
+| ✅ Pronto | 161 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 63 |
+| ⬜ A fazer | 62 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -268,7 +268,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-10 | Avaliar expressão | ✅ | M2 | Avaliar expressão testado com GDB real |
 | D-11 | Valores inline no editor | ✅ | M2 | Valores no fim da linha vistos na janela real |
 | D-12 | Definir valor de variável | ✅ | M4 | "Set Value…" (F2, duplo clique ou menu de contexto) em Variables e Watches abre um campo inline com o valor atual; Enter envia, Esc cancela, o erro do depurador aparece sob o campo. Usa `setVariable` ou, sem ele, `setExpression` no `evaluateName` (watches usam sempre `setExpression`); sem nenhum dos dois o item fica desabilitado. Depois de definir, Variables, Watches, valores inline e Memory são atualizados; aceita valor hex (`0x1f`) com hex ligado. Testado num programa Rust real sob GDB 15 (`a_variable_is_set_while_paused_and_the_program_sees_it`): o programa usa o novo valor. Não comparado com o RustRover |
-| D-13 | Set execution point | ⬜ | M4 | |
+| D-13 | Set execution point | ✅ | M4 | Definir o ponto de execução no cursor (menu Executar, Search Everywhere, menu de passos forçados da janela de depuração; Ctrl+Shift+F10 no mapa Visual Studio). Com GDB: `jump` com breakpoint temporário, só dentro da função atual e só em linha onde começa uma instrução (o GDB, sob DAP, pularia para qualquer lugar sem perguntar); outros adaptadores via `gotoTargets`/`goto`. Testado com GDB num projeto Rust: pular para a frente não executa as linhas puladas, voltar executa de novo, linha de outra função e linha sem código são recusadas com aviso. |
 | D-14 | Attach a processo | ✅ | M2 | Attach com GDB real e diálogo visto; com ptrace_scope 1 o Linux bloqueia e o app explica |
 | D-15 | Attach automático por padrão de nome | ⬜ | M4 | |
 | D-16 | Depuração remota | ⬜ | M6 | `gdbserver` |

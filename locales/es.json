@@ -1486,5 +1486,12 @@
     "Ungroup": "Desagrupar",
     "logs {message}": "registra {message}",
     "when {condition}": "cuando {condition}"
+  },
+  "executionpoint": {
+    "Set Execution Point to Cursor": "Establecer el punto de ejecución en el cursor",
+    "This debugger cannot move the execution point": "Este depurador no puede mover el punto de ejecución",
+    "The execution point can only move within the current function": "El punto de ejecución solo puede moverse dentro de la función actual",
+    "No statement starts at this line": "Ninguna instrucción empieza en esta línea",
+    "Cannot move the execution point: {message}": "No se puede mover el punto de ejecución: {message}"
   }
 }

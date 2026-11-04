@@ -514,6 +514,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ForceStepInto, || tr("Force Step Into")),
             &act(Action::ForceStepOver, || tr("Force Step Over")),
             &act(Action::ForceRunToCursor, || tr("Force Run to Cursor")),
+            &act(Action::SetExecutionPoint, || tr("Set Execution Point to Cursor")),
             &act(Action::ViewBreakpoints, || tr("View Breakpoints…")),
             &act(Action::Resume, || tr("Resume Program")),
             &act(Action::Evaluate, || tr("Evaluate Expression…")),
