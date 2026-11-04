@@ -14,8 +14,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             n.at = now;
         }
     }
-    // Messages stay 8 s (errors 15 s).
-    app.notices.retain(|n| now - n.at < if n.error { 15.0 } else { 8.0 });
+    // Messages stay 8 s (errors 15 s, those with a link 30 s).
+    app.notices.retain(|n| now - n.at < if n.url.is_some() { 30.0 } else if n.error { 15.0 } else { 8.0 });
     if !app.notices.is_empty() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
     }
@@ -29,10 +29,21 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(10.0);
                 }
                 breadcrumbs(app, ui);
+                let mut open = None;
                 if let Some(n) = app.notices.last() {
                     ui.add_space(16.0);
                     icons::image(ui, if n.error { ico::ERROR } else { ico::INFO }, 16.0);
+                    // The link's button first: a long message must not push it out of view.
+                    if let Some(url) = &n.url {
+                        if theme::flat_button(ui, Some(ico::EXTERNAL_LINK), tr("Open in Browser"), FontId::proportional(12.5), false, true).on_hover_text(url.as_str()).clicked() {
+                            open = Some(url.clone());
+                        }
+                        ui.add_space(4.0);
+                    }
                     ui.label(egui::RichText::new(&n.text).color(if n.error { p.error } else { p.text_muted }).size(12.5));
+                }
+                if let Some(url) = open {
+                    app.open_notice_url(url);
                 }
             }
             theme::Side::Right => {

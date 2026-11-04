@@ -1,0 +1,39 @@
+# Git tags in the Git window. Import: python3 scripts/i18n_tsv.py gittags scripts/i18n/git-tags.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Log	Registro	Journal	Log	Log	Log	日志	ログ
+Tags ({n})	Etiquetas ({n})	Tags ({n})	Tags ({n})	Tags ({n})	Tagi ({n})	标签 ({n})	タグ ({n})
+New Tag…	Nueva etiqueta…	Nouveau tag…	Nova tag…	Neues Tag…	Nowy tag…	新建标签…	新規タグ…
+New Tag	Nueva etiqueta	Nouveau tag	Nova tag	Neues Tag	Nowy tag	新建标签	新規タグ
+Push All Tags…	Enviar todas las etiquetas…	Pousser tous les tags…	Enviar todas as tags…	Alle Tags pushen…	Wypchnij wszystkie tagi…	推送所有标签…	すべてのタグをプッシュ…
+Push All Tags	Enviar todas las etiquetas	Pousser tous les tags	Enviar todas as tags	Alle Tags pushen	Wypchnij wszystkie tagi	推送所有标签	すべてのタグをプッシュ
+Push Tag	Enviar etiqueta	Pousser le tag	Enviar tag	Tag pushen	Wypchnij tag	推送标签	タグをプッシュ
+Push	Enviar	Pousser	Enviar	Pushen	Wypchnij	推送	プッシュ
+The repository has no remote	El repositorio no tiene remoto	Le dépôt n'a pas de dépôt distant	O repositório não tem remoto	Das Repository hat kein Remote	Repozytorium nie ma zdalnego	仓库没有远程	リポジトリにリモートがありません
+No tags	No hay etiquetas	Aucun tag	Nenhuma tag	Keine Tags	Brak tagów	没有标签	タグはありません
+annotated	anotada	annoté	anotada	annotiert	opisany	附注	注釈付き
+Annotated tag	Etiqueta anotada	Tag annoté	Tag anotada	Annotiertes Tag	Tag opisany	附注标签	注釈付きタグ
+Lightweight tag	Etiqueta ligera	Tag léger	Tag leve	Leichtgewichtiges Tag	Tag lekki	轻量标签	軽量タグ
+Select a tag to see its details	Seleccione una etiqueta para ver sus detalles	Sélectionnez un tag pour voir ses détails	Selecione uma tag para ver os detalhes	Wählen Sie ein Tag, um die Details zu sehen	Wybierz tag, aby zobaczyć szczegóły	选择一个标签以查看详情	タグを選択すると詳細が表示されます
+Push output	Salida del envío	Sortie du push	Saída do envio	Push-Ausgabe	Wynik wypychania	推送输出	プッシュの出力
+Everything up-to-date	Todo está actualizado	Tout est à jour	Tudo está atualizado	Alles ist aktuell	Wszystko jest aktualne	全部已是最新	すべて最新です
+Checkout…	Extraer…	Extraire…	Fazer checkout…	Auschecken…	Przełącz…	检出…	チェックアウト…
+Checkout	Extraer	Extraire	Fazer checkout	Auschecken	Przełącz	检出	チェックアウト
+Checkout Tag	Extraer etiqueta	Extraire le tag	Checkout da tag	Tag auschecken	Przełącz na tag	检出标签	タグをチェックアウト
+Checking out {name} detaches HEAD: new commits will not belong to any branch until you create one.	Extraer {name} separa HEAD: los nuevos commits no pertenecerán a ninguna rama hasta que cree una.	Extraire {name} détache HEAD : les nouveaux commits n'appartiendront à aucune branche tant que vous n'en créez pas une.	O checkout de {name} desanexa o HEAD: novos commits não pertencerão a nenhum branch até que você crie um.	Das Auschecken von {name} löst HEAD: Neue Commits gehören zu keinem Branch, bis Sie einen erstellen.	Przełączenie na {name} odłącza HEAD: nowe commity nie będą należeć do żadnej gałęzi, dopóki jej nie utworzysz.	检出 {name} 会分离 HEAD：在创建分支之前，新的提交不属于任何分支。	{name} をチェックアウトすると HEAD が切り離されます。ブランチを作成するまで、新しいコミットはどのブランチにも属しません。
+Checked out the tag; HEAD is detached	Etiqueta extraída; HEAD está separado	Tag extrait ; HEAD est détaché	Checkout da tag feito; o HEAD está desanexado	Tag ausgecheckt; HEAD ist losgelöst	Przełączono na tag; HEAD jest odłączony	已检出标签；HEAD 处于分离状态	タグをチェックアウトしました。HEAD は切り離されています
+Tag created	Etiqueta creada	Tag créé	Tag criada	Tag erstellt	Utworzono tag	标签已创建	タグを作成しました
+Tag deleted	Etiqueta eliminada	Tag supprimé	Tag excluída	Tag gelöscht	Usunięto tag	标签已删除	タグを削除しました
+Tags pushed	Etiquetas enviadas	Tags poussés	Tags enviadas	Tags gepusht	Wypchnięto tagi	标签已推送	タグをプッシュしました
+Tag name	Nombre de la etiqueta	Nom du tag	Nome da tag	Tag-Name	Nazwa tagu	标签名称	タグ名
+On commit {hash}	En el commit {hash}	Sur le commit {hash}	No commit {hash}	Auf Commit {hash}	Na commicie {hash}	在提交 {hash} 上	コミット {hash} に
+On HEAD	En HEAD	Sur HEAD	No HEAD	Auf HEAD	Na HEAD	在 HEAD 上	HEAD に
+This is not a valid tag name	Este no es un nombre de etiqueta válido	Ce n'est pas un nom de tag valide	Este não é um nome de tag válido	Dies ist kein gültiger Tag-Name	To nie jest prawidłowa nazwa tagu	这不是有效的标签名称	有効なタグ名ではありません
+Message (optional)	Mensaje (opcional)	Message (facultatif)	Mensagem (opcional)	Nachricht (optional)	Wiadomość (opcjonalna)	消息（可选）	メッセージ（省略可）
+With a message the tag is annotated; without one it is lightweight.	Con un mensaje la etiqueta es anotada; sin él es ligera.	Avec un message le tag est annoté ; sans message il est léger.	Com mensagem a tag é anotada; sem mensagem ela é leve.	Mit einer Nachricht ist das Tag annotiert, ohne ist es leichtgewichtig.	Z wiadomością tag jest opisany, bez niej — lekki.	有消息时为附注标签，没有消息时为轻量标签。	メッセージがあれば注釈付きタグ、なければ軽量タグになります。
+Delete Tag	Eliminar etiqueta	Supprimer le tag	Excluir tag	Tag löschen	Usuń tag	删除标签	タグを削除
+Delete the tag {name}? Copies of it on remotes are kept.	¿Eliminar la etiqueta {name}? Sus copias en los remotos se conservan.	Supprimer le tag {name} ? Ses copies sur les dépôts distants sont conservées.	Excluir a tag {name}? As cópias nos remotos são mantidas.	Das Tag {name} löschen? Kopien auf Remotes bleiben erhalten.	Usunąć tag {name}? Jego kopie w repozytoriach zdalnych zostaną zachowane.	删除标签 {name}？远程上的副本会保留。	タグ {name} を削除しますか？リモート上のコピーは残ります。
+Push the tag {name} to:	Enviar la etiqueta {name} a:	Pousser le tag {name} vers :	Enviar a tag {name} para:	Das Tag {name} pushen nach:	Wypchnij tag {name} do:	将标签 {name} 推送到：	タグ {name} のプッシュ先:
+Push every local tag to:	Enviar todas las etiquetas locales a:	Pousser tous les tags locaux vers :	Enviar todas as tags locais para:	Alle lokalen Tags pushen nach:	Wypchnij wszystkie lokalne tagi do:	将所有本地标签推送到：	すべてのローカルタグのプッシュ先:
+The repository's pre-push hook, if any, runs.	Se ejecuta el hook pre-push del repositorio, si existe.	Le hook pre-push du dépôt, s'il existe, est exécuté.	O hook pre-push do repositório, se houver, é executado.	Der pre-push-Hook des Repositorys wird ausgeführt, falls vorhanden.	Hook pre-push repozytorium, jeśli istnieje, zostanie uruchomiony.	如果仓库有 pre-push 钩子，它会运行。	リポジトリに pre-push フックがあれば実行されます。
+"{name}" is not a valid tag name	"{name}" no es un nombre de etiqueta válido	« {name} » n'est pas un nom de tag valide	"{name}" não é um nome de tag válido	„{name}" ist kein gültiger Tag-Name	„{name}" nie jest prawidłową nazwą tagu	"{name}" 不是有效的标签名称	"{name}" は有効なタグ名ではありません
+A tag named {name} already exists	Ya existe una etiqueta llamada {name}	Un tag nommé {name} existe déjà	Já existe uma tag chamada {name}	Ein Tag namens {name} existiert bereits	Tag o nazwie {name} już istnieje	名为 {name} 的标签已存在	{name} という名前のタグは既に存在します

@@ -103,6 +103,8 @@ pub const REVEAL_FILE: &str = "crabcraft.reveal_file";
 pub const DERIVE_COMMAND: &str = "crabcraft.derive";
 /// The Suppress rows of Alt+Enter (arguments: the lint, then `item` or `file`), run by the IDE.
 pub const SUPPRESS_COMMAND: &str = "crabcraft.suppress";
+/// Local command: updates the version requirement of a `Cargo.toml` dependency (line, version).
+pub const UPDATE_DEPENDENCY_COMMAND: &str = "crabcraft.update-dependency";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {

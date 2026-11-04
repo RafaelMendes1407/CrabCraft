@@ -496,7 +496,7 @@ pub fn find_bar(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
             let count = chosen.len();
             doc.editor.apply_text_edits(chosen.into_iter().map(|e| rc_text::Change::new(e.range.start, e.range.end, e.text)).collect());
             if replace_all {
-                app.notices.push(crate::app::Notice { text: rc_kit::i18n::trf("{n} occurrences replaced", &[("n", &count)]), error: false, at: 0.0 });
+                app.notices.push(crate::app::Notice { text: rc_kit::i18n::trf("{n} occurrences replaced", &[("n", &count)]), error: false, at: 0.0, url: None });
             }
         }
     }

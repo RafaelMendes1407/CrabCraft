@@ -106,6 +106,10 @@ pub struct Capabilities {
     pub supports_value_formatting_options: bool,
     /// The adapter answers `readMemory`.
     pub supports_read_memory_request: bool,
+    /// The adapter answers `disassemble`.
+    pub supports_disassemble_request: bool,
+    /// `next`, `stepIn` and `stepOut` accept `granularity` (`"instruction"`).
+    pub supports_stepping_granularity: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -179,6 +183,8 @@ pub struct StackFrame {
     pub end_column: Option<u32>,
     pub module_id: Option<Value>,
     pub presentation_hint: Option<String>,
+    /// The address of the frame's current instruction (its return address for callers).
+    pub instruction_pointer_reference: Option<String>,
 }
 
 impl StackFrame {
@@ -245,6 +251,29 @@ pub struct EvaluateResponse {
     pub named_variables: Option<i64>,
     pub indexed_variables: Option<i64>,
     pub memory_reference: Option<String>,
+}
+
+/// One instruction of a `disassemble` answer.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DisassembledInstruction {
+    pub address: String,
+    /// The instruction's bytes in hex (`"894c240c"` from GDB).
+    pub instruction_bytes: Option<String>,
+    /// Mnemonic and operands.
+    pub instruction: String,
+    /// The function or label starting at this address.
+    pub symbol: Option<String>,
+    pub location: Option<Source>,
+    pub line: Option<i64>,
+    pub presentation_hint: Option<String>,
+}
+
+/// Result of `disassemble`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DisassembleResponse {
+    pub instructions: Vec<DisassembledInstruction>,
 }
 
 /// Result of `readMemory`: base64 `data` starting at `address`; `unreadable_bytes` follow it.

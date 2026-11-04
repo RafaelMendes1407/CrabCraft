@@ -126,25 +126,30 @@ impl Repository {
     /// The files a commit changed against its first parent (everything for a root commit).
     pub async fn commit_files(&self, rev: &str) -> Result<Vec<ChangedFile>> {
         let out = self.cmd().args(["diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", "--find-renames", "--name-status", "-z", "--end-of-options", rev]).output().await?;
-        let mut files = Vec::new();
-        let mut it = out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned());
-        while let Some(status) = it.next() {
-            let code = status.chars().next().unwrap_or('M');
-            let first = it.next().ok_or_else(|| GitError::Parse(format!("diff-tree: {status}")))?;
-            if code == 'R' || code == 'C' {
-                let to = it.next().ok_or_else(|| GitError::Parse(format!("diff-tree: {status}")))?;
-                files.push(ChangedFile { status: code, path: to, orig_path: Some(first) });
-            } else {
-                files.push(ChangedFile { status: code, path: first, orig_path: None });
-            }
-        }
-        Ok(files)
+        parse_name_status(&out.stdout)
     }
 
     /// The full message of a commit (to prefill "Amend").
     pub async fn commit_message(&self, rev: &str) -> Result<String> {
         Ok(self.cmd().args(["log", "-1", "--format=%B", "--end-of-options", rev]).text().await?.trim_end().to_string())
     }
+}
+
+/// Parses `--name-status -z` output.
+pub(crate) fn parse_name_status(out: &[u8]) -> Result<Vec<ChangedFile>> {
+    let mut files = Vec::new();
+    let mut it = out.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned());
+    while let Some(status) = it.next() {
+        let code = status.chars().next().unwrap_or('M');
+        let first = it.next().ok_or_else(|| GitError::Parse(format!("diff-tree: {status}")))?;
+        if code == 'R' || code == 'C' {
+            let to = it.next().ok_or_else(|| GitError::Parse(format!("diff-tree: {status}")))?;
+            files.push(ChangedFile { status: code, path: to, orig_path: Some(first) });
+        } else {
+            files.push(ChangedFile { status: code, path: first, orig_path: None });
+        }
+    }
+    Ok(files)
 }
 
 /// Parses the output of `git log` run with this module's format.

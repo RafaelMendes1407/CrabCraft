@@ -159,6 +159,30 @@ pub struct Session {
     /// The target triple the code is analysed for; empty: the host. Read with
     /// `rc_cargo::valid_triple`: the file is untrusted.
     pub cargo_target: String,
+    /// The copyright header of the project's files. Read with care: the file is untrusted.
+    pub copyright: CopyrightProfile,
+}
+
+/// The template a project's files start with (`$year`, `$file`, `$project`, `$author`), its
+/// SPDX license and whether new files get it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CopyrightProfile {
+    pub template: String,
+    /// An SPDX license expression (`MIT OR Apache-2.0`); empty: no license line.
+    pub spdx: String,
+    pub on_new_files: bool,
+}
+
+impl CopyrightProfile {
+    /// Written for CrabCraft.
+    pub const DEFAULT_TEMPLATE: &str = "Copyright (c) $year $author\nPart of $project.";
+}
+
+impl Default for CopyrightProfile {
+    fn default() -> Self {
+        CopyrightProfile { template: Self::DEFAULT_TEMPLATE.to_string(), spdx: String::new(), on_new_files: false }
+    }
 }
 
 /// A line of an environment that is not `NAME=value` with a valid name (1-based).

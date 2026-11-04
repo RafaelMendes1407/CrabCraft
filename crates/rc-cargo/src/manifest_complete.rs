@@ -583,6 +583,27 @@ fn is_deps(s: &str) -> bool {
     matches!(s, "dependencies" | "dev-dependencies" | "build-dependencies")
 }
 
+/// Whether keys of `table` are dependency names: `[dependencies]` and its dev, build,
+/// `target.<cfg>` and workspace forms.
+pub fn is_dependency_table(table: &[String]) -> bool {
+    let t: Vec<&str> = table.iter().map(String::as_str).collect();
+    match t.as_slice() {
+        [d] | ["target", _, d] => is_deps(d),
+        ["workspace", "dependencies"] => true,
+        _ => false,
+    }
+}
+
+/// The crate whose version requirement the value of `key` in `table` is: `serde = "…"` in a
+/// dependency table, or `version = "…"` in a dependency's own table.
+pub fn version_crate(table: &[String], key: &str) -> Option<String> {
+    if is_dependency_table(table) {
+        return Some(key.to_string());
+    }
+    let (name, parent) = table.split_last()?;
+    (key == "version" && is_dependency_table(parent)).then(|| name.clone())
+}
+
 /// The keys valid in `table`; `None` where keys are names the user chooses.
 fn keys_for(table: &[String]) -> Option<Vec<&'static KeyDef>> {
     let t: Vec<&str> = table.iter().map(String::as_str).collect();
@@ -794,6 +815,26 @@ mod tests {
                 let _ = complete(s, caret);
             }
         }
+    }
+
+    #[test]
+    fn dependency_names_and_versions_are_recognised() {
+        assert!(is_dependency_table(&path(&["dev-dependencies"])));
+        assert!(is_dependency_table(&path(&["target", "cfg(unix)", "dependencies"])));
+        assert!(is_dependency_table(&path(&["workspace", "dependencies"])));
+        assert!(!is_dependency_table(&path(&["package"])));
+        assert_eq!(version_crate(&path(&["dependencies"]), "serde").as_deref(), Some("serde"));
+        assert_eq!(version_crate(&path(&["dependencies", "serde"]), "version").as_deref(), Some("serde"));
+        assert_eq!(version_crate(&path(&["workspace", "dependencies", "log"]), "version").as_deref(), Some("log"));
+        assert_eq!(version_crate(&path(&["dependencies", "serde"]), "features"), None);
+        assert_eq!(version_crate(&path(&["package"]), "version"), None);
+        let Some((_, Context::Value { table, key, in_string: true })) = ({
+            let (t, c) = at("[dependencies]\nserde = { version = \"1.|\" }");
+            context(&t, c)
+        }) else {
+            panic!("no value context")
+        };
+        assert_eq!(version_crate(&table, &key).as_deref(), Some("serde"));
     }
 
     #[test]

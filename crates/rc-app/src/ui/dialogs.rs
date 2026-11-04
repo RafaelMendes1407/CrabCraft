@@ -17,6 +17,7 @@ pub enum SettingsPage {
     Tools,
     ExternalTools,
     LiveTemplates,
+    Copyright,
 }
 
 pub enum Dialog {
@@ -48,6 +49,18 @@ pub enum Dialog {
     /// Confirm rolling back files to HEAD.
     Rollback { paths: Vec<String> },
     NewBranch { name: String },
+    /// A new tag on HEAD or on a commit (hash, short hash); a message makes it annotated.
+    NewTag { name: String, target: Option<(String, String)>, message: String },
+    /// Confirm deleting a local tag.
+    DeleteTag { name: String },
+    /// Warn before checking out a tag (detached HEAD).
+    CheckoutTag { name: String },
+    /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
+    PushTags { name: Option<String>, remote: String },
+    /// Stash the work tree's changes with an optional message.
+    StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    /// Confirm dropping a stash.
+    DropStash { stash: rc_vcs::Stash },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -64,6 +77,8 @@ pub enum Dialog {
     LocalHistory(Box<LocalHistoryView>),
     /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
     ProjectEnv { text: String },
+    /// Share in Playground: what is uploaded, to confirm before anything is sent.
+    SharePlayground(Box<crate::playground::Share>),
 }
 
 impl Dialog {
@@ -99,6 +114,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
         Dialog::NewBranch { name } => new_branch(app, ctx, name),
+        Dialog::NewTag { name, target, message } => new_tag(app, ctx, name, target.as_ref(), message),
+        Dialog::DeleteTag { name } => delete_tag(app, ctx, name),
+        Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
+        Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
+        Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -107,6 +128,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
+        Dialog::SharePlayground(share) => share_playground(app, ctx, share),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -153,6 +175,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::Tools, tr("Tools")),
                     (SettingsPage::ExternalTools, tr("External Tools")),
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
+                    (SettingsPage::Copyright, tr("Copyright")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -174,6 +197,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 // A list of its own, outside the two-column grid of the other pages.
                 if *page == SettingsPage::LiveTemplates {
                     live_templates_page(ui, &mut draft.live_templates, p.text_muted);
+                    return;
+                }
+                if *page == SettingsPage::Copyright {
+                    copyright_page(ui, app, p.text_muted, p.error);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -237,6 +264,9 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
+                        ui.end_row();
+                        ui.label("");
+                        ui.checkbox(&mut draft.scrollbar_lens, tr("Show a code preview when hovering the scrollbar"));
                         ui.end_row();
                         ui.label("");
                         ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
@@ -309,7 +339,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright => {}
                 });
             });
         });
@@ -317,9 +347,68 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
     });
     if ok {
         app.apply_settings(ctx, draft.clone());
+        if let Some(profile) = app.copyright.draft.take() {
+            app.set_copyright_profile(profile);
+        }
         return Outcome::Close;
     }
-    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+    if cancel || esc {
+        app.copyright.draft = None;
+        Outcome::Close
+    } else {
+        Outcome::Keep
+    }
+}
+
+/// Settings › Copyright: the header of the project's files, with a preview. Saved with the
+/// project (its session), so it needs one open.
+fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error: egui::Color32) {
+    use crate::copyright;
+    if app.workspace.is_none() {
+        ui.label(egui::RichText::new(tr("Open a project to set the copyright header of its files.")).color(muted));
+        return;
+    }
+    let mut draft = app.copyright.draft.take().unwrap_or_else(|| app.copyright.profile.clone());
+    ui.add(egui::Label::new(egui::RichText::new(tr("Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).")).color(muted)).wrap());
+    ui.add_space(8.0);
+    egui::Grid::new("copyright_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| {
+        ui.label(tr("Template"));
+        ui.add(egui::TextEdit::multiline(&mut draft.template).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(340.0));
+        ui.end_row();
+        ui.label(tr("SPDX license"));
+        ui.vertical(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.spdx).hint_text("MIT OR Apache-2.0").font(egui::TextStyle::Monospace).desired_width(340.0));
+            if !draft.spdx.trim().is_empty() && !copyright::valid_spdx(&draft.spdx) {
+                ui.colored_label(error, tr("Not an SPDX license expression: it is left out"));
+            }
+        });
+        ui.end_row();
+        ui.label("");
+        ui.checkbox(&mut draft.on_new_files, tr("Add the header to new files"));
+        ui.end_row();
+        ui.label(tr("Author"));
+        let author = match (&app.copyright.author, app.copyright.loading()) {
+            (Some(name), _) => name.clone(),
+            (None, true) => tr("Reading Git…").to_string(),
+            (None, false) => tr("Git has no user.name for this project").to_string(),
+        };
+        ui.label(egui::RichText::new(author).color(muted));
+        ui.end_row();
+    });
+    ui.add_space(8.0);
+    ui.label(tr("Preview"));
+    let project = app.copyright.project_name();
+    let vars = copyright::Vars { year: copyright::current_year(), file: "main.rs", project: &project, author: app.copyright.author.as_deref().unwrap_or("") };
+    let preview = copyright::comment(&copyright::expand(&draft, &vars), rc_syntax::Lang::Rust).unwrap_or_default();
+    egui::Frame::new().fill(ui.visuals().extreme_bg_color).corner_radius(6.0).inner_margin(8.0).show(ui, |ui| {
+        ui.set_width(480.0);
+        ui.add(egui::Label::new(egui::RichText::new(preview.trim_end()).monospace()).wrap());
+    });
+    ui.add_space(6.0);
+    if ui.button(tr("Restore the Default Template")).clicked() {
+        draft.template = rc_core::session::CopyrightProfile::DEFAULT_TEMPLATE.to_string();
+    }
+    app.copyright.draft = Some(draft);
 }
 
 /// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
@@ -1125,7 +1214,14 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
             *error = Some(tr("This name is not a valid Rust module name").to_string());
             return Outcome::Keep;
         }
-        let files = kind.files(dir, name);
+        let files: Vec<(PathBuf, String)> = kind
+            .files(dir, name)
+            .into_iter()
+            .map(|(p, c)| {
+                let c = if kind.is_folder() { c } else { app.copyright.new_file_content(&p, &c) };
+                (p, c)
+            })
+            .collect();
         if files.iter().any(|(p, _)| p.exists()) {
             *error = Some(tr("A file or folder with this name already exists").to_string());
             return Outcome::Keep;
@@ -1380,6 +1476,55 @@ fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+fn share_playground(app: &mut CrabCraftApp, ctx: &Context, share: &mut crate::playground::Share) -> Outcome {
+    use rc_cargo::playground::{Channel, EDITIONS};
+    let ((ok, cancel), esc) = modal(ctx, "share_playground", 520.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Share in Playground"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 32.0);
+            ui.vertical(|ui| {
+                ui.label(tr("The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it."));
+                ui.add_space(4.0);
+                let count = if share.lines == 1 { tr("1 line will be sent").to_string() } else { trf("{n} lines will be sent", &[("n", &share.lines)]) };
+                ui.label(egui::RichText::new(count).strong());
+            });
+        });
+        ui.add_space(8.0);
+        egui::Frame::new().fill(p.hover).stroke(egui::Stroke::new(1.0, p.island_border)).corner_radius(4.0).inner_margin(8.0).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 2.0;
+            for line in share.preview.lines().chain(share.more.then_some("…")) {
+                ui.add(egui::Label::new(egui::RichText::new(line).font(FontId::monospace(12.0)).color(p.text)).truncate());
+            }
+        });
+        ui.add_space(8.0);
+        egui::Grid::new("share_playground_grid").num_columns(2).spacing(vec2(16.0, 8.0)).show(ui, |ui| {
+            ui.label(tr("Channel"));
+            egui::ComboBox::from_id_salt("playground_channel").selected_text(share.channel.as_str()).show_ui(ui, |ui| {
+                for c in Channel::ALL {
+                    ui.selectable_value(&mut share.channel, c, c.as_str());
+                }
+            });
+            ui.end_row();
+            ui.label(tr("Edition"));
+            egui::ComboBox::from_id_salt("playground_edition").selected_text(share.edition.as_str()).show_ui(ui, |ui| {
+                for e in EDITIONS {
+                    ui.selectable_value(&mut share.edition, e.to_string(), e);
+                }
+            });
+            ui.end_row();
+        });
+        buttons(ui, tr("Upload and Copy Link"), true)
+    });
+    if ok {
+        app.playground.start(share);
+        app.notify(tr("Uploading to the Rust Playground…"), false);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn invalidate_caches(app: &mut CrabCraftApp, ctx: &Context, clean: &mut bool) -> Outcome {
     let rust = app.runner.cargo_workspace.is_some();
     let ((ok, cancel), esc) = modal(ctx, "invalidate_caches", 460.0, |ui| {
@@ -1598,8 +1743,21 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
-        if let rc_lsp::lsp_types::CodeActionOrCommand::Command(c) = &action {
+        // Local commands, also behind a local quick fix (a code action with only a command).
+        let local = match &action {
+            A::Command(c) => Some(c),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND),
+            A::CodeAction(_) => None,
+        };
+        if let Some(c) = local {
             let ran = match c.command.as_str() {
+                crate::insight::UPDATE_DEPENDENCY_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    if let (Some(line), Some(version)) = (args.first().and_then(|v| v.as_u64()), args.get(1).and_then(|v| v.as_str())) {
+                        app.update_dependency(usize::try_from(line).unwrap_or(usize::MAX), version);
+                    }
+                    true
+                }
                 crate::insight::RENAME_COMMAND => {
                     app.run_insight_action(rc_editor::Action::Rename, pos);
                     true
@@ -1770,6 +1928,134 @@ fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outco
     });
     if ok {
         app.vcs.new_branch(name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Cheap checks of a tag name while it is typed; git's `check-ref-format` has the last word
+/// when the tag is created.
+pub fn plausible_tag_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['-', '.', '/'])
+        && !name.ends_with(['.', '/'])
+        && !name.ends_with(".lock")
+        && !name.contains("..")
+        && !name.contains("@{")
+        && !name.contains("//")
+        && name != "@"
+        && !name.chars().any(|c| c.is_whitespace() || c.is_control() || matches!(c, '~' | '^' | ':' | '?' | '*' | '[' | '\\'))
+}
+
+fn new_tag(app: &mut CrabCraftApp, ctx: &Context, name: &mut String, target: Option<&(String, String)>, message: &mut String) -> Outcome {
+    let valid = plausible_tag_name(name.trim());
+    let ((ok, cancel), esc) = modal(ctx, "new_tag", 420.0, |ui| {
+        title(ui, tr("New Tag"));
+        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Tag name")).desired_width(f32::INFINITY));
+        if !ui.memory(|m| m.has_focus(resp.id)) && message.is_empty() && name.is_empty() {
+            resp.request_focus();
+        }
+        let muted = rc_kit::pal(ui).muted;
+        let on = match target {
+            Some((_, short)) => trf("On commit {hash}", &[("hash", short)]),
+            None => tr("On HEAD").to_string(),
+        };
+        ui.label(egui::RichText::new(on).size(12.0).color(muted));
+        if !name.trim().is_empty() && !valid {
+            ui.label(egui::RichText::new(tr("This is not a valid tag name")).size(12.0).color(rc_kit::pal(ui).error));
+        }
+        ui.add_space(6.0);
+        ui.add(egui::TextEdit::multiline(message).hint_text(tr("Message (optional)")).desired_rows(3).desired_width(f32::INFINITY));
+        ui.label(egui::RichText::new(tr("With a message the tag is annotated; without one it is lightweight.")).size(12.0).color(muted));
+        buttons(ui, tr("Create"), valid)
+    });
+    if ok && valid {
+        app.vcs.create_tag(name.trim(), target.map(|(h, _)| h.clone()), Some(message.clone()));
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn delete_tag(app: &mut CrabCraftApp, ctx: &Context, name: &str) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "delete_tag", 420.0, |ui| {
+        title(ui, tr("Delete Tag"));
+        ui.label(trf("Delete the tag {name}? Copies of it on remotes are kept.", &[("name", &name)]));
+        buttons(ui, tr("Delete"), true)
+    });
+    if ok {
+        app.vcs.delete_tag(name);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn checkout_tag(app: &mut CrabCraftApp, ctx: &Context, name: &str) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "checkout_tag", 440.0, |ui| {
+        title(ui, tr("Checkout Tag"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+            ui.label(trf("Checking out {name} detaches HEAD: new commits will not belong to any branch until you create one.", &[("name", &name)]));
+        });
+        buttons(ui, tr("Checkout"), true)
+    });
+    if ok {
+        app.vcs.checkout_tag(name);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: &mut String) -> Outcome {
+    let remotes = app.vcs.remotes.clone();
+    let valid = remotes.contains(remote);
+    let ((ok, cancel), esc) = modal(ctx, "push_tags", 420.0, |ui| {
+        title(ui, if name.is_some() { tr("Push Tag") } else { tr("Push All Tags") });
+        ui.label(match name {
+            Some(n) => trf("Push the tag {name} to:", &[("name", &n)]),
+            None => tr("Push every local tag to:").to_string(),
+        });
+        egui::ComboBox::from_id_salt("push_tags_remote").selected_text(remote.as_str()).show_ui(ui, |ui| {
+            for r in &remotes {
+                ui.selectable_value(remote, r.clone(), r.as_str());
+            }
+        });
+        ui.label(egui::RichText::new(tr("The repository's pre-push hook, if any, runs.")).size(12.0).color(rc_kit::pal(ui).muted));
+        buttons(ui, tr("Push"), valid)
+    });
+    if ok && valid {
+        app.vcs.push_tags(remote, name.map(str::to_string));
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "stash_changes", 420.0, |ui| {
+        title(ui, tr("Stash Changes"));
+        let resp = ui.add(egui::TextEdit::singleline(message).hint_text(tr("Message (optional)")).desired_width(f32::INFINITY));
+        if message.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+            resp.request_focus();
+        }
+        ui.add_space(6.0);
+        ui.checkbox(include_untracked, tr("Include untracked files"));
+        ui.checkbox(keep_index, tr("Keep staged changes in the work tree"));
+        buttons(ui, tr("Stash"), true)
+    });
+    if ok {
+        app.vcs.stash_push(message, *include_untracked, *keep_index);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "drop_stash", 440.0, |ui| {
+        title(ui, tr("Drop Stash"));
+        ui.label(trf("Drop {name} ({message})? Its changes are lost.", &[("name", &format!("stash@{{{}}}", stash.index)), ("message", &stash.message)]));
+        buttons(ui, tr("Drop"), true)
+    });
+    if ok {
+        app.vcs.stash_drop(stash);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

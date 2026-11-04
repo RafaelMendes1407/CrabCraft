@@ -1,0 +1,3 @@
+# Crate names and versions in Cargo.toml completion (C-02). Import: python3 scripts/i18n_tsv.py depversions scripts/i18n/crates-io-completion.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+requirement	requisito	exigence	requisito	Anforderung	wymaganie	版本要求	バージョン要件

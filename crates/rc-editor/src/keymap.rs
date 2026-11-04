@@ -135,10 +135,14 @@ pub enum Action {
     OpenFolder,
     InvalidateCaches,
     InspectCode,
+    /// Adds the project's copyright header to the file, or updates its years.
+    UpdateCopyright,
     NewScratchFile,
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    /// Uploads the selection or the file to the Rust Playground, after a confirmation.
+    ShareInPlayground,
 }
 
 impl Action {
@@ -228,10 +232,12 @@ impl Action {
                 | OpenFolder
                 | InvalidateCaches
                 | InspectCode
+                | UpdateCopyright
                 | NewScratchFile
                 | ZoomIn
                 | ZoomOut
                 | ZoomReset
+                | ShareInPlayground
         )
     }
 }

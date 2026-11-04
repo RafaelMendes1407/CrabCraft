@@ -1,6 +1,7 @@
-//! Stashes: list, push, apply, pop, drop.
+//! Stashes: list, push, apply, pop, drop, and the files a stash saved.
 
-use crate::error::Result;
+use crate::error::{GitError, Result};
+use crate::log::ChangedFile;
 use crate::repo::Repository;
 
 /// One stash entry (`stash@{index}`).
@@ -62,6 +63,29 @@ impl Repository {
     /// Applies a stash and keeps it.
     pub async fn stash_apply(&self, index: usize, restore_index: bool) -> Result<()> {
         self.cmd().args(["stash", "apply", "--quiet"]).args(restore_index.then_some("--index")).arg(format!("stash@{{{index}}}")).output().await.map(drop)
+    }
+
+    /// Fails with [`GitError::StashChanged`] unless `stash@{index}` is still the stash `hash`
+    /// (another tool may have pushed or dropped one since the list was read).
+    pub async fn check_stash(&self, index: usize, hash: &str) -> Result<()> {
+        match self.resolve(&format!("stash@{{{index}}}")).await {
+            Ok(h) if h == hash => Ok(()),
+            Ok(_) | Err(GitError::NotFound(_)) => Err(GitError::StashChanged),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The files a stash saved: tracked changes against the commit it was made on, then the
+    /// untracked files it holds (status `?`, from `--include-untracked`).
+    pub async fn stash_files(&self, hash: &str) -> Result<Vec<ChangedFile>> {
+        // A stash is a merge of HEAD and the index; its tree against HEAD is the work tree's changes.
+        let out = self.cmd().args(["diff-tree", "--no-commit-id", "-r", "--find-renames", "--name-status", "-z", "--end-of-options"]).arg(format!("{hash}^1")).arg(hash).output().await?;
+        let mut files = crate::log::parse_name_status(&out.stdout)?;
+        if let Ok(untracked) = self.resolve(&format!("{hash}^3")).await {
+            let out = self.cmd().args(["ls-tree", "-r", "-z", "--name-only", "--end-of-options", &untracked]).output().await?;
+            files.extend(out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| ChangedFile { status: '?', path: String::from_utf8_lossy(s).into_owned(), orig_path: None }));
+        }
+        Ok(files)
     }
 
     /// Deletes a stash.

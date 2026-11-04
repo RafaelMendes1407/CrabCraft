@@ -26,6 +26,39 @@ type WantedBreakpoint = (u32, Option<String>, Option<String>, bool);
 /// An Evaluate request: id, expression and its result once it arrives.
 pub type Evaluation = (u64, String, Option<Result<EvalValue, String>>);
 
+/// What Set Value changes: a variable (a child of `parent`, its scope or parent variable) or
+/// a watch (by its expression).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetTarget {
+    Variable { parent: i64, name: String, expression: Option<String> },
+    Watch { expression: String },
+}
+
+impl SetTarget {
+    /// Whether this adapter can change the value (otherwise Set Value is shown unavailable).
+    pub fn supported(&self, capabilities: &rc_dap::protocol::Capabilities) -> bool {
+        match self {
+            SetTarget::Variable { parent, expression, .. } => rc_dap::set_method(capabilities, *parent, expression.as_deref()).is_some(),
+            SetTarget::Watch { expression } => rc_dap::set_method(capabilities, 0, Some(expression)).is_some(),
+        }
+    }
+}
+
+/// The inline field of Set Value in the Variables view.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValueEdit {
+    /// The row being edited.
+    pub key: String,
+    pub target: SetTarget,
+    pub text: String,
+    /// The field takes the focus on its next frame.
+    pub focus: bool,
+    /// The request waiting for its answer.
+    pub pending: Option<u64>,
+    /// The debugger's error for the last value sent.
+    pub error: Option<String>,
+}
+
 pub struct Debugger {
     pub session: Option<DebugSession>,
     pub console: Option<crate::runner::Console>,
@@ -37,6 +70,10 @@ pub struct Debugger {
     waker: Waker,
     /// Expanded rows of the Variables tree, by path of names (kept across steps).
     pub expanded: BTreeSet<String>,
+    /// The selected row of the Variables view (F2 edits its value).
+    pub selected_var: Option<String>,
+    /// The value being edited (Set Value).
+    pub edit: Option<ValueEdit>,
     pub new_watch: String,
     /// Breakpoints stay in the editors but do not stop the program.
     pub muted: bool,
@@ -63,6 +100,9 @@ pub struct Debugger {
     /// The Memory tab is shown (instead of Threads & Variables or the Console).
     pub show_memory: bool,
     pub memory: crate::memory_view::MemoryView,
+    /// The Disassembly tab is shown (when neither the Console nor the Memory tab is).
+    pub show_disassembly: bool,
+    pub disassembly: crate::disassembly_view::DisassemblyView,
     /// Breakpoint set by Run to Cursor, removed at the next stop (file, 1-based line).
     temp: Option<(PathBuf, u32)>,
     /// URLs the debugged web app listens on.
@@ -83,6 +123,8 @@ impl Debugger {
             pending: None,
             waker,
             expanded: BTreeSet::new(),
+            selected_var: None,
+            edit: None,
             new_watch: String::new(),
             eval: None,
             hover: None,
@@ -98,6 +140,8 @@ impl Debugger {
             show_console: false,
             show_memory: false,
             memory: Default::default(),
+            show_disassembly: false,
+            disassembly: Default::default(),
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),
@@ -154,6 +198,7 @@ impl Debugger {
         self.name = name.to_string();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
         self.session = Some(session);
@@ -176,6 +221,7 @@ impl Debugger {
         self.name = config.name.clone();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
@@ -214,6 +260,7 @@ impl Debugger {
         self.name = config.name.clone();
         self.expanded.clear();
         self.memory.reset();
+        self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
         let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
@@ -250,6 +297,35 @@ impl Debugger {
         }
     }
 
+    /// Opens the inline field of Set Value on a row, with `value` (its value as shown, in
+    /// hexadecimal when hex is on) to edit. Nothing happens when not paused.
+    pub fn start_edit(&mut self, key: String, target: SetTarget, value: &str) {
+        if !self.stopped() {
+            return;
+        }
+        self.selected_var = Some(key.clone());
+        self.edit = Some(ValueEdit { key, target, text: value.to_string(), focus: true, pending: None, error: None });
+    }
+
+    /// Sends the value typed in the Set Value field; the answer closes it, or shows the
+    /// debugger's error under it.
+    pub fn apply_edit(&mut self) {
+        let (Some(edit), Some(s)) = (&mut self.edit, &mut self.session) else { return };
+        let value = edit.text.trim();
+        if value.is_empty() || edit.pending.is_some() {
+            return;
+        }
+        edit.error = None;
+        edit.pending = Some(match &edit.target {
+            SetTarget::Variable { parent, name, expression } => s.set_variable(*parent, name, expression.as_deref(), value),
+            SetTarget::Watch { expression } => s.set_expression(expression, value),
+        });
+    }
+
+    pub fn cancel_edit(&mut self) {
+        self.edit = None;
+    }
+
     /// Shows the memory of a variable or watch in the Memory tab: its memory reference, or
     /// the address of `expression`.
     pub fn show_memory_of(&mut self, memory_reference: Option<&str>, expression: &str) {
@@ -270,6 +346,24 @@ impl Debugger {
     pub fn memory_page(&mut self, pages: i64) {
         if let Some(s) = &mut self.session {
             self.memory.page(s, pages);
+        }
+    }
+
+    /// Loads the instructions before (`earlier`) or after the ones in the Disassembly tab.
+    pub fn disassembly_more(&mut self, earlier: bool) {
+        if let Some(s) = &mut self.session {
+            if earlier {
+                self.disassembly.load_earlier(s);
+            } else {
+                self.disassembly.load_later(s);
+            }
+        }
+    }
+
+    /// Runs one machine instruction, over calls (`over`) or into them.
+    pub fn step_instruction(&mut self, over: bool) {
+        if let Some(s) = self.session.as_mut().filter(|s| s.state().is_stopped()) {
+            s.step_instruction(over);
         }
     }
 
@@ -382,7 +476,33 @@ impl Debugger {
         let events = session.pump();
         for ev in events {
             self.memory.on_event(&ev, session);
+            self.disassembly.on_event(&ev, session);
             match ev {
+                DebugEvent::VariableSet { id, name, result, .. } => {
+                    let mine = self.edit.as_ref().is_some_and(|e| e.pending == Some(id));
+                    match result {
+                        Ok(_) => {
+                            if mine {
+                                self.edit = None;
+                            }
+                            // What shows the value is drawn again: inline values now, the
+                            // memory page read again (watches are evaluated by the session).
+                            self.inline_frame = None;
+                            self.memory.on_stopped(session);
+                        }
+                        Err(e) => {
+                            let msg = trf("Cannot set {name}: {error}", &[("name", &name), ("error", &e)]);
+                            match &mut self.edit {
+                                Some(edit) if mine => {
+                                    edit.pending = None;
+                                    edit.error = Some(msg);
+                                    edit.focus = true;
+                                }
+                                _ => out.push(DebugOutput::Notify(msg, true)),
+                            }
+                        }
+                    }
+                }
                 DebugEvent::Build(rc_dotnet::BuildEvent::Output(line) | rc_dotnet::BuildEvent::Task(line)) => {
                     if let Some(c) = &self.console {
                         c.line(&line);
@@ -447,6 +567,7 @@ impl Debugger {
                 }
                 DebugEvent::Continued => {
                     self.hover_result = None;
+                    self.edit = None;
                 }
                 DebugEvent::Exited(code) => {
                     if let Some(c) = &self.console {
@@ -500,6 +621,10 @@ impl Debugger {
                 }
                 _ => {}
             }
+        }
+        // The Disassembly tab follows the selected frame and reads again at each stop.
+        if self.show_disassembly && !self.show_console && !self.show_memory {
+            self.disassembly.sync(session);
         }
         // Execution point and breakpoint state in the editors.
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };

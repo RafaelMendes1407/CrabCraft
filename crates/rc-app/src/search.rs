@@ -377,9 +377,11 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Recent Files"), RecentFiles),
         (tr("Invalidate Caches…"), InvalidateCaches),
         (tr("Inspect Code"), InspectCode),
+        (tr("Update Copyright"), UpdateCopyright),
         (tr("New Scratch File…"), NewScratchFile),
         (tr("Select In…"), SelectIn),
         (tr("Reformat Code"), Reformat),
+        (tr("Share in Playground…"), ShareInPlayground),
         (tr("Generate…"), Generate),
         (tr("Refactor This…"), RefactorThis),
         (tr("Go to Declaration"), GotoDeclaration),
@@ -586,6 +588,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         GotoFile => ico::FILE_TEXT,
         InvalidateCaches => ico::REFRESH,
         InspectCode => ico::WARNING,
+        UpdateCopyright => ico::EDIT,
         NewScratchFile => ico::NEW_FILE,
         GotoClass => ico::CLASS,
         GotoSymbol => ico::METHOD,
@@ -617,6 +620,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         DuplicateLine => ico::COPY,
         NextError | PreviousError => ico::ERROR,
         OpenFolder => ico::OPEN,
+        ShareInPlayground => ico::EXTERNAL_LINK,
         _ => return None,
     })
 }

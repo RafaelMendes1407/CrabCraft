@@ -293,6 +293,14 @@ async fn stash_push_list_apply_pop_drop() {
     assert_eq!((list[0].index, list[0].message.as_str(), list[0].branch.as_deref()), (0, "On main: second", Some("main")));
     assert_eq!(t.repo.status(&StatusOptions::default()).await.unwrap().stash_count, 2);
 
+    // The files of each stash: tracked changes, and untracked files saved with them.
+    let files = |f: Vec<rc_vcs::ChangedFile>| f.into_iter().map(|f| (f.status, f.path)).collect::<Vec<_>>();
+    assert_eq!(files(t.repo.stash_files(&list[1].hash).await.unwrap()), [('M', "a.txt".to_string())]);
+    assert_eq!(files(t.repo.stash_files(&list[0].hash).await.unwrap()), [('M', "a.txt".to_string()), ('?', "u.txt".to_string())]);
+    t.repo.check_stash(1, &list[1].hash).await.unwrap();
+    assert!(matches!(t.repo.check_stash(0, &list[1].hash).await, Err(GitError::StashChanged)));
+    assert!(matches!(t.repo.check_stash(7, &list[1].hash).await, Err(GitError::StashChanged)));
+
     t.repo.stash_apply(1, false).await.unwrap();
     assert_eq!(t.read("a.txt"), "one\n");
     t.repo.rollback(&s(&["a.txt"])).await.unwrap();
@@ -414,6 +422,51 @@ async fn merge_conflicts_are_listed_and_resolved() {
 }
 
 #[tokio::test]
+async fn tags_are_created_listed_pushed_checked_out_and_deleted() {
+    let remote_dir = tempfile::tempdir().unwrap();
+    git(remote_dir.path(), &["init", "-q", "--bare", "-b", "main"]);
+    let url = format!("file://{}", remote_dir.path().display());
+    let t = TempRepo::new().await;
+    t.git(&["remote", "add", "origin", &url]);
+    t.commit_files(&[("a.txt", "1\n")], "first");
+    let first = t.repo.resolve("HEAD").await.unwrap();
+    t.commit_files(&[("a.txt", "2\n")], "second");
+    let second = t.repo.resolve("HEAD").await.unwrap();
+
+    // Invalid names never reach git as options or refs.
+    for bad in ["", "-d", "a..b", "with space", "end.lock", "x~1", "a:b", " v1"] {
+        assert!(matches!(t.repo.create_tag(bad, None, None).await, Err(GitError::InvalidRefName(_))), "{bad:?}");
+    }
+    t.repo.create_tag("v1.0", Some(&first), None).await.unwrap();
+    t.repo.create_tag("v2.0", None, Some("Release 2\n\nWith notes")).await.unwrap();
+    assert!(matches!(t.repo.create_tag("v2.0", None, None).await, Err(GitError::TagExists(n)) if n == "v2.0"));
+
+    let tags = t.repo.tags().await.unwrap();
+    let v1 = tags.iter().find(|x| x.name == "v1.0").unwrap();
+    let v2 = tags.iter().find(|x| x.name == "v2.0").unwrap();
+    assert_eq!((v1.target.as_str(), v1.annotated, v1.message.as_str()), (first.as_str(), false, ""));
+    assert_eq!((v2.target.as_str(), v2.annotated, v2.message.as_str()), (second.as_str(), true, "Release 2\n\nWith notes"));
+
+    // Push one tag, then all of them, to a local bare remote.
+    let report = t.repo.push_tags("origin", Some("v1.0"), None, None).await.unwrap();
+    assert!(report.contains("refs/tags/v1.0"), "{report}");
+    assert_eq!(git(remote_dir.path(), &["tag", "--list"]).trim(), "v1.0");
+    t.repo.push_tags("origin", None, None, None).await.unwrap();
+    assert_eq!(git(remote_dir.path(), &["tag", "--list"]).lines().collect::<Vec<_>>(), ["v1.0", "v2.0"]);
+    assert!(matches!(t.repo.push_tags("nowhere", Some("v1.0"), None, None).await, Err(GitError::Network(_) | GitError::NotFound(_) | GitError::Failed { .. })));
+    assert!(t.repo.push_tags("--all", None, None, None).await.is_err());
+
+    // Checkout detaches HEAD at the tag.
+    t.repo.checkout_tag("v1.0").await.unwrap();
+    assert_eq!(t.repo.current_branch().await.unwrap(), None);
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), first);
+
+    t.repo.delete_tag("v1.0").await.unwrap();
+    assert!(t.repo.tags().await.unwrap().iter().all(|x| x.name != "v1.0"));
+    assert!(t.repo.delete_tag("v1.0").await.is_err());
+}
+
+#[tokio::test]
 async fn fetch_pull_push_with_progress() {
     let remote_dir = tempfile::tempdir().unwrap();
     git(remote_dir.path(), &["init", "-q", "--bare", "-b", "main"]);
@@ -528,6 +581,7 @@ fn errors_have_translatable_messages() {
         GitError::NotARepository(Default::default()),
         GitError::NothingToCommit,
         GitError::NothingToStash,
+        GitError::StashChanged,
         GitError::Conflicts(String::new()),
         GitError::AuthenticationRequired(String::new()),
         GitError::DetachedHead,

@@ -32,6 +32,8 @@ pub struct Notice {
     pub text: String,
     pub error: bool,
     pub at: f64,
+    /// A link the status bar offers to open in the browser.
+    pub url: Option<String>,
 }
 
 pub struct WorkspaceState {
@@ -87,8 +89,16 @@ pub struct CrabCraftApp {
     /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
     /// docs.rs icons.
     pub dep_versions: crate::dep_versions::DepVersions,
+    /// The scan for the `cfg` uses of a Cargo feature (N-13).
+    pub feature_search: crate::feature_nav::FeatureSearch,
+    /// The project's copyright header profile (saved with the session).
+    pub copyright: crate::copyright::Copyright,
+    /// Crate names (crates.io search, local registry) for `Cargo.toml` completion.
+    pub crate_names: crate::manifest_completion::CrateNames,
     /// The last external page opened from the editor (docs.rs).
     pub opened_url: Option<String>,
+    /// Share in Playground uploads (N-18).
+    pub playground: crate::playground::Playground,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -289,7 +299,11 @@ impl CrabCraftApp {
             triple_load: None,
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            feature_search: Default::default(),
+            copyright: Default::default(),
+            crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
             opened_url: None,
+            playground: crate::playground::Playground::new(waker.clone()),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -340,7 +354,7 @@ impl CrabCraftApp {
     }
 
     pub fn notify(&mut self, text: impl Into<String>, error: bool) {
-        self.notices.push(Notice { text: text.into(), error, at: 0.0 });
+        self.notices.push(Notice { text: text.into(), error, at: 0.0, url: None });
     }
 
     // ------------------------------------------------------------------ workspace
@@ -390,6 +404,7 @@ impl CrabCraftApp {
         self.cargo_features = clean_features(&session.cargo_features);
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
+        self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -791,11 +806,73 @@ impl CrabCraftApp {
         doc.editor.gutter_icons.extend(icons);
     }
 
+    /// The quick fix of an outdated dependency: writes `version` as the requirement of the
+    /// dependency declared on `line` of the active `Cargo.toml`, in its editor (undoable).
+    pub fn update_dependency(&mut self, line: usize, version: &str) {
+        let Ok(version) = semver::Version::parse(version) else { return };
+        let Some(doc) = self.docs.active_doc_mut() else { return };
+        let text = doc.editor.buffer.rope().to_string();
+        let Some(dep) = rc_cargo::dependency_lines(&text).into_iter().find(|d| d.line == line) else { return };
+        let Some((start, end)) = rc_cargo::versions::dep_spans(&text, &dep).req else { return };
+        let req = rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version);
+        doc.editor.replace(start, end, &req);
+    }
+
     /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
     /// locked version in the browser.
     pub fn open_docs_rs_at(&mut self, line: usize) {
         let Some(doc) = self.docs.active_doc() else { return };
         let Some(url) = self.dep_versions.links.get(&doc.editor.id).and_then(|l| l.get(&line)).cloned() else { return };
+        #[cfg(not(test))]
+        crate::ui::run_windows::open_url(&url);
+        self.opened_url = Some(url);
+    }
+
+    /// Share in Playground: asks to confirm uploading the selection, or the whole Rust file.
+    pub fn share_in_playground(&mut self) {
+        let Some(doc) = self.docs.active_doc() else {
+            self.notify(tr("Open a Rust file to share it on the Rust Playground"), false);
+            return;
+        };
+        if doc.path.extension().is_none_or(|e| e != "rs") {
+            self.notify(tr("Only Rust files can be shared on the Rust Playground"), false);
+            return;
+        }
+        let selected = doc.editor.selected_text();
+        let code = if selected.trim().is_empty() { doc.editor.buffer.rope().to_string() } else { selected };
+        if code.trim().is_empty() {
+            self.notify(tr("There is no code to share"), false);
+            return;
+        }
+        if code.len() > rc_cargo::playground::MAX_CODE_BYTES {
+            self.notify(crate::playground::error_text(&rc_cargo::playground::PlaygroundError::TooLarge), true);
+            return;
+        }
+        if self.playground.running() {
+            self.notify(tr("The code is still being uploaded to the Rust Playground"), false);
+            return;
+        }
+        let edition = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path));
+        let share = crate::playground::Share::new(code, edition);
+        self.dialog = Some(Dialog::SharePlayground(Box::new(share)));
+    }
+
+    /// The finished Playground uploads: the link is copied and offered in the status bar.
+    fn poll_playground(&mut self, ctx: &Context) {
+        for done in self.playground.poll() {
+            match done {
+                Ok(url) => {
+                    ctx.copy_text(url.clone());
+                    let text = trf("Shared on the Rust Playground; link copied: {url}", &[("url", &url)]);
+                    self.notices.push(Notice { text, error: false, at: 0.0, url: Some(url) });
+                }
+                Err(e) => self.notify(e, true),
+            }
+        }
+    }
+
+    /// Opens a link offered by a notice in the browser.
+    pub fn open_notice_url(&mut self, url: String) {
         #[cfg(not(test))]
         crate::ui::run_windows::open_url(&url);
         self.opened_url = Some(url);
@@ -1153,6 +1230,7 @@ impl CrabCraftApp {
         self.dock = Dock::default();
         self.nav_back.clear();
         self.nav_forward.clear();
+        self.copyright.close();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1275,6 +1353,7 @@ impl CrabCraftApp {
             project_env: self.runner.project_env.clone(),
             cargo_features: self.cargo_features.clone(),
             cargo_target: self.cargo_target.clone().unwrap_or_default(),
+            copyright: self.copyright.profile.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1374,8 +1453,41 @@ impl CrabCraftApp {
         }
         // Cargo.toml is completed here: the Rust server does not complete TOML.
         if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
-            crate::manifest_completion::complete(&mut self.docs.list[i], true);
+            let mut cx = crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online: self.settings.check_crates_io };
+            crate::manifest_completion::complete(&mut self.docs.list[i], true, &mut cx);
             return;
+        }
+        // Cargo features and their `cfg` uses: rust-analyzer does not go between them.
+        if matches!(action, Action::GotoDeclaration | Action::FindUsages) {
+            let caret = self.docs.list[i].editor.caret();
+            if self.feature_navigate(i, caret, action == Action::FindUsages) {
+                return;
+            }
+            if crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+                self.notify(tr("Place the caret on a feature name to go to it or find its uses"), false);
+                return;
+            }
+        }
+        // The quick fix of an outdated dependency (C-04) is made here, not by a server.
+        if action == Action::ShowIntentions && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+            let doc = &self.docs.list[i];
+            let line = doc.editor.caret_line_col().0;
+            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
+                let version = version.to_string();
+                let command = rc_lsp::lsp_types::Command {
+                    title: trf("Update to {version}", &[("version", &version)]),
+                    command: crate::insight::UPDATE_DEPENDENCY_COMMAND.to_string(),
+                    arguments: Some(vec![serde_json::json!(line), serde_json::json!(version)]),
+                };
+                let action = rc_lsp::lsp_types::CodeAction {
+                    title: command.title.clone(),
+                    kind: Some(rc_lsp::lsp_types::CodeActionKind::QUICKFIX),
+                    command: Some(command),
+                    ..Default::default()
+                };
+                self.dialog = Some(Dialog::CodeActions { list: vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(action)], selected: 0 });
+                return;
+            }
         }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
@@ -1432,6 +1544,43 @@ impl CrabCraftApp {
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
             _ => {}
+        }
+    }
+
+    /// Code › Update Copyright: the profile's header added to the active file, or the year
+    /// range of the header it has brought up to date (one undoable edit).
+    pub fn update_copyright(&mut self) {
+        if self.workspace.is_none() {
+            self.notify(tr("Open a project to use its copyright profile"), false);
+            return;
+        }
+        let Some(d) = self.docs.active_doc() else { return };
+        let text = d.editor.buffer.rope().to_string();
+        let path = d.path.clone();
+        let Some(edit) = self.copyright.edit_for(&path, &text) else {
+            self.notify(tr("This file cannot have a copyright header"), false);
+            return;
+        };
+        let message = match edit.change {
+            crate::copyright::Change::Added => tr("Copyright header added"),
+            crate::copyright::Change::Updated => tr("Copyright year updated"),
+            crate::copyright::Change::Current => tr("The copyright header is up to date"),
+        };
+        if edit.change != crate::copyright::Change::Current
+            && let Some(d) = self.docs.active_doc_mut()
+        {
+            let rope = d.editor.buffer.rope();
+            let (start, end) = (rope.byte_to_char(edit.start), rope.byte_to_char(edit.end));
+            d.editor.replace(start, end, &edit.text);
+        }
+        self.notify(message, false);
+    }
+
+    /// Settings › Copyright: the profile of the project, saved with its session.
+    pub fn set_copyright_profile(&mut self, profile: rc_core::session::CopyrightProfile) {
+        if self.copyright.profile != profile {
+            self.copyright.profile = profile;
+            self.session_dirty = true;
         }
     }
 
@@ -1703,7 +1852,10 @@ impl CrabCraftApp {
             }
             Action::NavigateBack => self.navigate(true),
             Action::NavigateForward => self.navigate(false),
-            Action::ShowSettings => self.dialog = Some(Dialog::settings(&self.settings)),
+            Action::ShowSettings => {
+                self.copyright.draft = None;
+                self.dialog = Some(Dialog::settings(&self.settings));
+            }
             Action::ProjectEnvironment => match self.workspace {
                 Some(_) => self.dialog = Some(Dialog::ProjectEnv { text: self.runner.project_env.clone() }),
                 None => self.notify(tr("Open a project to set its environment variables"), false),
@@ -1841,6 +1993,7 @@ impl CrabCraftApp {
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::ShareInPlayground => self.share_in_playground(),
             Action::SelectIn if self.docs.active_doc().is_some() => {
                 let row = |title: &str, command: &str| {
                     rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command { title: title.to_string(), command: command.to_string(), arguments: None })
@@ -1850,6 +2003,7 @@ impl CrabCraftApp {
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
             Action::InspectCode => self.inspect_code(),
+            Action::UpdateCopyright => self.update_copyright(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
@@ -2269,6 +2423,7 @@ impl CrabCraftApp {
 
     /// Opens the settings on `page`.
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
+        self.copyright.draft = None;
         self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
     }
 
@@ -2556,6 +2711,7 @@ impl CrabCraftApp {
         self.poll_dep_trees();
         self.update_cfg_sets();
         self.poll_rustfmt();
+        self.copyright.poll();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);
@@ -2826,7 +2982,16 @@ impl eframe::App for CrabCraftApp {
         }
         self.update_test_markers();
         self.update_feature_icons();
-        self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
+        let online = self.settings.check_crates_io;
+        let waits = [
+            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online),
+            crate::manifest_completion::CrateNames::update(&mut self.docs, &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online }),
+        ];
+        if let Some(wait) = waits.into_iter().flatten().min() {
+            ctx.request_repaint_after(wait);
+        }
+        self.poll_feature_search();
+        self.poll_playground(&ctx);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
@@ -2885,6 +3050,7 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         show_indent_guides: s.show_indent_guides,
         show_inlays: s.show_inlay_hints,
         sticky_lines: if s.sticky_lines { 5 } else { 0 },
+        scrollbar_lens: s.scrollbar_lens,
         right_margin: (s.right_margin > 0).then_some(s.right_margin),
         live_templates: rc_core::live_templates::for_editor(&s.live_templates),
         ..EditorConfig::default()

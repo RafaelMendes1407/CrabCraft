@@ -1,9 +1,10 @@
 //! Debug tool window (Rider layout): toolbar with the stepping actions, then "Threads &
 //! Variables" (frames on the left; watches and variables of the selected frame on the right)
-//! "Console" (program output) and "Memory" (a hex dump of the paused program's memory).
+//! "Console" (program output), "Memory" (a hex dump of the paused program's memory) and
+//! "Disassembly" (the machine code around the selected frame's instruction).
 
 use crate::app::CrabCraftApp;
-use crate::debugger::Debugger;
+use crate::debugger::{Debugger, SetTarget, ValueEdit};
 use crate::toolwindow::ToolWindow;
 use crate::ui::run_windows::{console, header, open_link};
 use crate::ui::toolwindows::empty_state;
@@ -87,9 +88,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         let (console_tab, memory_tab) = (app.debugger.show_console, app.debugger.show_memory && !app.debugger.show_console);
-        if theme::tab(ui, !console_tab && !memory_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
+        let disassembly_tab = app.debugger.show_disassembly && !console_tab && !memory_tab;
+        if theme::tab(ui, !console_tab && !memory_tab && !disassembly_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
             app.debugger.show_console = false;
             app.debugger.show_memory = false;
+            app.debugger.show_disassembly = false;
         }
         if theme::tab(ui, console_tab, Some(ico::FILE_SHELL), tr("Console"), false).0.clicked() {
             app.debugger.show_console = true;
@@ -98,6 +101,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         if theme::tab(ui, memory_tab, Some(ico::FILE_BINARY), tr("Memory"), false).0.clicked() {
             app.debugger.show_console = false;
             app.debugger.show_memory = true;
+        }
+        if theme::tab(ui, disassembly_tab, Some(ico::FRAME), tr("Disassembly"), false).0.clicked() {
+            app.debugger.show_console = false;
+            app.debugger.show_memory = false;
+            app.debugger.show_disassembly = true;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(12.0);
@@ -133,6 +141,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if app.debugger.show_memory {
         memory(ui, &mut app.debugger);
+        return;
+    }
+    if app.debugger.show_disassembly {
+        disassembly(ui, &mut app.debugger);
         return;
     }
     let avail = ui.available_rect_before_wrap();
@@ -236,6 +248,122 @@ fn memory(ui: &mut Ui, dbg: &mut Debugger) {
             ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, p.text);
         }
     });
+}
+
+/// The Disassembly tab: instruction stepping, then the instructions around the selected
+/// frame's current one (address, bytes, instruction), with a header when the function or the
+/// source line changes, and rows to load more above and below.
+fn disassembly(ui: &mut Ui, dbg: &mut Debugger) {
+    use rc_dap::disassembly::{DisasmRow, format_address, rows};
+    let p = rc_kit::pal(ui);
+    let stopped = dbg.stopped();
+    let granular = dbg.session.as_ref().is_some_and(|s| s.capabilities().supports_stepping_granularity);
+    let mut step = None;
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        if granular {
+            if theme::icon_button(ui, ico::STEP_OVER, stopped, tr("Step Over Instruction")).clicked() {
+                step = Some(true);
+            }
+            if theme::icon_button(ui, ico::STEP_INTO, stopped, tr("Step Into Instruction")).clicked() {
+                step = Some(false);
+            }
+        }
+        if dbg.disassembly.loading() {
+            ui.add(egui::Spinner::new().size(12.0));
+        }
+    });
+    if let Some(over) = step {
+        dbg.step_instruction(over);
+    }
+    if let Some(e) = &dbg.disassembly.error {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            ui.label(egui::RichText::new(e).size(12.0).color(p.error));
+        });
+    }
+    if dbg.disassembly.instructions.is_empty() {
+        if dbg.disassembly.error.is_none() {
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                ui.add_space(12.0);
+                let msg = if stopped { tr("Loading instructions…") } else { tr("Instructions are shown when the program is paused") };
+                ui.label(egui::RichText::new(msg).color(p.muted));
+            });
+        }
+        return;
+    }
+    let current = if stopped { dbg.disassembly.current } else { None };
+    let layout = rows(&dbg.disassembly.instructions, current);
+    let current_row = layout.iter().position(|r| matches!(r, DisasmRow::Instruction { current: true, .. }));
+    let font = FontId::monospace(12.5);
+    let row_h = ROW_H - 4.0;
+    // A "load earlier" row first and a "load later" row last.
+    let total = layout.len() + 2;
+    let mut area = egui::ScrollArea::vertical().id_salt("dbg_disassembly").auto_shrink([false, false]);
+    if dbg.disassembly.scroll_to_current
+        && let Some(r) = current_row
+    {
+        // `show_rows` places rows `item_spacing.y` apart (of this ui, not the one inside).
+        let stride = row_h + ui.spacing().item_spacing.y;
+        area = area.vertical_scroll_offset(((r + 1) as f32 * stride + row_h / 2.0 - ui.available_height() / 2.0).max(0.0));
+        dbg.disassembly.scroll_to_current = false;
+    }
+    let top_unknown = dbg.disassembly.top_unknown;
+    let list = &dbg.disassembly.instructions;
+    let mut more = None;
+    area.show_rows(ui, row_h, total, |ui, range| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for n in range {
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
+            if n == 0 || n + 1 == total {
+                let earlier = n == 0;
+                let text = if earlier && top_unknown {
+                    tr("Earlier instructions could not be found. Try again")
+                } else if earlier {
+                    tr("Load earlier instructions")
+                } else {
+                    tr("Load later instructions")
+                };
+                let color = if stopped { p.accent } else { p.muted };
+                ui.painter().text(pos2(r.left() + 12.0, r.center().y), egui::Align2::LEFT_CENTER, text, FontId::proportional(12.0), color);
+                if stopped && resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                    more = Some(earlier);
+                }
+                continue;
+            }
+            match layout.get(n - 1) {
+                Some(DisasmRow::Header { symbol, location }) => {
+                    let mut job = egui::text::LayoutJob::default();
+                    if let Some(s) = symbol {
+                        job.append(&format!("{s}:"), 12.0, egui::TextFormat::simple(font.clone(), p.text));
+                    }
+                    if let Some(l) = location {
+                        job.append(l, if symbol.is_some() { 12.0 } else { 24.0 }, egui::TextFormat::simple(font.clone(), p.muted));
+                    }
+                    let g = ui.painter().layout_job(job);
+                    ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, p.text);
+                }
+                Some(DisasmRow::Instruction { index, current }) => {
+                    let Some(i) = list.get(*index) else { continue };
+                    if *current {
+                        ui.painter().rect_filled(r, 0.0, p.warn.gamma_multiply(0.30));
+                        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 12.0, r.center().y), vec2(14.0, 14.0)), ico::EXECUTION_POINT, &p, true);
+                    }
+                    let mut job = egui::text::LayoutJob::default();
+                    job.append(&format_address(i.address), 24.0, egui::TextFormat::simple(font.clone(), p.muted));
+                    job.append(&format!("  {:<24} ", i.bytes.as_deref().unwrap_or("")), 0.0, egui::TextFormat::simple(font.clone(), p.text_muted));
+                    job.append(&i.text, 0.0, egui::TextFormat::simple(font.clone(), p.text));
+                    let g = ui.painter().layout_job(job);
+                    ui.painter().galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, p.text);
+                }
+                None => {}
+            }
+        }
+    });
+    if let Some(earlier) = more {
+        dbg.disassembly_more(earlier);
+    }
 }
 
 fn frames(ui: &mut Ui, dbg: &mut Debugger) {
@@ -353,7 +481,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
             WatchValue::NotEvaluated => (tr("Cannot evaluate while running").into(), None, 0, true, None),
         };
         let expression = (!error).then(|| w.expression.clone());
-        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false, memory, expression });
+        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false, memory, expression, parent: 0 });
     }
     if stopped && let Some(frame) = s.selected_frame().map(|f| f.id) {
         match s.scopes(frame) {
@@ -367,7 +495,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
                         children(s, &dbg.expanded, sc.variables_reference, &format!("s:{}", sc.name), 0, &mut rows);
                     } else {
                         let key = format!("s:{}", sc.name);
-                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true, memory: None, expression: None });
+                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true, memory: None, expression: None, parent: 0 });
                         if dbg.expanded.contains(&key) {
                             children(s, &dbg.expanded, sc.variables_reference, &key, 1, &mut rows);
                         }
@@ -382,6 +510,12 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
     let hex = dbg.hex;
     let mut toggle_hex = false;
     let mut show_memory = None;
+    let caps = s.capabilities().clone();
+    let can_set = |row: &Row| stopped && row.set_target().is_some_and(|t| t.supported(&caps));
+    let list_id = ui.id().with("dbg_vars_list");
+    let mut select = None;
+    let mut start_edit: Option<(String, SetTarget, String)> = None;
+    let mut edit_done = None;
     egui::ScrollArea::vertical().id_salt("dbg_vars").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         if rows.is_empty() {
@@ -393,11 +527,37 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
             });
         }
         for row in &rows {
-            let resp = paint_row(ui, row, dbg.expanded.contains(&row.key));
+            if let Some(edit) = dbg.edit.as_mut().filter(|e| e.key == row.key) {
+                edit_done = edit_row(ui, row, edit).or(edit_done);
+                continue;
+            }
+            let selected = dbg.selected_var.as_deref() == Some(row.key.as_str());
+            let resp = paint_row(ui, row, dbg.expanded.contains(&row.key), selected);
             if resp.clicked() && row.reference > 0 {
                 toggle = Some(row.key.clone());
             }
+            if resp.clicked() || resp.secondary_clicked() {
+                select = Some(row.key.clone());
+                ui.memory_mut(|m| m.request_focus(list_id));
+            }
+            // Double-click on a plain value edits it (a struct expands instead).
+            if resp.double_clicked()
+                && row.reference <= 0
+                && can_set(row)
+                && let Some(t) = row.set_target()
+            {
+                start_edit = Some((row.key.clone(), t, row.value.clone()));
+            }
             resp.context_menu(|ui| {
+                if !row.scope {
+                    let enabled = can_set(row);
+                    if theme::menu_entry(ui, Some(ico::EDIT), tr("Set Value…"), Some("F2"), false, enabled).clicked()
+                        && enabled
+                        && let Some(t) = row.set_target()
+                    {
+                        start_edit = Some((row.key.clone(), t, row.value.clone()));
+                    }
+                }
                 if let Some(id) = row.watch {
                     if theme::menu_item(ui, Some(ico::REMOVE), tr("Remove Watch"), false).clicked() {
                         remove = Some(id);
@@ -430,6 +590,29 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
     if let Some(e) = add_watch {
         s.add_watch(e);
     }
+    // F2 edits the value of the selected row while the list has the focus.
+    if ui.memory(|m| m.has_focus(list_id))
+        && dbg.edit.is_none()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F2))
+        && let Some(row) = rows.iter().find(|r| dbg.selected_var.as_deref() == Some(r.key.as_str())).filter(|r| can_set(r))
+        && let Some(t) = row.set_target()
+    {
+        start_edit = Some((row.key.clone(), t, row.value.clone()));
+    }
+    if let Some(k) = select {
+        dbg.selected_var = Some(k);
+    }
+    match edit_done {
+        Some(true) => dbg.apply_edit(),
+        Some(false) => {
+            dbg.cancel_edit();
+            ui.memory_mut(|m| m.request_focus(list_id));
+        }
+        None => {}
+    }
+    if let Some((key, target, value)) = start_edit {
+        dbg.start_edit(key, target, &value);
+    }
     VariablesAsked { toggle_hex, memory: show_memory }
 }
 
@@ -449,8 +632,24 @@ struct Row {
     scope: bool,
     /// Where the value's memory starts, when the debugger says.
     memory: Option<String>,
-    /// An expression for the value (its address is shown in the Memory tab).
+    /// An expression for the value (its address is shown in the Memory tab; Set Value uses
+    /// it when the debugger has no `setVariable`).
     expression: Option<String>,
+    /// The scope or variable this one is a child of (0 for watches and scopes).
+    parent: i64,
+}
+
+impl Row {
+    /// What Set Value changes on this row; `None` for scopes and placeholders.
+    fn set_target(&self) -> Option<SetTarget> {
+        if self.scope {
+            return None;
+        }
+        if self.watch.is_some() {
+            return (!self.error).then(|| SetTarget::Watch { expression: self.name.clone() });
+        }
+        (self.parent > 0).then(|| SetTarget::Variable { parent: self.parent, name: self.name.clone(), expression: self.expression.clone() })
+    }
 }
 
 /// Children of `reference` (requested when not loaded), recursing into expanded rows.
@@ -460,19 +659,19 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
     }
     let Some(vars) = s.variables(reference).map(|v| v.to_vec()) else {
         s.request_variables(reference);
-        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false, memory: None, expression: None });
+        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false, memory: None, expression: None, parent: 0 });
         return;
     };
     for v in vars {
-        push_var(s, expanded, &v, parent, depth, rows);
+        push_var(s, expanded, &v, reference, parent, depth, rows);
     }
 }
 
-fn push_var(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<String>, v: &Variable, parent: &str, depth: usize, rows: &mut Vec<Row>) {
+fn push_var(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<String>, v: &Variable, parent_ref: i64, parent: &str, depth: usize, rows: &mut Vec<Row>) {
     let key = format!("{parent}/{}", v.name);
     // Only a top-level local is known by its name; deeper rows need the adapter's expression.
     let expression = v.evaluate_name.clone().filter(|e| !e.is_empty()).or_else(|| (depth == 0).then(|| v.name.clone()));
-    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: v.memory_reference.clone(), expression });
+    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: v.memory_reference.clone(), expression, parent: parent_ref });
     if v.variables_reference > 0 && expanded.contains(&key) {
         children(s, expanded, v.variables_reference, &key, depth + 1, rows);
     }
@@ -497,10 +696,12 @@ fn var_icon(row: &Row) -> Ico {
     }
 }
 
-fn paint_row(ui: &mut Ui, row: &Row, open: bool) -> egui::Response {
+fn paint_row(ui: &mut Ui, row: &Row, open: bool, selected: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
-    if resp.hovered() {
+    if selected {
+        ui.painter().rect_filled(r, 0.0, p.selection_inactive);
+    } else if resp.hovered() {
         ui.painter().rect_filled(r, 0.0, p.row_hover);
     }
     let x0 = r.left() + 8.0 + row.depth as f32 * INDENT;
@@ -547,6 +748,48 @@ fn paint_row(ui: &mut Ui, row: &Row, open: bool) -> egui::Response {
     if truncated && !row.value.is_empty() { resp.on_hover_text(format!("{} = {}", row.name, row.value)) } else { resp }
 }
 
+/// A row whose value is being edited: its icon and name, then the value field (Enter sets
+/// it, Escape cancels), and the debugger's error under it. Returns `Some(true)` to send the
+/// value and `Some(false)` to close the field.
+fn edit_row(ui: &mut Ui, row: &Row, edit: &mut ValueEdit) -> Option<bool> {
+    let p = rc_kit::pal(ui);
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
+    ui.painter().rect_filled(r, 0.0, p.selection_inactive);
+    let x0 = r.left() + 8.0 + row.depth as f32 * INDENT;
+    icons::paint(ui.painter(), Rect::from_center_size(pos2(x0 + 26.0, r.center().y), vec2(16.0, 16.0)), var_icon(row), &p, true);
+    let font = FontId::monospace(12.5);
+    let name_color = if row.watch.is_some() { p.text } else { theme::scheme(p.dark).field };
+    let g = ui.painter().layout_no_wrap(format!("{} = ", row.name), font.clone(), name_color);
+    let name_w = g.size().x.min((r.width() * 0.5).max(40.0));
+    ui.painter().with_clip_rect(r).galley(pos2(x0 + 38.0, r.center().y - g.size().y / 2.0), g, name_color);
+    let field = Rect::from_min_max(pos2(x0 + 38.0 + name_w, r.top() + 1.0), pos2(r.right() - 8.0, r.bottom() - 1.0));
+    let id = ui.id().with(("set_value", &edit.key));
+    let te = egui::TextEdit::singleline(&mut edit.text).id(id).font(font).margin(vec2(4.0, 1.0)).desired_width(field.width());
+    let resp = ui.put(field, te).on_hover_text(tr("Enter to set, Escape to cancel"));
+    if edit.focus {
+        resp.request_focus();
+        edit.focus = false;
+    }
+    let mut done = None;
+    let (enter, escape) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
+    if escape && (resp.has_focus() || resp.lost_focus()) {
+        done = Some(false);
+    } else if enter && (resp.has_focus() || resp.lost_focus()) {
+        // Keeps the focus while the debugger answers: an error can be fixed in place.
+        resp.request_focus();
+        done = Some(true);
+    } else if resp.lost_focus() && edit.pending.is_none() {
+        // Clicked elsewhere.
+        done = Some(false);
+    }
+    if let Some(e) = &edit.error {
+        let (er, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
+        let g = ui.painter().layout(e.clone(), FontId::proportional(12.0), p.error, (er.right() - field.left() - 8.0).max(40.0));
+        ui.painter().with_clip_rect(er).galley(pos2(field.left() + 4.0, er.center().y - g.size().y.min(ROW_H) / 2.0), g, p.error);
+    }
+    done
+}
+
 /// `System.Collections.Generic.List<Shop.Core.OrderLine>` → `List<OrderLine>`.
 fn short_type(t: &str) -> String {
     let mut out = String::new();
@@ -569,7 +812,7 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
     let Some(s) = &mut dbg.session else { return };
     let mut rows = Vec::new();
     let key = format!("e:{expression}");
-    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: None, expression: None });
+    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: None, expression: None, parent: 0 });
     if v.variables_reference > 0 && dbg.expanded.contains(&key) {
         children(s, &dbg.expanded, v.variables_reference, &key, 1, &mut rows);
     }
@@ -581,7 +824,7 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
             if row.depth == 0 {
                 row_icon.watch = None;
             }
-            if paint_row(ui, &row_icon, dbg.expanded.contains(&row.key)).clicked() && row.reference > 0 {
+            if paint_row(ui, &row_icon, dbg.expanded.contains(&row.key), false).clicked() && row.reference > 0 {
                 toggle = Some(row.key.clone());
             }
         }
@@ -606,6 +849,7 @@ fn clone_row(r: &Row) -> Row {
         scope: r.scope,
         memory: r.memory.clone(),
         expression: r.expression.clone(),
+        parent: r.parent,
     }
 }
 

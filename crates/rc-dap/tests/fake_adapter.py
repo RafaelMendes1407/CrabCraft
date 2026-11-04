@@ -1,5 +1,6 @@
 # A tiny fake debug adapter for the session unit tests.
-# Usage: fake_adapter.py <log file> <early|late> [--interpreter=vscode]
+# Usage: fake_adapter.py <log file> <early|late|late-noset> [--interpreter=vscode]
+# (late-noset: no setVariable, only setExpression.)
 # Logs every request it receives (one JSON line each) and plays a scripted program:
 # a loop that hits line 10 of the breakpoint file three times (x = 1, 2, 3), then exits with 3.
 import base64
@@ -12,6 +13,8 @@ seq = 0
 x = 1
 bp_ids = []
 stops = 0
+# The instruction pointer of the top frame: 4-byte instructions from 0x2000 (Calc) to 0x2100.
+ip = 0x2010
 
 
 def read():
@@ -82,8 +85,11 @@ while True:
             "supportsConfigurationDoneRequest": True,
             "supportsConditionalBreakpoints": True,
             "supportsExceptionInfoRequest": True,
-            "supportsSetVariable": True,
+            "supportsSetVariable": "noset" not in MODE,
+            "supportsSetExpression": True,
             "supportsReadMemoryRequest": True,
+            "supportsDisassembleRequest": True,
+            "supportsSteppingGranularity": True,
             "exceptionBreakpointFilters": [
                 {"filter": "all", "label": "All"},
                 {"filter": "user-unhandled", "label": "User-Unhandled", "default": True},
@@ -117,7 +123,7 @@ while True:
         respond(m, {"threads": [{"id": 1, "name": "Main"}]})
     elif cmd == "stackTrace":
         frames = [
-            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.cs"}},
+            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.cs"}, "instructionPointerReference": hex(ip)},
             {"id": stops * 10 + 1, "name": "Main", "line": 5, "column": 1, "source": {"path": "/w/Program.cs"}},
         ]
         start = a.get("startFrame", 0)
@@ -146,14 +152,26 @@ while True:
             respond(m, {"result": "{Order}", "variablesReference": 2000 + stops})
         else:
             respond(m, ok=False, message="error CS0103: The name '%s' does not exist" % e)
-    elif cmd == "setVariable":
-        if a["name"] == "x":
-            x = int(a["value"])
+    elif cmd in ("setVariable", "setExpression"):
+        target = a.get("name") if cmd == "setVariable" else a.get("expression")
+        try:
+            value = int(a["value"], 0)
+        except ValueError:
+            respond(m, ok=False, message="cannot assign '%s'" % a["value"])
+            continue
+        if target != "x":
+            respond(m, ok=False, message="no variable named '%s'" % target)
+            continue
+        x = value
         respond(m, {"value": str(x), "type": "int"})
     elif cmd == "continue":
         respond(m, {"allThreadsContinued": True})
         event("continued", {"threadId": 1, "allThreadsContinued": True})
         run_on()
+    elif cmd in ("next", "stepIn") and a.get("granularity") == "instruction":
+        respond(m)
+        ip += 4
+        stop("step", cur_line)
     elif cmd == "next":
         respond(m)
         event("continued", {"threadId": 1})
@@ -175,6 +193,24 @@ while True:
         else:
             data = memory[lo - 0x1000:hi - 0x1000]
             respond(m, {"address": hex(lo), "data": base64.b64encode(data).decode(), "unreadableBytes": start + a["count"] - hi})
+    elif cmd == "disassemble":
+        # Instructions exist only at multiples of 4 in [0x2000, 0x2100); like GDB 15, a
+        # negative instructionOffset is not supported.
+        start = int(a["memoryReference"], 0) + a.get("offset", 0)
+        start += a.get("instructionOffset", 0) * 4
+        out = []
+        addr = start
+        for _ in range(a["instructionCount"]):
+            if 0x2000 <= addr < 0x2100 and addr % 4 == 0:
+                insn = {"address": hex(addr), "instruction": "op %d" % ((addr - 0x2000) // 4), "instructionBytes": "%08x" % addr,
+                        "line": 9 + (addr - 0x2000) // 16, "location": {"name": "Calc.cs", "path": "/w/Calc.cs"}}
+                if addr == 0x2000:
+                    insn["symbol"] = "Calc"
+            else:
+                insn = {"address": hex(addr), "instruction": "??", "presentationHint": "invalid"}
+            out.append(insn)
+            addr += 4
+        respond(m, {"instructions": out})
     elif cmd == "exceptionInfo":
         respond(m, {"exceptionId": "System.Exception", "breakMode": "always"})
     elif cmd == "disconnect":

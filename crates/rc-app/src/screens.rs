@@ -602,6 +602,75 @@ fn screens_git() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes Git tag and stash captures to target/snapshots"]
+fn screens_git_tags_and_stashes() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["config", "tag.gpgsign", "false"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["tag", "v0.1.0"]);
+    std::fs::write(root.join("src/lib.rs"), "/// Prices an order.\npub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["commit", "-qam", "Document price"]);
+    git(&["tag", "-a", "v0.2.0", "-m", "Second release\n\nDocuments the price function."]);
+    std::fs::write(root.join("src/lib.rs"), "/// Prices an order.\npub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    std::fs::write(root.join("src/discount.rs"), "pub fn discount(p: u32) -> u32 {\n    p / 10\n}\n").unwrap();
+    git(&["stash", "push", "--include-untracked", "-m", "Try a higher price with a discount"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.3.0\"\nedition = \"2021\"\n").unwrap();
+    git(&["stash", "push"]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "tags", |a| a.vcs.tags.len() == 2);
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Tags;
+        app.vcs.selected_tag = Some("v0.2.0".into());
+        app.vcs.output = Some(crate::vcs::OpOutput { text: "To /srv/git/shop.git\n*\trefs/tags/v0.2.0:refs/tags/v0.2.0\t[new tag]\nDone".into(), error: false });
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-tags-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewTag { name: "v0.3.0".into(), target: None, message: "Third release".into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-new-tag-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CheckoutTag { name: "v0.1.0".into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-checkout-tag-dark.png")).unwrap();
+    h.state_mut().dialog = None;
+    run_frames(&mut h, "stashes", |a| a.vcs.stashes.len() == 2);
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Stashes;
+        let hash = app.vcs.stashes[1].hash.clone();
+        app.vcs.select_stash(&hash);
+    }
+    run_frames(&mut h, "stash files", |a| a.vcs.stash_files.len() == 2);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-stashes-dark.png")).unwrap();
+    let stash = h.state().vcs.stashes[1].clone();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DropStash { stash });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-drop-stash-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-stash-changes-dark.png")).unwrap();
+}
+
+#[test]
 #[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
 fn screens_insight() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1884,6 +1953,118 @@ fn cargo_toml_shows_locked_versions_and_docs_rs_icons() {
     assert!(!root.join("target").exists(), "nothing was built");
 }
 
+/// In a dependency table, typing a crate name lists crates.io's answers (given beforehand, so
+/// nothing goes to the network); choosing one writes `name = ""` and lists its versions, newest
+/// stable first with its short forms. Offline, names come from the lock and the local registry.
+#[test]
+fn cargo_toml_completes_crate_names_and_versions() {
+    use rc_cargo::crates_io::CrateHit;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _root) = dep_versions_harness(dir.path(), false);
+    let hits = vec![
+        CrateHit { name: "tokio".into(), version: Some("1.40.0".into()), description: Some("An event-driven runtime".into()), downloads: 400_000_000 },
+        CrateHit { name: "tokio-util".into(), version: Some("0.7.12".into()), description: None, downloads: 0 },
+    ];
+    for q in ["t", "to", "tok"] {
+        h.state_mut().crate_names.set_answer(q, hits.clone());
+    }
+    h.state_mut().dep_versions.set_published("tokio", rc_cargo::versions::parse_index("{\"vers\":\"1.39.0\"}\n{\"vers\":\"1.40.0\"}\n{\"vers\":\"1.41.0\",\"yanked\":true}"));
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    // The caret on a new line after `helper = { path = "helper" }`.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let at = editor.buffer.rope().to_string().find("\n\n[dev-dependencies]").unwrap();
+        editor.selection = rc_text::Selection::point(at);
+    }
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "tok");
+    assert_eq!(completion_labels(&h), vec!["tokio", "tokio-util"]);
+    let c = h.state().docs.active_doc().unwrap().editor.popups.completion.clone().unwrap();
+    let first = c.selected_item().unwrap();
+    assert_eq!((first.detail.as_str(), first.doc.as_deref()), ("1.40.0", Some("An event-driven runtime")));
+    assert!(h.state().crate_names.searching().is_none(), "answered: nothing sent");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).contains("helper\" }\ntokio = \"\"\n"), "{}", text(&h));
+    assert_eq!(completion_labels(&h), vec!["1.40.0", "1.40", "1", "1.39.0"]);
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).contains("\ntokio = \"1.40\"\n"), "{}", text(&h));
+
+    // Offline: the lock's and the local registry's names, nothing asked.
+    h.state_mut().settings.check_crates_io = false;
+    h.state_mut().crate_names.set_local(vec!["rayon".into(), "regex".into()]);
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "ra");
+    assert_eq!(completion_labels(&h), vec!["rand", "rayon"]);
+    assert!(h.state().crate_names.searching().is_none());
+}
+
+/// With the online check on, a dependency on a crate crates.io does not have is an error, a
+/// requirement no published version matches a warning, and one the newest stable version is
+/// outside a weak warning whose quick fix (Alt+Enter) updates it. Off, they are gone.
+#[test]
+fn cargo_toml_warns_about_unknown_and_outdated_crates() {
+    use rc_editor::Severity;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    h.state_mut().dep_versions.set_missing("no-such-crate");
+    h.state_mut().dep_versions.set_published("anyhow", rc_cargo::versions::parse_index("{\"vers\":\"1.0.0\"}\n{\"vers\":\"2.0.1\"}"));
+    h.state_mut().dep_versions.set_published("log", rc_cargo::versions::parse_index("{\"vers\":\"0.4.20\"}"));
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("rand = \"0.7\"\n").unwrap() + "rand = \"0.7\"\n".len();
+        editor.replace(at, at, "anyhow = \"1\"\nno-such-crate = \"1\"\nlog = { version = \"0.5\" }\n");
+    }
+    h.run_steps(3);
+    let ours = |h: &Harness<'static, CrabCraftApp>| {
+        let doc = h.state().docs.active_doc().unwrap();
+        let text = doc.editor.buffer.rope().to_string();
+        let mut out: Vec<(usize, String, Severity)> = doc
+            .editor
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.as_deref() == Some(crate::dep_versions::DIAG_CODE))
+            .map(|d| (text.chars().take(d.start).filter(|&c| c == '\n').count(), text.chars().skip(d.start).take(d.end - d.start).collect(), d.severity))
+            .collect();
+        out.sort_by_key(|d| d.0);
+        out
+    };
+    assert_eq!(ours(&h), vec![(11, "1".to_string(), Severity::Info), (12, "no-such-crate".to_string(), Severity::Error), (13, "0.5".to_string(), Severity::Warning)]);
+    let path = root.join("Cargo.toml");
+    let problems = h.state().insight.problems.get(&path).cloned().unwrap_or_default();
+    assert_eq!(problems.iter().map(|d| d.severity).collect::<Vec<_>>(), vec![Severity::Error, Severity::Warning], "the Problems window lists errors and warnings");
+    assert!(problems[0].message.contains("no-such-crate"), "{}", problems[0].message);
+
+    // Alt+Enter on the outdated line offers the update.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let at = editor.buffer.rope().line_to_char(11) + 2;
+        editor.selection = rc_text::Selection::point(at);
+    }
+    h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::new(100.0, 100.0));
+    h.run_steps(1);
+    assert!(matches!(&h.state().dialog, Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) if list.len() == 1));
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("\nanyhow = \"2.0.1\"\n"), "{text}");
+    assert_eq!(ours(&h).iter().map(|d| d.0).collect::<Vec<_>>(), vec![12, 13]);
+
+    // The online check off: no crates.io diagnostics.
+    h.state_mut().settings.check_crates_io = false;
+    h.run_steps(2);
+    assert!(ours(&h).is_empty());
+    assert!(h.state().insight.problems.get(&path).is_none_or(|l| l.iter().all(|d| d.code.as_deref() != Some(crate::dep_versions::DIAG_CODE))));
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
 fn cargo_dep_versions_capture() {
@@ -2222,5 +2403,356 @@ fn target_picker_capture() {
         });
         h.run_steps(6);
         h.render().unwrap().save(out.join(format!("target-picker-windows-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A long real file of this repository, open with a problem on `error_line`.
+fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-editor/src/view.rs").canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(3);
+    let doc = h.state_mut().docs.active_doc_mut().unwrap();
+    assert!(doc.editor.buffer.len_lines() > 1000, "a long file");
+    let start = doc.editor.buffer.rope().line_to_char(error_line) + 4;
+    doc.editor.diagnostics.push(rc_editor::Diagnostic {
+        start,
+        end: start + 6,
+        severity: rc_editor::Severity::Error,
+        message: "lens test: mismatched types".into(),
+        code: None,
+        unnecessary: false,
+        deprecated: false,
+    });
+    h.run_steps(2);
+    (h, file)
+}
+
+/// Height of the scrollbar where the stripe mark of `line` is (no folds).
+fn track_y_of_line(h: &Harness<'static, CrabCraftApp>, line: usize) -> egui::Pos2 {
+    let ed = &h.state().docs.active_doc().unwrap().editor;
+    let track = ed.scrollbar_track;
+    let rows = ed.buffer.len_lines() as f32;
+    let y = track.top() + line as f32 / rows.max(track.height() / ed.row_height()) * track.height();
+    egui::pos2(track.center().x, y + 0.2)
+}
+
+fn hover_lens(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2) -> Option<rc_editor::lens::ScrollLens> {
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(2);
+    h.state().docs.active_doc().unwrap().editor.scroll_lens.clone()
+}
+
+/// Hovering the scrollbar over a real Rust file previews the code at that height; a problem's
+/// stripe mark shows its message; leaving the bar or turning the setting off hides the lens.
+#[test]
+fn the_scrollbar_lens_previews_the_code_under_the_pointer() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _) = lens_harness(dir.path(), false, 300);
+    let target = {
+        let ed = &h.state().docs.active_doc().unwrap().editor;
+        (0..ed.buffer.len_lines()).find(|&l| ed.buffer.line_text(l).starts_with("fn paint_scrollbars(")).expect("the function is in view.rs")
+    };
+    let at = track_y_of_line(&h, target);
+    let lens = hover_lens(&mut h, at).expect("the lens is shown");
+    assert_eq!(lens.line, target);
+    assert_eq!(lens.lines, (target - 4..=target + 4).collect::<Vec<_>>());
+    assert_eq!(lens.message, None);
+    let track = h.state().docs.active_doc().unwrap().editor.scrollbar_track;
+    assert!(lens.rect.right() <= track.left(), "left of the scrollbar");
+    // Hovering scrolls nothing.
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.scroll_offset().y, 0.0);
+
+    // The error's stripe mark: its line in the middle and its message.
+    let at = track_y_of_line(&h, 300) + egui::vec2(0.0, 0.8);
+    let lens = hover_lens(&mut h, at).expect("the lens is shown");
+    assert_eq!(lens.line, 300);
+    assert_eq!(lens.message, Some((rc_editor::Severity::Error, "lens test: mismatched types".to_string())));
+
+    // Away from the bar: gone.
+    assert_eq!(hover_lens(&mut h, egui::pos2(500.0, 400.0)), None);
+
+    // Turned off in the settings.
+    let mut settings = h.state().settings.clone();
+    settings.scrollbar_lens = false;
+    let ctx = h.ctx.clone();
+    h.state_mut().apply_settings(&ctx, settings);
+    let at = track_y_of_line(&h, target);
+    assert_eq!(hover_lens(&mut h, at), None);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/scrollbar-lens-*.png"]
+fn scrollbar_lens_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = lens_harness(dir.path(), dark, 900);
+        let at = track_y_of_line(&h, 900) + egui::vec2(0.0, 0.8);
+        hover_lens(&mut h, at).expect("the lens is shown");
+        h.run_steps(2);
+        h.render().unwrap().save(out.join(format!("scrollbar-lens-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// Find Usages on a `[features]` key of `Cargo.toml` (N-13): the `cfg` uses in the Find window.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/feature-uses-*.png"]
+fn feature_uses_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("ws");
+        crate::rust_tests::feature_crate(&root);
+        let root = root.canonicalize().unwrap();
+        let mut app = test_app(&dir.path().join("home"), dark);
+        app.open_workspace(&root);
+        app.open_file(&root.join("Cargo.toml"));
+        app.docs.active_doc_mut().unwrap().editor.goto(8, 2);
+        app.run_insight_action(rc_editor::Action::FindUsages, egui::Pos2::ZERO);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "the uses of extra", |a| a.find_results.is_some());
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("feature-uses-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A one-request stand-in for `play.rust-lang.org/meta/gist`: returns the request it read.
+fn fake_playground(listener: std::net::TcpListener, reply: &'static str) -> std::thread::JoinHandle<String> {
+    use std::io::{Read, Write};
+    std::thread::spawn(move || {
+        listener.set_nonblocking(false).unwrap();
+        let (mut s, _) = listener.accept().unwrap();
+        s.set_nonblocking(false).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let (mut req, mut buf) = (Vec::new(), [0u8; 4096]);
+        loop {
+            let n = s.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            req.extend_from_slice(&buf[..n]);
+            let text = String::from_utf8_lossy(&req);
+            if let Some(end) = text.find("\r\n\r\n") {
+                let len = text[..end].lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                if req.len() >= end + 4 + len {
+                    break;
+                }
+            }
+        }
+        let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len());
+        String::from_utf8_lossy(&req).into_owned()
+    })
+}
+
+/// A Rust crate (edition 2021) with `src/main.rs` open, its workspace loaded.
+fn playground_harness(home: &Path, dir: &Path, dark: bool) -> Harness<'static, CrabCraftApp> {
+    let root = dir.join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x = 1;\n    println!(\"{x}\");\n}\n\nfn unused() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
+    h
+}
+
+/// N-18: the selection goes to the Playground only after the confirmation; the link is copied
+/// and offered in the status bar. A local server stands in for play.rust-lang.org.
+#[test]
+fn share_in_playground_confirms_then_uploads_and_copies_the_link() {
+    use crate::ui::dialogs::Dialog;
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::{tr, trf};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    h.state_mut().playground.endpoint = format!("http://{}/meta/gist", listener.local_addr().unwrap());
+    let selected = "fn main() {\n    let x = 1;\n    println!(\"{x}\");\n}";
+    let select = |h: &mut Harness<'static, CrabCraftApp>| {
+        h.state_mut().docs.active_doc_mut().unwrap().editor.set_selection(rc_text::Selection::single(rc_text::Range::new(0, selected.chars().count())));
+        h.run_steps(2);
+        h.state().caret_screen.unwrap() + vec2(-20.0, -6.0)
+    };
+
+    // From the editor's context menu: the dialog says what is sent, and where.
+    let at = select(&mut h);
+    right_click(&mut h, at);
+    h.get_by_label(tr("Share in Playground…")).click();
+    h.run_steps(4);
+    match &h.state().dialog {
+        Some(Dialog::SharePlayground(s)) => {
+            assert_eq!(s.code, selected);
+            assert_eq!(s.lines, 4);
+            assert_eq!(s.preview, selected);
+            assert_eq!((s.edition.as_str(), s.channel), ("2021", rc_cargo::playground::Channel::Stable), "the crate's edition is the default");
+        }
+        _ => panic!("no confirmation dialog"),
+    }
+    h.get_by_label(&trf("{n} lines will be sent", &[("n", &4)]));
+    h.get_by_label(tr("The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it."));
+
+    // Cancel: nothing reaches the server.
+    h.get_by_label(tr("Cancel")).click();
+    h.run_steps(4);
+    assert!(h.state().dialog.is_none());
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock), "something was sent after Cancel");
+    assert!(!h.state().playground.running());
+
+    // From Find Action's list, on nightly: the upload, the link, the clipboard.
+    assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::ShareInPlayground));
+    let server = fake_playground(listener, r#"{"id":"0123456789abcdef","url":"https://gist.github.com/0123456789abcdef","code":"..."}"#);
+    select(&mut h);
+    h.state_mut().pending.push(rc_editor::Action::ShareInPlayground);
+    h.run_steps(4);
+    if let Some(Dialog::SharePlayground(s)) = &mut h.state_mut().dialog {
+        s.channel = rc_cargo::playground::Channel::Nightly;
+    }
+    h.run_steps(1);
+    h.get_by_label(tr("Upload and Copy Link")).click();
+    let expected = "https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=0123456789abcdef";
+    let (mut copied, start) = (Vec::new(), std::time::Instant::now());
+    while h.state().playground.last_url.is_none() || copied.is_empty() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(30), "no link from the fake server");
+        h.run_steps(1);
+        for c in &h.output().platform_output.commands {
+            if let egui::OutputCommand::CopyText(t) = c {
+                copied.push(t.clone());
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(copied, vec![expected.to_string()]);
+    assert_eq!(h.state().playground.last_url.as_deref(), Some(expected));
+    let req = server.join().unwrap();
+    assert!(req.starts_with("POST /meta/gist "), "{req}");
+    assert!(req.to_ascii_lowercase().contains("user-agent: crabcraft (https://github.com/rafaelmendes1407/crabcraft)"), "{req}");
+    let body: serde_json::Value = serde_json::from_str(&req[req.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+    assert_eq!(body, serde_json::json!({ "code": selected }));
+    assert!(h.state().notices.last().is_some_and(|n| n.url.as_deref() == Some(expected) && !n.error));
+
+    // The status bar's Open in Browser opens the link.
+    h.run_steps(2);
+    h.get_by_label(tr("Open in Browser")).click();
+    h.run_steps(2);
+    assert_eq!(h.state().opened_url.as_deref(), Some(expected));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/share-playground-*.png"]
+fn share_in_playground_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = playground_harness(home.path(), dir.path(), dark);
+        h.state_mut().pending.push(rc_editor::Action::ShareInPlayground);
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("share-playground-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
+
+/// A Cargo project in a Git repository whose `user.name` is Ada Lovelace, with `src/old.rs`
+/// starting with a header from 2020.
+fn copyright_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"ws\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#![allow(dead_code)]\n\nmod old;\n").unwrap();
+    std::fs::write(root.join("src/old.rs"), "// Copyright (c) 2020 Ada Lovelace\n// Part of ws.\n\npub fn old() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    for args in [&["init", "-q"][..], &["config", "user.name", "Ada Lovelace"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
+    }
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the author from Git", |a| !a.copyright.loading());
+    (h, root)
+}
+
+/// Settings › Copyright sets the project's profile; a new Rust file starts with its header,
+/// and Update Copyright brings the years of an old header up to this year.
+#[test]
+fn copyright_headers_on_new_and_old_files() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = copyright_harness(dir.path(), false);
+    let year = crate::copyright::current_year();
+    assert_eq!(h.state().copyright.author.as_deref(), Some("Ada Lovelace"));
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Copyright);
+    h.run_steps(3);
+    h.state_mut().copyright.draft.as_mut().unwrap().spdx = "MIT".into();
+    h.get_by_label(tr("Add the header to new files")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("OK")).click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert!(h.state().copyright.profile.on_new_files);
+    h.state_mut().save_session();
+    assert_eq!(rc_core::Session::load(&root).copyright.spdx, "MIT");
+
+    // New › Rust File.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: root.join("src"), name: "net".into(), kind: crate::item_templates::ItemKind::RustFile, attach: false, public: false, error: None });
+    h.run_steps(2);
+    h.get_by_label(tr("Create")).click();
+    h.run_steps(3);
+    let text = std::fs::read_to_string(root.join("src/net.rs")).unwrap();
+    assert_eq!(text, format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n"));
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret()), Some(text.chars().count()));
+
+    // Update Copyright on the old file: 2020 becomes 2020-<this year>, once.
+    h.state_mut().open_file(&root.join("src/old.rs"));
+    h.run_steps(2);
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    let doc = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert_eq!(doc(&h), format!("// Copyright (c) 2020-{year} Ada Lovelace\n// Part of ws.\n\npub fn old() {{}}\n"));
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    assert_eq!(doc(&h), format!("// Copyright (c) 2020-{year} Ada Lovelace\n// Part of ws.\n\npub fn old() {{}}\n"));
+    // A file without a header gets one at the top, before its inner attributes.
+    h.state_mut().open_file(&root.join("src/lib.rs"));
+    h.run_steps(2);
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    assert!(doc(&h).starts_with(&format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n#![allow(dead_code)]\n")));
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/copyright-*.png"]
+fn copyright_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = copyright_harness(dir.path(), dark);
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Copyright);
+        h.run_steps(3);
+        if let Some(d) = h.state_mut().copyright.draft.as_mut() {
+            d.spdx = "MIT OR Apache-2.0".into();
+            d.on_new_files = true;
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("copyright-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }

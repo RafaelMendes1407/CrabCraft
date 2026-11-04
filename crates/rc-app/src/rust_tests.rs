@@ -820,20 +820,156 @@ fn integers_switch_to_hexadecimal_while_paused() {
     app.debugger.stop();
 }
 
-const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad, 0xbe, 0xef];\n    std::hint::black_box(&mut bytes);\n    bytes[1] = 0x42;\n    std::hint::black_box(&bytes);\n    println!(\"{bytes:?}\");\n}\n";
+const SET_VALUE_MAIN: &str = "fn main() {\n    let mut n: u32 = 255;\n    std::hint::black_box(&mut n);\n    let doubled = n * 2;\n    std::hint::black_box(doubled);\n    println!(\"n={n} doubled={doubled}\");\n}\n";
 
-/// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
-fn paused_on_bytes(dir: &Path) -> CrabCraftApp {
+/// An app paused under GDB at `let doubled = n * 2;` of [`SET_VALUE_MAIN`].
+fn paused_before_doubling(dir: &Path) -> CrabCraftApp {
     use rc_editor::{Action, BreakpointKind};
     let root = dir.join("project");
     write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
-    write(&root.join("src/main.rs"), MEMORY_MAIN);
+    write(&root.join("src/main.rs"), SET_VALUE_MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    app
+}
+
+/// Opens Set Value on the local `name`, as its context menu does, with `text` typed in it.
+fn edit_local(app: &mut CrabCraftApp, name: &str, text: &str) {
+    let vars = locals(app);
+    let s = app.debugger.session.as_ref().unwrap();
+    let scope = s.selected_frame().and_then(|f| s.scopes(f.id)).and_then(|sc| sc.first()).cloned().unwrap();
+    let v = vars.iter().find(|v| v.name == name).unwrap();
+    let target = crate::debugger::SetTarget::Variable { parent: scope.variables_reference, name: v.name.clone(), expression: Some(v.evaluate_name.clone().unwrap_or_else(|| v.name.clone())) };
+    assert!(target.supported(s.capabilities()));
+    app.debugger.start_edit(format!("s:{}/{}", scope.name, v.name), target, &v.value);
+    assert_eq!(app.debugger.edit.as_ref().map(|e| e.text.as_str()), Some(v.value.as_str()), "prefilled with the value");
+    app.debugger.edit.as_mut().unwrap().text = text.into();
+}
+
+#[test]
+fn a_variable_is_set_while_paused_and_the_program_sees_it() {
+    use rc_editor::Action;
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_before_doubling(dir.path());
+    let ctx = egui::Context::default();
+    // GDB 15 has both requests.
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    eprintln!("GDB supportsSetVariable={} supportsSetExpression={}", caps.supports_set_variable, caps.supports_set_expression);
+    assert!(caps.supports_set_variable && caps.supports_set_expression);
+    assert_eq!(local(&mut app, "n"), "255");
+    let w = app.debugger.session.as_mut().unwrap().add_watch("n + 1");
+
+    let settle = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            locals(app);
+            assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}: {:?}", app.debugger.edit);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let inline = |a: &CrabCraftApp, line: usize| a.docs.active_doc().and_then(|d| d.editor.debug_values.get(&line).cloned()).unwrap_or_default();
+    let watch = |a: &CrabCraftApp| match a.debugger.session.as_ref().and_then(|s| s.watches().iter().find(|x| x.id == w)).map(|x| x.value.clone()) {
+        Some(rc_dap::WatchValue::Value(v)) => v.result,
+        _ => String::new(),
+    };
+    settle(&mut app, "the values", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+
+    // A value the debugger refuses: its message under the field, which stays open.
+    edit_local(&mut app, "n", "no_such_name");
+    app.debugger.apply_edit();
+    settle(&mut app, "the error", &|a| a.debugger.edit.as_ref().is_some_and(|e| e.error.is_some()));
+    let error = app.debugger.edit.as_ref().and_then(|e| e.error.clone()).unwrap();
+    assert!(error.contains("no_such_name"), "{error}");
+    app.debugger.cancel_edit();
+    assert_eq!(local(&mut app, "n"), "255");
+
+    // In hex, a hex value typed (setVariable, GDB prints it back in hex).
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    settle(&mut app, "hexadecimal values", &|a| inline(a, 1) == "n = 0xff");
+    edit_local(&mut app, "n", "0x1f");
+    app.debugger.apply_edit();
+    settle(&mut app, "the hex value", &|a| a.debugger.edit.is_none() && inline(a, 1) == "n = 0x1f" && watch(a) == "0x20");
+    assert_eq!(local(&mut app, "n"), "0x1f");
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    settle(&mut app, "decimal values", &|a| inline(a, 1) == "n = 31");
+
+    // 255 → 7: the Variables view, the inline value and the watch follow.
+    edit_local(&mut app, "n", "7");
+    app.debugger.apply_edit();
+    settle(&mut app, "the new value", &|a| a.debugger.edit.is_none() && inline(a, 1) == "n = 7" && watch(a) == "8");
+    assert_eq!(local(&mut app, "n"), "7");
+
+    // The program uses 7: `doubled` is 14 after the step, and so is its output.
+    app.run_ide_action(&ctx, Action::StepOver);
+    settle(&mut app, "the step", &|a| a.debugger.stopped() && a.docs.active_doc().and_then(|d| d.editor.execution_line) == Some(4));
+    assert_eq!(local(&mut app, "doubled"), "14");
+    app.run_ide_action(&ctx, Action::Resume);
+    let start = Instant::now();
+    while app.debugger.active() {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(start.elapsed() < Duration::from_secs(30), "the program did not end");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let console = app.debugger.console.as_ref().unwrap().term.screen_lines().join("\n");
+    assert!(console.contains("n=7 doubled=14"), "{console}");
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/set-value-*.png"]
+fn set_value_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_before_doubling(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        // A refused value shows its error; the field stays open with the text.
+        edit_local(&mut app, "n", "0x1f + nope");
+        app.debugger.apply_edit();
+        settle_debugger(&mut app, "the error", &|a| a.debugger.edit.as_ref().is_some_and(|e| e.error.is_some()));
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("set-value-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
+const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad, 0xbe, 0xef];\n    std::hint::black_box(&mut bytes);\n    bytes[1] = 0x42;\n    std::hint::black_box(&bytes);\n    println!(\"{bytes:?}\");\n}\n";
+
+/// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
+fn paused_on_bytes(dir: &Path) -> CrabCraftApp {
+    paused_at(dir, MEMORY_MAIN, 3)
+}
+
+/// An app paused under GDB at the 0-based `line` of `main_rs`.
+fn paused_at(dir: &Path, main_rs: &str, line: usize) -> CrabCraftApp {
+    use rc_editor::{Action, BreakpointKind};
+    let root = dir.join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), main_rs);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     app.run_ide_action(&egui::Context::default(), Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
     app
@@ -937,6 +1073,135 @@ fn memory_view_capture() {
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
         h.run_steps(6);
         h.render().unwrap().save(out.join(format!("memory-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
+/// A function called from main: GDB shows no frame past `main`, so the caller is `demo::main`.
+const DISASSEMBLY_MAIN: &str = "#[inline(never)]\nfn twice(n: u32) -> u32 {\n    let m = std::hint::black_box(n).wrapping_mul(2);\n    m.wrapping_add(1)\n}\n\nfn main() {\n    println!(\"{}\", twice(std::hint::black_box(20)));\n}\n";
+
+/// An app paused under GDB at `let m = …` (line 3) of [`DISASSEMBLY_MAIN`].
+fn paused_in_twice(dir: &Path) -> CrabCraftApp {
+    paused_at(dir, DISASSEMBLY_MAIN, 2)
+}
+
+/// Opens the Disassembly tab and waits for the instructions around the current one.
+fn show_disassembly(app: &mut CrabCraftApp) {
+    app.debugger.show_disassembly = true;
+    settle_debugger(app, "the disassembly", &|a| {
+        let d = &a.debugger.disassembly;
+        !d.loading() && d.instructions.iter().any(|i| Some(i.address) == d.current) || d.error.is_some()
+    });
+    assert_eq!(app.debugger.disassembly.error, None);
+}
+
+/// The selected frame's instruction pointer.
+fn frame_ip(app: &CrabCraftApp) -> Option<u64> {
+    app.debugger.session.as_ref()?.selected_frame()?.instruction_pointer_reference.as_deref().and_then(rc_dap::memory::parse_address)
+}
+
+/// The symbol of the last header at or before the current instruction's row.
+fn current_function(app: &CrabCraftApp) -> Option<String> {
+    use rc_dap::disassembly::{DisasmRow, rows};
+    let d = &app.debugger.disassembly;
+    let layout = rows(&d.instructions, d.current);
+    let at = layout.iter().position(|r| matches!(r, DisasmRow::Instruction { current: true, .. }))?;
+    layout[..at].iter().rev().find_map(|r| match r {
+        DisasmRow::Header { symbol: Some(s), .. } => Some(s.clone()),
+        _ => None,
+    })
+}
+
+#[test]
+fn the_disassembly_view_marks_the_current_instruction_of_the_function() {
+    use rc_dap::disassembly::{DisasmRow, rows};
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_in_twice(dir.path());
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    assert!(caps.supports_disassemble_request, "GDB should answer disassemble");
+    assert!(caps.supports_stepping_granularity, "GDB should step by instruction");
+
+    show_disassembly(&mut app);
+    let ip = frame_ip(&app).unwrap();
+    let d = &app.debugger.disassembly;
+    assert_eq!(d.current, Some(ip));
+    // The current instruction is marked once, belongs to line 3 of main.rs and has its bytes.
+    let layout = rows(&d.instructions, d.current);
+    assert_eq!(layout.iter().filter(|r| matches!(r, DisasmRow::Instruction { current: true, .. })).count(), 1);
+    let i = d.instructions.iter().find(|i| i.address == ip).unwrap();
+    assert_eq!(i.line, Some(3), "{i:?}");
+    assert!(i.file.as_deref().is_some_and(|f| f.ends_with("main.rs")), "{i:?}");
+    assert!(i.bytes.is_some() && !i.text.is_empty(), "{i:?}");
+    // Instructions were found above the current one (GDB cannot disassemble backwards).
+    assert!(d.instructions.first().is_some_and(|f| f.address < ip), "nothing above the current instruction");
+    // GDB names the function at its first instruction: load earlier until it shows.
+    for _ in 0..5 {
+        if current_function(&app).is_some() {
+            break;
+        }
+        app.debugger.disassembly_more(true);
+        settle_debugger(&mut app, "earlier instructions", &|a| !a.debugger.disassembly.loading());
+    }
+    assert_eq!(current_function(&app).as_deref(), Some("demo::twice"));
+
+    // Load later adds instructions after the last one.
+    let (count, last) = (app.debugger.disassembly.instructions.len(), app.debugger.disassembly.instructions.last().map(|i| i.address));
+    app.debugger.disassembly_more(false);
+    settle_debugger(&mut app, "later instructions", &|a| !a.debugger.disassembly.loading());
+    assert!(app.debugger.disassembly.instructions.len() > count);
+    assert!(app.debugger.disassembly.instructions.last().map(|i| i.address) > last);
+
+    // Step Over Instruction: one instruction further, still in twice; the view follows.
+    app.debugger.step_instruction(true);
+    settle_debugger(&mut app, "the instruction step", &|a| a.debugger.stopped() && frame_ip(a).is_some_and(|n| n != ip));
+    show_disassembly(&mut app);
+    let next = frame_ip(&app).unwrap();
+    assert!(next > ip && next - ip <= 15, "{ip:#x} → {next:#x}");
+    assert_eq!(app.debugger.disassembly.current, Some(next));
+    assert_eq!(current_function(&app).as_deref(), Some("demo::twice"));
+
+    // Selecting the caller frame shows the code at its return address.
+    let tid = app.debugger.session.as_ref().and_then(|s| s.stop_info()).unwrap().thread_id;
+    let caller = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.frames(tid)).and_then(|f| f.frames.get(1).cloned());
+    if caller(&app).is_none() {
+        app.debugger.session.as_mut().unwrap().request_frames(tid);
+        settle_debugger(&mut app, "the caller frame", &|a| caller(a).is_some());
+    }
+    let caller = caller(&app).unwrap();
+    app.debugger.session.as_mut().unwrap().select_frame(caller.id);
+    let ret = caller.instruction_pointer_reference.as_deref().and_then(rc_dap::memory::parse_address).unwrap();
+    assert_eq!(caller.name, "demo::main");
+    settle_debugger(&mut app, "the caller's code", &|a| a.debugger.disassembly.current == Some(ret) && !a.debugger.disassembly.loading());
+    let at = app.debugger.disassembly.instructions.iter().find(|i| i.address == ret).unwrap();
+    assert_eq!(at.line, Some(8), "{at:?}");
+    // The instruction before the return address is the call to twice.
+    let call = app.debugger.disassembly.instructions.iter().rev().find(|i| i.address < ret).unwrap();
+    assert!(call.text.contains("call") && call.text.contains("twice"), "{call:?}");
+    app.debugger.stop();
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/disassembly-view-*.png"]
+fn disassembly_view_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_in_twice(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        show_disassembly(&mut app);
+        app.debugger.disassembly.scroll_to_current = true;
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("disassembly-view-{}.png", if dark { "dark" } else { "light" }))).unwrap();
         h.state_mut().debugger.stop();
     }
 }
@@ -3436,4 +3701,98 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     assert_eq!(app.insight.session.as_ref().and_then(|s| s.ra_settings().target.clone()), None);
     pump(&mut app, "the cfg of the board again", |a| faded(a).len() == 2);
     app.insight.stop();
+}
+
+/// A crate whose features are used in several files, for N-13.
+pub(crate) fn feature_crate(root: &Path) {
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\nfull = [\"std\", \"extra\"]\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub mod extra;\n\n#[cfg(all(feature = \"std\", not(feature = \"extra\")))]\npub fn plain() {}\n\npub fn always() -> bool {\n    cfg!(feature = \"extra\")\n}\n");
+    write(&root.join("src/extra.rs"), "#[cfg_attr(feature = \"extra\", derive(Debug))]\npub struct Extra;\n\n// #[cfg(feature = \"extra\")] in a comment does not count\n");
+    write(&root.join("tests/it.rs"), "#[test]\n#[cfg(any(windows, feature = \"extra\"))]\nfn it() {}\n");
+    // Not part of the package's sources: the build output.
+    write(&root.join("target/gen.rs"), "#[cfg(feature = \"extra\")]\nfn generated() {}\n");
+}
+
+/// Go to Declaration and Find Usages between Cargo features and their `cfg` uses (N-13): from
+/// a `[features]` key to every `cfg` that names it, from `"extra"` of a `cfg` to its line in
+/// `Cargo.toml`, and from a feature another one turns on to its own line. No server needed.
+#[test]
+fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
+    use rc_editor::Action;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    feature_crate(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let manifest = root.join("Cargo.toml");
+    let caret_on = |app: &mut CrabCraftApp, line: usize, col: usize| app.docs.active_doc_mut().unwrap().editor.goto(line, col);
+    let here = |app: &CrabCraftApp| {
+        let d = app.docs.active_doc().unwrap();
+        (d.path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), d.editor.caret_line_col().0)
+    };
+    let uses = |app: &mut CrabCraftApp, title: &str| {
+        let title = title.to_string();
+        pump(app, &title.clone(), move |a| {
+            a.poll_feature_search();
+            a.find_results.as_ref().is_some_and(|(t, _)| *t == title)
+        });
+        let (_, targets) = app.find_results.clone().unwrap();
+        targets
+    };
+
+    // From the `extra = []` key: its uses, from a scan in the background.
+    app.open_file(&manifest);
+    caret_on(&mut app, 8, 2);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert!(app.feature_search.busy());
+    let targets = uses(&mut app, "Uses of feature extra");
+    let got: Vec<(String, usize)> = targets.iter().map(|t| (t.path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), t.line)).collect();
+    assert_eq!(got, vec![("src/extra.rs".into(), 0), ("src/lib.rs".into(), 0), ("src/lib.rs".into(), 3), ("src/lib.rs".into(), 7), ("tests/it.rs".into(), 1)]);
+    assert_eq!(targets[2].preview, "#[cfg(all(feature = \"std\", not(feature = \"extra\")))]");
+    assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Find));
+    // A row opens its place, as a click in the Find window does.
+    let t = targets[4].clone();
+    app.open_at(&t.path, t.line, t.col);
+    assert_eq!(here(&app), ("tests/it.rs".into(), 1));
+
+    // Find Usages on `"std"` in the array of `full`; Go to Declaration there jumps to `std = []`.
+    app.open_file(&manifest);
+    caret_on(&mut app, 9, 10);
+    app.run_insight_action(Action::FindUsages, egui::Pos2::ZERO);
+    assert_eq!(uses(&mut app, "Uses of feature std").len(), 1);
+    caret_on(&mut app, 9, 10);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 7));
+    // Back returns to where the jump started.
+    app.navigate(true);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 9));
+
+    // From `"extra"` in a `cfg` of a Rust file to `extra = []`, with no language server.
+    app.open_file(&root.join("src/lib.rs"));
+    caret_on(&mut app, 3, 44);
+    let pos = app.docs.active_doc().unwrap().editor.caret();
+    assert!(crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos), "⌃+click is answered locally");
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 8));
+    assert!(app.insight.session.is_none());
+    // Elsewhere in a Rust file the server keeps the click.
+    app.open_file(&root.join("src/lib.rs"));
+    caret_on(&mut app, 6, 8);
+    let pos = app.docs.active_doc().unwrap().editor.caret();
+    assert!(!crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos));
+    // Find Usages on a `cfg!` string lists the feature's uses too.
+    caret_on(&mut app, 7, 21);
+    app.find_results = None;
+    app.run_insight_action(Action::FindUsages, egui::Pos2::ZERO);
+    assert_eq!(uses(&mut app, "Uses of feature extra").len(), 5);
+
+    // A feature that is not declared stays where it is.
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "#[cfg(feature = \"missing\")]\nfn m() {}\n");
+    caret_on(&mut app, 0, 18);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("src/lib.rs".into(), 0));
+    assert!(!root.join("target/debug").exists(), "nothing was built");
 }

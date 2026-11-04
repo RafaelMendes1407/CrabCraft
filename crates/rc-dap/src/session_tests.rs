@@ -145,10 +145,11 @@ fn handshake_order_stops_caches_watches_and_exit() {
     assert_eq!((got, v.variables_reference), (id, 2001));
 
     // setVariable updates the cache and re-evaluates the watches.
-    s.set_variable(locals, "x", "2");
-    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::VariableSet { .. }));
+    let set = s.set_variable(locals, "x", Some("x"), "2");
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::VariableSet { id, result: Ok(v), .. } if *id == set && v == "2"));
     pump_until_state(&mut s, &mut ev, settled);
     assert_eq!(s.variables(locals).unwrap()[0].value, "2");
+    assert_eq!(requests(&log).iter().filter(|r| r["command"] == "setVariable").count(), 1);
     assert_eq!(result_of(watch_value(&s, w)), "20");
 
     // Continue invalidates everything fetched in the stop; the next stop re-evaluates watches.
@@ -248,6 +249,91 @@ fn hex_is_converted_here_when_the_adapter_cannot_format() {
     assert_eq!(result_of(watch_value(&s, w)), "10");
 }
 
+/// Pumps until the set `id` answers.
+fn set_result(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<String, String> {
+    let mut got = None;
+    pump_until(s, ev, |e, _| match e {
+        DebugEvent::VariableSet { id: i, result, .. } if *i == id => {
+            got = Some(result.clone());
+            true
+        }
+        _ => false,
+    });
+    got.unwrap()
+}
+
+#[test]
+fn the_set_method_follows_the_capabilities() {
+    let caps = |var: bool, expr: bool| Capabilities { supports_set_variable: var, supports_set_expression: expr, ..Default::default() };
+    assert_eq!(set_method(&caps(true, true), 1000, Some("x")), Some(SetMethod::SetVariable));
+    assert_eq!(set_method(&caps(true, false), 1000, None), Some(SetMethod::SetVariable));
+    // A watch has no parent reference: only setExpression can change it.
+    assert_eq!(set_method(&caps(true, true), 0, Some("x + 0")), Some(SetMethod::SetExpression));
+    assert_eq!(set_method(&caps(true, false), 0, Some("x")), None);
+    assert_eq!(set_method(&caps(false, true), 1000, Some("order.Customer")), Some(SetMethod::SetExpression));
+    assert_eq!(set_method(&caps(false, true), 1000, None), None);
+    assert_eq!(set_method(&caps(false, true), 1000, Some("  ")), None);
+    assert_eq!(set_method(&caps(false, false), 1000, Some("x")), None);
+}
+
+#[test]
+fn set_value_uses_set_expression_without_set_variable_and_reports_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late-noset");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    // Not paused yet: refused without asking the adapter.
+    let early = s.set_variable(1001, "x", Some("x"), "5");
+    assert!(set_result(&mut s, &mut ev, early).is_err());
+    pump_until(&mut s, &mut ev, stopped);
+    assert!(!s.capabilities().supports_set_variable && s.capabilities().supports_set_expression);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::ScopesLoaded { frame_id: 10 }));
+    let locals = s.scopes(10).unwrap()[0].variables_reference;
+    s.request_variables(locals);
+    let w = s.add_watch("x * 10");
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+
+    // The adapter has no setVariable: setExpression on the expression, in the selected frame.
+    let id = s.set_variable(locals, "x", Some("x"), "5");
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("5".into()));
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(s.variables(locals).unwrap()[0].value, "5");
+    assert_eq!(result_of(watch_value(&s, w)), "50");
+    let req = requests(&log).into_iter().find(|r| r["command"] == "setExpression").unwrap();
+    assert_eq!(req["arguments"], json!({"expression": "x", "value": "5", "frameId": 10}));
+    assert!(!commands(&log).contains(&"setVariable".to_string()));
+
+    // A hex value typed by the user; shown back in hex when hex is on (converted here).
+    s.set_hex(true);
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    let id = s.set_expression("x", "0x1f");
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("0x1f".into()));
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(s.variables(locals).unwrap()[0].value, "0x1f");
+    assert_eq!(result_of(watch_value(&s, w)), "0x136");
+    s.set_hex(false);
+
+    // The adapter's error comes back as it is; the cached value does not change.
+    let id = s.set_variable(locals, "x", Some("x"), "abc");
+    assert_eq!(set_result(&mut s, &mut ev, id), Err("cannot assign 'abc'".into()));
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "31");
+    // A child with no expression cannot be changed by this adapter.
+    let id = s.set_variable(2001, "Customer", None, "\"Bob\"");
+    assert!(set_result(&mut s, &mut ev, id).is_err());
+
+    // An answer that arrives after the program continued is not put in the new stop.
+    let id = s.set_variable(locals, "x", Some("x"), "9");
+    s.continue_();
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("9".into()));
+    assert!(s.variables(locals).is_none());
+    s.stop();
+}
+
 /// Pumps until the memory read `id` answers.
 fn memory_read(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<crate::memory::MemoryBlock, String> {
     let mut got = None;
@@ -300,6 +386,75 @@ fn memory_is_read_decoded_and_partly_unreadable() {
     let again = memory_read(&mut s, &mut ev, id).unwrap();
     let first = crate::memory::MemoryBlock { address: 0x1000, bytes: vec![Some(0xde), Some(0xad), Some(0xbe), Some(0xef), Some(0), Some(0), Some(0), Some(1)] };
     assert_eq!(again.changed_since(Some(&first)), [false, false, false, false, false, false, false, true]);
+    s.stop();
+}
+
+/// Pumps until the disassembly `id` answers.
+fn disassembled(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<Vec<crate::disassembly::Instruction>, String> {
+    let mut got = None;
+    pump_until(s, ev, |e, _| match e {
+        DebugEvent::Disassembled { id: i, result } if *i == id => {
+            got = Some(result.clone());
+            true
+        }
+        _ => false,
+    });
+    got.unwrap()
+}
+
+#[test]
+fn code_is_disassembled_around_the_frame_and_stepped_by_instruction() {
+    use crate::disassembly::{instructions_before, rows, BACK_BYTES, DisasmRow};
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    let early = s.disassemble("0x2000", 0, 0, 4);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::Disassembled { id, result: Err(_) } if *id == early));
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, |s| s.selected_frame().is_some());
+    assert!(s.capabilities().supports_disassemble_request && s.capabilities().supports_stepping_granularity);
+    let ip = s.selected_frame().and_then(|f| f.instruction_pointer_reference.clone()).unwrap();
+    assert_eq!(ip, "0x2010");
+
+    // Below: from the instruction pointer on; addresses past the code are dropped.
+    let id = s.disassemble(&ip, 0, 0, 1000);
+    let below = disassembled(&mut s, &mut ev, id).unwrap();
+    assert_eq!(below.len(), (0x2100 - 0x2010) / 4);
+    assert_eq!((below[0].address, below[0].text.as_str(), below[0].bytes.as_deref()), (0x2010, "op 4", Some("00 00 20 10")));
+    let req = requests(&log).into_iter().find(|r| r["command"] == "disassemble" && r["arguments"]["instructionCount"] == 1000).unwrap();
+    assert_eq!(req["arguments"]["resolveSymbols"], true);
+    assert_eq!(req["arguments"]["memoryReference"], "0x2010");
+
+    // Above: read from bytes before the anchor and kept when the decoding lands on it.
+    let id = s.disassemble(&ip, -BACK_BYTES, 0, 64);
+    let back = disassembled(&mut s, &mut ev, id).unwrap();
+    let above = instructions_before(&back, 0x2010).unwrap();
+    // The first three decoded (0x2000..0x2008) may be out of step and are dropped.
+    assert_eq!(above.iter().map(|i| i.address).collect::<Vec<_>>(), [0x200c]);
+    // One byte off: nothing lands on an instruction.
+    let id = s.disassemble(&ip, -BACK_BYTES + 1, 0, 64);
+    assert!(disassembled(&mut s, &mut ev, id).is_err());
+
+    // The whole function from its symbol: headers for the symbol and each line.
+    let id = s.disassemble("0x2000", 0, 0, 8);
+    let all = disassembled(&mut s, &mut ev, id).unwrap();
+    let r = rows(&all, Some(0x2010));
+    assert_eq!(r[0], DisasmRow::Header { symbol: Some("Calc".into()), location: Some("/w/Calc.cs:9".into()) });
+    assert!(r.contains(&DisasmRow::Instruction { index: 4, current: true }));
+    assert_eq!(r.iter().filter(|r| matches!(r, DisasmRow::Header { .. })).count(), 2);
+
+    // Step Over Instruction: `next` by instruction; the frame moves to the next one.
+    s.step_instruction(true);
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, |s| s.selected_frame().is_some());
+    assert_eq!(s.selected_frame().and_then(|f| f.instruction_pointer_reference.as_deref()), Some("0x2014"));
+    s.step_instruction(false);
+    pump_until(&mut s, &mut ev, stopped);
+    let steps: Vec<Value> = requests(&log).into_iter().filter(|r| r["arguments"]["granularity"] == "instruction").collect();
+    assert_eq!(steps.iter().map(|r| r["command"].as_str().unwrap()).collect::<Vec<_>>(), ["next", "stepIn"]);
     s.stop();
 }
 
