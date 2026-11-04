@@ -4357,3 +4357,80 @@ fn an_ide_quick_fix_is_previewed_without_a_server() {
     assert_eq!(files[0].lines, vec![('@', "7".to_string()), ('-', "serde = \"1.0.100\"".to_string()), ('+', "serde = \"1.0.200\"".to_string())]);
     assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), MANIFEST);
 }
+
+/// I-18: an inspection profile changes what rustc's findings (through rust-analyzer's `cargo
+/// check`) and CrabCraft's own `Cargo.toml` inspections become in the editor (underline and
+/// scroll-bar marks follow `editor.diagnostics`) and in the Problems window; the project can use
+/// a profile of its own, saved with it.
+#[test]
+fn inspection_profiles_change_the_level_of_findings() {
+    use rc_core::inspections::{InspectionProfile, Level};
+    use rc_editor::Severity;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/main.rs"), "fn main() {\n    let unused = 1;\n}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    app.insight.did_save(&main);
+    let level = |a: &CrabCraftApp| a.docs.list.iter().find(|d| d.path == main).and_then(|d| d.editor.diagnostics.iter().find(|x| x.code.as_deref() == Some("unused_variables") && x.message.starts_with("unused variable")).map(|x| x.severity));
+    let listed = |a: &CrabCraftApp| a.insight.problems.get(&main).is_some_and(|l| l.iter().any(|x| x.code.as_deref() == Some("unused_variables")));
+    pump(&mut app, "cargo check's warning", |a| level(a) == Some(Severity::Warning) && listed(a));
+
+    // Default profile: an error, then off, then a weak warning (underlined, not listed).
+    app.settings.inspection_profile.set("unused_variables", Some(Level::Error));
+    app.refresh_inspection_profile();
+    assert_eq!(level(&app), Some(Severity::Error));
+    assert!(listed(&app));
+    app.settings.inspection_profile.set("unused_variables", Some(Level::Off));
+    app.refresh_inspection_profile();
+    assert_eq!(level(&app), None);
+    assert!(!listed(&app));
+    app.settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
+    app.refresh_inspection_profile();
+    assert_eq!(level(&app), Some(Severity::Info));
+    assert!(!listed(&app));
+    // A new report from the server follows the profile too.
+    app.insight.did_save(&main);
+    std::thread::sleep(Duration::from_millis(300));
+    pump(&mut app, "the next report", |a| level(a) == Some(Severity::Info));
+
+    // The project's own profile wins once chosen, and is saved with the project.
+    let mut project = InspectionProfile::default();
+    project.set("unused_variables", Some(Level::Error));
+    project.levels.insert("bad id".into(), "error".into());
+    app.set_project_inspections(true, project);
+    assert_eq!(level(&app), Some(Severity::Error));
+    assert!(!app.inspections.project.levels.contains_key("bad id"), "cleaned");
+    app.set_project_inspections(false, app.inspections.project.clone());
+    assert_eq!(level(&app), Some(Severity::Info));
+    app.set_project_inspections(true, app.inspections.project.clone());
+    app.save_session();
+    let saved = rc_core::Session::load(&root);
+    assert!(saved.use_project_profile);
+    assert_eq!(saved.inspection_profile.level("unused_variables"), Some(Level::Error));
+
+    // CrabCraft's own inspection of Cargo.toml: an unknown key, turned off.
+    let manifest = root.join("Cargo.toml");
+    let text = std::fs::read_to_string(&manifest).unwrap().replace("edition = \"2021\"", "edition = \"2021\"\nautthors = []");
+    std::fs::write(&manifest, text).unwrap();
+    app.open_file(&manifest);
+    let unknown = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.diagnostics.iter().find(|d| d.message.contains("autthors")).map(|d| d.severity);
+    pump(&mut app, "the manifest inspection", |a| {
+        a.manifest_inspections.update(&mut a.docs, &mut a.insight.problems, a.cfg_epoch, &a.insight.profile.clone());
+        unknown(a) == Some(Severity::Warning)
+    });
+    let mut project = app.inspections.project.clone();
+    project.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
+    app.set_project_inspections(true, project);
+    app.manifest_inspections.update(&mut app.docs, &mut app.insight.problems, app.cfg_epoch, &app.insight.profile.clone());
+    assert_eq!(unknown(&app), None);
+    assert!(app.insight.problems.get(&manifest).is_none_or(|l| !l.iter().any(|d| d.message.contains("autthors"))));
+    app.insight.stop();
+}

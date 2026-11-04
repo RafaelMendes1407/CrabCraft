@@ -14,6 +14,7 @@ mod feature_nav;
 mod http_client;
 mod disassembly_view;
 mod insight;
+mod inspection_profile;
 mod intention_preview;
 mod call_tree;
 mod item_templates;

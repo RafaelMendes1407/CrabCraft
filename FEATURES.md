@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 166 |
+| ✅ Pronto | 167 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 56 |
+| ⬜ A fazer | 55 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -134,7 +134,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-15 | Quick fixes e intention actions (Alt+Enter) | ✅ | M1 | Import pelo Alt+Enter testado com rust-analyzer real |
 | I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
 | I-17 | Inspeções em todo o projeto | ✅ | M3 | Inspecionar código (Find Action, menu nativo ou a aba Inspeção da janela Problems) roda `cargo clippy --workspace --all-targets` em segundo plano, cancelável pela janela Build; os achados, também de arquivos nunca abertos, ficam na aba Inspeção agrupados por lint, com clique para abrir na linha. Testado com Clippy real num workspace de dois crates; captura conferida |
-| I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
+| I-18 | Perfis e severidade de inspeções | ✅ | M4 | Configurações › Inspeções: perfil Padrão (nas configurações, vale para todo projeto) e perfil do Projeto (salvo com o projeto, escolhido no lugar do Padrão, com Copiar do Padrão). Cada inspeção pode ser desligada ou ganhar nível Erro, Aviso, Aviso fraco (sublinhado fino) ou Informação (sem destaque, correções no Alt+Enter). Cobre as inspeções próprias do `Cargo.toml` e do crates.io e os diagnósticos do rust-analyzer, rustc e Clippy pelo código (com `clippy::*` para o grupo e códigos digitados pelo usuário); a aba Inspeção (Clippy) também segue o perfil. A mudança vale na hora para sublinhado, marcas da barra de rolagem e janela Problemas. Perfis lidos dos arquivos são limpos (ids e níveis inválidos descartados, tamanho limitado). Testado com rust-analyzer e `cargo check` reais (`unused_variables` como erro, desligado e aviso fraco) e com a inspeção de chave desconhecida do `Cargo.toml`; captura conferida. Aviso fraco e informação não aparecem na janela Problemas nem na barra de rolagem; não há importar/exportar perfis nem mais de um perfil nomeado |
 | I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |

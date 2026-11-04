@@ -182,6 +182,10 @@ pub struct Insight {
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     /// The text the positions of `problems` refer to, for files that are not open.
     pub problem_text: BTreeMap<PathBuf, rc_text::Rope>,
+    /// The server's last diagnostics per file, shown again when the inspection profile changes.
+    reported: BTreeMap<PathBuf, Vec<lsp::Diagnostic>>,
+    /// The inspection profile in force (I-18).
+    pub profile: rc_core::inspections::InspectionProfile,
     /// The features rustc says hide what a diagnostic is about, per file and diagnostic message
     /// (from the rendered `cargo check` output rust-analyzer passes along), for C-10.
     pub feature_gates: HashMap<PathBuf, Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)>>,
@@ -280,6 +284,8 @@ impl Insight {
             env: Vec::new(),
             problems: BTreeMap::new(),
             problem_text: BTreeMap::new(),
+            reported: BTreeMap::new(),
+            profile: Default::default(),
             feature_gates: HashMap::new(),
             local_fixes: Vec::new(),
             raw_items: Vec::new(),
@@ -516,6 +522,7 @@ impl Insight {
         self.reset_requests();
         self.problems.clear();
         self.problem_text.clear();
+        self.reported.clear();
         self.structure.clear();
         self.call_tree = None;
         self.call_levels.clear();
@@ -592,19 +599,6 @@ impl Insight {
                     }
                 }
                 LspEvent::Diagnostics { path, diagnostics, .. } => {
-                    let doc = docs.list.iter_mut().find(|d| d.path == path);
-                    let converted: Vec<rc_editor::Diagnostic> = match &doc {
-                        Some(d) => diagnostics.iter().map(|x| convert::diagnostic(d.editor.buffer.rope(), x)).collect(),
-                        None => match std::fs::read_to_string(&path) {
-                            Ok(text) => {
-                                let rope = rc_text::Rope::from_str(&text.replace("\r\n", "\n"));
-                                let list = diagnostics.iter().map(|x| convert::diagnostic(&rope, x)).collect();
-                                self.problem_text.insert(path.clone(), rope);
-                                list
-                            }
-                            Err(_) => Vec::new(),
-                        },
-                    };
                     let gates: Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)> = diagnostics
                         .iter()
                         .filter_map(|x| {
@@ -618,10 +612,7 @@ impl Insight {
                     } else {
                         self.feature_gates.insert(path.clone(), gates);
                     }
-                    if let Some(d) = doc {
-                        d.editor.set_diagnostics(converted.clone());
-                    }
-                    self.store_problems(path, converted);
+                    self.publish(docs, path, diagnostics, true);
                 }
                 LspEvent::ApplyEdit { id, edit } => self.pending_apply.push((id, edit)),
                 LspEvent::Refresh(_) => self.refreshed.clear(),
@@ -659,6 +650,51 @@ impl Insight {
     pub fn problem_line(&self, docs: &Docs, path: &std::path::Path, start: usize) -> usize {
         let line = |rope: &rc_text::Rope| rope.char_to_line(start.min(rope.len_chars()));
         docs.list.iter().find(|d| d.path == path).map(|d| line(d.editor.buffer.rope())).or_else(|| self.problem_text.get(path).map(line)).unwrap_or(0)
+    }
+
+    /// Shows a file's diagnostics from the server under the inspection profile: in its editor
+    /// when it is open, and in the Problems window. The text of a closed file is read when
+    /// `read` (a new report), else the text it was read in before is used.
+    fn publish(&mut self, docs: &mut Docs, path: PathBuf, diagnostics: Vec<lsp::Diagnostic>, read: bool) {
+        let doc = docs.list.iter_mut().find(|d| d.path == path);
+        let converted: Vec<rc_editor::Diagnostic> = match &doc {
+            Some(d) => diagnostics.iter().map(|x| convert::diagnostic(d.editor.buffer.rope(), x)).collect(),
+            None if !read => match self.problem_text.get(&path) {
+                Some(rope) => diagnostics.iter().map(|x| convert::diagnostic(rope, x)).collect(),
+                None => Vec::new(),
+            },
+            None => match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    let rope = rc_text::Rope::from_str(&text.replace("\r\n", "\n"));
+                    let list = diagnostics.iter().map(|x| convert::diagnostic(&rope, x)).collect();
+                    self.problem_text.insert(path.clone(), rope);
+                    list
+                }
+                Err(_) => Vec::new(),
+            },
+        };
+        let converted = crate::inspection_profile::apply(&self.profile, converted);
+        if let Some(d) = doc {
+            d.editor.set_diagnostics(converted.clone());
+        }
+        if diagnostics.is_empty() {
+            self.reported.remove(&path);
+        } else {
+            self.reported.insert(path.clone(), diagnostics);
+        }
+        self.store_problems(path, converted);
+    }
+
+    /// Changes the inspection profile (I-18) and shows the server's last diagnostics under it.
+    pub fn set_profile(&mut self, docs: &mut Docs, profile: rc_core::inspections::InspectionProfile) {
+        if self.profile == profile {
+            return;
+        }
+        self.profile = profile;
+        let reported: Vec<(PathBuf, Vec<lsp::Diagnostic>)> = self.reported.iter().map(|(p, d)| (p.clone(), d.clone())).collect();
+        for (path, list) in reported {
+            self.publish(docs, path, list, false);
+        }
     }
 
     fn store_problems(&mut self, path: PathBuf, list: Vec<rc_editor::Diagnostic>) {
@@ -823,10 +859,8 @@ impl Insight {
                 continue;
             }
             let items: Vec<lsp::Diagnostic> = report.get("items").cloned().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-            let converted: Vec<rc_editor::Diagnostic> = items.iter().map(|x| convert::diagnostic(d.editor.buffer.rope(), x)).collect();
-            d.editor.set_diagnostics(converted.clone());
             let path = d.path.clone();
-            self.store_problems(path, converted);
+            self.publish(docs, path, items, false);
         }
         for id in done.drain(..) {
             self.diag_pull.remove(&id);

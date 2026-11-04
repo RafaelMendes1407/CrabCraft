@@ -19,6 +19,7 @@ pub enum SettingsPage {
     LiveTemplates,
     Copyright,
     Scopes,
+    Inspections,
 }
 
 pub enum Dialog {
@@ -222,6 +223,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
                     (SettingsPage::Copyright, tr("Copyright")),
                     (SettingsPage::Scopes, tr("Scopes")),
+                    (SettingsPage::Inspections, tr("Inspections")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -251,6 +253,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 }
                 if *page == SettingsPage::Scopes {
                     scopes_page(ui, app, p.text_muted, p.error);
+                    return;
+                }
+                if *page == SettingsPage::Inspections {
+                    inspections_page(ui, app, draft, p.text_muted);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -389,7 +395,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
                 });
             });
         });
@@ -403,15 +409,99 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         if let Some(draft) = app.explorer.scopes.draft.take() {
             app.set_scopes(draft);
         }
+        if let Some((use_project, profile)) = app.inspections.draft.take() {
+            app.set_project_inspections(use_project, profile);
+        }
         return Outcome::Close;
     }
     if cancel || esc {
         app.copyright.draft = None;
         app.explorer.scopes.draft = None;
+        app.inspections.draft = None;
         Outcome::Close
     } else {
         Outcome::Keep
     }
+}
+
+/// Settings › Inspections (I-18): which profile the project uses (the Default one, kept in the
+/// settings, or its own, kept with the project), and in it each inspection turned on or off and
+/// its level. Diagnostic codes of rust-analyzer, the compiler and Clippy can be added.
+fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, muted: egui::Color32) {
+    use crate::inspection_profile::{self as ip, Group};
+    use rc_core::inspections::{Level, valid_id};
+    let project_open = app.workspace.is_some();
+    let (mut use_project, mut project) = app.inspections.draft.take().unwrap_or_else(|| (app.inspections.use_project, app.inspections.project.clone()));
+    if project_open {
+        ui.horizontal(|ui| {
+            ui.label(tr("Profile"));
+            let name = |p: bool| if p { tr("Project (saved with this project)") } else { tr("Default (every project)") };
+            egui::ComboBox::from_id_salt("inspection_profile").selected_text(name(use_project)).width(260.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut use_project, false, name(false));
+                ui.selectable_value(&mut use_project, true, name(true));
+            });
+            if use_project && ui.button(tr("Copy from Default")).on_hover_text(tr("Replace the project's levels with those of the Default profile")).clicked() {
+                project = draft.inspection_profile.clone();
+            }
+        });
+    } else {
+        ui.label(egui::RichText::new(tr("Open a project to give it a profile of its own. The Default profile applies to every project.")).size(12.0).color(muted));
+    }
+    ui.label(egui::RichText::new(tr("Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.")).size(12.0).color(muted));
+    ui.add_space(6.0);
+    let editing = if project_open && use_project { &mut project } else { &mut draft.inspection_profile };
+    let mut remove = None;
+    egui::ScrollArea::vertical().id_salt("inspections_page").max_height(340.0).auto_shrink([false, true]).show(ui, |ui| {
+        // One grid for every group, so the level column lines up.
+        egui::Grid::new("inspections_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
+            for group in [Group::CargoToml, Group::CratesIo, Group::Rust] {
+                ui.label(egui::RichText::new(group.title()).font(theme::bold(13.0)));
+                ui.end_row();
+                let mut ids: Vec<String> = ip::KNOWN.iter().filter(|(_, g)| *g == group).map(|(id, _)| id.to_string()).collect();
+                let custom: Vec<String> = if group == Group::Rust { editing.levels.keys().filter(|k| !ip::KNOWN.iter().any(|(id, _)| id == k)).cloned().collect() } else { Vec::new() };
+                ids.extend(custom.iter().cloned());
+                for id in &ids {
+                    let level = editing.level(id).filter(|_| editing.levels.contains_key(id.as_str()));
+                    let mut on = level != Some(Level::Off);
+                    if ui.checkbox(&mut on, ip::title(id)).on_hover_text(id.as_str()).changed() {
+                        editing.set(id, if on { None } else { Some(Level::Off) });
+                    }
+                    ui.add_enabled_ui(on, |ui| {
+                        egui::ComboBox::from_id_salt(("inspection_level", id.as_str())).selected_text(ip::level_name(level.filter(|l| *l != Level::Off))).width(130.0).show_ui(ui, |ui| {
+                            for choice in [None, Some(Level::Error), Some(Level::Warning), Some(Level::WeakWarning), Some(Level::Info)] {
+                                if ui.selectable_label(level == choice, ip::level_name(choice)).clicked() {
+                                    editing.set(id, choice);
+                                }
+                            }
+                        });
+                    });
+                    if custom.contains(id) {
+                        if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                            remove = Some(id.clone());
+                        }
+                    } else {
+                        ui.label("");
+                    }
+                    ui.end_row();
+                }
+            }
+        });
+    });
+    if let Some(id) = remove {
+        editing.set(&id, None);
+    }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        let code = &mut app.inspections.new_code;
+        ui.add(egui::TextEdit::singleline(code).hint_text(tr("Diagnostic code, such as clippy::needless_return")).font(egui::TextStyle::Monospace).desired_width(300.0));
+        let id = code.trim().to_string();
+        let can_add = valid_id(&id) && !editing.levels.contains_key(&id);
+        if ui.add_enabled(can_add, egui::Button::new(tr("Add Code"))).on_hover_text(tr("A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group")).clicked() {
+            editing.set(&id, Some(Level::Warning));
+            code.clear();
+        }
+    });
+    app.inspections.draft = Some((use_project, project));
 }
 
 /// Settings › Scopes: the project's scopes (named globs) and the colours of their files. Saved

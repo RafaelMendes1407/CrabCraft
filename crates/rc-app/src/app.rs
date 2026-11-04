@@ -83,7 +83,7 @@ pub struct CrabCraftApp {
     rustc_cfg_load: Option<Inbox<Option<String>>>,
     /// Bumped when the Cargo model or the rustc cfg change; each document remembers the epoch
     /// its `cfg` set was given for.
-    cfg_epoch: u64,
+    pub(crate) cfg_epoch: u64,
     cfg_given: std::collections::HashMap<u64, u64>,
     /// Cargo features the user turned on, as `package/feature` (saved with the session).
     pub cargo_features: Vec<String>,
@@ -104,6 +104,8 @@ pub struct CrabCraftApp {
     pub manifest_inspections: crate::manifest_inspect::ManifestInspections,
     /// The diff of the highlighted Alt+Enter action (I-33).
     pub intention_preview: crate::intention_preview::IntentionPreview,
+    /// The project's inspection profile and which profile it uses (I-18).
+    pub inspections: crate::inspection_profile::Profiles,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
@@ -279,6 +281,7 @@ impl CrabCraftApp {
                 let mut insight = Insight::new(waker.clone());
                 insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
                 insight.imports_on_paste = settings.imports_on_paste;
+                insight.profile = settings.inspection_profile.clean();
                 insight
             },
             runner: {
@@ -325,6 +328,7 @@ impl CrabCraftApp {
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             manifest_inspections: crate::manifest_inspect::ManifestInspections::new(waker.clone()),
             intention_preview: crate::intention_preview::IntentionPreview::new(waker.clone()),
+            inspections: Default::default(),
             feature_search: Default::default(),
             copyright: Default::default(),
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
@@ -437,6 +441,8 @@ impl CrabCraftApp {
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
         self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
         self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
+        self.inspections = crate::inspection_profile::Profiles { project: session.inspection_profile.clean(), use_project: session.use_project_profile, ..Default::default() };
+        self.refresh_inspection_profile();
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -1317,6 +1323,8 @@ impl CrabCraftApp {
         self.nav_forward.clear();
         self.copyright.close();
         self.explorer.scopes.close();
+        self.inspections = Default::default();
+        self.refresh_inspection_profile();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1476,6 +1484,8 @@ impl CrabCraftApp {
             copyright: self.copyright.profile.clone(),
             scopes: self.explorer.scopes.user.clone(),
             file_colors: self.explorer.scopes.colors.clone(),
+            inspection_profile: self.inspections.project.clone(),
+            use_project_profile: self.inspections.use_project,
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1741,6 +1751,27 @@ impl CrabCraftApp {
     }
 
     /// Settings › Copyright: the profile of the project, saved with its session.
+    /// Puts the inspection profile in force (the project's or the Default one) everywhere
+    /// findings are shown (I-18).
+    pub fn refresh_inspection_profile(&mut self) {
+        let profile = self.inspections.effective(&self.settings.inspection_profile).clone();
+        self.insight.set_profile(&mut self.docs, profile);
+    }
+
+    /// Settings › Inspections, OK: whether the project uses its own profile, and that profile.
+    pub fn set_project_inspections(&mut self, use_project: bool, profile: rc_core::inspections::InspectionProfile) {
+        if self.workspace.is_none() {
+            return;
+        }
+        let profile = profile.clean();
+        if self.inspections.use_project != use_project || self.inspections.project != profile {
+            self.inspections.use_project = use_project;
+            self.inspections.project = profile;
+            self.session_dirty = true;
+        }
+        self.refresh_inspection_profile();
+    }
+
     pub fn set_copyright_profile(&mut self, profile: rc_core::session::CopyrightProfile) {
         if self.copyright.profile != profile {
             self.copyright.profile = profile;
@@ -2806,6 +2837,8 @@ impl CrabCraftApp {
         self.runner.external_tools = self.settings.external_tools.clone();
         self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
         self.insight.imports_on_paste = self.settings.imports_on_paste;
+        self.settings.inspection_profile = self.settings.inspection_profile.clean();
+        self.refresh_inspection_profile();
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = build_keymap(&self.settings);
@@ -3206,13 +3239,13 @@ impl eframe::App for CrabCraftApp {
         self.update_feature_icons();
         let online = self.settings.check_crates_io;
         let waits = [
-            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online),
+            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online, &self.insight.profile),
             crate::manifest_completion::CrateNames::update(&mut self.docs, &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online }),
         ];
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
-        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch);
+        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);
         self.http.poll();

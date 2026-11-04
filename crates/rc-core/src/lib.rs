@@ -6,6 +6,7 @@ pub mod external_tools;
 pub mod live_templates;
 pub mod run_files;
 pub mod history;
+pub mod inspections;
 pub mod inbox;
 pub mod paths;
 pub mod runtime;

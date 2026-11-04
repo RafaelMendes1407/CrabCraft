@@ -1801,6 +1801,27 @@ fn intention_preview_capture() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/inspection-profiles-*.png"]
+fn inspection_profiles_capture() {
+    use rc_core::inspections::Level;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _root) = two_crates_harness(dir.path(), dark);
+        let mut settings = h.state().settings.clone();
+        settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
+        settings.inspection_profile.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
+        settings.inspection_profile.set("clippy::needless_return", Some(Level::Error));
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections });
+        h.run_steps(4);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("inspection-profiles-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU and Clippy; writes target/snapshots/inspection.png"]
 fn inspection_capture() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
