@@ -46,6 +46,10 @@ pub enum GitError {
     PushRejected(String),
     #[error("The patch does not apply")]
     PatchFailed(String),
+    #[error("The patch is larger than {0} MB")]
+    PatchTooLarge(usize),
+    #[error("Finish or abort the operation in progress first")]
+    OperationInProgress,
     #[error("Not found: {0}")]
     NotFound(String),
     #[error("Set user.name and user.email in Git first")]
@@ -88,6 +92,8 @@ impl GitError {
             NoUpstream => ("The current branch has no upstream branch", vec![]),
             PushRejected(_) => ("The push was rejected (fetch first)", vec![]),
             PatchFailed(_) => ("The patch does not apply", vec![]),
+            PatchTooLarge(mb) => ("The patch is larger than {size} MB", vec![("size", mb.to_string())]),
+            OperationInProgress => ("Finish or abort the operation in progress first", vec![]),
             NotFound(what) => ("Not found: {what}", vec![("what", what.clone())]),
             IdentityUnknown => ("Set user.name and user.email in Git first", vec![]),
             Locked(_) => ("Another Git process is running in this repository", vec![]),

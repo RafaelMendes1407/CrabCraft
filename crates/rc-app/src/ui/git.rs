@@ -8,7 +8,7 @@ use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 use crate::ui::dialogs::Dialog;
-use crate::vcs::GitTab;
+use crate::vcs::{GitTab, PatchSource};
 use rc_vcs::FileState;
 
 /// IntelliJ's file status colours.
@@ -38,6 +38,7 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
     let changes = app.vcs.changes();
     let root = app.vcs.repo.as_ref().map(|r| r.root().to_path_buf()).unwrap_or_default();
+    let mut patch_action: Option<(PatchSource, bool)> = None;
     // Toolbar.
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -52,6 +53,13 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             && let Some(c) = changes.iter().find(|c| !c.untracked)
         {
             app.vcs.open_diff(&c.path);
+        }
+        let busy = app.vcs.busy.is_some();
+        if theme::icon_button(ui, ico::EXPORT, !included.is_empty() && !busy, tr("Create Patch from the checked files…")).clicked() {
+            patch_action = Some((PatchSource::Changes(included.clone()), false));
+        }
+        if theme::icon_button(ui, ico::COPY, !included.is_empty() && !busy, tr("Copy the checked files as a patch")).clicked() {
+            patch_action = Some((PatchSource::Changes(included.clone()), true));
         }
     });
     let list_h = (ui.available_height() - 198.0).max(80.0);
@@ -120,6 +128,15 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                         app.dialog = Some(crate::ui::dialogs::Dialog::Rollback { paths: vec![c.path.clone()] });
                         ui.close();
                     }
+                    ui.separator();
+                    if theme::menu_item(ui, Some(ico::EXPORT), tr("Create Patch…"), false).clicked() {
+                        patch_action = Some((PatchSource::Changes(vec![c.path.clone()]), false));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(ico::COPY), tr("Copy as Patch"), false).clicked() {
+                        patch_action = Some((PatchSource::Changes(vec![c.path.clone()]), true));
+                        ui.close();
+                    }
                 });
             }
         }
@@ -157,6 +174,29 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if let Some(path) = open_file {
         app.open_file(&path);
     }
+    if let Some((source, copy)) = patch_action {
+        create_patch(app, source, copy);
+    }
+}
+
+/// Creates a patch: copied to the clipboard, or saved where the user picks.
+pub fn create_patch(app: &mut CrabCraftApp, source: PatchSource, copy: bool) {
+    if copy {
+        app.vcs.create_patch(source, None);
+        return;
+    }
+    let name = match &source {
+        PatchSource::Changes(_) => "changes.patch".to_string(),
+        PatchSource::Commits(c) if c.len() == 1 => format!("{}.patch", c[0].chars().take(8).collect::<String>()),
+        PatchSource::Commits(_) => "commits.patch".to_string(),
+    };
+    let mut dialog = rfd::FileDialog::new().set_title(tr("Create Patch")).set_file_name(name).add_filter(tr("Patch files"), &["patch", "diff"]);
+    if let Some(root) = app.vcs.root() {
+        dialog = dialog.set_directory(root);
+    }
+    if let Some(path) = dialog.save_file() {
+        app.vcs.create_patch(source, Some(path));
+    }
 }
 
 pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
@@ -183,6 +223,13 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         if app.vcs.busy.is_some() {
             ui.add(egui::Spinner::new().size(14.0));
         }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(8.0);
+            if theme::icon_button(ui, ico::IMPORT, app.vcs.busy.is_none(), tr("Apply Patch…")).clicked() {
+                app.vcs.close_patch();
+                app.dialog = Some(Dialog::ApplyPatch { path: String::new(), paste: false });
+            }
+        });
     });
     match app.vcs.tab {
         GitTab::Log => log_view(app, ui),
@@ -198,13 +245,14 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
     let mut select = None;
+    let mut patch_action: Option<(PatchSource, bool)> = None;
     let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
     lu.set_clip_rect(left.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
     egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]).show_rows(&mut lu, 24.0, log.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for c in &log[range] {
-            let selected = app.vcs.selected_commit.as_deref() == Some(c.hash.as_str());
+            let selected = app.vcs.selected_commit.as_deref() == Some(c.hash.as_str()) || app.vcs.marked_commits.contains(&c.hash);
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
             if selected {
                 ui.painter().rect_filled(r.shrink2(vec2(4.0, 0.0)), 4.0, p.selection);
@@ -237,6 +285,8 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             ui.painter().galley(pos2(x, (r.center().y - g.size().y / 2.0).round()), g, p.text);
             ui.painter().galley(pos2(r.right() - mg.size().x - 10.0, (r.center().y - mg.size().y / 2.0).round()), mg, p.muted);
             if resp.clicked() {
+                let m = ui.input(|i| i.modifiers);
+                app.vcs.mark_commit(&c.hash, m.command, m.shift);
                 select = Some(c.hash.clone());
             }
             resp.context_menu(|ui| {
@@ -244,11 +294,32 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                     app.dialog = Some(Dialog::NewTag { name: String::new(), target: Some((c.hash.clone(), c.short_hash().to_string())), message: String::new() });
                     ui.close();
                 }
+                ui.separator();
+                let commits = app.vcs.patch_commits(&c.hash);
+                let busy = app.vcs.busy.is_some();
+                let (create, copy) = if commits.len() > 1 {
+                    (trf("Create Patch of {n} Commits…", &[("n", &commits.len())]), trf("Copy {n} Commits as Patch", &[("n", &commits.len())]))
+                } else {
+                    (tr("Create Patch…").to_string(), tr("Copy as Patch").to_string())
+                };
+                ui.add_enabled_ui(!busy, |ui| {
+                    if theme::menu_item(ui, Some(ico::EXPORT), &create, false).clicked() {
+                        patch_action = Some((PatchSource::Commits(commits.clone()), false));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(ico::COPY), &copy, false).clicked() {
+                        patch_action = Some((PatchSource::Commits(commits.clone()), true));
+                        ui.close();
+                    }
+                });
             });
         }
     });
     if let Some(h) = select {
         app.vcs.select_commit(&h);
+    }
+    if let Some((source, copy)) = patch_action {
+        create_patch(app, source, copy);
     }
     // Details of the selected commit.
     let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(10.0, 4.0))));

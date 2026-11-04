@@ -311,6 +311,100 @@ async fn stash_push_list_apply_pop_drop() {
     assert!(t.repo.stashes().await.unwrap().is_empty());
 }
 
+/// Two repositories with the same first commit (`b` is a clone of `a`).
+async fn twin_repos() -> (TempRepo, TempRepo) {
+    let a = TempRepo::new().await;
+    a.commit_files(&[("a.txt", &numbered(5)), ("src/lib.rs", "pub fn f() {}\n"), ("old.txt", "old\n")], "init");
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["clone", "-q", &a.repo.root().display().to_string(), "."]);
+    common::configure(dir.path());
+    let repo = Repository::discover(dir.path()).await.unwrap();
+    (a, TempRepo { dir, repo })
+}
+
+#[tokio::test]
+async fn patches_of_local_changes_round_trip_between_repositories() {
+    let (a, b) = twin_repos().await;
+    // Staged and unstaged edits, a deletion, a rename, a binary and an untracked file.
+    a.write("a.txt", &numbered(5).replace("line 3", "line three"));
+    a.git(&["rm", "-q", "old.txt"]);
+    a.git(&["mv", "src/lib.rs", "src/core.rs"]);
+    std::fs::write(a.path("logo.bin"), [0u8, 159, 146, 150, 0, 1]).unwrap();
+    a.write("new.txt", "brand new\n");
+    a.write("skip.txt", "not selected\n");
+    let paths = s(&["a.txt", "old.txt", "src/lib.rs", "src/core.rs", "logo.bin", "new.txt"]);
+    let patch = a.repo.diff_patch(&paths).await.unwrap();
+    assert_eq!(patch_kind(&patch), PatchKind::Diff);
+    let text = String::from_utf8_lossy(&patch);
+    assert!(!text.contains("skip.txt"), "{text}");
+    assert!(matches!(a.repo.diff_patch(&s(&["skip-nothing.txt"])).await, Err(GitError::NothingToCommit)));
+
+    let preview = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert_eq!(preview.problem, None);
+    let mut files: Vec<_> = preview.files.iter().map(|f| (f.path.as_str(), f.status)).collect();
+    files.sort();
+    assert_eq!(files, [("a.txt", 'M'), ("logo.bin", 'A'), ("new.txt", 'A'), ("old.txt", 'D'), ("src/core.rs", 'R')]);
+    assert!(preview.files.iter().any(|f| f.path == "logo.bin" && f.added.is_none()));
+
+    let report = b.repo.apply_patch(&patch, false).await.unwrap();
+    assert!(report.contains("a.txt"), "{report}");
+    assert_eq!(b.read("a.txt"), a.read("a.txt"));
+    assert_eq!(b.read("new.txt"), "brand new\n");
+    assert_eq!(std::fs::read(b.path("logo.bin")).unwrap(), [0u8, 159, 146, 150, 0, 1]);
+    assert!(!b.path("old.txt").exists() && !b.path("src/lib.rs").exists() && b.path("src/core.rs").exists());
+
+    // Applied again, the check fails and says why; applying fails with git's message.
+    let again = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert!(again.problem.as_deref().is_some_and(|p| !p.is_empty()), "{again:?}");
+    assert!(matches!(b.repo.apply_patch(&patch, false).await, Err(GitError::PatchFailed(m)) if !m.is_empty()));
+    // Text that is not a patch.
+    assert!(matches!(b.repo.preview_patch(b"hello\nworld\n", false).await, Err(GitError::PatchFailed(_))));
+    assert!(b.repo.apply_patch(b"hello\n", false).await.is_err());
+}
+
+#[tokio::test]
+async fn three_way_apply_leaves_conflicts_to_resolve() {
+    let (a, b) = twin_repos().await;
+    a.write("a.txt", &numbered(5).replace("line 3", "ours"));
+    let patch = a.repo.diff_patch(&s(&["a.txt"])).await.unwrap();
+    b.commit_files(&[("a.txt", &numbered(5).replace("line 3", "theirs"))], "diverge");
+    assert!(b.repo.preview_patch(&patch, false).await.unwrap().problem.is_some());
+    assert!(matches!(b.repo.apply_patch(&patch, true).await, Err(GitError::Conflicts(_))));
+    assert_eq!(b.repo.conflicted_paths().await.unwrap(), ["a.txt"]);
+    assert!(b.read("a.txt").contains("<<<<<<<"));
+}
+
+#[tokio::test]
+async fn commit_patches_become_commits_with_am() {
+    let (a, b) = twin_repos().await;
+    a.commit_files(&[("a.txt", &numbered(6))], "Add line 6");
+    a.commit_files(&[("a.txt", &numbered(7)), ("b.txt", "b\n")], "Add line 7 and b");
+    let log = a.repo.log(&LogOptions::default()).await.unwrap();
+    let (newest, older) = (log[0].hash.clone(), log[1].hash.clone());
+    // Given newest first, like the log; written oldest first.
+    let patch = a.repo.format_patch(&[newest, older]).await.unwrap();
+    assert_eq!(patch_kind(&patch), PatchKind::Mail);
+    let text = String::from_utf8_lossy(&patch);
+    assert!(text.find("Add line 6").unwrap() < text.find("Add line 7").unwrap());
+    let preview = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert_eq!((preview.kind, preview.commits, preview.problem.clone()), (PatchKind::Mail, 2, None));
+    let a_file = preview.files.iter().find(|f| f.path == "a.txt").unwrap();
+    assert_eq!((a_file.added, a_file.removed), (Some(2), Some(0)));
+
+    b.repo.apply_patch(&patch, false).await.unwrap();
+    let blog = b.repo.log(&LogOptions::default()).await.unwrap();
+    assert_eq!((blog[0].subject.as_str(), blog[1].subject.as_str()), ("Add line 7 and b", "Add line 6"));
+    assert_eq!(blog[0].author_email, "test@example.com");
+    assert_eq!(b.read("a.txt"), numbered(7));
+
+    // A failing series is aborted: no commit, no `am` in progress.
+    let head = b.repo.resolve("HEAD").await.unwrap();
+    assert!(matches!(b.repo.apply_patch(&patch, false).await, Err(GitError::PatchFailed(_))));
+    assert_eq!(b.repo.state().await, RepoState::Clean);
+    assert_eq!(b.repo.resolve("HEAD").await.unwrap(), head);
+    assert!(matches!(a.repo.format_patch(&s(&["no-such-commit"])).await, Err(GitError::NotFound(_))));
+}
+
 #[tokio::test]
 async fn log_paging_file_history_and_graph() {
     let t = TempRepo::new().await;
@@ -591,6 +685,8 @@ fn errors_have_translatable_messages() {
         GitError::NoUpstream,
         GitError::PushRejected(String::new()),
         GitError::PatchFailed(String::new()),
+        GitError::PatchTooLarge(32),
+        GitError::OperationInProgress,
         GitError::NotFound(String::new()),
         GitError::IdentityUnknown,
         GitError::Locked(String::new()),

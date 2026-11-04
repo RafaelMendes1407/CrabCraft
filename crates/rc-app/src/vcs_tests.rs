@@ -237,3 +237,101 @@ fn stashes_are_made_shown_applied_popped_and_dropped_from_the_git_window() {
     app.vcs.stash_push("empty", false, false);
     pump(&mut app, "nothing to stash", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
 }
+
+#[test]
+fn patches_are_created_and_applied_between_repositories_from_the_app() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let other = tempfile::tempdir().unwrap();
+    let b = other.path().canonicalize().unwrap();
+    git(&b, &["clone", "-q", &root.display().to_string(), "."]);
+    for (k, v) in [("user.name", "Other"), ("user.email", "other@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+        git(&b, &["config", k, v]);
+    }
+    let out_dir = tempfile::tempdir().unwrap();
+
+    // Two commits in A, and local changes on top.
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn a() {}\npub fn b() {}\n").unwrap();
+    git(&root, &["commit", "-qam", "Add b"]);
+    std::fs::write(root.join("README.md"), "# Shop\n").unwrap();
+    git(&root, &["add", "README.md"]);
+    git(&root, &["commit", "-qm", "Add readme"]);
+    std::fs::write(root.join("lib.rs"), "pub fn a() {}\npub fn b() {}\npub fn c() {}\n").unwrap();
+    std::fs::write(root.join("notes.txt"), "untracked notes\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "log", |a| a.vcs.log.len() == 3 && a.vcs.changes().len() == 2);
+
+    // Ctrl-click marks the two newest commits; the patch covers both, newest first.
+    let (newest, older) = (app.vcs.log[0].hash.clone(), app.vcs.log[1].hash.clone());
+    app.vcs.mark_commit(&newest, false, false);
+    app.vcs.select_commit(&newest);
+    app.vcs.mark_commit(&older, true, false);
+    assert_eq!(app.vcs.patch_commits(&older), [newest.clone(), older.clone()]);
+    let first = app.vcs.log[2].hash.clone();
+    assert_eq!(app.vcs.patch_commits(&first).len(), 1);
+    let commits_file = out_dir.path().join("commits.patch");
+    app.vcs.create_patch(crate::vcs::PatchSource::Commits(app.vcs.patch_commits(&newest)), Some(commits_file.clone()));
+    pump(&mut app, "commit patch saved", |a| a.vcs.busy.is_none());
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Patch saved")), "{:?}", app.vcs.error);
+    let text = std::fs::read_to_string(&commits_file).unwrap();
+    assert!(text.find("Add b").unwrap() < text.find("Add readme").unwrap());
+
+    // The checked local changes, saved and copied.
+    let changes_file = out_dir.path().join("changes.patch");
+    app.vcs.create_patch(crate::vcs::PatchSource::Changes(app.vcs.included()), Some(changes_file.clone()));
+    pump(&mut app, "changes patch saved", |a| a.vcs.busy.is_none());
+    app.vcs.create_patch(crate::vcs::PatchSource::Changes(vec!["lib.rs".into()]), None);
+    pump(&mut app, "copied", |a| a.vcs.busy.is_none() && a.vcs.clipboard.is_some());
+    let copied = app.vcs.clipboard.take().unwrap();
+    assert!(copied.contains("+pub fn c() {}") && !copied.contains("notes.txt"), "{copied}");
+
+    // In B: the commits become commits, then the changes go to the work tree.
+    let mut app = open_app(&b);
+    app.vcs.load_patch_file(commits_file.clone());
+    pump(&mut app, "commit patch checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    let pv = app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap();
+    assert_eq!((pv.kind, pv.commits, pv.problem.clone()), (rc_vcs::PatchKind::Mail, 2, None));
+    let mut files: Vec<_> = pv.files.iter().map(|f| (f.path.clone(), f.status)).collect();
+    files.sort();
+    assert_eq!(files, [("README.md".to_string(), 'A'), ("lib.rs".to_string(), 'M')]);
+    app.vcs.apply_patch();
+    pump(&mut app, "commits applied", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    assert!(!app.vcs.patch.as_ref().unwrap().result.as_ref().unwrap().error);
+    assert_eq!(git_out(&b, &["log", "--format=%s"]).lines().collect::<Vec<_>>(), ["Add readme", "Add b", "First"]);
+
+    app.vcs.load_patch_file(changes_file.clone());
+    pump(&mut app, "changes checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    assert_eq!(app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap().kind, rc_vcs::PatchKind::Diff);
+    app.vcs.apply_patch();
+    pump(&mut app, "changes applied", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    assert_eq!(std::fs::read_to_string(b.join("lib.rs")).unwrap(), "pub fn a() {}\npub fn b() {}\npub fn c() {}\n");
+    assert_eq!(std::fs::read_to_string(b.join("notes.txt")).unwrap(), "untracked notes\n");
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Patch applied")));
+
+    // Pasted again it no longer applies, and says why; applying shows git's message.
+    app.vcs.load_patch_text(copied);
+    pump(&mut app, "pasted checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    let pv = app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap();
+    assert!(pv.problem.is_some(), "{pv:?}");
+    app.vcs.apply_patch();
+    pump(&mut app, "failed apply", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    let r = app.vcs.patch.as_ref().unwrap().result.clone().unwrap();
+    assert!(r.error && r.text.contains("lib.rs"), "{r:?}");
+
+    // Not a patch, a missing file and an oversized file are refused with a message.
+    app.vcs.load_patch_text("hello".into());
+    pump(&mut app, "not a patch", |a| a.vcs.patch.as_ref().is_some_and(|p| matches!(p.preview, Some(Err(_)))));
+    app.vcs.load_patch_file(out_dir.path().join("missing.patch"));
+    pump(&mut app, "missing", |a| !a.vcs.patch_loading && a.vcs.patch_error.is_some());
+    let big = out_dir.path().join("big.patch");
+    std::fs::File::create(&big).unwrap().set_len(rc_vcs::MAX_PATCH_BYTES as u64 + 1).unwrap();
+    app.vcs.load_patch_file(big);
+    pump(&mut app, "too large", |a| !a.vcs.patch_loading && a.vcs.patch_error.is_some());
+    assert!(app.vcs.patch_error.as_ref().unwrap().contains("32"), "{:?}", app.vcs.patch_error);
+    app.vcs.close_patch();
+    assert!(app.vcs.patch.is_none() && app.vcs.patch_error.is_none());
+}

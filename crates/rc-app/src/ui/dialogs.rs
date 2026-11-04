@@ -61,6 +61,9 @@ pub enum Dialog {
     PushTags { name: Option<String>, remote: String },
     /// Stash the work tree's changes with an optional message.
     StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
+    /// requested (the loaded patch and its preview live in `app.vcs.patch`).
+    ApplyPatch { path: String, paste: bool },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
     /// ⇧⌘E: the places the caret jumped from.
@@ -122,6 +125,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
         Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
@@ -2116,6 +2120,153 @@ fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, in
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Apply Patch: pick a file or paste a patch, see the files it touches and whether it applies,
+/// then apply it (nothing changes before Apply is pressed) and read what git printed.
+fn apply_patch(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, paste: &mut bool) -> Outcome {
+    // Text from the clipboard: asked for with the button, or Ctrl+V outside the path field.
+    if *paste || ctx.memory(|m| m.focused().is_none()) {
+        let pasted = ctx.input(|i| i.events.iter().find_map(|e| if let egui::Event::Paste(t) = e { Some(t.clone()) } else { None }));
+        if let Some(text) = pasted {
+            *paste = false;
+            path.clear();
+            app.vcs.load_patch_text(text);
+        }
+    }
+    let busy = app.vcs.busy.is_some();
+    let mut load = None;
+    let mut recheck = false;
+    let mut apply = false;
+    let mut close = false;
+    let (_, esc) = modal(ctx, "apply_patch", 600.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Apply Patch"));
+        ui.horizontal(|ui| {
+            let resp = ui.add(egui::TextEdit::singleline(path).hint_text(tr("Patch file")).desired_width(300.0));
+            if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !path.trim().is_empty() {
+                load = Some(PathBuf::from(path.trim()));
+            }
+            if theme::secondary_button(ui, tr("Browse…")).clicked() {
+                let mut d = rfd::FileDialog::new().set_title(tr("Apply Patch")).add_filter(tr("Patch files"), &["patch", "diff", "eml", "mbox"]);
+                if let Some(root) = app.vcs.root() {
+                    d = d.set_directory(root);
+                }
+                if let Some(picked) = d.pick_file() {
+                    *path = picked.display().to_string();
+                    load = Some(picked);
+                }
+            }
+            if theme::secondary_button(ui, tr("Paste from Clipboard")).clicked() {
+                *paste = true;
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            }
+        });
+        ui.add_space(8.0);
+        let checking = |ui: &mut Ui| {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(14.0));
+                ui.label(egui::RichText::new(tr("Checking the patch…")).color(p.muted));
+            });
+        };
+        if app.vcs.patch_loading {
+            checking(ui);
+        }
+        if let Some(e) = &app.vcs.patch_error {
+            ui.label(egui::RichText::new(e).color(p.error).size(12.5));
+        }
+        let mut applied = false;
+        if let Some(patch) = &app.vcs.patch {
+            let from = match &patch.path {
+                Some(f) => trf("From {file}", &[("file", &f.display())]),
+                None => tr("From the clipboard").to_string(),
+            };
+            ui.label(egui::RichText::new(from).size(12.0).color(p.muted));
+            match &patch.preview {
+                None => checking(ui),
+                Some(Err(e)) => {
+                    ui.label(egui::RichText::new(e).color(p.error).size(12.5));
+                }
+                Some(Ok(pv)) => {
+                    let kind = match pv.kind {
+                        rc_vcs::PatchKind::Mail => trf("{n} commits (git am): each one becomes a commit on the current branch; the repository's hooks run.", &[("n", &pv.commits)]),
+                        rc_vcs::PatchKind::Diff => tr("Changes to the files of the work tree (git apply); nothing is committed.").to_string(),
+                    };
+                    ui.label(egui::RichText::new(kind).size(12.5));
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical().id_salt("patch_files").max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 2.0;
+                        for f in &pv.files {
+                            ui.horizontal(|ui| {
+                                let (status, color) = match f.status {
+                                    'A' => (tr("added"), p.ok),
+                                    'D' => (tr("deleted"), p.muted),
+                                    'R' => (tr("renamed"), p.accent),
+                                    _ => (tr("modified"), p.accent),
+                                };
+                                ui.label(egui::RichText::new(&f.path).size(12.5));
+                                ui.label(egui::RichText::new(status).size(11.5).color(color));
+                                let lines = match (f.added, f.removed) {
+                                    (Some(a), Some(r)) => format!("+{a} −{r}"),
+                                    _ => tr("binary").to_string(),
+                                };
+                                ui.label(egui::RichText::new(lines).font(FontId::monospace(11.5)).color(p.muted));
+                            });
+                        }
+                    });
+                    ui.add_space(4.0);
+                    match &pv.problem {
+                        None => {
+                            ui.label(egui::RichText::new(tr("The patch applies cleanly.")).size(12.5).color(p.ok));
+                        }
+                        Some(msg) => {
+                            ui.label(egui::RichText::new(tr("The patch does not apply as it is:")).size(12.5).color(p.error));
+                            egui::ScrollArea::vertical().id_salt("patch_problem").max_height(80.0).auto_shrink([false, true]).show(ui, |ui| {
+                                ui.label(egui::RichText::new(msg).font(FontId::monospace(11.5)).color(p.error));
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(r) = &patch.result {
+                applied = !r.error;
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(tr("Git output")).size(11.5).color(p.muted));
+                egui::ScrollArea::vertical().id_salt("patch_output").max_height(120.0).auto_shrink([false, true]).show(ui, |ui| {
+                    let text = if r.text.trim().is_empty() { tr("Patch applied") } else { r.text.as_str() };
+                    ui.label(egui::RichText::new(text).font(FontId::monospace(11.5)).color(if r.error { p.error } else { p.text }));
+                });
+            }
+        }
+        ui.add_space(6.0);
+        if ui.add_enabled(!busy, egui::Checkbox::new(&mut app.vcs.patch_three_way, tr("Fall back to a three-way merge (--3way)"))).changed() {
+            recheck = true;
+        }
+        let ready = !busy && !applied && app.vcs.patch.as_ref().is_some_and(|p| matches!(p.preview, Some(Ok(_))));
+        ui.add_space(14.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if !applied {
+                apply = ui.add_enabled_ui(ready, |ui| theme::primary_button(ui, tr("Apply"))).inner.clicked();
+            }
+            close = theme::secondary_button(ui, if applied { tr("Close") } else { tr("Cancel") }).clicked();
+            if app.vcs.busy == Some("patch_apply") {
+                ui.add(egui::Spinner::new().size(14.0));
+            }
+        });
+    });
+    if let Some(file) = load {
+        app.vcs.load_patch_file(file);
+    } else if recheck {
+        app.vcs.recheck_patch();
+    }
+    if apply {
+        app.vcs.apply_patch();
+    }
+    if close || esc {
+        app.vcs.close_patch();
+        return Outcome::Close;
+    }
+    Outcome::Keep
 }
 
 fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {

@@ -3025,6 +3025,9 @@ impl eframe::App for CrabCraftApp {
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
+        if let Some(text) = self.vcs.clipboard.take() {
+            ctx.copy_text(text);
+        }
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

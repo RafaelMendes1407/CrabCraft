@@ -5,9 +5,10 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 enum VcsEvent {
@@ -27,6 +28,34 @@ enum VcsEvent {
     StashFiles(String, Vec<rc_vcs::ChangedFile>),
     Remotes(Vec<String>),
     Output(OpOutput),
+    /// A created patch to put on the clipboard.
+    PatchClipboard(String),
+    /// A patch read for applying (generation, file, text and its preview, or why it failed).
+    PatchLoaded(u64, Option<PathBuf>, Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>),
+    /// A new preview of the loaded patch (generation, preview).
+    PatchPreview(u64, Result<PatchPreview, String>),
+    /// What applying the loaded patch printed (generation, output).
+    PatchApplied(u64, OpOutput),
+}
+
+/// What a new patch is made of.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PatchSource {
+    /// The local changes of these files (relative to the repository): a `git diff`.
+    Changes(Vec<String>),
+    /// These commits, newest first: mails from `git format-patch`.
+    Commits(Vec<String>),
+}
+
+/// A patch loaded to be applied, and what applying it would do.
+pub struct PendingPatch {
+    /// The file it was read from (`None`: the clipboard).
+    pub path: Option<PathBuf>,
+    pub text: Arc<Vec<u8>>,
+    /// The files it touches and whether it applies; `None` while git checks it.
+    pub preview: Option<Result<PatchPreview, String>>,
+    /// What git printed when it was applied.
+    pub result: Option<OpOutput>,
 }
 
 /// The views of the Git tool window.
@@ -86,6 +115,19 @@ pub struct Vcs {
     pub restore_index: bool,
     /// Output of the last tag push.
     pub output: Option<OpOutput>,
+    /// Commits of the log marked with Ctrl/Cmd- or Shift-click (for a patch of several).
+    pub marked_commits: BTreeSet<String>,
+    /// The patch of the Apply Patch dialog.
+    pub patch: Option<PendingPatch>,
+    /// Apply patches with a three-way merge fallback (`--3way`).
+    pub patch_three_way: bool,
+    /// A patch is being read and checked.
+    pub patch_loading: bool,
+    /// Why the last patch could not be loaded.
+    pub patch_error: Option<String>,
+    patch_gen: u64,
+    /// Text for the app to put on the clipboard.
+    pub clipboard: Option<String>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
     heads: HashMap<PathBuf, Option<String>>,
@@ -121,6 +163,13 @@ impl Vcs {
             stash_files: Vec::new(),
             restore_index: false,
             output: None,
+            marked_commits: BTreeSet::new(),
+            patch: None,
+            patch_three_way: false,
+            patch_loading: false,
+            patch_error: None,
+            patch_gen: 0,
+            clipboard: None,
             inbox: Inbox::new(waker.clone()),
             waker,
             heads: HashMap::new(),
@@ -368,6 +417,160 @@ impl Vcs {
         });
     }
 
+    // ------------------------------------------------------------------ patches
+
+    /// The commits a patch made from `clicked` covers: the marked ones when it is among them,
+    /// else just `clicked`; newest first, as in the log.
+    pub fn patch_commits(&self, clicked: &str) -> Vec<String> {
+        if self.marked_commits.len() > 1 && self.marked_commits.contains(clicked) {
+            self.log.iter().filter(|c| self.marked_commits.contains(&c.hash)).map(|c| c.hash.clone()).collect()
+        } else {
+            vec![clicked.to_string()]
+        }
+    }
+
+    /// Marks commits of the log before `hash` is selected: `toggle` (Ctrl/Cmd-click) adds or
+    /// removes one, `range` (Shift-click) marks every commit between the selected one and
+    /// `hash`, and a plain click clears the marks.
+    pub fn mark_commit(&mut self, hash: &str, toggle: bool, range: bool) {
+        if range && let Some(anchor) = self.selected_commit.clone() {
+            let at = |h: &str| self.log.iter().position(|c| c.hash == h);
+            if let (Some(a), Some(b)) = (at(&anchor), at(hash)) {
+                let (lo, hi) = (a.min(b), a.max(b));
+                self.marked_commits = self.log[lo..=hi].iter().map(|c| c.hash.clone()).collect();
+                return;
+            }
+        }
+        if toggle {
+            if self.marked_commits.is_empty()
+                && let Some(s) = &self.selected_commit
+            {
+                self.marked_commits.insert(s.clone());
+            }
+            if !self.marked_commits.remove(hash) {
+                self.marked_commits.insert(hash.to_string());
+            }
+        } else {
+            self.marked_commits.clear();
+        }
+    }
+
+    /// Creates a patch and saves it to `file`, or puts it on the clipboard (`None`).
+    pub fn create_patch(&mut self, source: PatchSource, file: Option<PathBuf>) {
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        let what = if file.is_some() { "patch_save" } else { "patch_copy" };
+        self.op(what, async move {
+            let patch = match &source {
+                PatchSource::Changes(paths) => repo.diff_patch(paths).await?,
+                PatchSource::Commits(commits) => repo.format_patch(commits).await?,
+            };
+            match file {
+                Some(path) => Runtime::handle().spawn_blocking(move || std::fs::write(path, patch)).await.map_err(std::io::Error::other)??,
+                None => {
+                    out.send(VcsEvent::PatchClipboard(String::from_utf8_lossy(&patch).into_owned()));
+                }
+            }
+            Ok(())
+        });
+    }
+
+    /// Reads a patch file in the background and checks what applying it would do.
+    pub fn load_patch_file(&mut self, path: PathBuf) {
+        let Some(repo) = self.repo.clone() else { return };
+        let generation = self.start_patch_load();
+        let three_way = self.patch_three_way;
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let file = path.clone();
+            let text = match Runtime::handle().spawn_blocking(move || read_patch_file(&file)).await {
+                Ok(Ok(t)) => Arc::new(t),
+                Ok(Err(e)) => {
+                    out.send(VcsEvent::PatchLoaded(generation, Some(path), Err(detailed_error(&e))));
+                    return;
+                }
+                Err(e) => {
+                    out.send(VcsEvent::PatchLoaded(generation, Some(path), Err(e.to_string())));
+                    return;
+                }
+            };
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchLoaded(generation, Some(path), Ok((text, preview))));
+        });
+    }
+
+    /// Takes a patch pasted from the clipboard and checks what applying it would do.
+    pub fn load_patch_text(&mut self, text: String) {
+        let Some(repo) = self.repo.clone() else { return };
+        let generation = self.start_patch_load();
+        if let Err(e) = rc_vcs::check_patch_size(text.len() as u64) {
+            self.patch_loading = false;
+            self.patch_error = Some(user_error(&e));
+            return;
+        }
+        let three_way = self.patch_three_way;
+        let out = self.inbox.sender();
+        let text = Arc::new(text.into_bytes());
+        Runtime::spawn(async move {
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchLoaded(generation, None, Ok((text, preview))));
+        });
+    }
+
+    fn start_patch_load(&mut self) -> u64 {
+        self.patch_gen += 1;
+        self.patch = None;
+        self.patch_loading = true;
+        self.patch_error = None;
+        self.patch_gen
+    }
+
+    /// Checks the loaded patch again (after the three-way option changed).
+    pub fn recheck_patch(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let Some(p) = &mut self.patch else { return };
+        p.preview = None;
+        p.result = None;
+        let (text, three_way, generation) = (p.text.clone(), self.patch_three_way, self.patch_gen);
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchPreview(generation, preview));
+        });
+    }
+
+    /// Applies the loaded patch (`git apply`, or `git am` for mails); what git printed goes to
+    /// the patch's `result`.
+    pub fn apply_patch(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let Some(p) = &mut self.patch else { return };
+        p.result = None;
+        let (text, three_way, generation) = (p.text.clone(), self.patch_three_way, self.patch_gen);
+        self.busy = Some("patch_apply");
+        self.error = None;
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            match repo.apply_patch(&text, three_way).await {
+                Ok(text) => {
+                    out.send(VcsEvent::PatchApplied(generation, OpOutput { text, error: false }));
+                    out.send(VcsEvent::Done("patch_apply", None));
+                }
+                Err(e) => {
+                    out.send(VcsEvent::PatchApplied(generation, OpOutput { text: detailed_error(&e), error: true }));
+                    out.send(VcsEvent::Done("patch_apply", Some(user_error(&e))));
+                }
+            }
+        });
+    }
+
+    /// Forgets the patch of the Apply Patch dialog.
+    pub fn close_patch(&mut self) {
+        self.patch_gen += 1;
+        self.patch = None;
+        self.patch_loading = false;
+        self.patch_error = None;
+    }
+
     /// The changes that go into the next commit, relative to the repository.
     pub fn included(&self) -> Vec<String> {
         self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect()
@@ -600,6 +803,25 @@ impl Vcs {
                 }
                 VcsEvent::Remotes(r) => self.remotes = r,
                 VcsEvent::Output(o) => self.output = Some(o),
+                VcsEvent::PatchClipboard(text) => self.clipboard = Some(text),
+                VcsEvent::PatchLoaded(generation, path, loaded) if generation == self.patch_gen => {
+                    self.patch_loading = false;
+                    match loaded {
+                        Ok((text, preview)) => self.patch = Some(PendingPatch { path, text, preview: Some(preview), result: None }),
+                        Err(e) => self.patch_error = Some(e),
+                    }
+                }
+                VcsEvent::PatchPreview(generation, preview) if generation == self.patch_gen => {
+                    if let Some(p) = &mut self.patch {
+                        p.preview = Some(preview);
+                    }
+                }
+                VcsEvent::PatchApplied(generation, output) if generation == self.patch_gen => {
+                    if let Some(p) = &mut self.patch {
+                        p.result = Some(output);
+                    }
+                }
+                VcsEvent::PatchLoaded(..) | VcsEvent::PatchPreview(..) | VcsEvent::PatchApplied(..) => {}
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
@@ -719,6 +941,26 @@ fn user_error(e: &rc_vcs::GitError) -> String {
     trf(tpl, &args)
 }
 
+/// The summary of a git failure followed by git's own message, if any.
+fn detailed_error(e: &rc_vcs::GitError) -> String {
+    let summary = user_error(e);
+    match e.details().filter(|d| !d.trim().is_empty()) {
+        Some(d) => format!("{summary}\n{}", d.trim()),
+        None => summary,
+    }
+}
+
+/// Reads a patch file, refusing files larger than [`rc_vcs::MAX_PATCH_BYTES`].
+fn read_patch_file(path: &Path) -> Result<Vec<u8>, rc_vcs::GitError> {
+    use std::io::Read;
+    let file = std::fs::File::open(path)?;
+    rc_vcs::check_patch_size(file.metadata()?.len())?;
+    let mut text = Vec::new();
+    file.take(rc_vcs::MAX_PATCH_BYTES as u64 + 1).read_to_end(&mut text)?;
+    rc_vcs::check_patch_size(text.len() as u64)?;
+    Ok(text)
+}
+
 /// What to tell the user when an operation of the Git window succeeds.
 fn done_notice(what: &str) -> Option<&'static str> {
     Some(match what {
@@ -730,6 +972,9 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "stash_apply" => tr("Stash applied"),
         "stash_pop" => tr("Stash applied and dropped"),
         "stash_drop" => tr("Stash dropped"),
+        "patch_save" => tr("Patch saved"),
+        "patch_copy" => tr("Patch copied to the clipboard"),
+        "patch_apply" => tr("Patch applied"),
         _ => return None,
     })
 }

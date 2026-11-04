@@ -20,3 +20,5 @@ Another Git process is running in this repository	Otro proceso de Git se está e
 Network error	Error de red	Erreur réseau	Erro de rede	Netzwerkfehler	Błąd sieci	网络错误	ネットワークエラー
 Cancelled	Cancelado	Annulé	Cancelado	Abgebrochen	Anulowano	已取消	キャンセルしました
 Git command failed	El comando de Git falló	La commande Git a échoué	O comando do Git falhou	Git-Befehl fehlgeschlagen	Polecenie Git nie powiodło się	Git 命令失败	Git コマンドが失敗しました
+The patch is larger than {size} MB	El parche ocupa más de {size} MB	Le correctif dépasse {size} Mo	O patch tem mais de {size} MB	Der Patch ist größer als {size} MB	Poprawka jest większa niż {size} MB	补丁大于 {size} MB	パッチが {size} MB を超えています
+Finish or abort the operation in progress first	Termina o cancela primero la operación en curso	Terminez ou annulez d’abord l’opération en cours	Conclua ou cancele primeiro a operação em andamento	Schließen Sie zuerst den laufenden Vorgang ab oder brechen Sie ihn ab	Najpierw zakończ lub przerwij trwającą operację	请先完成或中止正在进行的操作	先に進行中の操作を完了するか中止してください
