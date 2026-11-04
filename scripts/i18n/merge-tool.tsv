@@ -1,0 +1,26 @@
+# The three-pane merge tool for conflicted files (V-08). Import: python3 scripts/i18n_tsv.py mergetool scripts/i18n/merge-tool.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Resolve the file's changes side by side	Resolver los cambios del archivo lado a lado	Résoudre les modifications du fichier côte à côte	Resolver as alterações do arquivo lado a lado	Die Änderungen der Datei nebeneinander lösen	Rozwiąż zmiany pliku obok siebie	并排解决文件的更改	ファイルの変更を並べて解決
+Select one file	Selecciona un archivo	Sélectionnez un fichier	Selecione um arquivo	Wählen Sie eine Datei	Wybierz jeden plik	选择一个文件	ファイルを 1 つ選択してください
+Accept Both	Aceptar ambos	Accepter les deux	Aceitar ambos	Beide übernehmen	Akceptuj oba	接受两者	両方を採用
+Accept Left	Aceptar izquierda	Accepter la gauche	Aceitar esquerda	Links übernehmen	Akceptuj lewą	接受左侧	左を採用
+Accept Right	Aceptar derecha	Accepter la droite	Aceitar direita	Rechts übernehmen	Akceptuj prawą	接受右侧	右を採用
+All changes resolved	Todos los cambios resueltos	Toutes les modifications sont résolues	Todas as alterações resolvidas	Alle Änderungen gelöst	Wszystkie zmiany rozwiązane	所有更改均已解决	すべての変更を解決しました
+All from Left	Todo de la izquierda	Tout depuis la gauche	Tudo da esquerda	Alles von links	Wszystko z lewej	全部取左侧	すべて左から
+All from Right	Todo de la derecha	Tout depuis la droite	Tudo da direita	Alles von rechts	Wszystko z prawej	全部取右侧	すべて右から
+Apply Non-Conflicting Changes	Aplicar cambios sin conflicto	Appliquer les modifications sans conflit	Aplicar alterações sem conflito	Konfliktfreie Änderungen übernehmen	Zastosuj zmiany bez konfliktów	应用无冲突的更改	競合しない変更を適用
+Keep Base	Mantener la base	Garder la base	Manter a base	Basis behalten	Zachowaj bazę	保留基础版本	ベースを維持
+Left, then right	Izquierda y luego derecha	La gauche, puis la droite	Esquerda, depois direita	Links, dann rechts	Lewa, potem prawa	先左后右	左、次に右
+Merge {file}	Fusionar {file}	Fusionner {file}	Mesclar {file}	{file} zusammenführen	Scal {file}	合并 {file}	{file} をマージ
+Neither change: the text both sides started from	Ningún cambio: el texto del que partieron ambos lados	Aucune des modifications : le texte de départ des deux côtés	Nenhuma alteração: o texto do qual os dois lados partiram	Keine der Änderungen: der Text, von dem beide Seiten ausgingen	Żadna zmiana: tekst, od którego wyszły obie strony	都不采用：双方共同的起始文本	どちらの変更も採用しない（両側の元のテキスト）
+Next Change	Siguiente cambio	Modification suivante	Próxima alteração	Nächste Änderung	Następna zmiana	下一处更改	次の変更
+Previous Change	Cambio anterior	Modification précédente	Alteração anterior	Vorherige Änderung	Poprzednia zmiana	上一处更改	前の変更
+Result	Resultado	Résultat	Resultado	Ergebnis	Wynik	结果	結果
+Save Anyway	Guardar de todos modos	Enregistrer quand même	Salvar mesmo assim	Trotzdem speichern	Zapisz mimo to	仍然保存	このまま保存
+Save and Mark Resolved	Guardar y marcar como resuelto	Enregistrer et marquer comme résolu	Salvar e marcar como resolvido	Speichern und als gelöst markieren	Zapisz i oznacz jako rozwiązane	保存并标记为已解决	保存して解決済みにする
+{n} changes are not resolved.	{n} cambios no están resueltos.	{n} modifications ne sont pas résolues.	{n} alterações não estão resolvidas.	{n} Änderungen sind nicht gelöst.	{n} zmian nie jest rozwiązanych.	{n} 处更改尚未解决。	{n} 件の変更が未解決です。
+{n} changes not taken	{n} cambios sin aplicar	{n} modifications non reprises	{n} alterações não aplicadas	{n} Änderungen nicht übernommen	{n} zmian nie przyjęto	{n} 处更改未采用	{n} 件の変更が未採用
+{n} conflicts left	Quedan {n} conflictos	{n} conflits restants	{n} conflitos restantes	{n} Konflikte übrig	Pozostało konfliktów: {n}	剩余 {n} 个冲突	残りの競合 {n} 件
+Binary files cannot be merged here; accept one side instead	Los archivos binarios no se pueden fusionar aquí; acepta uno de los lados	Les fichiers binaires ne peuvent pas être fusionnés ici ; acceptez plutôt un côté	Arquivos binários não podem ser mesclados aqui; aceite um dos lados	Binärdateien können hier nicht zusammengeführt werden; übernehmen Sie stattdessen eine Seite	Plików binarnych nie można tu scalić; zaakceptuj jedną stronę	此处无法合并二进制文件；请改为接受其中一方	バイナリファイルはここではマージできません。どちらか一方を採用してください
+One side deleted the file; accept one side instead	Uno de los lados eliminó el archivo; acepta uno de los lados	Un côté a supprimé le fichier ; acceptez plutôt un côté	Um dos lados excluiu o arquivo; aceite um dos lados	Eine Seite hat die Datei gelöscht; übernehmen Sie stattdessen eine Seite	Jedna ze stron usunęła plik; zaakceptuj jedną stronę	一方删除了该文件；请改为接受其中一方	一方がファイルを削除しました。どちらか一方を採用してください
+{file} resolved	{file} resuelto	{file} résolu	{file} resolvido	{file} gelöst	Rozwiązano {file}	{file} 已解决	{file} を解決しました

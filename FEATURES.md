@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 162 |
+| ✅ Pronto | 168 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 61 |
+| ⬜ A fazer | 55 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -134,7 +134,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-15 | Quick fixes e intention actions (Alt+Enter) | ✅ | M1 | Import pelo Alt+Enter testado com rust-analyzer real |
 | I-16 | Aplicar correção sugerida pelo compilador | ✅ | M3 | Correção do rustc aparece no Alt+Enter; "remove this `mut`" aplicada em teste real |
 | I-17 | Inspeções em todo o projeto | ✅ | M3 | Inspecionar código (Find Action, menu nativo ou a aba Inspeção da janela Problems) roda `cargo clippy --workspace --all-targets` em segundo plano, cancelável pela janela Build; os achados, também de arquivos nunca abertos, ficam na aba Inspeção agrupados por lint, com clique para abrir na linha. Testado com Clippy real num workspace de dois crates; captura conferida |
-| I-18 | Perfis e severidade de inspeções | ⬜ | M4 | |
+| I-18 | Perfis e severidade de inspeções | ✅ | M4 | Configurações › Inspeções: perfil Padrão (nas configurações, vale para todo projeto) e perfil do Projeto (salvo com o projeto, escolhido no lugar do Padrão, com Copiar do Padrão). Cada inspeção pode ser desligada ou ganhar nível Erro, Aviso, Aviso fraco (sublinhado fino) ou Informação (sem destaque, correções no Alt+Enter). Cobre as inspeções próprias do `Cargo.toml` e do crates.io e os diagnósticos do rust-analyzer, rustc e Clippy pelo código (com `clippy::*` para o grupo e códigos digitados pelo usuário); a aba Inspeção (Clippy) também segue o perfil. A mudança vale na hora para sublinhado, marcas da barra de rolagem e janela Problemas. Perfis lidos dos arquivos são limpos (ids e níveis inválidos descartados, tamanho limitado). Testado com rust-analyzer e `cargo check` reais (`unused_variables` como erro, desligado e aviso fraco) e com a inspeção de chave desconhecida do `Cargo.toml`; captura conferida. Aviso fraco e informação não aparecem na janela Problemas nem na barra de rolagem; não há importar/exportar perfis nem mais de um perfil nomeado |
 | I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
@@ -149,7 +149,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-30 | Formatador embutido para trechos | ✅ | M3 | Reformatar código com seleção num arquivo Rust: o rustfmt (com as configurações do usuário) formata o arquivo em segundo plano e só os blocos de mudança que tocam as linhas selecionadas são aplicados (um bloco que cruza a borda vai inteiro). Testado com rustfmt real: só a função selecionada mudou |
 | I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
-| I-33 | Pré-visualizar intention antes de aplicar | ⬜ | M4 | |
+| I-33 | Pré-visualizar intention antes de aplicar | ✅ | M4 | No Alt+Enter (e nos popups Gerar e Refatorar), a ação destacada mostra ao lado o diff das linhas que muda, arquivo por arquivo quando a edição toca vários (arquivos fechados lidos numa thread). Ações do rust-analyzer sem edição são resolvidas com `codeAction/resolve` em segundo plano; mudar a seleção cancela o pedido e descarta o diff em andamento, e a ação resolvida é aplicada sem novo pedido. As correções próprias (versão e inspeções do `Cargo.toml`, ligar feature, `#[allow]`) também têm diff. Testado com rust-analyzer real (import do `HashMap`) e com a correção de versão do `Cargo.toml`; captura conferida. Operações de arquivo (criar/renomear/apagar) aparecem só como nota; ações que abrem diálogo ou só rodam comando do servidor dizem que não há texto para mostrar |
 
 ## 4. Navegação e busca
 
@@ -292,7 +292,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| A-01 | Profiler | ⬜ | M4 | `perf` + flamegraph. Citado no site; sem seção própria no índice da ajuda |
+| A-01 | Profiler | ✅ | M4 | Ação Profile (Find Action, menu Run e janela Profiler) compila a configuração de execução Rust selecionada e grava com `perf record` (`cpu-clock:u`, pilhas por DWARF) em segundo plano; Stop and Analyze encerra a gravação e mantém as amostras, Cancel mata o `perf` e o programa (grupo de processos). `perf script` é lido em segundo plano, com limites de amostras, profundidade e nós, e vira flame graph (clique amplia, duplo clique abre o código) e árvore de chamadas com total e self; funções do binário são ligadas ao código-fonte por `nm -l`. Com `kernel.perf_event_paranoid` acima de 2 a janela explica o bloqueio e como liberar. Testado com o `perf` real (paranoid = 1): gravação de um binário Rust real e de um projeto Cargo pela ação Profile, com `fib` amostrado e ligado a `src/main.rs`; com paranoid = 4, recusa com a mensagem; cancelamento e o leitor da saída do `perf script`; capturas conferidas. Ainda não há: perfis de alocação/memória, comparar perfis, inline frames e informações de linha em builds release sem debug |
 | A-02 | Console REPL | ⬜ | M4 | `evcxr_repl` em `rc-term` |
 | A-03 | REPL: painel de variáveis | ⬜ | M4 | |
 | A-04 | REPL: comando `:dep` | ⬜ | M4 | |
@@ -307,8 +307,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-04 | Marcas na margem e blame | 🟢 | M1 | |
 | V-05 | Fetch, pull e push | 🟢 | M1 | Confirmar a cobertura |
 | V-06 | Log e histórico de arquivo | ✅ | M5 | Log com filtros de texto da mensagem (literal), autor e branch (ou todos), "Carregar mais" depois de 500 commits e mensagem quando nada corresponde. Mostrar histórico do Git (aba do editor e Explorer, também para pastas) abre o Log só daquele caminho, seguindo renomeações. Testado num repositório real; captura conferida. |
-| V-07 | Merge, rebase e cherry-pick | ⬜ | M5 | |
-| V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
+| V-07 | Merge, rebase e cherry-pick | ✅ | M5 | Merge… e Rebase… na janela Git, no popup de branches e no menu de contexto do Log (com o branch ou commit escolhido); merge com fast-forward, `--no-ff`, `--ff-only`, `--squash` e `--no-commit`; rebase com `--autostash` e aviso de reescrita; Cherry-Pick de um ou vários commits marcados no Log (commits de merge recusados). Tudo em segundo plano, com o progresso do git, Cancelar (mata o git) e a saída mostrada. Faixa da operação em andamento (merge, rebase com passo n de m, cherry-pick, revert) nas janelas Git e Commit, com os arquivos em conflito, Resolver conflitos… (aceitar um lado por arquivo, abrir, marcar como resolvido recusando marcadores restantes), Continuar, Pular commit e Abortar com confirmação. Erros tipados (alterações locais, commit vazio, sem fast-forward, históricos sem relação, operação já em andamento). Testado com repositórios git reais; capturas conferidas. Fora: cherry-pick de merge (`-m`), rebase interativo (V-15) e `rebase --onto` com três argumentos |
+| V-08 | Resolução de conflitos em 3 painéis | ✅ | M5 | Merge… (diálogo Conflitos, menu de contexto ou duplo clique de arquivo em conflito na janela Commit) abre a ferramenta na área do editor: seus (estágio 2) \| resultado editável \| deles (estágio 3), com nomes certos para merge, rebase e cherry-pick. Mudanças de um lado só já vêm aplicadas; conflitos em vermelho, aplicados em verde. Setas » e « entre os painéis e barra para a mudança atual (aceitar esquerda, direita, ambos ou manter a base; anterior/próxima), aplicar as sem conflito e tudo de um lado para o arquivo. Edição livre do resultado (desfazer/refazer devolvem o estado das mudanças), rolagem sincronizada e "Salvar e marcar como resolvido" (`git add`), com confirmação se faltar algo; CRLF preservado. Arquivo binário ou apagado de um lado: recusado, com aceitar um lado (que agora remove o arquivo quando o lado o apagou). Testado com repositórios git reais (inclui teste de propriedade do merge de 3 vias); capturas conferidas. Fora: painel da base visível, destaque por caractere e curvas ligando os painéis |
 | V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |
 | V-10 | Changelists | ⬜ | M5 | |
 | V-11 | Worktrees | ✅ | M5 | Aba Worktrees na janela Git: lista (atual, branch ou HEAD destacado, bloqueado, podável), adicionar com branch nova, existente ou HEAD destacado (pasta sugerida ao lado do repositório), abrir nesta janela ou em outra, bloquear com motivo/desbloquear, remover (com mudanças locais pede confirmação para forçar; o branch fica) e podar mostrando a saída do Git. Testado com repositórios reais; capturas conferidas. |
@@ -326,7 +326,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | F-01 | Terminal | 🟢 | M1 | |
 | F-02 | Depurar processo a partir do terminal | ⬜ | M6 | |
-| F-03 | HTTP Client (arquivos `.http`) | ⬜ | M5 | |
+| F-03 | HTTP Client (arquivos `.http`) | ✅ | M5 | Arquivos `.http` e `.rest` com realce; requisições separadas por `###` (método, URL com linhas `?`/`&` de continuação, cabeçalhos, corpo, nome por `### nome` ou `# @name`); ícone de execução na margem de cada requisição envia em segundo plano (cancelável, tempo limite de 60 s, corpo limitado a 8 MB). Janela HTTP Client: histórico da sessão, status, tempos, tamanho, cabeçalhos e corpo (JSON reindentado sem reordenar), link de volta à requisição; funciona também com arquivo avulso. Variáveis `{{…}}`, `@var =`, `< arquivo`, scripts `> {% %}`, `>> arquivo` e diretivas `# @…` aparecem como avisos no editor e na resposta (variáveis e `< arquivo` impedem o envio). Testado contra servidor HTTP local; capturas conferidas. Fora: tudo de F-04, WebSocket/gRPC/GraphQL, cookies entre requisições, abrir a resposta no editor |
 | F-04 | HTTP Client: variáveis, OAuth 2.0, scripts | ⬜ | M5 | |
 | F-05 | HTTP Client CLI | ⬜ | M6 | |
 | F-06 | Axum: completar URLs e hints de rotas (2026.2) | ⬜ | M5 | |

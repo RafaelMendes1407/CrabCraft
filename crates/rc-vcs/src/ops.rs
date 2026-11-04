@@ -210,9 +210,31 @@ impl Repository {
 
     /// Resolves conflicts by taking one side for whole files (`checkout --ours/--theirs`),
     /// then marks them resolved.
+    /// A side that deleted a file resolves it by removing it.
     pub async fn resolve_with(&self, paths: &[String], theirs: bool) -> Result<()> {
-        self.cmd().arg("checkout").arg(if theirs { "--theirs" } else { "--ours" }).arg("--").args(paths).output().await?;
-        self.mark_resolved(paths).await
+        if paths.is_empty() {
+            return Ok(());
+        }
+        // The stages each path has in the index (`<mode> <hash> <stage>\t<path>`).
+        let want = if theirs { b'3' } else { b'2' };
+        let out = self.cmd().args(["ls-files", "-u", "-z", "--"]).args(paths).output().await?;
+        let has_side: std::collections::HashSet<String> = out
+            .stdout
+            .split(|b| *b == 0)
+            .filter_map(|rec| {
+                let tab = rec.iter().position(|b| *b == b'\t')?;
+                (tab >= 2 && rec[tab - 1] == want && rec[tab - 2] == b' ').then(|| String::from_utf8_lossy(&rec[tab + 1..]).into_owned())
+            })
+            .collect();
+        let (keep, remove): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(|p| has_side.contains(p));
+        if !keep.is_empty() {
+            self.cmd().arg("checkout").arg(if theirs { "--theirs" } else { "--ours" }).arg("--").args(&keep).output().await?;
+            self.mark_resolved(&keep).await?;
+        }
+        if !remove.is_empty() {
+            self.cmd().args(["rm", "-q", "--ignore-unmatch", "--"]).args(&remove).output().await?;
+        }
+        Ok(())
     }
 
     /// Marks conflicted paths as resolved with their current work tree content.

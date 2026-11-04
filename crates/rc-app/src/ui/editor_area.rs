@@ -54,6 +54,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         crate::ui::git::diff_view(app, ui);
         return;
     }
+    if app.vcs.merge_tool.is_some() {
+        crate::ui::git::merge_view(app, ui);
+        return;
+    }
     app.sync_layout();
     let focus = std::mem::take(&mut app.focus_editor);
     app.editor_frame = Some((focus, editor_actions));
@@ -439,6 +443,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let mut explain = None;
     let mut feature_line = None;
     let mut docs_rs_line = None;
+    let mut http_line = None;
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
@@ -474,6 +479,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunApp } => run_binary_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::FeatureOn | rc_editor::GutterIcon::FeatureOff } => feature_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::DocsRs } => docs_rs_line = Some(line),
+            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::HttpRequest } => http_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
             _ => {}
         }
@@ -559,6 +565,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     if let Some(line) = docs_rs_line {
         app.open_docs_rs_at(line);
+    }
+    if let Some(line) = http_line {
+        app.send_http_at(line);
     }
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);

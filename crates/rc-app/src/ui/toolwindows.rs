@@ -33,6 +33,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
+        ToolWindow::Http => crate::ui::http_window::show(app, ui),
+        ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -197,7 +199,9 @@ fn inspection(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let mut groups: std::collections::BTreeMap<String, Vec<&rc_dotnet::Diagnostic>> = Default::default();
-    for d in &insp.diagnostics {
+    // The inspection profile (I-18) leaves out the lints turned off.
+    let profile = &app.insight.profile;
+    for d in insp.diagnostics.iter().filter(|d| profile.level(&d.code) != Some(rc_core::inspections::Level::Off)) {
         let key = if d.code.is_empty() { tr("Other").to_string() } else { d.code.clone() };
         groups.entry(key).or_default().push(d);
     }
@@ -205,8 +209,12 @@ fn inspection(app: &mut CrabCraftApp, ui: &mut Ui) {
     egui::ScrollArea::vertical().id_salt("inspection").auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for (code, list) in &groups {
-            let errors = list.iter().any(|d| d.severity == rc_dotnet::Severity::Error);
-            let icon = if errors { rc_kit::ico::ERROR } else { rc_kit::ico::WARNING };
+            let own = if list.iter().any(|d| d.severity == rc_dotnet::Severity::Error) { rc_editor::Severity::Error } else { rc_editor::Severity::Warning };
+            let icon = match crate::inspection_profile::severity(profile, Some(code), own) {
+                Some(rc_editor::Severity::Error) => rc_kit::ico::ERROR,
+                Some(rc_editor::Severity::Warning) | None => rc_kit::ico::WARNING,
+                Some(_) => rc_kit::ico::INFO,
+            };
             list_row(ui, 0, icon, code, &rc_kit::i18n::trf("{n} problems", &[("n", &list.len())]), false);
             for d in list {
                 let file = d.file.as_ref().map(|f| root.as_ref().and_then(|r| f.strip_prefix(r).ok()).unwrap_or(f).display().to_string()).unwrap_or_default();
@@ -507,6 +515,8 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Cargo => ("Cargo", ""),
+        ToolWindow::Profiler => (tr("No profile yet"), tr("Choose the run configuration of a Rust binary and click Profile. Uses perf on Linux.")),
+        ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
     }

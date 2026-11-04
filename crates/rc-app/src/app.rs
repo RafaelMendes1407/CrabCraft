@@ -83,7 +83,7 @@ pub struct CrabCraftApp {
     rustc_cfg_load: Option<Inbox<Option<String>>>,
     /// Bumped when the Cargo model or the rustc cfg change; each document remembers the epoch
     /// its `cfg` set was given for.
-    cfg_epoch: u64,
+    pub(crate) cfg_epoch: u64,
     cfg_given: std::collections::HashMap<u64, u64>,
     /// Cargo features the user turned on, as `package/feature` (saved with the session).
     pub cargo_features: Vec<String>,
@@ -102,6 +102,10 @@ pub struct CrabCraftApp {
     pub dep_versions: crate::dep_versions::DepVersions,
     /// Offline inspections of the open `Cargo.toml` (I-22).
     pub manifest_inspections: crate::manifest_inspect::ManifestInspections,
+    /// The diff of the highlighted Alt+Enter action (I-33).
+    pub intention_preview: crate::intention_preview::IntentionPreview,
+    /// The project's inspection profile and which profile it uses (I-18).
+    pub inspections: crate::inspection_profile::Profiles,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
@@ -112,6 +116,12 @@ pub struct CrabCraftApp {
     pub opened_url: Option<String>,
     /// Share in Playground uploads (N-18).
     pub playground: crate::playground::Playground,
+    /// Requests sent from `.http` files and their responses (F-03).
+    pub http: crate::http_client::HttpClient,
+    /// perf recordings of run configurations (A-01).
+    pub profiler: crate::profiler::Profiler,
+    /// The text version each `.http` editor got its run icons and diagnostics for.
+    http_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -271,6 +281,7 @@ impl CrabCraftApp {
                 let mut insight = Insight::new(waker.clone());
                 insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
                 insight.imports_on_paste = settings.imports_on_paste;
+                insight.profile = settings.inspection_profile.clean();
                 insight
             },
             runner: {
@@ -316,11 +327,16 @@ impl CrabCraftApp {
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             manifest_inspections: crate::manifest_inspect::ManifestInspections::new(waker.clone()),
+            intention_preview: crate::intention_preview::IntentionPreview::new(waker.clone()),
+            inspections: Default::default(),
             feature_search: Default::default(),
             copyright: Default::default(),
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
             opened_url: None,
             playground: crate::playground::Playground::new(waker.clone()),
+            http: crate::http_client::HttpClient::new(waker.clone()),
+            profiler: crate::profiler::Profiler::new(waker.clone()),
+            http_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -425,6 +441,8 @@ impl CrabCraftApp {
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
         self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
         self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
+        self.inspections = crate::inspection_profile::Profiles { project: session.inspection_profile.clean(), use_project: session.use_project_profile, ..Default::default() };
+        self.refresh_inspection_profile();
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -838,13 +856,56 @@ impl CrabCraftApp {
     /// The quick fix of an outdated dependency: writes `version` as the requirement of the
     /// dependency declared on `line` of the active `Cargo.toml`, in its editor (undoable).
     pub fn update_dependency(&mut self, line: usize, version: &str) {
-        let Ok(version) = semver::Version::parse(version) else { return };
         let Some(doc) = self.docs.active_doc_mut() else { return };
         let text = doc.editor.buffer.rope().to_string();
-        let Some(dep) = rc_cargo::dependency_lines(&text).into_iter().find(|d| d.line == line) else { return };
-        let Some((start, end)) = rc_cargo::versions::dep_spans(&text, &dep).req else { return };
-        let req = rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version);
-        doc.editor.replace(start, end, &req);
+        if let Some((start, end, req)) = dependency_update_edit(&text, line, version) {
+            doc.editor.replace(start, end, &req);
+        }
+    }
+
+    /// Run icons on the requests of the active `.http` file, and its parts that are not
+    /// supported yet as warnings.
+    pub(crate) fn update_http_file(&mut self) {
+        use rc_editor::{Diagnostic, GutterIcon, Severity};
+        let Some(i) = self.docs.active else { return };
+        let doc = &mut self.docs.list[i];
+        if doc.editor.lang() != rc_syntax::Lang::Http {
+            return;
+        }
+        let version = doc.editor.buffer.version();
+        if self.http_given.get(&doc.editor.id) == Some(&version) {
+            return;
+        }
+        self.http_given.insert(doc.editor.id, version);
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.gutter_icons.retain(|_, icon| *icon != GutterIcon::HttpRequest);
+        for req in rc_syntax::http::parse_requests(&text) {
+            doc.editor.gutter_icons.insert(req.line, GutterIcon::HttpRequest);
+        }
+        let diags = rc_syntax::http::unsupported_in(&text)
+            .into_iter()
+            .map(|u| Diagnostic {
+                start: u.start,
+                end: u.end.max(u.start + 1),
+                severity: if u.kind.blocks_sending() { Severity::Warning } else { Severity::Info },
+                message: crate::http_client::unsupported_text(&u.kind),
+                code: Some("http".to_string()),
+                unnecessary: false,
+                deprecated: false,
+            })
+            .collect();
+        doc.editor.set_diagnostics(diags);
+    }
+
+    /// Click on the run icon of a request in an `.http` file: sends it and shows the HTTP
+    /// Client window.
+    pub fn send_http_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let text = doc.editor.buffer.rope().to_string();
+        let path = doc.path.clone();
+        let Some(req) = rc_syntax::http::parse_requests(&text).into_iter().find(|r| r.line == line) else { return };
+        self.http.start(&req, path);
+        self.dock.show(crate::toolwindow::ToolWindow::Http);
     }
 
     /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
@@ -1262,6 +1323,8 @@ impl CrabCraftApp {
         self.nav_forward.clear();
         self.copyright.close();
         self.explorer.scopes.close();
+        self.inspections = Default::default();
+        self.refresh_inspection_profile();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1421,6 +1484,8 @@ impl CrabCraftApp {
             copyright: self.copyright.profile.clone(),
             scopes: self.explorer.scopes.user.clone(),
             file_colors: self.explorer.scopes.colors.clone(),
+            inspection_profile: self.inspections.project.clone(),
+            use_project_profile: self.inspections.use_project,
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1686,6 +1751,27 @@ impl CrabCraftApp {
     }
 
     /// Settings › Copyright: the profile of the project, saved with its session.
+    /// Puts the inspection profile in force (the project's or the Default one) everywhere
+    /// findings are shown (I-18).
+    pub fn refresh_inspection_profile(&mut self) {
+        let profile = self.inspections.effective(&self.settings.inspection_profile).clone();
+        self.insight.set_profile(&mut self.docs, profile);
+    }
+
+    /// Settings › Inspections, OK: whether the project uses its own profile, and that profile.
+    pub fn set_project_inspections(&mut self, use_project: bool, profile: rc_core::inspections::InspectionProfile) {
+        if self.workspace.is_none() {
+            return;
+        }
+        let profile = profile.clean();
+        if self.inspections.use_project != use_project || self.inspections.project != profile {
+            self.inspections.use_project = use_project;
+            self.inspections.project = profile;
+            self.session_dirty = true;
+        }
+        self.refresh_inspection_profile();
+    }
+
     pub fn set_copyright_profile(&mut self, profile: rc_core::session::CopyrightProfile) {
         if self.copyright.profile != profile {
             self.copyright.profile = profile;
@@ -2012,6 +2098,7 @@ impl CrabCraftApp {
                 }
             }
             Action::Debug => self.start_debugging(),
+            Action::Profile => self.start_profiling(),
             Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut => {
                 if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
                     match action {
@@ -2442,6 +2529,22 @@ impl CrabCraftApp {
         }
     }
 
+    /// Profile (A-01): builds the selected Rust binary and records it with perf.
+    pub fn start_profiling(&mut self) {
+        self.dock.show(ToolWindow::Profiler);
+        let config = self.runner.selected_config().cloned();
+        let Some(config) = config.filter(|c| matches!(c.kind, crate::runner::ConfigKind::Cargo { .. })) else {
+            self.notify(tr("Choose the run configuration of a Rust binary to profile it"), false);
+            return;
+        };
+        self.save_all_docs();
+        match self.runner.cargo_debug_target(&config) {
+            Some(Ok((cargo, target))) => self.profiler.start(config.name.clone(), &cargo, target),
+            Some(Err(e)) => self.notify(e, true),
+            None => {}
+        }
+    }
+
     /// Integers in hexadecimal or decimal in the debugger, kept in the settings.
     pub fn toggle_hex_values(&mut self) {
         let hex = !self.debugger.hex;
@@ -2734,6 +2837,8 @@ impl CrabCraftApp {
         self.runner.external_tools = self.settings.external_tools.clone();
         self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
         self.insight.imports_on_paste = self.settings.imports_on_paste;
+        self.settings.inspection_profile = self.settings.inspection_profile.clean();
+        self.refresh_inspection_profile();
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = build_keymap(&self.settings);
@@ -3134,15 +3239,18 @@ impl eframe::App for CrabCraftApp {
         self.update_feature_icons();
         let online = self.settings.check_crates_io;
         let waits = [
-            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online),
+            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online, &self.insight.profile),
             crate::manifest_completion::CrateNames::update(&mut self.docs, &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online }),
         ];
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
-        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch);
+        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);
+        self.http.poll();
+        self.profiler.poll();
+        self.update_http_file();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
@@ -3162,6 +3270,8 @@ impl eframe::App for CrabCraftApp {
 
     fn on_exit(&mut self) {
         self.runner.stop_all();
+        self.http.cancel_all();
+        self.profiler.cancel();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();
@@ -3303,4 +3413,13 @@ mod double_tap_tests {
         // Ctrl+click, then Ctrl alone.
         assert!(!run(&[(true, false, 1.0), (true, true, 1.05), (false, false, 1.1), (true, false, 1.2)]).contains(&true));
     }
+}
+
+/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
+/// `version`: chars `start..end` and the new requirement.
+pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
+    let version = semver::Version::parse(version).ok()?;
+    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
+    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
+    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
 }

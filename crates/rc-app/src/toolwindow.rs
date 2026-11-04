@@ -22,6 +22,10 @@ pub enum ToolWindow {
     Nuget,
     Cargo,
     Hierarchy,
+    /// Responses of the requests sent from `.http` files (F-03).
+    Http,
+    /// Flame graph and call tree of a perf recording (A-01).
+    Profiler,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +61,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 15] = [
+    pub const ALL: [ToolWindow; 17] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -72,6 +76,8 @@ impl ToolWindow {
         ToolWindow::Git,
         ToolWindow::Nuget,
         ToolWindow::Cargo,
+        ToolWindow::Http,
+        ToolWindow::Profiler,
         ToolWindow::Notifications,
     ];
 
@@ -92,6 +98,8 @@ impl ToolWindow {
             ToolWindow::Nuget => "nuget",
             ToolWindow::Cargo => "cargo",
             ToolWindow::Hierarchy => "hierarchy",
+            ToolWindow::Http => "http",
+            ToolWindow::Profiler => "profiler",
         }
     }
 
@@ -112,6 +120,8 @@ impl ToolWindow {
             ToolWindow::Nuget => "NuGet",
             ToolWindow::Cargo => "Cargo",
             ToolWindow::Hierarchy => tr("Hierarchy"),
+            ToolWindow::Http => tr("HTTP Client"),
+            ToolWindow::Profiler => tr("Profiler"),
         }
     }
 
@@ -132,6 +142,8 @@ impl ToolWindow {
             ToolWindow::Nuget => ico::PACKAGE,
             ToolWindow::Cargo => ico::TW_DEPENDENCIES,
             ToolWindow::Hierarchy => ico::HIERARCHY,
+            ToolWindow::Http => ico::CONFIG_WEB,
+            ToolWindow::Profiler => ico::THREADS,
         }
     }
 

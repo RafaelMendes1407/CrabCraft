@@ -11,6 +11,7 @@
 use crate::dep_versions::{merge_into_editor, merge_into_problems};
 use crate::docs::Docs;
 use rc_cargo::inspect::{Fix, FixKind, Issue, Level, Problem};
+use rc_core::inspections::InspectionProfile;
 use rc_core::{Inbox, Waker};
 use rc_editor::{Diagnostic, Severity};
 use rc_kit::i18n::trf;
@@ -25,7 +26,8 @@ type Key = (u64, u64);
 
 struct Done {
     key: Key,
-    diags: Vec<Diagnostic>,
+    /// With their inspection id, for the inspection profile (I-18).
+    diags: Vec<(Diagnostic, &'static str)>,
     fixes: Vec<Fix>,
 }
 
@@ -50,12 +52,12 @@ impl ManifestInspections {
 
     /// Takes the finished inspections and, for the active `Cargo.toml`, starts one when its text
     /// or the Cargo project changed, and puts the current diagnostics in the editor and in
-    /// `problems`.
-    pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64) {
+    /// `problems`, at the levels `profile` gives them.
+    pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64, profile: &InspectionProfile) {
         let finished: Vec<(u64, Key, Vec<Issue>)> = self.running.iter().filter_map(|(id, (key, inbox))| inbox.drain().pop().map(|issues| (*id, *key, issues))).collect();
         for (id, key, issues) in finished {
             self.running.remove(&id);
-            let diags = issues.iter().map(diagnostic).collect();
+            let diags = issues.iter().map(|i| (diagnostic(i), crate::inspection_profile::manifest_id(&i.problem))).collect();
             let fixes = issues.into_iter().filter_map(|i| i.fix).collect();
             self.done.insert(id, Done { key, diags, fixes });
         }
@@ -81,8 +83,9 @@ impl ManifestInspections {
         }
         // Diagnostics of an older text stay as the editor moved them until the new ones come.
         if let Some(done) = self.done.get(&id).filter(|d| d.key.0 == key.0) {
-            merge_into_editor(&mut doc.editor, DIAG_CODE, &done.diags);
-            merge_into_problems(problems, &doc.path, DIAG_CODE, &done.diags);
+            let ours = crate::inspection_profile::apply_own(profile, &done.diags);
+            merge_into_editor(&mut doc.editor, DIAG_CODE, &ours);
+            merge_into_problems(problems, &doc.path, DIAG_CODE, &ours);
         }
     }
 

@@ -153,6 +153,8 @@ pub enum Action {
     ZoomReset,
     /// Uploads the selection or the file to the Rust Playground, after a confirmation.
     ShareInPlayground,
+    /// Records the selected run configuration with perf and shows the Profiler (A-01).
+    Profile,
 }
 
 impl Action {
@@ -253,6 +255,7 @@ impl Action {
                 | ZoomOut
                 | ZoomReset
                 | ShareInPlayground
+                | Profile
         )
     }
 }

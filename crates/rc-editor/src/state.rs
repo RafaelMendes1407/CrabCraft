@@ -57,6 +57,8 @@ pub enum GutterIcon {
     FeatureOff,
     /// A crates.io dependency of a `Cargo.toml` (click: open its page on docs.rs).
     DocsRs,
+    /// A request of an `.http` file (click: send it).
+    HttpRequest,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

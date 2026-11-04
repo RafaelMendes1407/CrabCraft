@@ -19,6 +19,7 @@ pub enum SettingsPage {
     LiveTemplates,
     Copyright,
     Scopes,
+    Inspections,
 }
 
 pub enum Dialog {
@@ -79,6 +80,14 @@ pub enum Dialog {
     LockWorktree { path: PathBuf, reason: String },
     /// Confirm pruning the worktrees whose folders are gone.
     PruneWorktrees { paths: Vec<PathBuf> },
+    /// Merge a branch or commit into the current branch (V-07).
+    Merge { rev: String, fast_forward: rc_vcs::FastForward, squash: bool, no_commit: bool },
+    /// Rebase the current branch onto a branch or commit (V-07).
+    Rebase { onto: String, autostash: bool },
+    /// Confirm abandoning the merge, rebase or cherry-pick in progress.
+    AbortOperation,
+    /// The conflicted files; the selected ones are acted on.
+    Conflicts { selected: std::collections::BTreeSet<String> },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -104,6 +113,11 @@ pub enum Dialog {
 impl Dialog {
     pub fn settings(s: &Settings) -> Dialog {
         Dialog::Settings { draft: Box::new(s.clone()), page: SettingsPage::Appearance }
+    }
+
+    /// The Merge dialog with `rev` picked and git's default options.
+    pub fn merge(rev: String) -> Dialog {
+        Dialog::Merge { rev, fast_forward: rc_vcs::FastForward::Allow, squash: false, no_commit: false }
     }
 }
 
@@ -146,6 +160,10 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RemoveWorktree { path, force } => remove_worktree(app, ctx, path, *force),
         Dialog::LockWorktree { path, reason } => lock_worktree(app, ctx, path, reason),
         Dialog::PruneWorktrees { paths } => prune_worktrees(app, ctx, paths),
+        Dialog::Merge { rev, fast_forward, squash, no_commit } => merge_dialog(app, ctx, rev, fast_forward, squash, no_commit),
+        Dialog::Rebase { onto, autostash } => rebase_dialog(app, ctx, onto, autostash),
+        Dialog::AbortOperation => abort_operation(app, ctx),
+        Dialog::Conflicts { selected } => conflicts_dialog(app, ctx, selected),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
@@ -205,6 +223,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
                     (SettingsPage::Copyright, tr("Copyright")),
                     (SettingsPage::Scopes, tr("Scopes")),
+                    (SettingsPage::Inspections, tr("Inspections")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -234,6 +253,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 }
                 if *page == SettingsPage::Scopes {
                     scopes_page(ui, app, p.text_muted, p.error);
+                    return;
+                }
+                if *page == SettingsPage::Inspections {
+                    inspections_page(ui, app, draft, p.text_muted);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -372,7 +395,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
                 });
             });
         });
@@ -386,15 +409,99 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         if let Some(draft) = app.explorer.scopes.draft.take() {
             app.set_scopes(draft);
         }
+        if let Some((use_project, profile)) = app.inspections.draft.take() {
+            app.set_project_inspections(use_project, profile);
+        }
         return Outcome::Close;
     }
     if cancel || esc {
         app.copyright.draft = None;
         app.explorer.scopes.draft = None;
+        app.inspections.draft = None;
         Outcome::Close
     } else {
         Outcome::Keep
     }
+}
+
+/// Settings › Inspections (I-18): which profile the project uses (the Default one, kept in the
+/// settings, or its own, kept with the project), and in it each inspection turned on or off and
+/// its level. Diagnostic codes of rust-analyzer, the compiler and Clippy can be added.
+fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, muted: egui::Color32) {
+    use crate::inspection_profile::{self as ip, Group};
+    use rc_core::inspections::{Level, valid_id};
+    let project_open = app.workspace.is_some();
+    let (mut use_project, mut project) = app.inspections.draft.take().unwrap_or_else(|| (app.inspections.use_project, app.inspections.project.clone()));
+    if project_open {
+        ui.horizontal(|ui| {
+            ui.label(tr("Profile"));
+            let name = |p: bool| if p { tr("Project (saved with this project)") } else { tr("Default (every project)") };
+            egui::ComboBox::from_id_salt("inspection_profile").selected_text(name(use_project)).width(260.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut use_project, false, name(false));
+                ui.selectable_value(&mut use_project, true, name(true));
+            });
+            if use_project && ui.button(tr("Copy from Default")).on_hover_text(tr("Replace the project's levels with those of the Default profile")).clicked() {
+                project = draft.inspection_profile.clone();
+            }
+        });
+    } else {
+        ui.label(egui::RichText::new(tr("Open a project to give it a profile of its own. The Default profile applies to every project.")).size(12.0).color(muted));
+    }
+    ui.label(egui::RichText::new(tr("Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.")).size(12.0).color(muted));
+    ui.add_space(6.0);
+    let editing = if project_open && use_project { &mut project } else { &mut draft.inspection_profile };
+    let mut remove = None;
+    egui::ScrollArea::vertical().id_salt("inspections_page").max_height(340.0).auto_shrink([false, true]).show(ui, |ui| {
+        // One grid for every group, so the level column lines up.
+        egui::Grid::new("inspections_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
+            for group in [Group::CargoToml, Group::CratesIo, Group::Rust] {
+                ui.label(egui::RichText::new(group.title()).font(theme::bold(13.0)));
+                ui.end_row();
+                let mut ids: Vec<String> = ip::KNOWN.iter().filter(|(_, g)| *g == group).map(|(id, _)| id.to_string()).collect();
+                let custom: Vec<String> = if group == Group::Rust { editing.levels.keys().filter(|k| !ip::KNOWN.iter().any(|(id, _)| id == k)).cloned().collect() } else { Vec::new() };
+                ids.extend(custom.iter().cloned());
+                for id in &ids {
+                    let level = editing.level(id).filter(|_| editing.levels.contains_key(id.as_str()));
+                    let mut on = level != Some(Level::Off);
+                    if ui.checkbox(&mut on, ip::title(id)).on_hover_text(id.as_str()).changed() {
+                        editing.set(id, if on { None } else { Some(Level::Off) });
+                    }
+                    ui.add_enabled_ui(on, |ui| {
+                        egui::ComboBox::from_id_salt(("inspection_level", id.as_str())).selected_text(ip::level_name(level.filter(|l| *l != Level::Off))).width(130.0).show_ui(ui, |ui| {
+                            for choice in [None, Some(Level::Error), Some(Level::Warning), Some(Level::WeakWarning), Some(Level::Info)] {
+                                if ui.selectable_label(level == choice, ip::level_name(choice)).clicked() {
+                                    editing.set(id, choice);
+                                }
+                            }
+                        });
+                    });
+                    if custom.contains(id) {
+                        if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                            remove = Some(id.clone());
+                        }
+                    } else {
+                        ui.label("");
+                    }
+                    ui.end_row();
+                }
+            }
+        });
+    });
+    if let Some(id) = remove {
+        editing.set(&id, None);
+    }
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        let code = &mut app.inspections.new_code;
+        ui.add(egui::TextEdit::singleline(code).hint_text(tr("Diagnostic code, such as clippy::needless_return")).font(egui::TextStyle::Monospace).desired_width(300.0));
+        let id = code.trim().to_string();
+        let can_add = valid_id(&id) && !editing.levels.contains_key(&id);
+        if ui.add_enabled(can_add, egui::Button::new(tr("Add Code"))).on_hover_text(tr("A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group")).clicked() {
+            editing.set(&id, Some(Level::Warning));
+            code.clear();
+        }
+    });
+    app.inspections.draft = Some((use_project, project));
 }
 
 /// Settings › Scopes: the project's scopes (named globs) and the colours of their files. Saved
@@ -2157,8 +2264,17 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
             }
         });
     });
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && chosen.is_none() {
+    // The highlighted action's changes, beside the list (I-33).
+    app.update_intention_preview(list, *selected);
+    if app.intention_preview.busy() {
+        ctx.request_repaint_after(std::time::Duration::from_millis(50));
+    }
+    let preview = intention_preview(app, ctx, area.response.rect);
+    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && !preview.hovered() && chosen.is_none() {
         close = true;
+    }
+    if close || chosen.is_some() {
+        app.intention_preview.clear();
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
@@ -2244,6 +2360,81 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         return Outcome::Close;
     }
     if close { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The diff of the highlighted Alt+Enter row, right of the list (or under it when the window
+/// is too narrow).
+fn intention_preview(app: &CrabCraftApp, ctx: &Context, list: egui::Rect) -> egui::Response {
+    use crate::intention_preview::State;
+    const WIDTH: f32 = 480.0;
+    let dark = ctx.global_style().visuals.dark_mode;
+    let (p, s) = (rc_kit::theme::palette(dark), rc_kit::theme::scheme(dark));
+    let screen = ctx.content_rect();
+    let pos = if list.right() + 6.0 + WIDTH <= screen.right() { list.right_top() + vec2(6.0, 0.0) } else { list.left_bottom() + vec2(0.0, 6.0) };
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let state = &app.intention_preview.state;
+    let area = egui::Area::new(Id::new("intention_preview")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+            ui.set_width(WIDTH);
+            let muted = |ui: &mut Ui, text: &str| {
+                ui.label(egui::RichText::new(text).size(12.0).color(p.muted));
+            };
+            match state {
+                State::Idle => {}
+                State::Resolving | State::Computing => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        muted(ui, tr("Loading preview…"));
+                    });
+                }
+                State::Note(n) => muted(ui, n),
+                State::Failed(e) => {
+                    ui.label(egui::RichText::new(trf("Could not preview this action: {error}", &[("error", e)])).size(12.0).color(p.error));
+                }
+                State::Ready { files, notes } => {
+                    egui::ScrollArea::vertical().id_salt("intention_preview_scroll").max_height(360.0).min_scrolled_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+                        for note in notes {
+                            muted(ui, note);
+                        }
+                        if files.is_empty() && notes.is_empty() {
+                            muted(ui, tr("This action changes no text"));
+                        }
+                        for f in files {
+                            let shown = root.as_deref().and_then(|r| f.path.strip_prefix(r).ok()).unwrap_or(&f.path);
+                            let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                            ui.horizontal(|ui| {
+                                icons::image(ui, icons::for_file(&name), 16.0);
+                                ui.label(egui::RichText::new(shown.display().to_string()).size(12.5).strong());
+                                if f.error.is_none() {
+                                    ui.label(egui::RichText::new(format!("+{} −{}", f.added, f.removed)).size(12.0).color(p.muted));
+                                }
+                            });
+                            if let Some(e) = &f.error {
+                                ui.label(egui::RichText::new(e).size(12.0).color(p.error));
+                            }
+                            for (kind, line) in &f.lines {
+                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), egui::Sense::hover());
+                                let (bg, sign, text) = match kind {
+                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                };
+                                ui.painter().rect_filled(rect, 0.0, bg);
+                                let color = if sign.is_empty() { p.muted } else { p.text };
+                                ui.painter().with_clip_rect(rect).text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), color);
+                            }
+                            let shown_lines = f.lines.iter().filter(|(k, _)| *k != '@').count();
+                            if shown_lines < f.added + f.removed {
+                                muted(ui, &trf("{n} more changed lines", &[("n", &(f.added + f.removed - shown_lines))]));
+                            }
+                            ui.add_space(6.0);
+                        }
+                    });
+                }
+            }
+        });
+    });
+    area.response
 }
 
 fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, original: &mut String, name: &mut String, focus: &mut bool) -> Outcome {
@@ -2791,6 +2982,210 @@ fn prune_worktrees(app: &mut CrabCraftApp, ctx: &Context, paths: &[PathBuf]) -> 
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The branches a merge or rebase can take, local ones first, without the current branch.
+fn other_branches(app: &CrabCraftApp) -> Vec<String> {
+    let mut list: Vec<&rc_vcs::Branch> = app.vcs.branches.iter().filter(|b| !b.is_head && !b.name.ends_with("/HEAD")).collect();
+    list.sort_by_key(|b| b.kind != rc_vcs::BranchKind::Local);
+    list.into_iter().map(|b| b.name.clone()).collect()
+}
+
+/// A branch picker: the branches in a list, or a commit given by the caller.
+fn rev_picker(ui: &mut Ui, id: &str, rev: &mut String, branches: &[String]) {
+    let shown = if rev.is_empty() { tr("Select a branch").to_string() } else { rev.clone() };
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(ui.available_width() - 8.0).height(320.0).show_ui(ui, |ui| {
+        for b in branches {
+            ui.selectable_value(rev, b.clone(), b.as_str());
+        }
+    });
+}
+
+/// Merge a branch or commit into the current branch (V-07).
+fn merge_dialog(app: &mut CrabCraftApp, ctx: &Context, rev: &mut String, fast_forward: &mut rc_vcs::FastForward, squash: &mut bool, no_commit: &mut bool) -> Outcome {
+    use rc_vcs::FastForward as Ff;
+    let branches = other_branches(app);
+    let current = app.vcs.branch_name().unwrap_or_default();
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let ((ok, cancel), esc) = modal(ctx, "merge", 460.0, |ui| {
+        title(ui, tr("Merge"));
+        ui.label(trf("Merge into {branch}:", &[("branch", &current)]));
+        rev_picker(ui, "merge_rev", rev, &branches);
+        ui.add_space(8.0);
+        ui.radio_value(fast_forward, Ff::Allow, tr("Fast-forward when possible"));
+        ui.radio_value(fast_forward, Ff::Never, tr("Always create a merge commit (--no-ff)"));
+        ui.radio_value(fast_forward, Ff::Only, tr("Only fast-forward (--ff-only)"));
+        ui.add_space(4.0);
+        ui.checkbox(squash, tr("Squash the changes into the index, without a merge commit (--squash)"));
+        ui.checkbox(no_commit, tr("Stop before committing (--no-commit)"));
+        let clash = *squash && *fast_forward == Ff::Never;
+        if clash {
+            ui.label(egui::RichText::new(tr("--squash cannot be combined with --no-ff")).color(p.error).size(12.5));
+        }
+        buttons(ui, tr("Merge"), !rev.trim().is_empty() && !clash)
+    });
+    if ok {
+        let opts = rc_vcs::MergeOptions { fast_forward: *fast_forward, squash: *squash, no_commit: *no_commit };
+        app.vcs.merge(rev.trim(), opts);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Rebase the current branch onto a branch or commit (V-07).
+fn rebase_dialog(app: &mut CrabCraftApp, ctx: &Context, onto: &mut String, autostash: &mut bool) -> Outcome {
+    let branches = other_branches(app);
+    let current = app.vcs.branch_name().unwrap_or_default();
+    let ((ok, cancel), esc) = modal(ctx, "rebase", 460.0, |ui| {
+        title(ui, tr("Rebase"));
+        ui.label(trf("Rebase {branch} onto:", &[("branch", &current)]));
+        rev_picker(ui, "rebase_onto", onto, &branches);
+        ui.add_space(8.0);
+        ui.checkbox(autostash, tr("Stash local changes first and restore them afterwards (--autostash)"));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+            ui.label(trf("The commits of {branch} are rewritten. Do not rebase commits that others already have.", &[("branch", &current)]));
+        });
+        buttons(ui, tr("Rebase"), !onto.trim().is_empty())
+    });
+    if ok {
+        app.vcs.rebase(onto.trim(), *autostash);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Confirm abandoning the merge, rebase, cherry-pick or revert in progress.
+fn abort_operation(app: &mut CrabCraftApp, ctx: &Context) -> Outcome {
+    let state = app.vcs.operation.state;
+    let ((ok, cancel), esc) = modal(ctx, "abort_operation", 460.0, |ui| {
+        title(ui, tr("Abort"));
+        ui.label(crate::ui::git::operation_text(&app.vcs));
+        ui.add_space(4.0);
+        ui.label(match state {
+            Some(rc_vcs::RepoState::Rebasing) => tr("Abort the rebase? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
+            Some(rc_vcs::RepoState::CherryPicking) => tr("Abort the cherry-pick? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
+            Some(rc_vcs::RepoState::Reverting) => tr("Abort the revert? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
+            _ => tr("Abort the merge? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
+        });
+        buttons(ui, tr("Abort"), state.is_some())
+    });
+    if ok {
+        app.vcs.abort_operation();
+        return Outcome::Close;
+    }
+    if cancel || esc || state.is_none() { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The conflicted files of the operation in progress: take one side for whole files, or open
+/// them to edit and mark them resolved.
+fn conflicts_dialog(app: &mut CrabCraftApp, ctx: &Context, selected: &mut std::collections::BTreeSet<String>) -> Outcome {
+    let entries: Vec<(String, Option<rc_vcs::ConflictKind>)> =
+        app.vcs.status.as_ref().map(|s| s.conflicts().map(|e| (e.path.clone(), e.conflict)).collect()).unwrap_or_default();
+    selected.retain(|p| entries.iter().any(|(e, _)| e == p));
+    let busy = app.vcs.busy.is_some();
+    let (ours, theirs) = crate::ui::git::side_names(&app.vcs);
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut action: Option<ConflictAction> = None;
+    let (close, esc) = modal(ctx, "conflicts", 560.0, |ui| {
+        title(ui, tr("Conflicts"));
+        if entries.is_empty() {
+            ui.label(egui::RichText::new(tr("Every conflict is resolved.")).color(p.ok));
+        } else {
+            ui.label(egui::RichText::new(format!("{ours}  ↔  {theirs}")).size(12.5).color(p.muted));
+            ui.add_space(4.0);
+            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+                for (path, kind) in &entries {
+                    ui.horizontal(|ui| {
+                        let mut on = selected.contains(path);
+                        let check = ui.checkbox(&mut on, path.as_str());
+                        if check.double_clicked() && !busy {
+                            action = Some(ConflictAction::Merge(path.clone()));
+                        }
+                        if check.changed() {
+                            if on {
+                                selected.insert(path.clone());
+                            } else {
+                                selected.remove(path);
+                            }
+                        }
+                        ui.label(egui::RichText::new(conflict_kind(*kind)).size(12.0).color(p.muted));
+                    });
+                }
+            });
+        }
+        ui.add_space(10.0);
+        let targets: Vec<String> = if selected.is_empty() { entries.iter().map(|(p, _)| p.clone()).collect() } else { selected.iter().cloned().collect() };
+        let some = !targets.is_empty() && !busy;
+        ui.horizontal_wrapped(|ui| {
+            // V-08: the three-pane merge tool, for one file.
+            let single = (targets.len() == 1 && !busy).then(|| targets[0].clone());
+            let merge = ui.add_enabled_ui(single.is_some(), |ui| theme::primary_button(ui, tr("Merge…"))).inner;
+            if single.is_none() {
+                merge.on_disabled_hover_text(tr("Select one file"));
+            } else if merge.on_hover_text(tr("Resolve the file's changes side by side")).clicked() {
+                action = single.map(ConflictAction::Merge);
+            }
+            if ui.add_enabled_ui(some, |ui| theme::secondary_button(ui, &trf("Accept {side}", &[("side", &ours)]))).inner.clicked() {
+                action = Some(ConflictAction::Take(targets.clone(), false));
+            }
+            if ui.add_enabled_ui(some, |ui| theme::secondary_button(ui, &trf("Accept {side}", &[("side", &theirs)]))).inner.clicked() {
+                action = Some(ConflictAction::Take(targets.clone(), true));
+            }
+            let one = selected.len() == 1 && !busy;
+            if ui.add_enabled_ui(one, |ui| theme::secondary_button(ui, tr("Open"))).inner.on_hover_text(tr("Edit the file with its conflict markers")).clicked() {
+                action = Some(ConflictAction::Open(targets[0].clone()));
+            }
+            if ui.add_enabled_ui(some, |ui| theme::secondary_button(ui, tr("Mark Resolved"))).inner.on_hover_text(tr("Stage the files as they are now")).clicked() {
+                action = Some(ConflictAction::MarkResolved(targets.clone()));
+            }
+        });
+        if selected.is_empty() && !entries.is_empty() {
+            ui.label(egui::RichText::new(tr("Without a selection, the buttons act on every file.")).size(12.0).color(p.muted));
+        }
+        ui.add_space(10.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| theme::primary_button(ui, tr("Close")).clicked()).inner
+    });
+    match action {
+        Some(ConflictAction::Take(paths, theirs)) => app.vcs.resolve_conflicts(paths, theirs),
+        Some(ConflictAction::MarkResolved(paths)) => app.vcs.mark_resolved(paths),
+        Some(ConflictAction::Merge(path)) => {
+            app.vcs.open_merge_tool(&path);
+            return Outcome::Close;
+        }
+        Some(ConflictAction::Open(path)) => {
+            if let Some(root) = app.vcs.root().map(|r| r.to_path_buf()) {
+                app.open_file(&root.join(path));
+            }
+            return Outcome::Close;
+        }
+        None => {}
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+enum ConflictAction {
+    /// Take one side (`true`: theirs) for whole files.
+    Take(Vec<String>, bool),
+    MarkResolved(Vec<String>),
+    Open(String),
+    /// Open the three-pane merge tool.
+    Merge(String),
+}
+
+/// A short description of a kind of conflict.
+fn conflict_kind(kind: Option<rc_vcs::ConflictKind>) -> &'static str {
+    use rc_vcs::ConflictKind as K;
+    match kind {
+        Some(K::BothModified) | None => tr("both modified"),
+        Some(K::BothAdded) => tr("both added"),
+        Some(K::BothDeleted) => tr("both deleted"),
+        Some(K::AddedByUs) => tr("added by us"),
+        Some(K::AddedByThem) => tr("added by them"),
+        Some(K::DeletedByUs) => tr("deleted by us"),
+        Some(K::DeletedByThem) => tr("deleted by them"),
+    }
 }
 
 /// Generate › Derive: check the traits; OK rewrites the type's `#[derive]` (or adds one).

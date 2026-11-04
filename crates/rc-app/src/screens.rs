@@ -1773,6 +1773,55 @@ fn refactor_preview_capture() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes target/snapshots/intention-preview-*.png"]
+fn intention_preview_capture() {
+    use rc_lsp::lsp_types as lsp;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = two_crates_harness(dir.path(), dark);
+        let lib = root.join("alpha/src/lib.rs");
+        h.state_mut().open_file(&lib);
+        h.run_steps(3);
+        let edit = |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
+        let mut changes = std::collections::HashMap::new();
+        changes.insert(rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]);
+        changes.insert(rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]);
+        let action = lsp::CodeAction { title: "Rename and import".into(), kind: Some(lsp::CodeActionKind::QUICKFIX), edit: Some(lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() }), ..Default::default() };
+        let other = lsp::Command { title: "Run a server command".into(), command: "server.command".into(), arguments: None };
+        h.state_mut().caret_screen = Some(egui::pos2(260.0, 160.0));
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CodeActions { list: vec![lsp::CodeActionOrCommand::CodeAction(action), lsp::CodeActionOrCommand::Command(other)], selected: 0 });
+        run_frames(&mut h, "the preview", |a| matches!(a.intention_preview.state, crate::intention_preview::State::Ready { .. }));
+        h.run_steps(3);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("intention-preview-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/inspection-profiles-*.png"]
+fn inspection_profiles_capture() {
+    use rc_core::inspections::Level;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _root) = two_crates_harness(dir.path(), dark);
+        let mut settings = h.state().settings.clone();
+        settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
+        settings.inspection_profile.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
+        settings.inspection_profile.set("clippy::needless_return", Some(Level::Error));
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections });
+        h.run_steps(4);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("inspection-profiles-{suffix}.png"))).unwrap();
+    }
+}
+
+#[test]
 #[ignore = "Requires a GPU and Clippy; writes target/snapshots/inspection.png"]
 fn inspection_capture() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -3307,4 +3356,291 @@ fn auto_attach_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("auto-attach-dark.png")).unwrap();
     h.state_mut().stop_auto_attach();
+}
+
+/// An `.http` file with three requests: one to `base`, one using a variable, one with a script.
+fn http_harness(home: &Path, dir: &Path, base: &str, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let file = dir.join("api.http");
+    let text = format!(
+        "### Create user\nPOST {base}/users?notify=true\nContent-Type: application/json\nAccept: application/json\n\n{{\n  \"name\": \"Ferris\"\n}}\n\n###\n# @name health\nGET http://{{{{host}}}}/health\n\n### List\nGET {base}/users\n\n> {{% client.test(\"ok\", () => {{}}) %}}\n"
+    );
+    std::fs::write(&file, text).unwrap();
+    let file = file.canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    (h, file)
+}
+
+/// F-03: each request of an `.http` file gets a run icon; the one clicked reaches a local
+/// server in the background and its response shows in the HTTP Client window. Variables are
+/// flagged in the editor and keep their request from being sent.
+#[test]
+fn http_file_requests_run_from_the_gutter() {
+    use egui_kittest::kittest::Queryable;
+    use rc_editor::GutterIcon;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let (mut h, file) = http_harness(home.path(), dir.path(), &base, true);
+    {
+        let doc = h.state().docs.active_doc().unwrap();
+        assert_eq!(doc.editor.lang(), rc_syntax::Lang::Http);
+        let icons: Vec<usize> = doc.editor.gutter_icons.iter().filter(|(_, i)| **i == GutterIcon::HttpRequest).map(|(l, _)| *l).collect();
+        assert_eq!(icons, vec![1, 11, 14]);
+        let messages: Vec<&str> = doc.editor.diagnostics.iter().map(|d| d.message.as_str()).collect();
+        assert!(messages.iter().any(|m| m.contains("{{host}}")), "{messages:?}");
+        assert!(messages.iter().any(|m| m.contains("script")), "{messages:?}");
+    }
+
+    // The variable: nothing is sent, the window says why.
+    h.state_mut().send_http_at(11);
+    h.run_steps(4);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Http));
+    assert!(!h.state().http.running());
+    h.get_by_label_contains("not supported yet");
+
+    // The first request: a local server answers.
+    let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"]}"#);
+    h.state_mut().send_http_at(1);
+    run_frames(&mut h, "the response", |a| !a.http.running());
+    let seen = server.join().unwrap();
+    assert!(seen.starts_with("POST /users?notify=true HTTP/1.1\r\n"), "{seen}");
+    assert!(seen.ends_with("\r\n\r\n{\n  \"name\": \"Ferris\"\n}"), "{seen}");
+    let e = &h.state().http.history[0];
+    assert_eq!((e.title.as_str(), e.file.as_path(), e.line), ("Create user", file.as_path(), 1));
+    h.get_by_label("200 OK");
+    h.get_by_label_contains("\"tags\": [");
+    h.get_by_label(tr("Body"));
+
+    // The window's link goes back to the request.
+    h.get_by_label("api.http:2").click();
+    h.run_steps(4);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret_line_col().0), Some(1));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/http-client-*.png"]
+fn http_client_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let (mut h, _) = http_harness(home.path(), dir.path(), &base, dark);
+        let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"],"address":{"city":"Lisbon","zip":null}}"#);
+        h.state_mut().send_http_at(11);
+        h.state_mut().send_http_at(1);
+        run_frames(&mut h, "the response", |a| !a.http.running());
+        server.join().unwrap();
+        h.run_steps(4);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("http-client-{suffix}.png"))).unwrap();
+        h.state_mut().http.show_headers = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("http-client-headers-{suffix}.png"))).unwrap();
+    }
+}
+
+/// A-01: Profile builds the selected Rust binary and records it with the real perf. Where the
+/// kernel forbids recording (perf_event_paranoid above 2), the window says so and how to allow
+/// it; otherwise the profile has samples of the program's own code.
+#[test]
+fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if crate::profiler::perf_path().is_none() {
+        eprintln!("skipped: no perf");
+        return;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    // A program that runs long enough to be sampled (the harness's own ends at once).
+    let main_rs = dir.path().join("demo/src/main.rs");
+    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    println!(\"{}\", fib(std::hint::black_box(34)));\n}\n").unwrap();
+    assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::Profile));
+    h.state_mut().pending.push(rc_editor::Action::Profile);
+    h.run_steps(2);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Profiler));
+    assert!(h.state().profiler.busy());
+    run_frames(&mut h, "the profile", |a| !a.profiler.busy());
+    match h.state().profiler.result.as_ref().unwrap() {
+        Ok(p) => {
+            assert!(p.samples > 10, "{p:?}");
+            let fib = p.frames.iter().find(|f| f.name.ends_with("demo::fib")).expect("demo::fib sampled");
+            assert!(fib.own && fib.source.as_ref().is_some_and(|(path, _)| path.ends_with("src/main.rs")), "{fib:?}");
+        }
+        Err(crate::profiler::ProfError::Restricted(level)) => {
+            assert!(level.is_some_and(|l| l > 2));
+            assert!(h.get_all_by_label_contains("sudo sysctl kernel.perf_event_paranoid=2").next().is_some());
+        }
+        Err(e) => panic!("{e:?}\n{}", h.state().profiler.output),
+    }
+}
+
+/// A profile made from `perf script` text of a small program (no recording needed).
+fn sample_profile() -> crate::profiler::Profile {
+    let bin = "/work/demo/target/debug/demo";
+    let stacks: &[(&[&str], u64)] = &[
+        (&["demo::parse::tokenize", "demo::parse::parse", "demo::main"], 40),
+        (&["demo::parse::number", "demo::parse::tokenize", "demo::parse::parse", "demo::main"], 25),
+        (&["demo::eval::apply", "demo::eval::eval", "demo::main"], 30),
+        (&["demo::eval::apply", "demo::eval::apply", "demo::eval::eval", "demo::main"], 22),
+        (&["alloc::raw_vec::RawVec<T,A>::grow_one", "demo::parse::tokenize", "demo::parse::parse", "demo::main"], 12),
+        (&["__memmove_avx_unaligned_erms", "demo::report::print", "demo::main"], 9),
+        (&["demo::main"], 4),
+    ];
+    let mut text = String::new();
+    for (stack, n) in stacks {
+        for i in 0..*n {
+            text.push_str(&format!("demo  77 100.{i:06}:    2004008 cpu-clock:u: \n"));
+            for f in stack.iter().chain(["std::rt::lang_start_internal", "__libc_start_call_main"].iter()) {
+                let dso = if f.starts_with("__") { "/usr/lib/x86_64-linux-gnu/libc.so.6" } else { bin };
+                text.push_str(&format!("\t    5581f0a1cc4f {f} ({dso})\n"));
+            }
+            text.push('\n');
+        }
+    }
+    let mut parser = crate::profiler::ScriptParser::new(Some(Path::new(bin)));
+    for l in text.split_inclusive('\n') {
+        parser.line(l);
+    }
+    let p = parser.finish();
+    assert_eq!(p.samples, 142);
+    p
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/profiler-*.png"]
+fn profiler_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = playground_harness(home.path(), dir.path(), dark);
+        let profile = sample_profile();
+        {
+            let app = h.state_mut();
+            app.dock.show(crate::toolwindow::ToolWindow::Profiler);
+            app.profiler.name = "demo".into();
+            app.profiler.open = crate::profiler::hot_path(&profile);
+            app.profiler.result = Some(Ok(profile));
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-flame-{suffix}.png"))).unwrap();
+        h.state_mut().profiler.show_tree = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-tree-{suffix}.png"))).unwrap();
+        h.state_mut().profiler.result = Some(Err(crate::profiler::ProfError::Restricted(Some(4))));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-restricted-{suffix}.png"))).unwrap();
+    }
+}
+
+/// V-07: a rebase stopped on conflicts (banner, Conflicts dialog), the Merge and Rebase dialogs.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/git-rebase-*.png and git-merge-dialog-dark.png"]
+fn screens_git_merge_and_rebase() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&["config", k, v]);
+    }
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 5\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["switch", "-q", "-c", "feature/discount"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2 - n / 10\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 4\n}\n").unwrap();
+    git(&["commit", "-qam", "Give a discount"]);
+    git(&["switch", "-q", "main"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 6\n}\n").unwrap();
+    git(&["commit", "-qam", "Raise prices"]);
+    git(&["switch", "-q", "feature/discount"]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "branches", |a| a.vcs.branches.len() == 2 && !a.vcs.log.is_empty());
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::merge("main".into()));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-merge-dialog-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Rebase { onto: "main".into(), autostash: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-dialog-dark.png")).unwrap();
+    h.state_mut().dialog = None;
+    h.state_mut().vcs.rebase("main", false);
+    run_frames(&mut h, "rebase stopped", |a| a.vcs.busy.is_none() && a.vcs.operation.state.is_some() && a.vcs.conflicts().len() == 2);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-stopped-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Conflicts { selected: ["src/lib.rs".to_string()].into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-conflicts-dark.png")).unwrap();
+}
+
+/// V-08: the three-pane merge tool on a conflicted Rust file.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/merge-tool-dark.png"]
+fn screens_merge_tool() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&["config", k, v]);
+    }
+    let lib = |price: &str, tax: &str, extra: &str| {
+        format!("/// Prices an order.\npub fn price(n: u32) -> u32 {{\n    {price}\n}}\n\n/// The tax on a price.\npub fn tax(p: u32) -> u32 {{\n    {tax}\n}}\n{extra}\n#[cfg(test)]\nmod tests {{\n    #[test]\n    fn prices() {{\n        assert!(super::price(10) > 0);\n    }}\n}}\n")
+    };
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), lib("n * 2", "p / 5", "")).unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["switch", "-q", "-c", "feature/discount"]);
+    std::fs::write(root.join("src/lib.rs"), lib("n * 2 - n / 10", "p / 5", "\n/// A discount.\npub fn discount(p: u32) -> u32 {\n    p / 10\n}\n")).unwrap();
+    git(&["commit", "-qam", "Give a discount"]);
+    git(&["switch", "-q", "main"]);
+    std::fs::write(root.join("src/lib.rs"), lib("n * 3", "p / 4", "")).unwrap();
+    git(&["commit", "-qam", "Raise prices and taxes"]);
+    let _ = std::process::Command::new("git").args(["merge", "feature/discount"]).current_dir(&root).output();
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "conflict", |a| a.vcs.conflicts().len() == 1 && a.vcs.operation.state.is_some());
+    h.state_mut().vcs.open_merge_tool("src/lib.rs");
+    run_frames(&mut h, "merge tool", |a| a.vcs.merge_tool.is_some());
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("merge-tool-dark.png")).unwrap();
+    h.state_mut().vcs.merge_tool.as_mut().unwrap().confirm_save = true;
+    h.run_steps(6);
+    h.render().unwrap().save(out.join("merge-tool-confirm-dark.png")).unwrap();
 }

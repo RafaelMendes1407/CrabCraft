@@ -108,6 +108,8 @@ pub struct Settings {
     /// Shortcuts changed by the user, over the keymap: action id → shortcut id
     /// (`ctrl+shift+K`), empty for none.
     pub shortcuts: std::collections::BTreeMap<String, String>,
+    /// The Default inspection profile (I-18). Untrusted: read with `clean`.
+    pub inspection_profile: crate::inspections::InspectionProfile,
 }
 
 impl Default for Settings {
@@ -151,6 +153,7 @@ impl Default for Settings {
             debugger_hex: false,
             check_crates_io: true,
             shortcuts: Default::default(),
+            inspection_profile: Default::default(),
         }
     }
 }

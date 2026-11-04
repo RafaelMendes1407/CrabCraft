@@ -174,6 +174,10 @@ pub struct Session {
     /// File colours: the first scope that holds a file gives its colour. Untrusted: read with
     /// [`clean_file_colors`].
     pub file_colors: Vec<FileColor>,
+    /// The project's inspection profile (I-18). Untrusted: read with `clean`.
+    pub inspection_profile: crate::inspections::InspectionProfile,
+    /// The project uses its own inspection profile instead of the Default one.
+    pub use_project_profile: bool,
 }
 
 /// A named set of files: globs separated by `,` or `;`, `!` to leave files out

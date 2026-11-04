@@ -71,7 +71,8 @@ pub struct DepVersions {
     /// The docs.rs page of each line with an icon, per editor.
     pub links: HashMap<u64, BTreeMap<usize, String>>,
     /// The crates.io diagnostics of each editor.
-    diags: HashMap<u64, Vec<Diagnostic>>,
+    /// With their inspection id, for the inspection profile (I-18).
+    diags: HashMap<u64, Vec<(Diagnostic, &'static str)>>,
     /// The version an outdated dependency can be updated to, by line, per editor.
     fixes: HashMap<u64, BTreeMap<usize, Version>>,
 }
@@ -148,7 +149,7 @@ impl DepVersions {
     /// `Cargo.toml`. `epoch` changes when the Cargo project is read again; `online` allows asking
     /// crates.io. The diagnostics also go to `problems` (the Problems window). Returns how soon
     /// to call again when a look-up waits for the text to rest.
-    pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64, online: bool) -> Option<Duration> {
+    pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64, online: bool, profile: &rc_core::inspections::InspectionProfile) -> Option<Duration> {
         for entry in self.locks.values_mut() {
             if let Some(info) = entry.loading.as_ref().and_then(|i| i.drain().into_iter().last()) {
                 entry.info = Some(Arc::new(info));
@@ -185,9 +186,9 @@ impl DepVersions {
             self.refresh(docs, i, online, settled);
         }
         let doc = &mut docs.list[i];
-        let ours = self.diags.get(&doc.editor.id).map(Vec::as_slice).unwrap_or_default();
-        merge_into_editor(&mut doc.editor, DIAG_CODE, ours);
-        merge_into_problems(problems, &doc.path, DIAG_CODE, ours);
+        let ours = crate::inspection_profile::apply_own(profile, self.diags.get(&doc.editor.id).map(Vec::as_slice).unwrap_or_default());
+        merge_into_editor(&mut doc.editor, DIAG_CODE, &ours);
+        merge_into_problems(problems, &doc.path, DIAG_CODE, &ours);
         (!settled).then(|| SETTLE - rest)
     }
 
@@ -232,16 +233,17 @@ impl DepVersions {
                 if let Some(problem) = problem {
                     let spans = rc_cargo::versions::dep_spans(&text, declared);
                     let req = dep.req.as_deref().unwrap_or_default();
-                    let (span, severity, message) = match &problem {
-                        DepProblem::Missing => (spans.key, Severity::Error, trf("No crate named `{name}` on crates.io", &[("name", &dep.name)])),
-                        DepProblem::NoMatch => (spans.req.or(spans.key), Severity::Warning, trf("No version of `{name}` on crates.io matches `{req}`", &[("name", &dep.name), ("req", &req)])),
+                    use crate::inspection_profile as ip;
+                    let (span, severity, message, id) = match &problem {
+                        DepProblem::Missing => (spans.key, Severity::Error, trf("No crate named `{name}` on crates.io", &[("name", &dep.name)]), ip::UNKNOWN_CRATE),
+                        DepProblem::NoMatch => (spans.req.or(spans.key), Severity::Warning, trf("No version of `{name}` on crates.io matches `{req}`", &[("name", &dep.name), ("req", &req)]), ip::NO_MATCHING_VERSION),
                         DepProblem::Outdated(v) => {
                             fixes.insert(dep.line, v.clone());
-                            (spans.req.or(spans.key), Severity::Info, trf("Newer version {version} is outside `{req}`", &[("version", &v.to_string()), ("req", &req)]))
+                            (spans.req.or(spans.key), Severity::Info, trf("Newer version {version} is outside `{req}`", &[("version", &v.to_string()), ("req", &req)]), ip::NEWER_VERSION)
                         }
                     };
                     if let Some((start, end)) = span {
-                        diags.push(Diagnostic { start, end, severity, message, code: Some(DIAG_CODE.to_string()), unnecessary: false, deprecated: false });
+                        diags.push((Diagnostic { start, end, severity, message, code: Some(DIAG_CODE.to_string()), unnecessary: false, deprecated: false }, id));
                     }
                 }
             }

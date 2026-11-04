@@ -7,9 +7,11 @@ pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod http_window;
 pub mod markdown;
 pub mod new_project;
 pub mod nuget;
+pub mod profiler_window;
 pub mod header;
 pub mod status;
 pub mod run_windows;
@@ -52,7 +54,22 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     // Files on their own (no workspace): only the editor, like Rider's LightEdit.
     let light = app.workspace.is_none();
     let margin = if light {
-        Margin { left: 6, right: 6, top: 0, bottom: 0 }
+        // A request sent from a loose `.http` file still needs its response.
+        let mut bottom = 0;
+        if app.dock.bottom == Some(crate::toolwindow::ToolWindow::Http) {
+            let tw = crate::toolwindow::ToolWindow::Http;
+            let gap = theme::ISLAND_GAP;
+            let resp = egui::Panel::bottom("tw_bottom")
+                .resizable(true)
+                .default_size(app.dock.size(tw) + gap as f32)
+                .size_range(100.0..=900.0)
+                .show_separator_line(false)
+                .frame(bar.inner_margin(Margin { top: gap, left: 6, right: 6, bottom: 0 }))
+                .show(ui, |ui| theme::fixed_island(ui, &p, |ui| toolwindows::show(app, ui, tw)));
+            remember_size(app, tw, resp.response.rect.height() - gap as f32);
+            bottom = gap;
+        }
+        Margin { left: 6, right: 6, top: 0, bottom }
     } else {
         tool_windows(app, ui, &p, bar)
     };

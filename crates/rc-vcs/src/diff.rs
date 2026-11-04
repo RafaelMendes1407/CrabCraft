@@ -518,7 +518,7 @@ impl Repository {
         match self.cmd().args(["cat-file", "--filters"]).arg(rev.object(path)).output().await {
             Ok(out) => Ok(Some(FileContent::new(out.stdout))),
             Err(GitError::NotFound(_)) => Ok(None),
-            Err(GitError::Failed { stderr, .. }) if stderr.contains("Not a valid object name") || stderr.contains("does not exist") => Ok(None),
+            Err(GitError::Failed { stderr, .. }) if stderr.contains("Not a valid object name") || stderr.contains("does not exist") || stderr.contains("but not at stage") => Ok(None),
             Err(e) => Err(e),
         }
     }

@@ -10,6 +10,7 @@ mod cfg;
 mod context;
 mod derive;
 mod highlight;
+pub mod http;
 mod lang;
 mod parse;
 mod structure;
@@ -93,7 +94,7 @@ impl Syntax {
     /// Queues a parse of `rope` (at `version`, the newest text) on the pool.
     pub fn request_parse(&mut self, pool: &ParserPool, doc: u64, rope: Rope, version: u64) {
         self.version = version;
-        if matches!(self.lang, Lang::Plain | Lang::Sln) {
+        if matches!(self.lang, Lang::Plain | Lang::Sln | Lang::Http) {
             return;
         }
         pool.submit(doc, self.lang, rope, version, self.tree.clone());

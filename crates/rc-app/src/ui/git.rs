@@ -35,6 +35,7 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         empty_state(ui, ico::TW_COMMIT, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
         return;
     }
+    operation_banner(app, ui);
     let p = rc_kit::pal(ui);
     let changes = app.vcs.changes();
     let root = app.vcs.repo.as_ref().map(|r| r.root().to_path_buf()).unwrap_or_default();
@@ -109,13 +110,19 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                 }
                 if resp.double_clicked() {
-                    if c.untracked || c.state == FileState::Added {
+                    if c.state == FileState::Unmerged {
+                        app.vcs.open_merge_tool(&c.path);
+                    } else if c.untracked || c.state == FileState::Added {
                         open_file = Some(root.join(&c.path));
                     } else {
                         open_diff = Some(c.path.clone());
                     }
                 }
                 resp.context_menu(|ui| {
+                    if c.state == FileState::Unmerged && theme::menu_item(ui, Some(ico::DIFF), tr("Merge…"), false).clicked() {
+                        app.vcs.open_merge_tool(&c.path);
+                        ui.close();
+                    }
                     if theme::menu_item(ui, Some(ico::DIFF), tr("Show Diff"), false).clicked() {
                         open_diff = Some(c.path.clone());
                         ui.close();
@@ -214,6 +221,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
         return;
     }
+    operation_banner(app, ui);
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         if theme::tab(ui, app.vcs.tab == GitTab::Log, Some(ico::HISTORY), tr("Log"), false).0.clicked() {
@@ -239,6 +247,13 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             if theme::icon_button(ui, ico::IMPORT, app.vcs.busy.is_none(), tr("Apply Patch…")).clicked() {
                 app.vcs.close_patch();
                 app.dialog = Some(Dialog::ApplyPatch { path: String::new(), paste: false });
+            }
+            let free = app.vcs.busy.is_none() && app.vcs.operation.state.is_none();
+            if ui.add_enabled_ui(free, |ui| theme::secondary_button(ui, tr("Rebase…"))).inner.clicked() {
+                app.dialog = Some(Dialog::Rebase { onto: String::new(), autostash: false });
+            }
+            if ui.add_enabled_ui(free, |ui| theme::secondary_button(ui, tr("Merge…"))).inner.clicked() {
+                app.dialog = Some(Dialog::merge(String::new()));
             }
         });
     });
@@ -378,6 +393,30 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                     app.dialog = Some(Dialog::NewTag { name: String::new(), target: Some((c.hash.clone(), c.short_hash().to_string())), message: String::new() });
                     ui.close();
                 }
+                ui.separator();
+                // V-07: cherry-pick the commit (or the marked ones), merge it or rebase onto it.
+                let free = app.vcs.busy.is_none() && app.vcs.operation.state.is_none();
+                let picks = cherry_pick_commits(&app.vcs, &c.hash);
+                let label = if picks.len() > 1 { trf("Cherry-Pick {n} Commits", &[("n", &picks.len())]) } else { tr("Cherry-Pick").to_string() };
+                let merges = picks.iter().any(|h| app.vcs.log.iter().any(|c| &c.hash == h && c.is_merge()));
+                let pick = ui.add_enabled_ui(free && !merges, |ui| theme::menu_item(ui, None, &label, false)).inner;
+                if merges {
+                    pick.on_disabled_hover_text(tr("Cherry-picking a merge commit is not supported"));
+                } else if pick.clicked() {
+                    app.vcs.cherry_pick(picks);
+                    ui.close();
+                }
+                let target = ref_name(c).unwrap_or_else(|| c.short_hash().to_string());
+                ui.add_enabled_ui(free, |ui| {
+                    if theme::menu_item(ui, None, &trf("Merge {rev} into Current…", &[("rev", &target)]), false).clicked() {
+                        app.dialog = Some(Dialog::merge(target.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, None, &trf("Rebase Current onto {rev}…", &[("rev", &target)]), false).clicked() {
+                        app.dialog = Some(Dialog::Rebase { onto: target.clone(), autostash: false });
+                        ui.close();
+                    }
+                });
                 ui.separator();
                 let commits = app.vcs.patch_commits(&c.hash);
                 let busy = app.vcs.busy.is_some();
@@ -1036,6 +1075,17 @@ pub fn branches_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.dialog = Some(crate::ui::dialogs::Dialog::NewBranch { name: String::new() });
         ui.close();
     }
+    let free = !busy && app.vcs.operation.state.is_none();
+    ui.add_enabled_ui(free, |ui| {
+        if theme::menu_item(ui, None, tr("Merge into Current…"), false).clicked() {
+            app.dialog = Some(Dialog::merge(String::new()));
+            ui.close();
+        }
+        if theme::menu_item(ui, None, tr("Rebase Current onto…"), false).clicked() {
+            app.dialog = Some(Dialog::Rebase { onto: String::new(), autostash: false });
+            ui.close();
+        }
+    });
     let p = rc_kit::pal(ui);
     // Every branch, in a list that scrolls inside the window; the actions above stay in view.
     let room = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 24.0).max(120.0);
@@ -1117,4 +1167,356 @@ pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
     }
     let _ = trf;
+}
+
+/// The commits a cherry-pick from `clicked` applies, oldest first: the marked ones when
+/// `clicked` is among them, else just `clicked`.
+fn cherry_pick_commits(vcs: &crate::vcs::Vcs, clicked: &str) -> Vec<String> {
+    let mut commits = vcs.patch_commits(clicked);
+    commits.reverse();
+    commits
+}
+
+/// The local branch, else the remote branch or tag, pointing at a commit of the log.
+fn ref_name(c: &rc_vcs::Commit) -> Option<String> {
+    let local = c.refs.iter().find_map(|r| if let rc_vcs::RefLabel::LocalBranch(n) = r { Some(n.clone()) } else { None });
+    local.or_else(|| {
+        c.refs.iter().find_map(|r| match r {
+            rc_vcs::RefLabel::RemoteBranch(n) | rc_vcs::RefLabel::Tag(n) => Some(n.clone()),
+            _ => None,
+        })
+    })
+}
+
+/// A branch pointing at `hash` (local first), else its short hash.
+pub fn rev_name(vcs: &crate::vcs::Vcs, hash: &str) -> String {
+    match vcs.branches.iter().filter(|b| b.target == hash).min_by_key(|b| b.kind != rc_vcs::BranchKind::Local) {
+        Some(b) => b.name.clone(),
+        None => hash.chars().take(8).collect(),
+    }
+}
+
+/// What the operation in progress does, in one line.
+pub fn operation_text(vcs: &crate::vcs::Vcs) -> String {
+    let op = &vcs.operation;
+    let hash = op.target.clone().unwrap_or_default();
+    let target = if hash.is_empty() { "?".to_string() } else { rev_name(vcs, &hash) };
+    let short: String = hash.chars().take(8).collect();
+    let branch = op.branch.clone().or_else(|| vcs.status.as_ref().and_then(|s| s.branch.head.clone())).unwrap_or_else(|| tr("HEAD").to_string());
+    let subject = vcs.log.iter().find(|c| c.hash == hash).map(|c| c.subject.clone()).unwrap_or_default();
+    match op.state {
+        Some(rc_vcs::RepoState::Merging) => trf("Merging {rev} into {branch}", &[("rev", &target), ("branch", &branch)]),
+        Some(rc_vcs::RepoState::Rebasing) => match op.step {
+            Some((n, total)) => trf("Rebasing {branch} onto {rev} (commit {n} of {total})", &[("branch", &branch), ("rev", &target), ("n", &n), ("total", &total)]),
+            None => trf("Rebasing {branch} onto {rev}", &[("branch", &branch), ("rev", &target)]),
+        },
+        Some(rc_vcs::RepoState::CherryPicking) => trf("Cherry-picking {rev} {subject}", &[("rev", &short), ("subject", &subject)]),
+        Some(rc_vcs::RepoState::Reverting) => trf("Reverting {rev} {subject}", &[("rev", &short), ("subject", &subject)]),
+        _ => String::new(),
+    }
+}
+
+/// The merge, rebase or cherry-pick in progress (V-07): what it does, its conflicts and
+/// Continue / Skip / Abort; while one runs, its progress and Cancel; afterwards, what git said.
+pub fn operation_banner(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let running = app.vcs.sequence_running();
+    let state = app.vcs.operation.state;
+    let output = app.vcs.op_output.clone();
+    if state.is_none() && !running && output.is_none() {
+        return;
+    }
+    let p = rc_kit::pal(ui);
+    let conflicts = app.vcs.conflicts();
+    let busy = app.vcs.busy.is_some();
+    let mut action: Option<Dialog> = None;
+    let frame = egui::Frame::new().fill(p.header_bg).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        if running {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(14.0));
+                let line = app.vcs.op_progress.clone().unwrap_or_else(|| tr("Running Git…").to_string());
+                ui.label(egui::RichText::new(line).size(12.5));
+                if theme::secondary_button(ui, tr("Cancel")).on_hover_text(tr("Stop Git; what it already did stays in progress")).clicked() {
+                    app.vcs.cancel_operation();
+                }
+            });
+        } else if let Some(state) = state {
+            ui.label(egui::RichText::new(operation_text(&app.vcs)).font(theme::bold(13.0)));
+            ui.horizontal_wrapped(|ui| {
+                if conflicts.is_empty() {
+                    ui.label(egui::RichText::new(tr("No conflicts left")).size(12.5).color(p.ok));
+                } else {
+                    ui.label(egui::RichText::new(trf("{n} conflicted files", &[("n", &conflicts.len())])).size(12.5).color(p.error));
+                    if ui.add_enabled_ui(!busy, |ui| theme::primary_button(ui, tr("Resolve Conflicts…"))).inner.clicked() {
+                        action = Some(Dialog::Conflicts { selected: Default::default() });
+                    }
+                }
+                let cont = ui.add_enabled_ui(!busy && conflicts.is_empty(), |ui| theme::secondary_button(ui, tr("Continue"))).inner;
+                if !conflicts.is_empty() {
+                    cont.on_disabled_hover_text(tr("Resolve every conflict first"));
+                } else if cont.on_hover_text(tr("Commit the resolved changes and go on")).clicked() {
+                    app.vcs.continue_operation();
+                }
+                if state != rc_vcs::RepoState::Merging
+                    && ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Skip Commit"))).inner.on_hover_text(tr("Leave this commit out and go on")).clicked()
+                {
+                    app.vcs.skip_operation();
+                }
+                if ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Abort…"))).inner.clicked() {
+                    action = Some(Dialog::AbortOperation);
+                }
+            });
+        }
+        if !running && let Some(o) = &output {
+            ui.horizontal(|ui| {
+                // The last lines git printed; all of them in the tooltip.
+                let lines: Vec<&str> = o.text.lines().filter(|l| !l.trim().is_empty()).collect();
+                let shown = if lines.is_empty() { tr("Done").to_string() } else { lines[lines.len().saturating_sub(4)..].join("\n") };
+                let resp = ui.label(egui::RichText::new(shown).font(FontId::monospace(11.5)).color(if o.error { p.error } else { p.muted }));
+                if lines.len() > 4 {
+                    resp.on_hover_text(&o.text);
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
+                        app.vcs.op_output = None;
+                    }
+                });
+            });
+        }
+    });
+    let r = frame.response.rect;
+    ui.painter().hline(r.x_range(), r.bottom() + 0.5, egui::Stroke::new(1.0, p.island_border));
+    if let Some(d) = action {
+        app.dialog = Some(d);
+    }
+}
+
+/// Names of the two sides of a conflict: the index's stage 2 ("ours") and stage 3 ("theirs").
+/// During a rebase, ours is what the branch is rebased onto and theirs your commit replayed.
+pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
+    let op = &vcs.operation;
+    let branch = vcs.status.as_ref().and_then(|s| s.branch.head.clone()).unwrap_or_else(|| tr("HEAD").to_string());
+    let short = |h: &Option<String>| h.as_deref().unwrap_or("").chars().take(8).collect::<String>();
+    match op.state {
+        Some(rc_vcs::RepoState::Rebasing) => {
+            let onto = op.target.as_deref().map(|h| rev_name(vcs, h)).unwrap_or_default();
+            (trf("Upstream ({rev})", &[("rev", &onto)]), trf("Your commit ({rev})", &[("rev", &short(&op.commit))]))
+        }
+        Some(rc_vcs::RepoState::Merging) => {
+            let theirs = op.target.as_deref().map(|h| rev_name(vcs, h)).unwrap_or_default();
+            (trf("Yours ({branch})", &[("branch", &branch)]), trf("Theirs ({rev})", &[("rev", &theirs)]))
+        }
+        Some(rc_vcs::RepoState::CherryPicking | rc_vcs::RepoState::Reverting) => (trf("Yours ({branch})", &[("branch", &branch)]), trf("Commit {rev}", &[("rev", &short(&op.target))])),
+        _ => (tr("Yours").to_string(), tr("Theirs").to_string()),
+    }
+}
+
+/// The three-pane merge tool in the editor area (V-08): ours | result | theirs, with arrows to
+/// take a side for each change, a toolbar for the selected change and the whole file, and
+/// Save and Mark Resolved.
+pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
+    use rc_vcs::{Pane, Take};
+    let p = rc_kit::pal(ui);
+    let full = ui.max_rect();
+    let Some(tool) = &mut app.vcs.merge_tool else { return };
+    tool.sync();
+    let busy = tool.saving;
+    let conflicts = tool.model.conflicts_left();
+    let unresolved = tool.model.unresolved();
+    let mut close = false;
+    let mut save = false;
+    // Header: the file, what is left, Close.
+    let head = Rect::from_min_size(full.min, vec2(full.width(), 38.0));
+    let mut hu = ui.new_child(egui::UiBuilder::new().max_rect(head.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    icons::image(&mut hu, ico::DIFF, 16.0);
+    hu.label(egui::RichText::new(trf("Merge {file}", &[("file", &tool.rel)])).font(theme::bold(13.0)));
+    let (status, color) = if unresolved == 0 {
+        (tr("All changes resolved").to_string(), p.ok)
+    } else if conflicts > 0 {
+        (trf("{n} conflicts left", &[("n", &conflicts)]), p.error)
+    } else {
+        (trf("{n} changes not taken", &[("n", &unresolved)]), p.muted)
+    };
+    hu.label(egui::RichText::new(status).size(12.5).color(color));
+    hu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
+            close = true;
+        }
+        if let Some(e) = &tool.error {
+            ui.label(egui::RichText::new(e).size(12.5).color(p.error));
+        } else if tool.confirm_save {
+            ui.label(egui::RichText::new(trf("{n} changes are not resolved.", &[("n", &unresolved)])).size(12.5).color(p.error));
+        }
+    });
+    ui.painter().hline(full.x_range(), head.bottom() - 0.5, egui::Stroke::new(1.0, p.island_border));
+    // Toolbar: the selected change, the whole file, save.
+    let bar = Rect::from_min_size(pos2(full.left(), head.bottom()), vec2(full.width(), 36.0));
+    let mut bu = ui.new_child(egui::UiBuilder::new().max_rect(bar.shrink2(vec2(10.0, 0.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    let has_current = tool.current.is_some_and(|c| c < tool.model.chunks.len());
+    let none = tool.model.chunks.is_empty();
+    if theme::icon_button(&mut bu, ico::CHEVRON_UP, !none, tr("Previous Change")).clicked() {
+        tool.step(false);
+    }
+    if theme::icon_button(&mut bu, ico::CHEVRON_DOWN, !none, tr("Next Change")).clicked() {
+        tool.step(true);
+    }
+    bu.add_enabled_ui(has_current && !busy, |ui| {
+        let cur = tool.current.unwrap_or(0);
+        if theme::secondary_button(ui, tr("Accept Left")).on_hover_text(tool.names.0.as_str()).clicked() {
+            tool.take(cur, Take::Ours);
+        }
+        if theme::secondary_button(ui, tr("Accept Right")).on_hover_text(tool.names.1.as_str()).clicked() {
+            tool.take(cur, Take::Theirs);
+        }
+        if theme::secondary_button(ui, tr("Accept Both")).on_hover_text(tr("Left, then right")).clicked() {
+            tool.take(cur, Take::Both);
+        }
+        if theme::secondary_button(ui, tr("Keep Base")).on_hover_text(tr("Neither change: the text both sides started from")).clicked() {
+            tool.take(cur, Take::Base);
+        }
+    });
+    bu.separator();
+    bu.add_enabled_ui(!busy, |ui| {
+        if theme::secondary_button(ui, tr("Apply Non-Conflicting Changes")).clicked() {
+            tool.take_non_conflicting();
+        }
+        if theme::secondary_button(ui, tr("All from Left")).on_hover_text(tool.names.0.as_str()).clicked() {
+            tool.take_file(false);
+        }
+        if theme::secondary_button(ui, tr("All from Right")).on_hover_text(tool.names.1.as_str()).clicked() {
+            tool.take_file(true);
+        }
+    });
+    bu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if busy {
+            ui.add(egui::Spinner::new().size(14.0));
+        } else if tool.confirm_save {
+            if theme::primary_button(ui, tr("Save Anyway")).clicked() {
+                save = true;
+            }
+            if theme::secondary_button(ui, tr("Cancel")).clicked() {
+                tool.confirm_save = false;
+            }
+        } else if theme::primary_button(ui, tr("Save and Mark Resolved")).clicked() {
+            if unresolved > 0 {
+                tool.confirm_save = true;
+            } else {
+                save = true;
+            }
+        }
+    });
+    // Column titles.
+    let gap = 26.0;
+    let titles = Rect::from_min_size(pos2(full.left(), bar.bottom()), vec2(full.width(), 24.0));
+    ui.painter().rect_filled(titles, 0.0, p.header_bg);
+    let col = (full.width() - 2.0 * gap) / 3.0;
+    let xs = [full.left(), full.left() + col + gap, full.left() + 2.0 * (col + gap)];
+    for (x, name) in xs.iter().zip([tool.names.0.as_str(), tr("Result"), tool.names.1.as_str()]) {
+        ui.painter().text(pos2(x + 10.0, titles.center().y), Align2::LEFT_CENTER, name, theme::bold(12.0), p.text);
+    }
+    let body = Rect::from_min_max(pos2(full.left(), titles.bottom()), full.max);
+    let rects = xs.map(|x| Rect::from_min_max(pos2(x, body.top()), pos2(x + col, body.bottom())));
+    // Scroll: the pane under the pointer leads; the others follow through the changes.
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    let panes = [Pane::Ours, Pane::Result, Pane::Theirs];
+    let lead = rects.iter().position(|r| pointer.is_some_and(|pt| r.contains(pt))).unwrap_or(1);
+    let row_h = tool.center.row_height();
+    if tool.reveal && row_h > 0.0 {
+        tool.reveal = false;
+        if let Some(c) = tool.current.filter(|c| *c < tool.model.chunks.len()) {
+            for (i, pane) in panes.iter().enumerate() {
+                let line = tool.line_of(c, *pane);
+                let e = match i {
+                    0 => &mut tool.left,
+                    1 => &mut tool.center,
+                    _ => &mut tool.right,
+                };
+                e.set_scroll_offset(vec2(0.0, (line.saturating_sub(4) as f32 * row_h).max(0.0)));
+            }
+        }
+    } else if row_h > 0.0 {
+        let lead_state = match lead {
+            0 => &tool.left,
+            1 => &tool.center,
+            _ => &tool.right,
+        };
+        let y = lead_state.scroll_offset().y;
+        let top = (y / row_h).floor();
+        let frac = y - top * row_h;
+        for (i, pane) in panes.iter().enumerate() {
+            if i == lead {
+                continue;
+            }
+            let line = tool.model.map_line(panes[lead], top as usize, *pane);
+            let e = match i {
+                0 => &mut tool.left,
+                1 => &mut tool.center,
+                _ => &mut tool.right,
+            };
+            let x = e.scroll_offset().x;
+            e.set_scroll_offset(vec2(x, line as f32 * row_h + frac));
+        }
+    }
+    let mut config = app.editor_config.clone();
+    config.sticky_lines = 0;
+    for (rect, i) in rects.iter().zip(0..3) {
+        let state = match i {
+            0 => &mut tool.left,
+            1 => &mut tool.center,
+            _ => &mut tool.right,
+        };
+        let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(*rect));
+        eu.set_clip_rect(rect.intersect(ui.clip_rect()));
+        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+    }
+    // The arrows between the panes: take the left side (») or the right side («) of a change.
+    let mut act: Option<(usize, Take)> = None;
+    for (g, gx) in [(0usize, rects[0].right()), (1, rects[1].right())] {
+        let strip = Rect::from_min_max(pos2(gx, body.top()), pos2(gx + gap, body.bottom()));
+        ui.painter().rect_filled(strip, 0.0, p.header_bg);
+        let (state, pane, take, glyph, tip) =
+            if g == 0 { (&tool.left, Pane::Ours, Take::Ours, "»", tool.names.0.as_str()) } else { (&tool.right, Pane::Theirs, Take::Theirs, "«", tool.names.1.as_str()) };
+        let rh = state.row_height();
+        if rh <= 0.0 {
+            continue;
+        }
+        let scroll = state.scroll_offset().y;
+        for (ci, c) in tool.model.chunks.iter().enumerate() {
+            let changed = match c.kind {
+                rc_vcs::ChunkKind::Conflict | rc_vcs::ChunkKind::Same => true,
+                rc_vcs::ChunkKind::Ours => g == 0,
+                rc_vcs::ChunkKind::Theirs => g == 1,
+            };
+            if !changed || c.resolved {
+                continue;
+            }
+            let line = tool.line_of(ci, pane);
+            let y = body.top() + line as f32 * rh - scroll + rh / 2.0;
+            if y < body.top() + 4.0 || y > body.bottom() - 4.0 {
+                continue;
+            }
+            let r = Rect::from_center_size(pos2(strip.center().x, y), vec2(20.0, rh.min(20.0)));
+            let id = ui.id().with(("merge_take", g, ci));
+            let resp = ui.interact(r, id, Sense::click()).on_hover_text(trf("Accept {side}", &[("side", &tip)]));
+            let color = if resp.hovered() { p.accent } else { p.text };
+            if resp.hovered() {
+                ui.painter().rect_filled(r, 3.0, p.row_hover);
+            }
+            ui.painter().text(r.center(), Align2::CENTER_CENTER, glyph, FontId::proportional(15.0), color);
+            if resp.clicked() && !busy {
+                act = Some((ci, take));
+            }
+        }
+    }
+    if let Some((ci, take)) = act {
+        tool.take(ci, take);
+    }
+    if close || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        app.vcs.merge_tool = None;
+        app.focus_editor = true;
+        return;
+    }
+    if save {
+        app.vcs.save_merge_tool();
+    }
 }
