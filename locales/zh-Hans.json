@@ -1135,5 +1135,14 @@
   },
   "lens": {
     "Show a code preview when hovering the scrollbar": "悬停在滚动条上时显示代码预览"
+  },
+  "featurenav": {
+    "Find Usages of Feature": "查找 feature 的用法",
+    "Uses of feature {name}": "feature {name} 的用法",
+    "No cfg uses of the feature {name} found in the package's sources": "在包的源代码中未找到 feature {name} 的 cfg 用法",
+    "The feature {name} is not declared in this Cargo.toml": "此 Cargo.toml 中未声明 feature {name}",
+    "The feature {name} is not declared in this package's Cargo.toml": "此包的 Cargo.toml 中未声明 feature {name}",
+    "This file does not belong to a Cargo package": "此文件不属于任何 Cargo 包",
+    "Place the caret on a feature name to go to it or find its uses": "将光标放在 feature 名称上，以转到它或查找其用法"
   }
 }

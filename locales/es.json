@@ -1135,5 +1135,14 @@
   },
   "lens": {
     "Show a code preview when hovering the scrollbar": "Mostrar una vista previa del código al pasar sobre la barra de desplazamiento"
+  },
+  "featurenav": {
+    "Find Usages of Feature": "Buscar usos de la feature",
+    "Uses of feature {name}": "Usos de la feature {name}",
+    "No cfg uses of the feature {name} found in the package's sources": "No se encontraron usos de cfg de la feature {name} en el código del paquete",
+    "The feature {name} is not declared in this Cargo.toml": "La feature {name} no está declarada en este Cargo.toml",
+    "The feature {name} is not declared in this package's Cargo.toml": "La feature {name} no está declarada en el Cargo.toml de este paquete",
+    "This file does not belong to a Cargo package": "Este archivo no pertenece a un paquete de Cargo",
+    "Place the caret on a feature name to go to it or find its uses": "Coloca el cursor sobre el nombre de una feature para ir a ella o buscar sus usos"
   }
 }

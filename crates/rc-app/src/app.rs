@@ -87,6 +87,8 @@ pub struct CrabCraftApp {
     /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
     /// docs.rs icons.
     pub dep_versions: crate::dep_versions::DepVersions,
+    /// The scan for the `cfg` uses of a Cargo feature (N-13).
+    pub feature_search: crate::feature_nav::FeatureSearch,
     /// The last external page opened from the editor (docs.rs).
     pub opened_url: Option<String>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
@@ -289,6 +291,7 @@ impl CrabCraftApp {
             triple_load: None,
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            feature_search: Default::default(),
             opened_url: None,
             cargo_open: Default::default(),
             layout: Default::default(),
@@ -1376,6 +1379,17 @@ impl CrabCraftApp {
         if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
             crate::manifest_completion::complete(&mut self.docs.list[i], true);
             return;
+        }
+        // Cargo features and their `cfg` uses: rust-analyzer does not go between them.
+        if matches!(action, Action::GotoDeclaration | Action::FindUsages) {
+            let caret = self.docs.list[i].editor.caret();
+            if self.feature_navigate(i, caret, action == Action::FindUsages) {
+                return;
+            }
+            if crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+                self.notify(tr("Place the caret on a feature name to go to it or find its uses"), false);
+                return;
+            }
         }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
@@ -2827,6 +2841,7 @@ impl eframe::App for CrabCraftApp {
         self.update_test_markers();
         self.update_feature_icons();
         self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
+        self.poll_feature_search();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

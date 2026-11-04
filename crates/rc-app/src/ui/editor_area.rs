@@ -409,8 +409,14 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     if crate::manifest_completion::is_manifest(doc) {
         crate::manifest_completion::on_editor_events(doc, &out.events);
     }
+    // ⌘+click on a Cargo feature or its `cfg` use is answered here (N-13), not by the server.
+    let feature_click = out.events.iter().find_map(|e| match e {
+        EditorEvent::NavigateAt(pos) if crate::feature_nav::handles_click(doc, *pos) => Some(*pos),
+        _ => None,
+    });
+    let server_events: Vec<EditorEvent> = out.events.iter().filter(|e| feature_click.is_none() || !matches!(e, EditorEvent::NavigateAt(_))).cloned().collect();
     if app.debugger.stopped() {
-        let insight_events: Vec<_> = out.events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
+        let insight_events: Vec<_> = server_events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
         app.insight.on_editor_events(doc, &insight_events);
         for e in &out.events {
             match e {
@@ -423,7 +429,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             }
         }
     } else {
-        app.insight.on_editor_events(doc, &out.events);
+        app.insight.on_editor_events(doc, &server_events);
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;
@@ -554,6 +560,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     if let Some((path, pos)) = navigated_from {
         app.push_nav_at(path, pos);
     }
+    if let Some(pos) = feature_click {
+        app.feature_navigate(active, pos, false);
+    }
     for a in insight_actions {
         app.run_insight_action(a, caret_screen);
     }
@@ -604,6 +613,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
     use crate::native_menu::{MenuCommand, forward_edit};
     let insight = app.docs.active_doc().is_some_and(crate::insight::has_insight);
     let is_csharp = app.docs.active_doc().is_some_and(|d| d.editor.lang() == rc_syntax::Lang::CSharp);
+    let manifest = app.docs.active_doc().is_some_and(crate::manifest_completion::is_manifest);
     let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
@@ -617,6 +627,11 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
                 ui.close();
             }
         };
+        if manifest {
+            entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
+            entry(ui, Some(ico::TW_FIND), tr("Find Usages of Feature"), Action::FindUsages);
+            ui.separator();
+        }
         if insight {
             entry(ui, Some(ico::BULB), tr("Show Context Actions"), Action::ShowIntentions);
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);

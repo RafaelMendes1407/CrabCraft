@@ -9,6 +9,7 @@
 //! (`build.rs`, proc macros) and only start from an explicit user action.
 
 pub mod explain;
+pub mod feature_nav;
 pub mod format;
 pub mod manifest_complete;
 pub mod messages;

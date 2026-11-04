@@ -1135,5 +1135,14 @@
   },
   "lens": {
     "Show a code preview when hovering the scrollbar": "スクロールバーにカーソルを合わせたときにコードのプレビューを表示"
+  },
+  "featurenav": {
+    "Find Usages of Feature": "feature の使用箇所を検索",
+    "Uses of feature {name}": "feature {name} の使用箇所",
+    "No cfg uses of the feature {name} found in the package's sources": "パッケージのソースに feature {name} の cfg 使用箇所は見つかりません",
+    "The feature {name} is not declared in this Cargo.toml": "この Cargo.toml に feature {name} は宣言されていません",
+    "The feature {name} is not declared in this package's Cargo.toml": "このパッケージの Cargo.toml に feature {name} は宣言されていません",
+    "This file does not belong to a Cargo package": "このファイルは Cargo パッケージに属していません",
+    "Place the caret on a feature name to go to it or find its uses": "feature 名にキャレットを置くと、その場所へ移動したり使用箇所を検索したりできます"
   }
 }

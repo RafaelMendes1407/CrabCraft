@@ -3437,3 +3437,97 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     pump(&mut app, "the cfg of the board again", |a| faded(a).len() == 2);
     app.insight.stop();
 }
+
+/// A crate whose features are used in several files, for N-13.
+pub(crate) fn feature_crate(root: &Path) {
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\nfull = [\"std\", \"extra\"]\n\n[workspace]\n");
+    write(&root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub mod extra;\n\n#[cfg(all(feature = \"std\", not(feature = \"extra\")))]\npub fn plain() {}\n\npub fn always() -> bool {\n    cfg!(feature = \"extra\")\n}\n");
+    write(&root.join("src/extra.rs"), "#[cfg_attr(feature = \"extra\", derive(Debug))]\npub struct Extra;\n\n// #[cfg(feature = \"extra\")] in a comment does not count\n");
+    write(&root.join("tests/it.rs"), "#[test]\n#[cfg(any(windows, feature = \"extra\"))]\nfn it() {}\n");
+    // Not part of the package's sources: the build output.
+    write(&root.join("target/gen.rs"), "#[cfg(feature = \"extra\")]\nfn generated() {}\n");
+}
+
+/// Go to Declaration and Find Usages between Cargo features and their `cfg` uses (N-13): from
+/// a `[features]` key to every `cfg` that names it, from `"extra"` of a `cfg` to its line in
+/// `Cargo.toml`, and from a feature another one turns on to its own line. No server needed.
+#[test]
+fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
+    use rc_editor::Action;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    feature_crate(&root);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    let manifest = root.join("Cargo.toml");
+    let caret_on = |app: &mut CrabCraftApp, line: usize, col: usize| app.docs.active_doc_mut().unwrap().editor.goto(line, col);
+    let here = |app: &CrabCraftApp| {
+        let d = app.docs.active_doc().unwrap();
+        (d.path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), d.editor.caret_line_col().0)
+    };
+    let uses = |app: &mut CrabCraftApp, title: &str| {
+        let title = title.to_string();
+        pump(app, &title.clone(), move |a| {
+            a.poll_feature_search();
+            a.find_results.as_ref().is_some_and(|(t, _)| *t == title)
+        });
+        let (_, targets) = app.find_results.clone().unwrap();
+        targets
+    };
+
+    // From the `extra = []` key: its uses, from a scan in the background.
+    app.open_file(&manifest);
+    caret_on(&mut app, 8, 2);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert!(app.feature_search.busy());
+    let targets = uses(&mut app, "Uses of feature extra");
+    let got: Vec<(String, usize)> = targets.iter().map(|t| (t.path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), t.line)).collect();
+    assert_eq!(got, vec![("src/extra.rs".into(), 0), ("src/lib.rs".into(), 0), ("src/lib.rs".into(), 3), ("src/lib.rs".into(), 7), ("tests/it.rs".into(), 1)]);
+    assert_eq!(targets[2].preview, "#[cfg(all(feature = \"std\", not(feature = \"extra\")))]");
+    assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Find));
+    // A row opens its place, as a click in the Find window does.
+    let t = targets[4].clone();
+    app.open_at(&t.path, t.line, t.col);
+    assert_eq!(here(&app), ("tests/it.rs".into(), 1));
+
+    // Find Usages on `"std"` in the array of `full`; Go to Declaration there jumps to `std = []`.
+    app.open_file(&manifest);
+    caret_on(&mut app, 9, 10);
+    app.run_insight_action(Action::FindUsages, egui::Pos2::ZERO);
+    assert_eq!(uses(&mut app, "Uses of feature std").len(), 1);
+    caret_on(&mut app, 9, 10);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 7));
+    // Back returns to where the jump started.
+    app.navigate(true);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 9));
+
+    // From `"extra"` in a `cfg` of a Rust file to `extra = []`, with no language server.
+    app.open_file(&root.join("src/lib.rs"));
+    caret_on(&mut app, 3, 44);
+    let pos = app.docs.active_doc().unwrap().editor.caret();
+    assert!(crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos), "⌃+click is answered locally");
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("Cargo.toml".into(), 8));
+    assert!(app.insight.session.is_none());
+    // Elsewhere in a Rust file the server keeps the click.
+    app.open_file(&root.join("src/lib.rs"));
+    caret_on(&mut app, 6, 8);
+    let pos = app.docs.active_doc().unwrap().editor.caret();
+    assert!(!crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos));
+    // Find Usages on a `cfg!` string lists the feature's uses too.
+    caret_on(&mut app, 7, 21);
+    app.find_results = None;
+    app.run_insight_action(Action::FindUsages, egui::Pos2::ZERO);
+    assert_eq!(uses(&mut app, "Uses of feature extra").len(), 5);
+
+    // A feature that is not declared stays where it is.
+    app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "#[cfg(feature = \"missing\")]\nfn m() {}\n");
+    caret_on(&mut app, 0, 18);
+    app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
+    assert_eq!(here(&app), ("src/lib.rs".into(), 0));
+    assert!(!root.join("target/debug").exists(), "nothing was built");
+}

@@ -6,6 +6,7 @@ mod instance;
 mod convert;
 mod debugger;
 mod dep_versions;
+mod feature_nav;
 mod insight;
 mod call_tree;
 mod item_templates;

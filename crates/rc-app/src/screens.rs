@@ -2317,3 +2317,27 @@ fn scrollbar_lens_capture() {
         h.render().unwrap().save(out.join(format!("scrollbar-lens-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// Find Usages on a `[features]` key of `Cargo.toml` (N-13): the `cfg` uses in the Find window.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/feature-uses-*.png"]
+fn feature_uses_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("ws");
+        crate::rust_tests::feature_crate(&root);
+        let root = root.canonicalize().unwrap();
+        let mut app = test_app(&dir.path().join("home"), dark);
+        app.open_workspace(&root);
+        app.open_file(&root.join("Cargo.toml"));
+        app.docs.active_doc_mut().unwrap().editor.goto(8, 2);
+        app.run_insight_action(rc_editor::Action::FindUsages, egui::Pos2::ZERO);
+        let mut h = harness(app, vec2(1280.0, 800.0));
+        run_frames(&mut h, "the uses of extra", |a| a.find_results.is_some());
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("feature-uses-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}
