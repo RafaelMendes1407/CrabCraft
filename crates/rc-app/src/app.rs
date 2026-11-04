@@ -184,6 +184,9 @@ pub struct CrabCraftApp {
     pub shift_taps: (f64, u8, bool),
     pub ctrl_taps: (f64, u8, bool),
     pub session_dirty: bool,
+    /// The patterns of automatic attach (D-15), as typed, and the watch while it runs.
+    pub auto_attach_text: String,
+    pub auto_attach: Option<crate::auto_attach::Watch>,
     pub last_session_save: f64,
     /// Editor keeps the focus when the window regains it.
     pub had_focus: bool,
@@ -353,6 +356,8 @@ impl CrabCraftApp {
             shift_taps: (0.0, 0, false),
             ctrl_taps: (0.0, 0, false),
             session_dirty: false,
+            auto_attach_text: String::new(),
+            auto_attach: None,
             last_session_save: 0.0,
             had_focus: true,
             settings,
@@ -434,6 +439,7 @@ impl CrabCraftApp {
         self.runner.compounds = session.compounds.clone();
         // The session file is the user's to edit: empty or overlong folder names are dropped.
         self.runner.folders = session.config_folders.iter().filter(|(_, f)| !f.trim().is_empty() && f.chars().count() <= crate::runner::MAX_FOLDER_CHARS).map(|(c, f)| (c.clone(), f.trim().to_string())).collect();
+        self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
         self.runner.test_configs = session.test_configs.clone();
         self.runner.options = session.run_options.clone();
         // Configurations stored in the project win over the session's copy.
@@ -1228,6 +1234,7 @@ impl CrabCraftApp {
             self.save_session();
         }
         self.workspace = None;
+        self.auto_attach = None;
         self._watcher = None;
         self.insight.stop();
         self.runner.stop_all();
@@ -1403,6 +1410,7 @@ impl CrabCraftApp {
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
             config_folders: self.runner.folders.clone(),
+            auto_attach: self.auto_attach_text.clone(),
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),
@@ -3116,6 +3124,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_inspection();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
+        self.poll_auto_attach();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);

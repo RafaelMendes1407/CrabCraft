@@ -3,6 +3,7 @@
 mod app;
 mod cli;
 mod instance;
+mod auto_attach;
 mod breakpoint_list;
 mod convert;
 mod copyright;

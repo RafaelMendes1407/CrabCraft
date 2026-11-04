@@ -4180,3 +4180,79 @@ fn set_execution_point_skips_and_repeats_lines_with_gdb() {
     app.run_ide_action(&egui::Context::default(), Action::Resume);
     settle_debugger(&mut app, "the end", &|a| a.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()));
 }
+
+/// D-15: watching for a name pattern attaches GDB to the next matching program that starts,
+/// not to the one already running, and not while a debug session runs.
+#[test]
+fn the_debugger_attaches_automatically_to_a_program_that_starts() {
+    use rc_editor::BreakpointKind;
+    // Yama allows a debugger that is not the parent only when the program says so.
+    const MAIN: &str = "extern \"C\" {\n    fn prctl(option: i32, arg: u64, ...) -> i32;\n}\n\nfn main() {\n    unsafe { prctl(0x59616d61, u64::MAX) };\n    let mut rounds = 0u64;\n    loop {\n        rounds += 1;\n        std::thread::sleep(std::time::Duration::from_millis(5));\n        if rounds == u64::MAX {\n            break;\n        }\n    }\n}\n";
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"autoserver\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let built = std::process::Command::new("cargo").arg("build").arg("-q").current_dir(&root).status().unwrap();
+    assert!(built.success());
+    struct Running(std::process::Child);
+    impl Drop for Running {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let spawn = || Running(std::process::Command::new(root.join("target/debug/autoserver")).spawn().unwrap());
+    let frames = |app: &mut CrabCraftApp, n: usize| {
+        for _ in 0..n {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            app.poll_auto_attach();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
+    let before = spawn();
+    std::thread::sleep(Duration::from_millis(300));
+    app.auto_attach_text = " other, auto* ,".into();
+    assert!(app.start_auto_attach());
+    assert_eq!(app.auto_attach_text, "other, auto*");
+    frames(&mut app, 60);
+    assert!(app.debugger.session.is_none(), "attached to the program that was already running");
+
+    let after = spawn();
+    let start = Instant::now();
+    while !app.debugger.stopped() {
+        frames(&mut app, 1);
+        if let Some(rc_dap::SessionState::Failed(f)) = app.debugger.session.as_ref().map(|s| s.state()) {
+            panic!("attach failed: {f}");
+        }
+        assert!(start.elapsed() < Duration::from_secs(60), "did not attach: {}", app.debugger.state_label());
+    }
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), Some(after.0.id()));
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(8));
+    assert!(app.notices.iter().any(|n| n.text.contains("autoserver")));
+
+    // While debugging, another one is let go.
+    let third = spawn();
+    frames(&mut app, 60);
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), Some(after.0.id()));
+    app.debugger.stop();
+    app.stop_auto_attach();
+    app.save_session();
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(again.auto_attach_text, "other, auto*");
+    assert!(again.auto_attach.is_none(), "watching starts only when asked");
+    drop((before, after, third));
+}

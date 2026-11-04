@@ -1493,5 +1493,14 @@
     "The execution point can only move within the current function": "Punkt wykonania można przenieść tylko w obrębie bieżącej funkcji",
     "No statement starts at this line": "W tym wierszu nie zaczyna się żadna instrukcja",
     "Cannot move the execution point: {message}": "Nie można przenieść punktu wykonania: {message}"
+  },
+  "autoattach": {
+    "Attach automatically to new processes named": "Automatycznie dołączaj do nowych procesów o nazwie",
+    "server*, *-worker": "server*, *-worker",
+    "Start Watching": "Zacznij obserwować",
+    "Stop Watching": "Przestań obserwować",
+    "Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.": "Obserwowanie {patterns}: debuger dołącza do pierwszego, który się uruchomi, gdy nic nie debuguje.",
+    "Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.": "Oddziel nazwy przecinkami; * to dowolny tekst, a ? jeden znak. Liczą się tylko procesy uruchomione po rozpoczęciu obserwacji.",
+    "Attached automatically to {name} ({pid})": "Automatycznie dołączono do {name} ({pid})"
   }
 }

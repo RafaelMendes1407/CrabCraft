@@ -1493,5 +1493,14 @@
     "The execution point can only move within the current function": "O ponto de execução só pode ser movido dentro da função atual",
     "No statement starts at this line": "Nenhuma instrução começa nesta linha",
     "Cannot move the execution point: {message}": "Não foi possível mover o ponto de execução: {message}"
+  },
+  "autoattach": {
+    "Attach automatically to new processes named": "Anexar automaticamente aos novos processos chamados",
+    "server*, *-worker": "server*, *-worker",
+    "Start Watching": "Começar a observar",
+    "Stop Watching": "Parar de observar",
+    "Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.": "Observando {patterns}: o depurador se anexa ao primeiro que iniciar enquanto não estiver depurando.",
+    "Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.": "Separe os nomes com vírgulas; * é qualquer texto e ? um caractere. Só contam os processos iniciados depois que a observação começa.",
+    "Attached automatically to {name} ({pid})": "Anexado automaticamente a {name} ({pid})"
   }
 }

@@ -431,6 +431,11 @@ impl Debugger {
         }
     }
 
+    /// Wakes the UI (for work that reports to it from another thread).
+    pub fn waker(&self) -> Waker {
+        self.waker.clone()
+    }
+
     /// Moves the execution point to `line` (0-based) of `path` without running the code in
     /// between (Set Execution Point to Cursor).
     pub fn set_execution_point(&mut self, path: &Path, line: usize) {

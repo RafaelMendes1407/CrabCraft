@@ -144,6 +144,9 @@ pub struct Session {
     pub bookmarks: BTreeMap<PathBuf, Vec<usize>>,
     /// Folders of the run configurations (B-21): configuration name → folder name.
     pub config_folders: BTreeMap<String, String>,
+    /// Names to attach the debugger to automatically (D-15), as typed (comma-separated). The
+    /// watch itself never starts on its own.
+    pub auto_attach: String,
     /// Compound run configurations: name and the configurations they start.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Test configurations made from a gutter run and saved (Save Configuration).

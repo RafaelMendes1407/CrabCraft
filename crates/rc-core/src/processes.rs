@@ -5,6 +5,8 @@
 pub struct Process {
     pub pid: u32,
     pub name: String,
+    /// The file name of its executable (`name` is cut to 15 bytes by Linux).
+    pub exe: String,
     /// Its command line.
     pub command: String,
 }
@@ -26,10 +28,11 @@ pub fn list() -> Vec<Process> {
 fn read(pid: u32) -> Option<Process> {
     let dir = std::path::PathBuf::from(format!("/proc/{pid}"));
     // Other users' processes hide their executable, and could not be attached to.
-    std::fs::read_link(dir.join("exe")).ok()?;
+    let exe = std::fs::read_link(dir.join("exe")).ok()?;
+    let exe = exe.file_name().map(|n| n.to_string_lossy().trim_end_matches(" (deleted)").to_string()).unwrap_or_default();
     let name = std::fs::read_to_string(dir.join("comm")).ok()?.trim().to_string();
     let raw = std::fs::read(dir.join("cmdline")).ok()?;
-    Some(Process { pid, name, command: command_line(&raw) })
+    Some(Process { pid, name, exe, command: command_line(&raw) })
 }
 
 /// `/proc/<pid>/cmdline` separates arguments with zero bytes.

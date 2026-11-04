@@ -3280,3 +3280,31 @@ fn breakpoint_list_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("breakpoint-list-dark.png")).unwrap();
 }
+
+/// D-15: captures the Attach dialog while it watches for processes by name.
+#[test]
+#[ignore = "writes target/snapshots/auto-attach-dark.png"]
+fn auto_attach_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root.canonicalize().unwrap());
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    h.state_mut().auto_attach_text = "shop-server*, *-worker".into();
+    assert!(h.state_mut().start_auto_attach());
+    let processes = vec![
+        rc_core::processes::Process { pid: 48211, name: "shop-server".into(), exe: "shop-server".into(), command: "target/debug/shop-server --port 8080".into() },
+        rc_core::processes::Process { pid: 48190, name: "mail-worker".into(), exe: "mail-worker".into(), command: "target/debug/mail-worker".into() },
+    ];
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Attach { filter: String::new(), processes });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("auto-attach-dark.png")).unwrap();
+    h.state_mut().stop_auto_attach();
+}

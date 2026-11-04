@@ -1493,5 +1493,14 @@
     "The execution point can only move within the current function": "Le point d’exécution ne peut se déplacer que dans la fonction en cours",
     "No statement starts at this line": "Aucune instruction ne commence à cette ligne",
     "Cannot move the execution point: {message}": "Impossible de déplacer le point d’exécution : {message}"
+  },
+  "autoattach": {
+    "Attach automatically to new processes named": "S’attacher automatiquement aux nouveaux processus nommés",
+    "server*, *-worker": "server*, *-worker",
+    "Start Watching": "Commencer la surveillance",
+    "Stop Watching": "Arrêter la surveillance",
+    "Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.": "Surveillance de {patterns} : le débogueur s’attache au premier qui démarre quand il ne débogue pas.",
+    "Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.": "Séparez les noms par des virgules ; * correspond à n’importe quel texte et ? à un caractère. Seuls les processus lancés après le début de la surveillance comptent.",
+    "Attached automatically to {name} ({pid})": "Attaché automatiquement à {name} ({pid})"
   }
 }

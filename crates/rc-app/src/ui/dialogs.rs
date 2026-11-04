@@ -1174,7 +1174,9 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
         let ((chosen, cancel), esc) = modal(ctx, "attach_process", 560.0, |ui| {
             title(ui, tr("Attach to Process"));
             let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Filter by name or PID")).desired_width(f32::INFINITY));
-            resp.request_focus();
+            if ui.memory(|m| m.focused().is_none()) {
+                resp.request_focus();
+            }
             ui.add_space(6.0);
             let needle = filter.trim().to_lowercase();
             let mut chosen = None;
@@ -1186,6 +1188,9 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
                     }
                 }
             });
+            ui.add_space(8.0);
+            ui.separator();
+            auto_attach(app, ui);
             ui.add_space(10.0);
             let cancel = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| theme::secondary_button(ui, tr("Cancel")).clicked()).inner;
             (chosen, cancel)
@@ -1198,6 +1203,32 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// The automatic attach of the Attach dialog (D-15): name patterns and Start/Stop Watching.
+fn auto_attach(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    ui.label(egui::RichText::new(tr("Attach automatically to new processes named")).strong());
+    let watching = app.auto_attach.is_some();
+    ui.horizontal(|ui| {
+        let edit = ui.add_enabled(!watching, egui::TextEdit::singleline(&mut app.auto_attach_text).hint_text(tr("server*, *-worker")).char_limit(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).desired_width(ui.available_width() - 150.0));
+        if edit.changed() {
+            app.session_dirty = true;
+        }
+        let ready = !crate::auto_attach::parse_patterns(&app.auto_attach_text).is_empty();
+        if watching {
+            if theme::secondary_button(ui, tr("Stop Watching")).clicked() {
+                app.stop_auto_attach();
+            }
+        } else if ui.add_enabled_ui(ready, |ui| theme::primary_button(ui, tr("Start Watching"))).inner.clicked() && !app.start_auto_attach() {
+            app.notify(tr("Attaching needs an open Rust project"), false);
+        }
+    });
+    let note = match &app.auto_attach {
+        Some(w) => trf("Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.", &[("patterns", &w.patterns.join(", "))]),
+        None => tr("Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.").to_string(),
+    };
+    ui.label(egui::RichText::new(note).size(12.0).color(if watching { p.accent } else { p.muted }));
 }
 
 #[allow(clippy::too_many_arguments)]
