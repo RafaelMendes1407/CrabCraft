@@ -2065,6 +2065,68 @@ fn cargo_toml_warns_about_unknown_and_outdated_crates() {
     assert!(h.state().insight.problems.get(&path).is_none_or(|l| l.iter().all(|d| d.code.as_deref() != Some(crate::dep_versions::DIAG_CODE))));
 }
 
+/// I-22: the open `Cargo.toml` is inspected offline, on a thread: a misspelled key and a
+/// feature that names a dependency that is not optional get diagnostics (also in the Problems
+/// window) whose Alt+Enter quick fixes correct them in the editor.
+#[test]
+fn cargo_toml_inspections_flag_mistakes_and_fix_them() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    h.state_mut().settings.check_crates_io = false;
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("edition = \"2021\"\n").unwrap() + "edition = \"2021\"\n".len();
+        editor.replace(at, at, "descripton = \"A demo\"\n");
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("extra = []").unwrap();
+        editor.replace(at, at + "extra = []".len(), "extra = [\"dep:serde\"]");
+    }
+    let ours = |a: &CrabCraftApp| -> Vec<String> {
+        let doc = a.docs.active_doc().unwrap();
+        let mut out: Vec<String> = doc.editor.diagnostics.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).map(|d| d.message.clone()).collect();
+        out.sort();
+        out
+    };
+    run_frames(&mut h, "the inspection", |a| !a.manifest_inspections.busy() && ours(a).len() == 2);
+    let got = ours(h.state());
+    assert_eq!(got, vec!["Feature `extra` includes `dep:serde`, but `serde` is not an optional dependency".to_string(), "Unknown key `descripton` in `[package]`; did you mean `description`?".to_string()]);
+    let path = root.join("Cargo.toml");
+    assert_eq!(h.state().insight.problems.get(&path).map_or(0, |l| l.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).count()), 2, "listed in the Problems window");
+
+    // Alt+Enter on each line offers its fix; Enter makes it.
+    for (line_text, title) in [("descripton", "Change to `description`"), ("serde = ", "Make `serde` optional")] {
+        {
+            let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+            let text = editor.buffer.rope().to_string();
+            let at = text.find(line_text).unwrap() + 1;
+            editor.selection = rc_text::Selection::point(at);
+        }
+        h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::new(100.0, 100.0));
+        h.run_steps(1);
+        let titles: Vec<String> = match &h.state().dialog {
+            Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) => list
+                .iter()
+                .map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(a) => a.title.clone(),
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        assert_eq!(titles, vec![title.to_string()]);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        run_frames(&mut h, "the next inspection", |a| !a.manifest_inspections.busy());
+    }
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("\ndescription = \"A demo\"\n"), "{text}");
+    assert!(text.contains("serde = { version = \"1\", features = [\"derive\"], optional = true }") || text.contains("optional = true"), "{text}");
+    run_frames(&mut h, "the diagnostics to go", |a| ours(a).is_empty());
+    assert_eq!(std::fs::read_to_string(&path).unwrap().contains("descripton"), false, "nothing was saved for the user");
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
 fn cargo_dep_versions_capture() {

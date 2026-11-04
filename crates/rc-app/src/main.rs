@@ -16,6 +16,7 @@ mod item_templates;
 mod layout;
 mod local_history;
 mod manifest_completion;
+mod manifest_inspect;
 mod memory_view;
 mod playground;
 mod refactor_conflicts;

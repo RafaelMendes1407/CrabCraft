@@ -1309,5 +1309,24 @@
     "Add feature `{feature}` to the {name} dependency": "依存関係 {name} に feature `{feature}` を追加",
     "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "{package} の feature {feature} をコード解析で有効にしました。Cargo.toml のガターで無効にできます",
     "The feature is already turned on in Cargo.toml": "この feature は Cargo.toml で既に有効です"
+  },
+  "cargo-inspections": {
+    "Unknown top-level key `{key}`; Cargo ignores it": "不明なトップレベルのキー `{key}`。Cargo は無視します",
+    "Unknown top-level key `{key}`; did you mean `{suggestion}`?": "不明なトップレベルのキー `{key}`。`{suggestion}` のことですか?",
+    "Unknown key `{key}` in `[{table}]`; Cargo ignores it": "`[{table}]` の不明なキー `{key}`。Cargo は無視します",
+    "Unknown key `{key}` in `[{table}]`; did you mean `{suggestion}`?": "`[{table}]` の不明なキー `{key}`。`{suggestion}` のことですか?",
+    "`{name}` is also in `[dependencies]` with the incompatible requirement `{req}`": "`{name}` は `[dependencies]` にも互換性のない要件 `{req}` で記述されています",
+    "Dependency `{name}` has no version, path, git or workspace source": "依存関係 `{name}` にバージョン、パス、git、workspace のいずれのソースもありません",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency": "フィーチャー `{feature}` に含まれる `{value}` はフィーチャーでも任意の依存関係でもありません",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency; did you mean `{suggestion}`?": "フィーチャー `{feature}` に含まれる `{value}` はフィーチャーでも任意の依存関係でもありません。`{suggestion}` のことですか?",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not a dependency": "フィーチャー `{feature}` は `{value}` を含みますが、`{dep}` は依存関係ではありません",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not an optional dependency": "フィーチャー `{feature}` は `{value}` を含みますが、`{dep}` は任意の依存関係ではありません",
+    "Feature `{feature}` includes `{dep}`, which has no implicit feature because `dep:{dep}` is used; write `dep:{dep}`": "フィーチャー `{feature}` が含む `{dep}` は `dep:{dep}` が使われているため暗黙のフィーチャーがありません。`dep:{dep}` と書いてください",
+    "Unknown edition `{value}`; expected 2015, 2018, 2021 or 2024": "不明なエディション `{value}`。2015、2018、2021、2024 のいずれかを指定してください",
+    "The edition must be a string, such as `{example}`": "エディションは `{example}` のような文字列で指定してください",
+    "No package at workspace member `{path}`": "ワークスペースのメンバー `{path}` にパッケージがありません",
+    "No package at `{path}` for dependency `{name}`": "依存関係 `{name}` の `{path}` にパッケージがありません",
+    "Change to `{text}`": "`{text}` に変更",
+    "Make `{name}` optional": "`{name}` を任意にする"
   }
 }

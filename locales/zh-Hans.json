@@ -1309,5 +1309,24 @@
     "Add feature `{feature}` to the {name} dependency": "将 feature `{feature}` 添加到依赖项 {name}",
     "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "{package} 的 feature {feature} 已为代码分析启用；可在 Cargo.toml 的边栏中关闭",
     "The feature is already turned on in Cargo.toml": "该 feature 已在 Cargo.toml 中启用"
+  },
+  "cargo-inspections": {
+    "Unknown top-level key `{key}`; Cargo ignores it": "未知的顶层键 `{key}`；Cargo 会忽略它",
+    "Unknown top-level key `{key}`; did you mean `{suggestion}`?": "未知的顶层键 `{key}`；是否想输入 `{suggestion}`？",
+    "Unknown key `{key}` in `[{table}]`; Cargo ignores it": "`[{table}]` 中的未知键 `{key}`；Cargo 会忽略它",
+    "Unknown key `{key}` in `[{table}]`; did you mean `{suggestion}`?": "`[{table}]` 中的未知键 `{key}`；是否想输入 `{suggestion}`？",
+    "`{name}` is also in `[dependencies]` with the incompatible requirement `{req}`": "`{name}` 也在 `[dependencies]` 中，且版本要求 `{req}` 不兼容",
+    "Dependency `{name}` has no version, path, git or workspace source": "依赖 `{name}` 没有版本、路径、git 或 workspace 来源",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency": "特性 `{feature}` 包含 `{value}`，它既不是特性也不是可选依赖",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency; did you mean `{suggestion}`?": "特性 `{feature}` 包含 `{value}`，它既不是特性也不是可选依赖；是否想输入 `{suggestion}`？",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not a dependency": "特性 `{feature}` 包含 `{value}`，但 `{dep}` 不是依赖",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not an optional dependency": "特性 `{feature}` 包含 `{value}`，但 `{dep}` 不是可选依赖",
+    "Feature `{feature}` includes `{dep}`, which has no implicit feature because `dep:{dep}` is used; write `dep:{dep}`": "特性 `{feature}` 包含 `{dep}`，但由于使用了 `dep:{dep}`，它没有隐式特性；请写 `dep:{dep}`",
+    "Unknown edition `{value}`; expected 2015, 2018, 2021 or 2024": "未知的版次 `{value}`；应为 2015、2018、2021 或 2024",
+    "The edition must be a string, such as `{example}`": "版次必须是字符串，例如 `{example}`",
+    "No package at workspace member `{path}`": "工作区成员 `{path}` 处没有包",
+    "No package at `{path}` for dependency `{name}`": "依赖 `{name}` 的 `{path}` 处没有包",
+    "Change to `{text}`": "改为 `{text}`",
+    "Make `{name}` optional": "将 `{name}` 设为可选"
   }
 }

@@ -1796,7 +1796,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         // Local commands, also behind a local quick fix (a code action with only a command).
         let local = match &action {
             A::Command(c) => Some(c),
-            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND || c.command == crate::feature_fix::ENABLE_FEATURE_COMMAND),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| [crate::insight::UPDATE_DEPENDENCY_COMMAND, crate::insight::MANIFEST_FIX_COMMAND, crate::feature_fix::ENABLE_FEATURE_COMMAND].contains(&c.command.as_str())),
             A::CodeAction(_) => None,
         };
         if let Some(c) = local {
@@ -1812,6 +1812,19 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     let fix = c.arguments.as_ref().and_then(|a| a.first()).and_then(|v| serde_json::from_value::<crate::feature_fix::FeatureFix>(v.clone()).ok());
                     if let Some(fix) = fix {
                         app.apply_feature_fix(fix);
+                    }
+                    true
+                }
+                crate::insight::MANIFEST_FIX_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let num = |i: usize| args.get(i).and_then(|v| v.as_u64()).and_then(|n| usize::try_from(n).ok());
+                    let text = |i: usize| args.get(i).and_then(|v| v.as_str());
+                    if let (Some(start), Some(end), Some(old), Some(new), Some(doc)) = (num(0), num(1), text(2), text(3), app.docs.active_doc_mut()) {
+                        let rope = doc.editor.buffer.rope();
+                        // Only when the text there is still what the fix was made for.
+                        if start <= end && end <= rope.len_chars() && rope.slice(start..end).to_string() == old {
+                            doc.editor.replace(start, end, new);
+                        }
                     }
                     true
                 }

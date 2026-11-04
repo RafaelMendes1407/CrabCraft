@@ -1309,5 +1309,24 @@
     "Add feature `{feature}` to the {name} dependency": "Añadir la feature `{feature}` a la dependencia {name}",
     "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "La feature {feature} de {package} está activada para el análisis de código; desactívala en el margen de Cargo.toml",
     "The feature is already turned on in Cargo.toml": "La feature ya está activada en Cargo.toml"
+  },
+  "cargo-inspections": {
+    "Unknown top-level key `{key}`; Cargo ignores it": "Clave de nivel superior desconocida `{key}`; Cargo la ignora",
+    "Unknown top-level key `{key}`; did you mean `{suggestion}`?": "Clave de nivel superior desconocida `{key}`; ¿quisiste decir `{suggestion}`?",
+    "Unknown key `{key}` in `[{table}]`; Cargo ignores it": "Clave desconocida `{key}` en `[{table}]`; Cargo la ignora",
+    "Unknown key `{key}` in `[{table}]`; did you mean `{suggestion}`?": "Clave desconocida `{key}` en `[{table}]`; ¿quisiste decir `{suggestion}`?",
+    "`{name}` is also in `[dependencies]` with the incompatible requirement `{req}`": "`{name}` también está en `[dependencies]` con el requisito incompatible `{req}`",
+    "Dependency `{name}` has no version, path, git or workspace source": "La dependencia `{name}` no tiene versión, ruta, git ni origen de workspace",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency": "La feature `{feature}` incluye `{value}`, que no es una feature ni una dependencia opcional",
+    "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency; did you mean `{suggestion}`?": "La feature `{feature}` incluye `{value}`, que no es una feature ni una dependencia opcional; ¿quisiste decir `{suggestion}`?",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not a dependency": "La feature `{feature}` incluye `{value}`, pero `{dep}` no es una dependencia",
+    "Feature `{feature}` includes `{value}`, but `{dep}` is not an optional dependency": "La feature `{feature}` incluye `{value}`, pero `{dep}` no es una dependencia opcional",
+    "Feature `{feature}` includes `{dep}`, which has no implicit feature because `dep:{dep}` is used; write `dep:{dep}`": "La feature `{feature}` incluye `{dep}`, que no tiene feature implícita porque se usa `dep:{dep}`; escribe `dep:{dep}`",
+    "Unknown edition `{value}`; expected 2015, 2018, 2021 or 2024": "Edición desconocida `{value}`; se esperaba 2015, 2018, 2021 o 2024",
+    "The edition must be a string, such as `{example}`": "La edición debe ser una cadena, como `{example}`",
+    "No package at workspace member `{path}`": "No hay ningún paquete en el miembro del workspace `{path}`",
+    "No package at `{path}` for dependency `{name}`": "No hay ningún paquete en `{path}` para la dependencia `{name}`",
+    "Change to `{text}`": "Cambiar a `{text}`",
+    "Make `{name}` optional": "Hacer `{name}` opcional"
   }
 }

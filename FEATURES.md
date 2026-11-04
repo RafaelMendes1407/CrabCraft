@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 150 |
+| ✅ Pronto | 151 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 73 |
+| ⬜ A fazer | 72 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -138,7 +138,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-19 | Suprimir inspeções (`#[allow]`) | ✅ | M3 | Alt+Enter num aviso do rustc ou do Clippy oferece suprimir o lint na instrução ou item (junta no #[allow] existente) ou no arquivo (#![allow]); só para nomes de lint, não para checagens próprias do rust-analyzer. Testado com rust-analyzer e cargo check reais |
 | I-20 | Linters externos: Cargo Check e Clippy | ✅ | M3 | `check.command` do rust-analyzer, trocado sem reiniciar; lint `len_zero` do Clippy recebido em teste real |
 | I-21 | Widget do linter na barra de status | ✅ | M3 | Clique alterna Cargo Check/Clippy e salva a escolha; visto na janela nativa |
-| I-22 | Inspeções de `Cargo.toml` | ⬜ | M4 | |
+| I-22 | Inspeções de `Cargo.toml` | ✅ | M4 | Offline, numa thread, a cada mudança do `Cargo.toml` aberto: chave desconhecida (com sugestão), dev-dependency com requisito incompatível com o de `[dependencies]`, dependência sem origem, feature que cita o que não existe ou dependência não opcional, `dep:` sem feature implícita, edição inválida, membro do workspace ou dependência `path` sem pacote. Diagnósticos no editor e na janela Problemas; Alt+Enter corrige (trocar chave/valor, tornar opcional). Testado na interface com um projeto real. |
 | I-23 | Visualizar lifetimes em erros do borrow checker | ⬜ | M4 | A partir dos spans do rustc |
 | I-24 | Explicações inline de erros | ✅ | M4 | Para diagnósticos com código do rustc (`E` e quatro dígitos, validado antes de chamar o rustc), "Explicar E0308" no hover do erro no editor e no menu de contexto das janelas Problemas e Build abre a explicação de `rustc --explain` (o rustc ao lado do cargo, em segundo plano com tempo limite e cache por código) numa aba Markdown somente leitura. Sem explicação, avisa. Testado em projeto Cargo real: E0308 de `cargo check` ao salvar e do build, com rustc e rust-analyzer reais; visto na janela renderizada |
 | I-25 | Expandir macro (recursivo e um passo) | 🚧 | M4 | Expandir recursivamente (menu Código e Find Action) abre a expansão numa aba somente leitura, fora do rust-analyzer; testado com rust-analyzer real. Falta expandir um passo: o rust-analyzer só expande tudo |

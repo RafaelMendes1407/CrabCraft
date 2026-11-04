@@ -13,6 +13,7 @@ pub mod explain;
 pub mod feature_fix;
 pub mod feature_nav;
 pub mod format;
+pub mod inspect;
 pub mod manifest_complete;
 pub mod messages;
 pub mod metadata;

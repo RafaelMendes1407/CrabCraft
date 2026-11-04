@@ -107,6 +107,9 @@ pub const DERIVE_COMMAND: &str = "crabcraft.derive";
 pub const SUPPRESS_COMMAND: &str = "crabcraft.suppress";
 /// Local command: updates the version requirement of a `Cargo.toml` dependency (line, version).
 pub const UPDATE_DEPENDENCY_COMMAND: &str = "crabcraft.update-dependency";
+/// Local command: a `Cargo.toml` inspection quick fix (start and end chars, the text there,
+/// its replacement).
+pub const MANIFEST_FIX_COMMAND: &str = "crabcraft.manifest-fix";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {

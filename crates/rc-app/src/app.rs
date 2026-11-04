@@ -89,6 +89,8 @@ pub struct CrabCraftApp {
     /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
     /// docs.rs icons.
     pub dep_versions: crate::dep_versions::DepVersions,
+    /// Offline inspections of the open `Cargo.toml` (I-22).
+    pub manifest_inspections: crate::manifest_inspect::ManifestInspections,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
@@ -299,6 +301,7 @@ impl CrabCraftApp {
             triple_load: None,
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            manifest_inspections: crate::manifest_inspect::ManifestInspections::new(waker.clone()),
             feature_search: Default::default(),
             copyright: Default::default(),
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
@@ -1477,24 +1480,31 @@ impl CrabCraftApp {
                 return;
             }
         }
-        // The quick fix of an outdated dependency (C-04) is made here, not by a server.
+        // The quick fixes of an outdated dependency (C-04) and of the manifest inspections (I-22)
+        // are made here, not by a server.
         if action == Action::ShowIntentions && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
             let doc = &self.docs.list[i];
             let line = doc.editor.caret_line_col().0;
-            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
-                let version = version.to_string();
-                let command = rc_lsp::lsp_types::Command {
-                    title: trf("Update to {version}", &[("version", &version)]),
-                    command: crate::insight::UPDATE_DEPENDENCY_COMMAND.to_string(),
-                    arguments: Some(vec![serde_json::json!(line), serde_json::json!(version)]),
-                };
-                let action = rc_lsp::lsp_types::CodeAction {
-                    title: command.title.clone(),
+            let quick_fix = |title: String, command: &str, arguments: Vec<serde_json::Value>| {
+                let command = rc_lsp::lsp_types::Command { title: title.clone(), command: command.to_string(), arguments: Some(arguments) };
+                rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(rc_lsp::lsp_types::CodeAction {
+                    title,
                     kind: Some(rc_lsp::lsp_types::CodeActionKind::QUICKFIX),
                     command: Some(command),
                     ..Default::default()
-                };
-                self.dialog = Some(Dialog::CodeActions { list: vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(action)], selected: 0 });
+                })
+            };
+            let mut list = Vec::new();
+            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
+                let version = version.to_string();
+                list.push(quick_fix(trf("Update to {version}", &[("version", &version)]), crate::insight::UPDATE_DEPENDENCY_COMMAND, vec![serde_json::json!(line), serde_json::json!(version)]));
+            }
+            for fix in self.manifest_inspections.fixes_on_line(doc, line) {
+                let args = vec![serde_json::json!(fix.start), serde_json::json!(fix.end), serde_json::json!(fix.old), serde_json::json!(fix.new)];
+                list.push(quick_fix(crate::manifest_inspect::fix_title(&fix), crate::insight::MANIFEST_FIX_COMMAND, args));
+            }
+            if !list.is_empty() {
+                self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
                 return;
             }
         }
@@ -3008,6 +3018,7 @@ impl eframe::App for CrabCraftApp {
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
+        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch);
         self.poll_feature_search();
         self.poll_playground(&ctx);
         let dark = self.dark(&ctx);
