@@ -3399,3 +3399,95 @@ fn http_client_capture() {
         h.render().unwrap().save(out.join(format!("http-client-headers-{suffix}.png"))).unwrap();
     }
 }
+
+/// A-01: Profile builds the selected Rust binary and records it with the real perf. Where the
+/// kernel forbids recording (perf_event_paranoid above 2), the window says so and how to allow
+/// it; otherwise the profile has samples of the program's own code.
+#[test]
+fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if crate::profiler::perf_path().is_none() {
+        eprintln!("skipped: no perf");
+        return;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::Profile));
+    h.state_mut().pending.push(rc_editor::Action::Profile);
+    h.run_steps(2);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Profiler));
+    assert!(h.state().profiler.busy());
+    run_frames(&mut h, "the profile", |a| !a.profiler.busy());
+    match h.state().profiler.result.as_ref().unwrap() {
+        Ok(p) => assert!(p.frames.iter().any(|f| f.own), "{p:?}"),
+        Err(crate::profiler::ProfError::Restricted(level)) => {
+            assert!(level.is_some_and(|l| l > 2));
+            assert!(h.get_all_by_label_contains("sudo sysctl kernel.perf_event_paranoid=2").next().is_some());
+        }
+        Err(e) => panic!("{e:?}\n{}", h.state().profiler.output),
+    }
+}
+
+/// A profile made from `perf script` text of a small program (no recording needed).
+fn sample_profile() -> crate::profiler::Profile {
+    let bin = "/work/demo/target/debug/demo";
+    let stacks: &[(&[&str], u64)] = &[
+        (&["demo::parse::tokenize", "demo::parse::parse", "demo::main"], 40),
+        (&["demo::parse::number", "demo::parse::tokenize", "demo::parse::parse", "demo::main"], 25),
+        (&["demo::eval::apply", "demo::eval::eval", "demo::main"], 30),
+        (&["demo::eval::apply", "demo::eval::apply", "demo::eval::eval", "demo::main"], 22),
+        (&["alloc::raw_vec::RawVec<T,A>::grow_one", "demo::parse::tokenize", "demo::parse::parse", "demo::main"], 12),
+        (&["__memmove_avx_unaligned_erms", "demo::report::print", "demo::main"], 9),
+        (&["demo::main"], 4),
+    ];
+    let mut text = String::new();
+    for (stack, n) in stacks {
+        for i in 0..*n {
+            text.push_str(&format!("demo  77 100.{i:06}:    2004008 cpu-clock:u: \n"));
+            for f in stack.iter().chain(["std::rt::lang_start_internal", "__libc_start_call_main"].iter()) {
+                let dso = if f.starts_with("__") { "/usr/lib/x86_64-linux-gnu/libc.so.6" } else { bin };
+                text.push_str(&format!("\t    5581f0a1cc4f {f} ({dso})\n"));
+            }
+            text.push('\n');
+        }
+    }
+    let mut parser = crate::profiler::ScriptParser::new(Some(Path::new(bin)));
+    for l in text.split_inclusive('\n') {
+        parser.line(l);
+    }
+    let p = parser.finish();
+    assert_eq!(p.samples, 142);
+    p
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/profiler-*.png"]
+fn profiler_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let suffix = if dark { "dark" } else { "light" };
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = playground_harness(home.path(), dir.path(), dark);
+        let profile = sample_profile();
+        {
+            let app = h.state_mut();
+            app.dock.show(crate::toolwindow::ToolWindow::Profiler);
+            app.profiler.name = "demo".into();
+            app.profiler.open = crate::profiler::hot_path(&profile);
+            app.profiler.result = Some(Ok(profile));
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-flame-{suffix}.png"))).unwrap();
+        h.state_mut().profiler.show_tree = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-tree-{suffix}.png"))).unwrap();
+        h.state_mut().profiler.result = Some(Err(crate::profiler::ProfError::Restricted(Some(4))));
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("profiler-restricted-{suffix}.png"))).unwrap();
+    }
+}

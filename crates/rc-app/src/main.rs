@@ -22,6 +22,7 @@ mod manifest_completion;
 mod manifest_inspect;
 mod memory_view;
 mod playground;
+mod profiler;
 mod refactor_conflicts;
 mod refactor_preview;
 mod run_anything;

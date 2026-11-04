@@ -114,6 +114,8 @@ pub struct CrabCraftApp {
     pub playground: crate::playground::Playground,
     /// Requests sent from `.http` files and their responses (F-03).
     pub http: crate::http_client::HttpClient,
+    /// perf recordings of run configurations (A-01).
+    pub profiler: crate::profiler::Profiler,
     /// The text version each `.http` editor got its run icons and diagnostics for.
     http_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
@@ -326,6 +328,7 @@ impl CrabCraftApp {
             opened_url: None,
             playground: crate::playground::Playground::new(waker.clone()),
             http: crate::http_client::HttpClient::new(waker.clone()),
+            profiler: crate::profiler::Profiler::new(waker.clone()),
             http_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
@@ -2063,6 +2066,7 @@ impl CrabCraftApp {
                 }
             }
             Action::Debug => self.start_debugging(),
+            Action::Profile => self.start_profiling(),
             Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut => {
                 if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
                     match action {
@@ -2490,6 +2494,22 @@ impl CrabCraftApp {
                 self.handle_debug(outs);
             }
             None => self.notify(tr("There is no run configuration to debug"), false),
+        }
+    }
+
+    /// Profile (A-01): builds the selected Rust binary and records it with perf.
+    pub fn start_profiling(&mut self) {
+        self.dock.show(ToolWindow::Profiler);
+        let config = self.runner.selected_config().cloned();
+        let Some(config) = config.filter(|c| matches!(c.kind, crate::runner::ConfigKind::Cargo { .. })) else {
+            self.notify(tr("Choose the run configuration of a Rust binary to profile it"), false);
+            return;
+        };
+        self.save_all_docs();
+        match self.runner.cargo_debug_target(&config) {
+            Some(Ok((cargo, target))) => self.profiler.start(config.name.clone(), &cargo, target),
+            Some(Err(e)) => self.notify(e, true),
+            None => {}
         }
     }
 
@@ -3195,6 +3215,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_feature_search();
         self.poll_playground(&ctx);
         self.http.poll();
+        self.profiler.poll();
         self.update_http_file();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
@@ -3216,6 +3237,7 @@ impl eframe::App for CrabCraftApp {
     fn on_exit(&mut self) {
         self.runner.stop_all();
         self.http.cancel_all();
+        self.profiler.cancel();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();

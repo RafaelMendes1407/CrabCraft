@@ -41,6 +41,10 @@ egui_commonmark = { version = "0.25", default-features = false, features = ["pul
 egui_extras = { version = "0.36", default-features = false, features = ["image", "file"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 
+# Stopping perf with SIGINT (A-01).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSURL", "NSString"] }

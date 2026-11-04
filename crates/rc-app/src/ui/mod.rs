@@ -11,6 +11,7 @@ pub mod http_window;
 pub mod markdown;
 pub mod new_project;
 pub mod nuget;
+pub mod profiler_window;
 pub mod header;
 pub mod status;
 pub mod run_windows;

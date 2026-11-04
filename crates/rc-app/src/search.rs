@@ -362,6 +362,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Build Project"), Build),
         (tr("Run"), Run),
         (tr("Debug"), Debug),
+        (tr("Profile"), Profile),
         (tr("Stop"), StopRun),
         (tr("Run Tests"), RunTests),
         (tr("Attach to Process…"), AttachToProcess),
@@ -640,6 +641,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         NextError | PreviousError => ico::ERROR,
         OpenFolder => ico::OPEN,
         ShareInPlayground => ico::EXTERNAL_LINK,
+        Profile => ico::THREADS,
         _ => return None,
     })
 }
