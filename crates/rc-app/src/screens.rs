@@ -2341,3 +2341,147 @@ fn feature_uses_capture() {
         h.render().unwrap().save(out.join(format!("feature-uses-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// A one-request stand-in for `play.rust-lang.org/meta/gist`: returns the request it read.
+fn fake_playground(listener: std::net::TcpListener, reply: &'static str) -> std::thread::JoinHandle<String> {
+    use std::io::{Read, Write};
+    std::thread::spawn(move || {
+        listener.set_nonblocking(false).unwrap();
+        let (mut s, _) = listener.accept().unwrap();
+        s.set_nonblocking(false).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let (mut req, mut buf) = (Vec::new(), [0u8; 4096]);
+        loop {
+            let n = s.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            req.extend_from_slice(&buf[..n]);
+            let text = String::from_utf8_lossy(&req);
+            if let Some(end) = text.find("\r\n\r\n") {
+                let len = text[..end].lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                if req.len() >= end + 4 + len {
+                    break;
+                }
+            }
+        }
+        let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len());
+        String::from_utf8_lossy(&req).into_owned()
+    })
+}
+
+/// A Rust crate (edition 2021) with `src/main.rs` open, its workspace loaded.
+fn playground_harness(home: &Path, dir: &Path, dark: bool) -> Harness<'static, CrabCraftApp> {
+    let root = dir.join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x = 1;\n    println!(\"{x}\");\n}\n\nfn unused() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_workspace(&root);
+    app.open_file(&root.join("src/main.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
+    h
+}
+
+/// N-18: the selection goes to the Playground only after the confirmation; the link is copied
+/// and offered in the status bar. A local server stands in for play.rust-lang.org.
+#[test]
+fn share_in_playground_confirms_then_uploads_and_copies_the_link() {
+    use crate::ui::dialogs::Dialog;
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::{tr, trf};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    h.state_mut().playground.endpoint = format!("http://{}/meta/gist", listener.local_addr().unwrap());
+    let selected = "fn main() {\n    let x = 1;\n    println!(\"{x}\");\n}";
+    let select = |h: &mut Harness<'static, CrabCraftApp>| {
+        h.state_mut().docs.active_doc_mut().unwrap().editor.set_selection(rc_text::Selection::single(rc_text::Range::new(0, selected.chars().count())));
+        h.run_steps(2);
+        h.state().caret_screen.unwrap() + vec2(-20.0, -6.0)
+    };
+
+    // From the editor's context menu: the dialog says what is sent, and where.
+    let at = select(&mut h);
+    right_click(&mut h, at);
+    h.get_by_label(tr("Share in Playground…")).click();
+    h.run_steps(4);
+    match &h.state().dialog {
+        Some(Dialog::SharePlayground(s)) => {
+            assert_eq!(s.code, selected);
+            assert_eq!(s.lines, 4);
+            assert_eq!(s.preview, selected);
+            assert_eq!((s.edition.as_str(), s.channel), ("2021", rc_cargo::playground::Channel::Stable), "the crate's edition is the default");
+        }
+        _ => panic!("no confirmation dialog"),
+    }
+    h.get_by_label(&trf("{n} lines will be sent", &[("n", &4)]));
+    h.get_by_label(tr("The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it."));
+
+    // Cancel: nothing reaches the server.
+    h.get_by_label(tr("Cancel")).click();
+    h.run_steps(4);
+    assert!(h.state().dialog.is_none());
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock), "something was sent after Cancel");
+    assert!(!h.state().playground.running());
+
+    // From Find Action's list, on nightly: the upload, the link, the clipboard.
+    assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::ShareInPlayground));
+    let server = fake_playground(listener, r#"{"id":"0123456789abcdef","url":"https://gist.github.com/0123456789abcdef","code":"..."}"#);
+    select(&mut h);
+    h.state_mut().pending.push(rc_editor::Action::ShareInPlayground);
+    h.run_steps(4);
+    if let Some(Dialog::SharePlayground(s)) = &mut h.state_mut().dialog {
+        s.channel = rc_cargo::playground::Channel::Nightly;
+    }
+    h.run_steps(1);
+    h.get_by_label(tr("Upload and Copy Link")).click();
+    let expected = "https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=0123456789abcdef";
+    let (mut copied, start) = (Vec::new(), std::time::Instant::now());
+    while h.state().playground.last_url.is_none() || copied.is_empty() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(30), "no link from the fake server");
+        h.run_steps(1);
+        for c in &h.output().platform_output.commands {
+            if let egui::OutputCommand::CopyText(t) = c {
+                copied.push(t.clone());
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(copied, vec![expected.to_string()]);
+    assert_eq!(h.state().playground.last_url.as_deref(), Some(expected));
+    let req = server.join().unwrap();
+    assert!(req.starts_with("POST /meta/gist "), "{req}");
+    assert!(req.to_ascii_lowercase().contains("user-agent: crabcraft (https://github.com/rafaelmendes1407/crabcraft)"), "{req}");
+    let body: serde_json::Value = serde_json::from_str(&req[req.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+    assert_eq!(body, serde_json::json!({ "code": selected }));
+    assert!(h.state().notices.last().is_some_and(|n| n.url.as_deref() == Some(expected) && !n.error));
+
+    // The status bar's Open in Browser opens the link.
+    h.run_steps(2);
+    h.get_by_label(tr("Open in Browser")).click();
+    h.run_steps(2);
+    assert_eq!(h.state().opened_url.as_deref(), Some(expected));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/share-playground-*.png"]
+fn share_in_playground_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = playground_harness(home.path(), dir.path(), dark);
+        h.state_mut().pending.push(rc_editor::Action::ShareInPlayground);
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("share-playground-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

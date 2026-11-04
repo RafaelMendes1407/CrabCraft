@@ -1144,5 +1144,26 @@
     "The feature {name} is not declared in this package's Cargo.toml": "Das Feature {name} ist in der Cargo.toml dieses Pakets nicht deklariert",
     "This file does not belong to a Cargo package": "Diese Datei gehört zu keinem Cargo-Paket",
     "Place the caret on a feature name to go to it or find its uses": "Setzen Sie den Cursor auf einen Feature-Namen, um dorthin zu gehen oder seine Verwendungen zu suchen"
+  },
+  "playground": {
+    "Share in Playground…": "Im Playground teilen…",
+    "Share in Playground": "Im Playground teilen",
+    "The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it.": "Der Code wird auf play.rust-lang.org hochgeladen und dort als öffentlicher GitHub-Gist veröffentlicht. Jeder mit dem Link kann ihn lesen.",
+    "{n} lines will be sent": "{n} Zeilen werden gesendet",
+    "1 line will be sent": "1 Zeile wird gesendet",
+    "Channel": "Kanal",
+    "Edition": "Edition",
+    "Upload and Copy Link": "Hochladen und Link kopieren",
+    "Uploading to the Rust Playground…": "Wird in den Rust Playground hochgeladen…",
+    "Shared on the Rust Playground; link copied: {url}": "Im Rust Playground geteilt; Link kopiert: {url}",
+    "Open a Rust file to share it on the Rust Playground": "Öffnen Sie eine Rust-Datei, um sie im Rust Playground zu teilen",
+    "Only Rust files can be shared on the Rust Playground": "Nur Rust-Dateien können im Rust Playground geteilt werden",
+    "There is no code to share": "Es gibt keinen Code zum Teilen",
+    "The code is still being uploaded to the Rust Playground": "Der Code wird noch in den Rust Playground hochgeladen",
+    "The code is too large to share on the Rust Playground": "Der Code ist zu groß, um ihn im Rust Playground zu teilen",
+    "The Rust Playground refused the code (HTTP {code})": "Der Rust Playground hat den Code abgelehnt (HTTP {code})",
+    "The Rust Playground sent an unexpected reply": "Der Rust Playground hat eine unerwartete Antwort gesendet",
+    "The Rust Playground did not answer in time": "Der Rust Playground hat nicht rechtzeitig geantwortet",
+    "Could not reach the Rust Playground: {error}": "Der Rust Playground ist nicht erreichbar: {error}"
   }
 }

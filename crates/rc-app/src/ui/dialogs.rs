@@ -64,6 +64,8 @@ pub enum Dialog {
     LocalHistory(Box<LocalHistoryView>),
     /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
     ProjectEnv { text: String },
+    /// Share in Playground: what is uploaded, to confirm before anything is sent.
+    SharePlayground(Box<crate::playground::Share>),
 }
 
 impl Dialog {
@@ -107,6 +109,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
+        Dialog::SharePlayground(share) => share_playground(app, ctx, share),
     };
     if matches!(outcome, Outcome::Keep) && app.dialog.is_none() {
         app.dialog = Some(dialog);
@@ -1378,6 +1381,55 @@ fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> 
             }
             Err(e) => app.notify(trf("Could not delete {name}: {error}", &[("name", &name), ("error", &e)]), true),
         }
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn share_playground(app: &mut CrabCraftApp, ctx: &Context, share: &mut crate::playground::Share) -> Outcome {
+    use rc_cargo::playground::{Channel, EDITIONS};
+    let ((ok, cancel), esc) = modal(ctx, "share_playground", 520.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Share in Playground"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 32.0);
+            ui.vertical(|ui| {
+                ui.label(tr("The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it."));
+                ui.add_space(4.0);
+                let count = if share.lines == 1 { tr("1 line will be sent").to_string() } else { trf("{n} lines will be sent", &[("n", &share.lines)]) };
+                ui.label(egui::RichText::new(count).strong());
+            });
+        });
+        ui.add_space(8.0);
+        egui::Frame::new().fill(p.hover).stroke(egui::Stroke::new(1.0, p.island_border)).corner_radius(4.0).inner_margin(8.0).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 2.0;
+            for line in share.preview.lines().chain(share.more.then_some("…")) {
+                ui.add(egui::Label::new(egui::RichText::new(line).font(FontId::monospace(12.0)).color(p.text)).truncate());
+            }
+        });
+        ui.add_space(8.0);
+        egui::Grid::new("share_playground_grid").num_columns(2).spacing(vec2(16.0, 8.0)).show(ui, |ui| {
+            ui.label(tr("Channel"));
+            egui::ComboBox::from_id_salt("playground_channel").selected_text(share.channel.as_str()).show_ui(ui, |ui| {
+                for c in Channel::ALL {
+                    ui.selectable_value(&mut share.channel, c, c.as_str());
+                }
+            });
+            ui.end_row();
+            ui.label(tr("Edition"));
+            egui::ComboBox::from_id_salt("playground_edition").selected_text(share.edition.as_str()).show_ui(ui, |ui| {
+                for e in EDITIONS {
+                    ui.selectable_value(&mut share.edition, e.to_string(), e);
+                }
+            });
+            ui.end_row();
+        });
+        buttons(ui, tr("Upload and Copy Link"), true)
+    });
+    if ok {
+        app.playground.start(share);
+        app.notify(tr("Uploading to the Rust Playground…"), false);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

@@ -16,7 +16,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(30) {
         let n = app.vcs.update(&mut app.docs, true);
-        app.notices.extend(n.into_iter().map(|text| crate::app::Notice { text, error: false, at: 0.0 }));
+        app.notices.extend(n.into_iter().map(|text| crate::app::Notice { text, error: false, at: 0.0, url: None }));
         if done(app) {
             return;
         }

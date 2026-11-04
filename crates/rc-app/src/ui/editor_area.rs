@@ -614,6 +614,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
     let insight = app.docs.active_doc().is_some_and(crate::insight::has_insight);
     let is_csharp = app.docs.active_doc().is_some_and(|d| d.editor.lang() == rc_syntax::Lang::CSharp);
     let manifest = app.docs.active_doc().is_some_and(crate::manifest_completion::is_manifest);
+    let rust_file = app.docs.active_doc().is_some_and(|d| d.path.extension().is_some_and(|e| e == "rs"));
     let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
@@ -650,6 +651,9 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
         ui.separator();
         entry(ui, Some(ico::REFORMAT), tr("Reformat Code"), Action::Reformat);
         entry(ui, None, tr("Comment with Line Comment"), Action::CommentLine);
+        if rust_file {
+            entry(ui, Some(ico::EXTERNAL_LINK), tr("Share in Playground…"), Action::ShareInPlayground);
+        }
         if is_csharp && theme::menu_item(ui, Some(ico::NAMESPACE), tr("Add Missing Usings"), false).clicked() {
             usings = true;
             ui.close();

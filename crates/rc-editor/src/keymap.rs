@@ -139,6 +139,8 @@ pub enum Action {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    /// Uploads the selection or the file to the Rust Playground, after a confirmation.
+    ShareInPlayground,
 }
 
 impl Action {
@@ -232,6 +234,7 @@ impl Action {
                 | ZoomIn
                 | ZoomOut
                 | ZoomReset
+                | ShareInPlayground
         )
     }
 }

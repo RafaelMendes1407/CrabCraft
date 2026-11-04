@@ -1144,5 +1144,26 @@
     "The feature {name} is not declared in this package's Cargo.toml": "此包的 Cargo.toml 中未声明 feature {name}",
     "This file does not belong to a Cargo package": "此文件不属于任何 Cargo 包",
     "Place the caret on a feature name to go to it or find its uses": "将光标放在 feature 名称上，以转到它或查找其用法"
+  },
+  "playground": {
+    "Share in Playground…": "分享到 Playground…",
+    "Share in Playground": "分享到 Playground",
+    "The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it.": "代码会上传到 play.rust-lang.org，并作为公开的 GitHub gist 发布。任何拥有链接的人都能查看。",
+    "{n} lines will be sent": "将发送 {n} 行",
+    "1 line will be sent": "将发送 1 行",
+    "Channel": "通道",
+    "Edition": "版本",
+    "Upload and Copy Link": "上传并复制链接",
+    "Uploading to the Rust Playground…": "正在上传到 Rust Playground…",
+    "Shared on the Rust Playground; link copied: {url}": "已分享到 Rust Playground；链接已复制：{url}",
+    "Open a Rust file to share it on the Rust Playground": "打开一个 Rust 文件以分享到 Rust Playground",
+    "Only Rust files can be shared on the Rust Playground": "只能将 Rust 文件分享到 Rust Playground",
+    "There is no code to share": "没有可分享的代码",
+    "The code is still being uploaded to the Rust Playground": "代码仍在上传到 Rust Playground",
+    "The code is too large to share on the Rust Playground": "代码太大，无法分享到 Rust Playground",
+    "The Rust Playground refused the code (HTTP {code})": "Rust Playground 拒绝了代码（HTTP {code}）",
+    "The Rust Playground sent an unexpected reply": "Rust Playground 返回了意外的响应",
+    "The Rust Playground did not answer in time": "Rust Playground 未及时响应",
+    "Could not reach the Rust Playground: {error}": "无法连接到 Rust Playground：{error}"
   }
 }

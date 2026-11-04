@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 142 |
-| 🚧 Em andamento | 4 |
+| 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 84 |
+| ⬜ A fazer | 83 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -172,7 +172,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-15 | Scopes e cores de arquivo | ⬜ | M4 | |
 | N-16 | Navigation bar e Select In | ✅ | M3 | Barra clicável na parte de baixo (pastas, arquivo e símbolos). Select In (Alt+F1) leva ao Explorador ou ao gerenciador de arquivos; sem outros destinos, como a janela Estrutura. |
 | N-17 | Mostrar contexto do código (Alt+Q) | ✅ | M4 | Navegar › Mostrar informações de contexto (Alt+Q no keymap Rider; ⌃⇧Q no macOS; sem atalho nos keymaps VS e VS Code; também em Localizar ação): popup acima do cursor com os cabeçalhos das declarações que o envolvem e estão fora da vista (mod, impl, trait, fn, struct, enum, macro_rules!, closures), do mais externo ao mais interno, com número da linha e cores da fonte do editor; assinaturas de várias linhas viram uma (ou primeira linha + …). Clique vai à linha; Esc, digitar ou mover o cursor fecha. Outras linguagens usam os blocos de dobra. Testado em src/app.rs deste repositório (teste headless e captura conferida) |
-| N-18 | Compartilhar no Rust Playground | ⬜ | M4 | Pede confirmação antes de enviar o código |
+| N-18 | Compartilhar no Rust Playground | 🚧 | M4 | Feito: "Compartilhar no Playground…" no menu de contexto do editor (arquivos `.rs`), no menu Code e em Find Action. Envia a seleção, ou o arquivo inteiro, só depois de uma confirmação que avisa que o código vira um gist público do GitHub via play.rust-lang.org, diz quantas linhas vão e mostra as primeiras; nela se escolhe o canal (stable/beta/nightly) e a edição (padrão: a do crate). O POST `{"code": …}` para `/meta/gist` roda em segundo plano, com timeout e limite de tamanho da resposta; o id da resposta é validado, o link `?version=…&mode=debug&edition=…&gist=…` é copiado e aparece na barra de status com "Abrir no navegador"; erros viram mensagens. Testado com um servidor HTTP local no lugar do Playground (cancelar não envia nada; confirmar envia o JSON com o User-Agent e copia o link). Falta: o envio real a play.rust-lang.org não foi exercitado (publicaria um gist); o teste `live_upload_to_the_playground` fica `#[ignore]` |
 
 ## 5. Refatoração e geração de código
 

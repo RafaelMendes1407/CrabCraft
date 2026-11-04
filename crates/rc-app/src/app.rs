@@ -32,6 +32,8 @@ pub struct Notice {
     pub text: String,
     pub error: bool,
     pub at: f64,
+    /// A link the status bar offers to open in the browser.
+    pub url: Option<String>,
 }
 
 pub struct WorkspaceState {
@@ -91,6 +93,8 @@ pub struct CrabCraftApp {
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The last external page opened from the editor (docs.rs).
     pub opened_url: Option<String>,
+    /// Share in Playground uploads (N-18).
+    pub playground: crate::playground::Playground,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -293,6 +297,7 @@ impl CrabCraftApp {
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             feature_search: Default::default(),
             opened_url: None,
+            playground: crate::playground::Playground::new(waker.clone()),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -343,7 +348,7 @@ impl CrabCraftApp {
     }
 
     pub fn notify(&mut self, text: impl Into<String>, error: bool) {
-        self.notices.push(Notice { text: text.into(), error, at: 0.0 });
+        self.notices.push(Notice { text: text.into(), error, at: 0.0, url: None });
     }
 
     // ------------------------------------------------------------------ workspace
@@ -799,6 +804,56 @@ impl CrabCraftApp {
     pub fn open_docs_rs_at(&mut self, line: usize) {
         let Some(doc) = self.docs.active_doc() else { return };
         let Some(url) = self.dep_versions.links.get(&doc.editor.id).and_then(|l| l.get(&line)).cloned() else { return };
+        #[cfg(not(test))]
+        crate::ui::run_windows::open_url(&url);
+        self.opened_url = Some(url);
+    }
+
+    /// Share in Playground: asks to confirm uploading the selection, or the whole Rust file.
+    pub fn share_in_playground(&mut self) {
+        let Some(doc) = self.docs.active_doc() else {
+            self.notify(tr("Open a Rust file to share it on the Rust Playground"), false);
+            return;
+        };
+        if doc.path.extension().is_none_or(|e| e != "rs") {
+            self.notify(tr("Only Rust files can be shared on the Rust Playground"), false);
+            return;
+        }
+        let selected = doc.editor.selected_text();
+        let code = if selected.trim().is_empty() { doc.editor.buffer.rope().to_string() } else { selected };
+        if code.trim().is_empty() {
+            self.notify(tr("There is no code to share"), false);
+            return;
+        }
+        if code.len() > rc_cargo::playground::MAX_CODE_BYTES {
+            self.notify(crate::playground::error_text(&rc_cargo::playground::PlaygroundError::TooLarge), true);
+            return;
+        }
+        if self.playground.running() {
+            self.notify(tr("The code is still being uploaded to the Rust Playground"), false);
+            return;
+        }
+        let edition = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path));
+        let share = crate::playground::Share::new(code, edition);
+        self.dialog = Some(Dialog::SharePlayground(Box::new(share)));
+    }
+
+    /// The finished Playground uploads: the link is copied and offered in the status bar.
+    fn poll_playground(&mut self, ctx: &Context) {
+        for done in self.playground.poll() {
+            match done {
+                Ok(url) => {
+                    ctx.copy_text(url.clone());
+                    let text = trf("Shared on the Rust Playground; link copied: {url}", &[("url", &url)]);
+                    self.notices.push(Notice { text, error: false, at: 0.0, url: Some(url) });
+                }
+                Err(e) => self.notify(e, true),
+            }
+        }
+    }
+
+    /// Opens a link offered by a notice in the browser.
+    pub fn open_notice_url(&mut self, url: String) {
         #[cfg(not(test))]
         crate::ui::run_windows::open_url(&url);
         self.opened_url = Some(url);
@@ -1855,6 +1910,7 @@ impl CrabCraftApp {
             Action::ZoomIn => self.set_zoom(ctx, self.settings.ui_zoom + 0.1),
             Action::ZoomOut => self.set_zoom(ctx, self.settings.ui_zoom - 0.1),
             Action::ZoomReset => self.set_zoom(ctx, 1.0),
+            Action::ShareInPlayground => self.share_in_playground(),
             Action::SelectIn if self.docs.active_doc().is_some() => {
                 let row = |title: &str, command: &str| {
                     rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command { title: title.to_string(), command: command.to_string(), arguments: None })
@@ -2842,6 +2898,7 @@ impl eframe::App for CrabCraftApp {
         self.update_feature_icons();
         self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
         self.poll_feature_search();
+        self.poll_playground(&ctx);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);

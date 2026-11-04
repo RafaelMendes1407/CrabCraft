@@ -1144,5 +1144,26 @@
     "The feature {name} is not declared in this package's Cargo.toml": "このパッケージの Cargo.toml に feature {name} は宣言されていません",
     "This file does not belong to a Cargo package": "このファイルは Cargo パッケージに属していません",
     "Place the caret on a feature name to go to it or find its uses": "feature 名にキャレットを置くと、その場所へ移動したり使用箇所を検索したりできます"
+  },
+  "playground": {
+    "Share in Playground…": "Playground で共有…",
+    "Share in Playground": "Playground で共有",
+    "The code is uploaded to play.rust-lang.org, which publishes it as a public GitHub gist. Anyone with the link can read it.": "コードは play.rust-lang.org にアップロードされ、公開の GitHub gist として公開されます。リンクを知っている人は誰でも読めます。",
+    "{n} lines will be sent": "{n} 行が送信されます",
+    "1 line will be sent": "1 行が送信されます",
+    "Channel": "チャンネル",
+    "Edition": "エディション",
+    "Upload and Copy Link": "アップロードしてリンクをコピー",
+    "Uploading to the Rust Playground…": "Rust Playground にアップロード中…",
+    "Shared on the Rust Playground; link copied: {url}": "Rust Playground で共有しました。リンクをコピーしました: {url}",
+    "Open a Rust file to share it on the Rust Playground": "Rust Playground で共有するには Rust ファイルを開いてください",
+    "Only Rust files can be shared on the Rust Playground": "Rust Playground で共有できるのは Rust ファイルだけです",
+    "There is no code to share": "共有するコードがありません",
+    "The code is still being uploaded to the Rust Playground": "コードはまだ Rust Playground にアップロード中です",
+    "The code is too large to share on the Rust Playground": "コードが大きすぎて Rust Playground で共有できません",
+    "The Rust Playground refused the code (HTTP {code})": "Rust Playground がコードを拒否しました (HTTP {code})",
+    "The Rust Playground sent an unexpected reply": "Rust Playground から予期しない応答がありました",
+    "The Rust Playground did not answer in time": "Rust Playground が時間内に応答しませんでした",
+    "Could not reach the Rust Playground: {error}": "Rust Playground に接続できませんでした: {error}"
   }
 }

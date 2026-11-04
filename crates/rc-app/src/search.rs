@@ -380,6 +380,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("New Scratch File…"), NewScratchFile),
         (tr("Select In…"), SelectIn),
         (tr("Reformat Code"), Reformat),
+        (tr("Share in Playground…"), ShareInPlayground),
         (tr("Generate…"), Generate),
         (tr("Refactor This…"), RefactorThis),
         (tr("Go to Declaration"), GotoDeclaration),
@@ -617,6 +618,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         DuplicateLine => ico::COPY,
         NextError | PreviousError => ico::ERROR,
         OpenFolder => ico::OPEN,
+        ShareInPlayground => ico::EXTERNAL_LINK,
         _ => return None,
     })
 }
