@@ -3644,3 +3644,29 @@ fn screens_merge_tool() {
     h.run_steps(6);
     h.render().unwrap().save(out.join("merge-tool-confirm-dark.png")).unwrap();
 }
+
+/// The bottom tool window spans the whole width, under the explorer too; a right-click in an
+/// editor of a split opens its menu at the pointer.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/bottom-tool-window.png"]
+fn bottom_tool_window_capture() {
+    use crate::layout::{Drop, Edge};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let lib = dir.path().join("demo/src/lib.rs");
+    std::fs::write(&lib, "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n").unwrap();
+    h.state_mut().open_file(&lib.canonicalize().unwrap());
+    h.run_steps(3);
+    let id = h.state().docs.active_doc().unwrap().editor.id;
+    let group = h.state().layout.group_of(id).unwrap();
+    assert!(h.state_mut().layout.move_doc(id, Drop::Split { group, edge: Edge::Bottom }));
+    h.state_mut().dock.toggle(crate::toolwindow::ToolWindow::Terminal);
+    h.run_steps(6);
+    right_click(&mut h, egui::pos2(560.0, 130.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bottom-tool-window.png")).unwrap();
+}

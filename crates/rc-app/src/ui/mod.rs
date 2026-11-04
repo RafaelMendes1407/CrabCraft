@@ -96,13 +96,26 @@ fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette,
     egui::Panel::right("stripe_right").exact_size(STRIPE_W).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| stripes::show(app, ui, Side::Right));
 
     let gap = theme::ISLAND_GAP;
+    // The bottom tool window spans the whole width between the stripes, under the side ones
+    // too, so it is laid out first.
+    let below = if app.dock.bottom.is_some() { gap } else { 0 };
+    if let Some(tw) = app.dock.bottom {
+        let resp = egui::Panel::bottom("tw_bottom")
+            .resizable(true)
+            .default_size(app.dock.size(tw) + gap as f32)
+            .size_range(100.0..=900.0)
+            .show_separator_line(false)
+            .frame(bar.inner_margin(Margin { top: gap, ..Margin::ZERO }))
+            .show(ui, |ui| theme::fixed_island(ui, &p, |ui| toolwindows::show(app, ui, tw)));
+        remember_size(app, tw, resp.response.rect.height() - gap as f32);
+    }
     if let Some(tw) = app.dock.left {
         let resp = egui::Panel::left("tw_left")
             .resizable(true)
             .default_size(app.dock.size(tw) + gap as f32)
             .size_range(180.0..=800.0)
             .show_separator_line(false)
-            .frame(bar.inner_margin(Margin { right: gap, ..Margin::ZERO }))
+            .frame(bar.inner_margin(Margin { right: gap, bottom: below, ..Margin::ZERO }))
             .show(ui, |ui| theme::fixed_island(ui, &p, |ui| toolwindows::show(app, ui, tw)));
         remember_size(app, tw, resp.response.rect.width() - gap as f32);
     }
@@ -112,22 +125,9 @@ fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette,
             .default_size(app.dock.size(tw) + gap as f32)
             .size_range(200.0..=800.0)
             .show_separator_line(false)
-            .frame(bar.inner_margin(Margin { left: gap, ..Margin::ZERO }))
+            .frame(bar.inner_margin(Margin { left: gap, bottom: below, ..Margin::ZERO }))
             .show(ui, |ui| theme::fixed_island(ui, &p, |ui| toolwindows::show(app, ui, tw)));
         remember_size(app, tw, resp.response.rect.width() - gap as f32);
-    }
-    if let Some(tw) = app.dock.bottom {
-        let left = if app.dock.left.is_some() { gap } else { 0 };
-        let right = if app.dock.right.is_some() { gap } else { 0 };
-        let _ = (left, right);
-        let resp = egui::Panel::bottom("tw_bottom")
-            .resizable(true)
-            .default_size(app.dock.size(tw) + gap as f32)
-            .size_range(100.0..=900.0)
-            .show_separator_line(false)
-            .frame(bar.inner_margin(Margin { top: gap, left: if app.dock.left.is_some() { gap } else { 0 }, right: if app.dock.right.is_some() { gap } else { 0 }, bottom: 0 }))
-            .show(ui, |ui| theme::fixed_island(ui, &p, |ui| toolwindows::show(app, ui, tw)));
-        remember_size(app, tw, resp.response.rect.height() - gap as f32);
     }
     Margin {
         left: if app.dock.left.is_some() { gap } else { 0 },
