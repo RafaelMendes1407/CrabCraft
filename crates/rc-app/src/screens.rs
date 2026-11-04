@@ -721,6 +721,51 @@ fn screens_git_worktrees() {
     h.render().unwrap().save(out.join("git-prune-worktrees-dark.png")).unwrap();
 }
 
+/// V-06 and V-14: the history of a renamed file in the Log, with a signed commit selected.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/git-file-history-dark.png"]
+fn screens_git_file_history() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["config", "commit.gpgsign", "false"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/prices.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    std::fs::write(root.join("README.md"), "# Shop\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Add a readme"]);
+    git(&["mv", "src/prices.rs", "src/lib.rs"]);
+    git(&["commit", "-q", "-m", "Rename prices.rs to lib.rs"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    git(&["commit", "-q", "-am", "Raise prices"]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "the log", |a| a.vcs.log.len() == 4 && !a.vcs.branches.is_empty());
+    h.state_mut().show_git_history(&root.join("src/lib.rs"));
+    run_frames(&mut h, "the history", |a| !a.vcs.log_loading && a.vcs.log.len() == 3);
+    let newest = h.state().vcs.log[0].hash.clone();
+    h.state_mut().vcs.select_commit(&newest);
+    h.state_mut().vcs.signature = Some((newest, rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    run_frames(&mut h, "the files", |a| !a.vcs.commit_files.is_empty());
+    h.state_mut().vcs.signature = Some((h.state().vcs.log[0].hash.clone(), rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-file-history-dark.png")).unwrap();
+}
+
 #[test]
 #[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
 fn screens_insight() {

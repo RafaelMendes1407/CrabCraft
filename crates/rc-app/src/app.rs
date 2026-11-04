@@ -549,6 +549,12 @@ impl CrabCraftApp {
     }
 
     /// Saves and commits, with the Rust files of the commit formatted if that was asked for.
+    /// Git › Show History: the Log of the Git window, for this file or folder only (V-06).
+    pub fn show_git_history(&mut self, path: &Path) {
+        self.vcs.show_file_history(path);
+        self.dock.show(ToolWindow::Git);
+    }
+
     pub fn commit_changes(&mut self, push: bool) {
         self.save_all_docs();
         let format = self.commit_format();
@@ -2713,6 +2719,7 @@ impl CrabCraftApp {
                 ExplorerAction::Delete(path) => self.dialog = Some(Dialog::ConfirmDelete { path }),
                 ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
+                ExplorerAction::ShowHistory(path) => self.show_git_history(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
                 ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
                 ExplorerAction::ManagePackages(project) => {

@@ -1452,5 +1452,15 @@
     "Signed by {signer} with a revoked key": "Podpisane przez {signer} unieważnionym kluczem",
     "Bad signature from {signer}": "Nieprawidłowy podpis od {signer}",
     "Signed with the key {key}, which is not available to check it": "Podpisane kluczem {key}, który nie jest dostępny do weryfikacji"
+  },
+  "gitlog": {
+    "Show Git History": "Pokaż historię Git",
+    "All branches": "Wszystkie gałęzie",
+    "Clear Filters": "Wyczyść filtry",
+    "History of {path}": "Historia {path}",
+    "Load More": "Wczytaj więcej",
+    "No commits match the filters": "Żaden commit nie pasuje do filtrów",
+    "Show every file": "Pokaż wszystkie pliki",
+    "Text or message": "Tekst lub komunikat"
   }
 }

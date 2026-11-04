@@ -256,17 +256,83 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
 }
 
+/// The filters of the Log (V-06): message text, author, branch and the path of a file history.
+fn log_filters(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let mut filter = app.vcs.log_filter.clone();
+    let mut apply = false;
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        // Typed text is applied with Enter or when the field loses focus.
+        let text = ui.add(egui::TextEdit::singleline(&mut app.vcs.log_text_draft).hint_text(tr("Text or message")).desired_width(170.0));
+        let author = ui.add(egui::TextEdit::singleline(&mut app.vcs.log_author_draft).hint_text(tr("Author")).desired_width(120.0));
+        if text.lost_focus() || author.lost_focus() {
+            filter.text = app.vcs.log_text_draft.clone();
+            filter.author = app.vcs.log_author_draft.clone();
+            apply = true;
+        }
+        let all = tr("All branches").to_string();
+        let shown = filter.branch.clone().unwrap_or_else(|| all.clone());
+        egui::ComboBox::from_id_salt("log_branch").selected_text(shown).width(150.0).show_ui(ui, |ui| {
+            if ui.selectable_label(filter.branch.is_none(), &all).clicked() {
+                filter.branch = None;
+                apply = true;
+            }
+            let local = app.vcs.branches.iter().filter(|b| b.kind == rc_vcs::BranchKind::Local);
+            let remote = app.vcs.branches.iter().filter(|b| b.kind != rc_vcs::BranchKind::Local);
+            for b in local.chain(remote) {
+                if ui.selectable_label(filter.branch.as_deref() == Some(b.name.as_str()), &b.name).clicked() {
+                    filter.branch = Some(b.name.clone());
+                    apply = true;
+                }
+            }
+        });
+        if let Some(path) = filter.path.clone() {
+            ui.label(egui::RichText::new(trf("History of {path}", &[("path", &path)])).size(12.5).color(p.accent));
+            if theme::icon_button(ui, ico::CLOSE, true, tr("Show every file")).clicked() {
+                filter.path = None;
+                apply = true;
+            }
+        }
+        if !filter.is_empty() && theme::secondary_button(ui, tr("Clear Filters")).clicked() {
+            filter = crate::vcs::LogFilter::default();
+            apply = true;
+        }
+        if app.vcs.log_loading {
+            ui.add(egui::Spinner::new().size(14.0));
+        }
+    });
+    if apply {
+        app.vcs.set_log_filter(filter);
+    }
+}
+
 fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let p = rc_kit::pal(ui);
+    log_filters(app, ui);
+    ui.add_space(2.0);
     let avail = ui.available_rect_before_wrap();
     let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.62).max(300.0), avail.height()));
     let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
     ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
     let mut select = None;
     let mut patch_action: Option<(PatchSource, bool)> = None;
-    let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
-    lu.set_clip_rect(left.intersect(ui.clip_rect()));
+    // Older commits on request, below the list.
+    let more_h = if app.vcs.log_more { 30.0 } else { 0.0 };
+    let list = Rect::from_min_max(left.min, pos2(left.right(), left.bottom() - more_h));
+    if app.vcs.log_more {
+        let mut mu = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(left.left() + 8.0, list.bottom() + 2.0), left.max)));
+        if mu.add_enabled_ui(!app.vcs.log_loading, |ui| theme::secondary_button(ui, tr("Load More"))).inner.clicked() {
+            app.vcs.load_more_log();
+        }
+    }
+    let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(list));
+    lu.set_clip_rect(list.intersect(ui.clip_rect()));
     let log = app.vcs.log.clone();
+    if log.is_empty() && !app.vcs.log_loading && !app.vcs.log_filter.is_empty() {
+        lu.add_space(20.0);
+        lu.vertical_centered(|ui| ui.label(egui::RichText::new(tr("No commits match the filters")).color(p.muted)));
+    }
     egui::ScrollArea::vertical().id_salt("git_log").auto_shrink([false, false]).show_rows(&mut lu, 24.0, log.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for c in &log[range] {

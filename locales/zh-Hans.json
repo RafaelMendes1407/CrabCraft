@@ -1452,5 +1452,15 @@
     "Signed by {signer} with a revoked key": "由 {signer} 使用已吊销的密钥签名",
     "Bad signature from {signer}": "来自 {signer} 的签名无效",
     "Signed with the key {key}, which is not available to check it": "使用密钥 {key} 签名，但该密钥不可用于验证"
+  },
+  "gitlog": {
+    "Show Git History": "显示 Git 历史",
+    "All branches": "所有分支",
+    "Clear Filters": "清除筛选",
+    "History of {path}": "{path} 的历史",
+    "Load More": "加载更多",
+    "No commits match the filters": "没有符合筛选条件的提交",
+    "Show every file": "显示所有文件",
+    "Text or message": "文本或消息"
   }
 }

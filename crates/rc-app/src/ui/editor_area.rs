@@ -38,6 +38,7 @@ enum TabCommand {
     Blame(usize),
     Diff(usize),
     LocalHistory(usize),
+    GitHistory(usize),
     Split(usize, bool),
     Float(usize),
     Rename(usize),
@@ -893,6 +894,10 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, 
                 commands.push(TabCommand::Diff(i));
                 ui.close();
             }
+            if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
+                commands.push(TabCommand::GitHistory(i));
+                ui.close();
+            }
         }
         if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Local History"), false).clicked() {
             commands.push(TabCommand::LocalHistory(i));
@@ -950,6 +955,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
             | TabCommand::Blame(i)
             | TabCommand::Diff(i)
             | TabCommand::LocalHistory(i)
+            | TabCommand::GitHistory(i)
             | TabCommand::Rename(i)
             | TabCommand::Split(i, _)
             | TabCommand::Float(i)
@@ -1011,6 +1017,10 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
                 }
             }
             TabCommand::LocalHistory(i) => app.show_local_history(i),
+            TabCommand::GitHistory(i) => {
+                let path = app.docs.list[i].path.clone();
+                app.show_git_history(&path);
+            }
             TabCommand::Locate(i) => {
                 app.docs.activate(i);
                 app.locate_active();

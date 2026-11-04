@@ -15,7 +15,8 @@ enum VcsEvent {
     Repo(Option<Repository>),
     Status(Result<Status, String>),
     Branches(Vec<Branch>),
-    Log(Vec<Commit>),
+    /// A page of the log: (generation of the filter, appended to the loaded commits, commits).
+    Log(u64, bool, Vec<Commit>),
     Head(PathBuf, Option<String>),
     Blame(PathBuf, Result<Blame, String>),
     /// An operation finished: (what, error).
@@ -65,6 +66,62 @@ pub struct PendingPatch {
     pub result: Option<OpOutput>,
 }
 
+/// Commits read per page of the log.
+pub const LOG_PAGE: usize = 500;
+
+/// What the Log shows (V-06): every commit by default, or those matching the filters.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LogFilter {
+    /// Words of the commit message (`--grep`, case-insensitive).
+    pub text: String,
+    /// Part of the author's name or email (`--author`).
+    pub author: String,
+    /// One branch (its short name) instead of every ref.
+    pub branch: Option<String>,
+    /// One file or folder, relative to the repository; a file's renames are followed.
+    pub path: Option<String>,
+}
+
+impl LogFilter {
+    pub fn is_empty(&self) -> bool {
+        *self == LogFilter::default()
+    }
+
+    /// The `git log` options for a page starting at `skip`.
+    pub fn options(&self, skip: usize) -> LogOptions {
+        let text = self.text.trim();
+        let author = self.author.trim();
+        let mut opts = LogOptions { skip, max_count: LOG_PAGE, ..Default::default() };
+        // Typed text is matched literally, not as a regular expression.
+        opts.grep = (!text.is_empty()).then(|| regex_escape(text));
+        opts.author = (!author.is_empty()).then(|| regex_escape(author));
+        match &self.branch {
+            Some(b) => opts.revs = vec![b.clone()],
+            // `--follow` works from one starting point.
+            None if self.path.is_some() => opts.revs = vec!["HEAD".into()],
+            None => opts.all = true,
+        }
+        if let Some(p) = &self.path {
+            // A folder (written with a trailing `/`) has no renames to follow.
+            opts.follow = !p.ends_with('/');
+            opts.paths = vec![p.trim_end_matches('/').to_string()].into_iter().map(|p| if p.is_empty() { ".".into() } else { p }).collect();
+        }
+        opts
+    }
+}
+
+/// `text` as an extended regular expression that matches it literally.
+fn regex_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if "\\.^$|?*+()[]{}".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// The views of the Git tool window.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GitTab {
@@ -103,6 +160,16 @@ pub struct Vcs {
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
     pub log: Vec<Commit>,
+    /// What the Log shows (V-06).
+    pub log_filter: LogFilter,
+    /// The last page was full: there may be older commits.
+    pub log_more: bool,
+    /// A page of the log is being read.
+    pub log_loading: bool,
+    /// The text and author fields of the Log as typed, applied on Enter or focus loss.
+    pub log_text_draft: String,
+    pub log_author_draft: String,
+    log_gen: u64,
     pub selected_commit: Option<String>,
     pub commit_files: Vec<rc_vcs::ChangedFile>,
     /// The signature of the selected commit, once git has verified it.
@@ -170,6 +237,12 @@ impl Vcs {
             status: None,
             branches: Vec::new(),
             log: Vec::new(),
+            log_filter: LogFilter::default(),
+            log_more: false,
+            log_loading: false,
+            log_text_draft: String::new(),
+            log_author_draft: String::new(),
+            log_gen: 0,
             selected_commit: None,
             commit_files: Vec::new(),
             signature: None,
@@ -297,15 +370,52 @@ impl Vcs {
         });
     }
 
+    /// Reads the first page of the log for the current filter.
     pub fn load_log(&mut self) {
+        self.log_gen += 1;
+        self.read_log(0);
+    }
+
+    /// Reads the next page of the log (Load More).
+    pub fn load_more_log(&mut self) {
+        if self.log_more && !self.log_loading {
+            self.read_log(self.log.len());
+        }
+    }
+
+    fn read_log(&mut self, skip: usize) {
         let Some(repo) = self.repo.clone() else { return };
         let out = self.inbox.sender();
+        let generation = self.log_gen;
+        let opts = self.log_filter.options(skip);
+        self.log_loading = true;
         Runtime::spawn(async move {
-            let opts = LogOptions { all: true, max_count: 500, ..Default::default() };
-            if let Ok(log) = repo.log(&opts).await {
-                out.send(VcsEvent::Log(log));
-            }
+            // A filter git refuses (a bad pattern) shows an empty log.
+            let log = repo.log(&opts).await.unwrap_or_default();
+            out.send(VcsEvent::Log(generation, skip > 0, log));
         });
+    }
+
+    /// Changes what the Log shows and reads it again.
+    pub fn set_log_filter(&mut self, filter: LogFilter) {
+        self.log_text_draft = filter.text.clone();
+        self.log_author_draft = filter.author.clone();
+        if filter != self.log_filter {
+            self.log_filter = filter;
+            self.selected_commit = None;
+            self.marked_commits.clear();
+            self.load_log();
+        }
+    }
+
+    /// The history of one file (`rel`, relative to the repository), renames followed.
+    pub fn show_file_history(&mut self, path: &Path) {
+        let Some(mut rel) = self.repo.as_ref().and_then(|r| r.rel_path(path)) else { return };
+        if path.is_dir() {
+            rel.push('/');
+        }
+        self.tab = GitTab::Log;
+        self.set_log_filter(LogFilter { path: Some(rel), ..LogFilter::default() });
     }
 
     pub fn select_commit(&mut self, hash: &str) {
@@ -817,7 +927,17 @@ impl Vcs {
                 }
                 VcsEvent::Status(Err(e)) => self.error = Some(e),
                 VcsEvent::Branches(b) => self.branches = b,
-                VcsEvent::Log(l) => self.log = l,
+                VcsEvent::Log(generation, append, l) if generation == self.log_gen => {
+                    self.log_loading = false;
+                    self.log_more = l.len() >= LOG_PAGE;
+                    if append {
+                        let known: std::collections::HashSet<String> = self.log.iter().map(|c| c.hash.clone()).collect();
+                        self.log.extend(l.into_iter().filter(|c| !known.contains(&c.hash)));
+                    } else {
+                        self.log = l;
+                    }
+                }
+                VcsEvent::Log(..) => {}
                 VcsEvent::Head(p, t) => {
                     self.head_pending.remove(&p);
                     self.heads.insert(p, t);

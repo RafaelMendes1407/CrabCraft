@@ -17,6 +17,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
             let (root, name) = (w.ws.root.clone(), w.ws.name());
             let active = app.docs.active_doc().map(|d| d.path.clone());
             app.explorer.single_click = app.settings.single_click_open;
+            app.explorer.git = app.vcs.repo.is_some();
             let actions = explorer::show(ui, &mut app.explorer, w.solution.as_ref(), &root, &name, active.as_deref());
             if ui.ctx().data_mut(|d| d.remove_temp::<bool>(Id::new("explorer_hide")).unwrap_or(false)) {
                 app.toggle_tool(ToolWindow::Explorer);

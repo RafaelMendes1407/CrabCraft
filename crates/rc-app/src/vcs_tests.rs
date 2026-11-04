@@ -501,3 +501,84 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     assert!(app.vcs.error.as_deref().unwrap().contains("could not be signed"), "{:?}", app.vcs.error);
     assert_eq!(app.vcs.log.len(), 3);
 }
+
+/// V-06: the Log filters by message text (literal, not a pattern), author and branch; a file's
+/// history follows its renames; older commits come with Load More.
+#[test]
+fn the_log_is_filtered_and_shows_the_history_of_a_file() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ana"), ("user.email", "ana@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&root, &["config", k, v]);
+    }
+    let commit = |msg: &str, author: Option<&str>| {
+        git(&root, &["add", "-A"]);
+        let mut args = vec!["commit", "-q", "--allow-empty", "-m", msg];
+        if let Some(a) = author {
+            args.push("--author");
+            args.push(a);
+        }
+        git(&root, &args);
+    };
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/old.rs"), "fn a() {}\n").unwrap();
+    commit("Add old.rs", None);
+    std::fs::write(root.join("README.md"), "# r\n").unwrap();
+    commit("Add readme (v1.0)", Some("Bruno <bruno@example.com>"));
+    git(&root, &["mv", "src/old.rs", "src/new.rs"]);
+    commit("Rename old to new", None);
+    std::fs::write(root.join("src/new.rs"), "fn a() {}\nfn b() {}\n").unwrap();
+    commit("Add b to new.rs", Some("Bruno <bruno@example.com>"));
+    git(&root, &["checkout", "-q", "-b", "dev"]);
+    commit("Work on dev", None);
+    git(&root, &["checkout", "-q", "main"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    pump(&mut app, "the log", |a| a.vcs.log.len() == 5 && !a.vcs.log_loading);
+    assert!(!app.vcs.log_more);
+    let subjects = |a: &CrabCraftApp| a.vcs.log.iter().map(|c| c.subject.clone()).collect::<Vec<_>>();
+    let apply = |app: &mut CrabCraftApp, f: crate::vcs::LogFilter, what: &str, n: usize| {
+        app.vcs.set_log_filter(f);
+        pump(app, what, |a| !a.vcs.log_loading && a.vcs.log.len() == n);
+    };
+
+    // Text: literal, case-insensitive; `(v1.0)` is not a pattern.
+    apply(&mut app, crate::vcs::LogFilter { text: "(V1.0)".into(), ..Default::default() }, "text filter", 1);
+    assert_eq!(subjects(&app), ["Add readme (v1.0)"]);
+    // Author.
+    apply(&mut app, crate::vcs::LogFilter { author: "bruno".into(), ..Default::default() }, "author filter", 2);
+    assert_eq!(subjects(&app), ["Add b to new.rs", "Add readme (v1.0)"]);
+    // Branch: main has no dev commit.
+    apply(&mut app, crate::vcs::LogFilter { branch: Some("main".into()), ..Default::default() }, "branch filter", 4);
+    assert!(!subjects(&app).contains(&"Work on dev".to_string()));
+    // Nothing matches: an empty log.
+    apply(&mut app, crate::vcs::LogFilter { text: "no such words".into(), ..Default::default() }, "no match", 0);
+
+    // The history of new.rs reaches back past its rename; the menu opens it in the Git window.
+    app.show_git_history(&root.join("src/new.rs"));
+    pump(&mut app, "file history", |a| !a.vcs.log_loading && a.vcs.log.len() == 3);
+    assert_eq!(app.vcs.log_filter.path.as_deref(), Some("src/new.rs"));
+    assert_eq!(app.vcs.tab, crate::vcs::GitTab::Log);
+    assert_eq!(subjects(&app), ["Add b to new.rs", "Rename old to new", "Add old.rs"]);
+    // A folder's history.
+    app.show_git_history(&root.join("src"));
+    pump(&mut app, "folder history", |a| !a.vcs.log_loading && a.vcs.log_filter.path.as_deref() == Some("src/") && a.vcs.log.len() == 3);
+
+    // More than a page: Load More brings the rest, once.
+    for i in 0..crate::vcs::LOG_PAGE {
+        git(&root, &["commit", "-q", "--allow-empty", "-m", &format!("Empty {i}")]);
+    }
+    apply(&mut app, crate::vcs::LogFilter::default(), "first page", crate::vcs::LOG_PAGE);
+    assert!(app.vcs.log_more);
+    app.vcs.load_more_log();
+    pump(&mut app, "second page", |a| !a.vcs.log_loading && a.vcs.log.len() == crate::vcs::LOG_PAGE + 5);
+    assert!(!app.vcs.log_more);
+    assert_eq!(app.vcs.log.last().unwrap().subject, "Add old.rs");
+}

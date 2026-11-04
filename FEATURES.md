@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 157 |
+| ✅ Pronto | 158 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 66 |
+| ⬜ A fazer | 65 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -306,7 +306,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-03 | Diff lado a lado | 🟢 | M1 | |
 | V-04 | Marcas na margem e blame | 🟢 | M1 | |
 | V-05 | Fetch, pull e push | 🟢 | M1 | Confirmar a cobertura |
-| V-06 | Log e histórico de arquivo | ⬜ | M5 | |
+| V-06 | Log e histórico de arquivo | ✅ | M5 | Log com filtros de texto da mensagem (literal), autor e branch (ou todos), "Carregar mais" depois de 500 commits e mensagem quando nada corresponde. Mostrar histórico do Git (aba do editor e Explorer, também para pastas) abre o Log só daquele caminho, seguindo renomeações. Testado num repositório real; captura conferida. |
 | V-07 | Merge, rebase e cherry-pick | ⬜ | M5 | |
 | V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
 | V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |

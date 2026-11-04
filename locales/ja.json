@@ -1452,5 +1452,15 @@
     "Signed by {signer} with a revoked key": "{signer} が失効した鍵で署名",
     "Bad signature from {signer}": "{signer} の署名が不正です",
     "Signed with the key {key}, which is not available to check it": "鍵 {key} で署名されていますが、検証に使える鍵がありません"
+  },
+  "gitlog": {
+    "Show Git History": "Git 履歴を表示",
+    "All branches": "すべてのブランチ",
+    "Clear Filters": "フィルターをクリア",
+    "History of {path}": "{path} の履歴",
+    "Load More": "さらに読み込む",
+    "No commits match the filters": "フィルターに一致するコミットはありません",
+    "Show every file": "すべてのファイルを表示",
+    "Text or message": "テキストまたはメッセージ"
   }
 }
