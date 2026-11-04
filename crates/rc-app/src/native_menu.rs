@@ -493,6 +493,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::RefactorThis, || tr("Refactor This…")),
             &act(Action::Reformat, || tr("Reformat Code")),
             &act(Action::ShareInPlayground, || tr("Share in Playground…")),
+            &act(Action::UpdateCopyright, || tr("Update Copyright")),
             &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;

@@ -1165,5 +1165,24 @@
     "The Rust Playground sent an unexpected reply": "Rust Playground 返回了意外的响应",
     "The Rust Playground did not answer in time": "Rust Playground 未及时响应",
     "Could not reach the Rust Playground: {error}": "无法连接到 Rust Playground：{error}"
+  },
+  "copyright": {
+    "Update Copyright": "更新版权信息",
+    "Open a project to use its copyright profile": "打开项目以使用其版权配置",
+    "This file cannot have a copyright header": "此文件不能添加版权头",
+    "Copyright header added": "已添加版权头",
+    "Copyright year updated": "已更新版权年份",
+    "The copyright header is up to date": "版权头已是最新",
+    "Copyright": "版权",
+    "Open a project to set the copyright header of its files.": "打开项目以设置其文件的版权头。",
+    "Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).": "随此项目保存。变量：$year、$file、$project 和 $author（Git 的 user.name）。",
+    "Template": "模板",
+    "SPDX license": "SPDX 许可证",
+    "Not an SPDX license expression: it is left out": "不是 SPDX 许可证表达式：将被忽略",
+    "Add the header to new files": "为新文件添加版权头",
+    "Author": "作者",
+    "Reading Git…": "正在读取 Git…",
+    "Git has no user.name for this project": "Git 没有此项目的 user.name",
+    "Restore the Default Template": "恢复默认模板"
   }
 }

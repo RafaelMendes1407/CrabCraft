@@ -1165,5 +1165,24 @@
     "The Rust Playground sent an unexpected reply": "Rust Playground から予期しない応答がありました",
     "The Rust Playground did not answer in time": "Rust Playground が時間内に応答しませんでした",
     "Could not reach the Rust Playground: {error}": "Rust Playground に接続できませんでした: {error}"
+  },
+  "copyright": {
+    "Update Copyright": "著作権表示を更新",
+    "Open a project to use its copyright profile": "プロジェクトを開くと著作権プロファイルを使用できます",
+    "This file cannot have a copyright header": "このファイルには著作権ヘッダーを追加できません",
+    "Copyright header added": "著作権ヘッダーを追加しました",
+    "Copyright year updated": "著作権の年を更新しました",
+    "The copyright header is up to date": "著作権ヘッダーは最新です",
+    "Copyright": "著作権",
+    "Open a project to set the copyright header of its files.": "プロジェクトを開くと、そのファイルの著作権ヘッダーを設定できます。",
+    "Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).": "このプロジェクトに保存されます。変数: $year、$file、$project、$author（Git の user.name）。",
+    "Template": "テンプレート",
+    "SPDX license": "SPDX ライセンス",
+    "Not an SPDX license expression: it is left out": "SPDX ライセンス式ではないため省略されます",
+    "Add the header to new files": "新しいファイルにヘッダーを追加",
+    "Author": "作成者",
+    "Reading Git…": "Git を読み込み中…",
+    "Git has no user.name for this project": "このプロジェクトの Git に user.name がありません",
+    "Restore the Default Template": "既定のテンプレートに戻す"
   }
 }

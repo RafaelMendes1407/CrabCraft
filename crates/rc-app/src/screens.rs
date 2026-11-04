@@ -2485,3 +2485,93 @@ fn share_in_playground_capture() {
         h.render().unwrap().save(out.join(format!("share-playground-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
 }
+
+/// A Cargo project in a Git repository whose `user.name` is Ada Lovelace, with `src/old.rs`
+/// starting with a header from 2020.
+fn copyright_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"ws\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "#![allow(dead_code)]\n\nmod old;\n").unwrap();
+    std::fs::write(root.join("src/old.rs"), "// Copyright (c) 2020 Ada Lovelace\n// Part of ws.\n\npub fn old() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    for args in [&["init", "-q"][..], &["config", "user.name", "Ada Lovelace"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
+    }
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "the author from Git", |a| !a.copyright.loading());
+    (h, root)
+}
+
+/// Settings › Copyright sets the project's profile; a new Rust file starts with its header,
+/// and Update Copyright brings the years of an old header up to this year.
+#[test]
+fn copyright_headers_on_new_and_old_files() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = copyright_harness(dir.path(), false);
+    let year = crate::copyright::current_year();
+    assert_eq!(h.state().copyright.author.as_deref(), Some("Ada Lovelace"));
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Copyright);
+    h.run_steps(3);
+    h.state_mut().copyright.draft.as_mut().unwrap().spdx = "MIT".into();
+    h.get_by_label(tr("Add the header to new files")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("OK")).click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert!(h.state().copyright.profile.on_new_files);
+    h.state_mut().save_session();
+    assert_eq!(rc_core::Session::load(&root).copyright.spdx, "MIT");
+
+    // New › Rust File.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: root.join("src"), name: "net".into(), kind: crate::item_templates::ItemKind::RustFile, attach: false, public: false, error: None });
+    h.run_steps(2);
+    h.get_by_label(tr("Create")).click();
+    h.run_steps(3);
+    let text = std::fs::read_to_string(root.join("src/net.rs")).unwrap();
+    assert_eq!(text, format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n"));
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret()), Some(text.chars().count()));
+
+    // Update Copyright on the old file: 2020 becomes 2020-<this year>, once.
+    h.state_mut().open_file(&root.join("src/old.rs"));
+    h.run_steps(2);
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    let doc = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert_eq!(doc(&h), format!("// Copyright (c) 2020-{year} Ada Lovelace\n// Part of ws.\n\npub fn old() {{}}\n"));
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    assert_eq!(doc(&h), format!("// Copyright (c) 2020-{year} Ada Lovelace\n// Part of ws.\n\npub fn old() {{}}\n"));
+    // A file without a header gets one at the top, before its inner attributes.
+    h.state_mut().open_file(&root.join("src/lib.rs"));
+    h.run_steps(2);
+    h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
+    h.run_steps(3);
+    assert!(doc(&h).starts_with(&format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n#![allow(dead_code)]\n")));
+    assert!(!root.join("target").exists(), "nothing was built");
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/copyright-*.png"]
+fn copyright_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, _) = copyright_harness(dir.path(), dark);
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Copyright);
+        h.run_steps(3);
+        if let Some(d) = h.state_mut().copyright.draft.as_mut() {
+            d.spdx = "MIT OR Apache-2.0".into();
+            d.on_new_files = true;
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("copyright-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+    }
+}

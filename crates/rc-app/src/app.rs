@@ -91,6 +91,8 @@ pub struct CrabCraftApp {
     pub dep_versions: crate::dep_versions::DepVersions,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
+    /// The project's copyright header profile (saved with the session).
+    pub copyright: crate::copyright::Copyright,
     /// The last external page opened from the editor (docs.rs).
     pub opened_url: Option<String>,
     /// Share in Playground uploads (N-18).
@@ -296,6 +298,7 @@ impl CrabCraftApp {
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             feature_search: Default::default(),
+            copyright: Default::default(),
             opened_url: None,
             playground: crate::playground::Playground::new(waker.clone()),
             cargo_open: Default::default(),
@@ -398,6 +401,7 @@ impl CrabCraftApp {
         self.cargo_features = clean_features(&session.cargo_features);
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
+        self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -1211,6 +1215,7 @@ impl CrabCraftApp {
         self.dock = Dock::default();
         self.nav_back.clear();
         self.nav_forward.clear();
+        self.copyright.close();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1333,6 +1338,7 @@ impl CrabCraftApp {
             project_env: self.runner.project_env.clone(),
             cargo_features: self.cargo_features.clone(),
             cargo_target: self.cargo_target.clone().unwrap_or_default(),
+            copyright: self.copyright.profile.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1501,6 +1507,43 @@ impl CrabCraftApp {
             Action::Reformat => self.insight.format(doc),
             Action::FileStructure => self.dialog = Some(Dialog::FileStructure { filter: String::new(), selected: 0 }),
             _ => {}
+        }
+    }
+
+    /// Code › Update Copyright: the profile's header added to the active file, or the year
+    /// range of the header it has brought up to date (one undoable edit).
+    pub fn update_copyright(&mut self) {
+        if self.workspace.is_none() {
+            self.notify(tr("Open a project to use its copyright profile"), false);
+            return;
+        }
+        let Some(d) = self.docs.active_doc() else { return };
+        let text = d.editor.buffer.rope().to_string();
+        let path = d.path.clone();
+        let Some(edit) = self.copyright.edit_for(&path, &text) else {
+            self.notify(tr("This file cannot have a copyright header"), false);
+            return;
+        };
+        let message = match edit.change {
+            crate::copyright::Change::Added => tr("Copyright header added"),
+            crate::copyright::Change::Updated => tr("Copyright year updated"),
+            crate::copyright::Change::Current => tr("The copyright header is up to date"),
+        };
+        if edit.change != crate::copyright::Change::Current
+            && let Some(d) = self.docs.active_doc_mut()
+        {
+            let rope = d.editor.buffer.rope();
+            let (start, end) = (rope.byte_to_char(edit.start), rope.byte_to_char(edit.end));
+            d.editor.replace(start, end, &edit.text);
+        }
+        self.notify(message, false);
+    }
+
+    /// Settings › Copyright: the profile of the project, saved with its session.
+    pub fn set_copyright_profile(&mut self, profile: rc_core::session::CopyrightProfile) {
+        if self.copyright.profile != profile {
+            self.copyright.profile = profile;
+            self.session_dirty = true;
         }
     }
 
@@ -1772,7 +1815,10 @@ impl CrabCraftApp {
             }
             Action::NavigateBack => self.navigate(true),
             Action::NavigateForward => self.navigate(false),
-            Action::ShowSettings => self.dialog = Some(Dialog::settings(&self.settings)),
+            Action::ShowSettings => {
+                self.copyright.draft = None;
+                self.dialog = Some(Dialog::settings(&self.settings));
+            }
             Action::ProjectEnvironment => match self.workspace {
                 Some(_) => self.dialog = Some(Dialog::ProjectEnv { text: self.runner.project_env.clone() }),
                 None => self.notify(tr("Open a project to set its environment variables"), false),
@@ -1920,6 +1966,7 @@ impl CrabCraftApp {
                 self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
             }
             Action::InspectCode => self.inspect_code(),
+            Action::UpdateCopyright => self.update_copyright(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
@@ -2339,6 +2386,7 @@ impl CrabCraftApp {
 
     /// Opens the settings on `page`.
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
+        self.copyright.draft = None;
         self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
     }
 
@@ -2626,6 +2674,7 @@ impl CrabCraftApp {
         self.poll_dep_trees();
         self.update_cfg_sets();
         self.poll_rustfmt();
+        self.copyright.poll();
         let mut changed: Vec<PathBuf> = Vec::new();
         let events = self.fs_inbox.drain();
         self.report_fs_to_server(&events);

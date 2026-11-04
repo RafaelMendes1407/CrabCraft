@@ -1165,5 +1165,24 @@
     "The Rust Playground sent an unexpected reply": "Le Rust Playground a envoyé une réponse inattendue",
     "The Rust Playground did not answer in time": "Le Rust Playground n'a pas répondu à temps",
     "Could not reach the Rust Playground: {error}": "Impossible de joindre le Rust Playground : {error}"
+  },
+  "copyright": {
+    "Update Copyright": "Mettre à jour le copyright",
+    "Open a project to use its copyright profile": "Ouvrez un projet pour utiliser son profil de copyright",
+    "This file cannot have a copyright header": "Ce fichier ne peut pas avoir d'en-tête de copyright",
+    "Copyright header added": "En-tête de copyright ajouté",
+    "Copyright year updated": "Année du copyright mise à jour",
+    "The copyright header is up to date": "L'en-tête de copyright est à jour",
+    "Copyright": "Copyright",
+    "Open a project to set the copyright header of its files.": "Ouvrez un projet pour définir l'en-tête de copyright de ses fichiers.",
+    "Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).": "Enregistré avec ce projet. Variables : $year, $file, $project et $author (le user.name de Git).",
+    "Template": "Modèle",
+    "SPDX license": "Licence SPDX",
+    "Not an SPDX license expression: it is left out": "Ce n'est pas une expression de licence SPDX : elle est ignorée",
+    "Add the header to new files": "Ajouter l'en-tête aux nouveaux fichiers",
+    "Author": "Auteur",
+    "Reading Git…": "Lecture de Git…",
+    "Git has no user.name for this project": "Git n'a pas de user.name pour ce projet",
+    "Restore the Default Template": "Rétablir le modèle par défaut"
   }
 }

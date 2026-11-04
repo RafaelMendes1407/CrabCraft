@@ -17,6 +17,7 @@ pub enum SettingsPage {
     Tools,
     ExternalTools,
     LiveTemplates,
+    Copyright,
 }
 
 pub enum Dialog {
@@ -156,6 +157,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::Tools, tr("Tools")),
                     (SettingsPage::ExternalTools, tr("External Tools")),
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
+                    (SettingsPage::Copyright, tr("Copyright")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -177,6 +179,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 // A list of its own, outside the two-column grid of the other pages.
                 if *page == SettingsPage::LiveTemplates {
                     live_templates_page(ui, &mut draft.live_templates, p.text_muted);
+                    return;
+                }
+                if *page == SettingsPage::Copyright {
+                    copyright_page(ui, app, p.text_muted, p.error);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -315,7 +321,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright => {}
                 });
             });
         });
@@ -323,9 +329,68 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
     });
     if ok {
         app.apply_settings(ctx, draft.clone());
+        if let Some(profile) = app.copyright.draft.take() {
+            app.set_copyright_profile(profile);
+        }
         return Outcome::Close;
     }
-    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+    if cancel || esc {
+        app.copyright.draft = None;
+        Outcome::Close
+    } else {
+        Outcome::Keep
+    }
+}
+
+/// Settings › Copyright: the header of the project's files, with a preview. Saved with the
+/// project (its session), so it needs one open.
+fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error: egui::Color32) {
+    use crate::copyright;
+    if app.workspace.is_none() {
+        ui.label(egui::RichText::new(tr("Open a project to set the copyright header of its files.")).color(muted));
+        return;
+    }
+    let mut draft = app.copyright.draft.take().unwrap_or_else(|| app.copyright.profile.clone());
+    ui.add(egui::Label::new(egui::RichText::new(tr("Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).")).color(muted)).wrap());
+    ui.add_space(8.0);
+    egui::Grid::new("copyright_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| {
+        ui.label(tr("Template"));
+        ui.add(egui::TextEdit::multiline(&mut draft.template).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(340.0));
+        ui.end_row();
+        ui.label(tr("SPDX license"));
+        ui.vertical(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut draft.spdx).hint_text("MIT OR Apache-2.0").font(egui::TextStyle::Monospace).desired_width(340.0));
+            if !draft.spdx.trim().is_empty() && !copyright::valid_spdx(&draft.spdx) {
+                ui.colored_label(error, tr("Not an SPDX license expression: it is left out"));
+            }
+        });
+        ui.end_row();
+        ui.label("");
+        ui.checkbox(&mut draft.on_new_files, tr("Add the header to new files"));
+        ui.end_row();
+        ui.label(tr("Author"));
+        let author = match (&app.copyright.author, app.copyright.loading()) {
+            (Some(name), _) => name.clone(),
+            (None, true) => tr("Reading Git…").to_string(),
+            (None, false) => tr("Git has no user.name for this project").to_string(),
+        };
+        ui.label(egui::RichText::new(author).color(muted));
+        ui.end_row();
+    });
+    ui.add_space(8.0);
+    ui.label(tr("Preview"));
+    let project = app.copyright.project_name();
+    let vars = copyright::Vars { year: copyright::current_year(), file: "main.rs", project: &project, author: app.copyright.author.as_deref().unwrap_or("") };
+    let preview = copyright::comment(&copyright::expand(&draft, &vars), rc_syntax::Lang::Rust).unwrap_or_default();
+    egui::Frame::new().fill(ui.visuals().extreme_bg_color).corner_radius(6.0).inner_margin(8.0).show(ui, |ui| {
+        ui.set_width(480.0);
+        ui.add(egui::Label::new(egui::RichText::new(preview.trim_end()).monospace()).wrap());
+    });
+    ui.add_space(6.0);
+    if ui.button(tr("Restore the Default Template")).clicked() {
+        draft.template = rc_core::session::CopyrightProfile::DEFAULT_TEMPLATE.to_string();
+    }
+    app.copyright.draft = Some(draft);
 }
 
 /// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
@@ -1131,7 +1196,14 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
             *error = Some(tr("This name is not a valid Rust module name").to_string());
             return Outcome::Keep;
         }
-        let files = kind.files(dir, name);
+        let files: Vec<(PathBuf, String)> = kind
+            .files(dir, name)
+            .into_iter()
+            .map(|(p, c)| {
+                let c = if kind.is_folder() { c } else { app.copyright.new_file_content(&p, &c) };
+                (p, c)
+            })
+            .collect();
         if files.iter().any(|(p, _)| p.exists()) {
             *error = Some(tr("A file or folder with this name already exists").to_string());
             return Outcome::Keep;

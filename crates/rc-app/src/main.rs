@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod instance;
 mod convert;
+mod copyright;
 mod debugger;
 mod dep_versions;
 mod feature_nav;

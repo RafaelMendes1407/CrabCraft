@@ -135,6 +135,8 @@ pub enum Action {
     OpenFolder,
     InvalidateCaches,
     InspectCode,
+    /// Adds the project's copyright header to the file, or updates its years.
+    UpdateCopyright,
     NewScratchFile,
     ZoomIn,
     ZoomOut,
@@ -230,6 +232,7 @@ impl Action {
                 | OpenFolder
                 | InvalidateCaches
                 | InspectCode
+                | UpdateCopyright
                 | NewScratchFile
                 | ZoomIn
                 | ZoomOut

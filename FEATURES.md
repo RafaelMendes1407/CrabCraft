@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 142 |
+| ✅ Pronto | 143 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 83 |
+| ⬜ A fazer | 82 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -106,7 +106,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-19 | Suporte a JSON e XML | 🟢 | M1 | |
 | E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | ⬜ | M6 | Realce primeiro |
 | E-21 | Emmet | 🚫 | - | Depende do suporte web |
-| E-22 | Cabeçalhos de copyright | ⬜ | M6 | |
+| E-22 | Cabeçalhos de copyright | ✅ | M6 | Configurações › Copyright: perfil do projeto salvo na sessão, com modelo (`$year`, `$file`, `$project`, `$author` = `user.name` do Git, lido numa thread), licença SPDX opcional (expressão inválida fica de fora), opção de pôr o cabeçalho em arquivos novos e prévia. Code › Update Copyright (menu, Find Action) insere o cabeçalho no estilo de comentário da linguagem (`//` em Rust, `#` em TOML, bloco onde não há comentário de linha; JSON não recebe) depois de shebang/BOM/declaração XML e antes de `#![…]`, ou só estende o ano do cabeçalho existente (`2020` → `2020-2026`, também em `/* */`), como edição desfazível; doc comments não contam como cabeçalho. Modelo vindo da sessão é limitado e o casamento não degenera. Teste headless num projeto Cargo com Git real (`screens::copyright_headers_on_new_and_old_files`: New › Rust File, atualização idempotente) e num `main.rs` real do CrabCraft. Captura da página não conferida. Falta: vários perfis por escopo de arquivos e atualizar o projeto inteiro de uma vez |
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |
 | E-24 | Marcas de erro na barra de rolagem | 🟢 | M3 | Herdado; marca de erro de Rust vista na janela nativa |
 | E-25 | Lens mode na barra de rolagem | ✅ | M6 | Passar o ponteiro na barra de rolagem mostra 9 linhas do código naquela altura (cores, números, problemas sublinhados, dobras respeitadas); sobre a marca de um erro mostra a mensagem. Desligável em Settings › Editor. Teste headless em `crates/rc-editor/src/view.rs` deste repositório (`the_scrollbar_lens_previews_the_code_under_the_pointer`) e captura GPU `scrollbar_lens_capture`. |
