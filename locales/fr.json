@@ -1468,5 +1468,23 @@
     "Move “{name}” to Folder": "Déplacer « {name} » dans un dossier",
     "Out of the Folder": "Hors du dossier",
     "Rename Folder “{folder}”…": "Renommer le dossier « {folder} »…"
+  },
+  "breakpointlist": {
+    "View Breakpoints…": "Afficher les points d’arrêt…",
+    "Breakpoints": "Points d’arrêt",
+    "Breakpoints are muted: none of them stops the program": "Les points d’arrêt sont désactivés : aucun n’arrête le programme",
+    "Edit…": "Modifier…",
+    "Existing groups": "Groupes existants",
+    "Go To": "Aller à",
+    "Group": "Groupe",
+    "Move to Group": "Déplacer dans le groupe",
+    "New or existing group": "Groupe nouveau ou existant",
+    "No breakpoints. Click the gutter of an editor to set one.": "Aucun point d’arrêt. Cliquez dans la marge d’un éditeur pour en poser un.",
+    "No group": "Aucun groupe",
+    "Remove from Group": "Retirer du groupe",
+    "Rename the Group to the Name Below": "Renommer le groupe avec le nom ci-dessous",
+    "Ungroup": "Dégrouper",
+    "logs {message}": "journalise {message}",
+    "when {condition}": "quand {condition}"
   }
 }

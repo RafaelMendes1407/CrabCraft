@@ -4038,3 +4038,77 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && a.insight.feature_gates.get(&main).is_none());
     app.insight.stop();
 }
+
+/// D-27: a breakpoint in a file that is closed stays set and stops the program; groups turn
+/// their breakpoints off together; a change made in the list reaches a running session; the
+/// list, with groups and closed files, comes back with the session.
+#[test]
+fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n");
+    write(&root.join("src/price.rs"), "pub fn double(n: u32) -> u32 {\n    let twice = n * 2;\n    twice\n}\n");
+    let root = root.canonicalize().unwrap();
+    let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+
+    // A breakpoint in price.rs, which is then closed: it stays.
+    app.open_file(&price_rs);
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(1, BreakpointKind::Normal);
+    let i = app.docs.index_of(&price_rs).unwrap();
+    app.docs.close(i);
+    assert_eq!(app.docs.closed_breakpoints.get(&price_rs).and_then(|b| b.get(&1)), Some(&BreakpointKind::Normal));
+    app.open_file(&main_rs);
+    for line in [3, 4] {
+        app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
+    }
+    app.set_breakpoint_group(&price_rs, 1, Some("Pricing"));
+    app.set_breakpoint_group(&main_rs, 3, Some("  Calls "));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    app.set_breakpoint_group(&main_rs, 4, Some("   "));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    assert_eq!(app.breakpoint_groups(), ["Calls", "Pricing"]);
+    let listed = |a: &CrabCraftApp| a.breakpoint_rows().into_iter().map(|r| (r.path.file_name().unwrap().to_string_lossy().into_owned(), r.line, r.enabled, r.group)).collect::<Vec<_>>();
+    // The whole Calls group off.
+    app.set_group_enabled(Some("Calls"), false);
+    let expected = vec![("main.rs".to_string(), 3, false, Some("Calls".to_string())), ("main.rs".into(), 4, false, Some("Calls".into())), ("price.rs".into(), 1, true, Some("Pricing".into()))];
+    assert_eq!(listed(&app), expected);
+    assert_eq!(app.docs.active_doc().unwrap().editor.breakpoints.get(&3), Some(&BreakpointKind::Disabled));
+
+    // Debugging stops in the closed file, not at the disabled calls.
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint in price.rs");
+    let at = app.debugger.session.as_ref().and_then(|s| s.execution_point());
+    assert_eq!(at, Some((price_rs.clone(), 2)));
+    // Turned off from the list while stopped, it no longer stops the second call.
+    app.set_breakpoint_enabled(&price_rs, 1, false);
+    app.run_ide_action(&egui::Context::default(), Action::Resume);
+    let start = Instant::now();
+    while !app.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(!app.debugger.stopped(), "stopped again at {:?}", app.debugger.session.as_ref().and_then(|s| s.execution_point()));
+        assert!(start.elapsed() < Duration::from_secs(60), "the program did not end");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    app.set_breakpoint_enabled(&price_rs, 1, true);
+
+    // Removing one from the list, in a closed file too; then the session keeps the rest.
+    app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(2, BreakpointKind::Normal);
+    app.remove_breakpoint(&price_rs, 2);
+    let before = listed(&app);
+    assert_eq!(before.len(), 3);
+    app.save_session();
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(listed(&again), before);
+}

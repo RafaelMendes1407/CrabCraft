@@ -44,6 +44,17 @@ pub struct WorkspaceState {
 /// What `rustc --explain` answered: its text, or `None` when it has none.
 type ExplainAnswer = Result<Option<String>, rc_cargo::ExplainError>;
 
+/// Breakpoints read back per file from the session, at most.
+const MAX_BREAKPOINTS_PER_FILE: usize = 10_000;
+/// Longest breakpoint group name kept.
+pub const MAX_GROUP_CHARS: usize = 80;
+
+/// A breakpoint group name as typed or read from the session: trimmed, not empty, not too long.
+pub fn clean_group(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name.chars().count() <= MAX_GROUP_CHARS).then(|| name.to_string())
+}
+
 pub struct CrabCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
@@ -1298,6 +1309,43 @@ impl CrabCraftApp {
             }
         }
         for (path, bps) in &s.breakpoints {
+            // Breakpoints of files that are not open are kept until the file opens (D-27).
+            if self.docs.index_of(path).is_none() {
+                let disabled = s.disabled_breakpoints.get(path);
+                let logs = s.logpoints.get(path);
+                let mut kept = std::collections::BTreeMap::new();
+                for (line, cond) in bps.iter().take(MAX_BREAKPOINTS_PER_FILE) {
+                    let cond = cond.as_ref().filter(|c| !c.is_empty());
+                    let log = logs.and_then(|l| l.iter().find(|(n, _)| n == line)).map(|(_, m)| m.clone());
+                    let kind = if disabled.is_some_and(|d| d.contains(line)) {
+                        rc_editor::BreakpointKind::Disabled
+                    } else if log.is_some() {
+                        rc_editor::BreakpointKind::Log
+                    } else if cond.is_some() {
+                        rc_editor::BreakpointKind::Conditional
+                    } else {
+                        rc_editor::BreakpointKind::Normal
+                    };
+                    if let Some(c) = cond {
+                        self.debugger.conditions.insert((path.clone(), *line), c.clone());
+                    }
+                    if let Some(m) = log {
+                        self.debugger.logs.insert((path.clone(), *line), m);
+                    }
+                    kept.insert(*line, kind);
+                }
+                for line in s.remove_once_hit.get(path).into_iter().flatten() {
+                    self.debugger.once.insert((path.clone(), *line));
+                }
+                if !kept.is_empty() {
+                    self.docs.closed_breakpoints.insert(path.clone(), kept);
+                }
+            }
+            for (line, group) in s.breakpoint_groups.get(path).into_iter().flatten() {
+                if let Some(g) = clean_group(group) {
+                    self.debugger.groups.insert((path.clone(), *line), g);
+                }
+            }
             if let Some(i) = self.docs.index_of(path) {
                 for (line, cond) in bps {
                     let cond = cond.as_ref().filter(|c| !c.is_empty());
@@ -1338,13 +1386,8 @@ impl CrabCraftApp {
                 OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
             })
             .collect();
-        let breakpoints = self
-            .docs
-            .list
-            .iter()
-            .filter(|d| !d.editor.breakpoints.is_empty())
-            .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
-            .collect();
+        let all_breakpoints = self.docs.all_breakpoints();
+        let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
         let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
             files,
@@ -1374,13 +1417,12 @@ impl CrabCraftApp {
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
             bookmarks: self.docs.bookmarks().into_iter().map(|(path, lines)| (path, lines.into_iter().collect())).collect(),
-            disabled_breakpoints: self
-                .docs
-                .list
+            disabled_breakpoints: all_breakpoints
                 .iter()
-                .map(|d| (d.path.clone(), d.editor.breakpoints.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
+                .map(|(p, b)| (p.clone(), b.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
                 .filter(|(_, v)| !v.is_empty())
                 .collect(),
+            breakpoint_groups: group_lines(self.debugger.groups.iter().filter(|((p, l), _)| all_breakpoints.get(p).is_some_and(|b| b.contains_key(l))).map(|((p, l), g)| (p.clone(), (*l, g.clone())))),
         }
     }
 
@@ -1979,6 +2021,7 @@ impl CrabCraftApp {
                     self.notify(tr("Attaching needs an open Rust project"), false);
                 }
             }
+            Action::ViewBreakpoints => self.dialog = Some(Dialog::Breakpoints { selected: None, group: String::new() }),
             Action::RunToCursor | Action::ForceRunToCursor => {
                 if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
                     self.debugger.run_to_cursor(&path, line, action == Action::ForceRunToCursor);

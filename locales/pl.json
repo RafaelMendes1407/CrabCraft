@@ -1468,5 +1468,23 @@
     "Move “{name}” to Folder": "Przenieś „{name}” do folderu",
     "Out of the Folder": "Poza folderem",
     "Rename Folder “{folder}”…": "Zmień nazwę folderu „{folder}”…"
+  },
+  "breakpointlist": {
+    "View Breakpoints…": "Pokaż punkty przerwania…",
+    "Breakpoints": "Punkty przerwania",
+    "Breakpoints are muted: none of them stops the program": "Punkty przerwania są wyciszone: żaden nie zatrzymuje programu",
+    "Edit…": "Edytuj…",
+    "Existing groups": "Istniejące grupy",
+    "Go To": "Przejdź do",
+    "Group": "Grupa",
+    "Move to Group": "Przenieś do grupy",
+    "New or existing group": "Nowa lub istniejąca grupa",
+    "No breakpoints. Click the gutter of an editor to set one.": "Brak punktów przerwania. Kliknij margines edytora, aby ustawić punkt.",
+    "No group": "Bez grupy",
+    "Remove from Group": "Usuń z grupy",
+    "Rename the Group to the Name Below": "Zmień nazwę grupy na poniższą",
+    "Ungroup": "Rozgrupuj",
+    "logs {message}": "loguje {message}",
+    "when {condition}": "gdy {condition}"
   }
 }

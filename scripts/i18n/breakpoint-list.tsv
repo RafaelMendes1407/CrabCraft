@@ -1,0 +1,18 @@
+# The list of every breakpoint and breakpoint groups (D-27). Import: python3 scripts/i18n_tsv.py breakpointlist scripts/i18n/breakpoint-list.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+View Breakpoints…	Ver puntos de interrupción…	Afficher les points d’arrêt…	Ver breakpoints…	Haltepunkte anzeigen…	Pokaż punkty przerwania…	查看断点…	ブレークポイントを表示…
+Breakpoints	Puntos de interrupción	Points d’arrêt	Breakpoints	Haltepunkte	Punkty przerwania	断点	ブレークポイント
+Breakpoints are muted: none of them stops the program	Los puntos de interrupción están silenciados: ninguno detiene el programa	Les points d’arrêt sont désactivés : aucun n’arrête le programme	Os breakpoints estão silenciados: nenhum deles para o programa	Haltepunkte sind stummgeschaltet: keiner hält das Programm an	Punkty przerwania są wyciszone: żaden nie zatrzymuje programu	断点已静音：任何断点都不会停止程序	ブレークポイントはミュート中です。どれもプログラムを停止しません
+Edit…	Editar…	Modifier…	Editar…	Bearbeiten…	Edytuj…	编辑…	編集…
+Existing groups	Grupos existentes	Groupes existants	Grupos existentes	Vorhandene Gruppen	Istniejące grupy	现有分组	既存のグループ
+Go To	Ir a	Aller à	Ir para	Gehe zu	Przejdź do	转到	移動
+Group	Grupo	Groupe	Grupo	Gruppe	Grupa	分组	グループ
+Move to Group	Mover al grupo	Déplacer dans le groupe	Mover para o grupo	In Gruppe verschieben	Przenieś do grupy	移到分组	グループに移動
+New or existing group	Grupo nuevo o existente	Groupe nouveau ou existant	Grupo novo ou existente	Neue oder vorhandene Gruppe	Nowa lub istniejąca grupa	新的或现有分组	新規または既存のグループ
+No breakpoints. Click the gutter of an editor to set one.	No hay puntos de interrupción. Haga clic en el margen de un editor para añadir uno.	Aucun point d’arrêt. Cliquez dans la marge d’un éditeur pour en poser un.	Nenhum breakpoint. Clique na margem de um editor para criar um.	Keine Haltepunkte. Klicken Sie in den Rand eines Editors, um einen zu setzen.	Brak punktów przerwania. Kliknij margines edytora, aby ustawić punkt.	没有断点。点击编辑器的边栏即可设置。	ブレークポイントはありません。エディターの余白をクリックして設定します。
+No group	Sin grupo	Aucun groupe	Sem grupo	Keine Gruppe	Bez grupy	无分组	グループなし
+Remove from Group	Quitar del grupo	Retirer du groupe	Remover do grupo	Aus Gruppe entfernen	Usuń z grupy	从分组中移除	グループから削除
+Rename the Group to the Name Below	Cambiar el nombre del grupo al de abajo	Renommer le groupe avec le nom ci-dessous	Renomear o grupo para o nome abaixo	Gruppe in den Namen unten umbenennen	Zmień nazwę grupy na poniższą	将分组重命名为下方的名称	グループ名を下の名前に変更
+Ungroup	Desagrupar	Dégrouper	Desagrupar	Gruppierung aufheben	Rozgrupuj	取消分组	グループ解除
+logs {message}	registra {message}	journalise {message}	registra {message}	protokolliert {message}	loguje {message}	记录 {message}	{message} を記録
+when {condition}	cuando {condition}	quand {condition}	quando {condition}	wenn {condition}	gdy {condition}	当 {condition}	{condition} のとき

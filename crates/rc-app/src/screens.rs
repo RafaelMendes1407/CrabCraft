@@ -3246,3 +3246,37 @@ fn run_config_folders_capture() {
     h.run_steps(4);
     h.render().unwrap().save(out.join("run-config-folders-dark.png")).unwrap();
 }
+
+/// D-27: captures the list of every breakpoint, with groups and a closed file.
+#[test]
+#[ignore = "writes target/snapshots/breakpoint-list-dark.png"]
+fn breakpoint_list_capture() {
+    use rc_editor::BreakpointKind;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n").unwrap();
+    std::fs::write(root.join("src/price.rs"), "pub fn double(n: u32) -> u32 {\n    let twice = n * 2;\n    twice\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(1, BreakpointKind::Normal);
+    app.open_file(&main_rs);
+    for line in [3, 4, 5] {
+        app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
+    }
+    app.debugger.conditions.insert((main_rs.clone(), 4), "a > 2".into());
+    app.set_breakpoint_group(&main_rs, 3, Some("Calls"));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    app.set_breakpoint_group(&price_rs, 1, Some("Pricing"));
+    app.set_breakpoint_enabled(&main_rs, 4, false);
+    app.dialog = Some(crate::ui::dialogs::Dialog::Breakpoints { selected: Some((main_rs.clone(), 3)), group: String::new() });
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("breakpoint-list-dark.png")).unwrap();
+}

@@ -1468,5 +1468,23 @@
     "Move “{name}” to Folder": "将“{name}”移到文件夹",
     "Out of the Folder": "移出文件夹",
     "Rename Folder “{folder}”…": "重命名文件夹“{folder}”…"
+  },
+  "breakpointlist": {
+    "View Breakpoints…": "查看断点…",
+    "Breakpoints": "断点",
+    "Breakpoints are muted: none of them stops the program": "断点已静音：任何断点都不会停止程序",
+    "Edit…": "编辑…",
+    "Existing groups": "现有分组",
+    "Go To": "转到",
+    "Group": "分组",
+    "Move to Group": "移到分组",
+    "New or existing group": "新的或现有分组",
+    "No breakpoints. Click the gutter of an editor to set one.": "没有断点。点击编辑器的边栏即可设置。",
+    "No group": "无分组",
+    "Remove from Group": "从分组中移除",
+    "Rename the Group to the Name Below": "将分组重命名为下方的名称",
+    "Ungroup": "取消分组",
+    "logs {message}": "记录 {message}",
+    "when {condition}": "当 {condition}"
   }
 }

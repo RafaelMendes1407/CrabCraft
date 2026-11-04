@@ -584,3 +584,11 @@ fn failure_messages_have_templates() {
     assert_eq!(f.to_string(), "The debugger could not attach to process 42: denied");
     assert_eq!(StopReason::parse("exception").label(), "Paused on exception");
 }
+
+#[test]
+fn reads_the_gdb_version() {
+    assert_eq!(gdb_major(&json!({ "result": "15", "variablesReference": 0 })), Some(15));
+    assert_eq!(gdb_major(&json!({ "result": " 16\n" })), Some(16));
+    assert_eq!(gdb_major(&json!({ "result": "void" })), None);
+    assert_eq!(gdb_major(&json!({})), None);
+}

@@ -125,6 +125,8 @@ pub enum Action {
     ForceStepOver,
     /// Run to Cursor that does not stop at breakpoints on the way.
     ForceRunToCursor,
+    /// The list of every breakpoint and their groups.
+    ViewBreakpoints,
     AttachToProcess,
     Evaluate,
     /// Integers in hexadecimal or decimal in the debugger.
@@ -226,6 +228,7 @@ impl Action {
                 | ForceStepInto
                 | ForceStepOver
                 | ForceRunToCursor
+                | ViewBreakpoints
                 | AttachToProcess
                 | Evaluate
                 | ToggleHexValues
@@ -558,6 +561,7 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F2, none, NextError),
         b(Key::F2, s, PreviousError),
         b(Key::F8, c, ToggleBreakpoint),
+        b(Key::F8, cs, ViewBreakpoints),
         b(Key::F11, c, ToggleBookmark),
         b(Key::F11, cs, ShowBookmarks),
         b(Key::O, cs, GotoFile),
@@ -702,6 +706,7 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F11, as_, ForceStepInto),
         b(Key::F10, as_, ForceStepOver),
         b(Key::F10, ca, ForceRunToCursor),
+        b(Key::F8, cs, ViewBreakpoints),
         b(Key::F9, s, Evaluate),
         b(Key::Insert, cas, NewScratchFile),
     ];

@@ -270,6 +270,8 @@ struct VarKey {
 
 enum Purpose {
     Initialize,
+    /// `$_gdb_major`, asked before a GDB `launch`.
+    GdbVersion,
     Launch,
     Config,
     ConfigurationDone,
@@ -305,6 +307,10 @@ struct Handshake {
     config_outstanding: usize,
     configuration_done: bool,
     launch_done: bool,
+    /// The start request waits for `configurationDone`: GDB before 16 runs the program as soon
+    /// as `launch` arrives, and then refuses the breakpoints of every file but the first
+    /// (`notStopped`).
+    launch_after_config: bool,
 }
 
 struct PendingStop {
@@ -672,13 +678,25 @@ impl DebugSession {
                 Ok(v) => {
                     self.capabilities = serde_json::from_value(v).unwrap_or_default();
                     self.hs.initialize_done = true;
-                    if let (Some(c), Some((command, a))) = (&self.client, self.start_request.take()) {
-                        self.in_flight.push((c.request(command, a), Purpose::Launch));
+                    match &self.client {
+                        Some(c) if self.is_gdb() && self.attach_pid.is_none() => {
+                            let p = c.request("evaluate", json!({ "expression": "$_gdb_major", "context": "repl" }));
+                            self.in_flight.push((p, Purpose::GdbVersion));
+                        }
+                        _ => self.send_start_request(),
                     }
                     self.maybe_configure();
                 }
                 Err(e) => self.fail(Failure::InitializeFailed(e.message)),
             },
+            Purpose::GdbVersion => {
+                let major = r.ok().and_then(|v| gdb_major(&v));
+                if major.is_some_and(|m| m < 16) && !self.hs.configuration_done {
+                    self.hs.launch_after_config = true;
+                } else {
+                    self.send_start_request();
+                }
+            }
             Purpose::Launch => match r {
                 Ok(_) => {
                     self.hs.launch_done = true;
@@ -723,6 +741,9 @@ impl DebugSession {
                     self.events.push(DebugEvent::Log(format!("configurationDone: {}", e.message)));
                 }
                 self.hs.configuration_done = true;
+                if self.hs.launch_after_config {
+                    self.send_start_request();
+                }
                 self.maybe_running();
             }
             Purpose::Threads { generation } => {
@@ -893,6 +914,13 @@ impl DebugSession {
     }
 
     // ---- Handshake ----------------------------------------------------------------------------
+
+    /// Sends `launch` or `attach` (once).
+    fn send_start_request(&mut self) {
+        if let (Some(c), Some((command, a))) = (&self.client, self.start_request.take()) {
+            self.in_flight.push((c.request(command, a), Purpose::Launch));
+        }
+    }
 
     fn maybe_configure(&mut self) {
         if !self.hs.initialize_done || !self.hs.initialized_event || self.hs.configuring || self.client.is_none() {
@@ -1831,6 +1859,11 @@ impl Drop for DebugSession {
     fn drop(&mut self) {
         self.shutdown();
     }
+}
+
+/// The major version from the answer to `evaluate $_gdb_major`.
+fn gdb_major(v: &Value) -> Option<u32> {
+    v.get("result")?.as_str()?.trim().parse().ok()
 }
 
 #[cfg(test)]

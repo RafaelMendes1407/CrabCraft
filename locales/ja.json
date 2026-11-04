@@ -1468,5 +1468,23 @@
     "Move “{name}” to Folder": "「{name}」をフォルダーに移動",
     "Out of the Folder": "フォルダーから出す",
     "Rename Folder “{folder}”…": "フォルダー「{folder}」の名前を変更…"
+  },
+  "breakpointlist": {
+    "View Breakpoints…": "ブレークポイントを表示…",
+    "Breakpoints": "ブレークポイント",
+    "Breakpoints are muted: none of them stops the program": "ブレークポイントはミュート中です。どれもプログラムを停止しません",
+    "Edit…": "編集…",
+    "Existing groups": "既存のグループ",
+    "Go To": "移動",
+    "Group": "グループ",
+    "Move to Group": "グループに移動",
+    "New or existing group": "新規または既存のグループ",
+    "No breakpoints. Click the gutter of an editor to set one.": "ブレークポイントはありません。エディターの余白をクリックして設定します。",
+    "No group": "グループなし",
+    "Remove from Group": "グループから削除",
+    "Rename the Group to the Name Below": "グループ名を下の名前に変更",
+    "Ungroup": "グループ解除",
+    "logs {message}": "{message} を記録",
+    "when {condition}": "{condition} のとき"
   }
 }

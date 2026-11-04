@@ -85,6 +85,8 @@ pub enum Dialog {
     FileStructure { filter: String, selected: usize },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
     BreakpointProperties { path: PathBuf, line: usize, condition: String, log: String, once: bool, enabled: bool, focus: bool },
+    /// Every breakpoint and its group (D-27): the selected one and the group name being typed.
+    Breakpoints { selected: Option<(PathBuf, usize)>, group: String },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
@@ -146,6 +148,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::PruneWorktrees { paths } => prune_worktrees(app, ctx, paths),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
+        Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
@@ -1198,6 +1201,179 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
 }
 
 #[allow(clippy::too_many_arguments)]
+/// What the Breakpoints dialog asked for, done once it is drawn.
+enum BpAction {
+    Enable(PathBuf, usize, bool),
+    EnableGroup(Option<String>, bool),
+    Select(PathBuf, usize),
+    GoTo(PathBuf, usize),
+    Edit(PathBuf, usize),
+    Remove(PathBuf, usize),
+    Move(PathBuf, usize, Option<String>),
+    RenameGroup(String, String),
+    Ungroup(String),
+}
+
+/// View Breakpoints (Ctrl+Shift+F8): every breakpoint of the project, open file or not, by
+/// group; each can be turned on or off, opened, edited, removed or moved to a group, and a
+/// whole group turned on or off at once.
+fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(PathBuf, usize)>, group: &mut String) -> Outcome {
+    let rows = app.breakpoint_rows();
+    let groups = app.breakpoint_groups();
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    if selected.as_ref().is_some_and(|(p, l)| !rows.iter().any(|r| r.path == *p && r.line == *l)) {
+        *selected = None;
+    }
+    let mut actions: Vec<BpAction> = Vec::new();
+    let (close, esc) = modal(ctx, "breakpoints", 720.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Breakpoints"));
+        if app.debugger.muted {
+            ui.label(egui::RichText::new(tr("Breakpoints are muted: none of them stops the program")).size(12.5).color(p.warn));
+            ui.add_space(4.0);
+        }
+        if rows.is_empty() {
+            ui.label(egui::RichText::new(tr("No breakpoints. Click the gutter of an editor to set one.")).color(p.muted));
+        }
+        egui::ScrollArea::vertical().id_salt("breakpoint_rows").max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+            let sections: Vec<Option<String>> = groups.iter().cloned().map(Some).chain(rows.iter().any(|r| r.group.is_none()).then_some(None)).collect();
+            for section in sections {
+                let members: Vec<&crate::breakpoint_list::BreakpointRow> = rows.iter().filter(|r| r.group == section).collect();
+                // A header with a checkbox for the group, when there are groups at all.
+                if !groups.is_empty() {
+                    ui.horizontal(|ui| {
+                        let on = members.iter().filter(|r| r.enabled).count();
+                        let mut all = on == members.len();
+                        let label = section.clone().unwrap_or_else(|| tr("No group").to_string());
+                        let resp = ui.add(egui::Checkbox::new(&mut all, egui::RichText::new(format!("{label} ({})", members.len())).strong()).indeterminate(on > 0 && on < members.len()));
+                        if resp.changed() {
+                            actions.push(BpAction::EnableGroup(section.clone(), all));
+                        }
+                        if let Some(g) = &section {
+                            resp.context_menu(|ui| {
+                                if theme::menu_item(ui, Some(rc_kit::ico::EDIT), tr("Rename the Group to the Name Below"), false).clicked() {
+                                    actions.push(BpAction::RenameGroup(g.clone(), group.clone()));
+                                    ui.close();
+                                }
+                                if theme::menu_item(ui, Some(rc_kit::ico::CLOSE), tr("Ungroup"), false).clicked() {
+                                    actions.push(BpAction::Ungroup(g.clone()));
+                                    ui.close();
+                                }
+                            });
+                        }
+                    });
+                }
+                for r in members {
+                    ui.horizontal(|ui| {
+                        if !groups.is_empty() {
+                            ui.add_space(18.0);
+                        }
+                        let mut on = r.enabled;
+                        if ui.checkbox(&mut on, "").changed() {
+                            actions.push(BpAction::Enable(r.path.clone(), r.line, on));
+                        }
+                        let name = r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        let is_selected = selected.as_ref().is_some_and(|(p, l)| *p == r.path && *l == r.line);
+                        let resp = ui.selectable_label(is_selected, egui::RichText::new(format!("{name}:{}", r.line + 1)).font(FontId::monospace(12.5)));
+                        if resp.clicked() {
+                            actions.push(BpAction::Select(r.path.clone(), r.line));
+                        }
+                        if resp.double_clicked() {
+                            actions.push(BpAction::GoTo(r.path.clone(), r.line));
+                        }
+                        let folder = r.path.parent().map(|d| root.as_ref().and_then(|root| d.strip_prefix(root).ok()).map(|d| d.display().to_string()).unwrap_or_else(|| d.display().to_string())).unwrap_or_default();
+                        ui.label(egui::RichText::new(folder).size(11.5).color(p.muted));
+                        let detail = match (&r.log, &r.condition) {
+                            (Some(m), _) => Some(trf("logs {message}", &[("message", m)])),
+                            (None, Some(c)) => Some(trf("when {condition}", &[("condition", c)])),
+                            _ => None,
+                        };
+                        if let Some(d) = detail {
+                            ui.label(egui::RichText::new(d).font(FontId::monospace(11.5)).color(p.accent));
+                        }
+                    });
+                }
+            }
+        });
+        ui.add_space(8.0);
+        ui.separator();
+        // What can be done with the selected breakpoint.
+        let chosen = selected.clone();
+        ui.add_enabled_ui(chosen.is_some(), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Group"));
+                ui.add(egui::TextEdit::singleline(group).hint_text(tr("New or existing group")).desired_width(180.0));
+                egui::ComboBox::from_id_salt("bp_groups").selected_text(tr("Existing groups")).width(140.0).show_ui(ui, |ui| {
+                    for g in &groups {
+                        if ui.selectable_label(false, g).clicked() {
+                            *group = g.clone();
+                        }
+                    }
+                });
+                if let Some((path, line)) = &chosen {
+                    if theme::secondary_button(ui, tr("Move to Group")).clicked() && !group.trim().is_empty() {
+                        actions.push(BpAction::Move(path.clone(), *line, Some(group.clone())));
+                    }
+                    if theme::secondary_button(ui, tr("Remove from Group")).clicked() {
+                        actions.push(BpAction::Move(path.clone(), *line, None));
+                    }
+                }
+            });
+        });
+        ui.add_space(10.0);
+        let mut close = false;
+        ui.horizontal(|ui| {
+            if let Some((path, line)) = &chosen {
+                if theme::secondary_button(ui, tr("Go To")).clicked() {
+                    actions.push(BpAction::GoTo(path.clone(), *line));
+                }
+                if theme::secondary_button(ui, tr("Edit…")).clicked() {
+                    actions.push(BpAction::Edit(path.clone(), *line));
+                }
+                if theme::secondary_button(ui, tr("Remove")).clicked() {
+                    actions.push(BpAction::Remove(path.clone(), *line));
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = theme::primary_button(ui, tr("Close")).clicked();
+            });
+        });
+        close
+    });
+    for a in actions {
+        match a {
+            BpAction::Enable(path, line, on) => app.set_breakpoint_enabled(&path, line, on),
+            BpAction::EnableGroup(g, on) => app.set_group_enabled(g.as_deref(), on),
+            BpAction::Select(path, line) => {
+                *group = app.debugger.groups.get(&(path.clone(), line)).cloned().unwrap_or_default();
+                *selected = Some((path, line));
+            }
+            BpAction::GoTo(path, line) => {
+                app.go_to_breakpoint(&path, line);
+                return Outcome::Close;
+            }
+            BpAction::Edit(path, line) => {
+                let key = (path.clone(), line);
+                let enabled = app.breakpoint_rows().iter().any(|r| r.path == path && r.line == line && r.enabled);
+                let condition = app.debugger.conditions.get(&key).cloned().unwrap_or_default();
+                let log = app.debugger.logs.get(&key).cloned().unwrap_or_default();
+                let once = app.debugger.once.contains(&key);
+                app.go_to_breakpoint(&path, line);
+                app.dialog = Some(Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus: true });
+                return Outcome::Keep;
+            }
+            BpAction::Remove(path, line) => {
+                app.remove_breakpoint(&path, line);
+                *selected = None;
+            }
+            BpAction::Move(path, line, g) => app.set_breakpoint_group(&path, line, g.as_deref()),
+            BpAction::RenameGroup(old, new) => app.rename_breakpoint_group(&old, &new),
+            BpAction::Ungroup(g) => app.remove_breakpoint_group(&g),
+        }
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, log: &mut String, once: &mut bool, enabled: &mut bool, focus: &mut bool) -> Outcome {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
@@ -1232,8 +1408,8 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
     if ok || remove {
         let key = (path.to_path_buf(), line);
         let cond = condition.trim().to_string();
-        if let Some(i) = app.docs.index_of(path) {
-            let bps = &mut app.docs.list[i].editor.breakpoints;
+        // The file may be closed: its breakpoints are kept apart (D-27).
+        if let Some(bps) = app.docs.breakpoints_mut(path) {
             if remove {
                 bps.remove(&line);
                 app.debugger.forget_breakpoint(path, line);
