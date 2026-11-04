@@ -1,0 +1,5 @@
+# Set a variable's value while paused (D-12). Import: python3 scripts/i18n_tsv.py setvalue scripts/i18n/set-value.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Set Value…	Establecer valor…	Définir la valeur…	Definir valor…	Wert setzen…	Ustaw wartość…	设置值…	値を設定…
+Cannot set {name}: {error}	No se puede establecer {name}: {error}	Impossible de définir {name} : {error}	Não foi possível definir {name}: {error}	{name} kann nicht gesetzt werden: {error}	Nie można ustawić {name}: {error}	无法设置 {name}：{error}	{name} を設定できません: {error}
+Enter to set, Escape to cancel	Intro para establecer, Escape para cancelar	Entrée pour définir, Échap pour annuler	Enter para definir, Esc para cancelar	Eingabe zum Setzen, Esc zum Abbrechen	Enter, aby ustawić, Esc, aby anulować	按 Enter 设置，按 Esc 取消	Enter で設定、Esc でキャンセル

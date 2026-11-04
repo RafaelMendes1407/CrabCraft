@@ -1184,5 +1184,10 @@
     "Reading Git…": "正在读取 Git…",
     "Git has no user.name for this project": "Git 没有此项目的 user.name",
     "Restore the Default Template": "恢复默认模板"
+  },
+  "setvalue": {
+    "Set Value…": "设置值…",
+    "Cannot set {name}: {error}": "无法设置 {name}：{error}",
+    "Enter to set, Escape to cancel": "按 Enter 设置，按 Esc 取消"
   }
 }

@@ -1184,5 +1184,10 @@
     "Reading Git…": "Git を読み込み中…",
     "Git has no user.name for this project": "このプロジェクトの Git に user.name がありません",
     "Restore the Default Template": "既定のテンプレートに戻す"
+  },
+  "setvalue": {
+    "Set Value…": "値を設定…",
+    "Cannot set {name}: {error}": "{name} を設定できません: {error}",
+    "Enter to set, Escape to cancel": "Enter で設定、Esc でキャンセル"
   }
 }

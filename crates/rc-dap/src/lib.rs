@@ -25,4 +25,4 @@ pub use memory::MemoryBlock;
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
 pub use netcoredbg::{AdapterCommand, DownloadEvent};
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};
-pub use session::{DebugEvent, DebugSession, EvalValue, Failure, OutputCategory, SessionState, StopInfo, StopReason, ThreadFrames, Watch, WatchValue};
+pub use session::{DebugEvent, DebugSession, EvalValue, Failure, OutputCategory, SessionState, SetMethod, set_method, StopInfo, StopReason, ThreadFrames, Watch, WatchValue};

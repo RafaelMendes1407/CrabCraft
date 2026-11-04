@@ -236,7 +236,9 @@ pub enum DebugEvent {
     VariablesFailed { reference: i64, message: String },
     WatchesUpdated,
     Evaluated { id: u64, expression: String, context: EvalContext, result: Result<EvalValue, String> },
-    VariableSet { reference: i64, name: String, result: Result<String, String> },
+    /// The answer of [`DebugSession::set_variable`] or [`DebugSession::set_expression`] with
+    /// its id: the new value as the debugger prints it, or its error message.
+    VariableSet { id: u64, reference: i64, name: String, result: Result<String, String> },
     /// The answer of [`DebugSession::read_memory`] with its id.
     MemoryRead { id: u64, result: Result<crate::memory::MemoryBlock, String> },
     /// The exception the program stopped on.
@@ -272,7 +274,7 @@ enum Purpose {
     Variables { generation: u64, key: VarKey, hex: bool },
     Watch { generation: u64, id: u64, hex: bool },
     Evaluate { id: u64, expression: String, context: EvalContext, hex: bool },
-    SetVariable { generation: u64, reference: i64, name: String },
+    SetVariable { id: u64, generation: u64, reference: i64, name: String, expression: Option<String>, hex: bool },
     ReadMemory { id: u64, requested: Option<u64>, count: usize },
     ExceptionInfo { generation: u64 },
     LogPoint { generation: u64, index: usize, part: usize },
@@ -810,30 +812,24 @@ impl DebugSession {
                 let result = r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))).map(|v| hex_result(v, client_hex)).map_err(|e| e.message);
                 self.events.push(DebugEvent::Evaluated { id, expression, context, result });
             }
-            Purpose::SetVariable { generation, reference, name } => {
+            Purpose::SetVariable { id, generation, reference, name, expression, hex } => {
                 let result = r.and_then(|v| serde_json::from_value::<SetVariableResponse>(v).map_err(|e| DapError::new(e.to_string())));
                 match result {
-                    Ok(v) => {
-                        if generation == self.generation {
-                            for (key, vars) in &mut self.variables {
-                                if key.reference != reference {
-                                    continue;
-                                }
-                                for var in vars.iter_mut().filter(|var| var.name == name) {
-                                    var.value = v.value.clone();
-                                    if let Some(t) = &v.type_name {
-                                        var.type_name = Some(t.clone());
-                                    }
-                                    if let Some(r) = v.variables_reference {
-                                        var.variables_reference = r;
-                                    }
-                                }
-                            }
+                    Ok(mut v) => {
+                        if self.client_hex(hex)
+                            && v.variables_reference.unwrap_or(0) == 0
+                            && let Some(h) = crate::format::hex_integer(&v.value, v.type_name.as_deref())
+                        {
+                            v.value = h;
+                        }
+                        // Answers of an older stop or of the other format are not shown.
+                        if generation == self.generation && hex == self.hex {
+                            self.apply_set(reference, &name, expression.as_deref(), &v);
                             self.evaluate_watches();
                         }
-                        self.events.push(DebugEvent::VariableSet { reference, name, result: Ok(v.value) });
+                        self.events.push(DebugEvent::VariableSet { id, reference, name, result: Ok(v.value) });
                     }
-                    Err(e) => self.events.push(DebugEvent::VariableSet { reference, name, result: Err(e.message) }),
+                    Err(e) => self.events.push(DebugEvent::VariableSet { id, reference, name, result: Err(e.message) }),
                 }
             }
             Purpose::ReadMemory { id, requested, count } => {
@@ -1420,18 +1416,77 @@ impl DebugSession {
         self.loading.iter().any(|(r, _)| *r == reference)
     }
 
-    /// Changes a variable's value; the answer comes as [`DebugEvent::VariableSet`].
-    pub fn set_variable(&mut self, reference: i64, name: &str, value: &str) {
-        let Some(c) = &self.client else { return };
-        if !self.state.is_stopped() {
-            return;
+    /// Changes the value of the variable `name`, a child of `reference` (its scope or parent
+    /// variable), to `value` (an expression in the program's language, `0x1f` included).
+    ///
+    /// Uses `setVariable`, or `setExpression` on `evaluate_name` when the adapter only has
+    /// that (see [`set_method`]). The answer comes as [`DebugEvent::VariableSet`] with the
+    /// returned id; the cached variable and the watches are updated on success.
+    pub fn set_variable(&mut self, reference: i64, name: &str, evaluate_name: Option<&str>, value: &str) -> u64 {
+        let id = self.next_id();
+        let refuse = match set_method(&self.capabilities, reference, evaluate_name) {
+            _ if !self.state.is_stopped() => Err("the program is not paused"),
+            None => Err("the debugger cannot change this value"),
+            Some(m) => Ok(m),
+        };
+        let hex = self.hex;
+        let format = self.adapter_hex(hex).then(|| json!({"hex": true}));
+        let request = refuse.map(|method| match method {
+            SetMethod::SetVariable => ("setVariable", json!({"variablesReference": reference, "name": name, "value": value}), None),
+            SetMethod::SetExpression => {
+                let expression = evaluate_name.unwrap_or(name).to_string();
+                let mut a = json!({"expression": expression, "value": value});
+                if let Some(frame) = self.selected_frame {
+                    a["frameId"] = json!(frame);
+                }
+                ("setExpression", a, Some(expression))
+            }
+        });
+        match (&self.client, request) {
+            (Some(c), Ok((command, mut a, expression))) => {
+                if let Some(f) = format {
+                    a["format"] = f;
+                }
+                let p = c.request(command, a);
+                self.in_flight.push((p, Purpose::SetVariable { id, generation: self.generation, reference, name: name.to_string(), expression, hex }));
+            }
+            (_, Err(why)) => self.events.push(DebugEvent::VariableSet { id, reference, name: name.to_string(), result: Err(why.into()) }),
+            (None, Ok(_)) => self.events.push(DebugEvent::VariableSet { id, reference, name: name.to_string(), result: Err("the debugger is not running".into()) }),
         }
-        let mut a = json!({"variablesReference": reference, "name": name, "value": value});
-        if self.adapter_hex(self.hex) {
-            a["format"] = json!({"hex": true});
+        id
+    }
+
+    /// Changes the value of `expression` (a watch) with `setExpression` in the selected frame;
+    /// the answer comes as [`DebugEvent::VariableSet`] with reference 0 and the expression as
+    /// its name.
+    pub fn set_expression(&mut self, expression: &str, value: &str) -> u64 {
+        self.set_variable(0, expression, Some(expression), value)
+    }
+
+    /// Puts a value the debugger set into the cached variables: the variable `name` under
+    /// `reference`, and any variable known by `expression` (its evaluate name, or its name for
+    /// a variable of the selected frame's scopes).
+    fn apply_set(&mut self, reference: i64, name: &str, expression: Option<&str>, v: &SetVariableResponse) {
+        let frame_scopes: Vec<i64> = self.selected_frame.and_then(|f| self.scopes.get(&f)).map(|sc| sc.iter().map(|s| s.variables_reference).collect()).unwrap_or_default();
+        for (key, vars) in &mut self.variables {
+            for var in vars.iter_mut() {
+                let by_expression = expression.is_some_and(|e| match var.evaluate_name.as_deref().filter(|n| !n.is_empty()) {
+                    Some(n) => n == e,
+                    None => frame_scopes.contains(&key.reference) && var.name == e,
+                });
+                let same = (reference > 0 && key.reference == reference && var.name == name) || by_expression;
+                if !same {
+                    continue;
+                }
+                var.value = v.value.clone();
+                if let Some(t) = &v.type_name {
+                    var.type_name = Some(t.clone());
+                }
+                if let Some(r) = v.variables_reference {
+                    var.variables_reference = r;
+                }
+            }
         }
-        let p = c.request("setVariable", a);
-        self.in_flight.push((p, Purpose::SetVariable { generation: self.generation, reference, name: name.to_string() }));
     }
 
     pub fn exception(&self) -> Option<&ExceptionInfo> {
@@ -1587,6 +1642,27 @@ impl DebugSession {
         let id = self.next_id;
         self.next_id += 1;
         id
+    }
+}
+
+/// How a value is changed (DAP `setVariable` or `setExpression`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SetMethod {
+    SetVariable,
+    SetExpression,
+}
+
+/// How to change a value with this adapter: `setVariable` for a child of `reference` when it
+/// has it, otherwise `setExpression` on the value's expression; `None` when it can do
+/// neither (the UI shows Set Value as unavailable).
+pub fn set_method(capabilities: &Capabilities, reference: i64, evaluate_name: Option<&str>) -> Option<SetMethod> {
+    let has_expression = evaluate_name.is_some_and(|e| !e.trim().is_empty());
+    if capabilities.supports_set_variable && reference > 0 {
+        Some(SetMethod::SetVariable)
+    } else if capabilities.supports_set_expression && has_expression {
+        Some(SetMethod::SetExpression)
+    } else {
+        None
     }
 }
 

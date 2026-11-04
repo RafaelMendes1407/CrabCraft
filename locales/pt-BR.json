@@ -1184,5 +1184,10 @@
     "Reading Git…": "Lendo o Git…",
     "Git has no user.name for this project": "O Git não tem user.name para este projeto",
     "Restore the Default Template": "Restaurar o modelo padrão"
+  },
+  "setvalue": {
+    "Set Value…": "Definir valor…",
+    "Cannot set {name}: {error}": "Não foi possível definir {name}: {error}",
+    "Enter to set, Escape to cancel": "Enter para definir, Esc para cancelar"
   }
 }

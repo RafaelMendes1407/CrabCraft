@@ -145,10 +145,11 @@ fn handshake_order_stops_caches_watches_and_exit() {
     assert_eq!((got, v.variables_reference), (id, 2001));
 
     // setVariable updates the cache and re-evaluates the watches.
-    s.set_variable(locals, "x", "2");
-    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::VariableSet { .. }));
+    let set = s.set_variable(locals, "x", Some("x"), "2");
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::VariableSet { id, result: Ok(v), .. } if *id == set && v == "2"));
     pump_until_state(&mut s, &mut ev, settled);
     assert_eq!(s.variables(locals).unwrap()[0].value, "2");
+    assert_eq!(requests(&log).iter().filter(|r| r["command"] == "setVariable").count(), 1);
     assert_eq!(result_of(watch_value(&s, w)), "20");
 
     // Continue invalidates everything fetched in the stop; the next stop re-evaluates watches.
@@ -246,6 +247,91 @@ fn hex_is_converted_here_when_the_adapter_cannot_format() {
     pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
     assert_eq!(s.variables(locals).unwrap()[0].value, "1");
     assert_eq!(result_of(watch_value(&s, w)), "10");
+}
+
+/// Pumps until the set `id` answers.
+fn set_result(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Result<String, String> {
+    let mut got = None;
+    pump_until(s, ev, |e, _| match e {
+        DebugEvent::VariableSet { id: i, result, .. } if *i == id => {
+            got = Some(result.clone());
+            true
+        }
+        _ => false,
+    });
+    got.unwrap()
+}
+
+#[test]
+fn the_set_method_follows_the_capabilities() {
+    let caps = |var: bool, expr: bool| Capabilities { supports_set_variable: var, supports_set_expression: expr, ..Default::default() };
+    assert_eq!(set_method(&caps(true, true), 1000, Some("x")), Some(SetMethod::SetVariable));
+    assert_eq!(set_method(&caps(true, false), 1000, None), Some(SetMethod::SetVariable));
+    // A watch has no parent reference: only setExpression can change it.
+    assert_eq!(set_method(&caps(true, true), 0, Some("x + 0")), Some(SetMethod::SetExpression));
+    assert_eq!(set_method(&caps(true, false), 0, Some("x")), None);
+    assert_eq!(set_method(&caps(false, true), 1000, Some("order.Customer")), Some(SetMethod::SetExpression));
+    assert_eq!(set_method(&caps(false, true), 1000, None), None);
+    assert_eq!(set_method(&caps(false, true), 1000, Some("  ")), None);
+    assert_eq!(set_method(&caps(false, false), 1000, Some("x")), None);
+}
+
+#[test]
+fn set_value_uses_set_expression_without_set_variable_and_reports_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late-noset");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    // Not paused yet: refused without asking the adapter.
+    let early = s.set_variable(1001, "x", Some("x"), "5");
+    assert!(set_result(&mut s, &mut ev, early).is_err());
+    pump_until(&mut s, &mut ev, stopped);
+    assert!(!s.capabilities().supports_set_variable && s.capabilities().supports_set_expression);
+    pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::ScopesLoaded { frame_id: 10 }));
+    let locals = s.scopes(10).unwrap()[0].variables_reference;
+    s.request_variables(locals);
+    let w = s.add_watch("x * 10");
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+
+    // The adapter has no setVariable: setExpression on the expression, in the selected frame.
+    let id = s.set_variable(locals, "x", Some("x"), "5");
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("5".into()));
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(s.variables(locals).unwrap()[0].value, "5");
+    assert_eq!(result_of(watch_value(&s, w)), "50");
+    let req = requests(&log).into_iter().find(|r| r["command"] == "setExpression").unwrap();
+    assert_eq!(req["arguments"], json!({"expression": "x", "value": "5", "frameId": 10}));
+    assert!(!commands(&log).contains(&"setVariable".to_string()));
+
+    // A hex value typed by the user; shown back in hex when hex is on (converted here).
+    s.set_hex(true);
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    let id = s.set_expression("x", "0x1f");
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("0x1f".into()));
+    pump_until_state(&mut s, &mut ev, settled);
+    assert_eq!(s.variables(locals).unwrap()[0].value, "0x1f");
+    assert_eq!(result_of(watch_value(&s, w)), "0x136");
+    s.set_hex(false);
+
+    // The adapter's error comes back as it is; the cached value does not change.
+    let id = s.set_variable(locals, "x", Some("x"), "abc");
+    assert_eq!(set_result(&mut s, &mut ev, id), Err("cannot assign 'abc'".into()));
+    s.request_variables(locals);
+    pump_until_state(&mut s, &mut ev, |s| s.variables(locals).is_some() && settled(s));
+    assert_eq!(s.variables(locals).unwrap()[0].value, "31");
+    // A child with no expression cannot be changed by this adapter.
+    let id = s.set_variable(2001, "Customer", None, "\"Bob\"");
+    assert!(set_result(&mut s, &mut ev, id).is_err());
+
+    // An answer that arrives after the program continued is not put in the new stop.
+    let id = s.set_variable(locals, "x", Some("x"), "9");
+    s.continue_();
+    assert_eq!(set_result(&mut s, &mut ev, id), Ok("9".into()));
+    assert!(s.variables(locals).is_none());
+    s.stop();
 }
 
 /// Pumps until the memory read `id` answers.

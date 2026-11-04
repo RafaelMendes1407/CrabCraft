@@ -1,5 +1,6 @@
 # A tiny fake debug adapter for the session unit tests.
-# Usage: fake_adapter.py <log file> <early|late> [--interpreter=vscode]
+# Usage: fake_adapter.py <log file> <early|late|late-noset> [--interpreter=vscode]
+# (late-noset: no setVariable, only setExpression.)
 # Logs every request it receives (one JSON line each) and plays a scripted program:
 # a loop that hits line 10 of the breakpoint file three times (x = 1, 2, 3), then exits with 3.
 import base64
@@ -82,7 +83,8 @@ while True:
             "supportsConfigurationDoneRequest": True,
             "supportsConditionalBreakpoints": True,
             "supportsExceptionInfoRequest": True,
-            "supportsSetVariable": True,
+            "supportsSetVariable": "noset" not in MODE,
+            "supportsSetExpression": True,
             "supportsReadMemoryRequest": True,
             "exceptionBreakpointFilters": [
                 {"filter": "all", "label": "All"},
@@ -146,9 +148,17 @@ while True:
             respond(m, {"result": "{Order}", "variablesReference": 2000 + stops})
         else:
             respond(m, ok=False, message="error CS0103: The name '%s' does not exist" % e)
-    elif cmd == "setVariable":
-        if a["name"] == "x":
-            x = int(a["value"])
+    elif cmd in ("setVariable", "setExpression"):
+        target = a.get("name") if cmd == "setVariable" else a.get("expression")
+        try:
+            value = int(a["value"], 0)
+        except ValueError:
+            respond(m, ok=False, message="cannot assign '%s'" % a["value"])
+            continue
+        if target != "x":
+            respond(m, ok=False, message="no variable named '%s'" % target)
+            continue
+        x = value
         respond(m, {"value": str(x), "type": "int"})
     elif cmd == "continue":
         respond(m, {"allThreadsContinued": True})

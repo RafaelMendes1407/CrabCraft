@@ -820,6 +820,137 @@ fn integers_switch_to_hexadecimal_while_paused() {
     app.debugger.stop();
 }
 
+const SET_VALUE_MAIN: &str = "fn main() {\n    let mut n: u32 = 255;\n    std::hint::black_box(&mut n);\n    let doubled = n * 2;\n    std::hint::black_box(doubled);\n    println!(\"n={n} doubled={doubled}\");\n}\n";
+
+/// An app paused under GDB at `let doubled = n * 2;` of [`SET_VALUE_MAIN`].
+fn paused_before_doubling(dir: &Path) -> CrabCraftApp {
+    use rc_editor::{Action, BreakpointKind};
+    let root = dir.join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), SET_VALUE_MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir);
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    app
+}
+
+/// Opens Set Value on the local `name`, as its context menu does, with `text` typed in it.
+fn edit_local(app: &mut CrabCraftApp, name: &str, text: &str) {
+    let vars = locals(app);
+    let s = app.debugger.session.as_ref().unwrap();
+    let scope = s.selected_frame().and_then(|f| s.scopes(f.id)).and_then(|sc| sc.first()).cloned().unwrap();
+    let v = vars.iter().find(|v| v.name == name).unwrap();
+    let target = crate::debugger::SetTarget::Variable { parent: scope.variables_reference, name: v.name.clone(), expression: Some(v.evaluate_name.clone().unwrap_or_else(|| v.name.clone())) };
+    assert!(target.supported(s.capabilities()));
+    app.debugger.start_edit(format!("s:{}/{}", scope.name, v.name), target, &v.value);
+    assert_eq!(app.debugger.edit.as_ref().map(|e| e.text.as_str()), Some(v.value.as_str()), "prefilled with the value");
+    app.debugger.edit.as_mut().unwrap().text = text.into();
+}
+
+#[test]
+fn a_variable_is_set_while_paused_and_the_program_sees_it() {
+    use rc_editor::Action;
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = paused_before_doubling(dir.path());
+    let ctx = egui::Context::default();
+    // GDB 15 has both requests.
+    let caps = app.debugger.session.as_ref().unwrap().capabilities().clone();
+    eprintln!("GDB supportsSetVariable={} supportsSetExpression={}", caps.supports_set_variable, caps.supports_set_expression);
+    assert!(caps.supports_set_variable && caps.supports_set_expression);
+    assert_eq!(local(&mut app, "n"), "255");
+    let w = app.debugger.session.as_mut().unwrap().add_watch("n + 1");
+
+    let settle = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
+        let start = Instant::now();
+        while !done(app) {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            locals(app);
+            assert!(start.elapsed() < Duration::from_secs(30), "timed out waiting for {what}: {:?}", app.debugger.edit);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let inline = |a: &CrabCraftApp, line: usize| a.docs.active_doc().and_then(|d| d.editor.debug_values.get(&line).cloned()).unwrap_or_default();
+    let watch = |a: &CrabCraftApp| match a.debugger.session.as_ref().and_then(|s| s.watches().iter().find(|x| x.id == w)).map(|x| x.value.clone()) {
+        Some(rc_dap::WatchValue::Value(v)) => v.result,
+        _ => String::new(),
+    };
+    settle(&mut app, "the values", &|a| inline(a, 1) == "n = 255" && watch(a) == "256");
+
+    // A value the debugger refuses: its message under the field, which stays open.
+    edit_local(&mut app, "n", "no_such_name");
+    app.debugger.apply_edit();
+    settle(&mut app, "the error", &|a| a.debugger.edit.as_ref().is_some_and(|e| e.error.is_some()));
+    let error = app.debugger.edit.as_ref().and_then(|e| e.error.clone()).unwrap();
+    assert!(error.contains("no_such_name"), "{error}");
+    app.debugger.cancel_edit();
+    assert_eq!(local(&mut app, "n"), "255");
+
+    // In hex, a hex value typed (setVariable, GDB prints it back in hex).
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    settle(&mut app, "hexadecimal values", &|a| inline(a, 1) == "n = 0xff");
+    edit_local(&mut app, "n", "0x1f");
+    app.debugger.apply_edit();
+    settle(&mut app, "the hex value", &|a| a.debugger.edit.is_none() && inline(a, 1) == "n = 0x1f" && watch(a) == "0x20");
+    assert_eq!(local(&mut app, "n"), "0x1f");
+    app.run_ide_action(&ctx, Action::ToggleHexValues);
+    settle(&mut app, "decimal values", &|a| inline(a, 1) == "n = 31");
+
+    // 255 → 7: the Variables view, the inline value and the watch follow.
+    edit_local(&mut app, "n", "7");
+    app.debugger.apply_edit();
+    settle(&mut app, "the new value", &|a| a.debugger.edit.is_none() && inline(a, 1) == "n = 7" && watch(a) == "8");
+    assert_eq!(local(&mut app, "n"), "7");
+
+    // The program uses 7: `doubled` is 14 after the step, and so is its output.
+    app.run_ide_action(&ctx, Action::StepOver);
+    settle(&mut app, "the step", &|a| a.debugger.stopped() && a.docs.active_doc().and_then(|d| d.editor.execution_line) == Some(4));
+    assert_eq!(local(&mut app, "doubled"), "14");
+    app.run_ide_action(&ctx, Action::Resume);
+    let start = Instant::now();
+    while app.debugger.active() {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(start.elapsed() < Duration::from_secs(30), "the program did not end");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let console = app.debugger.console.as_ref().unwrap().term.screen_lines().join("\n");
+    assert!(console.contains("n=7 doubled=14"), "{console}");
+}
+
+#[test]
+#[ignore = "Requires a GPU and GDB; writes target/snapshots/set-value-*.png"]
+fn set_value_capture() {
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = paused_before_doubling(dir.path());
+        app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+        // A refused value shows its error; the field stays open with the text.
+        edit_local(&mut app, "n", "0x1f + nope");
+        app.debugger.apply_edit();
+        settle_debugger(&mut app, "the error", &|a| a.debugger.edit.as_ref().is_some_and(|e| e.error.is_some()));
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        h.run_steps(6);
+        h.render().unwrap().save(out.join(format!("set-value-{}.png", if dark { "dark" } else { "light" }))).unwrap();
+        h.state_mut().debugger.stop();
+    }
+}
+
 const MEMORY_MAIN: &str = "fn main() {\n    let mut bytes: [u8; 4] = [0xde, 0xad, 0xbe, 0xef];\n    std::hint::black_box(&mut bytes);\n    bytes[1] = 0x42;\n    std::hint::black_box(&bytes);\n    println!(\"{bytes:?}\");\n}\n";
 
 /// An app paused under GDB at `bytes[1] = 0x42` of [`MEMORY_MAIN`].
