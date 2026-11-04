@@ -5,7 +5,7 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag, Worktree, WorktreeCheckout};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -36,6 +36,9 @@ enum VcsEvent {
     PatchPreview(u64, Result<PatchPreview, String>),
     /// What applying the loaded patch printed (generation, output).
     PatchApplied(u64, OpOutput),
+    Worktrees(Vec<Worktree>),
+    /// Removing this worktree was refused because it has local changes.
+    RemoveRefused(PathBuf),
 }
 
 /// What a new patch is made of.
@@ -65,6 +68,7 @@ pub enum GitTab {
     Log,
     Tags,
     Stashes,
+    Worktrees,
 }
 
 /// What git printed for the last explicit network operation (a tag push), or why it failed.
@@ -113,7 +117,7 @@ pub struct Vcs {
     pub stash_files: Vec<rc_vcs::ChangedFile>,
     /// Apply and Pop also restore what was staged (`--index`).
     pub restore_index: bool,
-    /// Output of the last tag push.
+    /// Output of the last tag push or worktree prune.
     pub output: Option<OpOutput>,
     /// Commits of the log marked with Ctrl/Cmd- or Shift-click (for a patch of several).
     pub marked_commits: BTreeSet<String>,
@@ -128,6 +132,12 @@ pub struct Vcs {
     patch_gen: u64,
     /// Text for the app to put on the clipboard.
     pub clipboard: Option<String>,
+    pub worktrees: Vec<Worktree>,
+    /// Path of the worktree shown in the Worktrees view.
+    pub selected_worktree: Option<PathBuf>,
+    /// A worktree whose removal was refused for its local changes: the Git window offers to
+    /// force it.
+    pub force_remove: Option<PathBuf>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
     heads: HashMap<PathBuf, Option<String>>,
@@ -170,6 +180,9 @@ impl Vcs {
             patch_error: None,
             patch_gen: 0,
             clipboard: None,
+            worktrees: Vec::new(),
+            selected_worktree: None,
+            force_remove: None,
             inbox: Inbox::new(waker.clone()),
             waker,
             heads: HashMap::new(),
@@ -256,6 +269,9 @@ impl Vcs {
             }
             if let Ok(r) = repo.remotes().await {
                 out.send(VcsEvent::Remotes(r.into_iter().map(|r| r.name).collect()));
+            }
+            if let Ok(w) = repo.worktrees().await {
+                out.send(VcsEvent::Worktrees(w));
             }
         });
     }
@@ -356,6 +372,54 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let name = name.to_string();
         self.op("tag_checkout", async move { repo.checkout_tag(&name).await });
+    }
+
+    // ------------------------------------------------------------------ worktrees
+
+    /// Creates a worktree at `path` and selects it.
+    pub fn add_worktree(&mut self, path: PathBuf, what: WorktreeCheckout) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.selected_worktree = Some(path.clone());
+        self.op("worktree_add", async move { repo.add_worktree(&path, &what).await });
+    }
+
+    /// Removes a worktree. Refused for local changes unless `force`; then
+    /// [`Vcs::force_remove`] asks whether to force it.
+    pub fn remove_worktree(&mut self, path: &Path, force: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let path = path.to_path_buf();
+        let out = self.inbox.sender();
+        self.op("worktree_remove", async move {
+            let r = repo.remove_worktree(&path, force).await;
+            if let Err(rc_vcs::GitError::WorktreeDirty(p)) = &r {
+                out.send(VcsEvent::RemoveRefused(p.clone()));
+            }
+            r
+        });
+    }
+
+    pub fn lock_worktree(&mut self, path: &Path, reason: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (path, reason) = (path.to_path_buf(), reason.to_string());
+        self.op("worktree_lock", async move { repo.lock_worktree(&path, Some(&reason)).await });
+    }
+
+    pub fn unlock_worktree(&mut self, path: &Path) {
+        let Some(repo) = self.repo.clone() else { return };
+        let path = path.to_path_buf();
+        self.op("worktree_unlock", async move { repo.unlock_worktree(&path).await });
+    }
+
+    /// Forgets the worktrees whose folders are gone; git's report goes to [`Vcs::output`].
+    pub fn prune_worktrees(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.run("worktree_prune", true, async move { repo.prune_worktrees().await.map(Some) });
+    }
+
+    /// The worktree this window has open.
+    pub fn current_worktree(&self) -> Option<&Worktree> {
+        let root = self.repo.as_ref()?.root();
+        self.worktrees.iter().find(|w| w.path == root)
     }
 
     // ------------------------------------------------------------------ stashes
@@ -822,6 +886,14 @@ impl Vcs {
                     }
                 }
                 VcsEvent::PatchLoaded(..) | VcsEvent::PatchPreview(..) | VcsEvent::PatchApplied(..) => {}
+                VcsEvent::Worktrees(list) => {
+                    // A worktree being added is selected before it is listed.
+                    if self.busy != Some("worktree_add") && self.selected_worktree.as_ref().is_some_and(|p| !list.iter().any(|w| &w.path == p)) {
+                        self.selected_worktree = None;
+                    }
+                    self.worktrees = list;
+                }
+                VcsEvent::RemoveRefused(p) => self.force_remove = Some(p),
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
@@ -975,6 +1047,11 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "patch_save" => tr("Patch saved"),
         "patch_copy" => tr("Patch copied to the clipboard"),
         "patch_apply" => tr("Patch applied"),
+        "worktree_add" => tr("Worktree created"),
+        "worktree_remove" => tr("Worktree removed"),
+        "worktree_lock" => tr("Worktree locked"),
+        "worktree_unlock" => tr("Worktree unlocked"),
+        "worktree_prune" => tr("Worktrees pruned"),
         _ => return None,
     })
 }

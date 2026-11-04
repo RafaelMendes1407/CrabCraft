@@ -561,6 +561,82 @@ async fn tags_are_created_listed_pushed_checked_out_and_deleted() {
 }
 
 #[tokio::test]
+async fn worktrees_are_added_listed_locked_removed_and_pruned() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("a.txt", "1\n")], "first");
+    t.git(&["branch", "dev"]);
+    let head = t.repo.resolve("HEAD").await.unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+    let (feat, dev, detached, gone) = (place.join("feat wt"), place.join("dev"), place.join("-detached"), place.join("gone"));
+
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(list[0].main && list[0].path == t.repo.root() && list[0].branch.as_deref() == Some("main"));
+
+    // A new branch, an existing one, a detached commit (a path that looks like an option).
+    t.repo.add_worktree(&feat, &WorktreeCheckout::NewBranch { name: "feat/x".into(), start: None }).await.unwrap();
+    t.repo.add_worktree(&dev, &WorktreeCheckout::Branch("dev".into())).await.unwrap();
+    t.repo.add_worktree(&detached, &WorktreeCheckout::Detached("HEAD".into())).await.unwrap();
+    t.repo.add_worktree(&gone, &WorktreeCheckout::Detached(head.clone())).await.unwrap();
+    assert_eq!(std::fs::read_to_string(feat.join("a.txt")).unwrap(), "1\n");
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.len(), 5);
+    let find = |p: &std::path::Path| list.iter().find(|w| w.path == p).cloned().unwrap();
+    assert_eq!((find(&feat).branch.as_deref(), find(&feat).head.as_deref()), (Some("feat/x"), Some(head.as_str())));
+    assert_eq!(find(&dev).branch.as_deref(), Some("dev"));
+    assert!(find(&detached).detached && find(&detached).branch.is_none());
+
+    // Refusals: bad or taken branch names, a branch checked out elsewhere, a used folder.
+    for bad in ["", "-b", "a..b", "with space", "HEAD"] {
+        let r = t.repo.add_worktree(&place.join("bad"), &WorktreeCheckout::NewBranch { name: bad.into(), start: None }).await;
+        assert!(matches!(r, Err(GitError::InvalidBranchName(_))), "{bad:?}: {r:?}");
+    }
+    assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::NewBranch { name: "dev".into(), start: None }).await, Err(GitError::BranchExists(b)) if b == "dev"));
+    let r = t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("dev".into())).await;
+    assert!(matches!(&r, Err(GitError::BranchInUse(b)) if b == "dev"), "{r:?}");
+    assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("nope".into())).await, Err(GitError::NotFound(_))));
+    std::fs::create_dir_all(place.join("full")).unwrap();
+    std::fs::write(place.join("full/f"), "x").unwrap();
+    let r = t.repo.add_worktree(&place.join("full"), &WorktreeCheckout::Detached("HEAD".into())).await;
+    assert!(matches!(r, Err(GitError::WorktreePathExists(_))), "{r:?}");
+    assert!(t.repo.add_worktree(std::path::Path::new("relative"), &WorktreeCheckout::Detached("HEAD".into())).await.is_err());
+
+    // Lock and unlock.
+    t.repo.lock_worktree(&dev, Some(" on a USB disk ")).await.unwrap();
+    assert_eq!(t.repo.worktrees().await.unwrap().iter().find(|w| w.path == dev).unwrap().locked.as_deref(), Some("on a USB disk"));
+    let r = t.repo.remove_worktree(&dev, true).await;
+    assert!(matches!(r, Err(GitError::WorktreeLocked(_))), "{r:?}");
+    t.repo.unlock_worktree(&dev).await.unwrap();
+    assert!(t.repo.worktrees().await.unwrap().iter().find(|w| w.path == dev).unwrap().locked.is_none());
+
+    // Remove: refused with local changes unless forced; the main worktree never.
+    std::fs::write(feat.join("new.txt"), "x").unwrap();
+    let r = t.repo.remove_worktree(&feat, false).await;
+    assert!(matches!(r, Err(GitError::WorktreeDirty(_))), "{r:?}");
+    assert!(feat.exists());
+    t.repo.remove_worktree(&feat, true).await.unwrap();
+    assert!(!feat.exists());
+    t.repo.remove_worktree(&dev, false).await.unwrap();
+    let r = t.repo.remove_worktree(t.repo.root(), true).await;
+    assert!(matches!(r, Err(GitError::MainWorktree)), "{r:?}");
+    let r = t.repo.remove_worktree(&place.join("never"), false).await;
+    assert!(matches!(r, Err(GitError::NotFound(_))), "{r:?}");
+
+    // A worktree whose folder vanished is prunable, unless locked.
+    std::fs::remove_dir_all(&gone).unwrap();
+    t.repo.lock_worktree(&detached, None).await.unwrap();
+    std::fs::remove_dir_all(&detached).unwrap();
+    let list = t.repo.worktrees().await.unwrap();
+    assert!(list.iter().find(|w| w.path == gone).unwrap().prunable.is_some());
+    assert_eq!(list.iter().find(|w| w.path == detached).unwrap().locked.as_deref(), Some(""));
+    let report = t.repo.prune_worktrees().await.unwrap();
+    assert!(report.contains("gone"), "{report}");
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.iter().map(|w| w.path.clone()).collect::<Vec<_>>(), [t.repo.root().to_path_buf(), detached.clone()]);
+}
+
+#[tokio::test]
 async fn fetch_pull_push_with_progress() {
     let remote_dir = tempfile::tempdir().unwrap();
     git(remote_dir.path(), &["init", "-q", "--bare", "-b", "main"]);

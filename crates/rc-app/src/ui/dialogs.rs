@@ -66,6 +66,15 @@ pub enum Dialog {
     ApplyPatch { path: String, paste: bool },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
+    /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
+    /// The path follows the branch until the user edits it.
+    AddWorktree { path: String, new_branch: bool, name: String, existing: String, path_edited: bool },
+    /// Confirm removing a worktree; `force` after git refused because of local changes.
+    RemoveWorktree { path: PathBuf, force: bool },
+    /// Lock a worktree, with an optional reason.
+    LockWorktree { path: PathBuf, reason: String },
+    /// Confirm pruning the worktrees whose folders are gone.
+    PruneWorktrees { paths: Vec<PathBuf> },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -127,6 +136,10 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
         Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
+        Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),
+        Dialog::RemoveWorktree { path, force } => remove_worktree(app, ctx, path, *force),
+        Dialog::LockWorktree { path, reason } => lock_worktree(app, ctx, path, reason),
+        Dialog::PruneWorktrees { paths } => prune_worktrees(app, ctx, paths),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -2277,6 +2290,152 @@ fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> O
     });
     if ok {
         app.vcs.stash_drop(stash);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Where a worktree for `branch` goes by default: next to the main worktree, named after the
+/// repository and the branch (`shop` + `feature/login` → `../shop-feature-login`).
+pub fn suggested_worktree_path(main: &std::path::Path, branch: &str) -> PathBuf {
+    let repo = main.file_name().map_or_else(|| "worktree".to_string(), |n| n.to_string_lossy().into_owned());
+    let branch: String = branch.trim().chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' }).collect();
+    let branch = branch.trim_matches(['-', '.']);
+    let name = if branch.is_empty() { format!("{repo}-worktree") } else { format!("{repo}-{branch}") };
+    main.parent().unwrap_or(main).join(name)
+}
+
+/// A branch name worth sending to git (which has the last word with `check-ref-format`).
+pub fn plausible_branch_name(name: &str) -> bool {
+    plausible_tag_name(name) && name != "HEAD"
+}
+
+fn add_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, new_branch: &mut bool, name: &mut String, existing: &mut String, path_edited: &mut bool) -> Outcome {
+    let main = app.vcs.worktrees.first().map(|w| w.path.clone()).or_else(|| app.vcs.root().map(std::path::Path::to_path_buf)).unwrap_or_default();
+    // Local branches that no worktree has checked out.
+    let free: Vec<String> = app
+        .vcs
+        .branches
+        .iter()
+        .filter(|b| b.kind == rc_vcs::BranchKind::Local && !app.vcs.worktrees.iter().any(|w| w.branch.as_deref() == Some(b.name.as_str())))
+        .map(|b| b.name.clone())
+        .collect();
+    if existing.is_empty() || !free.contains(existing) {
+        *existing = free.first().cloned().unwrap_or_default();
+    }
+    let branch = if *new_branch { name.trim().to_string() } else { existing.clone() };
+    if !*path_edited {
+        *path = if branch.is_empty() { String::new() } else { suggested_worktree_path(&main, &branch).display().to_string() };
+    }
+    let target = PathBuf::from(path.trim());
+    let branch_ok = if *new_branch { plausible_branch_name(&branch) } else { !branch.is_empty() };
+    let path_ok = target.is_absolute();
+    let valid = branch_ok && path_ok;
+    let ((ok, cancel), esc) = modal(ctx, "add_worktree", 480.0, |ui| {
+        title(ui, tr("Add Worktree"));
+        let p = rc_kit::pal(ui);
+        ui.horizontal(|ui| {
+            ui.radio_value(new_branch, true, tr("New branch"));
+            ui.add_enabled_ui(!free.is_empty(), |ui| ui.radio_value(new_branch, false, tr("Existing branch"))).response.on_disabled_hover_text(tr("Every local branch is already checked out in a worktree"));
+        });
+        if *new_branch {
+            let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+            if name.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+                resp.request_focus();
+            }
+            ui.label(egui::RichText::new(tr("Starts at the current HEAD.")).size(12.0).color(p.muted));
+            if !name.trim().is_empty() && !branch_ok {
+                ui.label(egui::RichText::new(tr("This is not a valid branch name")).size(12.0).color(p.error));
+            }
+        } else {
+            egui::ComboBox::from_id_salt("worktree_branch").width(ui.available_width()).selected_text(existing.as_str()).show_ui(ui, |ui| {
+                for b in &free {
+                    ui.selectable_value(existing, b.clone(), b.as_str());
+                }
+            });
+        }
+        ui.add_space(8.0);
+        ui.label(tr("Folder"));
+        ui.horizontal(|ui| {
+            let edit = ui.add(egui::TextEdit::singleline(path).hint_text(tr("A new or empty folder")).desired_width(ui.available_width() - 30.0));
+            if edit.changed() {
+                *path_edited = true;
+            }
+            if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a folder")).clicked()
+                && let Some(d) = rfd::FileDialog::new().set_directory(main.parent().unwrap_or(&main)).pick_folder()
+            {
+                // An empty folder is used as it is; inside another one a new folder is made.
+                let empty = std::fs::read_dir(&d).is_ok_and(|mut e| e.next().is_none());
+                *path = if empty || branch.is_empty() { d } else { d.join(suggested_worktree_path(&main, &branch).file_name().unwrap_or_default()) }.display().to_string();
+                *path_edited = true;
+            }
+        });
+        if !path.trim().is_empty() && !path_ok {
+            ui.label(egui::RichText::new(tr("Enter an absolute path")).size(12.0).color(p.error));
+        }
+        buttons(ui, tr("Add"), valid)
+    });
+    if ok && valid {
+        let what = if *new_branch { rc_vcs::WorktreeCheckout::NewBranch { name: branch, start: None } } else { rc_vcs::WorktreeCheckout::Branch(branch) };
+        app.vcs.add_worktree(target, what);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn remove_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, force: bool) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "remove_worktree", 460.0, |ui| {
+        title(ui, tr("Remove Worktree"));
+        if force {
+            ui.horizontal(|ui| {
+                icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+                ui.label(trf("{path} has modified or untracked files. Remove it anyway? Those changes are lost.", &[("path", &path.display())]));
+            });
+            buttons(ui, tr("Remove Anyway"), true)
+        } else {
+            ui.label(trf("Remove the worktree {path} and delete its folder? Its branch is kept.", &[("path", &path.display())]));
+            buttons(ui, tr("Remove"), true)
+        }
+    });
+    if ok {
+        app.vcs.remove_worktree(path, force);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn lock_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, reason: &mut String) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "lock_worktree", 440.0, |ui| {
+        title(ui, tr("Lock Worktree"));
+        ui.label(trf("Lock {path} so that prune and remove leave it alone (for a folder on a removable disk, say).", &[("path", &path.display())]));
+        ui.add_space(6.0);
+        let resp = ui.add(egui::TextEdit::singleline(reason).hint_text(tr("Reason (optional)")).desired_width(f32::INFINITY));
+        if reason.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+            resp.request_focus();
+        }
+        buttons(ui, tr("Lock"), true)
+    });
+    if ok {
+        app.vcs.lock_worktree(path, reason);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn prune_worktrees(app: &mut CrabCraftApp, ctx: &Context, paths: &[PathBuf]) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "prune_worktrees", 460.0, |ui| {
+        title(ui, tr("Prune Worktrees"));
+        ui.label(tr("Forget these worktrees, whose folders no longer exist? Their branches are kept."));
+        ui.add_space(4.0);
+        egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
+            for p in paths {
+                ui.label(egui::RichText::new(p.display().to_string()).font(FontId::monospace(12.0)));
+            }
+        });
+        buttons(ui, tr("Prune"), true)
+    });
+    if ok {
+        app.vcs.prune_worktrees();
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

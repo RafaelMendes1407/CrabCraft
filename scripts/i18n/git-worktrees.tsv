@@ -1,0 +1,52 @@
+# Git worktrees in the Git window. Import: python3 scripts/i18n_tsv.py gitworktrees scripts/i18n/git-worktrees.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Worktrees ({n})	Worktrees ({n})	Worktrees ({n})	Worktrees ({n})	Worktrees ({n})	Worktree ({n})	工作树 ({n})	ワークツリー ({n})
+Add Worktree…	Añadir worktree…	Ajouter un worktree…	Adicionar worktree…	Worktree hinzufügen…	Dodaj worktree…	添加工作树…	ワークツリーを追加…
+Add Worktree	Añadir worktree	Ajouter un worktree	Adicionar worktree	Worktree hinzufügen	Dodaj worktree	添加工作树	ワークツリーを追加
+Prune…	Podar…	Élaguer…	Podar…	Bereinigen…	Wyczyść…	清理…	整理…
+Prune	Podar	Élaguer	Podar	Bereinigen	Wyczyść	清理	整理
+No worktree has lost its folder	Ningún worktree ha perdido su carpeta	Aucun worktree n’a perdu son dossier	Nenhum worktree perdeu sua pasta	Kein Worktree hat seinen Ordner verloren	Żaden worktree nie utracił swojego folderu	没有工作树丢失其文件夹	フォルダーを失ったワークツリーはありません
+Locked	Bloqueado	Verrouillé	Bloqueado	Gesperrt	Zablokowany	已锁定	ロック中
+Locked: {reason}	Bloqueado: {reason}	Verrouillé : {reason}	Bloqueado: {reason}	Gesperrt: {reason}	Zablokowany: {reason}	已锁定：{reason}	ロック中: {reason}
+Its folder no longer exists; Prune forgets it.	Su carpeta ya no existe; Podar lo olvida.	Son dossier n’existe plus ; Élaguer l’oublie.	A pasta dele não existe mais; Podar o esquece.	Sein Ordner existiert nicht mehr; Bereinigen entfernt ihn.	Jego folder już nie istnieje; Wyczyść go usunie.	其文件夹已不存在；清理会将其移除。	フォルダーがもう存在しません。整理すると削除されます。
+Select a worktree to see its details	Selecciona un worktree para ver sus detalles	Sélectionnez un worktree pour voir ses détails	Selecione um worktree para ver os detalhes	Wählen Sie einen Worktree, um Details zu sehen	Wybierz worktree, aby zobaczyć szczegóły	选择一个工作树以查看详细信息	詳細を表示するワークツリーを選択してください
+Prune output	Salida de la poda	Sortie de l’élagage	Saída da poda	Ausgabe der Bereinigung	Wynik czyszczenia	清理输出	整理の出力
+Nothing to prune	Nada que podar	Rien à élaguer	Nada para podar	Nichts zu bereinigen	Nic do wyczyszczenia	没有可清理的内容	整理するものはありません
+main	principal	principal	principal	Haupt	główny	主	メイン
+current	actual	actuel	atual	aktuell	bieżący	当前	現在
+locked	bloqueado	verrouillé	bloqueado	gesperrt	zablokowany	已锁定	ロック中
+prunable	podable	élagable	podável	bereinigbar	do wyczyszczenia	可清理	整理可能
+bare repository	repositorio bare	dépôt nu	repositório bare	Bare-Repository	repozytorium bare	裸仓库	ベアリポジトリ
+This worktree is already open	Este worktree ya está abierto	Ce worktree est déjà ouvert	Este worktree já está aberto	Dieser Worktree ist bereits geöffnet	Ten worktree jest już otwarty	此工作树已打开	このワークツリーは既に開いています
+Its folder no longer exists	Su carpeta ya no existe	Son dossier n’existe plus	A pasta dele não existe mais	Sein Ordner existiert nicht mehr	Jego folder już nie istnieje	其文件夹已不存在	フォルダーがもう存在しません
+Unlock	Desbloquear	Déverrouiller	Desbloquear	Entsperren	Odblokuj	解锁	ロック解除
+Lock…	Bloquear…	Verrouiller…	Bloquear…	Sperren…	Zablokuj…	锁定…	ロック…
+Lock	Bloquear	Verrouiller	Bloquear	Sperren	Zablokuj	锁定	ロック
+The main worktree cannot be locked	El worktree principal no se puede bloquear	Le worktree principal ne peut pas être verrouillé	O worktree principal não pode ser bloqueado	Der Haupt-Worktree kann nicht gesperrt werden	Głównego worktree nie można zablokować	主工作树无法锁定	メインのワークツリーはロックできません
+The main worktree cannot be removed	El worktree principal no se puede eliminar	Le worktree principal ne peut pas être supprimé	O worktree principal não pode ser removido	Der Haupt-Worktree kann nicht entfernt werden	Głównego worktree nie można usunąć	主工作树无法移除	メインのワークツリーは削除できません
+Open another project before removing this worktree	Abre otro proyecto antes de eliminar este worktree	Ouvrez un autre projet avant de supprimer ce worktree	Abra outro projeto antes de remover este worktree	Öffnen Sie ein anderes Projekt, bevor Sie diesen Worktree entfernen	Otwórz inny projekt przed usunięciem tego worktree	移除此工作树前请先打开其他项目	このワークツリーを削除する前に別のプロジェクトを開いてください
+Unlock the worktree first	Desbloquea primero el worktree	Déverrouillez d’abord le worktree	Desbloqueie o worktree primeiro	Entsperren Sie zuerst den Worktree	Najpierw odblokuj worktree	请先解锁工作树	先にワークツリーのロックを解除してください
+Remove…	Eliminar…	Supprimer…	Remover…	Entfernen…	Usuń…	移除…	削除…
+Worktree created	Worktree creado	Worktree créé	Worktree criado	Worktree erstellt	Utworzono worktree	工作树已创建	ワークツリーを作成しました
+Worktree removed	Worktree eliminado	Worktree supprimé	Worktree removido	Worktree entfernt	Usunięto worktree	工作树已移除	ワークツリーを削除しました
+Worktree locked	Worktree bloqueado	Worktree verrouillé	Worktree bloqueado	Worktree gesperrt	Zablokowano worktree	工作树已锁定	ワークツリーをロックしました
+Worktree unlocked	Worktree desbloqueado	Worktree déverrouillé	Worktree desbloqueado	Worktree entsperrt	Odblokowano worktree	工作树已解锁	ワークツリーのロックを解除しました
+Worktrees pruned	Worktrees podados	Worktrees élagués	Worktrees podados	Worktrees bereinigt	Wyczyszczono worktree	工作树已清理	ワークツリーを整理しました
+New branch	Rama nueva	Nouvelle branche	Novo branch	Neuer Branch	Nowa gałąź	新分支	新しいブランチ
+Existing branch	Rama existente	Branche existante	Branch existente	Vorhandener Branch	Istniejąca gałąź	现有分支	既存のブランチ
+Every local branch is already checked out in a worktree	Todas las ramas locales ya están en un worktree	Chaque branche locale est déjà extraite dans un worktree	Todos os branches locais já estão em um worktree	Jeder lokale Branch ist bereits in einem Worktree ausgecheckt	Każda lokalna gałąź jest już pobrana w jakimś worktree	每个本地分支都已在某个工作树中检出	すべてのローカルブランチは既にワークツリーでチェックアウトされています
+Starts at the current HEAD.	Empieza en el HEAD actual.	Part du HEAD actuel.	Começa no HEAD atual.	Beginnt beim aktuellen HEAD.	Zaczyna się od bieżącego HEAD.	从当前 HEAD 开始。	現在の HEAD から開始します。
+This is not a valid branch name	No es un nombre de rama válido	Ce n’est pas un nom de branche valide	Este não é um nome de branch válido	Dies ist kein gültiger Branch-Name	To nie jest prawidłowa nazwa gałęzi	这不是有效的分支名称	有効なブランチ名ではありません
+Folder	Carpeta	Dossier	Pasta	Ordner	Folder	文件夹	フォルダー
+A new or empty folder	Una carpeta nueva o vacía	Un dossier nouveau ou vide	Uma pasta nova ou vazia	Ein neuer oder leerer Ordner	Nowy lub pusty folder	新的或空的文件夹	新規または空のフォルダー
+Enter an absolute path	Escribe una ruta absoluta	Saisissez un chemin absolu	Digite um caminho absoluto	Geben Sie einen absoluten Pfad ein	Podaj ścieżkę bezwzględną	请输入绝对路径	絶対パスを入力してください
+Remove Worktree	Eliminar worktree	Supprimer le worktree	Remover worktree	Worktree entfernen	Usuń worktree	移除工作树	ワークツリーを削除
+{path} has modified or untracked files. Remove it anyway? Those changes are lost.	{path} tiene archivos modificados o sin seguimiento. ¿Eliminarlo de todos modos? Esos cambios se perderán.	{path} contient des fichiers modifiés ou non suivis. Le supprimer quand même ? Ces modifications seront perdues.	{path} tem arquivos modificados ou não rastreados. Remover mesmo assim? Essas alterações serão perdidas.	{path} enthält geänderte oder nicht verfolgte Dateien. Trotzdem entfernen? Diese Änderungen gehen verloren.	{path} zawiera zmodyfikowane lub nieśledzone pliki. Usunąć mimo to? Te zmiany zostaną utracone.	{path} 有已修改或未跟踪的文件。仍要移除吗？这些更改将会丢失。	{path} には変更済みまたは未追跡のファイルがあります。それでも削除しますか？それらの変更は失われます。
+Remove Anyway	Eliminar de todos modos	Supprimer quand même	Remover mesmo assim	Trotzdem entfernen	Usuń mimo to	仍然移除	それでも削除
+Remove the worktree {path} and delete its folder? Its branch is kept.	¿Eliminar el worktree {path} y borrar su carpeta? Su rama se conserva.	Supprimer le worktree {path} et son dossier ? Sa branche est conservée.	Remover o worktree {path} e apagar a pasta dele? O branch é mantido.	Worktree {path} entfernen und seinen Ordner löschen? Sein Branch bleibt erhalten.	Usunąć worktree {path} wraz z folderem? Jego gałąź zostanie zachowana.	移除工作树 {path} 并删除其文件夹？其分支将保留。	ワークツリー {path} を削除してフォルダーも消去しますか？ブランチは残ります。
+Lock Worktree	Bloquear worktree	Verrouiller le worktree	Bloquear worktree	Worktree sperren	Zablokuj worktree	锁定工作树	ワークツリーをロック
+Lock {path} so that prune and remove leave it alone (for a folder on a removable disk, say).	Bloquea {path} para que podar y eliminar no lo toquen (por ejemplo, una carpeta en un disco extraíble).	Verrouillez {path} pour que l’élagage et la suppression l’ignorent (par exemple un dossier sur un disque amovible).	Bloqueie {path} para que podar e remover não mexam nele (por exemplo, uma pasta em um disco removível).	Sperren Sie {path}, damit Bereinigen und Entfernen ihn in Ruhe lassen (etwa bei einem Ordner auf einem Wechseldatenträger).	Zablokuj {path}, aby czyszczenie i usuwanie go pomijały (np. folder na dysku wymiennym).	锁定 {path}，使清理和移除不会影响它（例如位于可移动磁盘上的文件夹）。	{path} をロックして、整理や削除の対象外にします（リムーバブルディスク上のフォルダーなど）。
+Reason (optional)	Motivo (opcional)	Raison (facultative)	Motivo (opcional)	Grund (optional)	Powód (opcjonalnie)	原因（可选）	理由（任意）
+Prune Worktrees	Podar worktrees	Élaguer les worktrees	Podar worktrees	Worktrees bereinigen	Wyczyść worktree	清理工作树	ワークツリーを整理
+Forget these worktrees, whose folders no longer exist? Their branches are kept.	¿Olvidar estos worktrees, cuyas carpetas ya no existen? Sus ramas se conservan.	Oublier ces worktrees, dont les dossiers n’existent plus ? Leurs branches sont conservées.	Esquecer estes worktrees, cujas pastas não existem mais? Os branches são mantidos.	Diese Worktrees vergessen, deren Ordner nicht mehr existieren? Ihre Branches bleiben erhalten.	Zapomnieć te worktree, których foldery już nie istnieją? Ich gałęzie zostaną zachowane.	忘记这些文件夹已不存在的工作树？其分支将保留。	フォルダーが存在しないこれらのワークツリーを削除しますか？ブランチは残ります。
+the folder does not exist	la carpeta no existe	le dossier n’existe pas	a pasta não existe	der Ordner existiert nicht	folder nie istnieje	文件夹不存在	フォルダーが存在しません

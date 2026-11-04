@@ -335,3 +335,75 @@ fn patches_are_created_and_applied_between_repositories_from_the_app() {
     app.vcs.close_patch();
     assert!(app.vcs.patch.is_none() && app.vcs.patch_error.is_none());
 }
+
+#[test]
+fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    git(&root, &["branch", "dev"]);
+    let mut app = open_app(&root);
+    pump(&mut app, "worktrees", |a| a.vcs.worktrees.len() == 1);
+    assert_eq!(app.vcs.current_worktree().map(|w| w.main), Some(true));
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+
+    // The default folder sits next to the repository, named after it and the branch.
+    let suggested = crate::ui::dialogs::suggested_worktree_path(&root, "feature/login");
+    assert_eq!(suggested.parent(), root.parent());
+    assert!(suggested.file_name().unwrap().to_string_lossy().ends_with("-feature-login"), "{suggested:?}");
+    assert!(crate::ui::dialogs::plausible_branch_name("feature/login") && !crate::ui::dialogs::plausible_branch_name("HEAD"));
+
+    // A new branch and an existing one.
+    let (feat, dev) = (place.join("feat"), place.join("dev"));
+    app.vcs.add_worktree(feat.clone(), rc_vcs::WorktreeCheckout::NewBranch { name: "feat".into(), start: None });
+    pump(&mut app, "new branch worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == feat));
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Worktree created")));
+    assert_eq!(app.vcs.selected_worktree.as_deref(), Some(feat.as_path()));
+    app.vcs.add_worktree(dev.clone(), rc_vcs::WorktreeCheckout::Branch("dev".into()));
+    pump(&mut app, "existing branch worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev));
+    let w = app.vcs.worktrees.iter().find(|w| w.path == dev).unwrap();
+    assert_eq!(w.branch.as_deref(), Some("dev"));
+    assert!(root.join("lib.rs").is_file() && dev.join("lib.rs").is_file());
+    // A branch already checked out elsewhere is refused with git's reason.
+    app.vcs.add_worktree(place.join("again"), rc_vcs::WorktreeCheckout::Branch("dev".into()));
+    pump(&mut app, "branch in use", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(!place.join("again").exists());
+
+    // Lock with a reason, unlock.
+    app.vcs.lock_worktree(&dev, "external disk");
+    pump(&mut app, "locked", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev && w.locked.as_deref() == Some("external disk")));
+    app.vcs.unlock_worktree(&dev);
+    pump(&mut app, "unlocked", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev && w.locked.is_none()));
+
+    // Removing a worktree with local changes is refused and offered with force.
+    std::fs::write(feat.join("scratch.txt"), "draft").unwrap();
+    app.vcs.remove_worktree(&feat, false);
+    pump(&mut app, "refused removal", |a| a.vcs.busy.is_none() && a.vcs.force_remove.is_some());
+    assert_eq!(app.vcs.force_remove.as_deref(), Some(feat.as_path()));
+    assert!(feat.join("scratch.txt").exists());
+    app.vcs.force_remove = None;
+    app.vcs.remove_worktree(&feat, true);
+    pump(&mut app, "forced removal", |a| a.vcs.busy.is_none() && !a.vcs.worktrees.iter().any(|w| w.path == feat));
+    assert!(!feat.exists());
+    assert!(git_out(&root, &["branch", "--list", "feat"]).contains("feat"), "the branch stays");
+
+    // A worktree whose folder vanished is pruned; git's report is shown.
+    std::fs::remove_dir_all(&dev).unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "prunable", |a| a.vcs.worktrees.iter().any(|w| w.path == dev && w.prunable.is_some()));
+    app.vcs.prune_worktrees();
+    pump(&mut app, "pruned", |a| a.vcs.busy.is_none() && a.vcs.worktrees.len() == 1 && a.vcs.output.is_some());
+    assert!(!app.vcs.output.as_ref().unwrap().error);
+
+    // Opening a worktree makes it the project of this window.
+    let other = place.join("other");
+    app.vcs.add_worktree(other.clone(), rc_vcs::WorktreeCheckout::Detached("HEAD".into()));
+    pump(&mut app, "detached worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == other));
+    app.open_workspace(&other);
+    pump(&mut app, "worktree opened", |a| a.vcs.repo.as_ref().is_some_and(|r| r.root() == other) && a.vcs.worktrees.len() == 2);
+    let cur = app.vcs.current_worktree().unwrap();
+    assert!(!cur.main && cur.detached);
+}

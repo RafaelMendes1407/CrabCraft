@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 152 |
+| ✅ Pronto | 153 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 71 |
+| ⬜ A fazer | 70 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -311,7 +311,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
 | V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |
 | V-10 | Changelists | ⬜ | M5 | |
-| V-11 | Worktrees | ⬜ | M5 | |
+| V-11 | Worktrees | ✅ | M5 | Aba Worktrees na janela Git: lista (atual, branch ou HEAD destacado, bloqueado, podável), adicionar com branch nova, existente ou HEAD destacado (pasta sugerida ao lado do repositório), abrir nesta janela ou em outra, bloquear com motivo/desbloquear, remover (com mudanças locais pede confirmação para forçar; o branch fica) e podar mostrando a saída do Git. Testado com repositórios reais; capturas conferidas. |
 | V-12 | Tags | ✅ | M5 | Janela Git › aba Tags: lista (nome, anotada ou leve, commit, data, mensagem), Nova tag em HEAD ou num commit do Log (menu de contexto), leve ou anotada; nome validado com `git check-ref-format`; Checkout (aviso de HEAD destacado), Push de uma tag ou de todas (escolha do remoto, saída do git mostrada) e Excluir, todos com confirmação e em segundo plano. Testado com repositórios git reais e remoto bare; capturas conferidas. Fora: excluir a tag no remoto |
 | V-13 | Patches | ✅ | M5 | Criar patch dos arquivos marcados na janela Commit (ou de um arquivo, pelo menu de contexto) e de um ou vários commits do Log (Ctrl/Shift+clique), salvo em arquivo ou copiado; Aplicar patch (janela Git) de arquivo ou da área de transferência, com a lista de arquivos, se aplica sem conflito (`git apply --check`), opção `--3way` e a saída do Git. Patch de e-mail vira commits (`git am`, avisa que os hooks rodam); diff vai para a árvore de trabalho. Limite de 32 MB. Testado entre dois repositórios reais. |
 | V-14 | Assinatura GPG | ⬜ | M5 | |

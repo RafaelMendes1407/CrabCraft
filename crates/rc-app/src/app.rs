@@ -2524,6 +2524,23 @@ impl CrabCraftApp {
         }
     }
 
+    /// Opens a folder in a CrabCraft window of its own: a new process started as
+    /// `crabcraft -- <folder>`, which asks for trust like any project it opens.
+    pub fn open_in_new_window(&mut self, path: &Path) {
+        if !path.is_absolute() || !path.is_dir() {
+            self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the folder does not exist"))]), true);
+            return;
+        }
+        let spawned = std::env::current_exe().and_then(|exe| {
+            std::process::Command::new(exe).arg("--").arg(path).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+        });
+        match spawned {
+            // Reap it when it exits so it does not linger as a zombie.
+            Ok(mut child) => drop(std::thread::Builder::new().name("new-window".into()).spawn(move || child.wait())),
+            Err(e) => self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &e)]), true),
+        }
+    }
+
     pub fn open_path(&mut self, path: &Path) {
         if let Some(project) = self.project_of_manifest(path) {
             self.open_workspace(&project);

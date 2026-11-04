@@ -38,6 +38,18 @@ pub enum GitError {
     InvalidRefName(String),
     #[error("A tag named {0} already exists")]
     TagExists(String),
+    #[error("{0} is not a valid branch name")]
+    InvalidBranchName(String),
+    #[error("{0} has modified or untracked files")]
+    WorktreeDirty(PathBuf),
+    #[error("The worktree {0} is locked")]
+    WorktreeLocked(PathBuf),
+    #[error("The main worktree cannot be removed")]
+    MainWorktree,
+    #[error("{0} already exists and is not empty")]
+    WorktreePathExists(PathBuf),
+    #[error("The branch {0} is already checked out in another worktree")]
+    BranchInUse(String),
     #[error("The branch {0} is not fully merged")]
     BranchNotFullyMerged(String),
     #[error("The current branch has no upstream branch")]
@@ -88,6 +100,12 @@ impl GitError {
             BranchExists(b) => ("A branch named {branch} already exists", vec![("branch", b.clone())]),
             InvalidRefName(n) => ("\"{name}\" is not a valid tag name", vec![("name", n.clone())]),
             TagExists(n) => ("A tag named {name} already exists", vec![("name", n.clone())]),
+            InvalidBranchName(n) => ("\"{name}\" is not a valid branch name", vec![("name", n.clone())]),
+            WorktreeDirty(p) => ("{path} has modified or untracked files", vec![("path", p.display().to_string())]),
+            WorktreeLocked(p) => ("The worktree {path} is locked; unlock it first", vec![("path", p.display().to_string())]),
+            MainWorktree => ("The main worktree cannot be removed", vec![]),
+            WorktreePathExists(p) => ("{path} already exists and is not empty", vec![("path", p.display().to_string())]),
+            BranchInUse(b) => ("The branch {branch} is already checked out in another worktree", vec![("branch", b.clone())]),
             BranchNotFullyMerged(b) => ("The branch {branch} is not fully merged", vec![("branch", b.clone())]),
             NoUpstream => ("The current branch has no upstream branch", vec![]),
             PushRejected(_) => ("The push was rejected (fetch first)", vec![]),

@@ -671,6 +671,57 @@ fn screens_git_tags_and_stashes() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes Git worktree captures to target/snapshots"]
+fn screens_git_worktrees() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+    let root = place.join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["branch", "release/0.1"]);
+    let wt = |args: &[&str]| git(&[&["worktree", "add", "-q"], args].concat());
+    wt(&["-b", "feature/login", "--", place.join("shop-feature-login").to_str().unwrap()]);
+    wt(&["--", place.join("shop-release-0.1").to_str().unwrap(), "release/0.1"]);
+    wt(&["--detach", "--", place.join("shop-bisect").to_str().unwrap()]);
+    git(&["worktree", "lock", "--reason", "On the USB disk", "--", place.join("shop-release-0.1").to_str().unwrap()]);
+    std::fs::remove_dir_all(place.join("shop-bisect")).unwrap();
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "worktrees", |a| a.vcs.worktrees.len() == 4 && !a.vcs.branches.is_empty());
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Worktrees;
+        app.vcs.selected_worktree = Some(place.join("shop-release-0.1"));
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-worktrees-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AddWorktree { path: String::new(), new_branch: true, name: "fix/rounding".into(), existing: String::new(), path_edited: false });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-add-worktree-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RemoveWorktree { path: place.join("shop-feature-login"), force: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-remove-worktree-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::PruneWorktrees { paths: vec![place.join("shop-bisect")] });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-prune-worktrees-dark.png")).unwrap();
+}
+
+#[test]
 #[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
 fn screens_insight() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
