@@ -48,6 +48,7 @@ mod rust_tests;
 #[cfg(test)]
 mod screens;
 mod docs;
+mod file_ops;
 mod file_rename;
 mod native_menu;
 mod open_files;

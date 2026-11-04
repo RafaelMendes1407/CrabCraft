@@ -1713,5 +1713,12 @@
     "Diagnostic code, such as clippy::needless_return": "診断コード（例: clippy::needless_return）",
     "Add Code": "コードを追加",
     "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、コンパイラ、Clippy のコード。prefix::* でグループ全体を指定できます"
+  },
+  "fileops": {
+    "The language server sent a path that is not a file": "言語サーバーがファイルではないパスを送信しました",
+    "The language server asked to change a file outside the project: {file}": "言語サーバーがプロジェクト外のファイルの変更を求めました: {file}",
+    "Open a project to change its files": "ファイルを変更するにはプロジェクトを開いてください",
+    "This action deletes files, which is not supported yet": "この操作はファイルを削除します。これはまだサポートされていません",
+    "{file} exists already": "{file} は既に存在します"
   }
 }

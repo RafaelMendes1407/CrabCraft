@@ -72,6 +72,8 @@ pub enum InsightOutput {
     Message(String),
     /// Reformatting on save changed a document, which must be written again.
     SaveFormatted,
+    /// An edit that creates or renames files, which the app applies (it moves open editors).
+    ApplyFileOps(lsp::WorkspaceEdit),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1800,10 +1802,12 @@ impl Insight {
         let command = match action {
             lsp::CodeActionOrCommand::Command(c) => Some(c),
             lsp::CodeActionOrCommand::CodeAction(a) => {
-                if let Some(edit) = &a.edit
-                    && let Err(e) = apply_workspace_edit(docs, edit)
-                {
-                    out.push(InsightOutput::Message(e));
+                if let Some(edit) = &a.edit {
+                    if crate::file_ops::has_file_ops(edit) {
+                        out.push(InsightOutput::ApplyFileOps(edit.clone()));
+                    } else if let Err(e) = apply_workspace_edit(docs, edit) {
+                        out.push(InsightOutput::Message(e));
+                    }
                 }
                 a.command
             }

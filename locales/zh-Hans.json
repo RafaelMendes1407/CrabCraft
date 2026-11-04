@@ -1713,5 +1713,12 @@
     "Diagnostic code, such as clippy::needless_return": "诊断代码，例如 clippy::needless_return",
     "Add Code": "添加代码",
     "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、编译器或 Clippy 的代码；prefix::* 覆盖整个组"
+  },
+  "fileops": {
+    "The language server sent a path that is not a file": "语言服务器发送的路径不是文件",
+    "The language server asked to change a file outside the project: {file}": "语言服务器请求修改项目之外的文件：{file}",
+    "Open a project to change its files": "打开项目以修改其文件",
+    "This action deletes files, which is not supported yet": "此操作会删除文件，目前尚不支持",
+    "{file} exists already": "{file} 已存在"
   }
 }
