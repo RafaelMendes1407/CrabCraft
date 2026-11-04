@@ -421,6 +421,8 @@ impl CrabCraftApp {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.runner.compounds = session.compounds.clone();
+        // The session file is the user's to edit: empty or overlong folder names are dropped.
+        self.runner.folders = session.config_folders.iter().filter(|(_, f)| !f.trim().is_empty() && f.chars().count() <= crate::runner::MAX_FOLDER_CHARS).map(|(c, f)| (c.clone(), f.trim().to_string())).collect();
         self.runner.test_configs = session.test_configs.clone();
         self.runner.options = session.run_options.clone();
         // Configurations stored in the project win over the session's copy.
@@ -1357,6 +1359,7 @@ impl CrabCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
+            config_folders: self.runner.folders.clone(),
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),

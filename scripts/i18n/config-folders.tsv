@@ -1,0 +1,6 @@
+# Folders of run configurations (B-21). Import: python3 scripts/i18n_tsv.py configfolders scripts/i18n/config-folders.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Rename Folder	Cambiar nombre de carpeta	Renommer le dossier	Renomear pasta	Ordner umbenennen	Zmień nazwę folderu	重命名文件夹	フォルダー名を変更
+Move “{name}” to Folder	Mover «{name}» a una carpeta	Déplacer « {name} » dans un dossier	Mover “{name}” para uma pasta	„{name}“ in Ordner verschieben	Przenieś „{name}” do folderu	将“{name}”移到文件夹	「{name}」をフォルダーに移動
+Out of the Folder	Fuera de la carpeta	Hors du dossier	Fora da pasta	Aus dem Ordner	Poza folderem	移出文件夹	フォルダーから出す
+Rename Folder “{folder}”…	Cambiar nombre de la carpeta «{folder}»…	Renommer le dossier « {folder} »…	Renomear a pasta “{folder}”…	Ordner „{folder}“ umbenennen…	Zmień nazwę folderu „{folder}”…	重命名文件夹“{folder}”…	フォルダー「{folder}」の名前を変更…

@@ -1462,5 +1462,11 @@
     "No commits match the filters": "Nenhum commit corresponde aos filtros",
     "Show every file": "Mostrar todos os arquivos",
     "Text or message": "Texto ou mensagem"
+  },
+  "configfolders": {
+    "Rename Folder": "Renomear pasta",
+    "Move “{name}” to Folder": "Mover “{name}” para uma pasta",
+    "Out of the Folder": "Fora da pasta",
+    "Rename Folder “{folder}”…": "Renomear a pasta “{folder}”…"
   }
 }

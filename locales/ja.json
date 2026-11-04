@@ -1462,5 +1462,11 @@
     "No commits match the filters": "フィルターに一致するコミットはありません",
     "Show every file": "すべてのファイルを表示",
     "Text or message": "テキストまたはメッセージ"
+  },
+  "configfolders": {
+    "Rename Folder": "フォルダー名を変更",
+    "Move “{name}” to Folder": "「{name}」をフォルダーに移動",
+    "Out of the Folder": "フォルダーから出す",
+    "Rename Folder “{folder}”…": "フォルダー「{folder}」の名前を変更…"
   }
 }

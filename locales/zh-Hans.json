@@ -1462,5 +1462,11 @@
     "No commits match the filters": "没有符合筛选条件的提交",
     "Show every file": "显示所有文件",
     "Text or message": "文本或消息"
+  },
+  "configfolders": {
+    "Rename Folder": "重命名文件夹",
+    "Move “{name}” to Folder": "将“{name}”移到文件夹",
+    "Out of the Folder": "移出文件夹",
+    "Rename Folder “{folder}”…": "重命名文件夹“{folder}”…"
   }
 }

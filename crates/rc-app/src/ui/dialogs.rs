@@ -65,6 +65,9 @@ pub enum Dialog {
     /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
     /// requested (the loaded patch and its preview live in `app.vcs.patch`).
     ApplyPatch { path: String, paste: bool },
+    /// A new folder for the run configuration `config`, or the new name of the folder `rename`
+    /// (B-21).
+    ConfigFolder { config: String, rename: Option<String>, folder: String },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
     /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
@@ -146,6 +149,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
+        Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
@@ -1131,6 +1135,31 @@ fn compound(app: &mut CrabCraftApp, ctx: &Context, old: Option<&str>, name: &mut
     if ok && valid {
         let list = members.iter().filter(|(_, on)| *on).map(|(n, _)| n.clone()).collect();
         app.runner.save_compound(old, name.trim().to_string(), list);
+        app.session_dirty = true;
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Names a new folder for a run configuration, or renames the folder it is in.
+fn config_folder(app: &mut CrabCraftApp, ctx: &Context, config: &str, rename: Option<&str>, folder: &mut String) -> Outcome {
+    let valid = !folder.trim().is_empty() && folder.trim().chars().count() <= crate::runner::MAX_FOLDER_CHARS;
+    let ((ok, cancel), esc) = modal(ctx, "config_folder", 380.0, |ui| {
+        title(ui, if rename.is_some() { tr("Rename Folder") } else { tr("New Folder") });
+        ui.label(tr("Folder name"));
+        let resp = ui.add(egui::TextEdit::singleline(folder).desired_width(f32::INFINITY));
+        if !resp.has_focus() && folder.is_empty() {
+            resp.request_focus();
+        }
+        let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("OK"), valid);
+        (ok || enter, cancel)
+    });
+    if ok && valid {
+        match rename {
+            Some(old) => app.runner.rename_folder(old, folder),
+            None => app.runner.move_to_folder(config, Some(folder)),
+        }
         app.session_dirty = true;
         return Outcome::Close;
     }

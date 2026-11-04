@@ -3147,3 +3147,102 @@ fn scopes_capture() {
         h.render().unwrap().save(out.join(format!("scopes-settings-{mode}.png"))).unwrap();
     }
 }
+
+/// B-21: run configurations go into folders (a submenu each in the selector), folders are
+/// renamed with their configurations, and the folders come back with the session.
+#[test]
+fn run_configurations_are_kept_in_folders() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("trio");
+    std::fs::create_dir_all(root.join("src/bin")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"trio\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    for bin in ["api", "worker", "cli"] {
+        std::fs::write(root.join(format!("src/bin/{bin}.rs")), "fn main() {}\n").unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
+    let name = |h: &Harness<'static, CrabCraftApp>, bin: &str| h.state().runner.app_names().into_iter().find(|n| n.contains(bin)).unwrap();
+    let (api, worker, cli) = (name(&h, "api"), name(&h, "worker"), name(&h, "cli"));
+
+    // New Folder… for one configuration, then another moved into it.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: api.clone(), rename: None, folder: "Servers".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert!(h.state().dialog.is_none());
+    h.state_mut().runner.move_to_folder(&worker, Some("Servers"));
+    assert_eq!(h.state().runner.folder_names(), ["Servers"]);
+    // An empty name is refused by the dialog.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: cli.clone(), rename: None, folder: "   ".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert!(h.state().dialog.is_some());
+    h.state_mut().dialog = None;
+
+    // Renaming the folder takes both with it.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: api.clone(), rename: Some("Servers".into()), folder: "Back end".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().runner.folder_of(&api), Some("Back end"));
+    assert_eq!(h.state().runner.folder_of(&worker), Some("Back end"));
+    assert_eq!(h.state().runner.folder_of(&cli), None);
+
+    // The selector lists the folder as a submenu: its configurations are not at the top level.
+    let selected = h.state().runner.selected_config().unwrap().name.clone();
+    h.get_by_label(&selected).click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label_contains("Back end").count() == 2, "the folder and its Rename entry are listed");
+    assert_eq!(h.query_all_by_label(&cli).count(), if selected == cli { 2 } else { 1 });
+    h.get_all_by_label_contains("Back end").next().unwrap().hover();
+    h.run_steps(3);
+    assert!(h.query_by_label(&worker).is_some(), "the submenu holds the folder's configurations");
+
+    // Out of the folder; then the session keeps the rest.
+    h.state_mut().runner.move_to_folder(&worker, None);
+    h.state_mut().save_session();
+    let mut again = test_app(&dir.path().join("home"), true);
+    again.open_workspace(&root);
+    let start = std::time::Instant::now();
+    while again.runner.app_names().len() < 3 && start.elapsed() < std::time::Duration::from_secs(60) {
+        again.poll_cargo_workspace();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert_eq!(again.runner.folder_of(&api), Some("Back end"));
+    assert_eq!(again.runner.folder_of(&worker), None);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/run-config-folders-dark.png"]
+fn run_config_folders_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("trio");
+    std::fs::create_dir_all(root.join("src/bin")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"trio\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    for bin in ["api", "worker", "cli"] {
+        std::fs::write(root.join(format!("src/bin/{bin}.rs")), "fn main() {}\n").unwrap();
+    }
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root.canonicalize().unwrap());
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
+    for n in h.state().runner.app_names().into_iter().filter(|n| !n.contains("cli")) {
+        h.state_mut().runner.move_to_folder(&n, Some("Back end"));
+    }
+    let selected = h.state().runner.selected_config().unwrap().name.clone();
+    h.get_by_label(&selected).click();
+    h.run_steps(3);
+    h.get_all_by_label_contains("Back end").next().unwrap().hover();
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("run-config-folders-dark.png")).unwrap();
+}

@@ -1462,5 +1462,11 @@
     "No commits match the filters": "Ningún commit coincide con los filtros",
     "Show every file": "Mostrar todos los archivos",
     "Text or message": "Texto o mensaje"
+  },
+  "configfolders": {
+    "Rename Folder": "Cambiar nombre de carpeta",
+    "Move “{name}” to Folder": "Mover «{name}» a una carpeta",
+    "Out of the Folder": "Fuera de la carpeta",
+    "Rename Folder “{folder}”…": "Cambiar nombre de la carpeta «{folder}»…"
   }
 }

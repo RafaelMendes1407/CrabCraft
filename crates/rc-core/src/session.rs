@@ -140,6 +140,8 @@ pub struct Session {
     pub remove_once_hit: BTreeMap<PathBuf, Vec<usize>>,
     /// Bookmarks: file → 0-based lines.
     pub bookmarks: BTreeMap<PathBuf, Vec<usize>>,
+    /// Folders of the run configurations (B-21): configuration name → folder name.
+    pub config_folders: BTreeMap<String, String>,
     /// Compound run configurations: name and the configurations they start.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Test configurations made from a gutter run and saved (Save Configuration).
