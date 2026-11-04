@@ -5,21 +5,27 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag, Worktree, WorktreeCheckout};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 enum VcsEvent {
     Repo(Option<Repository>),
     Status(Result<Status, String>),
     Branches(Vec<Branch>),
-    Log(Vec<Commit>),
+    /// A page of the log: (generation of the filter, appended to the loaded commits, commits).
+    Log(u64, bool, Vec<Commit>),
     Head(PathBuf, Option<String>),
     Blame(PathBuf, Result<Blame, String>),
     /// An operation finished: (what, error).
     Done(&'static str, Option<String>),
     CommitFiles(String, Vec<rc_vcs::ChangedFile>),
+    /// The signature of a commit of the log (V-14).
+    Signature(String, rc_vcs::Signature),
+    /// The repository's signing settings.
+    Signing(rc_vcs::SigningConfig),
     /// Texts for the diff viewer: (title, path, left, right).
     Diff(String, PathBuf, String, String),
     Tags(Vec<Tag>),
@@ -27,6 +33,93 @@ enum VcsEvent {
     StashFiles(String, Vec<rc_vcs::ChangedFile>),
     Remotes(Vec<String>),
     Output(OpOutput),
+    /// A created patch to put on the clipboard.
+    PatchClipboard(String),
+    /// A patch read for applying (generation, file, text and its preview, or why it failed).
+    PatchLoaded(u64, Option<PathBuf>, Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>),
+    /// A new preview of the loaded patch (generation, preview).
+    PatchPreview(u64, Result<PatchPreview, String>),
+    /// What applying the loaded patch printed (generation, output).
+    PatchApplied(u64, OpOutput),
+    Worktrees(Vec<Worktree>),
+    /// Removing this worktree was refused because it has local changes.
+    RemoveRefused(PathBuf),
+}
+
+/// What a new patch is made of.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PatchSource {
+    /// The local changes of these files (relative to the repository): a `git diff`.
+    Changes(Vec<String>),
+    /// These commits, newest first: mails from `git format-patch`.
+    Commits(Vec<String>),
+}
+
+/// A patch loaded to be applied, and what applying it would do.
+pub struct PendingPatch {
+    /// The file it was read from (`None`: the clipboard).
+    pub path: Option<PathBuf>,
+    pub text: Arc<Vec<u8>>,
+    /// The files it touches and whether it applies; `None` while git checks it.
+    pub preview: Option<Result<PatchPreview, String>>,
+    /// What git printed when it was applied.
+    pub result: Option<OpOutput>,
+}
+
+/// Commits read per page of the log.
+pub const LOG_PAGE: usize = 500;
+
+/// What the Log shows (V-06): every commit by default, or those matching the filters.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LogFilter {
+    /// Words of the commit message (`--grep`, case-insensitive).
+    pub text: String,
+    /// Part of the author's name or email (`--author`).
+    pub author: String,
+    /// One branch (its short name) instead of every ref.
+    pub branch: Option<String>,
+    /// One file or folder, relative to the repository; a file's renames are followed.
+    pub path: Option<String>,
+}
+
+impl LogFilter {
+    pub fn is_empty(&self) -> bool {
+        *self == LogFilter::default()
+    }
+
+    /// The `git log` options for a page starting at `skip`.
+    pub fn options(&self, skip: usize) -> LogOptions {
+        let text = self.text.trim();
+        let author = self.author.trim();
+        let mut opts = LogOptions { skip, max_count: LOG_PAGE, ..Default::default() };
+        // Typed text is matched literally, not as a regular expression.
+        opts.grep = (!text.is_empty()).then(|| regex_escape(text));
+        opts.author = (!author.is_empty()).then(|| regex_escape(author));
+        match &self.branch {
+            Some(b) => opts.revs = vec![b.clone()],
+            // `--follow` works from one starting point.
+            None if self.path.is_some() => opts.revs = vec!["HEAD".into()],
+            None => opts.all = true,
+        }
+        if let Some(p) = &self.path {
+            // A folder (written with a trailing `/`) has no renames to follow.
+            opts.follow = !p.ends_with('/');
+            opts.paths = vec![p.trim_end_matches('/').to_string()].into_iter().map(|p| if p.is_empty() { ".".into() } else { p }).collect();
+        }
+        opts
+    }
+}
+
+/// `text` as an extended regular expression that matches it literally.
+fn regex_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if "\\.^$|?*+()[]{}".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// The views of the Git tool window.
@@ -36,6 +129,7 @@ pub enum GitTab {
     Log,
     Tags,
     Stashes,
+    Worktrees,
 }
 
 /// What git printed for the last explicit network operation (a tag push), or why it failed.
@@ -66,8 +160,25 @@ pub struct Vcs {
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
     pub log: Vec<Commit>,
+    /// What the Log shows (V-06).
+    pub log_filter: LogFilter,
+    /// The last page was full: there may be older commits.
+    pub log_more: bool,
+    /// A page of the log is being read.
+    pub log_loading: bool,
+    /// The text and author fields of the Log as typed, applied on Enter or focus loss.
+    pub log_text_draft: String,
+    pub log_author_draft: String,
+    log_gen: u64,
     pub selected_commit: Option<String>,
     pub commit_files: Vec<rc_vcs::ChangedFile>,
+    /// The signature of the selected commit, once git has verified it.
+    pub signature: Option<(String, rc_vcs::Signature)>,
+    /// The repository's signing settings (`commit.gpgsign`, `user.signingkey`).
+    pub signing: Option<rc_vcs::SigningConfig>,
+    /// Sign the next commit; starts as `commit.gpgsign` says until the user changes it.
+    pub sign: bool,
+    pub sign_touched: bool,
     pub message: String,
     pub amend: bool,
     pub excluded: BTreeSet<String>,
@@ -84,8 +195,27 @@ pub struct Vcs {
     pub stash_files: Vec<rc_vcs::ChangedFile>,
     /// Apply and Pop also restore what was staged (`--index`).
     pub restore_index: bool,
-    /// Output of the last tag push.
+    /// Output of the last tag push or worktree prune.
     pub output: Option<OpOutput>,
+    /// Commits of the log marked with Ctrl/Cmd- or Shift-click (for a patch of several).
+    pub marked_commits: BTreeSet<String>,
+    /// The patch of the Apply Patch dialog.
+    pub patch: Option<PendingPatch>,
+    /// Apply patches with a three-way merge fallback (`--3way`).
+    pub patch_three_way: bool,
+    /// A patch is being read and checked.
+    pub patch_loading: bool,
+    /// Why the last patch could not be loaded.
+    pub patch_error: Option<String>,
+    patch_gen: u64,
+    /// Text for the app to put on the clipboard.
+    pub clipboard: Option<String>,
+    pub worktrees: Vec<Worktree>,
+    /// Path of the worktree shown in the Worktrees view.
+    pub selected_worktree: Option<PathBuf>,
+    /// A worktree whose removal was refused for its local changes: the Git window offers to
+    /// force it.
+    pub force_remove: Option<PathBuf>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
     heads: HashMap<PathBuf, Option<String>>,
@@ -96,6 +226,8 @@ pub struct Vcs {
     pub blame_for: Option<PathBuf>,
     pub diff: Option<DiffView>,
     next_doc_id: u64,
+    /// Goes up with every new status (the Changed Files scope follows it).
+    pub status_version: u64,
 }
 
 impl Vcs {
@@ -105,8 +237,18 @@ impl Vcs {
             status: None,
             branches: Vec::new(),
             log: Vec::new(),
+            log_filter: LogFilter::default(),
+            log_more: false,
+            log_loading: false,
+            log_text_draft: String::new(),
+            log_author_draft: String::new(),
+            log_gen: 0,
             selected_commit: None,
             commit_files: Vec::new(),
+            signature: None,
+            signing: None,
+            sign: false,
+            sign_touched: false,
             message: String::new(),
             amend: false,
             excluded: BTreeSet::new(),
@@ -121,6 +263,16 @@ impl Vcs {
             stash_files: Vec::new(),
             restore_index: false,
             output: None,
+            marked_commits: BTreeSet::new(),
+            patch: None,
+            patch_three_way: false,
+            patch_loading: false,
+            patch_error: None,
+            patch_gen: 0,
+            clipboard: None,
+            worktrees: Vec::new(),
+            selected_worktree: None,
+            force_remove: None,
             inbox: Inbox::new(waker.clone()),
             waker,
             heads: HashMap::new(),
@@ -131,6 +283,7 @@ impl Vcs {
             blame_for: None,
             diff: None,
             next_doc_id: 1 << 40,
+            status_version: 0,
         }
     }
 
@@ -208,29 +361,77 @@ impl Vcs {
             if let Ok(r) = repo.remotes().await {
                 out.send(VcsEvent::Remotes(r.into_iter().map(|r| r.name).collect()));
             }
+            if let Ok(w) = repo.worktrees().await {
+                out.send(VcsEvent::Worktrees(w));
+            }
+            if let Ok(c) = repo.signing_config().await {
+                out.send(VcsEvent::Signing(c));
+            }
         });
     }
 
+    /// Reads the first page of the log for the current filter.
     pub fn load_log(&mut self) {
+        self.log_gen += 1;
+        self.read_log(0);
+    }
+
+    /// Reads the next page of the log (Load More).
+    pub fn load_more_log(&mut self) {
+        if self.log_more && !self.log_loading {
+            self.read_log(self.log.len());
+        }
+    }
+
+    fn read_log(&mut self, skip: usize) {
         let Some(repo) = self.repo.clone() else { return };
         let out = self.inbox.sender();
+        let generation = self.log_gen;
+        let opts = self.log_filter.options(skip);
+        self.log_loading = true;
         Runtime::spawn(async move {
-            let opts = LogOptions { all: true, max_count: 500, ..Default::default() };
-            if let Ok(log) = repo.log(&opts).await {
-                out.send(VcsEvent::Log(log));
-            }
+            // A filter git refuses (a bad pattern) shows an empty log.
+            let log = repo.log(&opts).await.unwrap_or_default();
+            out.send(VcsEvent::Log(generation, skip > 0, log));
         });
+    }
+
+    /// Changes what the Log shows and reads it again.
+    pub fn set_log_filter(&mut self, filter: LogFilter) {
+        self.log_text_draft = filter.text.clone();
+        self.log_author_draft = filter.author.clone();
+        if filter != self.log_filter {
+            self.log_filter = filter;
+            self.selected_commit = None;
+            self.marked_commits.clear();
+            self.load_log();
+        }
+    }
+
+    /// The history of one file (`rel`, relative to the repository), renames followed.
+    pub fn show_file_history(&mut self, path: &Path) {
+        let Some(mut rel) = self.repo.as_ref().and_then(|r| r.rel_path(path)) else { return };
+        if path.is_dir() {
+            rel.push('/');
+        }
+        self.tab = GitTab::Log;
+        self.set_log_filter(LogFilter { path: Some(rel), ..LogFilter::default() });
     }
 
     pub fn select_commit(&mut self, hash: &str) {
         self.selected_commit = Some(hash.to_string());
         self.commit_files.clear();
+        self.signature = None;
         let Some(repo) = self.repo.clone() else { return };
         let out = self.inbox.sender();
         let h = hash.to_string();
         Runtime::spawn(async move {
             if let Ok(files) = repo.commit_files(&h).await {
-                out.send(VcsEvent::CommitFiles(h, files));
+                out.send(VcsEvent::CommitFiles(h.clone(), files));
+            }
+            // Checking a signature runs the signing program: after the files.
+            if let Ok(sig) = repo.signature(&h).await {
+                out.send(VcsEvent::Signature(h, sig));
             }
         });
     }
@@ -309,6 +510,54 @@ impl Vcs {
         self.op("tag_checkout", async move { repo.checkout_tag(&name).await });
     }
 
+    // ------------------------------------------------------------------ worktrees
+
+    /// Creates a worktree at `path` and selects it.
+    pub fn add_worktree(&mut self, path: PathBuf, what: WorktreeCheckout) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.selected_worktree = Some(path.clone());
+        self.op("worktree_add", async move { repo.add_worktree(&path, &what).await });
+    }
+
+    /// Removes a worktree. Refused for local changes unless `force`; then
+    /// [`Vcs::force_remove`] asks whether to force it.
+    pub fn remove_worktree(&mut self, path: &Path, force: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let path = path.to_path_buf();
+        let out = self.inbox.sender();
+        self.op("worktree_remove", async move {
+            let r = repo.remove_worktree(&path, force).await;
+            if let Err(rc_vcs::GitError::WorktreeDirty(p)) = &r {
+                out.send(VcsEvent::RemoveRefused(p.clone()));
+            }
+            r
+        });
+    }
+
+    pub fn lock_worktree(&mut self, path: &Path, reason: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (path, reason) = (path.to_path_buf(), reason.to_string());
+        self.op("worktree_lock", async move { repo.lock_worktree(&path, Some(&reason)).await });
+    }
+
+    pub fn unlock_worktree(&mut self, path: &Path) {
+        let Some(repo) = self.repo.clone() else { return };
+        let path = path.to_path_buf();
+        self.op("worktree_unlock", async move { repo.unlock_worktree(&path).await });
+    }
+
+    /// Forgets the worktrees whose folders are gone; git's report goes to [`Vcs::output`].
+    pub fn prune_worktrees(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.run("worktree_prune", true, async move { repo.prune_worktrees().await.map(Some) });
+    }
+
+    /// The worktree this window has open.
+    pub fn current_worktree(&self) -> Option<&Worktree> {
+        let root = self.repo.as_ref()?.root();
+        self.worktrees.iter().find(|w| w.path == root)
+    }
+
     // ------------------------------------------------------------------ stashes
 
     /// Stashes the work tree's changes (`--include-untracked`, `--keep-index` on request).
@@ -368,6 +617,160 @@ impl Vcs {
         });
     }
 
+    // ------------------------------------------------------------------ patches
+
+    /// The commits a patch made from `clicked` covers: the marked ones when it is among them,
+    /// else just `clicked`; newest first, as in the log.
+    pub fn patch_commits(&self, clicked: &str) -> Vec<String> {
+        if self.marked_commits.len() > 1 && self.marked_commits.contains(clicked) {
+            self.log.iter().filter(|c| self.marked_commits.contains(&c.hash)).map(|c| c.hash.clone()).collect()
+        } else {
+            vec![clicked.to_string()]
+        }
+    }
+
+    /// Marks commits of the log before `hash` is selected: `toggle` (Ctrl/Cmd-click) adds or
+    /// removes one, `range` (Shift-click) marks every commit between the selected one and
+    /// `hash`, and a plain click clears the marks.
+    pub fn mark_commit(&mut self, hash: &str, toggle: bool, range: bool) {
+        if range && let Some(anchor) = self.selected_commit.clone() {
+            let at = |h: &str| self.log.iter().position(|c| c.hash == h);
+            if let (Some(a), Some(b)) = (at(&anchor), at(hash)) {
+                let (lo, hi) = (a.min(b), a.max(b));
+                self.marked_commits = self.log[lo..=hi].iter().map(|c| c.hash.clone()).collect();
+                return;
+            }
+        }
+        if toggle {
+            if self.marked_commits.is_empty()
+                && let Some(s) = &self.selected_commit
+            {
+                self.marked_commits.insert(s.clone());
+            }
+            if !self.marked_commits.remove(hash) {
+                self.marked_commits.insert(hash.to_string());
+            }
+        } else {
+            self.marked_commits.clear();
+        }
+    }
+
+    /// Creates a patch and saves it to `file`, or puts it on the clipboard (`None`).
+    pub fn create_patch(&mut self, source: PatchSource, file: Option<PathBuf>) {
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        let what = if file.is_some() { "patch_save" } else { "patch_copy" };
+        self.op(what, async move {
+            let patch = match &source {
+                PatchSource::Changes(paths) => repo.diff_patch(paths).await?,
+                PatchSource::Commits(commits) => repo.format_patch(commits).await?,
+            };
+            match file {
+                Some(path) => Runtime::handle().spawn_blocking(move || std::fs::write(path, patch)).await.map_err(std::io::Error::other)??,
+                None => {
+                    out.send(VcsEvent::PatchClipboard(String::from_utf8_lossy(&patch).into_owned()));
+                }
+            }
+            Ok(())
+        });
+    }
+
+    /// Reads a patch file in the background and checks what applying it would do.
+    pub fn load_patch_file(&mut self, path: PathBuf) {
+        let Some(repo) = self.repo.clone() else { return };
+        let generation = self.start_patch_load();
+        let three_way = self.patch_three_way;
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let file = path.clone();
+            let text = match Runtime::handle().spawn_blocking(move || read_patch_file(&file)).await {
+                Ok(Ok(t)) => Arc::new(t),
+                Ok(Err(e)) => {
+                    out.send(VcsEvent::PatchLoaded(generation, Some(path), Err(detailed_error(&e))));
+                    return;
+                }
+                Err(e) => {
+                    out.send(VcsEvent::PatchLoaded(generation, Some(path), Err(e.to_string())));
+                    return;
+                }
+            };
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchLoaded(generation, Some(path), Ok((text, preview))));
+        });
+    }
+
+    /// Takes a patch pasted from the clipboard and checks what applying it would do.
+    pub fn load_patch_text(&mut self, text: String) {
+        let Some(repo) = self.repo.clone() else { return };
+        let generation = self.start_patch_load();
+        if let Err(e) = rc_vcs::check_patch_size(text.len() as u64) {
+            self.patch_loading = false;
+            self.patch_error = Some(user_error(&e));
+            return;
+        }
+        let three_way = self.patch_three_way;
+        let out = self.inbox.sender();
+        let text = Arc::new(text.into_bytes());
+        Runtime::spawn(async move {
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchLoaded(generation, None, Ok((text, preview))));
+        });
+    }
+
+    fn start_patch_load(&mut self) -> u64 {
+        self.patch_gen += 1;
+        self.patch = None;
+        self.patch_loading = true;
+        self.patch_error = None;
+        self.patch_gen
+    }
+
+    /// Checks the loaded patch again (after the three-way option changed).
+    pub fn recheck_patch(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let Some(p) = &mut self.patch else { return };
+        p.preview = None;
+        p.result = None;
+        let (text, three_way, generation) = (p.text.clone(), self.patch_three_way, self.patch_gen);
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            let preview = repo.preview_patch(&text, three_way).await.map_err(|e| detailed_error(&e));
+            out.send(VcsEvent::PatchPreview(generation, preview));
+        });
+    }
+
+    /// Applies the loaded patch (`git apply`, or `git am` for mails); what git printed goes to
+    /// the patch's `result`.
+    pub fn apply_patch(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        let Some(p) = &mut self.patch else { return };
+        p.result = None;
+        let (text, three_way, generation) = (p.text.clone(), self.patch_three_way, self.patch_gen);
+        self.busy = Some("patch_apply");
+        self.error = None;
+        let out = self.inbox.sender();
+        Runtime::spawn(async move {
+            match repo.apply_patch(&text, three_way).await {
+                Ok(text) => {
+                    out.send(VcsEvent::PatchApplied(generation, OpOutput { text, error: false }));
+                    out.send(VcsEvent::Done("patch_apply", None));
+                }
+                Err(e) => {
+                    out.send(VcsEvent::PatchApplied(generation, OpOutput { text: detailed_error(&e), error: true }));
+                    out.send(VcsEvent::Done("patch_apply", Some(user_error(&e))));
+                }
+            }
+        });
+    }
+
+    /// Forgets the patch of the Apply Patch dialog.
+    pub fn close_patch(&mut self) {
+        self.patch_gen += 1;
+        self.patch = None;
+        self.patch_loading = false;
+        self.patch_error = None;
+    }
+
     /// The changes that go into the next commit, relative to the repository.
     pub fn included(&self) -> Vec<String> {
         self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect()
@@ -391,7 +794,7 @@ impl Vcs {
             self.error = Some(tr("Write a commit message").into());
             return;
         }
-        let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, ..Default::default() };
+        let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, sign: Some(self.sign), ..Default::default() };
         self.op(if push { "commit_push" } else { "commit" }, async move {
             if let Some((rustfmt, files)) = format {
                 let rustfmt = rustfmt.map_err(|e| rc_vcs::GitError::BeforeCommit(trf("Not committed: {error}", &[("error", &e)])))?;
@@ -520,10 +923,21 @@ impl Vcs {
                     let paths: BTreeSet<String> = s.entries.iter().map(|e| e.path.clone()).collect();
                     self.excluded.retain(|p| paths.contains(p));
                     self.status = Some(s);
+                    self.status_version += 1;
                 }
                 VcsEvent::Status(Err(e)) => self.error = Some(e),
                 VcsEvent::Branches(b) => self.branches = b,
-                VcsEvent::Log(l) => self.log = l,
+                VcsEvent::Log(generation, append, l) if generation == self.log_gen => {
+                    self.log_loading = false;
+                    self.log_more = l.len() >= LOG_PAGE;
+                    if append {
+                        let known: std::collections::HashSet<String> = self.log.iter().map(|c| c.hash.clone()).collect();
+                        self.log.extend(l.into_iter().filter(|c| !known.contains(&c.hash)));
+                    } else {
+                        self.log = l;
+                    }
+                }
+                VcsEvent::Log(..) => {}
                 VcsEvent::Head(p, t) => {
                     self.head_pending.remove(&p);
                     self.heads.insert(p, t);
@@ -574,6 +988,17 @@ impl Vcs {
                         }
                     }
                 }
+                VcsEvent::Signature(h, sig) => {
+                    if self.selected_commit.as_deref() == Some(h.as_str()) {
+                        self.signature = Some((h, sig));
+                    }
+                }
+                VcsEvent::Signing(c) => {
+                    if !self.sign_touched {
+                        self.sign = c.sign_by_default;
+                    }
+                    self.signing = Some(c);
+                }
                 VcsEvent::CommitFiles(h, f) => {
                     if self.selected_commit.as_deref() == Some(h.as_str()) {
                         self.commit_files = f;
@@ -600,6 +1025,33 @@ impl Vcs {
                 }
                 VcsEvent::Remotes(r) => self.remotes = r,
                 VcsEvent::Output(o) => self.output = Some(o),
+                VcsEvent::PatchClipboard(text) => self.clipboard = Some(text),
+                VcsEvent::PatchLoaded(generation, path, loaded) if generation == self.patch_gen => {
+                    self.patch_loading = false;
+                    match loaded {
+                        Ok((text, preview)) => self.patch = Some(PendingPatch { path, text, preview: Some(preview), result: None }),
+                        Err(e) => self.patch_error = Some(e),
+                    }
+                }
+                VcsEvent::PatchPreview(generation, preview) if generation == self.patch_gen => {
+                    if let Some(p) = &mut self.patch {
+                        p.preview = Some(preview);
+                    }
+                }
+                VcsEvent::PatchApplied(generation, output) if generation == self.patch_gen => {
+                    if let Some(p) = &mut self.patch {
+                        p.result = Some(output);
+                    }
+                }
+                VcsEvent::PatchLoaded(..) | VcsEvent::PatchPreview(..) | VcsEvent::PatchApplied(..) => {}
+                VcsEvent::Worktrees(list) => {
+                    // A worktree being added is selected before it is listed.
+                    if self.busy != Some("worktree_add") && self.selected_worktree.as_ref().is_some_and(|p| !list.iter().any(|w| &w.path == p)) {
+                        self.selected_worktree = None;
+                    }
+                    self.worktrees = list;
+                }
+                VcsEvent::RemoveRefused(p) => self.force_remove = Some(p),
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
@@ -719,6 +1171,26 @@ fn user_error(e: &rc_vcs::GitError) -> String {
     trf(tpl, &args)
 }
 
+/// The summary of a git failure followed by git's own message, if any.
+fn detailed_error(e: &rc_vcs::GitError) -> String {
+    let summary = user_error(e);
+    match e.details().filter(|d| !d.trim().is_empty()) {
+        Some(d) => format!("{summary}\n{}", d.trim()),
+        None => summary,
+    }
+}
+
+/// Reads a patch file, refusing files larger than [`rc_vcs::MAX_PATCH_BYTES`].
+fn read_patch_file(path: &Path) -> Result<Vec<u8>, rc_vcs::GitError> {
+    use std::io::Read;
+    let file = std::fs::File::open(path)?;
+    rc_vcs::check_patch_size(file.metadata()?.len())?;
+    let mut text = Vec::new();
+    file.take(rc_vcs::MAX_PATCH_BYTES as u64 + 1).read_to_end(&mut text)?;
+    rc_vcs::check_patch_size(text.len() as u64)?;
+    Ok(text)
+}
+
 /// What to tell the user when an operation of the Git window succeeds.
 fn done_notice(what: &str) -> Option<&'static str> {
     Some(match what {
@@ -730,6 +1202,14 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "stash_apply" => tr("Stash applied"),
         "stash_pop" => tr("Stash applied and dropped"),
         "stash_drop" => tr("Stash dropped"),
+        "patch_save" => tr("Patch saved"),
+        "patch_copy" => tr("Patch copied to the clipboard"),
+        "patch_apply" => tr("Patch applied"),
+        "worktree_add" => tr("Worktree created"),
+        "worktree_remove" => tr("Worktree removed"),
+        "worktree_lock" => tr("Worktree locked"),
+        "worktree_unlock" => tr("Worktree unlocked"),
+        "worktree_prune" => tr("Worktrees pruned"),
         _ => return None,
     })
 }

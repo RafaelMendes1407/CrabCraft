@@ -311,6 +311,100 @@ async fn stash_push_list_apply_pop_drop() {
     assert!(t.repo.stashes().await.unwrap().is_empty());
 }
 
+/// Two repositories with the same first commit (`b` is a clone of `a`).
+async fn twin_repos() -> (TempRepo, TempRepo) {
+    let a = TempRepo::new().await;
+    a.commit_files(&[("a.txt", &numbered(5)), ("src/lib.rs", "pub fn f() {}\n"), ("old.txt", "old\n")], "init");
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["clone", "-q", &a.repo.root().display().to_string(), "."]);
+    common::configure(dir.path());
+    let repo = Repository::discover(dir.path()).await.unwrap();
+    (a, TempRepo { dir, repo })
+}
+
+#[tokio::test]
+async fn patches_of_local_changes_round_trip_between_repositories() {
+    let (a, b) = twin_repos().await;
+    // Staged and unstaged edits, a deletion, a rename, a binary and an untracked file.
+    a.write("a.txt", &numbered(5).replace("line 3", "line three"));
+    a.git(&["rm", "-q", "old.txt"]);
+    a.git(&["mv", "src/lib.rs", "src/core.rs"]);
+    std::fs::write(a.path("logo.bin"), [0u8, 159, 146, 150, 0, 1]).unwrap();
+    a.write("new.txt", "brand new\n");
+    a.write("skip.txt", "not selected\n");
+    let paths = s(&["a.txt", "old.txt", "src/lib.rs", "src/core.rs", "logo.bin", "new.txt"]);
+    let patch = a.repo.diff_patch(&paths).await.unwrap();
+    assert_eq!(patch_kind(&patch), PatchKind::Diff);
+    let text = String::from_utf8_lossy(&patch);
+    assert!(!text.contains("skip.txt"), "{text}");
+    assert!(matches!(a.repo.diff_patch(&s(&["skip-nothing.txt"])).await, Err(GitError::NothingToCommit)));
+
+    let preview = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert_eq!(preview.problem, None);
+    let mut files: Vec<_> = preview.files.iter().map(|f| (f.path.as_str(), f.status)).collect();
+    files.sort();
+    assert_eq!(files, [("a.txt", 'M'), ("logo.bin", 'A'), ("new.txt", 'A'), ("old.txt", 'D'), ("src/core.rs", 'R')]);
+    assert!(preview.files.iter().any(|f| f.path == "logo.bin" && f.added.is_none()));
+
+    let report = b.repo.apply_patch(&patch, false).await.unwrap();
+    assert!(report.contains("a.txt"), "{report}");
+    assert_eq!(b.read("a.txt"), a.read("a.txt"));
+    assert_eq!(b.read("new.txt"), "brand new\n");
+    assert_eq!(std::fs::read(b.path("logo.bin")).unwrap(), [0u8, 159, 146, 150, 0, 1]);
+    assert!(!b.path("old.txt").exists() && !b.path("src/lib.rs").exists() && b.path("src/core.rs").exists());
+
+    // Applied again, the check fails and says why; applying fails with git's message.
+    let again = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert!(again.problem.as_deref().is_some_and(|p| !p.is_empty()), "{again:?}");
+    assert!(matches!(b.repo.apply_patch(&patch, false).await, Err(GitError::PatchFailed(m)) if !m.is_empty()));
+    // Text that is not a patch.
+    assert!(matches!(b.repo.preview_patch(b"hello\nworld\n", false).await, Err(GitError::PatchFailed(_))));
+    assert!(b.repo.apply_patch(b"hello\n", false).await.is_err());
+}
+
+#[tokio::test]
+async fn three_way_apply_leaves_conflicts_to_resolve() {
+    let (a, b) = twin_repos().await;
+    a.write("a.txt", &numbered(5).replace("line 3", "ours"));
+    let patch = a.repo.diff_patch(&s(&["a.txt"])).await.unwrap();
+    b.commit_files(&[("a.txt", &numbered(5).replace("line 3", "theirs"))], "diverge");
+    assert!(b.repo.preview_patch(&patch, false).await.unwrap().problem.is_some());
+    assert!(matches!(b.repo.apply_patch(&patch, true).await, Err(GitError::Conflicts(_))));
+    assert_eq!(b.repo.conflicted_paths().await.unwrap(), ["a.txt"]);
+    assert!(b.read("a.txt").contains("<<<<<<<"));
+}
+
+#[tokio::test]
+async fn commit_patches_become_commits_with_am() {
+    let (a, b) = twin_repos().await;
+    a.commit_files(&[("a.txt", &numbered(6))], "Add line 6");
+    a.commit_files(&[("a.txt", &numbered(7)), ("b.txt", "b\n")], "Add line 7 and b");
+    let log = a.repo.log(&LogOptions::default()).await.unwrap();
+    let (newest, older) = (log[0].hash.clone(), log[1].hash.clone());
+    // Given newest first, like the log; written oldest first.
+    let patch = a.repo.format_patch(&[newest, older]).await.unwrap();
+    assert_eq!(patch_kind(&patch), PatchKind::Mail);
+    let text = String::from_utf8_lossy(&patch);
+    assert!(text.find("Add line 6").unwrap() < text.find("Add line 7").unwrap());
+    let preview = b.repo.preview_patch(&patch, false).await.unwrap();
+    assert_eq!((preview.kind, preview.commits, preview.problem.clone()), (PatchKind::Mail, 2, None));
+    let a_file = preview.files.iter().find(|f| f.path == "a.txt").unwrap();
+    assert_eq!((a_file.added, a_file.removed), (Some(2), Some(0)));
+
+    b.repo.apply_patch(&patch, false).await.unwrap();
+    let blog = b.repo.log(&LogOptions::default()).await.unwrap();
+    assert_eq!((blog[0].subject.as_str(), blog[1].subject.as_str()), ("Add line 7 and b", "Add line 6"));
+    assert_eq!(blog[0].author_email, "test@example.com");
+    assert_eq!(b.read("a.txt"), numbered(7));
+
+    // A failing series is aborted: no commit, no `am` in progress.
+    let head = b.repo.resolve("HEAD").await.unwrap();
+    assert!(matches!(b.repo.apply_patch(&patch, false).await, Err(GitError::PatchFailed(_))));
+    assert_eq!(b.repo.state().await, RepoState::Clean);
+    assert_eq!(b.repo.resolve("HEAD").await.unwrap(), head);
+    assert!(matches!(a.repo.format_patch(&s(&["no-such-commit"])).await, Err(GitError::NotFound(_))));
+}
+
 #[tokio::test]
 async fn log_paging_file_history_and_graph() {
     let t = TempRepo::new().await;
@@ -467,6 +561,82 @@ async fn tags_are_created_listed_pushed_checked_out_and_deleted() {
 }
 
 #[tokio::test]
+async fn worktrees_are_added_listed_locked_removed_and_pruned() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("a.txt", "1\n")], "first");
+    t.git(&["branch", "dev"]);
+    let head = t.repo.resolve("HEAD").await.unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+    let (feat, dev, detached, gone) = (place.join("feat wt"), place.join("dev"), place.join("-detached"), place.join("gone"));
+
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(list[0].main && list[0].path == t.repo.root() && list[0].branch.as_deref() == Some("main"));
+
+    // A new branch, an existing one, a detached commit (a path that looks like an option).
+    t.repo.add_worktree(&feat, &WorktreeCheckout::NewBranch { name: "feat/x".into(), start: None }).await.unwrap();
+    t.repo.add_worktree(&dev, &WorktreeCheckout::Branch("dev".into())).await.unwrap();
+    t.repo.add_worktree(&detached, &WorktreeCheckout::Detached("HEAD".into())).await.unwrap();
+    t.repo.add_worktree(&gone, &WorktreeCheckout::Detached(head.clone())).await.unwrap();
+    assert_eq!(std::fs::read_to_string(feat.join("a.txt")).unwrap(), "1\n");
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.len(), 5);
+    let find = |p: &std::path::Path| list.iter().find(|w| w.path == p).cloned().unwrap();
+    assert_eq!((find(&feat).branch.as_deref(), find(&feat).head.as_deref()), (Some("feat/x"), Some(head.as_str())));
+    assert_eq!(find(&dev).branch.as_deref(), Some("dev"));
+    assert!(find(&detached).detached && find(&detached).branch.is_none());
+
+    // Refusals: bad or taken branch names, a branch checked out elsewhere, a used folder.
+    for bad in ["", "-b", "a..b", "with space", "HEAD"] {
+        let r = t.repo.add_worktree(&place.join("bad"), &WorktreeCheckout::NewBranch { name: bad.into(), start: None }).await;
+        assert!(matches!(r, Err(GitError::InvalidBranchName(_))), "{bad:?}: {r:?}");
+    }
+    assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::NewBranch { name: "dev".into(), start: None }).await, Err(GitError::BranchExists(b)) if b == "dev"));
+    let r = t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("dev".into())).await;
+    assert!(matches!(&r, Err(GitError::BranchInUse(b)) if b == "dev"), "{r:?}");
+    assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("nope".into())).await, Err(GitError::NotFound(_))));
+    std::fs::create_dir_all(place.join("full")).unwrap();
+    std::fs::write(place.join("full/f"), "x").unwrap();
+    let r = t.repo.add_worktree(&place.join("full"), &WorktreeCheckout::Detached("HEAD".into())).await;
+    assert!(matches!(r, Err(GitError::WorktreePathExists(_))), "{r:?}");
+    assert!(t.repo.add_worktree(std::path::Path::new("relative"), &WorktreeCheckout::Detached("HEAD".into())).await.is_err());
+
+    // Lock and unlock.
+    t.repo.lock_worktree(&dev, Some(" on a USB disk ")).await.unwrap();
+    assert_eq!(t.repo.worktrees().await.unwrap().iter().find(|w| w.path == dev).unwrap().locked.as_deref(), Some("on a USB disk"));
+    let r = t.repo.remove_worktree(&dev, true).await;
+    assert!(matches!(r, Err(GitError::WorktreeLocked(_))), "{r:?}");
+    t.repo.unlock_worktree(&dev).await.unwrap();
+    assert!(t.repo.worktrees().await.unwrap().iter().find(|w| w.path == dev).unwrap().locked.is_none());
+
+    // Remove: refused with local changes unless forced; the main worktree never.
+    std::fs::write(feat.join("new.txt"), "x").unwrap();
+    let r = t.repo.remove_worktree(&feat, false).await;
+    assert!(matches!(r, Err(GitError::WorktreeDirty(_))), "{r:?}");
+    assert!(feat.exists());
+    t.repo.remove_worktree(&feat, true).await.unwrap();
+    assert!(!feat.exists());
+    t.repo.remove_worktree(&dev, false).await.unwrap();
+    let r = t.repo.remove_worktree(t.repo.root(), true).await;
+    assert!(matches!(r, Err(GitError::MainWorktree)), "{r:?}");
+    let r = t.repo.remove_worktree(&place.join("never"), false).await;
+    assert!(matches!(r, Err(GitError::NotFound(_))), "{r:?}");
+
+    // A worktree whose folder vanished is prunable, unless locked.
+    std::fs::remove_dir_all(&gone).unwrap();
+    t.repo.lock_worktree(&detached, None).await.unwrap();
+    std::fs::remove_dir_all(&detached).unwrap();
+    let list = t.repo.worktrees().await.unwrap();
+    assert!(list.iter().find(|w| w.path == gone).unwrap().prunable.is_some());
+    assert_eq!(list.iter().find(|w| w.path == detached).unwrap().locked.as_deref(), Some(""));
+    let report = t.repo.prune_worktrees().await.unwrap();
+    assert!(report.contains("gone"), "{report}");
+    let list = t.repo.worktrees().await.unwrap();
+    assert_eq!(list.iter().map(|w| w.path.clone()).collect::<Vec<_>>(), [t.repo.root().to_path_buf(), detached.clone()]);
+}
+
+#[tokio::test]
 async fn fetch_pull_push_with_progress() {
     let remote_dir = tempfile::tempdir().unwrap();
     git(remote_dir.path(), &["init", "-q", "--bare", "-b", "main"]);
@@ -591,6 +761,8 @@ fn errors_have_translatable_messages() {
         GitError::NoUpstream,
         GitError::PushRejected(String::new()),
         GitError::PatchFailed(String::new()),
+        GitError::PatchTooLarge(32),
+        GitError::OperationInProgress,
         GitError::NotFound(String::new()),
         GitError::IdentityUnknown,
         GitError::Locked(String::new()),
@@ -602,4 +774,66 @@ fn errors_have_translatable_messages() {
         let (template, _) = e.user_message();
         assert!(tsv.lines().any(|l| l.split('\t').next() == Some(template)), "missing translation of {template:?}");
     }
+}
+
+/// V-14: commits are signed with a GPG key (a throwaway one, in its own GnuPG home reached
+/// through `gpg.program`), git verifies them, and a signing program that fails is reported.
+#[tokio::test]
+async fn commits_are_signed_and_their_signatures_verified() {
+    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+        eprintln!("skipped: gpg is not installed");
+        return;
+    }
+    let t = TempRepo::new().await;
+    let home = tempfile::tempdir().unwrap();
+    let gnupg = home.path().join("gnupg");
+    std::fs::create_dir(&gnupg).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&gnupg, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let made = std::process::Command::new("gpg")
+        .env("GNUPGHOME", &gnupg)
+        .args(["--batch", "--passphrase", "", "--quick-generate-key", "Signer <signer@example.com>", "ed25519", "sign", "never"])
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let wrapper = home.path().join("gpg.sh");
+    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{}' exec gpg \"$@\"\n", gnupg.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    t.git(&["config", "gpg.program", &wrapper.display().to_string()]);
+    t.git(&["config", "user.signingkey", "signer@example.com"]);
+
+    let cfg = t.repo.signing_config().await.unwrap();
+    assert_eq!((cfg.sign_by_default, cfg.key.as_deref(), cfg.format.as_str()), (false, Some("signer@example.com"), "openpgp"));
+
+    t.write("a.txt", "a\n");
+    let signed = t.repo.commit(&CommitOptions { message: "Signed".into(), only: s(&["a.txt"]), sign: Some(true), ..Default::default() }).await.unwrap();
+    let sig = t.repo.signature(&signed).await.unwrap();
+    assert!(matches!(sig.status, SignatureStatus::Good | SignatureStatus::GoodUntrusted), "{sig:?}");
+    assert_eq!(sig.signer, "Signer <signer@example.com>");
+    assert!(!sig.key.is_empty());
+
+    // `--no-gpg-sign` wins over `commit.gpgsign`.
+    t.git(&["config", "commit.gpgsign", "true"]);
+    assert!(t.repo.signing_config().await.unwrap().sign_by_default);
+    t.write("a.txt", "b\n");
+    let plain = t.repo.commit(&CommitOptions { message: "Plain".into(), only: s(&["a.txt"]), sign: Some(false), ..Default::default() }).await.unwrap();
+    assert_eq!(t.repo.signature(&plain).await.unwrap().status, SignatureStatus::Unsigned);
+    // `None` follows it.
+    t.write("a.txt", "c\n");
+    let default = t.repo.commit(&CommitOptions { message: "Default".into(), only: s(&["a.txt"]), ..Default::default() }).await.unwrap();
+    assert_ne!(t.repo.signature(&default).await.unwrap().status, SignatureStatus::Unsigned);
+
+    // A signing program that fails: nothing is committed, and the error says why.
+    t.git(&["config", "gpg.program", "false"]);
+    t.write("a.txt", "d\n");
+    let err = t.repo.commit(&CommitOptions { message: "Fails".into(), only: s(&["a.txt"]), sign: Some(true), ..Default::default() }).await.unwrap_err();
+    assert!(matches!(err, GitError::SigningFailed(_)), "{err:?}");
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), default);
 }

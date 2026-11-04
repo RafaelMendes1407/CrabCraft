@@ -237,3 +237,348 @@ fn stashes_are_made_shown_applied_popped_and_dropped_from_the_git_window() {
     app.vcs.stash_push("empty", false, false);
     pump(&mut app, "nothing to stash", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
 }
+
+#[test]
+fn patches_are_created_and_applied_between_repositories_from_the_app() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let other = tempfile::tempdir().unwrap();
+    let b = other.path().canonicalize().unwrap();
+    git(&b, &["clone", "-q", &root.display().to_string(), "."]);
+    for (k, v) in [("user.name", "Other"), ("user.email", "other@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+        git(&b, &["config", k, v]);
+    }
+    let out_dir = tempfile::tempdir().unwrap();
+
+    // Two commits in A, and local changes on top.
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn a() {}\npub fn b() {}\n").unwrap();
+    git(&root, &["commit", "-qam", "Add b"]);
+    std::fs::write(root.join("README.md"), "# Shop\n").unwrap();
+    git(&root, &["add", "README.md"]);
+    git(&root, &["commit", "-qm", "Add readme"]);
+    std::fs::write(root.join("lib.rs"), "pub fn a() {}\npub fn b() {}\npub fn c() {}\n").unwrap();
+    std::fs::write(root.join("notes.txt"), "untracked notes\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "log", |a| a.vcs.log.len() == 3 && a.vcs.changes().len() == 2);
+
+    // Ctrl-click marks the two newest commits; the patch covers both, newest first.
+    let (newest, older) = (app.vcs.log[0].hash.clone(), app.vcs.log[1].hash.clone());
+    app.vcs.mark_commit(&newest, false, false);
+    app.vcs.select_commit(&newest);
+    app.vcs.mark_commit(&older, true, false);
+    assert_eq!(app.vcs.patch_commits(&older), [newest.clone(), older.clone()]);
+    let first = app.vcs.log[2].hash.clone();
+    assert_eq!(app.vcs.patch_commits(&first).len(), 1);
+    let commits_file = out_dir.path().join("commits.patch");
+    app.vcs.create_patch(crate::vcs::PatchSource::Commits(app.vcs.patch_commits(&newest)), Some(commits_file.clone()));
+    pump(&mut app, "commit patch saved", |a| a.vcs.busy.is_none());
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Patch saved")), "{:?}", app.vcs.error);
+    let text = std::fs::read_to_string(&commits_file).unwrap();
+    assert!(text.find("Add b").unwrap() < text.find("Add readme").unwrap());
+
+    // The checked local changes, saved and copied.
+    let changes_file = out_dir.path().join("changes.patch");
+    app.vcs.create_patch(crate::vcs::PatchSource::Changes(app.vcs.included()), Some(changes_file.clone()));
+    pump(&mut app, "changes patch saved", |a| a.vcs.busy.is_none());
+    app.vcs.create_patch(crate::vcs::PatchSource::Changes(vec!["lib.rs".into()]), None);
+    pump(&mut app, "copied", |a| a.vcs.busy.is_none() && a.vcs.clipboard.is_some());
+    let copied = app.vcs.clipboard.take().unwrap();
+    assert!(copied.contains("+pub fn c() {}") && !copied.contains("notes.txt"), "{copied}");
+
+    // In B: the commits become commits, then the changes go to the work tree.
+    let mut app = open_app(&b);
+    app.vcs.load_patch_file(commits_file.clone());
+    pump(&mut app, "commit patch checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    let pv = app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap();
+    assert_eq!((pv.kind, pv.commits, pv.problem.clone()), (rc_vcs::PatchKind::Mail, 2, None));
+    let mut files: Vec<_> = pv.files.iter().map(|f| (f.path.clone(), f.status)).collect();
+    files.sort();
+    assert_eq!(files, [("README.md".to_string(), 'A'), ("lib.rs".to_string(), 'M')]);
+    app.vcs.apply_patch();
+    pump(&mut app, "commits applied", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    assert!(!app.vcs.patch.as_ref().unwrap().result.as_ref().unwrap().error);
+    assert_eq!(git_out(&b, &["log", "--format=%s"]).lines().collect::<Vec<_>>(), ["Add readme", "Add b", "First"]);
+
+    app.vcs.load_patch_file(changes_file.clone());
+    pump(&mut app, "changes checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    assert_eq!(app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap().kind, rc_vcs::PatchKind::Diff);
+    app.vcs.apply_patch();
+    pump(&mut app, "changes applied", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    assert_eq!(std::fs::read_to_string(b.join("lib.rs")).unwrap(), "pub fn a() {}\npub fn b() {}\npub fn c() {}\n");
+    assert_eq!(std::fs::read_to_string(b.join("notes.txt")).unwrap(), "untracked notes\n");
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Patch applied")));
+
+    // Pasted again it no longer applies, and says why; applying shows git's message.
+    app.vcs.load_patch_text(copied);
+    pump(&mut app, "pasted checked", |a| a.vcs.patch.as_ref().is_some_and(|p| p.preview.is_some()));
+    let pv = app.vcs.patch.as_ref().unwrap().preview.clone().unwrap().unwrap();
+    assert!(pv.problem.is_some(), "{pv:?}");
+    app.vcs.apply_patch();
+    pump(&mut app, "failed apply", |a| a.vcs.busy.is_none() && a.vcs.patch.as_ref().is_some_and(|p| p.result.is_some()));
+    let r = app.vcs.patch.as_ref().unwrap().result.clone().unwrap();
+    assert!(r.error && r.text.contains("lib.rs"), "{r:?}");
+
+    // Not a patch, a missing file and an oversized file are refused with a message.
+    app.vcs.load_patch_text("hello".into());
+    pump(&mut app, "not a patch", |a| a.vcs.patch.as_ref().is_some_and(|p| matches!(p.preview, Some(Err(_)))));
+    app.vcs.load_patch_file(out_dir.path().join("missing.patch"));
+    pump(&mut app, "missing", |a| !a.vcs.patch_loading && a.vcs.patch_error.is_some());
+    let big = out_dir.path().join("big.patch");
+    std::fs::File::create(&big).unwrap().set_len(rc_vcs::MAX_PATCH_BYTES as u64 + 1).unwrap();
+    app.vcs.load_patch_file(big);
+    pump(&mut app, "too large", |a| !a.vcs.patch_loading && a.vcs.patch_error.is_some());
+    assert!(app.vcs.patch_error.as_ref().unwrap().contains("32"), "{:?}", app.vcs.patch_error);
+    app.vcs.close_patch();
+    assert!(app.vcs.patch.is_none() && app.vcs.patch_error.is_none());
+}
+
+#[test]
+fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    git(&root, &["branch", "dev"]);
+    let mut app = open_app(&root);
+    pump(&mut app, "worktrees", |a| a.vcs.worktrees.len() == 1);
+    assert_eq!(app.vcs.current_worktree().map(|w| w.main), Some(true));
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+
+    // The default folder sits next to the repository, named after it and the branch.
+    let suggested = crate::ui::dialogs::suggested_worktree_path(&root, "feature/login");
+    assert_eq!(suggested.parent(), root.parent());
+    assert!(suggested.file_name().unwrap().to_string_lossy().ends_with("-feature-login"), "{suggested:?}");
+    assert!(crate::ui::dialogs::plausible_branch_name("feature/login") && !crate::ui::dialogs::plausible_branch_name("HEAD"));
+
+    // A new branch and an existing one.
+    let (feat, dev) = (place.join("feat"), place.join("dev"));
+    app.vcs.add_worktree(feat.clone(), rc_vcs::WorktreeCheckout::NewBranch { name: "feat".into(), start: None });
+    pump(&mut app, "new branch worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == feat));
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Worktree created")));
+    assert_eq!(app.vcs.selected_worktree.as_deref(), Some(feat.as_path()));
+    app.vcs.add_worktree(dev.clone(), rc_vcs::WorktreeCheckout::Branch("dev".into()));
+    pump(&mut app, "existing branch worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev));
+    let w = app.vcs.worktrees.iter().find(|w| w.path == dev).unwrap();
+    assert_eq!(w.branch.as_deref(), Some("dev"));
+    assert!(root.join("lib.rs").is_file() && dev.join("lib.rs").is_file());
+    // A branch already checked out elsewhere is refused with git's reason.
+    app.vcs.add_worktree(place.join("again"), rc_vcs::WorktreeCheckout::Branch("dev".into()));
+    pump(&mut app, "branch in use", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(!place.join("again").exists());
+
+    // Lock with a reason, unlock.
+    app.vcs.lock_worktree(&dev, "external disk");
+    pump(&mut app, "locked", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev && w.locked.as_deref() == Some("external disk")));
+    app.vcs.unlock_worktree(&dev);
+    pump(&mut app, "unlocked", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == dev && w.locked.is_none()));
+
+    // Removing a worktree with local changes is refused and offered with force.
+    std::fs::write(feat.join("scratch.txt"), "draft").unwrap();
+    app.vcs.remove_worktree(&feat, false);
+    pump(&mut app, "refused removal", |a| a.vcs.busy.is_none() && a.vcs.force_remove.is_some());
+    assert_eq!(app.vcs.force_remove.as_deref(), Some(feat.as_path()));
+    assert!(feat.join("scratch.txt").exists());
+    app.vcs.force_remove = None;
+    app.vcs.remove_worktree(&feat, true);
+    pump(&mut app, "forced removal", |a| a.vcs.busy.is_none() && !a.vcs.worktrees.iter().any(|w| w.path == feat));
+    assert!(!feat.exists());
+    assert!(git_out(&root, &["branch", "--list", "feat"]).contains("feat"), "the branch stays");
+
+    // A worktree whose folder vanished is pruned; git's report is shown.
+    std::fs::remove_dir_all(&dev).unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "prunable", |a| a.vcs.worktrees.iter().any(|w| w.path == dev && w.prunable.is_some()));
+    app.vcs.prune_worktrees();
+    pump(&mut app, "pruned", |a| a.vcs.busy.is_none() && a.vcs.worktrees.len() == 1 && a.vcs.output.is_some());
+    assert!(!app.vcs.output.as_ref().unwrap().error);
+
+    // Opening a worktree makes it the project of this window.
+    let other = place.join("other");
+    app.vcs.add_worktree(other.clone(), rc_vcs::WorktreeCheckout::Detached("HEAD".into()));
+    pump(&mut app, "detached worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == other));
+    app.open_workspace(&other);
+    pump(&mut app, "worktree opened", |a| a.vcs.repo.as_ref().is_some_and(|r| r.root() == other) && a.vcs.worktrees.len() == 2);
+    let cur = app.vcs.current_worktree().unwrap();
+    assert!(!cur.main && cur.detached);
+}
+
+/// V-14: the Commit window's "Sign with GPG" starts as `commit.gpgsign` says, signs with the
+/// user's key, and the Log shows the signature git verified; a failing signing program is
+/// reported and commits nothing.
+#[test]
+fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
+    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+        eprintln!("skipped: gpg is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let gnupg = home.path().join("gnupg");
+    std::fs::create_dir(&gnupg).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&gnupg, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let made = std::process::Command::new("gpg")
+        .env("GNUPGHOME", &gnupg)
+        .args(["--batch", "--passphrase", "", "--quick-generate-key", "Signer <signer@example.com>", "ed25519", "sign", "never"])
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let wrapper = home.path().join("gpg.sh");
+    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{}' exec gpg \"$@\"\n", gnupg.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Signer"), ("user.email", "signer@example.com"), ("core.hooksPath", "no-hooks"), ("gpg.program", &wrapper.display().to_string()), ("commit.gpgsign", "true")] {
+        git(&root, &["config", k, v]);
+    }
+    std::fs::write(root.join("a.txt"), "a\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "--no-gpg-sign", "-m", "First"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    pump(&mut app, "the signing settings", |a| a.vcs.signing.is_some() && a.vcs.log.len() == 1);
+    assert!(app.vcs.sign, "commit.gpgsign turns it on");
+
+    // A signed commit, from the Commit window.
+    std::fs::write(root.join("a.txt"), "b\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1);
+    app.vcs.message = "Signed".into();
+    app.commit_changes(false);
+    pump(&mut app, "the commit", |a| a.vcs.busy.is_none() && a.vcs.log.len() == 2);
+    let newest = app.vcs.log[0].hash.clone();
+    app.vcs.select_commit(&newest);
+    pump(&mut app, "the signature", |a| a.vcs.signature.is_some());
+    let sig = app.vcs.signature.clone().unwrap().1;
+    let (text, good) = crate::ui::git::signature_text(&sig).unwrap();
+    assert!(good && text.starts_with("Signed by Signer <signer@example.com> (key "), "{text}");
+    // The first commit is not signed: nothing is said.
+    let first = app.vcs.log[1].hash.clone();
+    app.vcs.select_commit(&first);
+    pump(&mut app, "no signature", |a| a.vcs.signature.is_some());
+    assert_eq!(crate::ui::git::signature_text(&app.vcs.signature.clone().unwrap().1), None);
+
+    // Turned off by the user, the next commit is not signed even with commit.gpgsign.
+    app.vcs.sign = false;
+    app.vcs.sign_touched = true;
+    std::fs::write(root.join("a.txt"), "c\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1 && a.vcs.signing.is_some());
+    assert!(!app.vcs.sign, "the user's choice stays");
+    app.vcs.message = "Plain".into();
+    app.commit_changes(false);
+    pump(&mut app, "the plain commit", |a| a.vcs.busy.is_none() && a.vcs.log.len() == 3);
+    let out = std::process::Command::new("git").args(["log", "-1", "--format=%G?"]).current_dir(&root).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "N");
+
+    // A signing program that fails: the error says so, nothing is committed.
+    git(&root, &["config", "gpg.program", "false"]);
+    app.vcs.sign = true;
+    std::fs::write(root.join("a.txt"), "d\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1);
+    app.vcs.message = "Fails".into();
+    app.commit_changes(false);
+    pump(&mut app, "the failure", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(app.vcs.error.as_deref().unwrap().contains("could not be signed"), "{:?}", app.vcs.error);
+    assert_eq!(app.vcs.log.len(), 3);
+}
+
+/// V-06: the Log filters by message text (literal, not a pattern), author and branch; a file's
+/// history follows its renames; older commits come with Load More.
+#[test]
+fn the_log_is_filtered_and_shows_the_history_of_a_file() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ana"), ("user.email", "ana@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&root, &["config", k, v]);
+    }
+    let commit = |msg: &str, author: Option<&str>| {
+        git(&root, &["add", "-A"]);
+        let mut args = vec!["commit", "-q", "--allow-empty", "-m", msg];
+        if let Some(a) = author {
+            args.push("--author");
+            args.push(a);
+        }
+        git(&root, &args);
+    };
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/old.rs"), "fn a() {}\n").unwrap();
+    commit("Add old.rs", None);
+    std::fs::write(root.join("README.md"), "# r\n").unwrap();
+    commit("Add readme (v1.0)", Some("Bruno <bruno@example.com>"));
+    git(&root, &["mv", "src/old.rs", "src/new.rs"]);
+    commit("Rename old to new", None);
+    std::fs::write(root.join("src/new.rs"), "fn a() {}\nfn b() {}\n").unwrap();
+    commit("Add b to new.rs", Some("Bruno <bruno@example.com>"));
+    git(&root, &["checkout", "-q", "-b", "dev"]);
+    commit("Work on dev", None);
+    git(&root, &["checkout", "-q", "main"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    pump(&mut app, "the log", |a| a.vcs.log.len() == 5 && !a.vcs.log_loading);
+    assert!(!app.vcs.log_more);
+    let subjects = |a: &CrabCraftApp| a.vcs.log.iter().map(|c| c.subject.clone()).collect::<Vec<_>>();
+    let apply = |app: &mut CrabCraftApp, f: crate::vcs::LogFilter, what: &str, n: usize| {
+        app.vcs.set_log_filter(f);
+        pump(app, what, |a| !a.vcs.log_loading && a.vcs.log.len() == n);
+    };
+
+    // Text: literal, case-insensitive; `(v1.0)` is not a pattern.
+    apply(&mut app, crate::vcs::LogFilter { text: "(V1.0)".into(), ..Default::default() }, "text filter", 1);
+    assert_eq!(subjects(&app), ["Add readme (v1.0)"]);
+    // Author.
+    apply(&mut app, crate::vcs::LogFilter { author: "bruno".into(), ..Default::default() }, "author filter", 2);
+    assert_eq!(subjects(&app), ["Add b to new.rs", "Add readme (v1.0)"]);
+    // Branch: main has no dev commit.
+    apply(&mut app, crate::vcs::LogFilter { branch: Some("main".into()), ..Default::default() }, "branch filter", 4);
+    assert!(!subjects(&app).contains(&"Work on dev".to_string()));
+    // Nothing matches: an empty log.
+    apply(&mut app, crate::vcs::LogFilter { text: "no such words".into(), ..Default::default() }, "no match", 0);
+
+    // The history of new.rs reaches back past its rename; the menu opens it in the Git window.
+    app.show_git_history(&root.join("src/new.rs"));
+    pump(&mut app, "file history", |a| !a.vcs.log_loading && a.vcs.log.len() == 3);
+    assert_eq!(app.vcs.log_filter.path.as_deref(), Some("src/new.rs"));
+    assert_eq!(app.vcs.tab, crate::vcs::GitTab::Log);
+    assert_eq!(subjects(&app), ["Add b to new.rs", "Rename old to new", "Add old.rs"]);
+    // A folder's history.
+    app.show_git_history(&root.join("src"));
+    pump(&mut app, "folder history", |a| !a.vcs.log_loading && a.vcs.log_filter.path.as_deref() == Some("src/") && a.vcs.log.len() == 3);
+
+    // More than a page: Load More brings the rest, once.
+    for i in 0..crate::vcs::LOG_PAGE {
+        git(&root, &["commit", "-q", "--allow-empty", "-m", &format!("Empty {i}")]);
+    }
+    apply(&mut app, crate::vcs::LogFilter::default(), "first page", crate::vcs::LOG_PAGE);
+    assert!(app.vcs.log_more);
+    app.vcs.load_more_log();
+    pump(&mut app, "second page", |a| !a.vcs.log_loading && a.vcs.log.len() == crate::vcs::LOG_PAGE + 5);
+    assert!(!app.vcs.log_more);
+    assert_eq!(app.vcs.log.last().unwrap().subject, "Add old.rs");
+}

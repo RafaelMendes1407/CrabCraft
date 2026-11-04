@@ -1,0 +1,7 @@
+# Force Step Into, Force Step Over and Force Run to Cursor in the debugger (D-06, D-28). Import: python3 scripts/i18n_tsv.py debugger scripts/i18n/forced-steps.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Force Step Into	Forzar paso a paso por instrucciones	Forcer le pas à pas détaillé	Forçar intervir	Einzelschritt erzwingen	Wymuś wejście	强制单步执行	強制ステップイン
+Force Step Over	Forzar paso a paso por procedimientos	Forcer le pas à pas principal	Forçar contornar	Prozedurschritt erzwingen	Wymuś przejście	强制单步跳过	強制ステップオーバー
+Force Run to Cursor	Forzar ejecución hasta el cursor	Forcer l'exécution jusqu'au curseur	Forçar execução até o cursor	Ausführung bis zum Cursor erzwingen	Wymuś uruchomienie do kursora	强制运行到光标处	カーソルまで強制実行
+More Stepping Actions	Más acciones de paso	Plus d'actions de pas à pas	Mais ações de passo	Weitere Schrittaktionen	Więcej akcji krokowych	更多单步操作	その他のステップ操作
+This debugger cannot force step into	Este depurador no puede forzar la entrada	Ce débogueur ne peut pas forcer l'entrée	Este depurador não consegue forçar a entrada	Dieser Debugger kann keinen Einzelschritt erzwingen	Ten debuger nie może wymusić wejścia	此调试器无法强制单步执行	このデバッガーは強制ステップインできません

@@ -44,6 +44,17 @@ pub struct WorkspaceState {
 /// What `rustc --explain` answered: its text, or `None` when it has none.
 type ExplainAnswer = Result<Option<String>, rc_cargo::ExplainError>;
 
+/// Breakpoints read back per file from the session, at most.
+const MAX_BREAKPOINTS_PER_FILE: usize = 10_000;
+/// Longest breakpoint group name kept.
+pub const MAX_GROUP_CHARS: usize = 80;
+
+/// A breakpoint group name as typed or read from the session: trimmed, not empty, not too long.
+pub fn clean_group(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name.chars().count() <= MAX_GROUP_CHARS).then(|| name.to_string())
+}
+
 pub struct CrabCraftApp {
     pub settings: Settings,
     pub keymap: Keymap,
@@ -89,6 +100,8 @@ pub struct CrabCraftApp {
     /// Locked and newest versions of the dependencies of an open `Cargo.toml`, with their
     /// docs.rs icons.
     pub dep_versions: crate::dep_versions::DepVersions,
+    /// Offline inspections of the open `Cargo.toml` (I-22).
+    pub manifest_inspections: crate::manifest_inspect::ManifestInspections,
     /// The scan for the `cfg` uses of a Cargo feature (N-13).
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
@@ -171,6 +184,9 @@ pub struct CrabCraftApp {
     pub shift_taps: (f64, u8, bool),
     pub ctrl_taps: (f64, u8, bool),
     pub session_dirty: bool,
+    /// The patterns of automatic attach (D-15), as typed, and the watch while it runs.
+    pub auto_attach_text: String,
+    pub auto_attach: Option<crate::auto_attach::Watch>,
     pub last_session_save: f64,
     /// Editor keeps the focus when the window regains it.
     pub had_focus: bool,
@@ -299,6 +315,7 @@ impl CrabCraftApp {
             triple_load: None,
             triple_filter: String::new(),
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
+            manifest_inspections: crate::manifest_inspect::ManifestInspections::new(waker.clone()),
             feature_search: Default::default(),
             copyright: Default::default(),
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
@@ -339,6 +356,8 @@ impl CrabCraftApp {
             shift_taps: (0.0, 0, false),
             ctrl_taps: (0.0, 0, false),
             session_dirty: false,
+            auto_attach_text: String::new(),
+            auto_attach: None,
             last_session_save: 0.0,
             had_focus: true,
             settings,
@@ -405,6 +424,7 @@ impl CrabCraftApp {
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
         self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
+        self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -417,6 +437,9 @@ impl CrabCraftApp {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.runner.compounds = session.compounds.clone();
+        // The session file is the user's to edit: empty or overlong folder names are dropped.
+        self.runner.folders = session.config_folders.iter().filter(|(_, f)| !f.trim().is_empty() && f.chars().count() <= crate::runner::MAX_FOLDER_CHARS).map(|(c, f)| (c.clone(), f.trim().to_string())).collect();
+        self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
         self.runner.test_configs = session.test_configs.clone();
         self.runner.options = session.run_options.clone();
         // Configurations stored in the project win over the session's copy.
@@ -545,6 +568,12 @@ impl CrabCraftApp {
     }
 
     /// Saves and commits, with the Rust files of the commit formatted if that was asked for.
+    /// Git › Show History: the Log of the Git window, for this file or folder only (V-06).
+    pub fn show_git_history(&mut self, path: &Path) {
+        self.vcs.show_file_history(path);
+        self.dock.show(ToolWindow::Git);
+    }
+
     pub fn commit_changes(&mut self, push: bool) {
         self.save_all_docs();
         let format = self.commit_format();
@@ -1205,6 +1234,7 @@ impl CrabCraftApp {
             self.save_session();
         }
         self.workspace = None;
+        self.auto_attach = None;
         self._watcher = None;
         self.insight.stop();
         self.runner.stop_all();
@@ -1231,6 +1261,7 @@ impl CrabCraftApp {
         self.nav_back.clear();
         self.nav_forward.clear();
         self.copyright.close();
+        self.explorer.scopes.close();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1285,6 +1316,43 @@ impl CrabCraftApp {
             }
         }
         for (path, bps) in &s.breakpoints {
+            // Breakpoints of files that are not open are kept until the file opens (D-27).
+            if self.docs.index_of(path).is_none() {
+                let disabled = s.disabled_breakpoints.get(path);
+                let logs = s.logpoints.get(path);
+                let mut kept = std::collections::BTreeMap::new();
+                for (line, cond) in bps.iter().take(MAX_BREAKPOINTS_PER_FILE) {
+                    let cond = cond.as_ref().filter(|c| !c.is_empty());
+                    let log = logs.and_then(|l| l.iter().find(|(n, _)| n == line)).map(|(_, m)| m.clone());
+                    let kind = if disabled.is_some_and(|d| d.contains(line)) {
+                        rc_editor::BreakpointKind::Disabled
+                    } else if log.is_some() {
+                        rc_editor::BreakpointKind::Log
+                    } else if cond.is_some() {
+                        rc_editor::BreakpointKind::Conditional
+                    } else {
+                        rc_editor::BreakpointKind::Normal
+                    };
+                    if let Some(c) = cond {
+                        self.debugger.conditions.insert((path.clone(), *line), c.clone());
+                    }
+                    if let Some(m) = log {
+                        self.debugger.logs.insert((path.clone(), *line), m);
+                    }
+                    kept.insert(*line, kind);
+                }
+                for line in s.remove_once_hit.get(path).into_iter().flatten() {
+                    self.debugger.once.insert((path.clone(), *line));
+                }
+                if !kept.is_empty() {
+                    self.docs.closed_breakpoints.insert(path.clone(), kept);
+                }
+            }
+            for (line, group) in s.breakpoint_groups.get(path).into_iter().flatten() {
+                if let Some(g) = clean_group(group) {
+                    self.debugger.groups.insert((path.clone(), *line), g);
+                }
+            }
             if let Some(i) = self.docs.index_of(path) {
                 for (line, cond) in bps {
                     let cond = cond.as_ref().filter(|c| !c.is_empty());
@@ -1325,13 +1393,8 @@ impl CrabCraftApp {
                 OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
             })
             .collect();
-        let breakpoints = self
-            .docs
-            .list
-            .iter()
-            .filter(|d| !d.editor.breakpoints.is_empty())
-            .map(|d| (d.path.clone(), d.editor.breakpoints.keys().map(|l| (*l, self.debugger.conditions.get(&(d.path.clone(), *l)).cloned())).collect()))
-            .collect();
+        let all_breakpoints = self.docs.all_breakpoints();
+        let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
         let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
             files,
@@ -1346,6 +1409,8 @@ impl CrabCraftApp {
             },
             run_configuration: self.runner.selected_config().map(|c| c.name.clone()),
             compounds: self.runner.compounds.clone(),
+            config_folders: self.runner.folders.clone(),
+            auto_attach: self.auto_attach_text.clone(),
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
             excluded: self.explorer.excluded.clone(),
@@ -1354,17 +1419,18 @@ impl CrabCraftApp {
             cargo_features: self.cargo_features.clone(),
             cargo_target: self.cargo_target.clone().unwrap_or_default(),
             copyright: self.copyright.profile.clone(),
+            scopes: self.explorer.scopes.user.clone(),
+            file_colors: self.explorer.scopes.colors.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
             bookmarks: self.docs.bookmarks().into_iter().map(|(path, lines)| (path, lines.into_iter().collect())).collect(),
-            disabled_breakpoints: self
-                .docs
-                .list
+            disabled_breakpoints: all_breakpoints
                 .iter()
-                .map(|d| (d.path.clone(), d.editor.breakpoints.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
+                .map(|(p, b)| (p.clone(), b.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
                 .filter(|(_, v)| !v.is_empty())
                 .collect(),
+            breakpoint_groups: group_lines(self.debugger.groups.iter().filter(|((p, l), _)| all_breakpoints.get(p).is_some_and(|b| b.contains_key(l))).map(|((p, l), g)| (p.clone(), (*l, g.clone())))),
         }
     }
 
@@ -1436,10 +1502,19 @@ impl CrabCraftApp {
                     let preview = crate::refactor_preview::RefactorPreview::start(title, &edit, open, self.waker.clone());
                     self.dialog = Some(Dialog::RefactorPreview(Box::new(preview)));
                 }
+                InsightOutput::RefactorConflicts(review) => self.dialog = Some(Dialog::RefactorConflicts(review)),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
             }
         }
+    }
+
+    /// "Continue anyway" on a rename's conflicts: applies its edits, or previews them.
+    pub fn continue_refactoring(&mut self, review: crate::refactor_conflicts::Review) {
+        let Some(edit) = review.edit else { return };
+        let mut out = Vec::new();
+        crate::insight::finish_rename(&mut self.docs, edit, review.preview, &mut out);
+        self.handle_insight(out);
     }
 
     /// Runs a code-insight action from the editor's keymap on the active document.
@@ -1468,26 +1543,42 @@ impl CrabCraftApp {
                 return;
             }
         }
-        // The quick fix of an outdated dependency (C-04) is made here, not by a server.
+        // The quick fixes of an outdated dependency (C-04) and of the manifest inspections (I-22)
+        // are made here, not by a server.
         if action == Action::ShowIntentions && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
             let doc = &self.docs.list[i];
             let line = doc.editor.caret_line_col().0;
-            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
-                let version = version.to_string();
-                let command = rc_lsp::lsp_types::Command {
-                    title: trf("Update to {version}", &[("version", &version)]),
-                    command: crate::insight::UPDATE_DEPENDENCY_COMMAND.to_string(),
-                    arguments: Some(vec![serde_json::json!(line), serde_json::json!(version)]),
-                };
-                let action = rc_lsp::lsp_types::CodeAction {
-                    title: command.title.clone(),
+            let quick_fix = |title: String, command: &str, arguments: Vec<serde_json::Value>| {
+                let command = rc_lsp::lsp_types::Command { title: title.clone(), command: command.to_string(), arguments: Some(arguments) };
+                rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(rc_lsp::lsp_types::CodeAction {
+                    title,
                     kind: Some(rc_lsp::lsp_types::CodeActionKind::QUICKFIX),
                     command: Some(command),
                     ..Default::default()
-                };
-                self.dialog = Some(Dialog::CodeActions { list: vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(action)], selected: 0 });
+                })
+            };
+            let mut list = Vec::new();
+            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
+                let version = version.to_string();
+                list.push(quick_fix(trf("Update to {version}", &[("version", &version)]), crate::insight::UPDATE_DEPENDENCY_COMMAND, vec![serde_json::json!(line), serde_json::json!(version)]));
+            }
+            for fix in self.manifest_inspections.fixes_on_line(doc, line) {
+                let args = vec![serde_json::json!(fix.start), serde_json::json!(fix.end), serde_json::json!(fix.old), serde_json::json!(fix.new)];
+                list.push(quick_fix(crate::manifest_inspect::fix_title(&fix), crate::insight::MANIFEST_FIX_COMMAND, args));
+            }
+            if !list.is_empty() {
+                self.dialog = Some(Dialog::CodeActions { list, selected: 0 });
                 return;
             }
+        }
+        // A name hidden behind a Cargo feature (C-10): the IDE's fixes, then the server's.
+        if action == Action::ShowIntentions {
+            let fixes: Vec<_> = self.feature_fixes(i).iter().map(crate::feature_fix::FeatureFix::action).collect();
+            if !fixes.is_empty() && !self.insight.ready() {
+                self.dialog = Some(Dialog::CodeActions { list: fixes, selected: 0 });
+                return;
+            }
+            self.insight.local_fixes = fixes;
         }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
@@ -1574,6 +1665,24 @@ impl CrabCraftApp {
             d.editor.replace(start, end, &edit.text);
         }
         self.notify(message, false);
+    }
+
+    /// Settings › Scopes: the project's scopes and file colours, saved with its session.
+    pub fn set_scopes(&mut self, draft: crate::scopes::Draft) {
+        if self.explorer.scopes.draft() != draft {
+            self.explorer.scopes.set(&draft.user, &draft.colors);
+            self.session_dirty = true;
+        }
+    }
+
+    /// Keeps the Changed Files scope in step with git's status (workspace-relative paths).
+    fn sync_changed_scope(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let vcs = &self.vcs;
+        self.explorer.scopes.sync_changed(vcs.status_version, || {
+            let Some(repo) = vcs.root() else { return Default::default() };
+            vcs.changes().iter().filter_map(|c| rc_core::workspace::relative_path(&root, &repo.join(&c.path))).collect()
+        });
     }
 
     /// Settings › Copyright: the profile of the project, saved with its session.
@@ -1920,9 +2029,29 @@ impl CrabCraftApp {
                     self.notify(tr("Attaching needs an open Rust project"), false);
                 }
             }
-            Action::RunToCursor => {
+            Action::ViewBreakpoints => self.dialog = Some(Dialog::Breakpoints { selected: None, group: String::new() }),
+            Action::RunToCursor | Action::ForceRunToCursor => {
                 if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
-                    self.debugger.run_to_cursor(&path, line);
+                    self.debugger.run_to_cursor(&path, line, action == Action::ForceRunToCursor);
+                }
+            }
+            Action::SetExecutionPoint => {
+                if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
+                    self.debugger.set_execution_point(&path, line);
+                }
+            }
+            Action::ForceStepOver => {
+                if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
+                    s.force_step_over();
+                }
+            }
+            Action::ForceStepInto => {
+                if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
+                    if s.can_force_step_in() {
+                        s.force_step_in();
+                    } else {
+                        self.notify(tr("This debugger cannot force step into"), false);
+                    }
                 }
             }
             Action::ToggleHexValues => self.toggle_hex_values(),
@@ -1980,6 +2109,7 @@ impl CrabCraftApp {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.is_empty() && !t.contains('\n'));
                     let fif = self.find_in_files.get_or_insert_with(|| crate::search::FindInFiles::new(&root, self.waker.clone(), String::new()));
                     fif.excluded = self.explorer.excluded.clone();
+                    fif.only = self.explorer.scopes.filter(&fif.scope).map_err(|e| e.text());
                     if let Some(t) = text {
                         fif.query = t;
                     }
@@ -2424,6 +2554,7 @@ impl CrabCraftApp {
     /// Opens the settings on `page`.
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
         self.copyright.draft = None;
+        self.explorer.scopes.draft = None;
         self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
     }
 
@@ -2493,6 +2624,23 @@ impl CrabCraftApp {
                 self.open_at(&request.path, line - 1, request.column.unwrap_or(1).saturating_sub(1));
             }
             _ => self.open_path(&request.path),
+        }
+    }
+
+    /// Opens a folder in a CrabCraft window of its own: a new process started as
+    /// `crabcraft -- <folder>`, which asks for trust like any project it opens.
+    pub fn open_in_new_window(&mut self, path: &Path) {
+        if !path.is_absolute() || !path.is_dir() {
+            self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the folder does not exist"))]), true);
+            return;
+        }
+        let spawned = std::env::current_exe().and_then(|exe| {
+            std::process::Command::new(exe).arg("--").arg(path).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+        });
+        match spawned {
+            // Reap it when it exits so it does not linger as a zombie.
+            Ok(mut child) => drop(std::thread::Builder::new().name("new-window".into()).spawn(move || child.wait())),
+            Err(e) => self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &e)]), true),
         }
     }
 
@@ -2630,6 +2778,7 @@ impl CrabCraftApp {
                 ExplorerAction::Delete(path) => self.dialog = Some(Dialog::ConfirmDelete { path }),
                 ExplorerAction::CopyPath(path) => ctx.copy_text(path.display().to_string()),
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
+                ExplorerAction::ShowHistory(path) => self.show_git_history(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
                 ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
                 ExplorerAction::ManagePackages(project) => {
@@ -2975,6 +3124,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_inspection();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
+        self.poll_auto_attach();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);
@@ -2990,12 +3140,17 @@ impl eframe::App for CrabCraftApp {
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
+        self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch);
         self.poll_feature_search();
         self.poll_playground(&ctx);
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
         }
+        if let Some(text) = self.vcs.clipboard.take() {
+            ctx.copy_text(text);
+        }
+        self.sync_changed_scope();
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

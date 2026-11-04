@@ -65,6 +65,8 @@ pub struct Docs {
     pub pool: ParserPool,
     /// Bookmarks of files that are not open.
     pub closed_bookmarks: BTreeMap<PathBuf, BTreeSet<usize>>,
+    /// Breakpoints of files that are not open (D-27): they stay set, and come back with the file.
+    pub closed_breakpoints: BTreeMap<PathBuf, BTreeMap<usize, rc_editor::BreakpointKind>>,
     /// Recently opened files, most recent first (⌘E).
     pub recent: Vec<PathBuf>,
     /// Folders whose files open read-only: the dependencies Cargo downloaded.
@@ -168,7 +170,7 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None, style_root: None }
+        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), closed_breakpoints: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None, style_root: None }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -209,6 +211,7 @@ impl Docs {
         }
         let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
+        editor.breakpoints = self.closed_breakpoints.remove(&path).unwrap_or_default();
         let saved = editor.buffer.snapshot();
         let scratch = rc_core::scratch::is_in(&rc_core::paths::scratches_dir(), &path);
         // Only files of the project follow its style (scratches and dependencies do not).
@@ -259,6 +262,36 @@ impl Docs {
     fn keep_bookmarks(&mut self, doc: &Doc) {
         if !doc.editor.bookmarks.is_empty() {
             self.closed_bookmarks.insert(doc.path.clone(), doc.editor.bookmarks.clone());
+        }
+        if !doc.editor.breakpoints.is_empty() {
+            // What the debugger said of them (verified or not) no longer holds once closed.
+            let kept = doc.editor.breakpoints.iter().map(|(l, k)| (*l, settled(*k))).collect();
+            self.closed_breakpoints.insert(doc.path.clone(), kept);
+        }
+    }
+
+    /// Every breakpoint, open file or not, by file.
+    pub fn all_breakpoints(&self) -> BTreeMap<PathBuf, BTreeMap<usize, rc_editor::BreakpointKind>> {
+        let mut all = self.closed_breakpoints.clone();
+        all.extend(self.list.iter().filter(|d| !d.editor.breakpoints.is_empty()).map(|d| (d.path.clone(), d.editor.breakpoints.clone())));
+        all
+    }
+
+    /// The breakpoints of `path`, in its editor or kept for the closed file.
+    pub fn breakpoints_mut(&mut self, path: &Path) -> Option<&mut BTreeMap<usize, rc_editor::BreakpointKind>> {
+        match self.index_of(path) {
+            Some(i) => Some(&mut self.list[i].editor.breakpoints),
+            None => self.closed_breakpoints.get_mut(path),
+        }
+    }
+
+    /// Removes a breakpoint, in a closed file too.
+    pub fn remove_breakpoint(&mut self, path: &Path, line: usize) {
+        if let Some(bps) = self.breakpoints_mut(path) {
+            bps.remove(&line);
+        }
+        if self.closed_breakpoints.get(path).is_some_and(BTreeMap::is_empty) {
+            self.closed_breakpoints.remove(path);
         }
     }
 
@@ -472,5 +505,13 @@ mod tests {
         docs.open_preview(&dir.path().join("d.cs")).unwrap();
         assert_eq!(docs.list.len(), 3);
         assert_eq!(docs.active_doc().unwrap().name(), "d.cs");
+    }
+}
+
+/// A breakpoint kind without what a debug session added (verified or not bound).
+pub fn settled(kind: rc_editor::BreakpointKind) -> rc_editor::BreakpointKind {
+    match kind {
+        rc_editor::BreakpointKind::Verified | rc_editor::BreakpointKind::Invalid => rc_editor::BreakpointKind::Normal,
+        k => k,
     }
 }

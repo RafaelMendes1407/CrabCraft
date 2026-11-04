@@ -38,6 +38,7 @@ enum TabCommand {
     Blame(usize),
     Diff(usize),
     LocalHistory(usize),
+    GitHistory(usize),
     Split(usize, bool),
     Float(usize),
     Rename(usize),
@@ -742,7 +743,9 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, full: Rect, window:
             if doc.is_modified() {
                 title.push_str(" *");
             }
-            let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color: if colors { file_color(&doc.path) } else { None }, draggable: true };
+            // The project's file colours (Settings › Scopes) first, then the kind of file.
+            let color = if colors { app.explorer.scopes.color_of(&doc.path).or_else(|| file_color(&doc.path)) } else { None };
+            let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color, draggable: true };
             let (resp, close) = theme::tab_ex(ui, selected, Some(icons::for_file(&doc.name())), &title, true, style);
             rects.push(resp.rect);
             // With several groups, the one that has the keyboard is underlined.
@@ -891,6 +894,10 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, 
                 commands.push(TabCommand::Diff(i));
                 ui.close();
             }
+            if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
+                commands.push(TabCommand::GitHistory(i));
+                ui.close();
+            }
         }
         if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Local History"), false).clicked() {
             commands.push(TabCommand::LocalHistory(i));
@@ -948,6 +955,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
             | TabCommand::Blame(i)
             | TabCommand::Diff(i)
             | TabCommand::LocalHistory(i)
+            | TabCommand::GitHistory(i)
             | TabCommand::Rename(i)
             | TabCommand::Split(i, _)
             | TabCommand::Float(i)
@@ -1009,6 +1017,10 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
                 }
             }
             TabCommand::LocalHistory(i) => app.show_local_history(i),
+            TabCommand::GitHistory(i) => {
+                let path = app.docs.list[i].path.clone();
+                app.show_git_history(&path);
+            }
             TabCommand::Locate(i) => {
                 app.docs.activate(i);
                 app.locate_active();

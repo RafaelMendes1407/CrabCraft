@@ -55,6 +55,8 @@ pub enum InsightOutput {
     OpenUrl(String),
     /// The edits of a refactoring, to review before they are applied.
     RefactorPreview { title: String, edit: lsp::WorkspaceEdit },
+    /// A rename with conflicts, for the user to continue or cancel.
+    RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     /// The expansion of the macro call under the caret.
     MacroExpansion { name: String, text: String },
     /// The call tree is ready to show.
@@ -105,6 +107,9 @@ pub const DERIVE_COMMAND: &str = "crabcraft.derive";
 pub const SUPPRESS_COMMAND: &str = "crabcraft.suppress";
 /// Local command: updates the version requirement of a `Cargo.toml` dependency (line, version).
 pub const UPDATE_DEPENDENCY_COMMAND: &str = "crabcraft.update-dependency";
+/// Local command: a `Cargo.toml` inspection quick fix (start and end chars, the text there,
+/// its replacement).
+pub const MANIFEST_FIX_COMMAND: &str = "crabcraft.manifest-fix";
 
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
@@ -177,6 +182,11 @@ pub struct Insight {
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     /// The text the positions of `problems` refer to, for files that are not open.
     pub problem_text: BTreeMap<PathBuf, rc_text::Rope>,
+    /// The features rustc says hide what a diagnostic is about, per file and diagnostic message
+    /// (from the rendered `cargo check` output rust-analyzer passes along), for C-10.
+    pub feature_gates: HashMap<PathBuf, Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)>>,
+    /// IDE quick fixes listed before the server's in the next Alt+Enter popup.
+    pub local_fixes: Vec<lsp::CodeActionOrCommand>,
     raw_items: Vec<lsp::CompletionItem>,
     completion: Option<CompletionRequest>,
     /// The completion item whose documentation was asked for (`None` pending: resolved).
@@ -201,8 +211,10 @@ pub struct Insight {
     /// A navigation asked for while the projects were still loading: repeated once they are.
     nav_retry: Option<(NavKind, NavOrigin)>,
     rename_prepare: Option<(u64, usize, Pending<Value>)>,
-    /// The rename asked for, and whether its edits are previewed instead of applied.
-    rename: Option<(Pending<Option<lsp::WorkspaceEdit>>, Option<String>)>,
+    /// The rename asked for, whether its edits are previewed instead of applied, and the new name.
+    rename: Option<(Pending<Option<lsp::WorkspaceEdit>>, Option<String>, String)>,
+    /// Rust: the conflicts of a rename being checked before it is applied or previewed.
+    rename_check: Option<crate::refactor_conflicts::Check>,
     actions: Option<Pending<Option<lsp::CodeActionResponse>>>,
     action_resolve: Option<Pending<lsp::CodeAction>>,
     optimizing: Option<Optimizing>,
@@ -268,6 +280,8 @@ impl Insight {
             env: Vec::new(),
             problems: BTreeMap::new(),
             problem_text: BTreeMap::new(),
+            feature_gates: HashMap::new(),
+            local_fixes: Vec::new(),
             raw_items: Vec::new(),
             completion: None,
             resolve: None,
@@ -286,6 +300,7 @@ impl Insight {
             nav_retry: None,
             rename_prepare: None,
             rename: None,
+            rename_check: None,
             actions: None,
             action_resolve: None,
             optimizing: None,
@@ -517,6 +532,7 @@ impl Insight {
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
+        self.rename_check = None;
         self.actions = None;
         self.action_resolve = None;
         self.optimizing = None;
@@ -589,6 +605,19 @@ impl Insight {
                             Err(_) => Vec::new(),
                         },
                     };
+                    let gates: Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)> = diagnostics
+                        .iter()
+                        .filter_map(|x| {
+                            let rendered = x.data.as_ref()?.get("rendered")?.as_str()?;
+                            let gates = rc_cargo::feature_fix::feature_gates(rendered);
+                            (!gates.is_empty()).then(|| (x.message.clone(), gates))
+                        })
+                        .collect();
+                    if gates.is_empty() {
+                        self.feature_gates.remove(&path);
+                    } else {
+                        self.feature_gates.insert(path.clone(), gates);
+                    }
                     if let Some(d) = doc {
                         d.editor.set_diagnostics(converted.clone());
                     }
@@ -1182,26 +1211,45 @@ impl Insight {
                 Err(e) => out.push(InsightOutput::Message(e.message)),
             }
         }
-        if let Some((p, preview)) = &mut self.rename
+        if let Some((p, preview, name)) = &mut self.rename
             && let Some(r) = p.poll()
         {
-            let preview = preview.take();
+            let (preview, name) = (preview.take(), std::mem::take(name));
             self.rename = None;
             match r {
-                Ok(Some(edit)) if let Some(title) = preview => out.push(InsightOutput::RefactorPreview { title, edit }),
-                Ok(Some(edit)) => match apply_workspace_edit(docs, &edit) {
-                    Ok(files) => out.push(InsightOutput::Message(trf("Renamed in {n} files", &[("n", &files)]))),
-                    Err(e) => out.push(InsightOutput::Message(e)),
-                },
+                // Rust renames are checked for conflicts first (R-04).
+                Ok(Some(edit)) if self.rust => {
+                    let open = docs.list.iter().map(|d| (d.path.clone(), d.editor.buffer.rope().clone())).collect();
+                    self.rename_check = Some(crate::refactor_conflicts::Check::start(name, edit, preview, self.root.clone(), open, self.waker.clone()));
+                }
+                Ok(Some(edit)) => finish_rename(docs, edit, preview, out),
                 Ok(None) => out.push(InsightOutput::Message(tr("Nothing to rename").into())),
+                Err(e) if self.rust => {
+                    let conflicts = crate::refactor_conflicts::server_error(&name, &e.message);
+                    out.push(InsightOutput::RefactorConflicts(Box::new(crate::refactor_conflicts::Review { name, conflicts, edit: None, preview })));
+                }
                 Err(e) => out.push(InsightOutput::Message(e.message)),
+            }
+        }
+        if let Some(conflicts) = self.rename_check.as_ref().and_then(|c| c.poll())
+            && let Some(c) = self.rename_check.take()
+        {
+            if conflicts.is_empty() {
+                finish_rename(docs, c.edit, c.preview, out);
+            } else {
+                out.push(InsightOutput::RefactorConflicts(Box::new(crate::refactor_conflicts::Review { name: c.name, conflicts, edit: Some(c.edit), preview: c.preview })));
             }
         }
         if let Some(p) = &mut self.actions
             && let Some(r) = p.poll()
         {
             self.actions = None;
-            let list = r.ok().flatten().unwrap_or_default();
+            let mut list = r.ok().flatten().unwrap_or_default();
+            // The IDE's own fixes (C-10) come first.
+            let local = std::mem::take(&mut self.local_fixes);
+            if !local.is_empty() && self.optimizing.is_none() && !self.refactor_only && !self.generate_only {
+                list.splice(0..0, local);
+            }
             if self.optimizing.is_some() {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {
@@ -1634,7 +1682,7 @@ impl Insight {
             "textDocument/rename",
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos), "newName": new_name }),
         );
-        self.rename = Some((p, preview));
+        self.rename = Some((p, preview, new_name.to_string()));
     }
 
     /// ⌥⏎: quick fixes and refactorings at the caret / selection.
@@ -2085,6 +2133,17 @@ fn use_block(text: &str) -> Option<(usize, usize)> {
 /// closed files on disk. Returns the number of files changed.
 pub fn apply_workspace_edit(docs: &mut Docs, edit: &lsp::WorkspaceEdit) -> Result<usize, String> {
     apply_file_edits(docs, workspace_edit_files(edit))
+}
+
+/// Applies the edits of a rename, or shows them first when `preview` (the preview's title).
+pub fn finish_rename(docs: &mut Docs, edit: lsp::WorkspaceEdit, preview: Option<String>, out: &mut Vec<InsightOutput>) {
+    match preview {
+        Some(title) => out.push(InsightOutput::RefactorPreview { title, edit }),
+        None => match apply_workspace_edit(docs, &edit) {
+            Ok(files) => out.push(InsightOutput::Message(trf("Renamed in {n} files", &[("n", &files)]))),
+            Err(e) => out.push(InsightOutput::Message(e)),
+        },
+    }
 }
 
 /// The text edits of a workspace edit, per file (file operations are left out).

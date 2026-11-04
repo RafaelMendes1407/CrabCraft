@@ -19,6 +19,8 @@ pub struct CommitOptions {
     pub allow_empty: bool,
     /// Override the author (`Name <email>`).
     pub author: Option<String>,
+    /// Sign the commit (`-S`) or not (`--no-gpg-sign`); `None` follows `commit.gpgsign`.
+    pub sign: Option<bool>,
 }
 
 /// The three versions of a conflicted file (`None` where a side does not have it).
@@ -166,6 +168,11 @@ impl Repository {
         }
         if let Some(a) = &opts.author {
             cmd = cmd.arg(format!("--author={a}"));
+        }
+        match opts.sign {
+            Some(true) => cmd = cmd.arg("--gpg-sign"),
+            Some(false) => cmd = cmd.arg("--no-gpg-sign"),
+            None => {}
         }
         if !opts.only.is_empty() {
             cmd = cmd.args(["--only", "--"]).args(&opts.only);

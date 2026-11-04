@@ -29,6 +29,9 @@ pub enum ConfigKind {
     TestSelection { target: PathBuf, filter: TestFilter },
 }
 
+/// Longest folder name kept.
+pub const MAX_FOLDER_CHARS: usize = 80;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunConfig {
     pub name: String,
@@ -263,6 +266,8 @@ pub struct Runner {
     pub test_configs: Vec<rc_core::session::SavedTestConfig>,
     /// Temporary test configurations, oldest first.
     pub temporary: Vec<RunConfig>,
+    /// Folders of the configurations (B-21): configuration name → folder.
+    pub folders: BTreeMap<String, String>,
     /// Attached Cargo projects (analysed and run with the workspace, not members of it).
     pub attached: Vec<rc_cargo::CargoWorkspace>,
     /// Names of the configurations made for their binaries.
@@ -277,7 +282,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -567,7 +572,45 @@ impl Runner {
     }
 
     /// Removes a saved or temporary test configuration.
+    /// The folder a configuration is in.
+    pub fn folder_of(&self, name: &str) -> Option<&str> {
+        self.folders.get(name).map(String::as_str)
+    }
+
+    /// The folders that hold at least one of the current configurations, sorted.
+    pub fn folder_names(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.configs.iter().filter_map(|c| self.folders.get(&c.name).cloned()).collect();
+        out.sort_by_key(|f| f.to_lowercase());
+        out.dedup();
+        out
+    }
+
+    /// Puts a configuration in a folder (`None`: at the top level). A name that is empty
+    /// after trimming leaves it at the top level.
+    pub fn move_to_folder(&mut self, name: &str, folder: Option<&str>) {
+        match folder.map(str::trim).filter(|f| !f.is_empty()) {
+            Some(f) => {
+                self.folders.insert(name.to_string(), f.chars().take(MAX_FOLDER_CHARS).collect());
+            }
+            None => {
+                self.folders.remove(name);
+            }
+        }
+    }
+
+    /// Renames a folder: its configurations go with it (into an existing folder, they merge).
+    pub fn rename_folder(&mut self, old: &str, new: &str) {
+        let new: String = new.trim().chars().take(MAX_FOLDER_CHARS).collect();
+        if new.is_empty() {
+            return;
+        }
+        for f in self.folders.values_mut().filter(|f| f.as_str() == old) {
+            *f = new.clone();
+        }
+    }
+
     pub fn remove_test_config(&mut self, name: &str) {
+        self.folders.remove(name);
         self.temporary.retain(|c| c.name != name);
         self.test_configs.retain(|t| t.name != name);
         self.configs.retain(|c| !(c.name == name && matches!(c.kind, ConfigKind::TestSelection { .. })));
@@ -602,6 +645,7 @@ impl Runner {
     }
 
     pub fn remove_compound(&mut self, name: &str) {
+        self.folders.remove(name);
         self.compounds.retain(|(n, _)| n != name);
         self.insert_compounds();
         self.selected = self.selected.min(self.configs.len().saturating_sub(1));

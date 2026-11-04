@@ -458,6 +458,69 @@ fn code_is_disassembled_around_the_frame_and_stepped_by_instruction() {
     s.stop();
 }
 
+/// The `setBreakpoints` requests sent after the `index`-th request, as (file, lines).
+fn breakpoint_sets(log: &Path, from: usize) -> Vec<(String, Vec<u64>)> {
+    requests(log)[from..]
+        .iter()
+        .filter(|r| r["command"] == "setBreakpoints")
+        .map(|r| (r["arguments"]["source"]["path"].as_str().unwrap().to_string(), r["arguments"]["breakpoints"].as_array().unwrap().iter().map(|b| b["line"].as_u64().unwrap()).collect()))
+        .collect()
+}
+
+#[test]
+fn forced_steps_take_the_breakpoints_away_until_the_program_stops() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, log) = fake(dir.path(), "late");
+    let mut bps = Breakpoints::new();
+    bps.set(BreakpointSpec::new(calc(), 9));
+    bps.set(BreakpointSpec::new("/w/Other.cs", 3));
+    let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
+    let mut ev = Vec::new();
+    pump_until(&mut s, &mut ev, stopped);
+    let other = |sets: &[(String, Vec<u64>)], file: &str| sets.iter().filter(|(f, _)| f == file).map(|(_, l)| l.clone()).collect::<Vec<_>>();
+
+    // Force Step Over: every file is sent empty before `next`, then sent again at the stop.
+    let before = commands(&log).len();
+    s.force_step_over();
+    assert!(s.ignoring_breakpoints());
+    pump_until(&mut s, &mut ev, stopped);
+    assert!(!s.ignoring_breakpoints());
+    pump_until_state(&mut s, &mut ev, |_| breakpoint_sets(&log, before).len() >= 4);
+    let after: Vec<String> = commands(&log)[before..].to_vec();
+    let next = after.iter().position(|c| c == "next").unwrap();
+    assert_eq!(after[..next].iter().filter(|c| *c == "setBreakpoints").count(), 2);
+    let sets = breakpoint_sets(&log, before);
+    assert_eq!(other(&sets, "/w/Calc.cs"), [vec![], vec![9]]);
+    assert_eq!(other(&sets, "/w/Other.cs"), [vec![], vec![3]]);
+    // The user's breakpoints never changed.
+    assert!(s.breakpoints().get(&calc(), 9).is_some_and(|b| b.spec.enabled));
+
+    // Force Run to Cursor: only the target line stays, in its file; an edit on the way stays
+    // out of the adapter too.
+    let before = commands(&log).len();
+    s.force_continue_to(BreakpointSpec::new(calc(), 15));
+    s.set_breakpoint(BreakpointSpec::new("/w/Other.cs", 7));
+    pump_until(&mut s, &mut ev, stopped);
+    pump_until_state(&mut s, &mut ev, |_| breakpoint_sets(&log, before).len() >= 6);
+    let sets = breakpoint_sets(&log, before);
+    assert_eq!(other(&sets, "/w/Calc.cs"), [vec![], vec![15], vec![9, 15]]);
+    assert_eq!(other(&sets, "/w/Other.cs"), [vec![], vec![], vec![3, 7]]);
+    let continued = commands(&log)[before..].iter().position(|c| c == "continue").unwrap();
+    assert_eq!(commands(&log)[before..][..continued].iter().filter(|c| *c == "setBreakpoints").count(), 3);
+
+    // Force Step Into needs GDB's skip: another adapter does a plain nothing.
+    assert!(!s.can_force_step_in());
+    let before = commands(&log).len();
+    s.force_step_in();
+    assert!(s.state().is_stopped());
+    assert_eq!(commands(&log).len(), before);
+
+    // Ending in the middle of a forced step leaves nothing pending.
+    s.force_step_over();
+    s.stop();
+    assert!(!s.ignoring_breakpoints());
+}
+
 #[test]
 fn logpoints_and_hit_conditions_are_emulated() {
     let dir = tempfile::tempdir().unwrap();
@@ -520,4 +583,24 @@ fn failure_messages_have_templates() {
     let f = Failure::AttachFailed { pid: 42, error: "denied".into() };
     assert_eq!(f.to_string(), "The debugger could not attach to process 42: denied");
     assert_eq!(StopReason::parse("exception").label(), "Paused on exception");
+}
+
+#[test]
+fn reads_the_gdb_version() {
+    assert_eq!(gdb_major(&json!({ "result": "15", "variablesReference": 0 })), Some(15));
+    assert_eq!(gdb_major(&json!({ "result": " 16\n" })), Some(16));
+    assert_eq!(gdb_major(&json!({ "result": "void" })), None);
+    assert_eq!(gdb_major(&json!({})), None);
+}
+
+#[test]
+fn gdb_jumps_only_where_it_was_checked() {
+    let c = gdb_jump(Path::new("/w/src/main.rs"), 6).unwrap();
+    assert!(c.starts_with("python exec(\""));
+    assert!(c.contains(r#"gdb.decode_line(\"\\\"/w/src/main.rs\\\":6\")"#), "{c}");
+    assert!(c.contains("sals[0].line != 6"));
+    assert!(gdb_jump(Path::new("/w/a\"b.rs"), 1).is_none());
+    assert_eq!(goto_error("Python Exception: crabcraft-goto: other function".into()), GotoError::OtherFunction);
+    assert_eq!(goto_error("crabcraft-goto: no code".into()), GotoError::NoCode);
+    assert_eq!(goto_error("boom".into()), GotoError::Adapter("boom".into()));
 }

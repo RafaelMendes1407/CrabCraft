@@ -3,16 +3,18 @@
 
 use crate::app::CrabCraftApp;
 use egui::{Align2, Context, FontId, Id, Rect, Sense, pos2, vec2};
-use rc_cargo::new_project::{NewProject, Template};
+use rc_cargo::new_project::{NewProject, Template, WASM_TARGET, WasmTools};
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{Ico, ico, icons, theme};
 use std::path::PathBuf;
 
 /// Name, description and icon of each template.
-const TEMPLATES: [(Template, &str, &str, Ico); 2] = [
+const TEMPLATES: [(Template, &str, &str, Ico); 4] = [
     (Template::Binary, "Binary", "An executable program with src/main.rs", ico::CONFIG_APP),
     (Template::Library, "Library", "A reusable library with src/lib.rs", ico::LIBRARY),
+    (Template::ProcMacro, "Procedural Macro", "A derive macro built with syn and quote, and an integration test in tests/", ico::ANNOTATION),
+    (Template::WebAssembly, "WebAssembly", "A cdylib library for the web with wasm-bindgen", ico::CONFIG_WEB),
 ];
 
 pub struct NewProjectDialog {
@@ -26,6 +28,10 @@ pub struct NewProjectDialog {
     error: Option<String>,
     inbox: Inbox<Result<PathBuf, String>>,
     focus: bool,
+    /// The WebAssembly tools, looked for in the background the first time that template is shown.
+    wasm_tools: Option<WasmTools>,
+    wasm_asked: bool,
+    wasm_inbox: Inbox<WasmTools>,
 }
 
 /// The folder new projects go to: the last one used, next to the last workspace, or the home.
@@ -44,13 +50,30 @@ impl NewProjectDialog {
     pub fn new(app: &CrabCraftApp, waker: Waker) -> Self {
         let location = default_location(app);
         let name = (1..).map(|i| format!("project{i}")).find(|n| !location.join(n).exists()).unwrap_or_default();
-        NewProjectDialog { template: 0, name, location: location.display().to_string(), git: true, member: false, busy: false, error: None, inbox: Inbox::new(waker), focus: true }
+        NewProjectDialog::with(0, name, location.display().to_string(), true, false, waker)
+    }
+
+    fn with(template: usize, name: String, location: String, git: bool, member: bool, waker: Waker) -> Self {
+        NewProjectDialog {
+            template,
+            name,
+            location,
+            git,
+            member,
+            busy: false,
+            error: None,
+            inbox: Inbox::new(waker.clone()),
+            focus: true,
+            wasm_tools: None,
+            wasm_asked: false,
+            wasm_inbox: Inbox::new(waker),
+        }
     }
 
     /// A new crate in `location`, inside the open project.
     pub fn member(location: &std::path::Path, waker: Waker) -> Self {
         let name = (1..).map(|i| format!("crate{i}")).find(|n| !location.join(n).exists()).unwrap_or_default();
-        NewProjectDialog { template: 1, name, location: location.display().to_string(), git: false, member: true, busy: false, error: None, inbox: Inbox::new(waker.clone()), focus: true }
+        NewProjectDialog::with(1, name, location.display().to_string(), false, true, waker)
     }
 
     fn request(&self) -> NewProject {
@@ -79,6 +102,16 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
                 return false;
             }
             Err(e) => d.error = Some(e),
+        }
+    }
+    if let Some(tools) = d.wasm_inbox.drain().pop() {
+        d.wasm_tools = Some(tools);
+    }
+    if TEMPLATES[d.template].0 == Template::WebAssembly && !d.wasm_asked {
+        d.wasm_asked = true;
+        if let Some(cargo) = rc_cargo::Cargo::locate() {
+            let out = d.wasm_inbox.sender();
+            std::thread::spawn(move || out.send(WasmTools::detect(&cargo)));
         }
     }
     if d.busy {
@@ -145,6 +178,22 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         ru.add_space(14.0);
         if d.member && !rc_cargo::modules::in_workspace(std::path::Path::new(d.location.trim())) {
             ru.label(egui::RichText::new(tr("No [workspace] here: the crate will not join the project")).size(12.0).color(p.warn));
+        }
+        if TEMPLATES[d.template].0 == Template::WebAssembly {
+            match d.wasm_tools {
+                None => {
+                    ru.label(egui::RichText::new(tr("Looking for the WebAssembly tools…")).size(12.0).color(p.muted));
+                }
+                Some(tools) => {
+                    if !tools.target {
+                        let text = trf("The {target} target is not installed. Add it with: rustup target add {target}", &[("target", &WASM_TARGET)]);
+                        ru.label(egui::RichText::new(text).size(12.0).color(p.warn));
+                    }
+                    if !tools.wasm_pack {
+                        ru.label(egui::RichText::new(tr("wasm-pack was not found: install it to package the library for JavaScript")).size(12.0).color(p.warn));
+                    }
+                }
+            }
         }
         ru.label(egui::RichText::new(trf("The project will be created in {path}", &[("path", &req.project_dir().display())])).size(12.0).color(p.muted));
         if let Some(e) = d.error.as_deref().or(problem) {

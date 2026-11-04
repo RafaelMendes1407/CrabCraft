@@ -46,6 +46,8 @@ pub struct Row {
 
 #[derive(Default)]
 pub struct ExplorerState {
+    /// The project is in a Git repository (its files have a history to show).
+    pub git: bool,
     pub expanded: HashSet<String>,
     pub selected: Option<String>,
     pub dir_cache: HashMap<PathBuf, Vec<FileNode>>,
@@ -62,6 +64,8 @@ pub struct ExplorerState {
     pub excluded: Vec<String>,
     /// `Cargo.toml` files of other Cargo projects analysed with the workspace (absolute).
     pub attached: Vec<PathBuf>,
+    /// The project's scopes and file colours (saved in the session).
+    pub scopes: crate::scopes::Scopes,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -76,6 +80,8 @@ pub enum ExplorerAction {
     Rename(PathBuf),
     Delete(PathBuf),
     Reveal(PathBuf),
+    /// Git › Show History of a file or folder (V-06).
+    ShowHistory(PathBuf),
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
     ManagePackages(PathBuf),
@@ -458,6 +464,12 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             let width = ui.available_width().max(200.0);
             let (rect, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
             let selected = selected_index == Some(i);
+            // File colours: a light tint behind the files of a coloured scope.
+            if let NodeKind::File(path) = &row.kind
+                && let Some(c) = state.scopes.color_of(path)
+            {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, c.gamma_multiply(if p.dark { 0.3 } else { 0.18 }));
+            }
             if selected {
                 let color = if state.has_focus { p.selection } else { p.selection_inactive };
                 ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, color);
@@ -514,7 +526,8 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if !in_library {
                 resp.context_menu(|ui| {
                     let rust = rc_cargo::find_manifest(root).is_some();
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, exclusion, &attached, &mut actions);
+                    let git = state.git;
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, git, exclusion, &attached, &mut actions);
                 });
             }
         }
@@ -609,7 +622,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
@@ -715,6 +728,12 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
     }
+    if git {
+        if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
+            actions.push(ExplorerAction::ShowHistory(path.clone()));
+            ui.close();
+        }
+    }
     // A Cargo.toml other than the workspace's: its project can be analysed with it.
     if matches!(row.kind, NodeKind::File(_)) && path.file_name().is_some_and(|n| n == "Cargo.toml") && path.parent() != Some(root) {
         ui.separator();
@@ -758,7 +777,7 @@ mod tests {
     fn click_in_menu(exclusion: Exclusion, label: &str, absent: &str) -> Vec<ExplorerAction> {
         let root = Path::new("/ws");
         let row = Row { key: "dir:/ws/gen".into(), kind: NodeKind::Dir(root.join("gen")), depth: 1, label: "gen".into(), secondary: String::new(), icon: ico::FOLDER, expandable: true };
-        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, exclusion, &[], actions), Vec::new());
+        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, false, exclusion, &[], actions), Vec::new());
         h.run();
         assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
         h.get_by_label(label).click();

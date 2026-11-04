@@ -671,6 +671,102 @@ fn screens_git_tags_and_stashes() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes Git worktree captures to target/snapshots"]
+fn screens_git_worktrees() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let place = place.path().canonicalize().unwrap();
+    let root = place.join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["branch", "release/0.1"]);
+    let wt = |args: &[&str]| git(&[&["worktree", "add", "-q"], args].concat());
+    wt(&["-b", "feature/login", "--", place.join("shop-feature-login").to_str().unwrap()]);
+    wt(&["--", place.join("shop-release-0.1").to_str().unwrap(), "release/0.1"]);
+    wt(&["--detach", "--", place.join("shop-bisect").to_str().unwrap()]);
+    git(&["worktree", "lock", "--reason", "On the USB disk", "--", place.join("shop-release-0.1").to_str().unwrap()]);
+    std::fs::remove_dir_all(place.join("shop-bisect")).unwrap();
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "worktrees", |a| a.vcs.worktrees.len() == 4 && !a.vcs.branches.is_empty());
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Worktrees;
+        app.vcs.selected_worktree = Some(place.join("shop-release-0.1"));
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-worktrees-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AddWorktree { path: String::new(), new_branch: true, name: "fix/rounding".into(), existing: String::new(), path_edited: false });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-add-worktree-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RemoveWorktree { path: place.join("shop-feature-login"), force: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-remove-worktree-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::PruneWorktrees { paths: vec![place.join("shop-bisect")] });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-prune-worktrees-dark.png")).unwrap();
+}
+
+/// V-06 and V-14: the history of a renamed file in the Log, with a signed commit selected.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/git-file-history-dark.png"]
+fn screens_git_file_history() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["config", "commit.gpgsign", "false"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/prices.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    std::fs::write(root.join("README.md"), "# Shop\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Add a readme"]);
+    git(&["mv", "src/prices.rs", "src/lib.rs"]);
+    git(&["commit", "-q", "-m", "Rename prices.rs to lib.rs"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    git(&["commit", "-q", "-am", "Raise prices"]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "the log", |a| a.vcs.log.len() == 4 && !a.vcs.branches.is_empty());
+    h.state_mut().show_git_history(&root.join("src/lib.rs"));
+    run_frames(&mut h, "the history", |a| !a.vcs.log_loading && a.vcs.log.len() == 3);
+    let newest = h.state().vcs.log[0].hash.clone();
+    h.state_mut().vcs.select_commit(&newest);
+    h.state_mut().vcs.signature = Some((newest, rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    run_frames(&mut h, "the files", |a| !a.vcs.commit_files.is_empty());
+    h.state_mut().vcs.signature = Some((h.state().vcs.log[0].hash.clone(), rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-file-history-dark.png")).unwrap();
+}
+
+#[test]
 #[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
 fn screens_insight() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -2065,6 +2161,68 @@ fn cargo_toml_warns_about_unknown_and_outdated_crates() {
     assert!(h.state().insight.problems.get(&path).is_none_or(|l| l.iter().all(|d| d.code.as_deref() != Some(crate::dep_versions::DIAG_CODE))));
 }
 
+/// I-22: the open `Cargo.toml` is inspected offline, on a thread: a misspelled key and a
+/// feature that names a dependency that is not optional get diagnostics (also in the Problems
+/// window) whose Alt+Enter quick fixes correct them in the editor.
+#[test]
+fn cargo_toml_inspections_flag_mistakes_and_fix_them() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    h.state_mut().settings.check_crates_io = false;
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("edition = \"2021\"\n").unwrap() + "edition = \"2021\"\n".len();
+        editor.replace(at, at, "descripton = \"A demo\"\n");
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("extra = []").unwrap();
+        editor.replace(at, at + "extra = []".len(), "extra = [\"dep:serde\"]");
+    }
+    let ours = |a: &CrabCraftApp| -> Vec<String> {
+        let doc = a.docs.active_doc().unwrap();
+        let mut out: Vec<String> = doc.editor.diagnostics.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).map(|d| d.message.clone()).collect();
+        out.sort();
+        out
+    };
+    run_frames(&mut h, "the inspection", |a| !a.manifest_inspections.busy() && ours(a).len() == 2);
+    let got = ours(h.state());
+    assert_eq!(got, vec!["Feature `extra` includes `dep:serde`, but `serde` is not an optional dependency".to_string(), "Unknown key `descripton` in `[package]`; did you mean `description`?".to_string()]);
+    let path = root.join("Cargo.toml");
+    assert_eq!(h.state().insight.problems.get(&path).map_or(0, |l| l.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).count()), 2, "listed in the Problems window");
+
+    // Alt+Enter on each line offers its fix; Enter makes it.
+    for (line_text, title) in [("descripton", "Change to `description`"), ("serde = ", "Make `serde` optional")] {
+        {
+            let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+            let text = editor.buffer.rope().to_string();
+            let at = text.find(line_text).unwrap() + 1;
+            editor.selection = rc_text::Selection::point(at);
+        }
+        h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::new(100.0, 100.0));
+        h.run_steps(1);
+        let titles: Vec<String> = match &h.state().dialog {
+            Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) => list
+                .iter()
+                .map(|a| match a {
+                    rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(a) => a.title.clone(),
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        assert_eq!(titles, vec![title.to_string()]);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        run_frames(&mut h, "the next inspection", |a| !a.manifest_inspections.busy());
+    }
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("\ndescription = \"A demo\"\n"), "{text}");
+    assert!(text.contains("serde = { version = \"1\", features = [\"derive\"], optional = true }") || text.contains("optional = true"), "{text}");
+    run_frames(&mut h, "the diagnostics to go", |a| ours(a).is_empty());
+    assert_eq!(std::fs::read_to_string(&path).unwrap().contains("descripton"), false, "nothing was saved for the user");
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
 fn cargo_dep_versions_capture() {
@@ -2755,4 +2913,398 @@ fn copyright_capture() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("copyright-{}.png", if dark { "dark" } else { "light" }))).unwrap();
     }
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/refactor-conflicts.png"]
+fn refactor_conflicts_capture() {
+    use crate::refactor_conflicts::{Conflict, Review};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(dir.path(), true);
+    let file = root.join("beta/src/lib.rs");
+    let conflicts = vec![
+        Conflict { path: Some(file.clone()), line: 3, col: 7, message: "'NEEDLE_NAME' is already used here".into() },
+        Conflict { path: Some(root.join("target/debug/build/out.rs")), line: 0, col: 3, message: "This file is generated (in the build output folder)".into() },
+        Conflict { path: None, line: 0, col: 0, message: "'fn' is a keyword".into() },
+    ];
+    let review = Review { name: "NEEDLE_NAME".into(), conflicts, edit: Some(Default::default()), preview: None };
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorConflicts(Box::new(review)));
+    h.run_steps(4);
+    assert!(matches!(h.state().dialog, Some(crate::ui::dialogs::Dialog::RefactorConflicts(_))));
+    h.render().unwrap().save(out.join("refactor-conflicts.png")).unwrap();
+}
+
+/// A Cargo project in git with a test, a README and an uncommitted change to `src/lib.rs`;
+/// every file says "needle".
+fn scopes_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    for (file, text) in [
+        ("Cargo.toml", "[package]\nname = \"ws\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n"),
+        ("src/main.rs", "// needle\nfn main() {\n    ws::hello();\n}\n"),
+        ("src/lib.rs", "// needle\npub fn hello() {}\n"),
+        ("src/net.rs", "// needle\npub fn net() {}\n"),
+        ("tests/it.rs", "// needle\n#[test]\nfn it() {}\n"),
+        ("README.md", "needle\n"),
+    ] {
+        std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
+        std::fs::write(root.join(file), text).unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
+    git(&["init", "-q"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Start"]);
+    std::fs::write(root.join("src/lib.rs"), "// needle\npub fn hello() {}\npub fn changed() {}\n").unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "git's status", |a| a.vcs.status.is_some());
+    (h, root)
+}
+
+/// The files Find in Files found, sorted.
+fn found_in_scope(h: &mut Harness<'static, CrabCraftApp>) -> Vec<String> {
+    run_frames(h, "Find in Files", |a| a.find_in_files.as_ref().is_some_and(|f| f.summary.is_some() || f.error.is_some()));
+    let mut v: Vec<String> = h.state().find_in_files.as_ref().map(|f| f.results.iter().map(|r| r.rel.clone()).collect()).unwrap_or_default();
+    v.sort();
+    v
+}
+
+/// Settings › Scopes defines a scope and file colours (saved with the session); the colours
+/// follow the scopes and git's changes; Find in Files' scope picker narrows the search, and a
+/// scope whose pattern does not parse is an error, not a crash.
+#[test]
+fn scopes_narrow_find_in_files_and_color_files() {
+    use crate::scopes::{CHANGED, TESTS};
+    use egui_kittest::kittest::Queryable;
+    use rc_core::session::{FileColor, NamedScope};
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = scopes_harness(dir.path(), false);
+
+    // Settings › Scopes: a new scope, renamed and given a pattern, and three colours.
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Scopes);
+    h.run_steps(3);
+    h.get_by_label(tr("Add Scope")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Add Color")).click();
+    h.run_steps(2);
+    {
+        let draft = h.state_mut().explorer.scopes.draft.as_mut().unwrap();
+        assert_eq!(draft.user.len(), 1);
+        assert_eq!(draft.colors.len(), 1);
+        draft.user[0] = NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() };
+        draft.colors = vec![
+            FileColor { scope: CHANGED.into(), color: "#e08e3c".into() },
+            FileColor { scope: TESTS.into(), color: "#5fb865".into() },
+            FileColor { scope: "Sources".into(), color: "#4a8fe0".into() },
+        ];
+    }
+    h.run_steps(2);
+    h.get_by_label(tr("OK")).click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert_eq!(h.state().explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }]);
+    h.state_mut().save_session();
+    let saved = rc_core::Session::load(&root);
+    assert_eq!(saved.scopes.len(), 1);
+    assert_eq!(saved.file_colors.len(), 3);
+
+    // Colours: the first scope that holds the file.
+    let rgb = |r, g, b| Some(egui::Color32::from_rgb(r, g, b));
+    let mut color = |rel: &str| h.state_mut().explorer.scopes.color_of(&root.join(rel));
+    assert_eq!(color("src/lib.rs"), rgb(0xe0, 0x8e, 0x3c), "the changed file");
+    assert_eq!(color("tests/it.rs"), rgb(0x5f, 0xb8, 0x65));
+    assert_eq!(color("src/main.rs"), rgb(0x4a, 0x8f, 0xe0));
+    assert_eq!(color("src/net.rs"), None, "left out by the pattern");
+    assert_eq!(color("README.md"), None);
+
+    // Find in Files: every file, then each scope picked in the selector.
+    h.state_mut().pending.push(rc_editor::Action::FindInFiles);
+    h.run_steps(3);
+    h.state_mut().find_in_files.as_mut().unwrap().query = "needle".into();
+    h.state_mut().find_in_files.as_mut().unwrap().search();
+    assert_eq!(found_in_scope(&mut h), ["README.md", "src/lib.rs", "src/main.rs", "src/net.rs", "tests/it.rs"]);
+    let pick = |h: &mut Harness<'static, CrabCraftApp>, from: &str, to: &str| {
+        // The selector shows the scope as its value.
+        h.get_by(|n| n.value().as_deref() == Some(from)).click();
+        h.run_steps(2);
+        // The popup's entry (another window may show the same word).
+        h.get_all_by_label(to).last().unwrap().click();
+        h.run_steps(2);
+        found_in_scope(h)
+    };
+    assert_eq!(pick(&mut h, tr("Project Files"), "Sources"), ["src/lib.rs", "src/main.rs"]);
+    assert_eq!(pick(&mut h, "Sources", tr("Tests")), ["tests/it.rs"]);
+    assert_eq!(pick(&mut h, tr("Tests"), tr("Changed Files")), ["src/lib.rs"]);
+
+    // A pattern that does not parse: an error in the window, no results.
+    h.state_mut().set_scopes(crate::scopes::Draft { user: vec![NamedScope { name: "Broken".into(), pattern: "src/[".into() }], colors: Vec::new() });
+    h.run_steps(2);
+    assert_eq!(pick(&mut h, tr("Changed Files"), "Broken"), Vec::<String>::new());
+    let error = h.state().find_in_files.as_ref().and_then(|f| f.error.clone()).unwrap_or_default();
+    assert!(error.contains("src/["), "{error}");
+    assert!(h.query_by_label(&error).is_some(), "the error is shown");
+
+    // Reopened: the scopes and colours come back from the (untrusted) session file.
+    drop(h);
+    std::fs::write(
+        rc_core::Session::file_for(&root),
+        r##"{ "scopes": [{ "name": "Sources", "pattern": "src/**" }, { "name": "builtin:x", "pattern": "*" }],
+            "file_colors": [{ "scope": "Sources", "color": "#123456" }, { "scope": "Nope", "color": "#ffffff" }, { "scope": "Sources", "color": "red" }] }"##,
+    )
+    .unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+    assert_eq!(app.explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**".into() }]);
+    assert_eq!(app.explorer.scopes.colors, [FileColor { scope: "Sources".into(), color: "#123456".into() }]);
+    assert_eq!(app.explorer.scopes.color_of(&root.join("src/net.rs")), rgb(0x12, 0x34, 0x56));
+}
+
+/// On this repository: a scope of one crate narrows Find in Files to it, and the Tests scope
+/// holds the integration tests and the `*_tests.rs` modules.
+#[test]
+fn scopes_on_the_crabcraft_repository() {
+    use rc_core::session::NamedScope;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+    app.set_scopes(crate::scopes::Draft {
+        user: vec![NamedScope { name: "Search crate".into(), pattern: "crates/rc-search/**/*.rs".into() }],
+        colors: vec![rc_core::session::FileColor { scope: crate::scopes::TESTS.into(), color: "#5fb865".into() }],
+    });
+    let search = |only: Option<rc_search::ScopeFilter>| {
+        let mut f = crate::search::FindInFiles::new(&root, Waker::noop(), "ScopeFilter".into());
+        f.only = Ok(only);
+        f.search();
+        let start = std::time::Instant::now();
+        while f.summary.is_none() && start.elapsed() < std::time::Duration::from_secs(120) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            f.poll();
+        }
+        let mut v: Vec<String> = f.results.iter().map(|r| r.rel.clone()).collect();
+        v.sort();
+        v
+    };
+    let everywhere = search(None);
+    assert!(everywhere.iter().any(|f| f == "crates/rc-app/src/scopes.rs") && everywhere.iter().any(|f| f == "crates/rc-search/src/scope.rs"), "{everywhere:?}");
+    let only = app.explorer.scopes.filter("Search crate").unwrap();
+    assert_eq!(search(only), ["crates/rc-search/src/find.rs", "crates/rc-search/src/lib.rs", "crates/rc-search/src/scope.rs"]);
+    let tests = app.explorer.scopes.filter(crate::scopes::TESTS).unwrap().unwrap();
+    assert!(tests.matches("crates/rc-search/tests/workspace.rs") && tests.matches("crates/rc-app/src/rust_tests.rs"));
+    assert!(!tests.matches("crates/rc-app/src/app.rs"));
+    assert!(app.explorer.scopes.color_of(&root.join("crates/rc-app/src/vcs_tests.rs")).is_some());
+    assert!(app.explorer.scopes.color_of(&root.join("crates/rc-app/src/vcs.rs")).is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/scopes-*.png"]
+fn scopes_capture() {
+    use crate::scopes::{CHANGED, TESTS};
+    use rc_core::session::{FileColor, NamedScope};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = scopes_harness(dir.path(), dark);
+        h.state_mut().set_scopes(crate::scopes::Draft {
+            user: vec![NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }],
+            colors: vec![
+                FileColor { scope: CHANGED.into(), color: "#e08e3c".into() },
+                FileColor { scope: TESTS.into(), color: "#5fb865".into() },
+                FileColor { scope: "Sources".into(), color: "#4a8fe0".into() },
+            ],
+        });
+        for f in ["src/main.rs", "src/net.rs", "tests/it.rs", "src/lib.rs"] {
+            h.state_mut().open_file(&root.join(f));
+        }
+        h.state_mut().explorer.locate(&root.join("tests/it.rs"), None, &root);
+        h.state_mut().explorer.locate(&root.join("src/lib.rs"), None, &root);
+        h.state_mut().pending.push(rc_editor::Action::FindInFiles);
+        h.run_steps(3);
+        let only = h.state().explorer.scopes.filter("Sources").map_err(|e| e.text());
+        if let Some(f) = h.state_mut().find_in_files.as_mut() {
+            f.query = "needle".into();
+            f.scope = "Sources".into();
+            f.only = only;
+            f.search();
+        }
+        found_in_scope(&mut h);
+        h.run_steps(4);
+        let mode = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("scopes-{mode}.png"))).unwrap();
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Scopes);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("scopes-settings-{mode}.png"))).unwrap();
+    }
+}
+
+/// B-21: run configurations go into folders (a submenu each in the selector), folders are
+/// renamed with their configurations, and the folders come back with the session.
+#[test]
+fn run_configurations_are_kept_in_folders() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("trio");
+    std::fs::create_dir_all(root.join("src/bin")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"trio\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    for bin in ["api", "worker", "cli"] {
+        std::fs::write(root.join(format!("src/bin/{bin}.rs")), "fn main() {}\n").unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
+    let name = |h: &Harness<'static, CrabCraftApp>, bin: &str| h.state().runner.app_names().into_iter().find(|n| n.contains(bin)).unwrap();
+    let (api, worker, cli) = (name(&h, "api"), name(&h, "worker"), name(&h, "cli"));
+
+    // New Folder… for one configuration, then another moved into it.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: api.clone(), rename: None, folder: "Servers".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert!(h.state().dialog.is_none());
+    h.state_mut().runner.move_to_folder(&worker, Some("Servers"));
+    assert_eq!(h.state().runner.folder_names(), ["Servers"]);
+    // An empty name is refused by the dialog.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: cli.clone(), rename: None, folder: "   ".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert!(h.state().dialog.is_some());
+    h.state_mut().dialog = None;
+
+    // Renaming the folder takes both with it.
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: api.clone(), rename: Some("Servers".into()), folder: "Back end".into() });
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().runner.folder_of(&api), Some("Back end"));
+    assert_eq!(h.state().runner.folder_of(&worker), Some("Back end"));
+    assert_eq!(h.state().runner.folder_of(&cli), None);
+
+    // The selector lists the folder as a submenu: its configurations are not at the top level.
+    let selected = h.state().runner.selected_config().unwrap().name.clone();
+    h.get_by_label(&selected).click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label_contains("Back end").count() == 2, "the folder and its Rename entry are listed");
+    assert_eq!(h.query_all_by_label(&cli).count(), if selected == cli { 2 } else { 1 });
+    h.get_all_by_label_contains("Back end").next().unwrap().hover();
+    h.run_steps(3);
+    assert!(h.query_by_label(&worker).is_some(), "the submenu holds the folder's configurations");
+
+    // Out of the folder; then the session keeps the rest.
+    h.state_mut().runner.move_to_folder(&worker, None);
+    h.state_mut().save_session();
+    let mut again = test_app(&dir.path().join("home"), true);
+    again.open_workspace(&root);
+    let start = std::time::Instant::now();
+    while again.runner.app_names().len() < 3 && start.elapsed() < std::time::Duration::from_secs(60) {
+        again.poll_cargo_workspace();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert_eq!(again.runner.folder_of(&api), Some("Back end"));
+    assert_eq!(again.runner.folder_of(&worker), None);
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/run-config-folders-dark.png"]
+fn run_config_folders_capture() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("trio");
+    std::fs::create_dir_all(root.join("src/bin")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"trio\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    for bin in ["api", "worker", "cli"] {
+        std::fs::write(root.join(format!("src/bin/{bin}.rs")), "fn main() {}\n").unwrap();
+    }
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root.canonicalize().unwrap());
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
+    for n in h.state().runner.app_names().into_iter().filter(|n| !n.contains("cli")) {
+        h.state_mut().runner.move_to_folder(&n, Some("Back end"));
+    }
+    let selected = h.state().runner.selected_config().unwrap().name.clone();
+    h.get_by_label(&selected).click();
+    h.run_steps(3);
+    h.get_all_by_label_contains("Back end").next().unwrap().hover();
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("run-config-folders-dark.png")).unwrap();
+}
+
+/// D-27: captures the list of every breakpoint, with groups and a closed file.
+#[test]
+#[ignore = "writes target/snapshots/breakpoint-list-dark.png"]
+fn breakpoint_list_capture() {
+    use rc_editor::BreakpointKind;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n").unwrap();
+    std::fs::write(root.join("src/price.rs"), "pub fn double(n: u32) -> u32 {\n    let twice = n * 2;\n    twice\n}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root);
+    app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(1, BreakpointKind::Normal);
+    app.open_file(&main_rs);
+    for line in [3, 4, 5] {
+        app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
+    }
+    app.debugger.conditions.insert((main_rs.clone(), 4), "a > 2".into());
+    app.set_breakpoint_group(&main_rs, 3, Some("Calls"));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    app.set_breakpoint_group(&price_rs, 1, Some("Pricing"));
+    app.set_breakpoint_enabled(&main_rs, 4, false);
+    app.dialog = Some(crate::ui::dialogs::Dialog::Breakpoints { selected: Some((main_rs.clone(), 3)), group: String::new() });
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("breakpoint-list-dark.png")).unwrap();
+}
+
+/// D-15: captures the Attach dialog while it watches for processes by name.
+#[test]
+#[ignore = "writes target/snapshots/auto-attach-dark.png"]
+fn auto_attach_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&dir.path().join("home"), true);
+    app.open_workspace(&root.canonicalize().unwrap());
+    let mut h = harness(app, vec2(1280.0, 720.0));
+    run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    h.state_mut().auto_attach_text = "shop-server*, *-worker".into();
+    assert!(h.state_mut().start_auto_attach());
+    let processes = vec![
+        rc_core::processes::Process { pid: 48211, name: "shop-server".into(), exe: "shop-server".into(), command: "target/debug/shop-server --port 8080".into() },
+        rc_core::processes::Process { pid: 48190, name: "mail-worker".into(), exe: "mail-worker".into(), command: "target/debug/mail-worker".into() },
+    ];
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Attach { filter: String::new(), processes });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("auto-attach-dark.png")).unwrap();
+    h.state_mut().stop_auto_attach();
 }

@@ -110,6 +110,8 @@ pub struct Capabilities {
     pub supports_disassemble_request: bool,
     /// `next`, `stepIn` and `stepOut` accept `granularity` (`"instruction"`).
     pub supports_stepping_granularity: bool,
+    /// The adapter answers `gotoTargets` and `goto` (Set Execution Point).
+    pub supports_goto_targets_request: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

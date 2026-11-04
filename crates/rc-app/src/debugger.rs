@@ -96,6 +96,8 @@ pub struct Debugger {
     pub logs: HashMap<(PathBuf, usize), String>,
     /// Breakpoints that remove themselves at their first stop, by (file, 0-based line).
     pub once: HashSet<(PathBuf, usize)>,
+    /// The group of each breakpoint in one (D-27).
+    pub groups: HashMap<(PathBuf, usize), String>,
     pub show_console: bool,
     /// The Memory tab is shown (instead of Threads & Variables or the Console).
     pub show_memory: bool,
@@ -132,6 +134,7 @@ impl Debugger {
             conditions: HashMap::new(),
             logs: HashMap::new(),
             once: HashSet::new(),
+            groups: HashMap::new(),
             muted: false,
             hex: false,
             inline_frame: None,
@@ -162,18 +165,19 @@ impl Debugger {
         self.conditions.remove(&key);
         self.logs.remove(&key);
         self.once.remove(&key);
+        self.groups.remove(&key);
     }
 
-    /// Breakpoints of every open editor (1-based lines for the adapter).
+    /// Breakpoints of every file, open or not (1-based lines for the adapter).
     fn breakpoints(&self, docs: &Docs) -> Breakpoints {
         let mut bps = Breakpoints::new();
-        for d in &docs.list {
-            for (&line, kind) in &d.editor.breakpoints {
-                let mut spec = BreakpointSpec::new(d.path.clone(), line as u32 + 1);
-                if let Some(c) = self.conditions.get(&(d.path.clone(), line)) {
+        for (path, lines) in docs.all_breakpoints() {
+            for (&line, kind) in &lines {
+                let mut spec = BreakpointSpec::new(path.clone(), line as u32 + 1);
+                if let Some(c) = self.conditions.get(&(path.clone(), line)) {
                     spec = spec.with_condition(c.clone());
                 }
-                if let Some(m) = self.logs.get(&(d.path.clone(), line)) {
+                if let Some(m) = self.logs.get(&(path.clone(), line)) {
                     spec = spec.with_log_message(m.clone());
                 }
                 spec.enabled = !self.muted && *kind != rc_editor::BreakpointKind::Disabled;
@@ -374,44 +378,72 @@ impl Debugger {
         if s.state().is_ended() {
             return;
         }
+        // Files with breakpoints, and those the adapter still has some for (all removed).
+        let mut files = docs.all_breakpoints();
         for d in &docs.list {
-            let current: Vec<WantedBreakpoint> = s.breakpoints().in_file(&d.path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.log_message.clone(), b.spec.enabled)).collect();
-            let wanted: Vec<WantedBreakpoint> = d
-                .editor
-                .breakpoints
+            files.entry(d.path.clone()).or_default();
+        }
+        for p in s.breakpoints().files().map(Path::to_path_buf).collect::<Vec<_>>() {
+            files.entry(p).or_default();
+        }
+        for (path, lines) in &files {
+            let current: Vec<WantedBreakpoint> = s.breakpoints().in_file(path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.log_message.clone(), b.spec.enabled)).collect();
+            let wanted: Vec<WantedBreakpoint> = lines
                 .iter()
                 .map(|(&l, k)| {
-                    let key = (d.path.clone(), l);
+                    let key = (path.clone(), l);
                     (l as u32 + 1, self.conditions.get(&key).cloned(), self.logs.get(&key).cloned(), !self.muted && *k != rc_editor::BreakpointKind::Disabled)
                 })
-                .chain(self.temp.iter().filter(|(p, _)| *p == d.path).map(|(_, l)| (*l, None, None, true)))
+                .chain(self.temp.iter().filter(|(p, _)| p == path).map(|(_, l)| (*l, None, None, true)))
                 .collect();
             let same = current.len() == wanted.len() && wanted.iter().all(|w| current.contains(w));
             if !same {
                 let specs = wanted
                     .into_iter()
                     .map(|(line, cond, log, enabled)| {
-                        let mut spec = BreakpointSpec::new(d.path.clone(), line);
+                        let mut spec = BreakpointSpec::new(path.clone(), line);
                         spec.condition = cond;
                         spec.log_message = log;
                         spec.enabled = enabled;
                         spec
                     })
                     .collect();
-                s.set_file_breakpoints(&d.path, specs);
+                s.set_file_breakpoints(path, specs);
             }
         }
     }
 
-    /// Continues to `line` (0-based) of `path` with a one-shot breakpoint.
-    pub fn run_to_cursor(&mut self, path: &Path, line: usize) {
+    /// Continues to `line` (0-based) of `path` with a one-shot breakpoint; `force` ignores the
+    /// other breakpoints on the way (Force Run to Cursor).
+    pub fn run_to_cursor(&mut self, path: &Path, line: usize, force: bool) {
         if !self.stopped() {
             return;
         }
         self.temp = Some((path.to_path_buf(), line as u32 + 1));
         if let Some(s) = &mut self.session {
-            s.set_breakpoint(BreakpointSpec::new(path.to_path_buf(), line as u32 + 1));
-            s.continue_();
+            let spec = BreakpointSpec::new(path.to_path_buf(), line as u32 + 1);
+            if force {
+                s.force_continue_to(spec);
+            } else {
+                s.set_breakpoint(spec);
+                s.continue_();
+            }
+        }
+    }
+
+    /// Wakes the UI (for work that reports to it from another thread).
+    pub fn waker(&self) -> Waker {
+        self.waker.clone()
+    }
+
+    /// Moves the execution point to `line` (0-based) of `path` without running the code in
+    /// between (Set Execution Point to Cursor).
+    pub fn set_execution_point(&mut self, path: &Path, line: usize) {
+        if !self.stopped() {
+            return;
+        }
+        if let Some(s) = self.session.as_mut().filter(|s| s.can_set_execution_point()) {
+            s.set_execution_point(path, line as u32 + 1);
         }
     }
 
@@ -531,7 +563,7 @@ impl Debugger {
                 }
                 DebugEvent::Stopped(info) => {
                     if let Some((p, l)) = &temp {
-                        let user = docs.list.iter().any(|d| d.path == *p && d.editor.breakpoints.contains_key(&(*l as usize - 1)));
+                        let user = docs.all_breakpoints().get(p).is_some_and(|b| b.contains_key(&(*l as usize).saturating_sub(1)));
                         if !user {
                             session.remove_breakpoint(p, *l);
                         }
@@ -542,9 +574,7 @@ impl Debugger {
                         if self.once.remove(&key) {
                             self.conditions.remove(&key);
                             session.remove_breakpoint(path, *line);
-                            if let Some(i) = docs.index_of(path) {
-                                docs.list[i].editor.breakpoints.remove(&key.1);
-                            }
+                            docs.remove_breakpoint(path, key.1);
                             out.push(DebugOutput::BreakpointsChanged);
                         }
                     }
@@ -589,6 +619,14 @@ impl Debugger {
                     if let Some(c) = &self.console {
                         c.note(&msg);
                     }
+                    out.push(DebugOutput::Notify(msg, true));
+                }
+                DebugEvent::ExecutionPointFailed(e) => {
+                    let msg = match e {
+                        rc_dap::GotoError::OtherFunction => tr("The execution point can only move within the current function").to_string(),
+                        rc_dap::GotoError::NoCode => tr("No statement starts at this line").to_string(),
+                        rc_dap::GotoError::Adapter(m) => trf("Cannot move the execution point: {message}", &[("message", &m)]),
+                    };
                     out.push(DebugOutput::Notify(msg, true));
                 }
                 DebugEvent::Evaluated { id, result, .. } => {

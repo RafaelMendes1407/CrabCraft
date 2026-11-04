@@ -1,0 +1,10 @@
+# Log filters and file history (V-06). Import: python3 scripts/i18n_tsv.py gitlog scripts/i18n/git-log.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Show Git History	Mostrar historial de Git	Afficher l’historique Git	Mostrar histórico do Git	Git-Verlauf anzeigen	Pokaż historię Git	显示 Git 历史	Git 履歴を表示
+All branches	Todas las ramas	Toutes les branches	Todos os branches	Alle Branches	Wszystkie gałęzie	所有分支	すべてのブランチ
+Clear Filters	Borrar filtros	Effacer les filtres	Limpar filtros	Filter zurücksetzen	Wyczyść filtry	清除筛选	フィルターをクリア
+History of {path}	Historial de {path}	Historique de {path}	Histórico de {path}	Verlauf von {path}	Historia {path}	{path} 的历史	{path} の履歴
+Load More	Cargar más	Charger plus	Carregar mais	Mehr laden	Wczytaj więcej	加载更多	さらに読み込む
+No commits match the filters	Ningún commit coincide con los filtros	Aucun commit ne correspond aux filtres	Nenhum commit corresponde aos filtros	Keine Commits entsprechen den Filtern	Żaden commit nie pasuje do filtrów	没有符合筛选条件的提交	フィルターに一致するコミットはありません
+Show every file	Mostrar todos los archivos	Afficher tous les fichiers	Mostrar todos os arquivos	Alle Dateien anzeigen	Pokaż wszystkie pliki	显示所有文件	すべてのファイルを表示
+Text or message	Texto o mensaje	Texte ou message	Texto ou mensagem	Text oder Nachricht	Tekst lub komunikat	文本或消息	テキストまたはメッセージ

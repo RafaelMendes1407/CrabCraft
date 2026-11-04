@@ -182,18 +182,63 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                             ui.label(egui::RichText::new(tr("The workspace has no executable or test projects")).color(rc_kit::pal(ui).muted));
                         }
                         let mut chosen = None;
-                        for (i, c) in app.runner.configs.iter().enumerate() {
+                        let config_item = |ui: &mut egui::Ui, i: usize, c: &crate::runner::RunConfig, chosen: &mut Option<usize>| {
                             // Temporary configurations are told apart, as in RustRover.
                             let temporary = app.runner.is_temporary(&c.name);
                             let label = if temporary { trf("{name} (temporary)", &[("name", &c.name)]) } else { c.name.clone() };
                             if theme::menu_item(ui, Some(c.icon()), &label, i == app.runner.selected).clicked() {
-                                chosen = Some(i);
+                                *chosen = Some(i);
                                 ui.close();
                             }
+                        };
+                        // Configurations in folders (B-21) are listed in a submenu per folder.
+                        for (i, c) in app.runner.configs.iter().enumerate().filter(|(_, c)| app.runner.folder_of(&c.name).is_none()) {
+                            config_item(ui, i, c, &mut chosen);
+                        }
+                        for folder in app.runner.folder_names() {
+                            let holds_selected = app.runner.selected_config().is_some_and(|c| app.runner.folder_of(&c.name) == Some(folder.as_str()));
+                            let text = egui::RichText::new(folder.as_str()).strong();
+                            let text = if holds_selected { text.color(rc_kit::pal(ui).accent) } else { text };
+                            ui.menu_button(text, |ui| {
+                                ui.set_min_width(220.0);
+                                for (i, c) in app.runner.configs.iter().enumerate().filter(|(_, c)| app.runner.folder_of(&c.name) == Some(folder.as_str())) {
+                                    config_item(ui, i, c, &mut chosen);
+                                }
+                            });
                         }
                         if let Some(i) = chosen {
                             app.runner.selected = i;
                             app.session_dirty = true;
+                        }
+                        // Folders of the selected configuration.
+                        if let Some(name) = app.runner.selected_config().map(|c| c.name.clone()) {
+                            ui.separator();
+                            let current = app.runner.folder_of(&name).map(str::to_string);
+                            ui.menu_button(trf("Move “{name}” to Folder", &[("name", &name)]), |ui| {
+                                ui.set_min_width(200.0);
+                                for folder in app.runner.folder_names().into_iter().filter(|f| Some(f) != current.as_ref()) {
+                                    if theme::menu_item(ui, Some(ico::FOLDER), &folder, false).clicked() {
+                                        app.runner.move_to_folder(&name, Some(&folder));
+                                        app.session_dirty = true;
+                                        ui.close();
+                                    }
+                                }
+                                if theme::menu_item(ui, Some(ico::ADD), tr("New Folder…"), false).clicked() {
+                                    app.dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: name.clone(), rename: None, folder: String::new() });
+                                    ui.close();
+                                }
+                                if current.is_some() && theme::menu_item(ui, Some(ico::CLOSE), tr("Out of the Folder"), false).clicked() {
+                                    app.runner.move_to_folder(&name, None);
+                                    app.session_dirty = true;
+                                    ui.close();
+                                }
+                            });
+                            if let Some(folder) = current
+                                && theme::menu_item(ui, Some(ico::EDIT), &trf("Rename Folder “{folder}”…", &[("folder", &folder)]), false).clicked()
+                            {
+                                app.dialog = Some(crate::ui::dialogs::Dialog::ConfigFolder { config: name.clone(), rename: Some(folder.clone()), folder });
+                                ui.close();
+                            }
                         }
                         if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } }) = app.runner.selected_config().cloned() {
                             ui.separator();

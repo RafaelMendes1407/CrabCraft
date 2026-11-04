@@ -35,6 +35,10 @@ pub enum StopReason {
     Other(String),
 }
 
+/// The GDB skip of the standard library ([`crate::gdb`]) is the first one GDB creates.
+const GDB_SKIP_DISABLE: &str = "skip disable 1";
+const GDB_SKIP_ENABLE: &str = "skip enable 1";
+
 /// The function of the Rust runtime every panic passes through.
 const PANIC_FUNCTION: &str = "std::panicking::rust_panic";
 
@@ -255,6 +259,19 @@ pub enum DebugEvent {
     Failed(Failure),
     /// A command (step, continue, pause…) the adapter refused.
     CommandFailed { command: String, message: String },
+    /// Set Execution Point did not move the program.
+    ExecutionPointFailed(GotoError),
+}
+
+/// Why Set Execution Point did not move the program.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GotoError {
+    /// GDB moves the execution point only within the function the program is in.
+    OtherFunction,
+    /// No statement starts at that line.
+    NoCode,
+    /// The adapter refused (its message).
+    Adapter(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -266,6 +283,12 @@ struct VarKey {
 
 enum Purpose {
     Initialize,
+    /// `$_gdb_major`, asked before a GDB `launch`.
+    GdbVersion,
+    /// `gotoTargets`, then `goto` for the first target in this thread.
+    GotoTargets { thread_id: i64 },
+    /// `goto`, or GDB's jump.
+    Goto,
     Launch,
     Config,
     ConfigurationDone,
@@ -301,6 +324,10 @@ struct Handshake {
     config_outstanding: usize,
     configuration_done: bool,
     launch_done: bool,
+    /// The start request waits for `configurationDone`: GDB before 16 runs the program as soon
+    /// as `launch` arrives, and then refuses the breakpoints of every file but the first
+    /// (`notStopped`).
+    launch_after_config: bool,
 }
 
 struct PendingStop {
@@ -357,6 +384,11 @@ pub struct DebugSession {
     /// Thread to resume once the logpoints of an emulated stop are printed.
     continue_after_logs: Option<i64>,
     orphan_breakpoint_events: Vec<Breakpoint>,
+    /// Force Step Over and Force Run to Cursor: until the program stops or ends, the adapter
+    /// has no breakpoint but this one (file, 1-based line). The user's breakpoints are kept.
+    ignoring_breakpoints: Option<Option<(PathBuf, u32)>>,
+    /// Force Step Into: GDB's skip of the standard library is off until the program stops.
+    skip_disabled: bool,
     shutdown_started: bool,
     events: Vec<DebugEvent>,
 }
@@ -407,6 +439,8 @@ impl DebugSession {
             log_evals: Vec::new(),
             continue_after_logs: None,
             orphan_breakpoint_events: Vec::new(),
+            ignoring_breakpoints: None,
+            skip_disabled: false,
             shutdown_started: false,
             events: Vec::new(),
         };
@@ -622,7 +656,8 @@ impl DebugSession {
                 match self.breakpoints.apply_event(&e.breakpoint) {
                     Some(path) => self.events.push(DebugEvent::BreakpointsChanged(path)),
                     None if e.reason != "removed" => self.orphan_breakpoint_events.push(e.breakpoint),
-                    None => {}
+                    // A one-shot breakpoint of the session's own (Set Execution Point).
+                    None => self.orphan_breakpoint_events.retain(|b| b.id.is_none() || b.id != e.breakpoint.id),
                 }
             }
             "thread" => {
@@ -661,13 +696,25 @@ impl DebugSession {
                 Ok(v) => {
                     self.capabilities = serde_json::from_value(v).unwrap_or_default();
                     self.hs.initialize_done = true;
-                    if let (Some(c), Some((command, a))) = (&self.client, self.start_request.take()) {
-                        self.in_flight.push((c.request(command, a), Purpose::Launch));
+                    match &self.client {
+                        Some(c) if self.is_gdb() && self.attach_pid.is_none() => {
+                            let p = c.request("evaluate", json!({ "expression": "$_gdb_major", "context": "repl" }));
+                            self.in_flight.push((p, Purpose::GdbVersion));
+                        }
+                        _ => self.send_start_request(),
                     }
                     self.maybe_configure();
                 }
                 Err(e) => self.fail(Failure::InitializeFailed(e.message)),
             },
+            Purpose::GdbVersion => {
+                let major = r.ok().and_then(|v| gdb_major(&v));
+                if major.is_some_and(|m| m < 16) && !self.hs.configuration_done {
+                    self.hs.launch_after_config = true;
+                } else {
+                    self.send_start_request();
+                }
+            }
             Purpose::Launch => match r {
                 Ok(_) => {
                     self.hs.launch_done = true;
@@ -712,6 +759,9 @@ impl DebugSession {
                     self.events.push(DebugEvent::Log(format!("configurationDone: {}", e.message)));
                 }
                 self.hs.configuration_done = true;
+                if self.hs.launch_after_config {
+                    self.send_start_request();
+                }
                 self.maybe_running();
             }
             Purpose::Threads { generation } => {
@@ -872,6 +922,23 @@ impl DebugSession {
                 }
                 self.flush_logpoints();
             }
+            Purpose::GotoTargets { thread_id } => {
+                let target = r.as_ref().ok().and_then(|v| v.get("targets")?.as_array()?.first()?.get("id")?.as_i64());
+                match (r, target, &self.client) {
+                    (Err(e), _, _) => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::Adapter(e.message))),
+                    (Ok(_), None, _) => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::NoCode)),
+                    (Ok(_), Some(id), Some(c)) => {
+                        let p = c.request("goto", json!({ "threadId": thread_id, "targetId": id }));
+                        self.in_flight.push((p, Purpose::Goto));
+                    }
+                    (Ok(_), Some(_), None) => {}
+                }
+            }
+            Purpose::Goto => {
+                if let Err(e) = r {
+                    self.events.push(DebugEvent::ExecutionPointFailed(goto_error(e.message)));
+                }
+            }
             Purpose::Command(command) => {
                 if let Err(e) = r {
                     self.events.push(DebugEvent::CommandFailed { command: command.to_string(), message: e.message });
@@ -882,6 +949,13 @@ impl DebugSession {
     }
 
     // ---- Handshake ----------------------------------------------------------------------------
+
+    /// Sends `launch` or `attach` (once).
+    fn send_start_request(&mut self) {
+        if let (Some(c), Some((command, a))) = (&self.client, self.start_request.take()) {
+            self.in_flight.push((c.request(command, a), Purpose::Launch));
+        }
+    }
 
     fn maybe_configure(&mut self) {
         if !self.hs.initialize_done || !self.hs.initialized_event || self.hs.configuring || self.client.is_none() {
@@ -929,7 +1003,11 @@ impl DebugSession {
 
     fn send_breakpoints(&mut self, path: &Path, during_config: bool) {
         let Some(c) = &self.client else { return };
-        let (lines, bps) = self.breakpoints.request_for(path, self.emulation());
+        let (mut lines, mut bps) = self.breakpoints.request_for(path, self.emulation());
+        if let Some(keep) = &self.ignoring_breakpoints {
+            let kept = |line: u32| keep.as_ref().is_some_and(|(p, l)| p == path && *l == line);
+            (lines, bps) = lines.into_iter().zip(bps).filter(|(l, _)| kept(*l)).unzip();
+        }
         let p = c.request("setBreakpoints", args::set_breakpoints(path, &bps));
         if during_config {
             self.hs.config_outstanding += 1;
@@ -984,6 +1062,7 @@ impl DebugSession {
             }
             return;
         }
+        self.end_forced_step();
         self.invalidate();
         let generation = self.generation;
         let thread_id = ev.thread_id;
@@ -1180,6 +1259,9 @@ impl DebugSession {
 
     /// Disconnects and makes sure the adapter (and a launched debuggee) are gone after a grace.
     fn shutdown(&mut self) {
+        // Nothing to give back to an adapter that is going away.
+        self.ignoring_breakpoints = None;
+        self.skip_disabled = false;
         if let Some(c) = &self.prep_cancel {
             c.cancel();
         }
@@ -1244,6 +1326,112 @@ impl DebugSession {
             return;
         }
         self.resume_with(if over { "next" } else { "stepIn" }, Some("instruction"));
+    }
+
+    /// Whether Force Step Into can step into the code Step Into skips (GDB's skip of the
+    /// standard library); other adapters filter their steps in ways the session cannot lift.
+    pub fn can_force_step_in(&self) -> bool {
+        self.is_gdb()
+    }
+
+    /// Step Into that also enters the standard library: GDB's skip is turned off until the
+    /// program stops. Does nothing when [`Self::can_force_step_in`] is false.
+    pub fn force_step_in(&mut self) {
+        if !self.can_force_step_in() || !self.state.is_stopped() {
+            return;
+        }
+        self.gdb_command(GDB_SKIP_DISABLE);
+        self.skip_disabled = true;
+        self.step_in();
+    }
+
+    /// Step Over that does not stop at the breakpoints of the code it runs.
+    pub fn force_step_over(&mut self) {
+        if !self.state.is_stopped() {
+            return;
+        }
+        self.ignore_breakpoints(None);
+        self.step_over();
+    }
+
+    /// Continues to `spec` (a one-shot breakpoint the caller removes) without stopping at any
+    /// other breakpoint on the way.
+    pub fn force_continue_to(&mut self, spec: BreakpointSpec) {
+        if !self.state.is_stopped() {
+            return;
+        }
+        self.ignore_breakpoints(Some((spec.path.clone(), spec.line)));
+        self.set_breakpoint(spec);
+        self.continue_();
+    }
+
+    /// Whether the adapter has the breakpoints taken away by a forced step right now.
+    pub fn ignoring_breakpoints(&self) -> bool {
+        self.ignoring_breakpoints.is_some()
+    }
+
+    /// Takes every breakpoint but `keep` from the adapter until the program stops.
+    fn ignore_breakpoints(&mut self, keep: Option<(PathBuf, u32)>) {
+        self.ignoring_breakpoints = Some(keep);
+        self.send_all_breakpoints();
+    }
+
+    fn send_all_breakpoints(&mut self) {
+        if !self.live() {
+            return;
+        }
+        let files: Vec<PathBuf> = self.breakpoints.files().map(Path::to_path_buf).collect();
+        for f in files {
+            self.send_breakpoints(&f, false);
+        }
+    }
+
+    /// The program stopped after a forced step: the adapter gets back the user's breakpoints
+    /// and the skip of the standard library.
+    fn end_forced_step(&mut self) {
+        if self.ignoring_breakpoints.take().is_some() {
+            self.send_all_breakpoints();
+        }
+        if std::mem::take(&mut self.skip_disabled) {
+            self.gdb_command(GDB_SKIP_ENABLE);
+        }
+    }
+
+    /// Runs a GDB command whose answer nobody reads.
+    fn gdb_command(&mut self, command: &str) {
+        if let Some(c) = &self.client {
+            let p = c.request("evaluate", args::evaluate(command, None, EvalContext::Repl, false));
+            self.in_flight.push((p, Purpose::Ignore));
+        }
+    }
+
+    /// Whether Set Execution Point works with this adapter: GDB jumps, others answer
+    /// `gotoTargets`.
+    pub fn can_set_execution_point(&self) -> bool {
+        self.is_gdb() || self.capabilities.supports_goto_targets_request
+    }
+
+    /// Moves the execution point of the stopped thread to `line` (1-based) of `path` without
+    /// running the code in between. With GDB, only within the function the program is in, and
+    /// only to a line where a statement starts. A failure comes as
+    /// [`DebugEvent::ExecutionPointFailed`]; the move itself as a stop.
+    pub fn set_execution_point(&mut self, path: &Path, line: u32) {
+        let SessionState::Stopped(info) = &self.state else { return };
+        let thread_id = info.thread_id;
+        let Some(c) = &self.client else { return };
+        if self.is_gdb() {
+            match gdb_jump(path, line) {
+                Some(command) => {
+                    let p = c.request("evaluate", args::evaluate(&command, None, EvalContext::Repl, false));
+                    self.in_flight.push((p, Purpose::Goto));
+                }
+                None => self.events.push(DebugEvent::ExecutionPointFailed(GotoError::NoCode)),
+            }
+        } else if self.capabilities.supports_goto_targets_request {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+            let p = c.request("gotoTargets", json!({ "source": { "name": name, "path": path }, "line": line }));
+            self.in_flight.push((p, Purpose::GotoTargets { thread_id }));
+        }
     }
 
     /// Breaks into the running program.
@@ -1735,6 +1923,60 @@ impl Drop for DebugSession {
     fn drop(&mut self) {
         self.shutdown();
     }
+}
+
+/// Marks the errors of [`gdb_jump`].
+const GOTO_NO_CODE: &str = "crabcraft-goto: no code";
+const GOTO_OTHER_FUNCTION: &str = "crabcraft-goto: other function";
+
+/// The GDB command for Set Execution Point: a Python check that `line` of `path` starts a
+/// statement of the function the program is in (GDB would jump anywhere, asking nobody under
+/// DAP), then a one-shot breakpoint there and `jump`. `None` for a path GDB cannot be given.
+fn gdb_jump(path: &Path, line: u32) -> Option<String> {
+    let path = path.to_str()?;
+    if path.contains(['"', '\n', '\r']) {
+        return None;
+    }
+    let location = serde_json::to_string(&format!("\"{path}\":{line}")).ok()?;
+    let script = format!(
+        "import gdb
+try:
+    sals = gdb.decode_line({location})[1]
+except gdb.error:
+    sals = None
+if not sals or sals[0].line != {line}:
+    raise gdb.GdbError(\"{GOTO_NO_CODE}\")
+pc = sals[0].pc
+def function(block):
+    while block is not None and block.function is None:
+        block = block.superblock
+    return block
+here = function(gdb.newest_frame().block())
+there = function(gdb.block_for_pc(pc))
+if here is None or there is None or (here.start, here.end) != (there.start, there.end):
+    raise gdb.GdbError(\"{GOTO_OTHER_FUNCTION}\")
+if pc == there.start:
+    raise gdb.GdbError(\"{GOTO_NO_CODE}\")
+gdb.execute(\"tbreak *%d\" % pc)
+gdb.execute(\"jump *%d\" % pc)
+"
+    );
+    Some(format!("python exec({})", serde_json::to_string(&script).ok()?))
+}
+
+fn goto_error(message: String) -> GotoError {
+    if message.contains(GOTO_OTHER_FUNCTION) {
+        GotoError::OtherFunction
+    } else if message.contains(GOTO_NO_CODE) {
+        GotoError::NoCode
+    } else {
+        GotoError::Adapter(message)
+    }
+}
+
+/// The major version from the answer to `evaluate $_gdb_major`.
+fn gdb_major(v: &Value) -> Option<u32> {
+    v.get("result")?.as_str()?.trim().parse().ok()
 }
 
 #[cfg(test)]

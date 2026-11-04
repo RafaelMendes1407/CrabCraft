@@ -470,7 +470,7 @@ pub const HEADERS: &[HeaderDef] = &[
 
 const ROOT_KEYS: &[KeyDef] = &[k("cargo-features", Shape::Array, "Unstable Cargo features this manifest uses (nightly only).")];
 
-const PACKAGE_KEYS: &[KeyDef] = &[
+pub(crate) const PACKAGE_KEYS: &[KeyDef] = &[
     k("name", Shape::Str, "The package name, also used for its crates and on crates.io."),
     k("version", Shape::Str, "The package version, in semantic versioning."),
     k("edition", Shape::Str, DOC_EDITION),
@@ -500,10 +500,10 @@ const PACKAGE_KEYS: &[KeyDef] = &[
 ];
 
 /// Package keys members can inherit from `[workspace.package]`.
-const INHERITABLE: &[&str] =
+pub(crate) const INHERITABLE: &[&str] =
     &["version", "authors", "description", "documentation", "readme", "homepage", "repository", "license", "license-file", "keywords", "categories", "edition", "rust-version", "publish", "exclude", "include"];
 
-const WORKSPACE_KEYS: &[KeyDef] = &[
+pub(crate) const WORKSPACE_KEYS: &[KeyDef] = &[
     k("members", Shape::Array, "Paths or glob patterns of the packages in the workspace."),
     k("exclude", Shape::Array, "Paths kept out of the workspace even when a member pattern matches."),
     k("default-members", Shape::Array, "The members commands act on when no package is chosen."),
@@ -548,7 +548,7 @@ const PROFILE_KEYS: &[KeyDef] = &[
 /// Profile keys that cannot be set per package.
 const PROFILE_ONLY: &[&str] = &["lto", "panic", "rpath", "inherits", "package", "build-override"];
 
-const DEPENDENCY_KEYS: &[KeyDef] = &[
+pub(crate) const DEPENDENCY_KEYS: &[KeyDef] = &[
     k("version", Shape::Str, "The versions of the dependency that are accepted."),
     k("path", Shape::Str, "A local directory that holds the dependency."),
     k("git", Shape::Str, "A Git repository the dependency comes from."),

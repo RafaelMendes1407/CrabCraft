@@ -18,6 +18,7 @@ pub enum SettingsPage {
     ExternalTools,
     LiveTemplates,
     Copyright,
+    Scopes,
 }
 
 pub enum Dialog {
@@ -34,6 +35,8 @@ pub enum Dialog {
     RenameFile(Box<crate::file_rename::FileRename>),
     /// The edits of a refactoring, to review before applying them.
     RefactorPreview(Box<crate::refactor_preview::RefactorPreview>),
+    /// The conflicts of a refactoring, to continue anyway or cancel.
+    RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     ConfirmDelete { path: PathBuf },
     /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
     InvalidateCaches { clean: bool },
@@ -59,14 +62,31 @@ pub enum Dialog {
     PushTags { name: Option<String>, remote: String },
     /// Stash the work tree's changes with an optional message.
     StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
+    /// requested (the loaded patch and its preview live in `app.vcs.patch`).
+    ApplyPatch { path: String, paste: bool },
+    /// A new folder for the run configuration `config`, or the new name of the folder `rename`
+    /// (B-21).
+    ConfigFolder { config: String, rename: Option<String>, folder: String },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
+    /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
+    /// The path follows the branch until the user edits it.
+    AddWorktree { path: String, new_branch: bool, name: String, existing: String, path_edited: bool },
+    /// Confirm removing a worktree; `force` after git refused because of local changes.
+    RemoveWorktree { path: PathBuf, force: bool },
+    /// Lock a worktree, with an optional reason.
+    LockWorktree { path: PathBuf, reason: String },
+    /// Confirm pruning the worktrees whose folders are gone.
+    PruneWorktrees { paths: Vec<PathBuf> },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
     FileStructure { filter: String, selected: usize },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
     BreakpointProperties { path: PathBuf, line: usize, condition: String, log: String, once: bool, enabled: bool, focus: bool },
+    /// Every breakpoint and its group (D-27): the selected one and the group name being typed.
+    Breakpoints { selected: Option<(PathBuf, usize)>, group: String },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
@@ -104,6 +124,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Rename { path, name, error } => rename(app, ctx, path, name, error),
         Dialog::RenameFile(r) => rename_file(app, ctx, r),
         Dialog::RefactorPreview(r) => refactor_preview(app, ctx, r),
+        Dialog::RefactorConflicts(r) => refactor_conflicts(app, ctx, r),
         Dialog::ConfirmDelete { path } => confirm_delete(app, ctx, path),
         Dialog::InvalidateCaches { clean } => invalidate_caches(app, ctx, clean),
         Dialog::RecentFiles { selected, filter } => recent_files(app, ctx, selected, filter),
@@ -119,12 +140,19 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
         Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
+        Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),
+        Dialog::RemoveWorktree { path, force } => remove_worktree(app, ctx, path, *force),
+        Dialog::LockWorktree { path, reason } => lock_worktree(app, ctx, path, reason),
+        Dialog::PruneWorktrees { paths } => prune_worktrees(app, ctx, paths),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
+        Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
+        Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
@@ -176,6 +204,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::ExternalTools, tr("External Tools")),
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
                     (SettingsPage::Copyright, tr("Copyright")),
+                    (SettingsPage::Scopes, tr("Scopes")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -201,6 +230,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 }
                 if *page == SettingsPage::Copyright {
                     copyright_page(ui, app, p.text_muted, p.error);
+                    return;
+                }
+                if *page == SettingsPage::Scopes {
+                    scopes_page(ui, app, p.text_muted, p.error);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -339,7 +372,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates | SettingsPage::Copyright => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes => {}
                 });
             });
         });
@@ -350,14 +383,124 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         if let Some(profile) = app.copyright.draft.take() {
             app.set_copyright_profile(profile);
         }
+        if let Some(draft) = app.explorer.scopes.draft.take() {
+            app.set_scopes(draft);
+        }
         return Outcome::Close;
     }
     if cancel || esc {
         app.copyright.draft = None;
+        app.explorer.scopes.draft = None;
         Outcome::Close
     } else {
         Outcome::Keep
     }
+}
+
+/// Settings › Scopes: the project's scopes (named globs) and the colours of their files. Saved
+/// with the project (its session), so it needs one open.
+fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error: egui::Color32) {
+    use crate::scopes;
+    use rc_core::session::{FileColor, NamedScope, hex_color, parse_hex_color};
+    if app.workspace.is_none() {
+        ui.label(egui::RichText::new(tr("Open a project to define its scopes and file colors.")).color(muted));
+        return;
+    }
+    let mut draft = app.explorer.scopes.draft.take().unwrap_or_else(|| app.explorer.scopes.draft());
+    egui::ScrollArea::vertical().id_salt("scopes_page").max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.label(egui::RichText::new(tr("Scopes")).font(theme::bold(13.0)));
+        ui.label(egui::RichText::new(tr("Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.")).size(12.0).color(muted));
+        ui.add_space(6.0);
+        egui::Grid::new("builtin_scopes").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+            for (name, what) in [
+                (tr("Project Files"), tr("Every file of the project except the excluded folders").to_string()),
+                (tr("Tests"), scopes::TESTS_PATTERN.to_string()),
+                (tr("Changed Files"), tr("Files git reports as changed").to_string()),
+            ] {
+                ui.label(name);
+                ui.label(egui::RichText::new(what).color(muted));
+                ui.end_row();
+            }
+        });
+        ui.add_space(6.0);
+        let mut remove = None;
+        for i in 0..draft.user.len() {
+            ui.horizontal(|ui| {
+                let old = draft.user[i].name.clone();
+                ui.add(egui::TextEdit::singleline(&mut draft.user[i].name).hint_text(tr("Name")).desired_width(130.0));
+                ui.add(egui::TextEdit::singleline(&mut draft.user[i].pattern).hint_text("src/**/*.rs, !target/**").font(egui::TextStyle::Monospace).desired_width(290.0));
+                if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+                // A renamed scope keeps its colour.
+                let new = draft.user[i].name.trim().to_string();
+                if new != old.trim() {
+                    for c in draft.colors.iter_mut().filter(|c| c.scope == old.trim()) {
+                        c.scope = new.clone();
+                    }
+                }
+            });
+            if let Some(problem) = scopes::draft_problem(&draft, i) {
+                ui.label(egui::RichText::new(problem).size(12.0).color(error));
+            }
+        }
+        if let Some(i) = remove {
+            let gone = draft.user.remove(i).name;
+            draft.colors.retain(|c| c.scope != gone.trim());
+        }
+        if ui.button(tr("Add Scope")).clicked() {
+            draft.user.push(NamedScope { name: format!("{} {}", tr("Scope"), draft.user.len() + 1), pattern: String::new() });
+        }
+        ui.add_space(14.0);
+        ui.label(egui::RichText::new(tr("File Colors")).font(theme::bold(13.0)));
+        ui.label(egui::RichText::new(tr("Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.")).size(12.0).color(muted));
+        ui.add_space(6.0);
+        let mut choices: Vec<(String, String)> = [scopes::PROJECT, scopes::TESTS, scopes::CHANGED].iter().map(|k| (k.to_string(), app.explorer.scopes.label(k))).collect();
+        choices.extend(draft.user.iter().map(|s| s.name.trim().to_string()).filter(|n| !n.is_empty()).map(|n| (n.clone(), n)));
+        let mut remove = None;
+        let mut swap = None;
+        let count = draft.colors.len();
+        for (i, c) in draft.colors.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                let label = choices.iter().find(|(k, _)| *k == c.scope).map_or_else(|| c.scope.clone(), |(_, n)| n.clone());
+                egui::ComboBox::from_id_salt(("file_color_scope", i)).selected_text(label).width(180.0).show_ui(ui, |ui| {
+                    for (key, name) in &choices {
+                        if ui.selectable_label(c.scope == *key, name).clicked() {
+                            c.scope = key.clone();
+                        }
+                    }
+                });
+                let mut rgb = parse_hex_color(&c.color).unwrap_or(scopes::DEFAULT_COLOR);
+                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    c.color = hex_color(rgb);
+                }
+                if theme::icon_button(ui, rc_kit::ico::CHEVRON_UP, i > 0, tr("Move Up")).clicked() {
+                    swap = Some(i - 1);
+                }
+                if theme::icon_button(ui, rc_kit::ico::CHEVRON_DOWN, i + 1 < count, tr("Move Down")).clicked() {
+                    swap = Some(i);
+                }
+                if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = swap
+            && i + 1 < draft.colors.len()
+        {
+            draft.colors.swap(i, i + 1);
+        }
+        if let Some(i) = remove {
+            draft.colors.remove(i);
+        }
+        let free = choices.iter().find(|(k, _)| !draft.colors.iter().any(|c| c.scope == *k)).map(|(k, _)| k.clone());
+        if ui.add_enabled(free.is_some(), egui::Button::new(tr("Add Color"))).clicked()
+            && let Some(scope) = free
+        {
+            draft.colors.push(FileColor { scope, color: hex_color(scopes::DEFAULT_COLOR) });
+        }
+    });
+    app.explorer.scopes.draft = Some(draft);
 }
 
 /// Settings › Copyright: the header of the project's files, with a preview. Saved with the
@@ -1001,12 +1144,39 @@ fn compound(app: &mut CrabCraftApp, ctx: &Context, old: Option<&str>, name: &mut
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// Names a new folder for a run configuration, or renames the folder it is in.
+fn config_folder(app: &mut CrabCraftApp, ctx: &Context, config: &str, rename: Option<&str>, folder: &mut String) -> Outcome {
+    let valid = !folder.trim().is_empty() && folder.trim().chars().count() <= crate::runner::MAX_FOLDER_CHARS;
+    let ((ok, cancel), esc) = modal(ctx, "config_folder", 380.0, |ui| {
+        title(ui, if rename.is_some() { tr("Rename Folder") } else { tr("New Folder") });
+        ui.label(tr("Folder name"));
+        let resp = ui.add(egui::TextEdit::singleline(folder).desired_width(f32::INFINITY));
+        if !resp.has_focus() && folder.is_empty() {
+            resp.request_focus();
+        }
+        let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+        let (ok, cancel) = buttons(ui, tr("OK"), valid);
+        (ok || enter, cancel)
+    });
+    if ok && valid {
+        match rename {
+            Some(old) => app.runner.rename_folder(old, folder),
+            None => app.runner.move_to_folder(config, Some(folder)),
+        }
+        app.session_dirty = true;
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes: &[rc_core::processes::Process]) -> Outcome {
     let (chosen, cancel, esc) = {
         let ((chosen, cancel), esc) = modal(ctx, "attach_process", 560.0, |ui| {
             title(ui, tr("Attach to Process"));
             let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Filter by name or PID")).desired_width(f32::INFINITY));
-            resp.request_focus();
+            if ui.memory(|m| m.focused().is_none()) {
+                resp.request_focus();
+            }
             ui.add_space(6.0);
             let needle = filter.trim().to_lowercase();
             let mut chosen = None;
@@ -1018,6 +1188,9 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
                     }
                 }
             });
+            ui.add_space(8.0);
+            ui.separator();
+            auto_attach(app, ui);
             ui.add_space(10.0);
             let cancel = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| theme::secondary_button(ui, tr("Cancel")).clicked()).inner;
             (chosen, cancel)
@@ -1032,7 +1205,206 @@ fn attach(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, processes:
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// The automatic attach of the Attach dialog (D-15): name patterns and Start/Stop Watching.
+fn auto_attach(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    ui.label(egui::RichText::new(tr("Attach automatically to new processes named")).strong());
+    let watching = app.auto_attach.is_some();
+    ui.horizontal(|ui| {
+        let edit = ui.add_enabled(!watching, egui::TextEdit::singleline(&mut app.auto_attach_text).hint_text(tr("server*, *-worker")).char_limit(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).desired_width(ui.available_width() - 150.0));
+        if edit.changed() {
+            app.session_dirty = true;
+        }
+        let ready = !crate::auto_attach::parse_patterns(&app.auto_attach_text).is_empty();
+        if watching {
+            if theme::secondary_button(ui, tr("Stop Watching")).clicked() {
+                app.stop_auto_attach();
+            }
+        } else if ui.add_enabled_ui(ready, |ui| theme::primary_button(ui, tr("Start Watching"))).inner.clicked() && !app.start_auto_attach() {
+            app.notify(tr("Attaching needs an open Rust project"), false);
+        }
+    });
+    let note = match &app.auto_attach {
+        Some(w) => trf("Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.", &[("patterns", &w.patterns.join(", "))]),
+        None => tr("Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.").to_string(),
+    };
+    ui.label(egui::RichText::new(note).size(12.0).color(if watching { p.accent } else { p.muted }));
+}
+
 #[allow(clippy::too_many_arguments)]
+/// What the Breakpoints dialog asked for, done once it is drawn.
+enum BpAction {
+    Enable(PathBuf, usize, bool),
+    EnableGroup(Option<String>, bool),
+    Select(PathBuf, usize),
+    GoTo(PathBuf, usize),
+    Edit(PathBuf, usize),
+    Remove(PathBuf, usize),
+    Move(PathBuf, usize, Option<String>),
+    RenameGroup(String, String),
+    Ungroup(String),
+}
+
+/// View Breakpoints (Ctrl+Shift+F8): every breakpoint of the project, open file or not, by
+/// group; each can be turned on or off, opened, edited, removed or moved to a group, and a
+/// whole group turned on or off at once.
+fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(PathBuf, usize)>, group: &mut String) -> Outcome {
+    let rows = app.breakpoint_rows();
+    let groups = app.breakpoint_groups();
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    if selected.as_ref().is_some_and(|(p, l)| !rows.iter().any(|r| r.path == *p && r.line == *l)) {
+        *selected = None;
+    }
+    let mut actions: Vec<BpAction> = Vec::new();
+    let (close, esc) = modal(ctx, "breakpoints", 720.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Breakpoints"));
+        if app.debugger.muted {
+            ui.label(egui::RichText::new(tr("Breakpoints are muted: none of them stops the program")).size(12.5).color(p.warn));
+            ui.add_space(4.0);
+        }
+        if rows.is_empty() {
+            ui.label(egui::RichText::new(tr("No breakpoints. Click the gutter of an editor to set one.")).color(p.muted));
+        }
+        egui::ScrollArea::vertical().id_salt("breakpoint_rows").max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+            let sections: Vec<Option<String>> = groups.iter().cloned().map(Some).chain(rows.iter().any(|r| r.group.is_none()).then_some(None)).collect();
+            for section in sections {
+                let members: Vec<&crate::breakpoint_list::BreakpointRow> = rows.iter().filter(|r| r.group == section).collect();
+                // A header with a checkbox for the group, when there are groups at all.
+                if !groups.is_empty() {
+                    ui.horizontal(|ui| {
+                        let on = members.iter().filter(|r| r.enabled).count();
+                        let mut all = on == members.len();
+                        let label = section.clone().unwrap_or_else(|| tr("No group").to_string());
+                        let resp = ui.add(egui::Checkbox::new(&mut all, egui::RichText::new(format!("{label} ({})", members.len())).strong()).indeterminate(on > 0 && on < members.len()));
+                        if resp.changed() {
+                            actions.push(BpAction::EnableGroup(section.clone(), all));
+                        }
+                        if let Some(g) = &section {
+                            resp.context_menu(|ui| {
+                                if theme::menu_item(ui, Some(rc_kit::ico::EDIT), tr("Rename the Group to the Name Below"), false).clicked() {
+                                    actions.push(BpAction::RenameGroup(g.clone(), group.clone()));
+                                    ui.close();
+                                }
+                                if theme::menu_item(ui, Some(rc_kit::ico::CLOSE), tr("Ungroup"), false).clicked() {
+                                    actions.push(BpAction::Ungroup(g.clone()));
+                                    ui.close();
+                                }
+                            });
+                        }
+                    });
+                }
+                for r in members {
+                    ui.horizontal(|ui| {
+                        if !groups.is_empty() {
+                            ui.add_space(18.0);
+                        }
+                        let mut on = r.enabled;
+                        if ui.checkbox(&mut on, "").changed() {
+                            actions.push(BpAction::Enable(r.path.clone(), r.line, on));
+                        }
+                        let name = r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        let is_selected = selected.as_ref().is_some_and(|(p, l)| *p == r.path && *l == r.line);
+                        let resp = ui.selectable_label(is_selected, egui::RichText::new(format!("{name}:{}", r.line + 1)).font(FontId::monospace(12.5)));
+                        if resp.clicked() {
+                            actions.push(BpAction::Select(r.path.clone(), r.line));
+                        }
+                        if resp.double_clicked() {
+                            actions.push(BpAction::GoTo(r.path.clone(), r.line));
+                        }
+                        let folder = r.path.parent().map(|d| root.as_ref().and_then(|root| d.strip_prefix(root).ok()).map(|d| d.display().to_string()).unwrap_or_else(|| d.display().to_string())).unwrap_or_default();
+                        ui.label(egui::RichText::new(folder).size(11.5).color(p.muted));
+                        let detail = match (&r.log, &r.condition) {
+                            (Some(m), _) => Some(trf("logs {message}", &[("message", m)])),
+                            (None, Some(c)) => Some(trf("when {condition}", &[("condition", c)])),
+                            _ => None,
+                        };
+                        if let Some(d) = detail {
+                            ui.label(egui::RichText::new(d).font(FontId::monospace(11.5)).color(p.accent));
+                        }
+                    });
+                }
+            }
+        });
+        ui.add_space(8.0);
+        ui.separator();
+        // What can be done with the selected breakpoint.
+        let chosen = selected.clone();
+        ui.add_enabled_ui(chosen.is_some(), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(tr("Group"));
+                ui.add(egui::TextEdit::singleline(group).hint_text(tr("New or existing group")).desired_width(180.0));
+                egui::ComboBox::from_id_salt("bp_groups").selected_text(tr("Existing groups")).width(140.0).show_ui(ui, |ui| {
+                    for g in &groups {
+                        if ui.selectable_label(false, g).clicked() {
+                            *group = g.clone();
+                        }
+                    }
+                });
+                if let Some((path, line)) = &chosen {
+                    if theme::secondary_button(ui, tr("Move to Group")).clicked() && !group.trim().is_empty() {
+                        actions.push(BpAction::Move(path.clone(), *line, Some(group.clone())));
+                    }
+                    if theme::secondary_button(ui, tr("Remove from Group")).clicked() {
+                        actions.push(BpAction::Move(path.clone(), *line, None));
+                    }
+                }
+            });
+        });
+        ui.add_space(10.0);
+        let mut close = false;
+        ui.horizontal(|ui| {
+            if let Some((path, line)) = &chosen {
+                if theme::secondary_button(ui, tr("Go To")).clicked() {
+                    actions.push(BpAction::GoTo(path.clone(), *line));
+                }
+                if theme::secondary_button(ui, tr("Edit…")).clicked() {
+                    actions.push(BpAction::Edit(path.clone(), *line));
+                }
+                if theme::secondary_button(ui, tr("Remove")).clicked() {
+                    actions.push(BpAction::Remove(path.clone(), *line));
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = theme::primary_button(ui, tr("Close")).clicked();
+            });
+        });
+        close
+    });
+    for a in actions {
+        match a {
+            BpAction::Enable(path, line, on) => app.set_breakpoint_enabled(&path, line, on),
+            BpAction::EnableGroup(g, on) => app.set_group_enabled(g.as_deref(), on),
+            BpAction::Select(path, line) => {
+                *group = app.debugger.groups.get(&(path.clone(), line)).cloned().unwrap_or_default();
+                *selected = Some((path, line));
+            }
+            BpAction::GoTo(path, line) => {
+                app.go_to_breakpoint(&path, line);
+                return Outcome::Close;
+            }
+            BpAction::Edit(path, line) => {
+                let key = (path.clone(), line);
+                let enabled = app.breakpoint_rows().iter().any(|r| r.path == path && r.line == line && r.enabled);
+                let condition = app.debugger.conditions.get(&key).cloned().unwrap_or_default();
+                let log = app.debugger.logs.get(&key).cloned().unwrap_or_default();
+                let once = app.debugger.once.contains(&key);
+                app.go_to_breakpoint(&path, line);
+                app.dialog = Some(Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus: true });
+                return Outcome::Keep;
+            }
+            BpAction::Remove(path, line) => {
+                app.remove_breakpoint(&path, line);
+                *selected = None;
+            }
+            BpAction::Move(path, line, g) => app.set_breakpoint_group(&path, line, g.as_deref()),
+            BpAction::RenameGroup(old, new) => app.rename_breakpoint_group(&old, &new),
+            BpAction::Ungroup(g) => app.remove_breakpoint_group(&g),
+        }
+    }
+    if close || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, log: &mut String, once: &mut bool, enabled: &mut bool, focus: &mut bool) -> Outcome {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
@@ -1067,8 +1439,8 @@ fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path
     if ok || remove {
         let key = (path.to_path_buf(), line);
         let cond = condition.trim().to_string();
-        if let Some(i) = app.docs.index_of(path) {
-            let bps = &mut app.docs.list[i].editor.breakpoints;
+        // The file may be closed: its breakpoints are kept apart (D-27).
+        if let Some(bps) = app.docs.breakpoints_mut(path) {
             if remove {
                 bps.remove(&line);
                 app.debugger.forget_breakpoint(path, line);
@@ -1391,6 +1763,53 @@ fn refactor_preview(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refact
                 Outcome::Keep
             }
         };
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// What may go wrong with a rename, each conflict with its place (a click opens it);
+/// "Continue anyway" makes the rename (or previews it), Cancel leaves everything as it is.
+fn refactor_conflicts(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::refactor_conflicts::Review) -> Outcome {
+    let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
+    let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
+    let mut open = None;
+    let can_continue = r.edit.is_some();
+    let ((go, cancel), esc) = modal(ctx, "refactor_conflicts", 640.0, |ui| {
+        title(ui, tr("Refactoring Conflicts"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 32.0);
+            ui.label(trf("Renaming to '{name}' may cause problems:", &[("name", &r.name)]));
+        });
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().max_height(320.0).auto_shrink([false, true]).show(ui, |ui| {
+            for (i, c) in r.conflicts.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if let Some(path) = &c.path {
+                        let shown = root.as_deref().and_then(|root| path.strip_prefix(root).ok()).unwrap_or(path).display().to_string();
+                        let place = format!("{shown}:{}", c.line + 1);
+                        if ui.link(egui::RichText::new(place).monospace().size(12.0)).on_hover_text(tr("Open this place")).clicked() {
+                            open = Some(i);
+                        }
+                    }
+                    ui.label(egui::RichText::new(&c.message).color(if c.path.is_some() { p.text } else { p.error }));
+                });
+            }
+        });
+        if !can_continue {
+            ui.label(egui::RichText::new(tr("Nothing can be renamed until these are fixed.")).size(12.0).color(p.muted));
+        }
+        buttons(ui, tr("Continue Anyway"), can_continue)
+    });
+    if let Some(c) = open.and_then(|i| r.conflicts.get(i))
+        && let Some(path) = c.path.clone()
+    {
+        app.open_at(&path, c.line, c.col);
+    }
+    if go && can_continue {
+        let review = std::mem::replace(r, crate::refactor_conflicts::Review { name: String::new(), conflicts: Vec::new(), edit: None, preview: None });
+        // The preview, when asked for, takes this dialog's place.
+        app.continue_refactoring(review);
+        return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
@@ -1746,7 +2165,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         // Local commands, also behind a local quick fix (a code action with only a command).
         let local = match &action {
             A::Command(c) => Some(c),
-            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| [crate::insight::UPDATE_DEPENDENCY_COMMAND, crate::insight::MANIFEST_FIX_COMMAND, crate::feature_fix::ENABLE_FEATURE_COMMAND].contains(&c.command.as_str())),
             A::CodeAction(_) => None,
         };
         if let Some(c) = local {
@@ -1755,6 +2174,26 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     let args = c.arguments.clone().unwrap_or_default();
                     if let (Some(line), Some(version)) = (args.first().and_then(|v| v.as_u64()), args.get(1).and_then(|v| v.as_str())) {
                         app.update_dependency(usize::try_from(line).unwrap_or(usize::MAX), version);
+                    }
+                    true
+                }
+                crate::feature_fix::ENABLE_FEATURE_COMMAND => {
+                    let fix = c.arguments.as_ref().and_then(|a| a.first()).and_then(|v| serde_json::from_value::<crate::feature_fix::FeatureFix>(v.clone()).ok());
+                    if let Some(fix) = fix {
+                        app.apply_feature_fix(fix);
+                    }
+                    true
+                }
+                crate::insight::MANIFEST_FIX_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    let num = |i: usize| args.get(i).and_then(|v| v.as_u64()).and_then(|n| usize::try_from(n).ok());
+                    let text = |i: usize| args.get(i).and_then(|v| v.as_str());
+                    if let (Some(start), Some(end), Some(old), Some(new), Some(doc)) = (num(0), num(1), text(2), text(3), app.docs.active_doc_mut()) {
+                        let rope = doc.editor.buffer.rope();
+                        // Only when the text there is still what the fix was made for.
+                        if start <= end && end <= rope.len_chars() && rope.slice(start..end).to_string() == old {
+                            doc.editor.replace(start, end, new);
+                        }
                     }
                     true
                 }
@@ -2048,6 +2487,153 @@ fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, in
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
+/// Apply Patch: pick a file or paste a patch, see the files it touches and whether it applies,
+/// then apply it (nothing changes before Apply is pressed) and read what git printed.
+fn apply_patch(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, paste: &mut bool) -> Outcome {
+    // Text from the clipboard: asked for with the button, or Ctrl+V outside the path field.
+    if *paste || ctx.memory(|m| m.focused().is_none()) {
+        let pasted = ctx.input(|i| i.events.iter().find_map(|e| if let egui::Event::Paste(t) = e { Some(t.clone()) } else { None }));
+        if let Some(text) = pasted {
+            *paste = false;
+            path.clear();
+            app.vcs.load_patch_text(text);
+        }
+    }
+    let busy = app.vcs.busy.is_some();
+    let mut load = None;
+    let mut recheck = false;
+    let mut apply = false;
+    let mut close = false;
+    let (_, esc) = modal(ctx, "apply_patch", 600.0, |ui| {
+        let p = rc_kit::pal(ui);
+        title(ui, tr("Apply Patch"));
+        ui.horizontal(|ui| {
+            let resp = ui.add(egui::TextEdit::singleline(path).hint_text(tr("Patch file")).desired_width(300.0));
+            if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) && !path.trim().is_empty() {
+                load = Some(PathBuf::from(path.trim()));
+            }
+            if theme::secondary_button(ui, tr("Browse…")).clicked() {
+                let mut d = rfd::FileDialog::new().set_title(tr("Apply Patch")).add_filter(tr("Patch files"), &["patch", "diff", "eml", "mbox"]);
+                if let Some(root) = app.vcs.root() {
+                    d = d.set_directory(root);
+                }
+                if let Some(picked) = d.pick_file() {
+                    *path = picked.display().to_string();
+                    load = Some(picked);
+                }
+            }
+            if theme::secondary_button(ui, tr("Paste from Clipboard")).clicked() {
+                *paste = true;
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            }
+        });
+        ui.add_space(8.0);
+        let checking = |ui: &mut Ui| {
+            ui.horizontal(|ui| {
+                ui.add(egui::Spinner::new().size(14.0));
+                ui.label(egui::RichText::new(tr("Checking the patch…")).color(p.muted));
+            });
+        };
+        if app.vcs.patch_loading {
+            checking(ui);
+        }
+        if let Some(e) = &app.vcs.patch_error {
+            ui.label(egui::RichText::new(e).color(p.error).size(12.5));
+        }
+        let mut applied = false;
+        if let Some(patch) = &app.vcs.patch {
+            let from = match &patch.path {
+                Some(f) => trf("From {file}", &[("file", &f.display())]),
+                None => tr("From the clipboard").to_string(),
+            };
+            ui.label(egui::RichText::new(from).size(12.0).color(p.muted));
+            match &patch.preview {
+                None => checking(ui),
+                Some(Err(e)) => {
+                    ui.label(egui::RichText::new(e).color(p.error).size(12.5));
+                }
+                Some(Ok(pv)) => {
+                    let kind = match pv.kind {
+                        rc_vcs::PatchKind::Mail => trf("{n} commits (git am): each one becomes a commit on the current branch; the repository's hooks run.", &[("n", &pv.commits)]),
+                        rc_vcs::PatchKind::Diff => tr("Changes to the files of the work tree (git apply); nothing is committed.").to_string(),
+                    };
+                    ui.label(egui::RichText::new(kind).size(12.5));
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical().id_salt("patch_files").max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 2.0;
+                        for f in &pv.files {
+                            ui.horizontal(|ui| {
+                                let (status, color) = match f.status {
+                                    'A' => (tr("added"), p.ok),
+                                    'D' => (tr("deleted"), p.muted),
+                                    'R' => (tr("renamed"), p.accent),
+                                    _ => (tr("modified"), p.accent),
+                                };
+                                ui.label(egui::RichText::new(&f.path).size(12.5));
+                                ui.label(egui::RichText::new(status).size(11.5).color(color));
+                                let lines = match (f.added, f.removed) {
+                                    (Some(a), Some(r)) => format!("+{a} −{r}"),
+                                    _ => tr("binary").to_string(),
+                                };
+                                ui.label(egui::RichText::new(lines).font(FontId::monospace(11.5)).color(p.muted));
+                            });
+                        }
+                    });
+                    ui.add_space(4.0);
+                    match &pv.problem {
+                        None => {
+                            ui.label(egui::RichText::new(tr("The patch applies cleanly.")).size(12.5).color(p.ok));
+                        }
+                        Some(msg) => {
+                            ui.label(egui::RichText::new(tr("The patch does not apply as it is:")).size(12.5).color(p.error));
+                            egui::ScrollArea::vertical().id_salt("patch_problem").max_height(80.0).auto_shrink([false, true]).show(ui, |ui| {
+                                ui.label(egui::RichText::new(msg).font(FontId::monospace(11.5)).color(p.error));
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(r) = &patch.result {
+                applied = !r.error;
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(tr("Git output")).size(11.5).color(p.muted));
+                egui::ScrollArea::vertical().id_salt("patch_output").max_height(120.0).auto_shrink([false, true]).show(ui, |ui| {
+                    let text = if r.text.trim().is_empty() { tr("Patch applied") } else { r.text.as_str() };
+                    ui.label(egui::RichText::new(text).font(FontId::monospace(11.5)).color(if r.error { p.error } else { p.text }));
+                });
+            }
+        }
+        ui.add_space(6.0);
+        if ui.add_enabled(!busy, egui::Checkbox::new(&mut app.vcs.patch_three_way, tr("Fall back to a three-way merge (--3way)"))).changed() {
+            recheck = true;
+        }
+        let ready = !busy && !applied && app.vcs.patch.as_ref().is_some_and(|p| matches!(p.preview, Some(Ok(_))));
+        ui.add_space(14.0);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if !applied {
+                apply = ui.add_enabled_ui(ready, |ui| theme::primary_button(ui, tr("Apply"))).inner.clicked();
+            }
+            close = theme::secondary_button(ui, if applied { tr("Close") } else { tr("Cancel") }).clicked();
+            if app.vcs.busy == Some("patch_apply") {
+                ui.add(egui::Spinner::new().size(14.0));
+            }
+        });
+    });
+    if let Some(file) = load {
+        app.vcs.load_patch_file(file);
+    } else if recheck {
+        app.vcs.recheck_patch();
+    }
+    if apply {
+        app.vcs.apply_patch();
+    }
+    if close || esc {
+        app.vcs.close_patch();
+        return Outcome::Close;
+    }
+    Outcome::Keep
+}
+
 fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "drop_stash", 440.0, |ui| {
         title(ui, tr("Drop Stash"));
@@ -2056,6 +2642,152 @@ fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> O
     });
     if ok {
         app.vcs.stash_drop(stash);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Where a worktree for `branch` goes by default: next to the main worktree, named after the
+/// repository and the branch (`shop` + `feature/login` → `../shop-feature-login`).
+pub fn suggested_worktree_path(main: &std::path::Path, branch: &str) -> PathBuf {
+    let repo = main.file_name().map_or_else(|| "worktree".to_string(), |n| n.to_string_lossy().into_owned());
+    let branch: String = branch.trim().chars().map(|c| if c.is_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' }).collect();
+    let branch = branch.trim_matches(['-', '.']);
+    let name = if branch.is_empty() { format!("{repo}-worktree") } else { format!("{repo}-{branch}") };
+    main.parent().unwrap_or(main).join(name)
+}
+
+/// A branch name worth sending to git (which has the last word with `check-ref-format`).
+pub fn plausible_branch_name(name: &str) -> bool {
+    plausible_tag_name(name) && name != "HEAD"
+}
+
+fn add_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, new_branch: &mut bool, name: &mut String, existing: &mut String, path_edited: &mut bool) -> Outcome {
+    let main = app.vcs.worktrees.first().map(|w| w.path.clone()).or_else(|| app.vcs.root().map(std::path::Path::to_path_buf)).unwrap_or_default();
+    // Local branches that no worktree has checked out.
+    let free: Vec<String> = app
+        .vcs
+        .branches
+        .iter()
+        .filter(|b| b.kind == rc_vcs::BranchKind::Local && !app.vcs.worktrees.iter().any(|w| w.branch.as_deref() == Some(b.name.as_str())))
+        .map(|b| b.name.clone())
+        .collect();
+    if existing.is_empty() || !free.contains(existing) {
+        *existing = free.first().cloned().unwrap_or_default();
+    }
+    let branch = if *new_branch { name.trim().to_string() } else { existing.clone() };
+    if !*path_edited {
+        *path = if branch.is_empty() { String::new() } else { suggested_worktree_path(&main, &branch).display().to_string() };
+    }
+    let target = PathBuf::from(path.trim());
+    let branch_ok = if *new_branch { plausible_branch_name(&branch) } else { !branch.is_empty() };
+    let path_ok = target.is_absolute();
+    let valid = branch_ok && path_ok;
+    let ((ok, cancel), esc) = modal(ctx, "add_worktree", 480.0, |ui| {
+        title(ui, tr("Add Worktree"));
+        let p = rc_kit::pal(ui);
+        ui.horizontal(|ui| {
+            ui.radio_value(new_branch, true, tr("New branch"));
+            ui.add_enabled_ui(!free.is_empty(), |ui| ui.radio_value(new_branch, false, tr("Existing branch"))).response.on_disabled_hover_text(tr("Every local branch is already checked out in a worktree"));
+        });
+        if *new_branch {
+            let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+            if name.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+                resp.request_focus();
+            }
+            ui.label(egui::RichText::new(tr("Starts at the current HEAD.")).size(12.0).color(p.muted));
+            if !name.trim().is_empty() && !branch_ok {
+                ui.label(egui::RichText::new(tr("This is not a valid branch name")).size(12.0).color(p.error));
+            }
+        } else {
+            egui::ComboBox::from_id_salt("worktree_branch").width(ui.available_width()).selected_text(existing.as_str()).show_ui(ui, |ui| {
+                for b in &free {
+                    ui.selectable_value(existing, b.clone(), b.as_str());
+                }
+            });
+        }
+        ui.add_space(8.0);
+        ui.label(tr("Folder"));
+        ui.horizontal(|ui| {
+            let edit = ui.add(egui::TextEdit::singleline(path).hint_text(tr("A new or empty folder")).desired_width(ui.available_width() - 30.0));
+            if edit.changed() {
+                *path_edited = true;
+            }
+            if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a folder")).clicked()
+                && let Some(d) = rfd::FileDialog::new().set_directory(main.parent().unwrap_or(&main)).pick_folder()
+            {
+                // An empty folder is used as it is; inside another one a new folder is made.
+                let empty = std::fs::read_dir(&d).is_ok_and(|mut e| e.next().is_none());
+                *path = if empty || branch.is_empty() { d } else { d.join(suggested_worktree_path(&main, &branch).file_name().unwrap_or_default()) }.display().to_string();
+                *path_edited = true;
+            }
+        });
+        if !path.trim().is_empty() && !path_ok {
+            ui.label(egui::RichText::new(tr("Enter an absolute path")).size(12.0).color(p.error));
+        }
+        buttons(ui, tr("Add"), valid)
+    });
+    if ok && valid {
+        let what = if *new_branch { rc_vcs::WorktreeCheckout::NewBranch { name: branch, start: None } } else { rc_vcs::WorktreeCheckout::Branch(branch) };
+        app.vcs.add_worktree(target, what);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn remove_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, force: bool) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "remove_worktree", 460.0, |ui| {
+        title(ui, tr("Remove Worktree"));
+        if force {
+            ui.horizontal(|ui| {
+                icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+                ui.label(trf("{path} has modified or untracked files. Remove it anyway? Those changes are lost.", &[("path", &path.display())]));
+            });
+            buttons(ui, tr("Remove Anyway"), true)
+        } else {
+            ui.label(trf("Remove the worktree {path} and delete its folder? Its branch is kept.", &[("path", &path.display())]));
+            buttons(ui, tr("Remove"), true)
+        }
+    });
+    if ok {
+        app.vcs.remove_worktree(path, force);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn lock_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, reason: &mut String) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "lock_worktree", 440.0, |ui| {
+        title(ui, tr("Lock Worktree"));
+        ui.label(trf("Lock {path} so that prune and remove leave it alone (for a folder on a removable disk, say).", &[("path", &path.display())]));
+        ui.add_space(6.0);
+        let resp = ui.add(egui::TextEdit::singleline(reason).hint_text(tr("Reason (optional)")).desired_width(f32::INFINITY));
+        if reason.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+            resp.request_focus();
+        }
+        buttons(ui, tr("Lock"), true)
+    });
+    if ok {
+        app.vcs.lock_worktree(path, reason);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn prune_worktrees(app: &mut CrabCraftApp, ctx: &Context, paths: &[PathBuf]) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "prune_worktrees", 460.0, |ui| {
+        title(ui, tr("Prune Worktrees"));
+        ui.label(tr("Forget these worktrees, whose folders no longer exist? Their branches are kept."));
+        ui.add_space(4.0);
+        egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
+            for p in paths {
+                ui.label(egui::RichText::new(p.display().to_string()).font(FontId::monospace(12.0)));
+            }
+        });
+        buttons(ui, tr("Prune"), true)
+    });
+    if ok {
+        app.vcs.prune_worktrees();
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

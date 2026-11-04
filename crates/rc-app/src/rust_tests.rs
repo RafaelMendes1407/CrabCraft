@@ -1252,6 +1252,69 @@ fn step_into_walks_past_the_standard_library() {
     app.run_ide_action(&ctx, Action::StopRun);
 }
 
+#[test]
+fn forced_steps_enter_the_library_and_pass_breakpoints_by() {
+    use rc_editor::{Action, BreakpointKind};
+    const MAIN: &str = "#[inline(never)]\nfn own(n: u32) -> u32 {\n    std::hint::black_box(n) + 1\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let a = own(std::hint::black_box(1));\n    let b = own(a);\n    let c = own(b);\n    let d = own(c);\n    println!(\"{text} {d}\");\n}\n";
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    // Paused at `String::from`, with a breakpoint in `own` too.
+    let mut app = paused_at(dir.path(), MAIN, 6);
+    let main_rs = app.docs.active_doc().unwrap().path.clone();
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(2, BreakpointKind::Normal);
+    let ctx = egui::Context::default();
+    let line = |a: &CrabCraftApp| a.docs.list.iter().find(|d| d.path == main_rs).and_then(|d| d.editor.execution_line);
+    let top = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.selected_frame()).map(|f| f.name.clone()).unwrap_or_default();
+    let run = |app: &mut CrabCraftApp, action: Action, what: &str| {
+        app.run_ide_action(&ctx, action);
+        settle_debugger(app, what, &|a| a.debugger.stopped() && a.debugger.session.as_ref().is_some_and(|s| s.selected_frame().is_some()));
+    };
+    assert_eq!(line(&app), Some(6));
+    assert!(app.debugger.session.as_ref().unwrap().can_force_step_in());
+
+    // Force Step Into enters `String::from`, which Step Into walks past.
+    run(&mut app, Action::ForceStepInto, "the forced step into");
+    let entered = top(&app);
+    assert!(!entered.starts_with("demo::"), "still in the project: {entered}");
+    assert!(entered.contains("from") || entered.contains("alloc") || entered.contains("core"), "{entered}");
+    // The skip of the standard library is back once stopped.
+    let id = app.debugger.session.as_mut().unwrap().evaluate("info skip", rc_dap::EvalContext::Repl);
+    let mut skips = String::new();
+    let start = Instant::now();
+    while skips.is_empty() && start.elapsed() < Duration::from_secs(10) {
+        for e in app.debugger.session.as_mut().unwrap().pump() {
+            if let rc_dap::DebugEvent::Evaluated { id: i, result, .. } = e
+                && i == id
+            {
+                skips = result.map(|v| v.result).unwrap_or_else(|e| e);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(skips.contains("core|alloc|std") && skips.contains(" y "), "{skips}");
+
+    // Force Run to Cursor passes the breakpoint in `own` twice.
+    app.open_file(&main_rs);
+    app.docs.active_doc_mut().unwrap().editor.goto(9, 0);
+    run(&mut app, Action::ForceRunToCursor, "the forced run to cursor");
+    assert_eq!(line(&app), Some(9), "{}", top(&app));
+    let s = app.debugger.session.as_ref().unwrap();
+    assert!(!s.ignoring_breakpoints());
+    assert!(s.breakpoints().get(&main_rs, 3).is_some_and(|b| b.spec.enabled));
+    assert!(s.breakpoints().get(&main_rs, 10).is_none(), "the one-shot breakpoint is gone");
+
+    // Force Step Over passes it once more; a plain Step Over then stops there again.
+    run(&mut app, Action::ForceStepOver, "the forced step over");
+    assert_eq!(line(&app), Some(10), "{}", top(&app));
+    run(&mut app, Action::StepOver, "the step over");
+    assert_eq!(line(&app), Some(2), "{}", top(&app));
+    assert_eq!(app.debugger.session.as_ref().unwrap().stop_info().map(|i| i.reason.clone()), Some(rc_dap::StopReason::Breakpoint));
+    app.run_ide_action(&ctx, Action::StopRun);
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();
@@ -3795,4 +3858,401 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
     assert_eq!(here(&app), ("src/lib.rs".into(), 0));
     assert!(!root.join("target/debug").exists(), "nothing was built");
+}
+
+#[test]
+fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
+    use egui_kittest::kittest::Queryable;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let location = dir.path().canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.new_project_location = Some(location.clone());
+    app.new_project_dialog(None);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.run_steps(2);
+    let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&mut egui_kittest::Harness<'static, CrabCraftApp>) -> bool| {
+        let start = Instant::now();
+        while !done(h) {
+            assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}");
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    };
+
+    // WebAssembly: the missing tools are named, nothing is installed.
+    h.get_by_label("WebAssembly").click();
+    h.run_steps(2);
+    wait(&mut h, "the WebAssembly tools", &|h| h.query_by_label("Looking for the WebAssembly tools…").is_none());
+    let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
+    let tools = rc_cargo::new_project::WasmTools::detect(&cargo);
+    let target_note = "The wasm32-unknown-unknown target is not installed. Add it with: rustup target add wasm32-unknown-unknown";
+    assert_eq!(h.query_by_label(target_note).is_some(), !tools.target);
+    assert_eq!(h.query_by_label("wasm-pack was not found: install it to package the library for JavaScript").is_some(), !tools.wasm_pack);
+
+    // Procedural Macro: created in the background, then opened.
+    h.get_by_label("Procedural Macro").click();
+    h.run_steps(2);
+    h.get_by_label("Create").click();
+    let project = location.join("project1");
+    wait(&mut h, "the new project", &|h| h.state().new_project.is_none() && h.state().runner.cargo_workspace.is_some());
+    let manifest = std::fs::read_to_string(project.join("Cargo.toml")).unwrap();
+    assert!(manifest.contains("proc-macro = true") && manifest.contains("syn = "), "{manifest}");
+    assert!(project.join("tests/describe.rs").is_file());
+    assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(project.join("src/lib.rs")));
+}
+
+/// Before a rename is made, its conflicts are listed (R-04): a name already used in a file
+/// the rename touches, a keyword. "Continue anyway" makes it (or previews it); a rename
+/// without conflicts is made at once.
+#[test]
+fn a_rename_lists_its_conflicts_before_it_is_made() {
+    use crate::ui::dialogs::Dialog;
+    const LIB: &str = "pub struct Greeter;\n\nimpl Greeter {\n    pub fn hello(&self) -> &'static str {\n        \"hello\"\n    }\n\n    pub fn bye(&self) -> &'static str {\n        \"bye\"\n    }\n}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    write(&root.join("src/lib.rs"), LIB);
+    let root = root.canonicalize().unwrap();
+    let lib = root.join("src/lib.rs");
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
+    let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
+    let i = app.docs.active.unwrap();
+    let conflicts = |app: &mut CrabCraftApp, name: &str, preview: Option<String>| {
+        app.dialog = None;
+        app.insight.rename(&app.docs.list[i], pos, name, preview);
+        pump(app, "the conflicts", |a| matches!(a.dialog, Some(Dialog::RefactorConflicts(_))));
+        let Some(Dialog::RefactorConflicts(review)) = app.dialog.take() else { unreachable!() };
+        review
+    };
+
+    // A name another method of the type already has.
+    let review = conflicts(&mut app, "bye", None);
+    let found: Vec<(Option<&Path>, usize, &str)> = review.conflicts.iter().map(|c| (c.path.as_deref(), c.line, c.message.as_str())).collect();
+    assert_eq!(found, [(Some(lib.as_path()), 7, "'bye' is already used here")], "{review:#?}");
+    assert!(std::fs::read_to_string(&lib).unwrap().contains("pub fn hello("), "nothing is renamed before the user continues");
+
+    // A keyword: listed, whether or not rust-analyzer accepts it.
+    let review = conflicts(&mut app, "fn", None);
+    assert!(review.conflicts.iter().any(|c| c.path.is_none() && c.message == "'fn' is a keyword"), "{review:#?}");
+    assert!(std::fs::read_to_string(&lib).unwrap().contains("pub fn hello("));
+
+    // Continue anyway with a preview: the preview opens with the edits.
+    let review = conflicts(&mut app, "bye", Some("Rename".into()));
+    app.continue_refactoring(*review);
+    assert!(matches!(app.dialog, Some(Dialog::RefactorPreview(_))));
+
+    // Without conflicts nothing is asked: the preview of a rename to a new name opens at once.
+    app.dialog = None;
+    app.insight.rename(&app.docs.list[i], pos, "farewell", Some("Rename".into()));
+    pump(&mut app, "the preview", |a| a.dialog.is_some());
+    assert!(matches!(app.dialog, Some(Dialog::RefactorPreview(_))));
+
+    // Continue anyway: the rename is made.
+    let review = conflicts(&mut app, "bye", None);
+    app.continue_refactoring(*review);
+    let main_text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(main_text.contains("Greeter.bye()"), "{main_text}");
+    assert_eq!(std::fs::read_to_string(&lib).unwrap().matches("pub fn bye(").count(), 2);
+    assert!(app.dialog.is_none());
+}
+
+/// C-10: `cargo check` (run by rust-analyzer) says what a feature hides; Alt+Enter turns it on.
+/// A dependency's feature goes into its `features` in `Cargo.toml` (undoable, in the editor), the
+/// package's own into the analysis or `default`; with the fixes the errors go away. Uses tokio
+/// from the local Cargo cache, offline.
+#[test]
+fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
+    use crate::feature_fix::FeatureFix;
+    use rc_editor::Action;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    const MANIFEST: &str = "[package]\nname = \"gated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[features]\nextra = []\n\n[dependencies]\ntokio = { version = \"1\", default-features = false }\n\n[workspace]\n";
+    write(&root.join("Cargo.toml"), MANIFEST);
+    write(&root.join("src/main.rs"), "use tokio::fs::File;\n\n#[cfg(feature = \"extra\")]\nfn helper() -> u32 {\n    1\n}\n\nfn main() {\n    let _ = helper();\n    let _f: Option<File> = None;\n}\n");
+    let locked = std::process::Command::new("cargo").args(["generate-lockfile", "--offline"]).current_dir(&root).output().is_ok_and(|o| o.status.success());
+    if !locked {
+        eprintln!("skipped: tokio is not in the local Cargo cache");
+        return;
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    let has = |a: &CrabCraftApp, code: &str| a.docs.list.iter().find(|d| d.path == main).is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some(code)));
+    // `cargo check` runs on save.
+    app.insight.did_save(&main);
+    pump(&mut app, "cargo check's errors", |a| has(a, "E0432") && has(a, "E0425") && a.insight.feature_gates.get(&main).is_some_and(|g| g.len() == 2));
+    let i = app.docs.index_of(&main).unwrap();
+    let manifest = root.join("Cargo.toml");
+
+    // On the import: tokio's `fs` feature, in the dependency.
+    app.docs.list[i].editor.goto(0, 12);
+    let tokio = FeatureFix::Dependency { manifest: manifest.clone(), key: "tokio".into(), name: "tokio".into(), feature: "fs".into() };
+    assert_eq!(app.feature_fixes(i), vec![tokio.clone()]);
+    // Alt+Enter lists it first, before the server's actions.
+    app.run_insight_action(Action::ShowIntentions, egui::Pos2::ZERO);
+    pump(&mut app, "the actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    let Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) = &app.dialog else { unreachable!() };
+    let first = match &list[0] {
+        rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(a) => a.title.clone(),
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+    };
+    assert_eq!(first, "Add feature `fs` to the tokio dependency");
+    app.dialog = None;
+    app.apply_feature_fix(tokio);
+    let edited = MANIFEST.replace("default-features = false }", "default-features = false, features = [\"fs\"] }");
+    let text = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert_eq!(app.docs.active_doc().unwrap().path, manifest);
+    assert_eq!(text(&app), edited);
+    // Undoable, and not saved for the user.
+    app.docs.active_doc_mut().unwrap().editor.undo();
+    assert_eq!(text(&app), MANIFEST);
+    app.docs.active_doc_mut().unwrap().editor.redo();
+    assert_eq!(text(&app), edited);
+    assert_eq!(std::fs::read_to_string(&manifest).unwrap(), MANIFEST);
+
+    // On the call: the package's own `extra`, for the analysis or in `default`.
+    app.open_file(&main);
+    app.docs.list[i].editor.goto(8, 12);
+    let fixes = app.feature_fixes(i);
+    assert_eq!(fixes, vec![FeatureFix::Analysis { package: "gated".into(), feature: "extra".into() }, FeatureFix::Default { manifest: manifest.clone(), package: "gated".into(), feature: "extra".into() }]);
+    app.apply_feature_fix(fixes[0].clone());
+    assert_eq!(app.cargo_features, vec!["gated/extra".to_string()]);
+    // Once on, it is not offered again.
+    assert!(app.feature_fixes(i).is_empty());
+
+    // Saved, `cargo check` with both features finds neither error.
+    app.save_all_docs();
+    app.insight.did_save(&main);
+    pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && a.insight.feature_gates.get(&main).is_none());
+    app.insight.stop();
+}
+
+/// D-27: a breakpoint in a file that is closed stays set and stops the program; groups turn
+/// their breakpoints off together; a change made in the list reaches a running session; the
+/// list, with groups and closed files, comes back with the session.
+#[test]
+fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n");
+    write(&root.join("src/price.rs"), "pub fn double(n: u32) -> u32 {\n    let twice = n * 2;\n    twice\n}\n");
+    let root = root.canonicalize().unwrap();
+    let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+
+    // A breakpoint in price.rs, which is then closed: it stays.
+    app.open_file(&price_rs);
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(1, BreakpointKind::Normal);
+    let i = app.docs.index_of(&price_rs).unwrap();
+    app.docs.close(i);
+    assert_eq!(app.docs.closed_breakpoints.get(&price_rs).and_then(|b| b.get(&1)), Some(&BreakpointKind::Normal));
+    app.open_file(&main_rs);
+    for line in [3, 4] {
+        app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
+    }
+    app.set_breakpoint_group(&price_rs, 1, Some("Pricing"));
+    app.set_breakpoint_group(&main_rs, 3, Some("  Calls "));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    app.set_breakpoint_group(&main_rs, 4, Some("   "));
+    app.set_breakpoint_group(&main_rs, 4, Some("Calls"));
+    assert_eq!(app.breakpoint_groups(), ["Calls", "Pricing"]);
+    let listed = |a: &CrabCraftApp| a.breakpoint_rows().into_iter().map(|r| (r.path.file_name().unwrap().to_string_lossy().into_owned(), r.line, r.enabled, r.group)).collect::<Vec<_>>();
+    // The whole Calls group off.
+    app.set_group_enabled(Some("Calls"), false);
+    let expected = vec![("main.rs".to_string(), 3, false, Some("Calls".to_string())), ("main.rs".into(), 4, false, Some("Calls".into())), ("price.rs".into(), 1, true, Some("Pricing".into()))];
+    assert_eq!(listed(&app), expected);
+    assert_eq!(app.docs.active_doc().unwrap().editor.breakpoints.get(&3), Some(&BreakpointKind::Disabled));
+
+    // Debugging stops in the closed file, not at the disabled calls.
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint in price.rs");
+    let at = app.debugger.session.as_ref().and_then(|s| s.execution_point());
+    assert_eq!(at, Some((price_rs.clone(), 2)));
+    // Turned off from the list while stopped, it no longer stops the second call.
+    app.set_breakpoint_enabled(&price_rs, 1, false);
+    app.run_ide_action(&egui::Context::default(), Action::Resume);
+    let start = Instant::now();
+    while !app.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()) {
+        let outs = app.debugger.update(&mut app.docs);
+        app.handle_debug(outs);
+        assert!(!app.debugger.stopped(), "stopped again at {:?}", app.debugger.session.as_ref().and_then(|s| s.execution_point()));
+        assert!(start.elapsed() < Duration::from_secs(60), "the program did not end");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    app.set_breakpoint_enabled(&price_rs, 1, true);
+
+    // Removing one from the list, in a closed file too; then the session keeps the rest.
+    app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(2, BreakpointKind::Normal);
+    app.remove_breakpoint(&price_rs, 2);
+    let before = listed(&app);
+    assert_eq!(before.len(), 3);
+    app.save_session();
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(listed(&again), before);
+}
+
+/// D-13: Set Execution Point to Cursor moves the program forward and back within the function
+/// without running the lines in between, and refuses lines in other functions and lines without
+/// code.
+#[test]
+fn set_execution_point_skips_and_repeats_lines_with_gdb() {
+    use rc_editor::{Action, BreakpointKind};
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), "mod other;\n\nfn main() {\n    let mut n = 1;\n    n += 10;\n    n += 100;\n    n += 1000;\n    other::show(n);\n}\n");
+    write(&root.join("src/other.rs"), "pub fn show(n: u32) {\n    println!(\"{n}\");\n}\n");
+    let root = root.canonicalize().unwrap();
+    let main_rs = root.join("src/main.rs");
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&main_rs);
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(5, BreakpointKind::Normal);
+    app.run_ide_action(&egui::Context::default(), Action::Debug);
+    pump_debugger(&mut app, "the breakpoint");
+    assert!(app.debugger.session.as_ref().unwrap().can_set_execution_point());
+    assert_eq!(local(&mut app, "n"), "11");
+    let at = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.execution_point());
+    let jump_to = |app: &mut CrabCraftApp, line: usize| {
+        app.docs.active_doc_mut().unwrap().editor.goto(line, 0);
+        app.run_ide_action(&egui::Context::default(), Action::SetExecutionPoint);
+    };
+
+    // Forward: n += 100 and n += 1000 do not run.
+    jump_to(&mut app, 7);
+    settle_debugger(&mut app, "the jump forward", &|a| a.debugger.stopped() && at(a) == Some((main_rs.clone(), 8)));
+    assert_eq!(local(&mut app, "n"), "11");
+
+    // Refused: a line in another function, and a line without code. The program stays.
+    let notices = app.notices.len();
+    app.open_file(&root.join("src/other.rs"));
+    jump_to(&mut app, 1);
+    settle_debugger(&mut app, "the refusal", &|a| a.notices.len() > notices);
+    assert!(app.notices.last().unwrap().text.contains("current function"), "{}", app.notices.last().unwrap().text);
+    app.open_file(&main_rs);
+    jump_to(&mut app, 1);
+    settle_debugger(&mut app, "the second refusal", &|a| a.notices.len() > notices + 1);
+    assert!(app.notices.last().unwrap().text.contains("No statement"), "{}", app.notices.last().unwrap().text);
+    assert_eq!(at(&app), Some((main_rs.clone(), 8)));
+
+    // Back: n += 100 runs again from 11.
+    jump_to(&mut app, 5);
+    settle_debugger(&mut app, "the jump back", &|a| a.debugger.stopped() && at(a) == Some((main_rs.clone(), 6)));
+    // Overflow checks split `n += 100` in two ranges: GDB stops on it twice, as without a jump.
+    for _ in 0..3 {
+        if at(&app) == Some((main_rs.clone(), 7)) {
+            break;
+        }
+        let generation = app.debugger.session.as_ref().unwrap().generation();
+        app.run_ide_action(&egui::Context::default(), Action::StepOver);
+        settle_debugger(&mut app, "the step", &|a| a.debugger.stopped() && a.debugger.session.as_ref().is_some_and(|s| s.generation() > generation + 1) && at(a).is_some());
+    }
+    assert_eq!(at(&app), Some((main_rs.clone(), 7)));
+    assert_eq!(local(&mut app, "n"), "111");
+    app.run_ide_action(&egui::Context::default(), Action::Resume);
+    settle_debugger(&mut app, "the end", &|a| a.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()));
+}
+
+/// D-15: watching for a name pattern attaches GDB to the next matching program that starts,
+/// not to the one already running, and not while a debug session runs.
+#[test]
+fn the_debugger_attaches_automatically_to_a_program_that_starts() {
+    use rc_editor::BreakpointKind;
+    // Yama allows a debugger that is not the parent only when the program says so.
+    const MAIN: &str = "extern \"C\" {\n    fn prctl(option: i32, arg: u64, ...) -> i32;\n}\n\nfn main() {\n    unsafe { prctl(0x59616d61, u64::MAX) };\n    let mut rounds = 0u64;\n    loop {\n        rounds += 1;\n        std::thread::sleep(std::time::Duration::from_millis(5));\n        if rounds == u64::MAX {\n            break;\n        }\n    }\n}\n";
+    if rc_dap::gdb::locate().is_none() {
+        eprintln!("skipped: GDB is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    write(&root.join("Cargo.toml"), "[package]\nname = \"autoserver\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n");
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let built = std::process::Command::new("cargo").arg("build").arg("-q").current_dir(&root).status().unwrap();
+    assert!(built.success());
+    struct Running(std::process::Child);
+    impl Drop for Running {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let spawn = || Running(std::process::Command::new(root.join("target/debug/autoserver")).spawn().unwrap());
+    let frames = |app: &mut CrabCraftApp, n: usize| {
+        for _ in 0..n {
+            let outs = app.debugger.update(&mut app.docs);
+            app.handle_debug(outs);
+            app.poll_auto_attach();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+
+    let mut app = new_app(dir.path());
+    app.open_workspace(&root);
+    pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
+    app.open_file(&root.join("src/main.rs"));
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
+    let before = spawn();
+    std::thread::sleep(Duration::from_millis(300));
+    app.auto_attach_text = " other, auto* ,".into();
+    assert!(app.start_auto_attach());
+    assert_eq!(app.auto_attach_text, "other, auto*");
+    frames(&mut app, 60);
+    assert!(app.debugger.session.is_none(), "attached to the program that was already running");
+
+    let after = spawn();
+    let start = Instant::now();
+    while !app.debugger.stopped() {
+        frames(&mut app, 1);
+        if let Some(rc_dap::SessionState::Failed(f)) = app.debugger.session.as_ref().map(|s| s.state()) {
+            panic!("attach failed: {f}");
+        }
+        assert!(start.elapsed() < Duration::from_secs(60), "did not attach: {}", app.debugger.state_label());
+    }
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), Some(after.0.id()));
+    assert_eq!(app.docs.active_doc().and_then(|d| d.editor.execution_line), Some(8));
+    assert!(app.notices.iter().any(|n| n.text.contains("autoserver")));
+
+    // While debugging, another one is let go.
+    let third = spawn();
+    frames(&mut app, 60);
+    assert_eq!(app.debugger.session.as_ref().and_then(|s| s.debuggee_pid()), Some(after.0.id()));
+    app.debugger.stop();
+    app.stop_auto_attach();
+    app.save_session();
+    let mut again = new_app(dir.path());
+    again.open_workspace(&root);
+    assert_eq!(again.auto_attach_text, "other, auto*");
+    assert!(again.auto_attach.is_none(), "watching starts only when asked");
+    drop((before, after, third));
 }

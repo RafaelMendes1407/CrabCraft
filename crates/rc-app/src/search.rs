@@ -365,6 +365,11 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Stop"), StopRun),
         (tr("Run Tests"), RunTests),
         (tr("Attach to Process…"), AttachToProcess),
+        (tr("Force Step Into"), ForceStepInto),
+        (tr("Force Step Over"), ForceStepOver),
+        (tr("Force Run to Cursor"), ForceRunToCursor),
+        (tr("Set Execution Point to Cursor"), SetExecutionPoint),
+        (tr("View Breakpoints…"), ViewBreakpoints),
         (tr("Show Integers in Hex"), ToggleHexValues),
         (tr("Settings…"), ShowSettings),
         (tr("Project Environment Variables…"), ProjectEnvironment),
@@ -473,6 +478,10 @@ pub struct FindInFiles {
     pub mask: String,
     /// Folders and files the user excluded (root-relative); never searched.
     pub excluded: Vec<String>,
+    /// The scope searched (a key of [`crate::scopes::Scopes::list`]) and its files, or why its
+    /// pattern does not parse.
+    pub scope: String,
+    pub only: Result<Option<rc_search::ScopeFilter>, String>,
     pub results: Vec<FileMatches>,
     pub summary: Option<FindSummary>,
     pub error: Option<String>,
@@ -495,6 +504,8 @@ impl FindInFiles {
             regex: false,
             mask: String::new(),
             excluded: Vec::new(),
+            scope: crate::scopes::PROJECT.to_string(),
+            only: Ok(None),
             results: Vec::new(),
             summary: None,
             error: None,
@@ -531,7 +542,14 @@ impl FindInFiles {
                 return;
             }
         };
-        let opts = FindOptions { query: self.options(), mask, max_results: 5000, excluded: self.excluded.clone(), ..Default::default() };
+        let only = match &self.only {
+            Ok(o) => o.clone(),
+            Err(e) => {
+                self.error = Some(e.clone());
+                return;
+            }
+        };
+        let opts = FindOptions { query: self.options(), mask, max_results: 5000, excluded: self.excluded.clone(), only, ..Default::default() };
         if let Some(f) = &mut self.finder
             && let Err(e) = f.start(opts)
         {
@@ -571,10 +589,11 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         Debug => ico::DEBUG,
         StopRun => ico::STOP,
         RunTests => ico::RUN_ALL,
-        StepOver => ico::STEP_OVER,
-        StepInto => ico::STEP_INTO,
+        StepOver | ForceStepOver => ico::STEP_OVER,
+        StepInto | ForceStepInto => ico::STEP_INTO,
         StepOut => ico::STEP_OUT,
-        RunToCursor => ico::RUN_TO_CURSOR,
+        RunToCursor | ForceRunToCursor | SetExecutionPoint => ico::RUN_TO_CURSOR,
+        ViewBreakpoints => ico::BREAKPOINT,
         AttachToProcess => ico::DEBUG,
         Resume => ico::RESUME,
         Evaluate => ico::EVALUATE,

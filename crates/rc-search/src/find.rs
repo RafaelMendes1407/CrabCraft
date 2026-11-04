@@ -34,6 +34,8 @@ pub struct FindOptions {
     pub max_file_size: u64,
     /// Folders and files the user excluded (root-relative, `/`-separated); never searched.
     pub excluded: Vec<String>,
+    /// Only the files of this scope (Find in Files' scope picker); `None`: every file.
+    pub only: Option<crate::scope::ScopeFilter>,
 }
 
 impl Default for FindOptions {
@@ -46,6 +48,7 @@ impl Default for FindOptions {
             context_lines: 0,
             max_file_size: 8 << 20,
             excluded: Vec::new(),
+            only: None,
         }
     }
 }
@@ -237,7 +240,7 @@ fn run_search(root: &Path, opts: &FindOptions, query: &Query, cancel: &AtomicBoo
                 return WalkState::Continue;
             }
             let Some(rel) = rel else { return WalkState::Continue };
-            if !opts.mask.matches(&rel) || e.metadata().map_or(true, |m| m.len() > opts.max_file_size) {
+            if !opts.mask.matches(&rel) || opts.only.as_ref().is_some_and(|o| !o.matches(&rel)) || e.metadata().map_or(true, |m| m.len() > opts.max_file_size) {
                 return WalkState::Continue;
             }
             c.files_searched.fetch_add(1, Ordering::Relaxed);

@@ -38,6 +38,18 @@ pub enum GitError {
     InvalidRefName(String),
     #[error("A tag named {0} already exists")]
     TagExists(String),
+    #[error("{0} is not a valid branch name")]
+    InvalidBranchName(String),
+    #[error("{0} has modified or untracked files")]
+    WorktreeDirty(PathBuf),
+    #[error("The worktree {0} is locked")]
+    WorktreeLocked(PathBuf),
+    #[error("The main worktree cannot be removed")]
+    MainWorktree,
+    #[error("{0} already exists and is not empty")]
+    WorktreePathExists(PathBuf),
+    #[error("The branch {0} is already checked out in another worktree")]
+    BranchInUse(String),
     #[error("The branch {0} is not fully merged")]
     BranchNotFullyMerged(String),
     #[error("The current branch has no upstream branch")]
@@ -46,10 +58,17 @@ pub enum GitError {
     PushRejected(String),
     #[error("The patch does not apply")]
     PatchFailed(String),
+    #[error("The patch is larger than {0} MB")]
+    PatchTooLarge(usize),
+    #[error("Finish or abort the operation in progress first")]
+    OperationInProgress,
     #[error("Not found: {0}")]
     NotFound(String),
     #[error("Set user.name and user.email in Git first")]
     IdentityUnknown,
+    /// The signing program failed (no key, no agent, a wrong passphrase); git's message.
+    #[error("The commit could not be signed")]
+    SigningFailed(String),
     #[error("Another Git process is running in this repository")]
     Locked(String),
     #[error("Network error")]
@@ -84,12 +103,21 @@ impl GitError {
             BranchExists(b) => ("A branch named {branch} already exists", vec![("branch", b.clone())]),
             InvalidRefName(n) => ("\"{name}\" is not a valid tag name", vec![("name", n.clone())]),
             TagExists(n) => ("A tag named {name} already exists", vec![("name", n.clone())]),
+            InvalidBranchName(n) => ("\"{name}\" is not a valid branch name", vec![("name", n.clone())]),
+            WorktreeDirty(p) => ("{path} has modified or untracked files", vec![("path", p.display().to_string())]),
+            WorktreeLocked(p) => ("The worktree {path} is locked; unlock it first", vec![("path", p.display().to_string())]),
+            MainWorktree => ("The main worktree cannot be removed", vec![]),
+            WorktreePathExists(p) => ("{path} already exists and is not empty", vec![("path", p.display().to_string())]),
+            BranchInUse(b) => ("The branch {branch} is already checked out in another worktree", vec![("branch", b.clone())]),
             BranchNotFullyMerged(b) => ("The branch {branch} is not fully merged", vec![("branch", b.clone())]),
             NoUpstream => ("The current branch has no upstream branch", vec![]),
             PushRejected(_) => ("The push was rejected (fetch first)", vec![]),
             PatchFailed(_) => ("The patch does not apply", vec![]),
+            PatchTooLarge(mb) => ("The patch is larger than {size} MB", vec![("size", mb.to_string())]),
+            OperationInProgress => ("Finish or abort the operation in progress first", vec![]),
             NotFound(what) => ("Not found: {what}", vec![("what", what.clone())]),
             IdentityUnknown => ("Set user.name and user.email in Git first", vec![]),
+            SigningFailed(_) => ("The commit could not be signed; check the signing key and its agent", vec![]),
             Locked(_) => ("Another Git process is running in this repository", vec![]),
             Network(_) => ("Network error", vec![]),
             Cancelled => ("Cancelled", vec![]),
@@ -101,7 +129,7 @@ impl GitError {
     pub fn details(&self) -> Option<String> {
         use GitError::*;
         match self {
-            Conflicts(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
+            Conflicts(s) | SigningFailed(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
             LocalChangesWouldBeOverwritten(files) => Some(files.join("\n")),
             Io(e) => Some(e.to_string()),
             Failed { stderr, .. } => Some(stderr.clone()),
@@ -123,6 +151,9 @@ impl GitError {
         }
         if has("Please tell me who you are") || has("empty ident name") {
             return GitError::IdentityUnknown;
+        }
+        if has("gpg failed to sign") || has("failed to sign the data") || has("error: cannot run gpg") || has("error: unable to sign") {
+            return GitError::SigningFailed(err.to_string());
         }
         if has("would be overwritten by") {
             return GitError::LocalChangesWouldBeOverwritten(indented_list(&all));

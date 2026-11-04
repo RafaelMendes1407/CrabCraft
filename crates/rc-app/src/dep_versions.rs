@@ -186,8 +186,8 @@ impl DepVersions {
         }
         let doc = &mut docs.list[i];
         let ours = self.diags.get(&doc.editor.id).map(Vec::as_slice).unwrap_or_default();
-        merge_into_editor(&mut doc.editor, ours);
-        merge_into_problems(problems, &doc.path, ours);
+        merge_into_editor(&mut doc.editor, DIAG_CODE, ours);
+        merge_into_problems(problems, &doc.path, DIAG_CODE, ours);
         (!settled).then(|| SETTLE - rest)
     }
 
@@ -307,34 +307,35 @@ impl DepVersions {
     }
 }
 
-fn is_ours(d: &Diagnostic) -> bool {
-    d.code.as_deref() == Some(DIAG_CODE)
+fn is_ours(d: &Diagnostic, code: &str) -> bool {
+    d.code.as_deref() == Some(code)
 }
 
-/// Whether `list` holds exactly `ours` among the diagnostics made here.
-fn holds(list: &[Diagnostic], ours: &[Diagnostic]) -> bool {
-    list.iter().filter(|d| is_ours(d)).count() == ours.len() && ours.iter().all(|o| list.contains(o))
+/// Whether `list` holds exactly `ours` among the diagnostics with `code`.
+fn holds(list: &[Diagnostic], code: &str, ours: &[Diagnostic]) -> bool {
+    list.iter().filter(|d| is_ours(d, code)).count() == ours.len() && ours.iter().all(|o| list.contains(o))
 }
 
-/// Puts `ours` among the editor's diagnostics, keeping the language server's: they are put back
-/// when a server report replaces the list.
-fn merge_into_editor(editor: &mut rc_editor::EditorState, ours: &[Diagnostic]) {
-    if holds(&editor.diagnostics, ours) {
+/// Puts `ours` (made locally, all with `code`) among the editor's diagnostics, keeping the
+/// language server's and the other local ones: they are put back when a server report replaces
+/// the list.
+pub(crate) fn merge_into_editor(editor: &mut rc_editor::EditorState, code: &str, ours: &[Diagnostic]) {
+    if holds(&editor.diagnostics, code, ours) {
         return;
     }
-    let mut list: Vec<Diagnostic> = editor.diagnostics.iter().filter(|d| !is_ours(d)).cloned().collect();
+    let mut list: Vec<Diagnostic> = editor.diagnostics.iter().filter(|d| !is_ours(d, code)).cloned().collect();
     list.extend(ours.iter().cloned());
     editor.set_diagnostics(list);
 }
 
 /// The same for the Problems window, which lists errors and warnings.
-fn merge_into_problems(problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, path: &Path, ours: &[Diagnostic]) {
+pub(crate) fn merge_into_problems(problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, path: &Path, code: &str, ours: &[Diagnostic]) {
     let ours: Vec<Diagnostic> = ours.iter().filter(|d| d.severity <= Severity::Warning).cloned().collect();
     let current = problems.get(path).map(Vec::as_slice).unwrap_or_default();
-    if holds(current, &ours) {
+    if holds(current, code, &ours) {
         return;
     }
-    let mut list: Vec<Diagnostic> = current.iter().filter(|d| !is_ours(d)).cloned().collect();
+    let mut list: Vec<Diagnostic> = current.iter().filter(|d| !is_ours(d, code)).cloned().collect();
     list.extend(ours);
     if list.is_empty() {
         problems.remove(path);

@@ -12,19 +12,27 @@ use rc_kit::{Ico, ico, icons, theme};
 /// Header with a title on the left and icon actions on the right; returns the clicked action
 /// index (or `usize::MAX` for "Hide").
 pub fn header(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> Option<usize> {
+    header_buttons(ui, title, actions).0
+}
+
+/// [`header`] that also returns the response of each action button (to open a menu from it).
+pub fn header_buttons(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> (Option<usize>, Vec<egui::Response>) {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), HEADER_H));
     ui.allocate_rect(r, Sense::hover());
     ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, title, theme::bold(13.0), p.text);
     let title_w = ui.painter().layout_no_wrap(title.to_string(), theme::bold(13.0), p.text).size().x;
     let mut clicked = None;
+    let mut responses = Vec::with_capacity(actions.len());
     let mut x = r.left() + 12.0 + title_w + 10.0;
     for (i, (icon, tip, enabled)) in actions.iter().enumerate() {
         let br = Rect::from_min_size(pos2(x, r.center().y - 13.0), vec2(26.0, 26.0));
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br));
-        if theme::icon_button(&mut child, *icon, *enabled, tip).clicked() {
+        let resp = theme::icon_button(&mut child, *icon, *enabled, tip);
+        if resp.clicked() {
             clicked = Some(i);
         }
+        responses.push(resp);
         x += 28.0;
     }
     let br = Rect::from_min_size(pos2(r.right() - 34.0, r.center().y - 13.0), vec2(26.0, 26.0));
@@ -32,7 +40,7 @@ pub fn header(ui: &mut Ui, title: &str, actions: &[(Ico, &str, bool)]) -> Option
     if theme::icon_button(&mut child, ico::HIDE, true, tr("Hide")).clicked() {
         clicked = Some(usize::MAX);
     }
-    clicked
+    (clicked, responses)
 }
 
 pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEvent> {

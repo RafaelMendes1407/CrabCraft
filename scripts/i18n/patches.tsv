@@ -1,0 +1,26 @@
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Apply Patch	Aplicar parche	Appliquer le correctif	Aplicar patch	Patch anwenden	Zastosuj poprawkę	应用补丁	パッチを適用
+Apply Patch…	Aplicar parche…	Appliquer le correctif…	Aplicar patch…	Patch anwenden…	Zastosuj poprawkę…	应用补丁…	パッチを適用…
+Changes to the files of the work tree (git apply); nothing is committed.	Cambios en los archivos del árbol de trabajo (git apply); no se confirma nada.	Modifications des fichiers de l’arbre de travail (git apply) ; rien n’est validé.	Alterações nos arquivos da árvore de trabalho (git apply); nada é commitado.	Änderungen an den Dateien des Arbeitsverzeichnisses (git apply); nichts wird committet.	Zmiany w plikach drzewa roboczego (git apply); nic nie jest zatwierdzane.	对工作树文件的更改（git apply）；不会提交任何内容。	作業ツリーのファイルへの変更（git apply）。何もコミットされません。
+Checking the patch…	Comprobando el parche…	Vérification du correctif…	Verificando o patch…	Patch wird geprüft…	Sprawdzanie poprawki…	正在检查补丁…	パッチを確認しています…
+Fall back to a three-way merge (--3way)	Recurrir a una fusión a tres bandas (--3way)	Se rabattre sur une fusion à trois voies (--3way)	Recorrer a uma mesclagem de três vias (--3way)	Auf einen Drei-Wege-Merge zurückgreifen (--3way)	W razie potrzeby użyj scalania trójstronnego (--3way)	回退到三方合并（--3way）	3 方向マージにフォールバック（--3way）
+From the clipboard	Desde el portapapeles	Depuis le presse-papiers	Da área de transferência	Aus der Zwischenablage	Ze schowka	来自剪贴板	クリップボードから
+From {file}	Desde {file}	Depuis {file}	De {file}	Aus {file}	Z {file}	来自 {file}	{file} から
+Git output	Salida de Git	Sortie de Git	Saída do Git	Git-Ausgabe	Wyjście Git	Git 输出	Git の出力
+Paste from Clipboard	Pegar desde el portapapeles	Coller depuis le presse-papiers	Colar da área de transferência	Aus der Zwischenablage einfügen	Wklej ze schowka	从剪贴板粘贴	クリップボードから貼り付け
+Patch applied	Parche aplicado	Correctif appliqué	Patch aplicado	Patch angewendet	Zastosowano poprawkę	补丁已应用	パッチを適用しました
+Patch file	Archivo de parche	Fichier de correctif	Arquivo de patch	Patch-Datei	Plik poprawki	补丁文件	パッチファイル
+Patch files	Archivos de parche	Fichiers de correctif	Arquivos de patch	Patch-Dateien	Pliki poprawek	补丁文件	パッチファイル
+The patch applies cleanly.	El parche se aplica sin problemas.	Le correctif s’applique sans problème.	O patch se aplica sem problemas.	Der Patch lässt sich sauber anwenden.	Poprawka stosuje się bez problemów.	补丁可以干净地应用。	パッチは問題なく適用できます。
+The patch does not apply as it is:	El parche no se aplica tal como está:	Le correctif ne s’applique pas tel quel :	O patch não se aplica do jeito que está:	Der Patch lässt sich so nicht anwenden:	Poprawki nie można zastosować w obecnej postaci:	补丁无法按原样应用：	パッチはそのままでは適用できません:
+binary	binario	binaire	binário	binär	binarny	二进制	バイナリ
+{n} commits (git am): each one becomes a commit on the current branch; the repository's hooks run.	{n} commits (git am): cada uno se convierte en un commit en la rama actual; se ejecutan los hooks del repositorio.	{n} commits (git am) : chacun devient un commit sur la branche actuelle ; les hooks du dépôt s’exécutent.	{n} commits (git am): cada um vira um commit no branch atual; os hooks do repositório são executados.	{n} Commits (git am): Jeder wird ein Commit auf dem aktuellen Branch; die Hooks des Repositorys laufen.	Commity: {n} (git am): każdy staje się commitem w bieżącej gałęzi; uruchamiane są hooki repozytorium.	{n} 个提交（git am）：每个都会成为当前分支上的一个提交；会运行仓库的钩子。	{n} 件のコミット（git am）：それぞれが現在のブランチのコミットになります。リポジトリのフックが実行されます。
+Copy as Patch	Copiar como parche	Copier comme correctif	Copiar como patch	Als Patch kopieren	Kopiuj jako poprawkę	复制为补丁	パッチとしてコピー
+Copy the checked files as a patch	Copiar los archivos marcados como parche	Copier les fichiers cochés comme correctif	Copiar os arquivos marcados como patch	Die markierten Dateien als Patch kopieren	Kopiuj zaznaczone pliki jako poprawkę	将勾选的文件复制为补丁	チェックしたファイルをパッチとしてコピー
+Copy {n} Commits as Patch	Copiar {n} commits como parche	Copier {n} commits comme correctif	Copiar {n} commits como patch	{n} Commits als Patch kopieren	Kopiuj commity ({n}) jako poprawkę	将 {n} 个提交复制为补丁	{n} 件のコミットをパッチとしてコピー
+Create Patch from the checked files…	Crear parche con los archivos marcados…	Créer un correctif à partir des fichiers cochés…	Criar patch dos arquivos marcados…	Patch aus den markierten Dateien erstellen…	Utwórz poprawkę z zaznaczonych plików…	从勾选的文件创建补丁…	チェックしたファイルからパッチを作成…
+Create Patch of {n} Commits…	Crear parche de {n} commits…	Créer un correctif de {n} commits…	Criar patch de {n} commits…	Patch aus {n} Commits erstellen…	Utwórz poprawkę z commitów ({n})…	创建 {n} 个提交的补丁…	{n} 件のコミットからパッチを作成…
+Create Patch	Crear parche	Créer un correctif	Criar patch	Patch erstellen	Utwórz poprawkę	创建补丁	パッチを作成
+Create Patch…	Crear parche…	Créer un correctif…	Criar patch…	Patch erstellen…	Utwórz poprawkę…	创建补丁…	パッチを作成…
+Patch copied to the clipboard	Parche copiado al portapapeles	Correctif copié dans le presse-papiers	Patch copiado para a área de transferência	Patch in die Zwischenablage kopiert	Skopiowano poprawkę do schowka	补丁已复制到剪贴板	パッチをクリップボードにコピーしました
+Patch saved	Parche guardado	Correctif enregistré	Patch salvo	Patch gespeichert	Zapisano poprawkę	补丁已保存	パッチを保存しました
