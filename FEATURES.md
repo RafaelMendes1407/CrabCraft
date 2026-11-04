@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 147 |
+| ✅ Pronto | 148 |
 | 🚧 Em andamento | 5 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 78 |
+| ⬜ A fazer | 77 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -312,7 +312,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-09 | Stash e shelve | ⬜ | M5 | |
 | V-10 | Changelists | ⬜ | M5 | |
 | V-11 | Worktrees | ⬜ | M5 | |
-| V-12 | Tags | ⬜ | M5 | |
+| V-12 | Tags | ✅ | M5 | Janela Git › aba Tags: lista (nome, anotada ou leve, commit, data, mensagem), Nova tag em HEAD ou num commit do Log (menu de contexto), leve ou anotada; nome validado com `git check-ref-format`; Checkout (aviso de HEAD destacado), Push de uma tag ou de todas (escolha do remoto, saída do git mostrada) e Excluir, todos com confirmação e em segundo plano. Testado com repositórios git reais e remoto bare; capturas conferidas. Fora: excluir a tag no remoto |
 | V-13 | Patches | ⬜ | M5 | |
 | V-14 | Assinatura GPG | ⬜ | M5 | |
 | V-15 | Editar histórico | ⬜ | M5 | |

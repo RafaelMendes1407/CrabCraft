@@ -49,6 +49,14 @@ pub enum Dialog {
     /// Confirm rolling back files to HEAD.
     Rollback { paths: Vec<String> },
     NewBranch { name: String },
+    /// A new tag on HEAD or on a commit (hash, short hash); a message makes it annotated.
+    NewTag { name: String, target: Option<(String, String)>, message: String },
+    /// Confirm deleting a local tag.
+    DeleteTag { name: String },
+    /// Warn before checking out a tag (detached HEAD).
+    CheckoutTag { name: String },
+    /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
+    PushTags { name: Option<String>, remote: String },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -102,6 +110,10 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::FileStructure { filter, selected } => file_structure(app, ctx, filter, selected),
         Dialog::Rollback { paths } => rollback(app, ctx, paths),
         Dialog::NewBranch { name } => new_branch(app, ctx, name),
+        Dialog::NewTag { name, target, message } => new_tag(app, ctx, name, target.as_ref(), message),
+        Dialog::DeleteTag { name } => delete_tag(app, ctx, name),
+        Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
+        Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -1910,6 +1922,102 @@ fn new_branch(app: &mut CrabCraftApp, ctx: &Context, name: &mut String) -> Outco
     });
     if ok {
         app.vcs.new_branch(name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+/// Cheap checks of a tag name while it is typed; git's `check-ref-format` has the last word
+/// when the tag is created.
+pub fn plausible_tag_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['-', '.', '/'])
+        && !name.ends_with(['.', '/'])
+        && !name.ends_with(".lock")
+        && !name.contains("..")
+        && !name.contains("@{")
+        && !name.contains("//")
+        && name != "@"
+        && !name.chars().any(|c| c.is_whitespace() || c.is_control() || matches!(c, '~' | '^' | ':' | '?' | '*' | '[' | '\\'))
+}
+
+fn new_tag(app: &mut CrabCraftApp, ctx: &Context, name: &mut String, target: Option<&(String, String)>, message: &mut String) -> Outcome {
+    let valid = plausible_tag_name(name.trim());
+    let ((ok, cancel), esc) = modal(ctx, "new_tag", 420.0, |ui| {
+        title(ui, tr("New Tag"));
+        let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Tag name")).desired_width(f32::INFINITY));
+        if !ui.memory(|m| m.has_focus(resp.id)) && message.is_empty() && name.is_empty() {
+            resp.request_focus();
+        }
+        let muted = rc_kit::pal(ui).muted;
+        let on = match target {
+            Some((_, short)) => trf("On commit {hash}", &[("hash", short)]),
+            None => tr("On HEAD").to_string(),
+        };
+        ui.label(egui::RichText::new(on).size(12.0).color(muted));
+        if !name.trim().is_empty() && !valid {
+            ui.label(egui::RichText::new(tr("This is not a valid tag name")).size(12.0).color(rc_kit::pal(ui).error));
+        }
+        ui.add_space(6.0);
+        ui.add(egui::TextEdit::multiline(message).hint_text(tr("Message (optional)")).desired_rows(3).desired_width(f32::INFINITY));
+        ui.label(egui::RichText::new(tr("With a message the tag is annotated; without one it is lightweight.")).size(12.0).color(muted));
+        buttons(ui, tr("Create"), valid)
+    });
+    if ok && valid {
+        app.vcs.create_tag(name.trim(), target.map(|(h, _)| h.clone()), Some(message.clone()));
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn delete_tag(app: &mut CrabCraftApp, ctx: &Context, name: &str) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "delete_tag", 420.0, |ui| {
+        title(ui, tr("Delete Tag"));
+        ui.label(trf("Delete the tag {name}? Copies of it on remotes are kept.", &[("name", &name)]));
+        buttons(ui, tr("Delete"), true)
+    });
+    if ok {
+        app.vcs.delete_tag(name);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn checkout_tag(app: &mut CrabCraftApp, ctx: &Context, name: &str) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "checkout_tag", 440.0, |ui| {
+        title(ui, tr("Checkout Tag"));
+        ui.horizontal(|ui| {
+            icons::image(ui, rc_kit::ico::DIALOG_WARNING, 20.0);
+            ui.label(trf("Checking out {name} detaches HEAD: new commits will not belong to any branch until you create one.", &[("name", &name)]));
+        });
+        buttons(ui, tr("Checkout"), true)
+    });
+    if ok {
+        app.vcs.checkout_tag(name);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: &mut String) -> Outcome {
+    let remotes = app.vcs.remotes.clone();
+    let valid = remotes.contains(remote);
+    let ((ok, cancel), esc) = modal(ctx, "push_tags", 420.0, |ui| {
+        title(ui, if name.is_some() { tr("Push Tag") } else { tr("Push All Tags") });
+        ui.label(match name {
+            Some(n) => trf("Push the tag {name} to:", &[("name", &n)]),
+            None => tr("Push every local tag to:").to_string(),
+        });
+        egui::ComboBox::from_id_salt("push_tags_remote").selected_text(remote.as_str()).show_ui(ui, |ui| {
+            for r in &remotes {
+                ui.selectable_value(remote, r.clone(), r.as_str());
+            }
+        });
+        ui.label(egui::RichText::new(tr("The repository's pre-push hook, if any, runs.")).size(12.0).color(rc_kit::pal(ui).muted));
+        buttons(ui, tr("Push"), valid)
+    });
+    if ok && valid {
+        app.vcs.push_tags(remote, name.map(str::to_string));
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

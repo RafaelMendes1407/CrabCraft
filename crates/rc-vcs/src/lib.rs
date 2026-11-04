@@ -18,6 +18,7 @@ pub mod repo;
 pub mod side_by_side;
 pub mod stash;
 pub mod status;
+pub mod tag;
 pub mod textdiff;
 
 pub use blame::{Blame, BlameCommit, BlameLine};
@@ -35,3 +36,4 @@ pub use repo::{RepoState, Repository};
 pub use side_by_side::{Row, RowKind, SideBySide, inline_changes};
 pub use stash::{Stash, StashOptions};
 pub use status::{BranchStatus, ConflictKind, FileState, Status, StatusEntry, StatusOptions};
+pub use tag::Tag;

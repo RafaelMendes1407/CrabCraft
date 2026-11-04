@@ -32,6 +32,10 @@ pub enum GitError {
     LocalChangesWouldBeOverwritten(Vec<String>),
     #[error("A branch named {0} already exists")]
     BranchExists(String),
+    #[error("{0} is not a valid tag name")]
+    InvalidRefName(String),
+    #[error("A tag named {0} already exists")]
+    TagExists(String),
     #[error("The branch {0} is not fully merged")]
     BranchNotFullyMerged(String),
     #[error("The current branch has no upstream branch")]
@@ -75,6 +79,8 @@ impl GitError {
             DetachedHead => ("HEAD is detached (not on a branch)", vec![]),
             LocalChangesWouldBeOverwritten(_) => ("Local changes would be overwritten", vec![]),
             BranchExists(b) => ("A branch named {branch} already exists", vec![("branch", b.clone())]),
+            InvalidRefName(n) => ("\"{name}\" is not a valid tag name", vec![("name", n.clone())]),
+            TagExists(n) => ("A tag named {name} already exists", vec![("name", n.clone())]),
             BranchNotFullyMerged(b) => ("The branch {branch} is not fully merged", vec![("branch", b.clone())]),
             NoUpstream => ("The current branch has no upstream branch", vec![]),
             PushRejected(_) => ("The push was rejected (fetch first)", vec![]),
@@ -153,6 +159,9 @@ impl GitError {
         }
         if has("[rejected]") || has("non-fast-forward") || has("fetch first") || has("failed to push some refs") {
             return GitError::PushRejected(err.to_string());
+        }
+        if let Some(name) = quoted_after(&all, "tag '").filter(|_| has("already exists")) {
+            return GitError::TagExists(name);
         }
         if let Some(name) = quoted_after(&all, "a branch named '").or_else(|| quoted_after(&all, "branch '").filter(|_| has("already exists"))) {
             return GitError::BranchExists(name);

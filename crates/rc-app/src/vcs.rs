@@ -5,7 +5,7 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Status, StatusOptions};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Status, StatusOptions, Tag};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -22,6 +22,24 @@ enum VcsEvent {
     CommitFiles(String, Vec<rc_vcs::ChangedFile>),
     /// Texts for the diff viewer: (title, path, left, right).
     Diff(String, PathBuf, String, String),
+    Tags(Vec<Tag>),
+    Remotes(Vec<String>),
+    Output(OpOutput),
+}
+
+/// The views of the Git tool window.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GitTab {
+    #[default]
+    Log,
+    Tags,
+}
+
+/// What git printed for the last explicit network operation (a tag push), or why it failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpOutput {
+    pub text: String,
+    pub error: bool,
 }
 
 /// The changed files of the work tree, as shown by the Commit window.
@@ -52,6 +70,12 @@ pub struct Vcs {
     pub excluded: BTreeSet<String>,
     pub busy: Option<&'static str>,
     pub error: Option<String>,
+    pub tab: GitTab,
+    pub tags: Vec<Tag>,
+    pub selected_tag: Option<String>,
+    pub remotes: Vec<String>,
+    /// Output of the last tag push.
+    pub output: Option<OpOutput>,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
     heads: HashMap<PathBuf, Option<String>>,
@@ -78,6 +102,11 @@ impl Vcs {
             excluded: BTreeSet::new(),
             busy: None,
             error: None,
+            tab: GitTab::Log,
+            tags: Vec::new(),
+            selected_tag: None,
+            remotes: Vec::new(),
+            output: None,
             inbox: Inbox::new(waker.clone()),
             waker,
             heads: HashMap::new(),
@@ -156,6 +185,12 @@ impl Vcs {
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
             }
+            if let Ok(t) = repo.tags().await {
+                out.send(VcsEvent::Tags(t));
+            }
+            if let Ok(r) = repo.remotes().await {
+                out.send(VcsEvent::Remotes(r.into_iter().map(|r| r.name).collect()));
+            }
         });
     }
 
@@ -189,17 +224,72 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<(), rc_vcs::GitError>> + Send + 'static,
     {
+        self.run(what, false, async move { f.await.map(|()| None) });
+    }
+
+    /// Runs an operation in the background. Text it returns becomes [`Vcs::output`]; with
+    /// `report`, so does git's message when it fails.
+    fn run<F>(&mut self, what: &'static str, report: bool, f: F)
+    where
+        F: std::future::Future<Output = Result<Option<String>, rc_vcs::GitError>> + Send + 'static,
+    {
         self.busy = Some(what);
         self.error = None;
+        if report {
+            self.output = None;
+        }
         let out = self.inbox.sender();
         Runtime::spawn(async move {
-            let r = f.await;
-            out.send(VcsEvent::Done(what, r.err().map(|e| {
-                let (tpl, args) = e.user_message();
-                let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
-                trf(tpl, &args)
-            })));
+            match f.await {
+                Ok(text) => {
+                    if let Some(text) = text {
+                        out.send(VcsEvent::Output(OpOutput { text, error: false }));
+                    }
+                    out.send(VcsEvent::Done(what, None));
+                }
+                Err(e) => {
+                    let summary = user_error(&e);
+                    if report {
+                        let text = match e.details().filter(|d| !d.trim().is_empty()) {
+                            Some(d) => format!("{summary}\n{}", d.trim()),
+                            None => summary.clone(),
+                        };
+                        out.send(VcsEvent::Output(OpOutput { text, error: true }));
+                    }
+                    out.send(VcsEvent::Done(what, Some(summary)));
+                }
+            }
         });
+    }
+
+    // ------------------------------------------------------------------ tags
+
+    /// Creates a tag on `target` (default HEAD), annotated when `message` is not empty.
+    pub fn create_tag(&mut self, name: &str, target: Option<String>, message: Option<String>) {
+        let Some(repo) = self.repo.clone() else { return };
+        let name = name.to_string();
+        let message = message.filter(|m| !m.trim().is_empty());
+        self.op("tag", async move { repo.create_tag(&name, target.as_deref(), message.as_deref()).await });
+    }
+
+    pub fn delete_tag(&mut self, name: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let name = name.to_string();
+        self.op("tag_delete", async move { repo.delete_tag(&name).await });
+    }
+
+    /// Pushes one tag, or every tag (`None`), to `remote`; git's report goes to [`Vcs::output`].
+    pub fn push_tags(&mut self, remote: &str, name: Option<String>) {
+        let Some(repo) = self.repo.clone() else { return };
+        let remote = remote.to_string();
+        self.run("tag_push", true, async move { repo.push_tags(&remote, name.as_deref(), None, None).await.map(Some) });
+    }
+
+    /// Checks out the commit of a tag (detached HEAD).
+    pub fn checkout_tag(&mut self, name: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let name = name.to_string();
+        self.op("tag_checkout", async move { repo.checkout_tag(&name).await });
     }
 
     /// The changes that go into the next commit, relative to the repository.
@@ -398,6 +488,8 @@ impl Vcs {
                                 notices.push(tr("Pushed").to_string());
                             } else if what == "pull" {
                                 notices.push(tr("Project updated").to_string());
+                            } else if let Some(text) = done_notice(what) {
+                                notices.push(text.to_string());
                             }
                             self.refresh();
                         }
@@ -409,6 +501,14 @@ impl Vcs {
                     }
                 }
                 VcsEvent::Diff(title, path, left, right) => self.diff = Some(self.make_diff(title, path, &left, &right, dark)),
+                VcsEvent::Tags(t) => {
+                    if self.selected_tag.as_ref().is_some_and(|s| !t.iter().any(|x| &x.name == s)) {
+                        self.selected_tag = None;
+                    }
+                    self.tags = t;
+                }
+                VcsEvent::Remotes(r) => self.remotes = r,
+                VcsEvent::Output(o) => self.output = Some(o),
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
@@ -519,6 +619,24 @@ impl Vcs {
         };
         DiffView { title, path: path.clone(), left: make(lt.join("\n"), lbg, left_numbers), right: make(rt.join("\n"), rbg, right_numbers) }
     }
+}
+
+/// The translated summary of a git failure.
+fn user_error(e: &rc_vcs::GitError) -> String {
+    let (tpl, args) = e.user_message();
+    let args: Vec<(&str, &dyn std::fmt::Display)> = args.iter().map(|(k, v)| (*k, v as &dyn std::fmt::Display)).collect();
+    trf(tpl, &args)
+}
+
+/// What to tell the user when an operation of the Git window succeeds.
+fn done_notice(what: &str) -> Option<&'static str> {
+    Some(match what {
+        "tag" => tr("Tag created"),
+        "tag_delete" => tr("Tag deleted"),
+        "tag_push" => tr("Tags pushed"),
+        "tag_checkout" => tr("Checked out the tag; HEAD is detached"),
+        _ => return None,
+    })
 }
 
 fn short_author(a: &str) -> String {

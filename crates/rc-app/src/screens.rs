@@ -602,6 +602,52 @@ fn screens_git() {
 }
 
 #[test]
+#[ignore = "Requires a GPU; writes Git tag and stash captures to target/snapshots"]
+fn screens_git_tags_and_stashes() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["config", "tag.gpgsign", "false"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["tag", "v0.1.0"]);
+    std::fs::write(root.join("src/lib.rs"), "/// Prices an order.\npub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    git(&["commit", "-qam", "Document price"]);
+    git(&["tag", "-a", "v0.2.0", "-m", "Second release\n\nDocuments the price function."]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "tags", |a| a.vcs.tags.len() == 2);
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Tags;
+        app.vcs.selected_tag = Some("v0.2.0".into());
+        app.vcs.output = Some(crate::vcs::OpOutput { text: "To /srv/git/shop.git\n*\trefs/tags/v0.2.0:refs/tags/v0.2.0\t[new tag]\nDone".into(), error: false });
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-tags-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewTag { name: "v0.3.0".into(), target: None, message: "Third release".into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-new-tag-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CheckoutTag { name: "v0.1.0".into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-checkout-tag-dark.png")).unwrap();
+}
+
+#[test]
 #[ignore = "Requires a GPU, the .NET SDK and the Roslyn server in target/test-home; writes captures"]
 fn screens_insight() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());

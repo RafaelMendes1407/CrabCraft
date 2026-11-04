@@ -85,3 +85,85 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     assert_eq!(ann.len(), app.docs.active_doc().unwrap().editor.buffer.len_lines() - 1);
     assert!(ann.iter().all(|a| a.contains("Test")), "{ann:?}");
 }
+
+/// A repository with one commit and a local bare remote named `origin`.
+fn repo_with_remote() -> (tempfile::TempDir, tempfile::TempDir, std::path::PathBuf) {
+    let repo = tempfile::tempdir().unwrap();
+    let remote = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    git(remote.path(), &["init", "-q", "--bare", "-b", "main"]);
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Test"), ("user.email", "test@example.com"), ("tag.gpgsign", "false"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+        git(&root, &["config", k, v]);
+    }
+    git(&root, &["remote", "add", "origin", &format!("file://{}", remote.path().display())]);
+    std::fs::write(root.join("lib.rs"), "pub fn a() {}\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "First"]);
+    (repo, remote, root)
+}
+
+fn open_app(root: &Path) -> CrabCraftApp {
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(root);
+    pump(&mut app, "status", |a| a.vcs.status.is_some() && !a.vcs.log.is_empty());
+    app
+}
+
+fn git_out(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[test]
+fn tags_are_created_pushed_checked_out_and_deleted_from_the_git_window() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, remote, root) = repo_with_remote();
+    let mut app = open_app(&root);
+    let first = app.vcs.log[0].hash.clone();
+    std::fs::write(root.join("lib.rs"), "pub fn b() {}\n").unwrap();
+    git(&root, &["commit", "-qam", "Second"]);
+    app.vcs.refresh();
+    pump(&mut app, "remotes and log", |a| a.vcs.remotes == ["origin"] && a.vcs.log.len() == 2);
+
+    // A lightweight tag on an older commit, an annotated one on HEAD.
+    app.vcs.create_tag("v0.1", Some(first.clone()), None);
+    pump(&mut app, "lightweight tag", |a| a.vcs.busy.is_none() && a.vcs.tags.iter().any(|t| t.name == "v0.1"));
+    app.vcs.create_tag("v0.2", None, Some("Second release".into()));
+    pump(&mut app, "annotated tag", |a| a.vcs.busy.is_none() && a.vcs.tags.iter().any(|t| t.name == "v0.2"));
+    let v1 = app.vcs.tags.iter().find(|t| t.name == "v0.1").unwrap().clone();
+    let v2 = app.vcs.tags.iter().find(|t| t.name == "v0.2").unwrap().clone();
+    assert_eq!((v1.target.as_str(), v1.annotated), (first.as_str(), false));
+    assert!(v2.annotated && v2.message == "Second release");
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Tag created")));
+
+    // A bad name is refused by git's own rules, before anything runs.
+    app.vcs.create_tag("bad..name", None, None);
+    pump(&mut app, "refused name", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(!crate::ui::dialogs::plausible_tag_name("bad..name") && crate::ui::dialogs::plausible_tag_name("release/1.0"));
+
+    // Push one tag, then all; the output shows what git did.
+    app.vcs.push_tags("origin", Some("v0.1".into()));
+    pump(&mut app, "push one", |a| a.vcs.busy.is_none() && a.vcs.output.is_some());
+    let out = app.vcs.output.clone().unwrap();
+    assert!(!out.error && out.text.contains("refs/tags/v0.1"), "{out:?}");
+    assert_eq!(git_out(remote.path(), &["tag", "--list"]).trim(), "v0.1");
+    app.vcs.push_tags("origin", None);
+    pump(&mut app, "push all", |a| a.vcs.busy.is_none() && a.vcs.output.is_some());
+    assert_eq!(git_out(remote.path(), &["tag", "--list"]).lines().collect::<Vec<_>>(), ["v0.1", "v0.2"]);
+    // A failing push reports git's message as output.
+    app.vcs.push_tags("nowhere", Some("v0.1".into()));
+    pump(&mut app, "failed push", |a| a.vcs.busy.is_none() && a.vcs.output.as_ref().is_some_and(|o| o.error));
+
+    // Checkout detaches HEAD at the tag; delete removes it locally only.
+    app.vcs.checkout_tag("v0.1");
+    pump(&mut app, "detached", |a| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.branch.head.is_none()));
+    assert_eq!(git_out(&root, &["rev-parse", "HEAD"]).trim(), first);
+    app.vcs.delete_tag("v0.1");
+    pump(&mut app, "deleted", |a| a.vcs.busy.is_none() && !a.vcs.tags.iter().any(|t| t.name == "v0.1"));
+    assert!(git_out(remote.path(), &["tag", "--list"]).contains("v0.1"));
+}
