@@ -680,7 +680,10 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         ui.set_min_width(220.0);
         ui.set_max_width(280.0);
         use crate::item_templates::ItemKind;
-        for entry in if rust { ItemKind::RUST_MENU } else { ItemKind::MENU } {
+        // C# types, controllers and Razor items only where a .NET project is: anywhere else
+        // (a Rust project, or a folder of several) the Rust menu, so nothing becomes a `.cs`.
+        let dotnet = !rust && (solution.is_some() || crate::item_templates::in_dotnet_project(&target_dir));
+        for entry in if dotnet { ItemKind::MENU } else { ItemKind::RUST_MENU } {
             match entry {
                 None => {
                     ui.separator();
@@ -694,7 +697,7 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
                 }
             }
         }
-        if rust {
+        if !dotnet {
             ui.separator();
             if theme::menu_item(ui, Some(ico::LIBRARY), &format!("{}…", tr("Cargo Crate")), false).clicked() {
                 actions.push(ExplorerAction::NewCrate(target_dir.clone()));
