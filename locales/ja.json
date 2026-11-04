@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "現在のブランチにはアップストリームブランチがありません",
     "The patch does not apply": "パッチを適用できません",
     "The push was rejected (fetch first)": "プッシュが拒否されました（先にフェッチしてください）",
-    "{path} is not inside a Git repository": "{path} は Git リポジトリ内にありません"
+    "{path} is not inside a Git repository": "{path} は Git リポジトリ内にありません",
+    "The stash list changed; refresh it and try again": "スタッシュの一覧が変わりました。更新してやり直してください"
   },
   "search-results": {
     "… more": "… さらに表示"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "リポジトリに pre-push フックがあれば実行されます。",
     "\"{name}\" is not a valid tag name": "\"{name}\" は有効なタグ名ではありません",
     "A tag named {name} already exists": "{name} という名前のタグは既に存在します"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "スタッシュ ({n})",
+    "Stash": "スタッシュ",
+    "Stash Changes…": "変更をスタッシュ…",
+    "Stash Changes": "変更をスタッシュ",
+    "Restore index": "インデックスを復元",
+    "Apply and Pop also restore which changes were staged.": "適用とポップでステージ済みの変更も復元します。",
+    "No stashes": "スタッシュはありません",
+    "Apply": "適用",
+    "Pop": "ポップ",
+    "Drop…": "削除…",
+    "Drop": "削除",
+    "Drop Stash": "スタッシュを削除",
+    "Drop {name} ({message})? Its changes are lost.": "{name}（{message}）を削除しますか？変更は失われます。",
+    "Apply the changes and keep the stash": "変更を適用してスタッシュを残す",
+    "Apply the changes and drop the stash": "変更を適用してスタッシュを削除",
+    "Select a stash to see its changes": "スタッシュを選択すると変更が表示されます",
+    "Include untracked files": "追跡されていないファイルを含める",
+    "Keep staged changes in the work tree": "ステージ済みの変更を作業ツリーに残す",
+    "untracked": "未追跡",
+    "added": "追加",
+    "deleted": "削除",
+    "renamed": "名前変更",
+    "copied": "コピー",
+    "modified": "変更",
+    "Changes stashed": "変更をスタッシュしました",
+    "Stash applied": "スタッシュを適用しました",
+    "Stash applied and dropped": "スタッシュを適用して削除しました",
+    "Stash dropped": "スタッシュを削除しました"
   }
 }

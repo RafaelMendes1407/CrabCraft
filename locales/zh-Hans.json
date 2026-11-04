@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "当前分支没有上游分支",
     "The patch does not apply": "补丁无法应用",
     "The push was rejected (fetch first)": "推送被拒绝（请先获取）",
-    "{path} is not inside a Git repository": "{path} 不在 Git 仓库中"
+    "{path} is not inside a Git repository": "{path} 不在 Git 仓库中",
+    "The stash list changed; refresh it and try again": "贮藏列表已更改；请刷新后重试"
   },
   "search-results": {
     "… more": "… 更多"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "如果仓库有 pre-push 钩子，它会运行。",
     "\"{name}\" is not a valid tag name": "\"{name}\" 不是有效的标签名称",
     "A tag named {name} already exists": "名为 {name} 的标签已存在"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "贮藏 ({n})",
+    "Stash": "贮藏",
+    "Stash Changes…": "贮藏更改…",
+    "Stash Changes": "贮藏更改",
+    "Restore index": "恢复索引",
+    "Apply and Pop also restore which changes were staged.": "应用和弹出也会恢复已暂存的更改。",
+    "No stashes": "没有贮藏",
+    "Apply": "应用",
+    "Pop": "弹出",
+    "Drop…": "删除…",
+    "Drop": "删除",
+    "Drop Stash": "删除贮藏",
+    "Drop {name} ({message})? Its changes are lost.": "删除 {name}（{message}）？其中的更改将丢失。",
+    "Apply the changes and keep the stash": "应用更改并保留贮藏",
+    "Apply the changes and drop the stash": "应用更改并删除贮藏",
+    "Select a stash to see its changes": "选择一个贮藏以查看其更改",
+    "Include untracked files": "包括未跟踪的文件",
+    "Keep staged changes in the work tree": "在工作树中保留已暂存的更改",
+    "untracked": "未跟踪",
+    "added": "已添加",
+    "deleted": "已删除",
+    "renamed": "已重命名",
+    "copied": "已复制",
+    "modified": "已修改",
+    "Changes stashed": "已贮藏更改",
+    "Stash applied": "已应用贮藏",
+    "Stash applied and dropped": "已应用并删除贮藏",
+    "Stash dropped": "已删除贮藏"
   }
 }

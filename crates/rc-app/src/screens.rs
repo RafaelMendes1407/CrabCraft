@@ -623,6 +623,11 @@ fn screens_git_tags_and_stashes() {
     std::fs::write(root.join("src/lib.rs"), "/// Prices an order.\npub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
     git(&["commit", "-qam", "Document price"]);
     git(&["tag", "-a", "v0.2.0", "-m", "Second release\n\nDocuments the price function."]);
+    std::fs::write(root.join("src/lib.rs"), "/// Prices an order.\npub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    std::fs::write(root.join("src/discount.rs"), "pub fn discount(p: u32) -> u32 {\n    p / 10\n}\n").unwrap();
+    git(&["stash", "push", "--include-untracked", "-m", "Try a higher price with a discount"]);
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.3.0\"\nedition = \"2021\"\n").unwrap();
+    git(&["stash", "push"]);
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
@@ -645,6 +650,24 @@ fn screens_git_tags_and_stashes() {
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CheckoutTag { name: "v0.1.0".into() });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-checkout-tag-dark.png")).unwrap();
+    h.state_mut().dialog = None;
+    run_frames(&mut h, "stashes", |a| a.vcs.stashes.len() == 2);
+    {
+        let app = h.state_mut();
+        app.vcs.tab = crate::vcs::GitTab::Stashes;
+        let hash = app.vcs.stashes[1].hash.clone();
+        app.vcs.select_stash(&hash);
+    }
+    run_frames(&mut h, "stash files", |a| a.vcs.stash_files.len() == 2);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-stashes-dark.png")).unwrap();
+    let stash = h.state().vcs.stashes[1].clone();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DropStash { stash });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-drop-stash-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-stash-changes-dark.png")).unwrap();
 }
 
 #[test]

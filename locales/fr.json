@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "La branche actuelle n’a pas de branche amont",
     "The patch does not apply": "Le correctif ne s’applique pas",
     "The push was rejected (fetch first)": "Le push a été rejeté (faites d’abord un fetch)",
-    "{path} is not inside a Git repository": "{path} n’est pas dans un dépôt Git"
+    "{path} is not inside a Git repository": "{path} n’est pas dans un dépôt Git",
+    "The stash list changed; refresh it and try again": "La liste des remises a changé ; actualisez-la et réessayez"
   },
   "search-results": {
     "… more": "… plus"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "Le hook pre-push du dépôt, s'il existe, est exécuté.",
     "\"{name}\" is not a valid tag name": "« {name} » n'est pas un nom de tag valide",
     "A tag named {name} already exists": "Un tag nommé {name} existe déjà"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "Remises ({n})",
+    "Stash": "Remise",
+    "Stash Changes…": "Remiser les modifications…",
+    "Stash Changes": "Remiser les modifications",
+    "Restore index": "Restaurer l'index",
+    "Apply and Pop also restore which changes were staged.": "Appliquer et Pop restaurent aussi les modifications indexées.",
+    "No stashes": "Aucune remise",
+    "Apply": "Appliquer",
+    "Pop": "Pop",
+    "Drop…": "Supprimer…",
+    "Drop": "Supprimer",
+    "Drop Stash": "Supprimer la remise",
+    "Drop {name} ({message})? Its changes are lost.": "Supprimer {name} ({message}) ? Ses modifications seront perdues.",
+    "Apply the changes and keep the stash": "Appliquer les modifications et garder la remise",
+    "Apply the changes and drop the stash": "Appliquer les modifications et supprimer la remise",
+    "Select a stash to see its changes": "Sélectionnez une remise pour voir ses modifications",
+    "Include untracked files": "Inclure les fichiers non suivis",
+    "Keep staged changes in the work tree": "Garder les modifications indexées dans l'arbre de travail",
+    "untracked": "non suivi",
+    "added": "ajouté",
+    "deleted": "supprimé",
+    "renamed": "renommé",
+    "copied": "copié",
+    "modified": "modifié",
+    "Changes stashed": "Modifications remisées",
+    "Stash applied": "Remise appliquée",
+    "Stash applied and dropped": "Remise appliquée et supprimée",
+    "Stash dropped": "Remise supprimée"
   }
 }

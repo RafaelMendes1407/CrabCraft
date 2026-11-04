@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 148 |
-| 🚧 Em andamento | 5 |
+| 🚧 Em andamento | 6 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 77 |
+| ⬜ A fazer | 76 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -309,7 +309,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-06 | Log e histórico de arquivo | ⬜ | M5 | |
 | V-07 | Merge, rebase e cherry-pick | ⬜ | M5 | |
 | V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
-| V-09 | Stash e shelve | ⬜ | M5 | |
+| V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |
 | V-10 | Changelists | ⬜ | M5 | |
 | V-11 | Worktrees | ⬜ | M5 | |
 | V-12 | Tags | ✅ | M5 | Janela Git › aba Tags: lista (nome, anotada ou leve, commit, data, mensagem), Nova tag em HEAD ou num commit do Log (menu de contexto), leve ou anotada; nome validado com `git check-ref-format`; Checkout (aviso de HEAD destacado), Push de uma tag ou de todas (escolha do remoto, saída do git mostrada) e Excluir, todos com confirmação e em segundo plano. Testado com repositórios git reais e remoto bare; capturas conferidas. Fora: excluir a tag no remoto |

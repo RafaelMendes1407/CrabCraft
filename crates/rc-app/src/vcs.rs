@@ -5,7 +5,7 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Status, StatusOptions, Tag};
+use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -23,6 +23,8 @@ enum VcsEvent {
     /// Texts for the diff viewer: (title, path, left, right).
     Diff(String, PathBuf, String, String),
     Tags(Vec<Tag>),
+    Stashes(Vec<Stash>),
+    StashFiles(String, Vec<rc_vcs::ChangedFile>),
     Remotes(Vec<String>),
     Output(OpOutput),
 }
@@ -33,6 +35,7 @@ pub enum GitTab {
     #[default]
     Log,
     Tags,
+    Stashes,
 }
 
 /// What git printed for the last explicit network operation (a tag push), or why it failed.
@@ -74,6 +77,13 @@ pub struct Vcs {
     pub tags: Vec<Tag>,
     pub selected_tag: Option<String>,
     pub remotes: Vec<String>,
+    pub stashes: Vec<Stash>,
+    /// Hash of the stash shown in the Stashes view.
+    pub selected_stash: Option<String>,
+    /// The files the selected stash saved (untracked ones have status `?`).
+    pub stash_files: Vec<rc_vcs::ChangedFile>,
+    /// Apply and Pop also restore what was staged (`--index`).
+    pub restore_index: bool,
     /// Output of the last tag push.
     pub output: Option<OpOutput>,
     inbox: Inbox<VcsEvent>,
@@ -106,6 +116,10 @@ impl Vcs {
             tags: Vec::new(),
             selected_tag: None,
             remotes: Vec::new(),
+            stashes: Vec::new(),
+            selected_stash: None,
+            stash_files: Vec::new(),
+            restore_index: false,
             output: None,
             inbox: Inbox::new(waker.clone()),
             waker,
@@ -187,6 +201,9 @@ impl Vcs {
             }
             if let Ok(t) = repo.tags().await {
                 out.send(VcsEvent::Tags(t));
+            }
+            if let Ok(s) = repo.stashes().await {
+                out.send(VcsEvent::Stashes(s));
             }
             if let Ok(r) = repo.remotes().await {
                 out.send(VcsEvent::Remotes(r.into_iter().map(|r| r.name).collect()));
@@ -290,6 +307,65 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let name = name.to_string();
         self.op("tag_checkout", async move { repo.checkout_tag(&name).await });
+    }
+
+    // ------------------------------------------------------------------ stashes
+
+    /// Stashes the work tree's changes (`--include-untracked`, `--keep-index` on request).
+    pub fn stash_push(&mut self, message: &str, include_untracked: bool, keep_index: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let message = Some(message.trim().to_string()).filter(|m| !m.is_empty());
+        let opts = StashOptions { message, include_untracked, keep_index, paths: Vec::new() };
+        self.op("stash", async move { repo.stash_push(&opts).await });
+    }
+
+    /// Applies a stash to the work tree; `pop` also drops it when it applied cleanly.
+    pub fn stash_apply(&mut self, stash: &Stash, pop: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (index, hash, restore) = (stash.index, stash.hash.clone(), self.restore_index);
+        self.op(if pop { "stash_pop" } else { "stash_apply" }, async move {
+            repo.check_stash(index, &hash).await?;
+            if pop { repo.stash_pop(index, restore).await } else { repo.stash_apply(index, restore).await }
+        });
+    }
+
+    pub fn stash_drop(&mut self, stash: &Stash) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (index, hash) = (stash.index, stash.hash.clone());
+        self.op("stash_drop", async move {
+            repo.check_stash(index, &hash).await?;
+            repo.stash_drop(index).await
+        });
+    }
+
+    /// Shows a stash and loads the files it saved.
+    pub fn select_stash(&mut self, hash: &str) {
+        self.selected_stash = Some(hash.to_string());
+        self.stash_files.clear();
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        let h = hash.to_string();
+        Runtime::spawn(async move {
+            if let Ok(files) = repo.stash_files(&h).await {
+                out.send(VcsEvent::StashFiles(h, files));
+            }
+        });
+    }
+
+    /// Opens the diff of a file saved in a stash: the commit it was made on ↔ the stash
+    /// (an untracked file is compared with nothing).
+    pub fn open_stash_diff(&mut self, hash: &str, file: &rc_vcs::ChangedFile) {
+        let Some(repo) = self.repo.clone() else { return };
+        let out = self.inbox.sender();
+        let (h, rel, untracked) = (hash.to_string(), file.path.clone(), file.status == '?');
+        let base = file.orig_path.clone().unwrap_or_else(|| rel.clone());
+        Runtime::spawn(async move {
+            let text = |c: Option<rc_vcs::FileContent>| c.map(|c| c.text().into_owned()).unwrap_or_default();
+            let left = if untracked { String::new() } else { text(repo.show_file(&Revision::Commit(format!("{h}^1")), &base).await.ok().flatten()) };
+            let right_rev = if untracked { format!("{h}^3") } else { h.clone() };
+            let right = text(repo.show_file(&Revision::Commit(right_rev), &rel).await.ok().flatten());
+            out.send(VcsEvent::Diff(format!("{rel} ({})", tr("Stash")), repo.abs_path(&rel), left, right));
+        });
     }
 
     /// The changes that go into the next commit, relative to the repository.
@@ -478,6 +554,9 @@ impl Vcs {
                         Some(e) => {
                             self.error = Some(e.clone());
                             notices.push(e);
+                            // A failed operation may still have changed something (a pop
+                            // with conflicts applies the changes), or found the lists stale.
+                            self.refresh();
                         }
                         None => {
                             if what == "commit" || what == "commit_push" {
@@ -506,6 +585,18 @@ impl Vcs {
                         self.selected_tag = None;
                     }
                     self.tags = t;
+                }
+                VcsEvent::Stashes(list) => {
+                    if self.selected_stash.as_ref().is_some_and(|h| !list.iter().any(|x| &x.hash == h)) {
+                        self.selected_stash = None;
+                        self.stash_files.clear();
+                    }
+                    self.stashes = list;
+                }
+                VcsEvent::StashFiles(h, f) => {
+                    if self.selected_stash.as_deref() == Some(h.as_str()) {
+                        self.stash_files = f;
+                    }
                 }
                 VcsEvent::Remotes(r) => self.remotes = r,
                 VcsEvent::Output(o) => self.output = Some(o),
@@ -635,6 +726,10 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "tag_delete" => tr("Tag deleted"),
         "tag_push" => tr("Tags pushed"),
         "tag_checkout" => tr("Checked out the tag; HEAD is detached"),
+        "stash" => tr("Changes stashed"),
+        "stash_apply" => tr("Stash applied"),
+        "stash_pop" => tr("Stash applied and dropped"),
+        "stash_drop" => tr("Stash dropped"),
         _ => return None,
     })
 }

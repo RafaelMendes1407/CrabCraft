@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "Der aktuelle Branch hat keinen Upstream-Branch",
     "The patch does not apply": "Der Patch lässt sich nicht anwenden",
     "The push was rejected (fetch first)": "Der Push wurde abgelehnt (zuerst fetchen)",
-    "{path} is not inside a Git repository": "{path} liegt in keinem Git-Repository"
+    "{path} is not inside a Git repository": "{path} liegt in keinem Git-Repository",
+    "The stash list changed; refresh it and try again": "Die Stash-Liste hat sich geändert; aktualisieren Sie sie und versuchen Sie es erneut"
   },
   "search-results": {
     "… more": "… mehr"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "Der pre-push-Hook des Repositorys wird ausgeführt, falls vorhanden.",
     "\"{name}\" is not a valid tag name": "„{name}\" ist kein gültiger Tag-Name",
     "A tag named {name} already exists": "Ein Tag namens {name} existiert bereits"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "Stashes ({n})",
+    "Stash": "Stash",
+    "Stash Changes…": "Änderungen stashen…",
+    "Stash Changes": "Änderungen stashen",
+    "Restore index": "Index wiederherstellen",
+    "Apply and Pop also restore which changes were staged.": "Anwenden und Pop stellen auch wieder her, welche Änderungen vorgemerkt waren.",
+    "No stashes": "Keine Stashes",
+    "Apply": "Anwenden",
+    "Pop": "Pop",
+    "Drop…": "Verwerfen…",
+    "Drop": "Verwerfen",
+    "Drop Stash": "Stash verwerfen",
+    "Drop {name} ({message})? Its changes are lost.": "{name} ({message}) verwerfen? Seine Änderungen gehen verloren.",
+    "Apply the changes and keep the stash": "Änderungen anwenden und den Stash behalten",
+    "Apply the changes and drop the stash": "Änderungen anwenden und den Stash verwerfen",
+    "Select a stash to see its changes": "Wählen Sie einen Stash, um seine Änderungen zu sehen",
+    "Include untracked files": "Nicht verfolgte Dateien einbeziehen",
+    "Keep staged changes in the work tree": "Vorgemerkte Änderungen im Arbeitsverzeichnis behalten",
+    "untracked": "nicht verfolgt",
+    "added": "hinzugefügt",
+    "deleted": "gelöscht",
+    "renamed": "umbenannt",
+    "copied": "kopiert",
+    "modified": "geändert",
+    "Changes stashed": "Änderungen gestasht",
+    "Stash applied": "Stash angewendet",
+    "Stash applied and dropped": "Stash angewendet und verworfen",
+    "Stash dropped": "Stash verworfen"
   }
 }

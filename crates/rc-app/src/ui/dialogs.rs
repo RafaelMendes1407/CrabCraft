@@ -57,6 +57,10 @@ pub enum Dialog {
     CheckoutTag { name: String },
     /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
     PushTags { name: Option<String>, remote: String },
+    /// Stash the work tree's changes with an optional message.
+    StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    /// Confirm dropping a stash.
+    DropStash { stash: rc_vcs::Stash },
     /// ⇧⌘E: the places the caret jumped from.
     RecentLocations { selected: usize },
     /// ⌘F12 file structure popup.
@@ -114,6 +118,8 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::DeleteTag { name } => delete_tag(app, ctx, name),
         Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
+        Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -2018,6 +2024,38 @@ fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: 
     });
     if ok && valid {
         app.vcs.push_tags(remote, name.map(str::to_string));
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "stash_changes", 420.0, |ui| {
+        title(ui, tr("Stash Changes"));
+        let resp = ui.add(egui::TextEdit::singleline(message).hint_text(tr("Message (optional)")).desired_width(f32::INFINITY));
+        if message.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+            resp.request_focus();
+        }
+        ui.add_space(6.0);
+        ui.checkbox(include_untracked, tr("Include untracked files"));
+        ui.checkbox(keep_index, tr("Keep staged changes in the work tree"));
+        buttons(ui, tr("Stash"), true)
+    });
+    if ok {
+        app.vcs.stash_push(message, *include_untracked, *keep_index);
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {
+    let ((ok, cancel), esc) = modal(ctx, "drop_stash", 440.0, |ui| {
+        title(ui, tr("Drop Stash"));
+        ui.label(trf("Drop {name} ({message})? Its changes are lost.", &[("name", &format!("stash@{{{}}}", stash.index)), ("message", &stash.message)]));
+        buttons(ui, tr("Drop"), true)
+    });
+    if ok {
+        app.vcs.stash_drop(stash);
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

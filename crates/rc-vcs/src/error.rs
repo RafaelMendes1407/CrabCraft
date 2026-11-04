@@ -22,6 +22,8 @@ pub enum GitError {
     BeforeCommit(String),
     #[error("No local changes to stash")]
     NothingToStash,
+    #[error("The stash list changed; refresh it and try again")]
+    StashChanged,
     #[error("Resolve the merge conflicts first")]
     Conflicts(String),
     #[error("Authentication required")]
@@ -74,6 +76,7 @@ impl GitError {
             NothingToCommit => ("Nothing to commit", vec![]),
             BeforeCommit(m) => ("{message}", vec![("message", m.clone())]),
             NothingToStash => ("No local changes to stash", vec![]),
+            StashChanged => ("The stash list changed; refresh it and try again", vec![]),
             Conflicts(_) => ("Resolve the merge conflicts first", vec![]),
             AuthenticationRequired(_) => ("Authentication required", vec![]),
             DetachedHead => ("HEAD is detached (not on a branch)", vec![]),

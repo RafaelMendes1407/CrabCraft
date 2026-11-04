@@ -1,0 +1,30 @@
+# Git stashes in the Git window. Import: python3 scripts/i18n_tsv.py gitstashes scripts/i18n/git-stashes.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Stashes ({n})	Stashes ({n})	Remises ({n})	Stashes ({n})	Stashes ({n})	Schowki ({n})	贮藏 ({n})	スタッシュ ({n})
+Stash	Stash	Remise	Stash	Stash	Schowek	贮藏	スタッシュ
+Stash Changes…	Guardar cambios en stash…	Remiser les modifications…	Guardar alterações no stash…	Änderungen stashen…	Schowaj zmiany…	贮藏更改…	変更をスタッシュ…
+Stash Changes	Guardar cambios en stash	Remiser les modifications	Guardar alterações no stash	Änderungen stashen	Schowaj zmiany	贮藏更改	変更をスタッシュ
+Restore index	Restaurar índice	Restaurer l'index	Restaurar índice	Index wiederherstellen	Przywróć indeks	恢复索引	インデックスを復元
+Apply and Pop also restore which changes were staged.	Aplicar y Pop también restauran qué cambios estaban preparados.	Appliquer et Pop restaurent aussi les modifications indexées.	Aplicar e Pop também restauram quais alterações estavam preparadas.	Anwenden und Pop stellen auch wieder her, welche Änderungen vorgemerkt waren.	Zastosuj i Pop przywracają też, które zmiany były w poczekalni.	应用和弹出也会恢复已暂存的更改。	適用とポップでステージ済みの変更も復元します。
+No stashes	No hay stashes	Aucune remise	Nenhum stash	Keine Stashes	Brak schowków	没有贮藏	スタッシュはありません
+Apply	Aplicar	Appliquer	Aplicar	Anwenden	Zastosuj	应用	適用
+Pop	Pop	Pop	Pop	Pop	Pop	弹出	ポップ
+Drop…	Descartar…	Supprimer…	Descartar…	Verwerfen…	Usuń…	删除…	削除…
+Drop	Descartar	Supprimer	Descartar	Verwerfen	Usuń	删除	削除
+Drop Stash	Descartar stash	Supprimer la remise	Descartar stash	Stash verwerfen	Usuń schowek	删除贮藏	スタッシュを削除
+Drop {name} ({message})? Its changes are lost.	¿Descartar {name} ({message})? Sus cambios se pierden.	Supprimer {name} ({message}) ? Ses modifications seront perdues.	Descartar {name} ({message})? As alterações dele serão perdidas.	{name} ({message}) verwerfen? Seine Änderungen gehen verloren.	Usunąć {name} ({message})? Jego zmiany zostaną utracone.	删除 {name}（{message}）？其中的更改将丢失。	{name}（{message}）を削除しますか？変更は失われます。
+Apply the changes and keep the stash	Aplicar los cambios y conservar el stash	Appliquer les modifications et garder la remise	Aplicar as alterações e manter o stash	Änderungen anwenden und den Stash behalten	Zastosuj zmiany i zachowaj schowek	应用更改并保留贮藏	変更を適用してスタッシュを残す
+Apply the changes and drop the stash	Aplicar los cambios y descartar el stash	Appliquer les modifications et supprimer la remise	Aplicar as alterações e descartar o stash	Änderungen anwenden und den Stash verwerfen	Zastosuj zmiany i usuń schowek	应用更改并删除贮藏	変更を適用してスタッシュを削除
+Select a stash to see its changes	Seleccione un stash para ver sus cambios	Sélectionnez une remise pour voir ses modifications	Selecione um stash para ver as alterações	Wählen Sie einen Stash, um seine Änderungen zu sehen	Wybierz schowek, aby zobaczyć jego zmiany	选择一个贮藏以查看其更改	スタッシュを選択すると変更が表示されます
+Include untracked files	Incluir archivos sin seguimiento	Inclure les fichiers non suivis	Incluir arquivos não rastreados	Nicht verfolgte Dateien einbeziehen	Uwzględnij nieśledzone pliki	包括未跟踪的文件	追跡されていないファイルを含める
+Keep staged changes in the work tree	Conservar los cambios preparados en el árbol de trabajo	Garder les modifications indexées dans l'arbre de travail	Manter as alterações preparadas na árvore de trabalho	Vorgemerkte Änderungen im Arbeitsverzeichnis behalten	Zachowaj zmiany z poczekalni w drzewie roboczym	在工作树中保留已暂存的更改	ステージ済みの変更を作業ツリーに残す
+untracked	sin seguimiento	non suivi	não rastreado	nicht verfolgt	nieśledzony	未跟踪	未追跡
+added	añadido	ajouté	adicionado	hinzugefügt	dodany	已添加	追加
+deleted	eliminado	supprimé	excluído	gelöscht	usunięty	已删除	削除
+renamed	renombrado	renommé	renomeado	umbenannt	zmieniona nazwa	已重命名	名前変更
+copied	copiado	copié	copiado	kopiert	skopiowany	已复制	コピー
+modified	modificado	modifié	modificado	geändert	zmodyfikowany	已修改	変更
+Changes stashed	Cambios guardados en el stash	Modifications remisées	Alterações guardadas no stash	Änderungen gestasht	Schowano zmiany	已贮藏更改	変更をスタッシュしました
+Stash applied	Stash aplicado	Remise appliquée	Stash aplicado	Stash angewendet	Zastosowano schowek	已应用贮藏	スタッシュを適用しました
+Stash applied and dropped	Stash aplicado y descartado	Remise appliquée et supprimée	Stash aplicado e descartado	Stash angewendet und verworfen	Zastosowano i usunięto schowek	已应用并删除贮藏	スタッシュを適用して削除しました
+Stash dropped	Stash descartado	Remise supprimée	Stash descartado	Stash verworfen	Usunięto schowek	已删除贮藏	スタッシュを削除しました

@@ -293,6 +293,14 @@ async fn stash_push_list_apply_pop_drop() {
     assert_eq!((list[0].index, list[0].message.as_str(), list[0].branch.as_deref()), (0, "On main: second", Some("main")));
     assert_eq!(t.repo.status(&StatusOptions::default()).await.unwrap().stash_count, 2);
 
+    // The files of each stash: tracked changes, and untracked files saved with them.
+    let files = |f: Vec<rc_vcs::ChangedFile>| f.into_iter().map(|f| (f.status, f.path)).collect::<Vec<_>>();
+    assert_eq!(files(t.repo.stash_files(&list[1].hash).await.unwrap()), [('M', "a.txt".to_string())]);
+    assert_eq!(files(t.repo.stash_files(&list[0].hash).await.unwrap()), [('M', "a.txt".to_string()), ('?', "u.txt".to_string())]);
+    t.repo.check_stash(1, &list[1].hash).await.unwrap();
+    assert!(matches!(t.repo.check_stash(0, &list[1].hash).await, Err(GitError::StashChanged)));
+    assert!(matches!(t.repo.check_stash(7, &list[1].hash).await, Err(GitError::StashChanged)));
+
     t.repo.stash_apply(1, false).await.unwrap();
     assert_eq!(t.read("a.txt"), "one\n");
     t.repo.rollback(&s(&["a.txt"])).await.unwrap();
@@ -573,6 +581,7 @@ fn errors_have_translatable_messages() {
         GitError::NotARepository(Default::default()),
         GitError::NothingToCommit,
         GitError::NothingToStash,
+        GitError::StashChanged,
         GitError::Conflicts(String::new()),
         GitError::AuthenticationRequired(String::new()),
         GitError::DetachedHead,

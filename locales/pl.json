@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "Bieżąca gałąź nie ma gałęzi nadrzędnej",
     "The patch does not apply": "Nie można zastosować poprawki",
     "The push was rejected (fetch first)": "Push został odrzucony (najpierw wykonaj fetch)",
-    "{path} is not inside a Git repository": "{path} nie znajduje się w repozytorium Git"
+    "{path} is not inside a Git repository": "{path} nie znajduje się w repozytorium Git",
+    "The stash list changed; refresh it and try again": "Lista schowków się zmieniła; odśwież ją i spróbuj ponownie"
   },
   "search-results": {
     "… more": "… więcej"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "Hook pre-push repozytorium, jeśli istnieje, zostanie uruchomiony.",
     "\"{name}\" is not a valid tag name": "„{name}\" nie jest prawidłową nazwą tagu",
     "A tag named {name} already exists": "Tag o nazwie {name} już istnieje"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "Schowki ({n})",
+    "Stash": "Schowek",
+    "Stash Changes…": "Schowaj zmiany…",
+    "Stash Changes": "Schowaj zmiany",
+    "Restore index": "Przywróć indeks",
+    "Apply and Pop also restore which changes were staged.": "Zastosuj i Pop przywracają też, które zmiany były w poczekalni.",
+    "No stashes": "Brak schowków",
+    "Apply": "Zastosuj",
+    "Pop": "Pop",
+    "Drop…": "Usuń…",
+    "Drop": "Usuń",
+    "Drop Stash": "Usuń schowek",
+    "Drop {name} ({message})? Its changes are lost.": "Usunąć {name} ({message})? Jego zmiany zostaną utracone.",
+    "Apply the changes and keep the stash": "Zastosuj zmiany i zachowaj schowek",
+    "Apply the changes and drop the stash": "Zastosuj zmiany i usuń schowek",
+    "Select a stash to see its changes": "Wybierz schowek, aby zobaczyć jego zmiany",
+    "Include untracked files": "Uwzględnij nieśledzone pliki",
+    "Keep staged changes in the work tree": "Zachowaj zmiany z poczekalni w drzewie roboczym",
+    "untracked": "nieśledzony",
+    "added": "dodany",
+    "deleted": "usunięty",
+    "renamed": "zmieniona nazwa",
+    "copied": "skopiowany",
+    "modified": "zmodyfikowany",
+    "Changes stashed": "Schowano zmiany",
+    "Stash applied": "Zastosowano schowek",
+    "Stash applied and dropped": "Zastosowano i usunięto schowek",
+    "Stash dropped": "Usunięto schowek"
   }
 }

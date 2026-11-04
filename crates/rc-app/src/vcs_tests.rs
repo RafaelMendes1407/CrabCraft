@@ -167,3 +167,73 @@ fn tags_are_created_pushed_checked_out_and_deleted_from_the_git_window() {
     pump(&mut app, "deleted", |a| a.vcs.busy.is_none() && !a.vcs.tags.iter().any(|t| t.name == "v0.1"));
     assert!(git_out(remote.path(), &["tag", "--list"]).contains("v0.1"));
 }
+
+#[test]
+fn stashes_are_made_shown_applied_popped_and_dropped_from_the_git_window() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let mut app = open_app(&root);
+    let clean = |a: &CrabCraftApp| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.entries.is_empty());
+
+    // Stash a modified file and an untracked one, with a message.
+    std::fs::write(root.join("lib.rs"), "pub fn changed() {}\n").unwrap();
+    std::fs::write(root.join("new.rs"), "pub fn new() {}\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "dirty", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    app.vcs.stash_push("  work in progress ", true, false);
+    pump(&mut app, "stashed", |a| clean(a) && a.vcs.stashes.len() == 1);
+    assert!(app.notices.iter().any(|n| n.text == rc_kit::i18n::tr("Changes stashed")));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn a() {}\n");
+    assert!(!root.join("new.rs").exists());
+    let st = app.vcs.stashes[0].clone();
+    assert_eq!((st.index, st.message.as_str(), st.branch.as_deref()), (0, "On main: work in progress", Some("main")));
+
+    // Its contents: the changed file, the untracked one, and a diff of each.
+    app.vcs.select_stash(&st.hash);
+    pump(&mut app, "stash files", |a| a.vcs.stash_files.len() == 2);
+    let files: Vec<_> = app.vcs.stash_files.iter().map(|f| (f.status, f.path.as_str())).collect();
+    assert_eq!(files, [('M', "lib.rs"), ('?', "new.rs")]);
+    let changed = app.vcs.stash_files[0].clone();
+    app.vcs.open_stash_diff(&st.hash, &changed);
+    pump(&mut app, "stash diff", |a| a.vcs.diff.is_some());
+    let untracked = app.vcs.stash_files[1].clone();
+    app.vcs.diff = None;
+    app.vcs.open_stash_diff(&st.hash, &untracked);
+    pump(&mut app, "untracked diff", |a| a.vcs.diff.is_some());
+
+    // Apply keeps the stash; Pop drops it.
+    app.vcs.stash_apply(&st, false);
+    pump(&mut app, "applied", |a| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn changed() {}\n");
+    assert_eq!(app.vcs.stashes.len(), 1);
+    git(&root, &["checkout", "--", "lib.rs"]);
+    std::fs::remove_file(root.join("new.rs")).unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "clean again", |a| clean(a));
+    app.vcs.stash_apply(&st, true);
+    pump(&mut app, "popped", |a| a.vcs.busy.is_none() && a.vcs.stashes.is_empty() && a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    assert!(app.vcs.selected_stash.is_none() && app.vcs.stash_files.is_empty());
+
+    // Drop, after a check that the entry is still the one shown.
+    app.vcs.stash_push("", false, false);
+    pump(&mut app, "stashed again", |a| a.vcs.busy.is_none() && a.vcs.stashes.len() == 1);
+    let old = app.vcs.stashes[0].clone();
+    assert!(old.message.starts_with("WIP on main"), "{old:?}");
+    git(&root, &["stash", "push", "--include-untracked", "-m", "from outside"]);
+    app.vcs.stash_drop(&old);
+    pump(&mut app, "stale drop refused", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert_eq!(git_out(&root, &["stash", "list"]).lines().count(), 2);
+    pump(&mut app, "both listed", |a| a.vcs.stashes.len() == 2);
+    let old = app.vcs.stashes.iter().find(|s| s.hash == old.hash).unwrap().clone();
+    assert_eq!(old.index, 1);
+    app.vcs.stash_drop(&old);
+    pump(&mut app, "dropped", |a| a.vcs.busy.is_none() && a.vcs.stashes.len() == 1);
+    assert!(git_out(&root, &["stash", "list"]).contains("from outside"));
+
+    // Nothing to stash is reported, not a crash.
+    app.vcs.stash_push("empty", false, false);
+    pump(&mut app, "nothing to stash", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+}

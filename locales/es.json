@@ -873,7 +873,8 @@
     "The current branch has no upstream branch": "La rama actual no tiene rama upstream",
     "The patch does not apply": "El parche no se puede aplicar",
     "The push was rejected (fetch first)": "Se rechazó el push (haz fetch primero)",
-    "{path} is not inside a Git repository": "{path} no está dentro de un repositorio Git"
+    "{path} is not inside a Git repository": "{path} no está dentro de un repositorio Git",
+    "The stash list changed; refresh it and try again": "La lista de stashes cambió; actualícela e inténtelo de nuevo"
   },
   "search-results": {
     "… more": "… más"
@@ -1244,5 +1245,35 @@
     "The repository's pre-push hook, if any, runs.": "Se ejecuta el hook pre-push del repositorio, si existe.",
     "\"{name}\" is not a valid tag name": "\"{name}\" no es un nombre de etiqueta válido",
     "A tag named {name} already exists": "Ya existe una etiqueta llamada {name}"
+  },
+  "gitstashes": {
+    "Stashes ({n})": "Stashes ({n})",
+    "Stash": "Stash",
+    "Stash Changes…": "Guardar cambios en stash…",
+    "Stash Changes": "Guardar cambios en stash",
+    "Restore index": "Restaurar índice",
+    "Apply and Pop also restore which changes were staged.": "Aplicar y Pop también restauran qué cambios estaban preparados.",
+    "No stashes": "No hay stashes",
+    "Apply": "Aplicar",
+    "Pop": "Pop",
+    "Drop…": "Descartar…",
+    "Drop": "Descartar",
+    "Drop Stash": "Descartar stash",
+    "Drop {name} ({message})? Its changes are lost.": "¿Descartar {name} ({message})? Sus cambios se pierden.",
+    "Apply the changes and keep the stash": "Aplicar los cambios y conservar el stash",
+    "Apply the changes and drop the stash": "Aplicar los cambios y descartar el stash",
+    "Select a stash to see its changes": "Seleccione un stash para ver sus cambios",
+    "Include untracked files": "Incluir archivos sin seguimiento",
+    "Keep staged changes in the work tree": "Conservar los cambios preparados en el árbol de trabajo",
+    "untracked": "sin seguimiento",
+    "added": "añadido",
+    "deleted": "eliminado",
+    "renamed": "renombrado",
+    "copied": "copiado",
+    "modified": "modificado",
+    "Changes stashed": "Cambios guardados en el stash",
+    "Stash applied": "Stash aplicado",
+    "Stash applied and dropped": "Stash aplicado y descartado",
+    "Stash dropped": "Stash descartado"
   }
 }

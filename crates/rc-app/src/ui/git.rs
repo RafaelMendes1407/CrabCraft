@@ -176,6 +176,10 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         if theme::tab(ui, app.vcs.tab == GitTab::Tags, Some(ico::VCS), &tags, false).0.clicked() {
             app.vcs.tab = GitTab::Tags;
         }
+        let stashes = trf("Stashes ({n})", &[("n", &app.vcs.stashes.len())]);
+        if theme::tab(ui, app.vcs.tab == GitTab::Stashes, Some(ico::HISTORY), &stashes, false).0.clicked() {
+            app.vcs.tab = GitTab::Stashes;
+        }
         if app.vcs.busy.is_some() {
             ui.add(egui::Spinner::new().size(14.0));
         }
@@ -183,6 +187,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     match app.vcs.tab {
         GitTab::Log => log_view(app, ui),
         GitTab::Tags => tags_view(app, ui),
+        GitTab::Stashes => stashes_view(app, ui),
     }
 }
 
@@ -409,6 +414,174 @@ fn tags_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.advance_cursor_after_rect(avail);
     if let Some(d) = action {
         app.dialog = Some(d);
+    }
+}
+
+/// The Stashes view of the Git window: the stashes, the files the selected one saved (click
+/// for its diff) and what can be done with it (apply, pop, drop).
+fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let p = rc_kit::pal(ui);
+    let busy = app.vcs.busy.is_some();
+    let dirty = app.vcs.status.as_ref().is_some_and(|s| !s.entries.is_empty());
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        let stash = ui.add_enabled_ui(!busy && dirty, |ui| theme::secondary_button(ui, tr("Stash Changes…"))).inner;
+        if stash.clicked() {
+            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false });
+        }
+        if !dirty {
+            stash.on_disabled_hover_text(tr("No local changes to stash"));
+        }
+        ui.checkbox(&mut app.vcs.restore_index, tr("Restore index")).on_hover_text(tr("Apply and Pop also restore which changes were staged."));
+        if theme::icon_button(ui, ico::REFRESH, true, tr("Refresh")).clicked() {
+            app.vcs.refresh();
+        }
+    });
+    let avail = ui.available_rect_before_wrap();
+    let left = Rect::from_min_size(avail.min, vec2((avail.width() * 0.5).max(260.0).min(avail.width()), avail.height()));
+    let right = Rect::from_min_max(pos2(left.right() + 1.0, avail.top()), avail.max);
+    ui.painter().vline(left.right() + 0.5, avail.y_range(), egui::Stroke::new(1.0, p.island_border));
+    let stashes = app.vcs.stashes.clone();
+    let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left));
+    lu.set_clip_rect(left.intersect(ui.clip_rect()));
+    let mut select = None;
+    let mut action: Option<StashAction> = None;
+    if stashes.is_empty() {
+        lu.add_space(20.0);
+        lu.vertical_centered(|ui| ui.label(egui::RichText::new(tr("No stashes")).color(p.muted)));
+    }
+    egui::ScrollArea::vertical().id_salt("git_stashes").auto_shrink([false, false]).show_rows(&mut lu, 40.0, stashes.len(), |ui, range| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for st in &stashes[range] {
+            let selected = app.vcs.selected_stash.as_deref() == Some(st.hash.as_str());
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::click());
+            if selected {
+                ui.painter().rect_filled(r.shrink2(vec2(4.0, 1.0)), 4.0, p.selection);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(r.shrink2(vec2(4.0, 1.0)), 4.0, p.row_hover);
+            }
+            let top = r.top() + 12.0;
+            let name = format!("stash@{{{}}}", st.index);
+            let g = ui.painter().layout_no_wrap(name.clone(), FontId::monospace(12.0), p.text);
+            ui.painter().galley(pos2(r.left() + 14.0, top - g.size().y / 2.0), g.clone(), p.text);
+            if let Some(b) = &st.branch {
+                theme::paint_badge(ui, pos2(r.left() + 22.0 + g.size().x, top), b);
+            }
+            ui.painter().text(pos2(r.right() - 10.0, top), Align2::RIGHT_CENTER, crate::vcs::format_date(st.time), FontId::proportional(11.5), p.muted);
+            let mut job = egui::text::LayoutJob::simple_singleline(stash_summary(&st.message), FontId::proportional(12.0), p.muted);
+            job.wrap.max_width = (r.width() - 28.0).max(40.0);
+            job.wrap.max_rows = 1;
+            job.wrap.break_anywhere = true;
+            job.wrap.overflow_character = Some('…');
+            let sg = ui.painter().layout_job(job);
+            ui.painter().galley(pos2(r.left() + 14.0, r.top() + 29.0 - sg.size().y / 2.0), sg, p.muted);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &name));
+            if resp.clicked() && !selected {
+                select = Some(st.hash.clone());
+            }
+            resp.context_menu(|ui| {
+                ui.add_enabled_ui(!busy, |ui| {
+                    if theme::menu_item(ui, None, tr("Apply"), false).clicked() {
+                        action = Some(StashAction::Apply(st.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, None, tr("Pop"), false).clicked() {
+                        action = Some(StashAction::Pop(st.clone()));
+                        ui.close();
+                    }
+                    if theme::menu_item(ui, Some(ico::DELETE), tr("Drop…"), false).clicked() {
+                        action = Some(StashAction::Drop(st.clone()));
+                        ui.close();
+                    }
+                });
+            });
+        }
+    });
+    // Details of the selected stash.
+    let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right.shrink2(vec2(10.0, 6.0))));
+    ru.set_clip_rect(right.intersect(ui.clip_rect()));
+    let mut diff = None;
+    match app.vcs.selected_stash.as_ref().and_then(|h| stashes.iter().find(|s| &s.hash == h)) {
+        Some(st) => {
+            ru.label(egui::RichText::new(stash_summary(&st.message)).font(theme::bold(13.5)));
+            ru.label(egui::RichText::new(format!("stash@{{{}}}  ·  {}  ·  {}", st.index, &st.hash[..st.hash.len().min(8)], crate::vcs::format_date(st.time))).size(12.0).color(p.muted));
+            ru.add_space(6.0);
+            ru.horizontal_wrapped(|ui| {
+                ui.add_enabled_ui(!busy, |ui| {
+                    if theme::secondary_button(ui, tr("Apply")).on_hover_text(tr("Apply the changes and keep the stash")).clicked() {
+                        action = Some(StashAction::Apply(st.clone()));
+                    }
+                    if theme::secondary_button(ui, tr("Pop")).on_hover_text(tr("Apply the changes and drop the stash")).clicked() {
+                        action = Some(StashAction::Pop(st.clone()));
+                    }
+                    if theme::secondary_button(ui, tr("Drop…")).clicked() {
+                        action = Some(StashAction::Drop(st.clone()));
+                    }
+                });
+            });
+            ru.add_space(6.0);
+            let files = app.vcs.stash_files.clone();
+            egui::ScrollArea::vertical().id_salt("stash_files").auto_shrink([false, false]).show(&mut ru, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                for f in &files {
+                    let name = f.path.rsplit('/').next().unwrap_or(&f.path).to_string();
+                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                    if resp.hovered() {
+                        ui.painter().rect_filled(r, 4.0, p.row_hover);
+                    }
+                    icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 10.0, r.center().y), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+                    let g = ui.painter().layout_no_wrap(f.path.clone(), FontId::proportional(12.5), p.text);
+                    ui.painter().galley(pos2(r.left() + 24.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
+                    let kind = if f.status == '?' { tr("untracked") } else { stash_status(f.status) };
+                    ui.painter().text(pos2(r.left() + 32.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, kind, FontId::proportional(11.5), p.muted);
+                    if resp.clicked() {
+                        diff = Some(f.clone());
+                    }
+                }
+            });
+        }
+        None => {
+            ru.add_space(20.0);
+            ru.vertical_centered(|ui| ui.label(egui::RichText::new(tr("Select a stash to see its changes")).color(p.muted)));
+        }
+    }
+    ui.advance_cursor_after_rect(avail);
+    if let Some(h) = select {
+        app.vcs.select_stash(&h);
+    }
+    if let (Some(f), Some(h)) = (diff, app.vcs.selected_stash.clone()) {
+        app.vcs.open_stash_diff(&h, &f);
+    }
+    match action {
+        Some(StashAction::Apply(st)) => app.vcs.stash_apply(&st, false),
+        Some(StashAction::Pop(st)) => app.vcs.stash_apply(&st, true),
+        Some(StashAction::Drop(stash)) => app.dialog = Some(Dialog::DropStash { stash }),
+        None => {}
+    }
+}
+
+enum StashAction {
+    Apply(rc_vcs::Stash),
+    Pop(rc_vcs::Stash),
+    Drop(rc_vcs::Stash),
+}
+
+/// `On main: message` → `message`; `WIP on main: abc123 subject` stays as it is.
+fn stash_summary(message: &str) -> String {
+    match message.strip_prefix("On ").and_then(|r| r.split_once(": ")) {
+        Some((_, m)) => m.to_string(),
+        None => message.to_string(),
+    }
+}
+
+/// A word for a `--name-status` code.
+fn stash_status(code: char) -> &'static str {
+    match code {
+        'A' => tr("added"),
+        'D' => tr("deleted"),
+        'R' => tr("renamed"),
+        'C' => tr("copied"),
+        _ => tr("modified"),
     }
 }
 
