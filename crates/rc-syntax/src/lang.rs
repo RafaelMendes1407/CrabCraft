@@ -16,6 +16,8 @@ pub enum Lang {
     Razor,
     /// Visual Studio solution files (`.sln`), highlighted by a small lexer (no grammar).
     Sln,
+    /// HTTP request files (`.http`, `.rest`), highlighted by a small lexer.
+    Http,
     Plain,
 }
 
@@ -33,6 +35,7 @@ impl Lang {
             // Plain HTML reads well as Razor without `@` (its markup lexer colours the tags).
             "razor" | "cshtml" | "html" | "htm" => Lang::Razor,
             "sln" => Lang::Sln,
+            "http" | "rest" => Lang::Http,
             _ => {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if name == "Cargo.lock" {
@@ -50,7 +53,7 @@ impl Lang {
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
             Lang::Rust | Lang::CSharp | Lang::Json => Some("//"),
-            Lang::Toml | Lang::Sln => Some("#"),
+            Lang::Toml | Lang::Sln | Lang::Http => Some("#"),
             _ => None,
         }
     }
@@ -75,6 +78,7 @@ impl Lang {
             Lang::Markdown => "Markdown",
             Lang::Razor => "Razor",
             Lang::Sln => "Solution",
+            Lang::Http => "HTTP",
             Lang::Plain => "Plain text",
         }
     }
@@ -88,7 +92,7 @@ impl Lang {
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
             Lang::Markdown => tree_sitter_md::LANGUAGE.into(),
             Lang::Razor => tree_sitter_razor_modern::LANGUAGE.into(),
-            Lang::Sln | Lang::Plain => return None,
+            Lang::Sln | Lang::Http | Lang::Plain => return None,
         })
     }
 
@@ -111,7 +115,7 @@ impl Lang {
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
             Lang::Razor => (&RAZOR, RAZOR_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/csharp.scm"), include_str!("../queries/razor.scm"))).as_str()),
-            Lang::Sln | Lang::Plain => return None,
+            Lang::Sln | Lang::Http | Lang::Plain => return None,
         };
         let language = self.language()?;
         Some(cell.get_or_init(|| Query::new(&language, source).unwrap_or_else(|e| panic!("bad {self:?} query: {e}"))))

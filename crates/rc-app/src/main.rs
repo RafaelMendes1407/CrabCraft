@@ -11,6 +11,7 @@ mod debugger;
 mod dep_versions;
 mod feature_fix;
 mod feature_nav;
+mod http_client;
 mod disassembly_view;
 mod insight;
 mod call_tree;

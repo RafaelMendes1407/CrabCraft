@@ -277,8 +277,16 @@ pub fn html_spans(text: &[u8]) -> Vec<(usize, usize, Hl)> {
     out
 }
 
-/// Highlighting of languages without a grammar (`.sln`); `None` for the others.
+/// Highlighting of languages without a grammar (`.sln`, `.http`); `None` for the others.
 pub fn highlight_lexical(lang: Lang, rope: &Rope, first: usize, count: usize) -> Option<Vec<Vec<Span>>> {
+    if lang == Lang::Http {
+        // Lines above `first` tell whether it is a header or the body.
+        let last = (first + count).min(rope.len_lines());
+        let floor = first.saturating_sub(crate::http::MAX_LOOK_BACK);
+        let from = (floor..=first.min(last)).rev().find(|&l| l < rope.len_lines() && rope.line(l).chars().take(3).eq("###".chars())).unwrap_or(floor);
+        let lines: Vec<String> = (from..last).map(|l| rope.line(l).to_string()).collect();
+        return Some(crate::http::highlight(&lines, first - from, last.saturating_sub(first)));
+    }
     if lang != Lang::Sln {
         return None;
     }

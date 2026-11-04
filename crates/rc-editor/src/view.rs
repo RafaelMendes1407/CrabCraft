@@ -745,7 +745,7 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
                 GutterIcon::RunTest => ico::GUTTER_RUN,
                 GutterIcon::TestPassed => ico::GUTTER_RUN_SUCCESS,
                 GutterIcon::TestFailed => ico::GUTTER_RUN_FAILED,
-                GutterIcon::RunApp => ico::GUTTER_RUN,
+                GutterIcon::RunApp | GutterIcon::HttpRequest => ico::GUTTER_RUN,
                 GutterIcon::Implemented => ico::GUTTER_IMPLEMENTED,
                 GutterIcon::Implementing => ico::GUTTER_IMPLEMENTING,
                 GutterIcon::Overridden => ico::GUTTER_OVERRIDDEN,

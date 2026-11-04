@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 162 |
+| ✅ Pronto | 163 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 61 |
+| ⬜ A fazer | 60 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -326,7 +326,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | F-01 | Terminal | 🟢 | M1 | |
 | F-02 | Depurar processo a partir do terminal | ⬜ | M6 | |
-| F-03 | HTTP Client (arquivos `.http`) | ⬜ | M5 | |
+| F-03 | HTTP Client (arquivos `.http`) | ✅ | M5 | Arquivos `.http` e `.rest` com realce; requisições separadas por `###` (método, URL com linhas `?`/`&` de continuação, cabeçalhos, corpo, nome por `### nome` ou `# @name`); ícone de execução na margem de cada requisição envia em segundo plano (cancelável, tempo limite de 60 s, corpo limitado a 8 MB). Janela HTTP Client: histórico da sessão, status, tempos, tamanho, cabeçalhos e corpo (JSON reindentado sem reordenar), link de volta à requisição; funciona também com arquivo avulso. Variáveis `{{…}}`, `@var =`, `< arquivo`, scripts `> {% %}`, `>> arquivo` e diretivas `# @…` aparecem como avisos no editor e na resposta (variáveis e `< arquivo` impedem o envio). Testado contra servidor HTTP local; capturas conferidas. Fora: tudo de F-04, WebSocket/gRPC/GraphQL, cookies entre requisições, abrir a resposta no editor |
 | F-04 | HTTP Client: variáveis, OAuth 2.0, scripts | ⬜ | M5 | |
 | F-05 | HTTP Client CLI | ⬜ | M6 | |
 | F-06 | Axum: completar URLs e hints de rotas (2026.2) | ⬜ | M5 | |

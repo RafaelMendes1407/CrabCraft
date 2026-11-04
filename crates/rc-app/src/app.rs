@@ -112,6 +112,10 @@ pub struct CrabCraftApp {
     pub opened_url: Option<String>,
     /// Share in Playground uploads (N-18).
     pub playground: crate::playground::Playground,
+    /// Requests sent from `.http` files and their responses (F-03).
+    pub http: crate::http_client::HttpClient,
+    /// The text version each `.http` editor got its run icons and diagnostics for.
+    http_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
     pub cargo_open: std::collections::BTreeSet<String>,
     /// Editor groups, splits and floating editor windows.
@@ -321,6 +325,8 @@ impl CrabCraftApp {
             crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
             opened_url: None,
             playground: crate::playground::Playground::new(waker.clone()),
+            http: crate::http_client::HttpClient::new(waker.clone()),
+            http_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
             tab_drag: None,
@@ -845,6 +851,51 @@ impl CrabCraftApp {
         let Some((start, end)) = rc_cargo::versions::dep_spans(&text, &dep).req else { return };
         let req = rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version);
         doc.editor.replace(start, end, &req);
+    }
+
+    /// Run icons on the requests of the active `.http` file, and its parts that are not
+    /// supported yet as warnings.
+    pub(crate) fn update_http_file(&mut self) {
+        use rc_editor::{Diagnostic, GutterIcon, Severity};
+        let Some(i) = self.docs.active else { return };
+        let doc = &mut self.docs.list[i];
+        if doc.editor.lang() != rc_syntax::Lang::Http {
+            return;
+        }
+        let version = doc.editor.buffer.version();
+        if self.http_given.get(&doc.editor.id) == Some(&version) {
+            return;
+        }
+        self.http_given.insert(doc.editor.id, version);
+        let text = doc.editor.buffer.rope().to_string();
+        doc.editor.gutter_icons.retain(|_, icon| *icon != GutterIcon::HttpRequest);
+        for req in rc_syntax::http::parse_requests(&text) {
+            doc.editor.gutter_icons.insert(req.line, GutterIcon::HttpRequest);
+        }
+        let diags = rc_syntax::http::unsupported_in(&text)
+            .into_iter()
+            .map(|u| Diagnostic {
+                start: u.start,
+                end: u.end.max(u.start + 1),
+                severity: if u.kind.blocks_sending() { Severity::Warning } else { Severity::Info },
+                message: crate::http_client::unsupported_text(&u.kind),
+                code: Some("http".to_string()),
+                unnecessary: false,
+                deprecated: false,
+            })
+            .collect();
+        doc.editor.set_diagnostics(diags);
+    }
+
+    /// Click on the run icon of a request in an `.http` file: sends it and shows the HTTP
+    /// Client window.
+    pub fn send_http_at(&mut self, line: usize) {
+        let Some(doc) = self.docs.active_doc() else { return };
+        let text = doc.editor.buffer.rope().to_string();
+        let path = doc.path.clone();
+        let Some(req) = rc_syntax::http::parse_requests(&text).into_iter().find(|r| r.line == line) else { return };
+        self.http.start(&req, path);
+        self.dock.show(crate::toolwindow::ToolWindow::Http);
     }
 
     /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
@@ -3143,6 +3194,8 @@ impl eframe::App for CrabCraftApp {
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch);
         self.poll_feature_search();
         self.poll_playground(&ctx);
+        self.http.poll();
+        self.update_http_file();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
             self.notify(n, false);
@@ -3162,6 +3215,7 @@ impl eframe::App for CrabCraftApp {
 
     fn on_exit(&mut self) {
         self.runner.stop_all();
+        self.http.cancel_all();
         self.debugger.stop();
         self.insight.stop();
         self.save_all_docs();

@@ -3308,3 +3308,94 @@ fn auto_attach_capture() {
     h.render().unwrap().save(out.join("auto-attach-dark.png")).unwrap();
     h.state_mut().stop_auto_attach();
 }
+
+/// An `.http` file with three requests: one to `base`, one using a variable, one with a script.
+fn http_harness(home: &Path, dir: &Path, base: &str, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let file = dir.join("api.http");
+    let text = format!(
+        "### Create user\nPOST {base}/users?notify=true\nContent-Type: application/json\nAccept: application/json\n\n{{\n  \"name\": \"Ferris\"\n}}\n\n###\n# @name health\nGET http://{{{{host}}}}/health\n\n### List\nGET {base}/users\n\n> {{% client.test(\"ok\", () => {{}}) %}}\n"
+    );
+    std::fs::write(&file, text).unwrap();
+    let file = file.canonicalize().unwrap();
+    let mut app = test_app(home, dark);
+    app.open_path(&file);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.run_steps(4);
+    (h, file)
+}
+
+/// F-03: each request of an `.http` file gets a run icon; the one clicked reaches a local
+/// server in the background and its response shows in the HTTP Client window. Variables are
+/// flagged in the editor and keep their request from being sent.
+#[test]
+fn http_file_requests_run_from_the_gutter() {
+    use egui_kittest::kittest::Queryable;
+    use rc_editor::GutterIcon;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let (mut h, file) = http_harness(home.path(), dir.path(), &base, true);
+    {
+        let doc = h.state().docs.active_doc().unwrap();
+        assert_eq!(doc.editor.lang(), rc_syntax::Lang::Http);
+        let icons: Vec<usize> = doc.editor.gutter_icons.iter().filter(|(_, i)| **i == GutterIcon::HttpRequest).map(|(l, _)| *l).collect();
+        assert_eq!(icons, vec![1, 11, 14]);
+        let messages: Vec<&str> = doc.editor.diagnostics.iter().map(|d| d.message.as_str()).collect();
+        assert!(messages.iter().any(|m| m.contains("{{host}}")), "{messages:?}");
+        assert!(messages.iter().any(|m| m.contains("script")), "{messages:?}");
+    }
+
+    // The variable: nothing is sent, the window says why.
+    h.state_mut().send_http_at(11);
+    h.run_steps(4);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Http));
+    assert!(!h.state().http.running());
+    h.get_by_label_contains("not supported yet");
+
+    // The first request: a local server answers.
+    let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"]}"#);
+    h.state_mut().send_http_at(1);
+    run_frames(&mut h, "the response", |a| !a.http.running());
+    let seen = server.join().unwrap();
+    assert!(seen.starts_with("POST /users?notify=true HTTP/1.1\r\n"), "{seen}");
+    assert!(seen.ends_with("\r\n\r\n{\n  \"name\": \"Ferris\"\n}"), "{seen}");
+    let e = &h.state().http.history[0];
+    assert_eq!((e.title.as_str(), e.file.as_path(), e.line), ("Create user", file.as_path(), 1));
+    h.get_by_label("200 OK");
+    h.get_by_label_contains("\"tags\": [");
+    h.get_by_label(tr("Body"));
+
+    // The window's link goes back to the request.
+    h.get_by_label("api.http:2").click();
+    h.run_steps(4);
+    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret_line_col().0), Some(1));
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/http-client-*.png"]
+fn http_client_capture() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let home = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let (mut h, _) = http_harness(home.path(), dir.path(), &base, dark);
+        let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"],"address":{"city":"Lisbon","zip":null}}"#);
+        h.state_mut().send_http_at(11);
+        h.state_mut().send_http_at(1);
+        run_frames(&mut h, "the response", |a| !a.http.running());
+        server.join().unwrap();
+        h.run_steps(4);
+        let suffix = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("http-client-{suffix}.png"))).unwrap();
+        h.state_mut().http.show_headers = true;
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("http-client-headers-{suffix}.png"))).unwrap();
+    }
+}

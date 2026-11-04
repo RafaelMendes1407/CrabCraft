@@ -33,6 +33,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
+        ToolWindow::Http => crate::ui::http_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
                 app.toggle_tool(tw);
@@ -507,6 +508,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
         ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Cargo => ("Cargo", ""),
+        ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
     }

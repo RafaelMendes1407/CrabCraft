@@ -3538,11 +3538,13 @@ dependencies = [
  "rc-term",
  "rc-text",
  "rc-vcs",
+ "reqwest",
  "rfd",
  "semver",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "wgpu",
 ]
 
