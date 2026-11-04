@@ -26,6 +26,16 @@ pub enum GitError {
     StashChanged,
     #[error("Resolve the merge conflicts first")]
     Conflicts(String),
+    #[error("Commit or stash your local changes first")]
+    UncommittedChanges(String),
+    #[error("The commit is now empty; skip it or abort")]
+    EmptyCommit(String),
+    #[error("No merge, rebase or cherry-pick is in progress")]
+    NoOperation,
+    #[error("The branches have no common history")]
+    UnrelatedHistories,
+    #[error("The branch cannot be fast-forwarded")]
+    NotFastForward,
     #[error("Authentication required")]
     AuthenticationRequired(String),
     #[error("HEAD is detached (not on a branch)")]
@@ -97,6 +107,11 @@ impl GitError {
             NothingToStash => ("No local changes to stash", vec![]),
             StashChanged => ("The stash list changed; refresh it and try again", vec![]),
             Conflicts(_) => ("Resolve the merge conflicts first", vec![]),
+            UncommittedChanges(_) => ("Commit or stash your local changes first", vec![]),
+            EmptyCommit(_) => ("The commit is now empty; skip it or abort", vec![]),
+            NoOperation => ("No merge, rebase or cherry-pick is in progress", vec![]),
+            UnrelatedHistories => ("The branches have no common history", vec![]),
+            NotFastForward => ("The branch cannot be fast-forwarded", vec![]),
             AuthenticationRequired(_) => ("Authentication required", vec![]),
             DetachedHead => ("HEAD is detached (not on a branch)", vec![]),
             LocalChangesWouldBeOverwritten(_) => ("Local changes would be overwritten", vec![]),
@@ -129,7 +144,7 @@ impl GitError {
     pub fn details(&self) -> Option<String> {
         use GitError::*;
         match self {
-            Conflicts(s) | SigningFailed(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
+            Conflicts(s) | UncommittedChanges(s) | EmptyCommit(s) | SigningFailed(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
             LocalChangesWouldBeOverwritten(files) => Some(files.join("\n")),
             Io(e) => Some(e.to_string()),
             Failed { stderr, .. } => Some(stderr.clone()),
@@ -158,6 +173,18 @@ impl GitError {
         if has("would be overwritten by") {
             return GitError::LocalChangesWouldBeOverwritten(indented_list(&all));
         }
+        if has("is now empty") || has("did you forget to use 'git add'") {
+            return GitError::EmptyCommit(all.trim().to_string());
+        }
+        if has("There is no merge to abort") || has("There is no merge in progress") || has("No rebase in progress") || has("no cherry-pick or revert in progress") {
+            return GitError::NoOperation;
+        }
+        if has("refusing to merge unrelated histories") {
+            return GitError::UnrelatedHistories;
+        }
+        if has("Not possible to fast-forward") || has("Not possible to fast forward") {
+            return GitError::NotFastForward;
+        }
         if has("CONFLICT")
             || has("needs merge")
             || has("you need to resolve your current index first")
@@ -167,6 +194,9 @@ impl GitError {
             || has("Automatic merge failed")
         {
             return GitError::Conflicts(all.trim().to_string());
+        }
+        if has("You have unstaged changes") || has("Your index contains uncommitted changes") || has("Please commit or stash them") {
+            return GitError::UncommittedChanges(err.to_string());
         }
         if has("nothing to commit") || has("no changes added to commit") || has("nothing added to commit") {
             return GitError::NothingToCommit;
@@ -269,5 +299,15 @@ mod tests {
         ));
         assert!(matches!(c("fatal: You are not currently on a branch."), GitError::DetachedHead));
         assert!(matches!(c("error: something odd"), GitError::Failed { .. }));
+        assert!(matches!(c("error: cannot rebase: You have unstaged changes.\nerror: Please commit or stash them."), GitError::UncommittedChanges(_)));
+        assert!(matches!(
+            GitError::classify(&[], Some(1), "nothing to commit, working tree clean", "The previous cherry-pick is now empty, possibly due to conflict resolution."),
+            GitError::EmptyCommit(_)
+        ));
+        assert!(matches!(c("fatal: No rebase in progress?"), GitError::NoOperation));
+        assert!(matches!(c("fatal: There is no merge to abort (MERGE_HEAD missing)."), GitError::NoOperation));
+        assert!(matches!(c("fatal: refusing to merge unrelated histories"), GitError::UnrelatedHistories));
+        assert!(matches!(c("fatal: Not possible to fast-forward, aborting."), GitError::NotFastForward));
+        assert!(matches!(GitError::classify(&[], Some(1), "CONFLICT (content): Merge conflict in f", "error: could not apply 2ffe2a8... side1"), GitError::Conflicts(_)));
     }
 }

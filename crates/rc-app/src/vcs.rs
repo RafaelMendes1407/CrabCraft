@@ -44,6 +44,13 @@ enum VcsEvent {
     Worktrees(Vec<Worktree>),
     /// Removing this worktree was refused because it has local changes.
     RemoveRefused(PathBuf),
+    /// The merge, rebase, cherry-pick or revert in progress (V-07), with the number of the
+    /// status request that read it.
+    Operation(u64, rc_vcs::Operation),
+    /// A progress line of the running merge, rebase or cherry-pick.
+    OpProgress(String),
+    /// What the last merge, rebase or cherry-pick printed.
+    OpOutput(OpOutput),
 }
 
 /// What a new patch is made of.
@@ -216,6 +223,17 @@ pub struct Vcs {
     /// A worktree whose removal was refused for its local changes: the Git window offers to
     /// force it.
     pub force_remove: Option<PathBuf>,
+    /// The merge, rebase, cherry-pick or revert git has in progress (V-07).
+    pub operation: rc_vcs::Operation,
+    /// The last progress line of the running merge, rebase or cherry-pick.
+    pub op_progress: Option<String>,
+    /// What the last merge, rebase or cherry-pick printed, or why it stopped.
+    pub op_output: Option<OpOutput>,
+    /// Cancels the running merge, rebase or cherry-pick (kills git).
+    op_cancel: Option<rc_vcs::CancelToken>,
+    /// Status requests made, and the newest whose operation was applied (reads can overlap).
+    status_seq: u64,
+    operation_seq: u64,
     inbox: Inbox<VcsEvent>,
     waker: Waker,
     heads: HashMap<PathBuf, Option<String>>,
@@ -273,6 +291,12 @@ impl Vcs {
             worktrees: Vec::new(),
             selected_worktree: None,
             force_remove: None,
+            operation: rc_vcs::Operation::default(),
+            op_progress: None,
+            op_output: None,
+            op_cancel: None,
+            status_seq: 0,
+            operation_seq: 0,
             inbox: Inbox::new(waker.clone()),
             waker,
             heads: HashMap::new(),
@@ -344,11 +368,14 @@ impl Vcs {
     fn request_status(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
         self.status_requested = Some(Instant::now());
+        self.status_seq += 1;
+        let seq = self.status_seq;
         self.status_dirty = false;
         let out = self.inbox.sender();
         Runtime::spawn(async move {
             let st = repo.status(&StatusOptions::default()).await.map_err(|e| e.to_string());
             out.send(VcsEvent::Status(st));
+            out.send(VcsEvent::Operation(seq, repo.operation().await));
             if let Ok(b) = repo.branches().await {
                 out.send(VcsEvent::Branches(b));
             }
@@ -556,6 +583,125 @@ impl Vcs {
     pub fn current_worktree(&self) -> Option<&Worktree> {
         let root = self.repo.as_ref()?.root();
         self.worktrees.iter().find(|w| w.path == root)
+    }
+
+    // ------------------------------------------------------------------ merge, rebase, cherry-pick
+
+    /// Paths with merge conflicts, as of the last status.
+    pub fn conflicts(&self) -> Vec<String> {
+        self.status.as_ref().map(|s| s.conflicts().map(|e| e.path.clone()).collect()).unwrap_or_default()
+    }
+
+    /// A merge, rebase or cherry-pick (or a step of one) is running.
+    pub fn sequence_running(&self) -> bool {
+        self.op_cancel.is_some()
+    }
+
+    /// Merges `rev` into the current branch.
+    pub fn merge(&mut self, rev: &str, opts: rc_vcs::MergeOptions) {
+        let Some(repo) = self.repo.clone() else { return };
+        let rev = rev.to_string();
+        self.sequence("merge", move |cancel, progress| async move { repo.merge_with(&rev, &opts, Some(&cancel), Some(progress)).await });
+    }
+
+    /// Rebases the current branch onto `onto`.
+    pub fn rebase(&mut self, onto: &str, autostash: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        let onto = onto.to_string();
+        self.sequence("rebase", move |cancel, progress| async move { repo.rebase(&onto, autostash, Some(&cancel), Some(progress)).await });
+    }
+
+    /// Applies commits (oldest first) on top of the current branch.
+    pub fn cherry_pick(&mut self, commits: Vec<String>) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.sequence("cherry_pick", move |cancel, _| async move { repo.cherry_pick(&commits, Some(&cancel)).await });
+    }
+
+    /// Continues the stopped merge, rebase or cherry-pick once its conflicts are resolved.
+    pub fn continue_operation(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.sequence("op_continue", move |cancel, _| async move { repo.continue_operation(Some(&cancel)).await });
+    }
+
+    /// Skips the commit a rebase or cherry-pick stopped on.
+    pub fn skip_operation(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.sequence("op_skip", move |cancel, _| async move { repo.skip_operation(Some(&cancel)).await });
+    }
+
+    /// Abandons the operation in progress.
+    pub fn abort_operation(&mut self) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.op_output = None;
+        self.op("op_abort", async move { repo.abort_operation().await });
+    }
+
+    /// Stops the running merge, rebase or cherry-pick; what git had done stays in progress.
+    pub fn cancel_operation(&mut self) {
+        if let Some(c) = &self.op_cancel {
+            c.cancel();
+        }
+    }
+
+    /// Resolves conflicted files by taking our or their whole version, and marks them resolved.
+    pub fn resolve_conflicts(&mut self, paths: Vec<String>, theirs: bool) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.op("resolve", async move { repo.resolve_with(&paths, theirs).await });
+    }
+
+    /// Marks conflicted files resolved as they are in the work tree; refused while one still
+    /// has conflict markers.
+    pub fn mark_resolved(&mut self, paths: Vec<String>) {
+        let Some(repo) = self.repo.clone() else { return };
+        self.op("resolve", async move {
+            let files: Vec<(String, PathBuf)> = paths.iter().map(|p| (p.clone(), repo.abs_path(p))).collect();
+            let marked = Runtime::handle().spawn_blocking(move || files.into_iter().find(|(_, abs)| has_conflict_markers(abs)).map(|(p, _)| p)).await.map_err(std::io::Error::other)?;
+            if let Some(path) = marked {
+                return Err(rc_vcs::GitError::BeforeCommit(trf("{file} still has conflict markers", &[("file", &path)])));
+            }
+            repo.mark_resolved(&paths).await
+        });
+    }
+
+    /// Runs a merge, rebase or cherry-pick step: cancellable, its progress shown, and what git
+    /// printed (or why it stopped) kept in [`Vcs::op_output`].
+    fn sequence<F, Fut>(&mut self, what: &'static str, f: F)
+    where
+        F: FnOnce(rc_vcs::CancelToken, rc_vcs::ProgressSink) -> Fut,
+        Fut: std::future::Future<Output = Result<String, rc_vcs::GitError>> + Send + 'static,
+    {
+        let cancel = rc_vcs::CancelToken::new();
+        self.op_cancel = Some(cancel.clone());
+        self.op_progress = None;
+        self.op_output = None;
+        self.busy = Some(what);
+        self.error = None;
+        let out = self.inbox.sender();
+        let lines = out.clone();
+        let progress: rc_vcs::ProgressSink = Arc::new(move |p: rc_vcs::Progress| {
+            lines.send(VcsEvent::OpProgress(p.text));
+        });
+        let work = f(cancel, progress);
+        Runtime::spawn(async move {
+            match work.await {
+                Ok(text) => {
+                    out.send(VcsEvent::OpOutput(OpOutput { text: text.trim().to_string(), error: false }));
+                    out.send(VcsEvent::Done(what, None));
+                }
+                Err(e) => {
+                    let summary = match &e {
+                        rc_vcs::GitError::Conflicts(_) => tr("Stopped on conflicts: resolve them, then continue").to_string(),
+                        e => user_error(e),
+                    };
+                    let text = match e.details().filter(|d| !d.trim().is_empty()) {
+                        Some(d) => format!("{summary}\n{}", d.trim()),
+                        None => summary.clone(),
+                    };
+                    out.send(VcsEvent::OpOutput(OpOutput { text, error: true }));
+                    out.send(VcsEvent::Done(what, Some(summary)));
+                }
+            }
+        });
     }
 
     // ------------------------------------------------------------------ stashes
@@ -964,6 +1110,8 @@ impl Vcs {
                 }
                 VcsEvent::Done(what, err) => {
                     self.busy = None;
+                    self.op_cancel = None;
+                    self.op_progress = None;
                     match err {
                         Some(e) => {
                             self.error = Some(e.clone());
@@ -1052,6 +1200,18 @@ impl Vcs {
                     self.worktrees = list;
                 }
                 VcsEvent::RemoveRefused(p) => self.force_remove = Some(p),
+                VcsEvent::Operation(seq, op) => {
+                    if seq >= self.operation_seq {
+                        self.operation_seq = seq;
+                        self.operation = op;
+                    }
+                }
+                VcsEvent::OpProgress(line) => {
+                    if self.op_cancel.is_some() {
+                        self.op_progress = Some(line);
+                    }
+                }
+                VcsEvent::OpOutput(o) => self.op_output = Some(o),
             }
         }
         if self.repo.is_some() && self.status_dirty && self.status_requested.is_none_or(|t| t.elapsed() > Duration::from_millis(700)) {
@@ -1180,6 +1340,26 @@ fn detailed_error(e: &rc_vcs::GitError) -> String {
     }
 }
 
+/// Whether a file has a conflict block left (`<<<<<<<` … `>>>>>>>` at line starts). Only the
+/// first 64 MB are read; unreadable files have none.
+pub fn has_conflict_markers(path: &Path) -> bool {
+    use std::io::Read;
+    let mut text = Vec::new();
+    let read = std::fs::File::open(path).and_then(|f| f.take(64 << 20).read_to_end(&mut text));
+    if read.is_err() {
+        return false;
+    }
+    let mut open = false;
+    for line in text.split(|b| *b == b'\n') {
+        if line.starts_with(b"<<<<<<< ") || line == b"<<<<<<<" {
+            open = true;
+        } else if open && (line.starts_with(b">>>>>>> ") || line == b">>>>>>>") {
+            return true;
+        }
+    }
+    false
+}
+
 /// Reads a patch file, refusing files larger than [`rc_vcs::MAX_PATCH_BYTES`].
 fn read_patch_file(path: &Path) -> Result<Vec<u8>, rc_vcs::GitError> {
     use std::io::Read;
@@ -1210,6 +1390,13 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "worktree_lock" => tr("Worktree locked"),
         "worktree_unlock" => tr("Worktree unlocked"),
         "worktree_prune" => tr("Worktrees pruned"),
+        "merge" => tr("Merged"),
+        "rebase" => tr("Rebased"),
+        "cherry_pick" => tr("Cherry-picked"),
+        "op_continue" => tr("Continued"),
+        "op_skip" => tr("Commit skipped"),
+        "op_abort" => tr("Aborted"),
+        "resolve" => tr("Conflicts resolved"),
         _ => return None,
     })
 }

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 163 |
+| ✅ Pronto | 164 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 59 |
+| ⬜ A fazer | 58 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -307,7 +307,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-04 | Marcas na margem e blame | 🟢 | M1 | |
 | V-05 | Fetch, pull e push | 🟢 | M1 | Confirmar a cobertura |
 | V-06 | Log e histórico de arquivo | ✅ | M5 | Log com filtros de texto da mensagem (literal), autor e branch (ou todos), "Carregar mais" depois de 500 commits e mensagem quando nada corresponde. Mostrar histórico do Git (aba do editor e Explorer, também para pastas) abre o Log só daquele caminho, seguindo renomeações. Testado num repositório real; captura conferida. |
-| V-07 | Merge, rebase e cherry-pick | ⬜ | M5 | |
+| V-07 | Merge, rebase e cherry-pick | ✅ | M5 | Merge… e Rebase… na janela Git, no popup de branches e no menu de contexto do Log (com o branch ou commit escolhido); merge com fast-forward, `--no-ff`, `--ff-only`, `--squash` e `--no-commit`; rebase com `--autostash` e aviso de reescrita; Cherry-Pick de um ou vários commits marcados no Log (commits de merge recusados). Tudo em segundo plano, com o progresso do git, Cancelar (mata o git) e a saída mostrada. Faixa da operação em andamento (merge, rebase com passo n de m, cherry-pick, revert) nas janelas Git e Commit, com os arquivos em conflito, Resolver conflitos… (aceitar um lado por arquivo, abrir, marcar como resolvido recusando marcadores restantes), Continuar, Pular commit e Abortar com confirmação. Erros tipados (alterações locais, commit vazio, sem fast-forward, históricos sem relação, operação já em andamento). Testado com repositórios git reais; capturas conferidas. Fora: cherry-pick de merge (`-m`), rebase interativo (V-15) e `rebase --onto` com três argumentos |
 | V-08 | Resolução de conflitos em 3 painéis | ⬜ | M5 | |
 | V-09 | Stash e shelve | 🚧 | M5 | Feito (stash): Janela Git › aba Stashes lista os stashes (branch, data, mensagem); Guardar alterações com mensagem, arquivos não rastreados e manter o índice; Aplicar, Pop (com Restaurar índice) e Descartar com confirmação; mostra os arquivos de cada stash (inclusive não rastreados) e abre o diff; tudo em segundo plano e conferindo que o stash ainda é o mesmo antes de agir. Testado com repositórios git reais; capturas conferidas. Falta: shelve (prateleiras do IDE), stash de arquivos selecionados e criar branch a partir de um stash |
 | V-10 | Changelists | ⬜ | M5 | |

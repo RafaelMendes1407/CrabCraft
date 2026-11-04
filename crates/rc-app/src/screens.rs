@@ -3491,3 +3491,56 @@ fn profiler_capture() {
         h.render().unwrap().save(out.join(format!("profiler-restricted-{suffix}.png"))).unwrap();
     }
 }
+
+/// V-07: a rebase stopped on conflicts (banner, Conflicts dialog), the Merge and Rebase dialogs.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/git-rebase-*.png and git-merge-dialog-dark.png"]
+fn screens_git_merge_and_rebase() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    let home = tempfile::tempdir().unwrap();
+    let place = tempfile::tempdir().unwrap();
+    let root = place.path().canonicalize().unwrap().join("shop");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
+        git(&["config", k, v]);
+    }
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 5\n}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Initial shop"]);
+    git(&["switch", "-q", "-c", "feature/discount"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 2 - n / 10\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 4\n}\n").unwrap();
+    git(&["commit", "-qam", "Give a discount"]);
+    git(&["switch", "-q", "main"]);
+    std::fs::write(root.join("src/lib.rs"), "pub fn price(n: u32) -> u32 {\n    n * 3\n}\n").unwrap();
+    std::fs::write(root.join("src/tax.rs"), "pub fn tax(p: u32) -> u32 {\n    p / 6\n}\n").unwrap();
+    git(&["commit", "-qam", "Raise prices"]);
+    git(&["switch", "-q", "feature/discount"]);
+
+    let mut app = test_app(home.path(), true);
+    app.settings.roslyn_path = Some("/nonexistent".into());
+    app.open_workspace(&root);
+    app.dock.show(crate::toolwindow::ToolWindow::Git);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
+    let mut h = harness(app, vec2(1440.0, 900.0));
+    run_frames(&mut h, "branches", |a| a.vcs.branches.len() == 2 && !a.vcs.log.is_empty());
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::merge("main".into()));
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-merge-dialog-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Rebase { onto: "main".into(), autostash: true });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-dialog-dark.png")).unwrap();
+    h.state_mut().dialog = None;
+    h.state_mut().vcs.rebase("main", false);
+    run_frames(&mut h, "rebase stopped", |a| a.vcs.busy.is_none() && a.vcs.operation.state.is_some() && a.vcs.conflicts().len() == 2);
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-stopped-dark.png")).unwrap();
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Conflicts { selected: ["src/lib.rs".to_string()].into() });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("git-rebase-conflicts-dark.png")).unwrap();
+}

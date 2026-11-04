@@ -515,6 +515,105 @@ async fn merge_conflicts_are_listed_and_resolved() {
     assert_eq!(t.read("c.txt"), "ours 2\n");
 }
 
+/// V-07: merge (fast-forward, merge commit, ff-only refused), rebase stopped on a conflict and
+/// continued, skipped or aborted, cherry-picks with conflicts, and the operation in progress.
+#[tokio::test]
+async fn merge_rebase_and_cherry_pick_with_conflicts() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("f.txt", "a\nb\nc\n")], "base");
+    t.git(&["switch", "-q", "-c", "side"]);
+    t.commit_files(&[("f.txt", "a\nB\nc\n")], "side 1");
+    t.commit_files(&[("g.txt", "g\n")], "side 2");
+    let side2 = t.repo.resolve("side").await.unwrap();
+    let side1 = t.repo.resolve("side~1").await.unwrap();
+    t.git(&["switch", "-q", "main"]);
+
+    // Fast-forward, then nothing left to merge.
+    let ff = t.repo.merge_with("side", &MergeOptions::default(), None, None).await.unwrap();
+    assert!(ff.contains("Fast-forward"), "{ff}");
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), side2);
+    let up = t.repo.merge_with("side", &MergeOptions::default(), None, None).await.unwrap();
+    assert!(up.contains("Already up to date"), "{up}");
+    t.git(&["reset", "-q", "--hard", "HEAD~2"]);
+
+    // main diverges: --ff-only is refused, a merge commit is made, a conflict stops.
+    t.commit_files(&[("h.txt", "h\n")], "main 1");
+    let only = MergeOptions { fast_forward: FastForward::Only, ..Default::default() };
+    assert!(matches!(t.repo.merge_with("side", &only, None, None).await, Err(GitError::NotFastForward)));
+    t.repo.merge_with("side", &MergeOptions { fast_forward: FastForward::Never, ..Default::default() }, None, None).await.unwrap();
+    assert!(t.git(&["log", "-1", "--format=%P"]).split_whitespace().count() == 2);
+    t.git(&["reset", "-q", "--hard", "HEAD~1"]);
+    t.commit_files(&[("f.txt", "a\nM\nc\n")], "main 2");
+    assert!(matches!(t.repo.merge_with("side", &MergeOptions::default(), None, None).await, Err(GitError::Conflicts(_))));
+    let op = t.repo.operation().await;
+    assert_eq!((op.state, op.target.as_deref()), (Some(RepoState::Merging), Some(side2.as_str())));
+    // Another operation cannot start meanwhile.
+    assert!(matches!(t.repo.rebase("side", false, None, None).await, Err(GitError::OperationInProgress)));
+    assert!(matches!(t.repo.continue_operation(None).await, Err(GitError::Conflicts(_))));
+    t.repo.abort_operation().await.unwrap();
+    assert_eq!(t.repo.operation().await, Operation::default());
+    assert_eq!(t.read("f.txt"), "a\nM\nc\n");
+    assert!(matches!(t.repo.abort_operation().await, Err(GitError::NoOperation)));
+
+    // Rebase side onto main: the first commit conflicts; resolve, continue to the end.
+    t.git(&["switch", "-q", "side"]);
+    t.write("f.txt", "dirty\n");
+    assert!(matches!(t.repo.rebase("main", false, None, None).await, Err(GitError::UncommittedChanges(_))));
+    t.git(&["checkout", "--", "f.txt"]);
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let sink: ProgressSink = {
+        let lines = lines.clone();
+        Arc::new(move |p: Progress| lines.lock().unwrap().push(p.text))
+    };
+    assert!(matches!(t.repo.rebase("main", false, None, Some(sink)).await, Err(GitError::Conflicts(_))));
+    assert!(lines.lock().unwrap().iter().any(|l| l.contains("Rebasing (1/2)")), "{:?}", lines.lock().unwrap());
+    let op = t.repo.operation().await;
+    assert_eq!((op.state, op.branch.as_deref(), op.step), (Some(RepoState::Rebasing), Some("side"), Some((1, 2))));
+    assert_eq!(op.target, Some(t.repo.resolve("main").await.unwrap()));
+    t.write("f.txt", "a\nM and B\nc\n");
+    t.repo.mark_resolved(&s(&["f.txt"])).await.unwrap();
+    t.repo.continue_operation(None).await.unwrap();
+    assert_eq!(t.repo.state().await, RepoState::Clean);
+    assert_eq!(t.git(&["log", "--format=%s", "-3"]).lines().collect::<Vec<_>>(), ["side 2", "side 1", "main 2"]);
+
+    // Rebase again from the original side: skip the conflicting commit, or abort.
+    t.git(&["reset", "-q", "--hard", &side2]);
+    assert!(t.repo.rebase("main", false, None, None).await.is_err());
+    t.repo.skip_operation(None).await.unwrap();
+    assert_eq!(t.git(&["log", "--format=%s", "-2"]).lines().collect::<Vec<_>>(), ["side 2", "main 2"]);
+    t.git(&["reset", "-q", "--hard", &side2]);
+    assert!(t.repo.rebase("main", false, None, None).await.is_err());
+    t.repo.abort_operation().await.unwrap();
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), side2);
+    // Local changes are carried over with autostash.
+    t.git(&["switch", "-q", "-c", "other", "side~2"]);
+    t.commit_files(&[("z.txt", "z\n")], "other");
+    t.git(&["switch", "-q", "main"]);
+    t.write("h.txt", "local\n");
+    t.repo.rebase("other", true, None, None).await.unwrap();
+    assert_eq!(t.read("h.txt"), "local\n");
+    assert_eq!(t.git(&["log", "--format=%s", "-3"]).lines().collect::<Vec<_>>(), ["main 2", "main 1", "other"]);
+    t.git(&["checkout", "--", "h.txt"]);
+
+    // Cherry-pick onto main: one applies cleanly, one conflicts and is resolved and
+    // continued; a commit whose change is already there stops as empty and is skipped.
+    t.repo.cherry_pick(&s(&[&side2]), None).await.unwrap();
+    assert_eq!(t.read("g.txt"), "g\n");
+    assert!(matches!(t.repo.cherry_pick(&s(&[&side1]), None).await, Err(GitError::Conflicts(_))));
+    let op = t.repo.operation().await;
+    assert_eq!((op.state, op.target.as_deref()), (Some(RepoState::CherryPicking), Some(side1.as_str())));
+    t.repo.resolve_with(&s(&["f.txt"]), false).await.unwrap();
+    assert!(matches!(t.repo.continue_operation(None).await, Err(GitError::EmptyCommit(_))));
+    t.repo.skip_operation(None).await.unwrap();
+    assert_eq!(t.repo.state().await, RepoState::Clean);
+    assert!(matches!(t.repo.cherry_pick(&s(&[&side1]), None).await, Err(GitError::Conflicts(_))));
+    t.write("f.txt", "a\nB\nc\n");
+    t.repo.mark_resolved(&s(&["f.txt"])).await.unwrap();
+    t.repo.continue_operation(None).await.unwrap();
+    assert_eq!(t.git(&["log", "-1", "--format=%s"]).trim(), "side 1");
+    assert_eq!(t.repo.state().await, RepoState::Clean);
+}
+
 #[tokio::test]
 async fn tags_are_created_listed_pushed_checked_out_and_deleted() {
     let remote_dir = tempfile::tempdir().unwrap();
@@ -763,6 +862,11 @@ fn errors_have_translatable_messages() {
         GitError::PatchFailed(String::new()),
         GitError::PatchTooLarge(32),
         GitError::OperationInProgress,
+        GitError::UncommittedChanges(String::new()),
+        GitError::EmptyCommit(String::new()),
+        GitError::NoOperation,
+        GitError::UnrelatedHistories,
+        GitError::NotFastForward,
         GitError::NotFound(String::new()),
         GitError::IdentityUnknown,
         GitError::Locked(String::new()),

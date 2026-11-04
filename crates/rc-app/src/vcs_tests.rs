@@ -582,3 +582,101 @@ fn the_log_is_filtered_and_shows_the_history_of_a_file() {
     assert!(!app.vcs.log_more);
     assert_eq!(app.vcs.log.last().unwrap().subject, "Add old.rs");
 }
+
+/// V-07: merge, rebase and cherry-pick from the app. Each stops on its conflicts, which are
+/// listed and resolved, then continued, skipped or aborted; a running merge can be cancelled.
+#[test]
+fn merge_rebase_and_cherry_pick_stop_on_conflicts_and_go_on() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    git(&root, &["switch", "-q", "-c", "side"]);
+    std::fs::write(root.join("lib.rs"), "pub fn side() {}\n").unwrap();
+    git(&root, &["commit", "-qam", "Side change"]);
+    std::fs::write(root.join("extra.rs"), "pub fn extra() {}\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "Side extra"]);
+    let side_extra = git_out(&root, &["rev-parse", "HEAD"]).trim().to_string();
+    let side_change = git_out(&root, &["rev-parse", "HEAD~1"]).trim().to_string();
+    git(&root, &["switch", "-q", "main"]);
+    std::fs::write(root.join("lib.rs"), "pub fn main_change() {}\n").unwrap();
+    git(&root, &["commit", "-qam", "Main change"]);
+    let main_head = git_out(&root, &["rev-parse", "HEAD"]).trim().to_string();
+    let mut app = open_app(&root);
+    pump(&mut app, "branches", |a| a.vcs.branches.len() == 2);
+    let state = |a: &CrabCraftApp| a.vcs.operation.state;
+
+    // Merge stops on lib.rs.
+    app.vcs.merge("side", rc_vcs::MergeOptions::default());
+    pump(&mut app, "merge conflict", |a| a.vcs.busy.is_none() && state(a) == Some(rc_vcs::RepoState::Merging) && !a.vcs.conflicts().is_empty());
+    assert_eq!(app.vcs.error.as_deref(), Some(rc_kit::i18n::tr("Stopped on conflicts: resolve them, then continue")));
+    assert!(app.vcs.op_output.as_ref().is_some_and(|o| o.error && o.text.contains("CONFLICT")), "{:?}", app.vcs.op_output);
+    assert_eq!(app.vcs.conflicts(), ["lib.rs"]);
+    assert_eq!(crate::ui::git::operation_text(&app.vcs), "Merging side into main");
+    assert_eq!(crate::ui::git::side_names(&app.vcs), ("Yours (main)".to_string(), "Theirs (side)".to_string()));
+    // The file still has its markers: marking it resolved is refused.
+    app.vcs.mark_resolved(vec!["lib.rs".into()]);
+    pump(&mut app, "refused", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(app.vcs.error.as_deref().unwrap().contains("conflict markers"), "{:?}", app.vcs.error);
+    app.vcs.resolve_conflicts(vec!["lib.rs".into()], true);
+    pump(&mut app, "resolved", |a| a.vcs.busy.is_none() && a.vcs.conflicts().is_empty() && a.vcs.status.is_some());
+    app.vcs.continue_operation();
+    pump(&mut app, "merge done", |a| a.vcs.busy.is_none() && state(a).is_none() && a.vcs.log.first().is_some_and(|c| c.is_merge()));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn side() {}\n");
+    git(&root, &["reset", "-q", "--hard", &main_head]);
+    app.vcs.refresh();
+
+    // Rebase main onto side stops at its only commit; abort puts main back.
+    app.vcs.rebase("side", false);
+    // A status read while git was still writing its state may lack the step: wait for the next.
+    pump(&mut app, "rebase conflict", |a| a.vcs.busy.is_none() && state(a) == Some(rc_vcs::RepoState::Rebasing) && a.vcs.operation.step.is_some() && !a.vcs.conflicts().is_empty());
+    assert_eq!(app.vcs.operation.step, Some((1, 1)));
+    assert_eq!(app.vcs.operation.commit.as_deref(), Some(main_head.as_str()));
+    assert!(crate::ui::git::operation_text(&app.vcs).starts_with("Rebasing main onto side"), "{}", crate::ui::git::operation_text(&app.vcs));
+    app.vcs.abort_operation();
+    pump(&mut app, "rebase aborted", |a| a.vcs.busy.is_none() && state(a).is_none() && a.notices.iter().any(|n| n.text == "Aborted"));
+    assert_eq!(git_out(&root, &["rev-parse", "HEAD"]).trim(), main_head);
+
+    // Cherry-pick: one commit applies; one conflicts, keeps our side, is empty and skipped.
+    app.vcs.cherry_pick(vec![side_extra]);
+    pump(&mut app, "cherry-pick", |a| a.vcs.busy.is_none() && a.notices.iter().any(|n| n.text == "Cherry-picked"));
+    assert!(root.join("extra.rs").exists());
+    app.vcs.cherry_pick(vec![side_change]);
+    pump(&mut app, "cherry-pick conflict", |a| a.vcs.busy.is_none() && state(a) == Some(rc_vcs::RepoState::CherryPicking) && !a.vcs.conflicts().is_empty());
+    app.vcs.resolve_conflicts(vec!["lib.rs".into()], false);
+    pump(&mut app, "kept ours", |a| a.vcs.busy.is_none() && a.vcs.conflicts().is_empty());
+    app.vcs.continue_operation();
+    pump(&mut app, "empty commit", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert_eq!(app.vcs.error.as_deref(), Some("The commit is now empty; skip it or abort"));
+    app.vcs.skip_operation();
+    pump(&mut app, "skipped", |a| a.vcs.busy.is_none() && state(a).is_none() && a.notices.iter().any(|n| n.text == "Commit skipped"));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn main_change() {}\n");
+
+    // A merge held up by a slow hook is cancelled: git is killed.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let hooks = root.join("slow-hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("pre-merge-commit");
+        std::fs::write(&hook, "#!/bin/sh\nsleep 20\n").unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        git(&root, &["config", "core.hooksPath", hooks.to_str().unwrap()]);
+        git(&root, &["switch", "-q", "-c", "other", "HEAD~2"]);
+        std::fs::write(root.join("other.rs"), "pub fn other() {}\n").unwrap();
+        git(&root, &["add", "other.rs"]);
+        git(&root, &["commit", "-qm", "Other"]);
+        git(&root, &["switch", "-q", "main"]);
+        app.vcs.merge("other", rc_vcs::MergeOptions::default());
+        assert!(app.vcs.sequence_running());
+        std::thread::sleep(Duration::from_millis(300));
+        let started = Instant::now();
+        app.vcs.cancel_operation();
+        pump(&mut app, "cancelled", |a| a.vcs.busy.is_none());
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(app.vcs.error.as_deref(), Some(rc_kit::i18n::tr("Cancelled")));
+        assert!(!app.vcs.sequence_running());
+    }
+}
