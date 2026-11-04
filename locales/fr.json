@@ -886,7 +886,8 @@
     "{path} has modified or untracked files": "{path} contient des fichiers modifiés ou non suivis",
     "The worktree {path} is locked; unlock it first": "Le worktree {path} est verrouillé ; déverrouillez-le d’abord",
     "{path} already exists and is not empty": "{path} existe déjà et n’est pas vide",
-    "The branch {branch} is already checked out in another worktree": "La branche {branch} est déjà extraite dans un autre worktree"
+    "The branch {branch} is already checked out in another worktree": "La branche {branch} est déjà extraite dans un autre worktree",
+    "The commit could not be signed; check the signing key and its agent": "Le commit n’a pas pu être signé ; vérifiez la clé de signature et son agent"
   },
   "search-results": {
     "… more": "… plus"
@@ -1439,5 +1440,17 @@
     "Move Up": "Monter",
     "Move Down": "Descendre",
     "Add Color": "Ajouter une couleur"
+  },
+  "gpgsigning": {
+    "Sign with GPG": "Signer avec GPG",
+    "Signs with the key {key} (user.signingkey)": "Signe avec la clé {key} (user.signingkey)",
+    "Signs with the committer's key; set user.signingkey to choose another": "Signe avec la clé de l’auteur du commit ; définissez user.signingkey pour en choisir une autre",
+    "Signed by {signer} (key {key})": "Signé par {signer} (clé {key})",
+    "Signed by {signer} (key {key}, not trusted)": "Signé par {signer} (clé {key}, non approuvée)",
+    "Signed by {signer}, but the signature has expired": "Signé par {signer}, mais la signature a expiré",
+    "Signed by {signer} with a key that has expired": "Signé par {signer} avec une clé expirée",
+    "Signed by {signer} with a revoked key": "Signé par {signer} avec une clé révoquée",
+    "Bad signature from {signer}": "Signature incorrecte de {signer}",
+    "Signed with the key {key}, which is not available to check it": "Signé avec la clé {key}, qui n’est pas disponible pour la vérifier"
   }
 }

@@ -407,3 +407,97 @@ fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
     let cur = app.vcs.current_worktree().unwrap();
     assert!(!cur.main && cur.detached);
 }
+
+/// V-14: the Commit window's "Sign with GPG" starts as `commit.gpgsign` says, signs with the
+/// user's key, and the Log shows the signature git verified; a failing signing program is
+/// reported and commits nothing.
+#[test]
+fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
+    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+        eprintln!("skipped: gpg is not installed");
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let gnupg = home.path().join("gnupg");
+    std::fs::create_dir(&gnupg).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&gnupg, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let made = std::process::Command::new("gpg")
+        .env("GNUPGHOME", &gnupg)
+        .args(["--batch", "--passphrase", "", "--quick-generate-key", "Signer <signer@example.com>", "ed25519", "sign", "never"])
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let wrapper = home.path().join("gpg.sh");
+    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{}' exec gpg \"$@\"\n", gnupg.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let repo = tempfile::tempdir().unwrap();
+    let root = repo.path().canonicalize().unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    for (k, v) in [("user.name", "Signer"), ("user.email", "signer@example.com"), ("core.hooksPath", "no-hooks"), ("gpg.program", &wrapper.display().to_string()), ("commit.gpgsign", "true")] {
+        git(&root, &["config", k, v]);
+    }
+    std::fs::write(root.join("a.txt"), "a\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "--no-gpg-sign", "-m", "First"]);
+
+    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
+    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    app.open_workspace(&root);
+    pump(&mut app, "the signing settings", |a| a.vcs.signing.is_some() && a.vcs.log.len() == 1);
+    assert!(app.vcs.sign, "commit.gpgsign turns it on");
+
+    // A signed commit, from the Commit window.
+    std::fs::write(root.join("a.txt"), "b\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1);
+    app.vcs.message = "Signed".into();
+    app.commit_changes(false);
+    pump(&mut app, "the commit", |a| a.vcs.busy.is_none() && a.vcs.log.len() == 2);
+    let newest = app.vcs.log[0].hash.clone();
+    app.vcs.select_commit(&newest);
+    pump(&mut app, "the signature", |a| a.vcs.signature.is_some());
+    let sig = app.vcs.signature.clone().unwrap().1;
+    let (text, good) = crate::ui::git::signature_text(&sig).unwrap();
+    assert!(good && text.starts_with("Signed by Signer <signer@example.com> (key "), "{text}");
+    // The first commit is not signed: nothing is said.
+    let first = app.vcs.log[1].hash.clone();
+    app.vcs.select_commit(&first);
+    pump(&mut app, "no signature", |a| a.vcs.signature.is_some());
+    assert_eq!(crate::ui::git::signature_text(&app.vcs.signature.clone().unwrap().1), None);
+
+    // Turned off by the user, the next commit is not signed even with commit.gpgsign.
+    app.vcs.sign = false;
+    app.vcs.sign_touched = true;
+    std::fs::write(root.join("a.txt"), "c\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1 && a.vcs.signing.is_some());
+    assert!(!app.vcs.sign, "the user's choice stays");
+    app.vcs.message = "Plain".into();
+    app.commit_changes(false);
+    pump(&mut app, "the plain commit", |a| a.vcs.busy.is_none() && a.vcs.log.len() == 3);
+    let out = std::process::Command::new("git").args(["log", "-1", "--format=%G?"]).current_dir(&root).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "N");
+
+    // A signing program that fails: the error says so, nothing is committed.
+    git(&root, &["config", "gpg.program", "false"]);
+    app.vcs.sign = true;
+    std::fs::write(root.join("a.txt"), "d\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "the change", |a| a.vcs.changes().len() == 1);
+    app.vcs.message = "Fails".into();
+    app.commit_changes(false);
+    pump(&mut app, "the failure", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+    assert!(app.vcs.error.as_deref().unwrap().contains("could not be signed"), "{:?}", app.vcs.error);
+    assert_eq!(app.vcs.log.len(), 3);
+}

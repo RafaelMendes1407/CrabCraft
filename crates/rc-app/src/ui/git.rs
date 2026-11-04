@@ -148,6 +148,13 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY));
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
+        let tip = match app.vcs.signing.as_ref().and_then(|c| c.key.as_deref()) {
+            Some(key) => trf("Signs with the key {key} (user.signingkey)", &[("key", &key)]),
+            None => tr("Signs with the committer's key; set user.signingkey to choose another").to_string(),
+        };
+        if ui.checkbox(&mut app.vcs.sign, tr("Sign with GPG")).on_hover_text(tip).changed() {
+            app.vcs.sign_touched = true;
+        }
     });
     if app.runner.cargo_workspace.is_some() && child.checkbox(&mut app.settings.format_on_commit, tr("Reformat with rustfmt")).changed() {
         let _ = app.settings.save();
@@ -344,6 +351,11 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             ru.label(egui::RichText::new(c.body.trim()).size(12.5));
         }
         ru.label(egui::RichText::new(format!("{}  {} <{}>  {}", c.short_hash(), c.author_name, c.author_email, crate::vcs::format_date(c.author_time))).size(12.0).color(p.muted));
+        if let Some((_, sig)) = app.vcs.signature.as_ref().filter(|(s, _)| *s == h)
+            && let Some((text, good)) = signature_text(sig)
+        {
+            ru.label(egui::RichText::new(text).size(12.0).color(if good { p.ok } else { p.error }));
+        }
         ru.add_space(6.0);
         let files = app.vcs.commit_files.clone();
         egui::ScrollArea::vertical().id_salt("commit_files").auto_shrink([false, false]).show(&mut ru, |ui| {
@@ -369,6 +381,24 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         ru.vertical_centered(|ui| ui.label(egui::RichText::new(tr("Select a commit to see its changes")).color(p.muted)));
     }
     ui.advance_cursor_after_rect(avail);
+}
+
+/// What the details of a commit say of its signature, and whether it is good; nothing when the
+/// commit is not signed.
+pub fn signature_text(sig: &rc_vcs::Signature) -> Option<(String, bool)> {
+    use rc_vcs::SignatureStatus as S;
+    let who = if sig.signer.is_empty() { sig.key.clone() } else { sig.signer.clone() };
+    let key = sig.key.as_str();
+    Some(match sig.status {
+        S::Unsigned => return None,
+        S::Good => (trf("Signed by {signer} (key {key})", &[("signer", &who), ("key", &key)]), true),
+        S::GoodUntrusted => (trf("Signed by {signer} (key {key}, not trusted)", &[("signer", &who), ("key", &key)]), true),
+        S::Expired => (trf("Signed by {signer}, but the signature has expired", &[("signer", &who)]), false),
+        S::ExpiredKey => (trf("Signed by {signer} with a key that has expired", &[("signer", &who)]), false),
+        S::RevokedKey => (trf("Signed by {signer} with a revoked key", &[("signer", &who)]), false),
+        S::Bad => (trf("Bad signature from {signer}", &[("signer", &who)]), false),
+        S::CannotCheck => (trf("Signed with the key {key}, which is not available to check it", &[("key", &key)]), false),
+    })
 }
 
 /// The Tags view of the Git window: the tags with their commit and message, and what can be

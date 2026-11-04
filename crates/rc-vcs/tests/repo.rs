@@ -775,3 +775,65 @@ fn errors_have_translatable_messages() {
         assert!(tsv.lines().any(|l| l.split('\t').next() == Some(template)), "missing translation of {template:?}");
     }
 }
+
+/// V-14: commits are signed with a GPG key (a throwaway one, in its own GnuPG home reached
+/// through `gpg.program`), git verifies them, and a signing program that fails is reported.
+#[tokio::test]
+async fn commits_are_signed_and_their_signatures_verified() {
+    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+        eprintln!("skipped: gpg is not installed");
+        return;
+    }
+    let t = TempRepo::new().await;
+    let home = tempfile::tempdir().unwrap();
+    let gnupg = home.path().join("gnupg");
+    std::fs::create_dir(&gnupg).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&gnupg, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let made = std::process::Command::new("gpg")
+        .env("GNUPGHOME", &gnupg)
+        .args(["--batch", "--passphrase", "", "--quick-generate-key", "Signer <signer@example.com>", "ed25519", "sign", "never"])
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+    let wrapper = home.path().join("gpg.sh");
+    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{}' exec gpg \"$@\"\n", gnupg.display())).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    t.git(&["config", "gpg.program", &wrapper.display().to_string()]);
+    t.git(&["config", "user.signingkey", "signer@example.com"]);
+
+    let cfg = t.repo.signing_config().await.unwrap();
+    assert_eq!((cfg.sign_by_default, cfg.key.as_deref(), cfg.format.as_str()), (false, Some("signer@example.com"), "openpgp"));
+
+    t.write("a.txt", "a\n");
+    let signed = t.repo.commit(&CommitOptions { message: "Signed".into(), only: s(&["a.txt"]), sign: Some(true), ..Default::default() }).await.unwrap();
+    let sig = t.repo.signature(&signed).await.unwrap();
+    assert!(matches!(sig.status, SignatureStatus::Good | SignatureStatus::GoodUntrusted), "{sig:?}");
+    assert_eq!(sig.signer, "Signer <signer@example.com>");
+    assert!(!sig.key.is_empty());
+
+    // `--no-gpg-sign` wins over `commit.gpgsign`.
+    t.git(&["config", "commit.gpgsign", "true"]);
+    assert!(t.repo.signing_config().await.unwrap().sign_by_default);
+    t.write("a.txt", "b\n");
+    let plain = t.repo.commit(&CommitOptions { message: "Plain".into(), only: s(&["a.txt"]), sign: Some(false), ..Default::default() }).await.unwrap();
+    assert_eq!(t.repo.signature(&plain).await.unwrap().status, SignatureStatus::Unsigned);
+    // `None` follows it.
+    t.write("a.txt", "c\n");
+    let default = t.repo.commit(&CommitOptions { message: "Default".into(), only: s(&["a.txt"]), ..Default::default() }).await.unwrap();
+    assert_ne!(t.repo.signature(&default).await.unwrap().status, SignatureStatus::Unsigned);
+
+    // A signing program that fails: nothing is committed, and the error says why.
+    t.git(&["config", "gpg.program", "false"]);
+    t.write("a.txt", "d\n");
+    let err = t.repo.commit(&CommitOptions { message: "Fails".into(), only: s(&["a.txt"]), sign: Some(true), ..Default::default() }).await.unwrap_err();
+    assert!(matches!(err, GitError::SigningFailed(_)), "{err:?}");
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), default);
+}

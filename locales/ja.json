@@ -886,7 +886,8 @@
     "{path} has modified or untracked files": "{path} には変更済みまたは未追跡のファイルがあります",
     "The worktree {path} is locked; unlock it first": "ワークツリー {path} はロックされています。先にロックを解除してください",
     "{path} already exists and is not empty": "{path} は既に存在し、空ではありません",
-    "The branch {branch} is already checked out in another worktree": "ブランチ {branch} は既に別のワークツリーでチェックアウトされています"
+    "The branch {branch} is already checked out in another worktree": "ブランチ {branch} は既に別のワークツリーでチェックアウトされています",
+    "The commit could not be signed; check the signing key and its agent": "コミットに署名できませんでした。署名鍵とそのエージェントを確認してください"
   },
   "search-results": {
     "… more": "… さらに表示"
@@ -1439,5 +1440,17 @@
     "Move Up": "上へ移動",
     "Move Down": "下へ移動",
     "Add Color": "色を追加"
+  },
+  "gpgsigning": {
+    "Sign with GPG": "GPG で署名",
+    "Signs with the key {key} (user.signingkey)": "鍵 {key} で署名します（user.signingkey）",
+    "Signs with the committer's key; set user.signingkey to choose another": "コミッターの鍵で署名します。別の鍵を使うには user.signingkey を設定してください",
+    "Signed by {signer} (key {key})": "{signer} が署名（鍵 {key}）",
+    "Signed by {signer} (key {key}, not trusted)": "{signer} が署名（鍵 {key}、信頼されていません）",
+    "Signed by {signer}, but the signature has expired": "{signer} が署名しましたが、署名の有効期限が切れています",
+    "Signed by {signer} with a key that has expired": "{signer} が期限切れの鍵で署名",
+    "Signed by {signer} with a revoked key": "{signer} が失効した鍵で署名",
+    "Bad signature from {signer}": "{signer} の署名が不正です",
+    "Signed with the key {key}, which is not available to check it": "鍵 {key} で署名されていますが、検証に使える鍵がありません"
   }
 }

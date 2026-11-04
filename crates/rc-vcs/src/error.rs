@@ -66,6 +66,9 @@ pub enum GitError {
     NotFound(String),
     #[error("Set user.name and user.email in Git first")]
     IdentityUnknown,
+    /// The signing program failed (no key, no agent, a wrong passphrase); git's message.
+    #[error("The commit could not be signed")]
+    SigningFailed(String),
     #[error("Another Git process is running in this repository")]
     Locked(String),
     #[error("Network error")]
@@ -114,6 +117,7 @@ impl GitError {
             OperationInProgress => ("Finish or abort the operation in progress first", vec![]),
             NotFound(what) => ("Not found: {what}", vec![("what", what.clone())]),
             IdentityUnknown => ("Set user.name and user.email in Git first", vec![]),
+            SigningFailed(_) => ("The commit could not be signed; check the signing key and its agent", vec![]),
             Locked(_) => ("Another Git process is running in this repository", vec![]),
             Network(_) => ("Network error", vec![]),
             Cancelled => ("Cancelled", vec![]),
@@ -125,7 +129,7 @@ impl GitError {
     pub fn details(&self) -> Option<String> {
         use GitError::*;
         match self {
-            Conflicts(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
+            Conflicts(s) | SigningFailed(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
             LocalChangesWouldBeOverwritten(files) => Some(files.join("\n")),
             Io(e) => Some(e.to_string()),
             Failed { stderr, .. } => Some(stderr.clone()),
@@ -147,6 +151,9 @@ impl GitError {
         }
         if has("Please tell me who you are") || has("empty ident name") {
             return GitError::IdentityUnknown;
+        }
+        if has("gpg failed to sign") || has("failed to sign the data") || has("error: cannot run gpg") || has("error: unable to sign") {
+            return GitError::SigningFailed(err.to_string());
         }
         if has("would be overwritten by") {
             return GitError::LocalChangesWouldBeOverwritten(indented_list(&all));

@@ -21,6 +21,10 @@ enum VcsEvent {
     /// An operation finished: (what, error).
     Done(&'static str, Option<String>),
     CommitFiles(String, Vec<rc_vcs::ChangedFile>),
+    /// The signature of a commit of the log (V-14).
+    Signature(String, rc_vcs::Signature),
+    /// The repository's signing settings.
+    Signing(rc_vcs::SigningConfig),
     /// Texts for the diff viewer: (title, path, left, right).
     Diff(String, PathBuf, String, String),
     Tags(Vec<Tag>),
@@ -101,6 +105,13 @@ pub struct Vcs {
     pub log: Vec<Commit>,
     pub selected_commit: Option<String>,
     pub commit_files: Vec<rc_vcs::ChangedFile>,
+    /// The signature of the selected commit, once git has verified it.
+    pub signature: Option<(String, rc_vcs::Signature)>,
+    /// The repository's signing settings (`commit.gpgsign`, `user.signingkey`).
+    pub signing: Option<rc_vcs::SigningConfig>,
+    /// Sign the next commit; starts as `commit.gpgsign` says until the user changes it.
+    pub sign: bool,
+    pub sign_touched: bool,
     pub message: String,
     pub amend: bool,
     pub excluded: BTreeSet<String>,
@@ -161,6 +172,10 @@ impl Vcs {
             log: Vec::new(),
             selected_commit: None,
             commit_files: Vec::new(),
+            signature: None,
+            signing: None,
+            sign: false,
+            sign_touched: false,
             message: String::new(),
             amend: false,
             excluded: BTreeSet::new(),
@@ -276,6 +291,9 @@ impl Vcs {
             if let Ok(w) = repo.worktrees().await {
                 out.send(VcsEvent::Worktrees(w));
             }
+            if let Ok(c) = repo.signing_config().await {
+                out.send(VcsEvent::Signing(c));
+            }
         });
     }
 
@@ -293,12 +311,17 @@ impl Vcs {
     pub fn select_commit(&mut self, hash: &str) {
         self.selected_commit = Some(hash.to_string());
         self.commit_files.clear();
+        self.signature = None;
         let Some(repo) = self.repo.clone() else { return };
         let out = self.inbox.sender();
         let h = hash.to_string();
         Runtime::spawn(async move {
             if let Ok(files) = repo.commit_files(&h).await {
-                out.send(VcsEvent::CommitFiles(h, files));
+                out.send(VcsEvent::CommitFiles(h.clone(), files));
+            }
+            // Checking a signature runs the signing program: after the files.
+            if let Ok(sig) = repo.signature(&h).await {
+                out.send(VcsEvent::Signature(h, sig));
             }
         });
     }
@@ -661,7 +684,7 @@ impl Vcs {
             self.error = Some(tr("Write a commit message").into());
             return;
         }
-        let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, ..Default::default() };
+        let opts = CommitOptions { message: self.message.trim().to_string(), amend: self.amend, only, sign: Some(self.sign), ..Default::default() };
         self.op(if push { "commit_push" } else { "commit" }, async move {
             if let Some((rustfmt, files)) = format {
                 let rustfmt = rustfmt.map_err(|e| rc_vcs::GitError::BeforeCommit(trf("Not committed: {error}", &[("error", &e)])))?;
@@ -844,6 +867,17 @@ impl Vcs {
                             self.refresh();
                         }
                     }
+                }
+                VcsEvent::Signature(h, sig) => {
+                    if self.selected_commit.as_deref() == Some(h.as_str()) {
+                        self.signature = Some((h, sig));
+                    }
+                }
+                VcsEvent::Signing(c) => {
+                    if !self.sign_touched {
+                        self.sign = c.sign_by_default;
+                    }
+                    self.signing = Some(c);
                 }
                 VcsEvent::CommitFiles(h, f) => {
                     if self.selected_commit.as_deref() == Some(h.as_str()) {

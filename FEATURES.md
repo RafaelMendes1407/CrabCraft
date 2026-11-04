@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 156 |
+| ✅ Pronto | 157 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 67 |
+| ⬜ A fazer | 66 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -314,7 +314,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-11 | Worktrees | ✅ | M5 | Aba Worktrees na janela Git: lista (atual, branch ou HEAD destacado, bloqueado, podável), adicionar com branch nova, existente ou HEAD destacado (pasta sugerida ao lado do repositório), abrir nesta janela ou em outra, bloquear com motivo/desbloquear, remover (com mudanças locais pede confirmação para forçar; o branch fica) e podar mostrando a saída do Git. Testado com repositórios reais; capturas conferidas. |
 | V-12 | Tags | ✅ | M5 | Janela Git › aba Tags: lista (nome, anotada ou leve, commit, data, mensagem), Nova tag em HEAD ou num commit do Log (menu de contexto), leve ou anotada; nome validado com `git check-ref-format`; Checkout (aviso de HEAD destacado), Push de uma tag ou de todas (escolha do remoto, saída do git mostrada) e Excluir, todos com confirmação e em segundo plano. Testado com repositórios git reais e remoto bare; capturas conferidas. Fora: excluir a tag no remoto |
 | V-13 | Patches | ✅ | M5 | Criar patch dos arquivos marcados na janela Commit (ou de um arquivo, pelo menu de contexto) e de um ou vários commits do Log (Ctrl/Shift+clique), salvo em arquivo ou copiado; Aplicar patch (janela Git) de arquivo ou da área de transferência, com a lista de arquivos, se aplica sem conflito (`git apply --check`), opção `--3way` e a saída do Git. Patch de e-mail vira commits (`git am`, avisa que os hooks rodam); diff vai para a árvore de trabalho. Limite de 32 MB. Testado entre dois repositórios reais. |
-| V-14 | Assinatura GPG | ⬜ | M5 | |
+| V-14 | Assinatura GPG | ✅ | M5 | Janela Commit: "Assinar com GPG" começa como diz `commit.gpgsign` e assina com `-S` (a chave de `user.signingkey` aparece na dica); desmarcado usa `--no-gpg-sign`. O Log mostra a assinatura verificada pelo git (boa, não confiável, expirada, revogada, inválida, chave ausente). Falha do programa de assinatura vira erro claro e nada é commitado. Testado com chave GPG real. |
 | V-15 | Editar histórico | ⬜ | M5 | |
 | V-16 | Integração com issue trackers | ⬜ | M5 | |
 | V-17 | GitHub: conta, PRs, revisão, fork, gists, Actions | ⬜ | M5 | Via `gh` |
