@@ -325,7 +325,12 @@
     "Instructions are shown when the program is paused": "Instrukcje są widoczne, gdy program jest wstrzymany",
     "Earlier instructions could not be found. Try again": "Nie znaleziono wcześniejszych instrukcji. Ponów",
     "Load earlier instructions": "Wczytaj wcześniejsze instrukcje",
-    "Load later instructions": "Wczytaj dalsze instrukcje"
+    "Load later instructions": "Wczytaj dalsze instrukcje",
+    "Force Step Into": "Wymuś wejście",
+    "Force Step Over": "Wymuś przejście",
+    "Force Run to Cursor": "Wymuś uruchomienie do kursora",
+    "More Stepping Actions": "Więcej akcji krokowych",
+    "This debugger cannot force step into": "Ten debuger nie może wymusić wejścia"
   },
   "editor": {
     "Editor Only": "Tylko edytor",

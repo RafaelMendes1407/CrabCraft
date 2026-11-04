@@ -1948,9 +1948,23 @@ impl CrabCraftApp {
                     self.notify(tr("Attaching needs an open Rust project"), false);
                 }
             }
-            Action::RunToCursor => {
+            Action::RunToCursor | Action::ForceRunToCursor => {
                 if let Some((path, line)) = self.docs.active_doc().map(|d| (d.path.clone(), d.editor.caret_line_col().0)) {
-                    self.debugger.run_to_cursor(&path, line);
+                    self.debugger.run_to_cursor(&path, line, action == Action::ForceRunToCursor);
+                }
+            }
+            Action::ForceStepOver => {
+                if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
+                    s.force_step_over();
+                }
+            }
+            Action::ForceStepInto => {
+                if let Some(s) = self.debugger.session.as_mut().filter(|s| s.state().is_stopped()) {
+                    if s.can_force_step_in() {
+                        s.force_step_in();
+                    } else {
+                        self.notify(tr("This debugger cannot force step into"), false);
+                    }
                 }
             }
             Action::ToggleHexValues => self.toggle_hex_values(),

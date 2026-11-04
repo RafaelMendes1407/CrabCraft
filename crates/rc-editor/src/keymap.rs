@@ -119,6 +119,12 @@ pub enum Action {
     StepOut,
     Resume,
     RunToCursor,
+    /// Step Into that also enters the code Step Into skips (the standard library).
+    ForceStepInto,
+    /// Step Over that does not stop at breakpoints on the way.
+    ForceStepOver,
+    /// Run to Cursor that does not stop at breakpoints on the way.
+    ForceRunToCursor,
     AttachToProcess,
     Evaluate,
     /// Integers in hexadecimal or decimal in the debugger.
@@ -217,6 +223,9 @@ impl Action {
                 | StepOut
                 | Resume
                 | RunToCursor
+                | ForceStepInto
+                | ForceStepOver
+                | ForceRunToCursor
                 | AttachToProcess
                 | Evaluate
                 | ToggleHexValues
@@ -576,6 +585,9 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::F8, s, StepOut),
         b(Key::R, ca, Resume),
         b(Key::F9, a, RunToCursor),
+        b(Key::F7, as_, ForceStepInto),
+        b(Key::F8, as_, ForceStepOver),
+        b(Key::F9, ca, ForceRunToCursor),
         b(Key::F8, a, Evaluate),
         b(Key::Comma, c, ShowSettings),
         b(Key::Num1, c, ToggleProjectWindow),
@@ -687,6 +699,9 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         b(Key::F11, none, StepInto),
         b(Key::F11, s, StepOut),
         b(Key::F10, c, RunToCursor),
+        b(Key::F11, as_, ForceStepInto),
+        b(Key::F10, as_, ForceStepOver),
+        b(Key::F10, ca, ForceRunToCursor),
         b(Key::F9, s, Evaluate),
         b(Key::Insert, cas, NewScratchFile),
     ];

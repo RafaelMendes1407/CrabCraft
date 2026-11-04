@@ -6,7 +6,7 @@
 use crate::app::CrabCraftApp;
 use crate::debugger::{Debugger, SetTarget, ValueEdit};
 use crate::toolwindow::ToolWindow;
-use crate::ui::run_windows::{console, header, open_link};
+use crate::ui::run_windows::{console, header_buttons, open_link};
 use crate::ui::toolwindows::empty_state;
 use egui::{FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_dap::{EvalValue, Variable, WatchValue};
@@ -39,7 +39,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     );
     let t_mute = if app.debugger.muted { tr("Unmute Breakpoints") } else { tr("Mute Breakpoints") };
     let mute_icon = if app.debugger.muted { ico::BREAKPOINT_MUTED } else { ico::MUTE_BREAKPOINTS };
-    let actions: [(Ico, &str, bool); 10] = [
+    let t_more = tr("More Stepping Actions");
+    let actions: [(Ico, &str, bool); 11] = [
         (ico::RERUN, &t_restart, has),
         (ico::RESUME, &t_resume, stopped),
         (ico::PAUSE, &t_pause, active && !stopped),
@@ -48,12 +49,16 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         (ico::STEP_INTO, &t_into, stopped),
         (ico::STEP_OUT, &t_out, stopped),
         (ico::RUN_TO_CURSOR, &t_cursor, stopped),
+        (ico::MORE_VERT, t_more, stopped),
         (ico::EVALUATE, &t_eval, stopped),
         (mute_icon, t_mute, true),
     ];
     let title = if app.debugger.name.is_empty() { tr("Debug").to_string() } else { format!("{}: {}", tr("Debug"), app.debugger.name) };
-    let clicked = header(ui, &title, &actions);
+    let (clicked, buttons) = header_buttons(ui, &title, &actions);
     let ctx = ui.ctx().clone();
+    if let Some(more) = buttons.get(8) {
+        egui::Popup::menu(more).show(|ui| forced_steps_menu(app, ui));
+    }
     match clicked {
         Some(0) => app.restart_debugging(),
         Some(1) => app.run_ide_action(&ctx, Action::Resume),
@@ -67,8 +72,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(5) => app.run_ide_action(&ctx, Action::StepInto),
         Some(6) => app.run_ide_action(&ctx, Action::StepOut),
         Some(7) => app.run_ide_action(&ctx, Action::RunToCursor),
-        Some(8) => app.run_ide_action(&ctx, Action::Evaluate),
-        Some(9) => app.debugger.muted = !app.debugger.muted,
+        Some(9) => app.run_ide_action(&ctx, Action::Evaluate),
+        Some(10) => app.debugger.muted = !app.debugger.muted,
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Debug),
         _ => {}
     }
@@ -163,6 +168,31 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.debugger.show_memory_of(reference.as_deref(), &expression);
     }
     ui.advance_cursor_after_rect(avail);
+}
+
+/// The stepping actions that ignore what the plain ones respect: Force Step Into enters the
+/// standard library, Force Step Over and Force Run to Cursor pass breakpoints by.
+fn forced_steps_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
+    ui.set_min_width(240.0);
+    let stopped = app.debugger.stopped();
+    let can_force_in = app.debugger.session.as_ref().is_some_and(|s| s.can_force_step_in());
+    let ctx = ui.ctx().clone();
+    let entries = [
+        (Action::ForceStepInto, ico::STEP_INTO, tr("Force Step Into"), stopped && can_force_in),
+        (Action::ForceStepOver, ico::STEP_OVER, tr("Force Step Over"), stopped),
+        (Action::ForceRunToCursor, ico::RUN_TO_CURSOR, tr("Force Run to Cursor"), stopped),
+    ];
+    for (action, icon, text, enabled) in entries {
+        let shortcut = app.keymap.shortcut_text(action);
+        let mut resp = theme::menu_entry(ui, Some(icon), text, shortcut.as_deref(), false, enabled);
+        if action == Action::ForceStepInto && !can_force_in {
+            resp = resp.on_disabled_hover_text(tr("This debugger cannot force step into"));
+        }
+        if resp.clicked() {
+            ui.close();
+            app.run_ide_action(&ctx, action);
+        }
+    }
 }
 
 /// The Memory tab: an address or expression field, page buttons and the hex dump (address,

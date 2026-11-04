@@ -325,7 +325,12 @@
     "Instructions are shown when the program is paused": "Les instructions s'affichent quand le programme est en pause",
     "Earlier instructions could not be found. Try again": "Instructions précédentes introuvables. Réessayer",
     "Load earlier instructions": "Charger les instructions précédentes",
-    "Load later instructions": "Charger les instructions suivantes"
+    "Load later instructions": "Charger les instructions suivantes",
+    "Force Step Into": "Forcer le pas à pas détaillé",
+    "Force Step Over": "Forcer le pas à pas principal",
+    "Force Run to Cursor": "Forcer l'exécution jusqu'au curseur",
+    "More Stepping Actions": "Plus d'actions de pas à pas",
+    "This debugger cannot force step into": "Ce débogueur ne peut pas forcer l'entrée"
   },
   "editor": {
     "Editor Only": "Éditeur seul",

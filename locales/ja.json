@@ -325,7 +325,12 @@
     "Instructions are shown when the program is paused": "プログラムが一時停止しているときに命令が表示されます",
     "Earlier instructions could not be found. Try again": "前の命令が見つかりません。再試行",
     "Load earlier instructions": "前の命令を読み込む",
-    "Load later instructions": "後の命令を読み込む"
+    "Load later instructions": "後の命令を読み込む",
+    "Force Step Into": "強制ステップイン",
+    "Force Step Over": "強制ステップオーバー",
+    "Force Run to Cursor": "カーソルまで強制実行",
+    "More Stepping Actions": "その他のステップ操作",
+    "This debugger cannot force step into": "このデバッガーは強制ステップインできません"
   },
   "editor": {
     "Editor Only": "エディターのみ",

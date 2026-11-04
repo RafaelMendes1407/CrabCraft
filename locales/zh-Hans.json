@@ -325,7 +325,12 @@
     "Instructions are shown when the program is paused": "程序暂停时显示指令",
     "Earlier instructions could not be found. Try again": "找不到更早的指令。重试",
     "Load earlier instructions": "加载更早的指令",
-    "Load later instructions": "加载后续的指令"
+    "Load later instructions": "加载后续的指令",
+    "Force Step Into": "强制单步执行",
+    "Force Step Over": "强制单步跳过",
+    "Force Run to Cursor": "强制运行到光标处",
+    "More Stepping Actions": "更多单步操作",
+    "This debugger cannot force step into": "此调试器无法强制单步执行"
   },
   "editor": {
     "Editor Only": "仅编辑器",

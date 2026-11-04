@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 153 |
+| ✅ Pronto | 155 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 70 |
+| ⬜ A fazer | 68 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -261,7 +261,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-03 | Breakpoints condicionais | ✅ | M2 | Condição testada com GDB real |
 | D-04 | Breakpoints em exceção/panic | ✅ | M2 | Para na linha do código que causou o panic, com GDB real; também para em should_panic |
 | D-05 | Step over, into, out e Run to Cursor | ✅ | M2 | Over, into, out e Run to Cursor testados com GDB real |
-| D-06 | Force Step Into | ⬜ | M4 | |
+| D-06 | Force Step Into | ✅ | M4 | Alt+Shift+F7 (e no menu ⋮ da janela Debug): com GDB, desliga o skip da biblioteca padrão até a próxima parada e entra em `String::from`; com outros adaptadores fica desabilitado, com o motivo. Testado com GDB real. |
 | D-07 | Threads e frames | ✅ | M2 | Thread com o nome do teste e pilha vistos na janela real |
 | D-08 | Árvore de variáveis | ✅ | M2 | Testado com GDB real, inclusive `Vec` e `String`; registradores ficam fora da árvore |
 | D-09 | Watches | ✅ | M2 | Watches testados com GDB real |
@@ -283,7 +283,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-25 | Mute breakpoints | ✅ | M2 | Testado com GDB real; botão visto na janela |
 | D-26 | Logpoints e remover ao atingir | ✅ | M3 | Mensagem com `{expressão}` e "Remover ao atingir" nas propriedades do breakpoint; salvos na sessão. Remover ao atingir vale só para breakpoints que param: logpoint não para, então a IDE não vê o acerto. |
 | D-27 | Grupos de breakpoints e lista geral | ⬜ | M4 | |
-| D-28 | Force Step Over e Force Run to Cursor | ⬜ | M4 | |
+| D-28 | Force Step Over e Force Run to Cursor | ✅ | M4 | Alt+Shift+F8 e Ctrl+Alt+F9 (e no menu ⋮ da janela Debug): o adaptador fica sem os breakpoints do usuário (só o do cursor) até o programa parar, e eles voltam em seguida. Testado com GDB real: passa duas vezes por um breakpoint e o Step Over normal volta a parar nele. |
 | D-29 | Console do depurador | ✅ | M2 | Comandos chegam ao GDB, testado; caixa vista na janela |
 | D-30 | Pular a stdlib ao fazer step | ✅ | M3 | Pula `core`/`alloc`/`std` por nome de função; breakpoints e panics ainda param na biblioteca. Um Step Into pode parar de novo na mesma linha, e closures passadas à biblioteca são puladas. |
 | D-31 | Sessões em paralelo | ⬜ | M4 | |

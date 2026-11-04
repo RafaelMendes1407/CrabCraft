@@ -403,15 +403,21 @@ impl Debugger {
         }
     }
 
-    /// Continues to `line` (0-based) of `path` with a one-shot breakpoint.
-    pub fn run_to_cursor(&mut self, path: &Path, line: usize) {
+    /// Continues to `line` (0-based) of `path` with a one-shot breakpoint; `force` ignores the
+    /// other breakpoints on the way (Force Run to Cursor).
+    pub fn run_to_cursor(&mut self, path: &Path, line: usize, force: bool) {
         if !self.stopped() {
             return;
         }
         self.temp = Some((path.to_path_buf(), line as u32 + 1));
         if let Some(s) = &mut self.session {
-            s.set_breakpoint(BreakpointSpec::new(path.to_path_buf(), line as u32 + 1));
-            s.continue_();
+            let spec = BreakpointSpec::new(path.to_path_buf(), line as u32 + 1);
+            if force {
+                s.force_continue_to(spec);
+            } else {
+                s.set_breakpoint(spec);
+                s.continue_();
+            }
         }
     }
 

@@ -35,6 +35,10 @@ pub enum StopReason {
     Other(String),
 }
 
+/// The GDB skip of the standard library ([`crate::gdb`]) is the first one GDB creates.
+const GDB_SKIP_DISABLE: &str = "skip disable 1";
+const GDB_SKIP_ENABLE: &str = "skip enable 1";
+
 /// The function of the Rust runtime every panic passes through.
 const PANIC_FUNCTION: &str = "std::panicking::rust_panic";
 
@@ -357,6 +361,11 @@ pub struct DebugSession {
     /// Thread to resume once the logpoints of an emulated stop are printed.
     continue_after_logs: Option<i64>,
     orphan_breakpoint_events: Vec<Breakpoint>,
+    /// Force Step Over and Force Run to Cursor: until the program stops or ends, the adapter
+    /// has no breakpoint but this one (file, 1-based line). The user's breakpoints are kept.
+    ignoring_breakpoints: Option<Option<(PathBuf, u32)>>,
+    /// Force Step Into: GDB's skip of the standard library is off until the program stops.
+    skip_disabled: bool,
     shutdown_started: bool,
     events: Vec<DebugEvent>,
 }
@@ -407,6 +416,8 @@ impl DebugSession {
             log_evals: Vec::new(),
             continue_after_logs: None,
             orphan_breakpoint_events: Vec::new(),
+            ignoring_breakpoints: None,
+            skip_disabled: false,
             shutdown_started: false,
             events: Vec::new(),
         };
@@ -929,7 +940,11 @@ impl DebugSession {
 
     fn send_breakpoints(&mut self, path: &Path, during_config: bool) {
         let Some(c) = &self.client else { return };
-        let (lines, bps) = self.breakpoints.request_for(path, self.emulation());
+        let (mut lines, mut bps) = self.breakpoints.request_for(path, self.emulation());
+        if let Some(keep) = &self.ignoring_breakpoints {
+            let kept = |line: u32| keep.as_ref().is_some_and(|(p, l)| p == path && *l == line);
+            (lines, bps) = lines.into_iter().zip(bps).filter(|(l, _)| kept(*l)).unzip();
+        }
         let p = c.request("setBreakpoints", args::set_breakpoints(path, &bps));
         if during_config {
             self.hs.config_outstanding += 1;
@@ -984,6 +999,7 @@ impl DebugSession {
             }
             return;
         }
+        self.end_forced_step();
         self.invalidate();
         let generation = self.generation;
         let thread_id = ev.thread_id;
@@ -1180,6 +1196,9 @@ impl DebugSession {
 
     /// Disconnects and makes sure the adapter (and a launched debuggee) are gone after a grace.
     fn shutdown(&mut self) {
+        // Nothing to give back to an adapter that is going away.
+        self.ignoring_breakpoints = None;
+        self.skip_disabled = false;
         if let Some(c) = &self.prep_cancel {
             c.cancel();
         }
@@ -1244,6 +1263,83 @@ impl DebugSession {
             return;
         }
         self.resume_with(if over { "next" } else { "stepIn" }, Some("instruction"));
+    }
+
+    /// Whether Force Step Into can step into the code Step Into skips (GDB's skip of the
+    /// standard library); other adapters filter their steps in ways the session cannot lift.
+    pub fn can_force_step_in(&self) -> bool {
+        self.is_gdb()
+    }
+
+    /// Step Into that also enters the standard library: GDB's skip is turned off until the
+    /// program stops. Does nothing when [`Self::can_force_step_in`] is false.
+    pub fn force_step_in(&mut self) {
+        if !self.can_force_step_in() || !self.state.is_stopped() {
+            return;
+        }
+        self.gdb_command(GDB_SKIP_DISABLE);
+        self.skip_disabled = true;
+        self.step_in();
+    }
+
+    /// Step Over that does not stop at the breakpoints of the code it runs.
+    pub fn force_step_over(&mut self) {
+        if !self.state.is_stopped() {
+            return;
+        }
+        self.ignore_breakpoints(None);
+        self.step_over();
+    }
+
+    /// Continues to `spec` (a one-shot breakpoint the caller removes) without stopping at any
+    /// other breakpoint on the way.
+    pub fn force_continue_to(&mut self, spec: BreakpointSpec) {
+        if !self.state.is_stopped() {
+            return;
+        }
+        self.ignore_breakpoints(Some((spec.path.clone(), spec.line)));
+        self.set_breakpoint(spec);
+        self.continue_();
+    }
+
+    /// Whether the adapter has the breakpoints taken away by a forced step right now.
+    pub fn ignoring_breakpoints(&self) -> bool {
+        self.ignoring_breakpoints.is_some()
+    }
+
+    /// Takes every breakpoint but `keep` from the adapter until the program stops.
+    fn ignore_breakpoints(&mut self, keep: Option<(PathBuf, u32)>) {
+        self.ignoring_breakpoints = Some(keep);
+        self.send_all_breakpoints();
+    }
+
+    fn send_all_breakpoints(&mut self) {
+        if !self.live() {
+            return;
+        }
+        let files: Vec<PathBuf> = self.breakpoints.files().map(Path::to_path_buf).collect();
+        for f in files {
+            self.send_breakpoints(&f, false);
+        }
+    }
+
+    /// The program stopped after a forced step: the adapter gets back the user's breakpoints
+    /// and the skip of the standard library.
+    fn end_forced_step(&mut self) {
+        if self.ignoring_breakpoints.take().is_some() {
+            self.send_all_breakpoints();
+        }
+        if std::mem::take(&mut self.skip_disabled) {
+            self.gdb_command(GDB_SKIP_ENABLE);
+        }
+    }
+
+    /// Runs a GDB command whose answer nobody reads.
+    fn gdb_command(&mut self, command: &str) {
+        if let Some(c) = &self.client {
+            let p = c.request("evaluate", args::evaluate(command, None, EvalContext::Repl, false));
+            self.in_flight.push((p, Purpose::Ignore));
+        }
     }
 
     /// Breaks into the running program.

@@ -1252,6 +1252,69 @@ fn step_into_walks_past_the_standard_library() {
     app.run_ide_action(&ctx, Action::StopRun);
 }
 
+#[test]
+fn forced_steps_enter_the_library_and_pass_breakpoints_by() {
+    use rc_editor::{Action, BreakpointKind};
+    const MAIN: &str = "#[inline(never)]\nfn own(n: u32) -> u32 {\n    std::hint::black_box(n) + 1\n}\n\nfn main() {\n    let text = String::from(\"abc\");\n    let a = own(std::hint::black_box(1));\n    let b = own(a);\n    let c = own(b);\n    let d = own(c);\n    println!(\"{text} {d}\");\n}\n";
+    if rc_dap::gdb::locate().is_none() {
+        return;
+    }
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    // Paused at `String::from`, with a breakpoint in `own` too.
+    let mut app = paused_at(dir.path(), MAIN, 6);
+    let main_rs = app.docs.active_doc().unwrap().path.clone();
+    app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(2, BreakpointKind::Normal);
+    let ctx = egui::Context::default();
+    let line = |a: &CrabCraftApp| a.docs.list.iter().find(|d| d.path == main_rs).and_then(|d| d.editor.execution_line);
+    let top = |a: &CrabCraftApp| a.debugger.session.as_ref().and_then(|s| s.selected_frame()).map(|f| f.name.clone()).unwrap_or_default();
+    let run = |app: &mut CrabCraftApp, action: Action, what: &str| {
+        app.run_ide_action(&ctx, action);
+        settle_debugger(app, what, &|a| a.debugger.stopped() && a.debugger.session.as_ref().is_some_and(|s| s.selected_frame().is_some()));
+    };
+    assert_eq!(line(&app), Some(6));
+    assert!(app.debugger.session.as_ref().unwrap().can_force_step_in());
+
+    // Force Step Into enters `String::from`, which Step Into walks past.
+    run(&mut app, Action::ForceStepInto, "the forced step into");
+    let entered = top(&app);
+    assert!(!entered.starts_with("demo::"), "still in the project: {entered}");
+    assert!(entered.contains("from") || entered.contains("alloc") || entered.contains("core"), "{entered}");
+    // The skip of the standard library is back once stopped.
+    let id = app.debugger.session.as_mut().unwrap().evaluate("info skip", rc_dap::EvalContext::Repl);
+    let mut skips = String::new();
+    let start = Instant::now();
+    while skips.is_empty() && start.elapsed() < Duration::from_secs(10) {
+        for e in app.debugger.session.as_mut().unwrap().pump() {
+            if let rc_dap::DebugEvent::Evaluated { id: i, result, .. } = e
+                && i == id
+            {
+                skips = result.map(|v| v.result).unwrap_or_else(|e| e);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(skips.contains("core|alloc|std") && skips.contains(" y "), "{skips}");
+
+    // Force Run to Cursor passes the breakpoint in `own` twice.
+    app.open_file(&main_rs);
+    app.docs.active_doc_mut().unwrap().editor.goto(9, 0);
+    run(&mut app, Action::ForceRunToCursor, "the forced run to cursor");
+    assert_eq!(line(&app), Some(9), "{}", top(&app));
+    let s = app.debugger.session.as_ref().unwrap();
+    assert!(!s.ignoring_breakpoints());
+    assert!(s.breakpoints().get(&main_rs, 3).is_some_and(|b| b.spec.enabled));
+    assert!(s.breakpoints().get(&main_rs, 10).is_none(), "the one-shot breakpoint is gone");
+
+    // Force Step Over passes it once more; a plain Step Over then stops there again.
+    run(&mut app, Action::ForceStepOver, "the forced step over");
+    assert_eq!(line(&app), Some(10), "{}", top(&app));
+    run(&mut app, Action::StepOver, "the step over");
+    assert_eq!(line(&app), Some(2), "{}", top(&app));
+    assert_eq!(app.debugger.session.as_ref().unwrap().stop_info().map(|i| i.reason.clone()), Some(rc_dap::StopReason::Breakpoint));
+    app.run_ide_action(&ctx, Action::StopRun);
+}
+
 /// Asks for completion at the end of `text` in the active document and returns the server's list.
 fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion {
     let doc = app.docs.active_doc_mut().unwrap();
