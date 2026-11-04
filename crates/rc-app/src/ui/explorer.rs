@@ -62,6 +62,8 @@ pub struct ExplorerState {
     pub excluded: Vec<String>,
     /// `Cargo.toml` files of other Cargo projects analysed with the workspace (absolute).
     pub attached: Vec<PathBuf>,
+    /// The project's scopes and file colours (saved in the session).
+    pub scopes: crate::scopes::Scopes,
 }
 
 /// What the user asked for in the explorer this frame.
@@ -458,6 +460,12 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             let width = ui.available_width().max(200.0);
             let (rect, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
             let selected = selected_index == Some(i);
+            // File colours: a light tint behind the files of a coloured scope.
+            if let NodeKind::File(path) = &row.kind
+                && let Some(c) = state.scopes.color_of(path)
+            {
+                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, c.gamma_multiply(if p.dark { 0.3 } else { 0.18 }));
+            }
             if selected {
                 let color = if state.has_focus { p.selection } else { p.selection_inactive };
                 ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, color);

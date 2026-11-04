@@ -742,7 +742,9 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, full: Rect, window:
             if doc.is_modified() {
                 title.push_str(" *");
             }
-            let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color: if colors { file_color(&doc.path) } else { None }, draggable: true };
+            // The project's file colours (Settings › Scopes) first, then the kind of file.
+            let color = if colors { app.explorer.scopes.color_of(&doc.path).or_else(|| file_color(&doc.path)) } else { None };
+            let style = theme::TabStyle { italic: doc.preview, pinned: doc.pinned, color, draggable: true };
             let (resp, close) = theme::tab_ex(ui, selected, Some(icons::for_file(&doc.name())), &title, true, style);
             rects.push(resp.rect);
             // With several groups, the one that has the keyboard is underlined.

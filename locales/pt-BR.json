@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "Podar worktrees",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "Esquecer estes worktrees, cujas pastas não existem mais? Os branches são mantidos.",
     "the folder does not exist": "a pasta não existe"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "Escopo \"{scope}\": padrão inválido '{glob}': {message}",
+    "Project Files": "Arquivos do projeto",
+    "Changed Files": "Arquivos alterados",
+    "The scope needs a name": "O escopo precisa de um nome",
+    "Another scope has this name": "Outro escopo tem este nome",
+    "Scope:": "Escopo:",
+    "Scope": "Escopo",
+    "Scopes": "Escopos",
+    "Open a project to define its scopes and file colors.": "Abra um projeto para definir seus escopos e cores de arquivo.",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs separados por vírgulas; ! deixa arquivos de fora. Um glob com / corresponde ao caminho a partir da pasta do projeto; um sem / ao nome do arquivo.",
+    "Every file of the project except the excluded folders": "Todos os arquivos do projeto, exceto as pastas excluídas",
+    "Files git reports as changed": "Arquivos que o git informa como alterados",
+    "Add Scope": "Adicionar escopo",
+    "File Colors": "Cores de arquivo",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "Os arquivos de um escopo recebem a cor dele no Explorador e nas abas do editor; vale o primeiro escopo que contém o arquivo.",
+    "Move Up": "Mover para cima",
+    "Move Down": "Mover para baixo",
+    "Add Color": "Adicionar cor"
   }
 }

@@ -148,6 +148,8 @@ pub struct Vcs {
     pub blame_for: Option<PathBuf>,
     pub diff: Option<DiffView>,
     next_doc_id: u64,
+    /// Goes up with every new status (the Changed Files scope follows it).
+    pub status_version: u64,
 }
 
 impl Vcs {
@@ -193,6 +195,7 @@ impl Vcs {
             blame_for: None,
             diff: None,
             next_doc_id: 1 << 40,
+            status_version: 0,
         }
     }
 
@@ -787,6 +790,7 @@ impl Vcs {
                     let paths: BTreeSet<String> = s.entries.iter().map(|e| e.path.clone()).collect();
                     self.excluded.retain(|p| paths.contains(p));
                     self.status = Some(s);
+                    self.status_version += 1;
                 }
                 VcsEvent::Status(Err(e)) => self.error = Some(e),
                 VcsEvent::Branches(b) => self.branches = b,

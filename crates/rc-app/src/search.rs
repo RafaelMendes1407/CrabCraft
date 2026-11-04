@@ -476,6 +476,10 @@ pub struct FindInFiles {
     pub mask: String,
     /// Folders and files the user excluded (root-relative); never searched.
     pub excluded: Vec<String>,
+    /// The scope searched (a key of [`crate::scopes::Scopes::list`]) and its files, or why its
+    /// pattern does not parse.
+    pub scope: String,
+    pub only: Result<Option<rc_search::ScopeFilter>, String>,
     pub results: Vec<FileMatches>,
     pub summary: Option<FindSummary>,
     pub error: Option<String>,
@@ -498,6 +502,8 @@ impl FindInFiles {
             regex: false,
             mask: String::new(),
             excluded: Vec::new(),
+            scope: crate::scopes::PROJECT.to_string(),
+            only: Ok(None),
             results: Vec::new(),
             summary: None,
             error: None,
@@ -534,7 +540,14 @@ impl FindInFiles {
                 return;
             }
         };
-        let opts = FindOptions { query: self.options(), mask, max_results: 5000, excluded: self.excluded.clone(), ..Default::default() };
+        let only = match &self.only {
+            Ok(o) => o.clone(),
+            Err(e) => {
+                self.error = Some(e.clone());
+                return;
+            }
+        };
+        let opts = FindOptions { query: self.options(), mask, max_results: 5000, excluded: self.excluded.clone(), only, ..Default::default() };
         if let Some(f) = &mut self.finder
             && let Err(e) = f.start(opts)
         {

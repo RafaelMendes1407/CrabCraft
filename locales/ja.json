@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "ワークツリーを整理",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "フォルダーが存在しないこれらのワークツリーを削除しますか？ブランチは残ります。",
     "the folder does not exist": "フォルダーが存在しません"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "スコープ「{scope}」: 無効なパターン '{glob}': {message}",
+    "Project Files": "プロジェクトファイル",
+    "Changed Files": "変更されたファイル",
+    "The scope needs a name": "スコープには名前が必要です",
+    "Another scope has this name": "別のスコープがこの名前を使っています",
+    "Scope:": "スコープ:",
+    "Scope": "スコープ",
+    "Scopes": "スコープ",
+    "Open a project to define its scopes and file colors.": "プロジェクトを開いてスコープとファイルの色を定義します。",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "カンマ区切りのグロブ。! でファイルを除外します。/ を含むグロブはプロジェクトフォルダーからのパスに、含まないものはファイル名に一致します。",
+    "Every file of the project except the excluded folders": "除外したフォルダー以外のプロジェクトのすべてのファイル",
+    "Files git reports as changed": "git が変更ありと報告するファイル",
+    "Add Scope": "スコープを追加",
+    "File Colors": "ファイルの色",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "スコープのファイルはエクスプローラーとエディタータブでその色になります。ファイルを含む最初のスコープが優先されます。",
+    "Move Up": "上へ移動",
+    "Move Down": "下へ移動",
+    "Add Color": "色を追加"
   }
 }

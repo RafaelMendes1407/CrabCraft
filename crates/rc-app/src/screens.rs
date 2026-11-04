@@ -2891,3 +2891,214 @@ fn refactor_conflicts_capture() {
     assert!(matches!(h.state().dialog, Some(crate::ui::dialogs::Dialog::RefactorConflicts(_))));
     h.render().unwrap().save(out.join("refactor-conflicts.png")).unwrap();
 }
+
+/// A Cargo project in git with a test, a README and an uncommitted change to `src/lib.rs`;
+/// every file says "needle".
+fn scopes_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
+    let root = home.join("ws");
+    for (file, text) in [
+        ("Cargo.toml", "[package]\nname = \"ws\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n"),
+        ("src/main.rs", "// needle\nfn main() {\n    ws::hello();\n}\n"),
+        ("src/lib.rs", "// needle\npub fn hello() {}\n"),
+        ("src/net.rs", "// needle\npub fn net() {}\n"),
+        ("tests/it.rs", "// needle\n#[test]\nfn it() {}\n"),
+        ("README.md", "needle\n"),
+    ] {
+        std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
+        std::fs::write(root.join(file), text).unwrap();
+    }
+    let root = root.canonicalize().unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
+    git(&["init", "-q"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "Start"]);
+    std::fs::write(root.join("src/lib.rs"), "// needle\npub fn hello() {}\npub fn changed() {}\n").unwrap();
+    let mut app = test_app(&home.join("home"), dark);
+    app.open_workspace(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    run_frames(&mut h, "git's status", |a| a.vcs.status.is_some());
+    (h, root)
+}
+
+/// The files Find in Files found, sorted.
+fn found_in_scope(h: &mut Harness<'static, CrabCraftApp>) -> Vec<String> {
+    run_frames(h, "Find in Files", |a| a.find_in_files.as_ref().is_some_and(|f| f.summary.is_some() || f.error.is_some()));
+    let mut v: Vec<String> = h.state().find_in_files.as_ref().map(|f| f.results.iter().map(|r| r.rel.clone()).collect()).unwrap_or_default();
+    v.sort();
+    v
+}
+
+/// Settings › Scopes defines a scope and file colours (saved with the session); the colours
+/// follow the scopes and git's changes; Find in Files' scope picker narrows the search, and a
+/// scope whose pattern does not parse is an error, not a crash.
+#[test]
+fn scopes_narrow_find_in_files_and_color_files() {
+    use crate::scopes::{CHANGED, TESTS};
+    use egui_kittest::kittest::Queryable;
+    use rc_core::session::{FileColor, NamedScope};
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = scopes_harness(dir.path(), false);
+
+    // Settings › Scopes: a new scope, renamed and given a pattern, and three colours.
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Scopes);
+    h.run_steps(3);
+    h.get_by_label(tr("Add Scope")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Add Color")).click();
+    h.run_steps(2);
+    {
+        let draft = h.state_mut().explorer.scopes.draft.as_mut().unwrap();
+        assert_eq!(draft.user.len(), 1);
+        assert_eq!(draft.colors.len(), 1);
+        draft.user[0] = NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() };
+        draft.colors = vec![
+            FileColor { scope: CHANGED.into(), color: "#e08e3c".into() },
+            FileColor { scope: TESTS.into(), color: "#5fb865".into() },
+            FileColor { scope: "Sources".into(), color: "#4a8fe0".into() },
+        ];
+    }
+    h.run_steps(2);
+    h.get_by_label(tr("OK")).click();
+    h.run_steps(3);
+    assert!(h.state().dialog.is_none());
+    assert_eq!(h.state().explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }]);
+    h.state_mut().save_session();
+    let saved = rc_core::Session::load(&root);
+    assert_eq!(saved.scopes.len(), 1);
+    assert_eq!(saved.file_colors.len(), 3);
+
+    // Colours: the first scope that holds the file.
+    let rgb = |r, g, b| Some(egui::Color32::from_rgb(r, g, b));
+    let mut color = |rel: &str| h.state_mut().explorer.scopes.color_of(&root.join(rel));
+    assert_eq!(color("src/lib.rs"), rgb(0xe0, 0x8e, 0x3c), "the changed file");
+    assert_eq!(color("tests/it.rs"), rgb(0x5f, 0xb8, 0x65));
+    assert_eq!(color("src/main.rs"), rgb(0x4a, 0x8f, 0xe0));
+    assert_eq!(color("src/net.rs"), None, "left out by the pattern");
+    assert_eq!(color("README.md"), None);
+
+    // Find in Files: every file, then each scope picked in the selector.
+    h.state_mut().pending.push(rc_editor::Action::FindInFiles);
+    h.run_steps(3);
+    h.state_mut().find_in_files.as_mut().unwrap().query = "needle".into();
+    h.state_mut().find_in_files.as_mut().unwrap().search();
+    assert_eq!(found_in_scope(&mut h), ["README.md", "src/lib.rs", "src/main.rs", "src/net.rs", "tests/it.rs"]);
+    let pick = |h: &mut Harness<'static, CrabCraftApp>, from: &str, to: &str| {
+        // The selector shows the scope as its value.
+        h.get_by(|n| n.value().as_deref() == Some(from)).click();
+        h.run_steps(2);
+        // The popup's entry (another window may show the same word).
+        h.get_all_by_label(to).last().unwrap().click();
+        h.run_steps(2);
+        found_in_scope(h)
+    };
+    assert_eq!(pick(&mut h, tr("Project Files"), "Sources"), ["src/lib.rs", "src/main.rs"]);
+    assert_eq!(pick(&mut h, "Sources", tr("Tests")), ["tests/it.rs"]);
+    assert_eq!(pick(&mut h, tr("Tests"), tr("Changed Files")), ["src/lib.rs"]);
+
+    // A pattern that does not parse: an error in the window, no results.
+    h.state_mut().set_scopes(crate::scopes::Draft { user: vec![NamedScope { name: "Broken".into(), pattern: "src/[".into() }], colors: Vec::new() });
+    h.run_steps(2);
+    assert_eq!(pick(&mut h, tr("Changed Files"), "Broken"), Vec::<String>::new());
+    let error = h.state().find_in_files.as_ref().and_then(|f| f.error.clone()).unwrap_or_default();
+    assert!(error.contains("src/["), "{error}");
+    assert!(h.query_by_label(&error).is_some(), "the error is shown");
+
+    // Reopened: the scopes and colours come back from the (untrusted) session file.
+    drop(h);
+    std::fs::write(
+        rc_core::Session::file_for(&root),
+        r##"{ "scopes": [{ "name": "Sources", "pattern": "src/**" }, { "name": "builtin:x", "pattern": "*" }],
+            "file_colors": [{ "scope": "Sources", "color": "#123456" }, { "scope": "Nope", "color": "#ffffff" }, { "scope": "Sources", "color": "red" }] }"##,
+    )
+    .unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+    assert_eq!(app.explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**".into() }]);
+    assert_eq!(app.explorer.scopes.colors, [FileColor { scope: "Sources".into(), color: "#123456".into() }]);
+    assert_eq!(app.explorer.scopes.color_of(&root.join("src/net.rs")), rgb(0x12, 0x34, 0x56));
+}
+
+/// On this repository: a scope of one crate narrows Find in Files to it, and the Tests scope
+/// holds the integration tests and the `*_tests.rs` modules.
+#[test]
+fn scopes_on_the_crabcraft_repository() {
+    use rc_core::session::NamedScope;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let mut app = test_app(&dir.path().join("home"), false);
+    app.open_workspace(&root);
+    app.set_scopes(crate::scopes::Draft {
+        user: vec![NamedScope { name: "Search crate".into(), pattern: "crates/rc-search/**/*.rs".into() }],
+        colors: vec![rc_core::session::FileColor { scope: crate::scopes::TESTS.into(), color: "#5fb865".into() }],
+    });
+    let search = |only: Option<rc_search::ScopeFilter>| {
+        let mut f = crate::search::FindInFiles::new(&root, Waker::noop(), "ScopeFilter".into());
+        f.only = Ok(only);
+        f.search();
+        let start = std::time::Instant::now();
+        while f.summary.is_none() && start.elapsed() < std::time::Duration::from_secs(120) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            f.poll();
+        }
+        let mut v: Vec<String> = f.results.iter().map(|r| r.rel.clone()).collect();
+        v.sort();
+        v
+    };
+    let everywhere = search(None);
+    assert!(everywhere.iter().any(|f| f == "crates/rc-app/src/scopes.rs") && everywhere.iter().any(|f| f == "crates/rc-search/src/scope.rs"), "{everywhere:?}");
+    let only = app.explorer.scopes.filter("Search crate").unwrap();
+    assert_eq!(search(only), ["crates/rc-search/src/find.rs", "crates/rc-search/src/lib.rs", "crates/rc-search/src/scope.rs"]);
+    let tests = app.explorer.scopes.filter(crate::scopes::TESTS).unwrap().unwrap();
+    assert!(tests.matches("crates/rc-search/tests/workspace.rs") && tests.matches("crates/rc-app/src/rust_tests.rs"));
+    assert!(!tests.matches("crates/rc-app/src/app.rs"));
+    assert!(app.explorer.scopes.color_of(&root.join("crates/rc-app/src/vcs_tests.rs")).is_some());
+    assert!(app.explorer.scopes.color_of(&root.join("crates/rc-app/src/vcs.rs")).is_none());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/scopes-*.png"]
+fn scopes_capture() {
+    use crate::scopes::{CHANGED, TESTS};
+    use rc_core::session::{FileColor, NamedScope};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    for dark in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut h, root) = scopes_harness(dir.path(), dark);
+        h.state_mut().set_scopes(crate::scopes::Draft {
+            user: vec![NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }],
+            colors: vec![
+                FileColor { scope: CHANGED.into(), color: "#e08e3c".into() },
+                FileColor { scope: TESTS.into(), color: "#5fb865".into() },
+                FileColor { scope: "Sources".into(), color: "#4a8fe0".into() },
+            ],
+        });
+        for f in ["src/main.rs", "src/net.rs", "tests/it.rs", "src/lib.rs"] {
+            h.state_mut().open_file(&root.join(f));
+        }
+        h.state_mut().explorer.locate(&root.join("tests/it.rs"), None, &root);
+        h.state_mut().explorer.locate(&root.join("src/lib.rs"), None, &root);
+        h.state_mut().pending.push(rc_editor::Action::FindInFiles);
+        h.run_steps(3);
+        let only = h.state().explorer.scopes.filter("Sources").map_err(|e| e.text());
+        if let Some(f) = h.state_mut().find_in_files.as_mut() {
+            f.query = "needle".into();
+            f.scope = "Sources".into();
+            f.only = only;
+            f.search();
+        }
+        found_in_scope(&mut h);
+        h.run_steps(4);
+        let mode = if dark { "dark" } else { "light" };
+        h.render().unwrap().save(out.join(format!("scopes-{mode}.png"))).unwrap();
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Scopes);
+        h.run_steps(4);
+        h.render().unwrap().save(out.join(format!("scopes-settings-{mode}.png"))).unwrap();
+    }
+}

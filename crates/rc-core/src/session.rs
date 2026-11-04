@@ -161,6 +161,87 @@ pub struct Session {
     pub cargo_target: String,
     /// The copyright header of the project's files. Read with care: the file is untrusted.
     pub copyright: CopyrightProfile,
+    /// Scopes the user defined (named sets of files). Untrusted: read with
+    /// [`clean_scopes`].
+    pub scopes: Vec<NamedScope>,
+    /// File colours: the first scope that holds a file gives its colour. Untrusted: read with
+    /// [`clean_file_colors`].
+    pub file_colors: Vec<FileColor>,
+}
+
+/// A named set of files: globs separated by `,` or `;`, `!` to leave files out
+/// (`src/**/*.rs, !**/generated/**`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NamedScope {
+    pub name: String,
+    pub pattern: String,
+}
+
+/// The colour of the files of a scope: the scope's key (a built-in key such as
+/// `builtin:tests`, or a user scope's name) and `#rrggbb`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FileColor {
+    pub scope: String,
+    pub color: String,
+}
+
+/// Prefix of the keys of the scopes CrabCraft defines; user scopes cannot use it.
+pub const BUILTIN_SCOPE_PREFIX: &str = "builtin:";
+/// Longest scope name and pattern kept from a session file.
+const MAX_SCOPE_NAME: usize = 120;
+const MAX_SCOPE_PATTERN: usize = 4000;
+const MAX_SCOPES: usize = 200;
+
+/// User scopes read from a session file: names trimmed, not empty, not reserved, unique (the
+/// first wins), within a sane size. The patterns are not checked here (a bad glob is shown
+/// where the scope is used).
+pub fn clean_scopes(list: &[NamedScope]) -> Vec<NamedScope> {
+    let mut out: Vec<NamedScope> = Vec::new();
+    for s in list {
+        let name = s.name.trim();
+        if name.is_empty() || name.len() > MAX_SCOPE_NAME || name.starts_with(BUILTIN_SCOPE_PREFIX) || s.pattern.len() > MAX_SCOPE_PATTERN || out.iter().any(|o| o.name == name) {
+            continue;
+        }
+        out.push(NamedScope { name: name.to_string(), pattern: s.pattern.trim().to_string() });
+        if out.len() == MAX_SCOPES {
+            break;
+        }
+    }
+    out
+}
+
+/// `#rrggbb` (or `rrggbb`) as red, green and blue.
+pub fn parse_hex_color(text: &str) -> Option<[u8; 3]> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
+
+/// Red, green and blue as `#rrggbb`.
+pub fn hex_color(rgb: [u8; 3]) -> String {
+    format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
+}
+
+/// File colours read from a session file: valid colours of scopes that exist (`known` says
+/// which keys do), one per scope (the first wins), colours written as `#rrggbb`.
+pub fn clean_file_colors(list: &[FileColor], known: impl Fn(&str) -> bool) -> Vec<FileColor> {
+    let mut out: Vec<FileColor> = Vec::new();
+    for c in list {
+        let Some(rgb) = parse_hex_color(&c.color) else { continue };
+        if !known(&c.scope) || out.iter().any(|o| o.scope == c.scope) {
+            continue;
+        }
+        out.push(FileColor { scope: c.scope.clone(), color: hex_color(rgb) });
+        if out.len() == MAX_SCOPES {
+            break;
+        }
+    }
+    out
 }
 
 /// The template a project's files start with (`$year`, `$file`, `$project`, `$author`), its
@@ -265,5 +346,17 @@ mod tests {
         assert_eq!(parse_env("TWO WORDS=x"), Err(BadEnvLine(1)));
         assert_eq!(parse_env("NUL=a\0b"), Err(BadEnvLine(1)));
         assert_eq!(parse_env(""), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn scopes_and_file_colors_from_a_session_are_cleaned() {
+        let scope = |name: &str, pattern: &str| NamedScope { name: name.into(), pattern: pattern.into() };
+        let raw = vec![scope(" Sources ", " src/**/*.rs "), scope("", "*"), scope("builtin:tests", "*"), scope("Sources", "other"), scope("Docs", "a[")];
+        assert_eq!(clean_scopes(&raw), vec![scope("Sources", "src/**/*.rs"), scope("Docs", "a[")]);
+        let color = |scope: &str, color: &str| FileColor { scope: scope.into(), color: color.into() };
+        let raw = vec![color("Sources", "#A0B1C2"), color("Sources", "#000000"), color("Gone", "#ffffff"), color("builtin:tests", "green"), color("builtin:tests", "12345"), color("builtin:tests", "1a2b3c")];
+        let known = |k: &str| k == "Sources" || k == "builtin:tests";
+        assert_eq!(clean_file_colors(&raw, known), vec![color("Sources", "#a0b1c2"), color("builtin:tests", "#1a2b3c")]);
+        assert_eq!(parse_hex_color("#ffé000"), None);
     }
 }

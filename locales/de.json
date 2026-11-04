@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "Worktrees bereinigen",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "Diese Worktrees vergessen, deren Ordner nicht mehr existieren? Ihre Branches bleiben erhalten.",
     "the folder does not exist": "der Ordner existiert nicht"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "Bereich „{scope}“: ungültiges Muster '{glob}': {message}",
+    "Project Files": "Projektdateien",
+    "Changed Files": "Geänderte Dateien",
+    "The scope needs a name": "Der Bereich braucht einen Namen",
+    "Another scope has this name": "Ein anderer Bereich hat diesen Namen",
+    "Scope:": "Bereich:",
+    "Scope": "Bereich",
+    "Scopes": "Bereiche",
+    "Open a project to define its scopes and file colors.": "Öffnen Sie ein Projekt, um seine Bereiche und Dateifarben festzulegen.",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs durch Kommas getrennt; ! schließt Dateien aus. Ein Glob mit / passt auf den Pfad ab dem Projektordner, einer ohne / auf den Dateinamen.",
+    "Every file of the project except the excluded folders": "Alle Dateien des Projekts außer den ausgeschlossenen Ordnern",
+    "Files git reports as changed": "Dateien, die git als geändert meldet",
+    "Add Scope": "Bereich hinzufügen",
+    "File Colors": "Dateifarben",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "Dateien eines Bereichs erhalten seine Farbe im Explorer und auf den Editor-Tabs; der erste Bereich, der eine Datei enthält, gewinnt.",
+    "Move Up": "Nach oben",
+    "Move Down": "Nach unten",
+    "Add Color": "Farbe hinzufügen"
   }
 }

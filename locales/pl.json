@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "Wyczyść worktree",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "Zapomnieć te worktree, których foldery już nie istnieją? Ich gałęzie zostaną zachowane.",
     "the folder does not exist": "folder nie istnieje"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "Zakres „{scope}”: nieprawidłowy wzorzec '{glob}': {message}",
+    "Project Files": "Pliki projektu",
+    "Changed Files": "Zmienione pliki",
+    "The scope needs a name": "Zakres musi mieć nazwę",
+    "Another scope has this name": "Inny zakres ma tę nazwę",
+    "Scope:": "Zakres:",
+    "Scope": "Zakres",
+    "Scopes": "Zakresy",
+    "Open a project to define its scopes and file colors.": "Otwórz projekt, aby określić jego zakresy i kolory plików.",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globy oddzielone przecinkami; ! wyklucza pliki. Glob z / dopasowuje ścieżkę od folderu projektu, bez / – nazwę pliku.",
+    "Every file of the project except the excluded folders": "Wszystkie pliki projektu poza wykluczonymi folderami",
+    "Files git reports as changed": "Pliki, które git zgłasza jako zmienione",
+    "Add Scope": "Dodaj zakres",
+    "File Colors": "Kolory plików",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "Pliki zakresu dostają jego kolor w Eksploratorze i na kartach edytora; wygrywa pierwszy zakres, który zawiera plik.",
+    "Move Up": "Przenieś w górę",
+    "Move Down": "Przenieś w dół",
+    "Add Color": "Dodaj kolor"
   }
 }

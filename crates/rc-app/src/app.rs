@@ -408,6 +408,7 @@ impl CrabCraftApp {
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
         self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
+        self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
@@ -1234,6 +1235,7 @@ impl CrabCraftApp {
         self.nav_back.clear();
         self.nav_forward.clear();
         self.copyright.close();
+        self.explorer.scopes.close();
     }
 
     fn restore_session(&mut self, s: Session) {
@@ -1357,6 +1359,8 @@ impl CrabCraftApp {
             cargo_features: self.cargo_features.clone(),
             cargo_target: self.cargo_target.clone().unwrap_or_default(),
             copyright: self.copyright.profile.clone(),
+            scopes: self.explorer.scopes.user.clone(),
+            file_colors: self.explorer.scopes.colors.clone(),
             breakpoints,
             logpoints: group_lines(self.debugger.logs.iter().map(|((p, l), m)| (p.clone(), (*l, m.clone())))),
             remove_once_hit: group_lines(self.debugger.once.iter().map(|(p, l)| (p.clone(), *l))),
@@ -1602,6 +1606,24 @@ impl CrabCraftApp {
             d.editor.replace(start, end, &edit.text);
         }
         self.notify(message, false);
+    }
+
+    /// Settings › Scopes: the project's scopes and file colours, saved with its session.
+    pub fn set_scopes(&mut self, draft: crate::scopes::Draft) {
+        if self.explorer.scopes.draft() != draft {
+            self.explorer.scopes.set(&draft.user, &draft.colors);
+            self.session_dirty = true;
+        }
+    }
+
+    /// Keeps the Changed Files scope in step with git's status (workspace-relative paths).
+    fn sync_changed_scope(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        let vcs = &self.vcs;
+        self.explorer.scopes.sync_changed(vcs.status_version, || {
+            let Some(repo) = vcs.root() else { return Default::default() };
+            vcs.changes().iter().filter_map(|c| rc_core::workspace::relative_path(&root, &repo.join(&c.path))).collect()
+        });
     }
 
     /// Settings › Copyright: the profile of the project, saved with its session.
@@ -2022,6 +2044,7 @@ impl CrabCraftApp {
                     let text = self.docs.active_doc().map(|d| d.editor.selected_text()).filter(|t| !t.is_empty() && !t.contains('\n'));
                     let fif = self.find_in_files.get_or_insert_with(|| crate::search::FindInFiles::new(&root, self.waker.clone(), String::new()));
                     fif.excluded = self.explorer.excluded.clone();
+                    fif.only = self.explorer.scopes.filter(&fif.scope).map_err(|e| e.text());
                     if let Some(t) = text {
                         fif.query = t;
                     }
@@ -2466,6 +2489,7 @@ impl CrabCraftApp {
     /// Opens the settings on `page`.
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
         self.copyright.draft = None;
+        self.explorer.scopes.draft = None;
         self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
     }
 
@@ -3059,6 +3083,7 @@ impl eframe::App for CrabCraftApp {
         if let Some(text) = self.vcs.clipboard.take() {
             ctx.copy_text(text);
         }
+        self.sync_changed_scope();
         crate::ui::frame(self, ui, editor_actions);
         self.docs.reparse_edited();
         let now = ctx.input(|i| i.time);

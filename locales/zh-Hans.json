@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "清理工作树",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "忘记这些文件夹已不存在的工作树？其分支将保留。",
     "the folder does not exist": "文件夹不存在"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "范围“{scope}”：无效的模式 '{glob}'：{message}",
+    "Project Files": "项目文件",
+    "Changed Files": "已更改的文件",
+    "The scope needs a name": "范围需要名称",
+    "Another scope has this name": "另一个范围已使用此名称",
+    "Scope:": "范围:",
+    "Scope": "范围",
+    "Scopes": "范围",
+    "Open a project to define its scopes and file colors.": "打开项目以定义其范围和文件颜色。",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "用逗号分隔的通配符；! 排除文件。含 / 的通配符匹配从项目文件夹开始的路径，不含 / 的匹配文件名。",
+    "Every file of the project except the excluded folders": "项目的所有文件（已排除的文件夹除外）",
+    "Files git reports as changed": "git 报告为已更改的文件",
+    "Add Scope": "添加范围",
+    "File Colors": "文件颜色",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "范围内的文件在资源管理器和编辑器标签页中使用其颜色；以第一个包含该文件的范围为准。",
+    "Move Up": "上移",
+    "Move Down": "下移",
+    "Add Color": "添加颜色"
   }
 }

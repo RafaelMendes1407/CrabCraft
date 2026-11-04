@@ -1419,5 +1419,25 @@
     "Prune Worktrees": "Élaguer les worktrees",
     "Forget these worktrees, whose folders no longer exist? Their branches are kept.": "Oublier ces worktrees, dont les dossiers n’existent plus ? Leurs branches sont conservées.",
     "the folder does not exist": "le dossier n’existe pas"
+  },
+  "scopes": {
+    "Scope \"{scope}\": invalid pattern '{glob}': {message}": "Portée « {scope} » : motif non valide '{glob}' : {message}",
+    "Project Files": "Fichiers du projet",
+    "Changed Files": "Fichiers modifiés",
+    "The scope needs a name": "La portée doit avoir un nom",
+    "Another scope has this name": "Une autre portée porte ce nom",
+    "Scope:": "Portée :",
+    "Scope": "Portée",
+    "Scopes": "Portées",
+    "Open a project to define its scopes and file colors.": "Ouvrez un projet pour définir ses portées et ses couleurs de fichiers.",
+    "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs séparés par des virgules ; ! exclut des fichiers. Un glob avec / correspond au chemin depuis le dossier du projet, un glob sans / au nom du fichier.",
+    "Every file of the project except the excluded folders": "Tous les fichiers du projet sauf les dossiers exclus",
+    "Files git reports as changed": "Fichiers que git signale comme modifiés",
+    "Add Scope": "Ajouter une portée",
+    "File Colors": "Couleurs des fichiers",
+    "Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.": "Les fichiers d’une portée prennent sa couleur dans l’Explorateur et sur les onglets de l’éditeur ; la première portée qui contient un fichier l’emporte.",
+    "Move Up": "Monter",
+    "Move Down": "Descendre",
+    "Add Color": "Ajouter une couleur"
   }
 }

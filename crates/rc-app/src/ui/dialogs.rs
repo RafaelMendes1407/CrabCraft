@@ -18,6 +18,7 @@ pub enum SettingsPage {
     ExternalTools,
     LiveTemplates,
     Copyright,
+    Scopes,
 }
 
 pub enum Dialog {
@@ -196,6 +197,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     (SettingsPage::ExternalTools, tr("External Tools")),
                     (SettingsPage::LiveTemplates, tr("Live Templates")),
                     (SettingsPage::Copyright, tr("Copyright")),
+                    (SettingsPage::Scopes, tr("Scopes")),
                 ] {
                     let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
                     if *page == pg {
@@ -221,6 +223,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 }
                 if *page == SettingsPage::Copyright {
                     copyright_page(ui, app, p.text_muted, p.error);
+                    return;
+                }
+                if *page == SettingsPage::Scopes {
+                    scopes_page(ui, app, p.text_muted, p.error);
                     return;
                 }
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
@@ -359,7 +365,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates | SettingsPage::Copyright => {}
+                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes => {}
                 });
             });
         });
@@ -370,14 +376,124 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         if let Some(profile) = app.copyright.draft.take() {
             app.set_copyright_profile(profile);
         }
+        if let Some(draft) = app.explorer.scopes.draft.take() {
+            app.set_scopes(draft);
+        }
         return Outcome::Close;
     }
     if cancel || esc {
         app.copyright.draft = None;
+        app.explorer.scopes.draft = None;
         Outcome::Close
     } else {
         Outcome::Keep
     }
+}
+
+/// Settings › Scopes: the project's scopes (named globs) and the colours of their files. Saved
+/// with the project (its session), so it needs one open.
+fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error: egui::Color32) {
+    use crate::scopes;
+    use rc_core::session::{FileColor, NamedScope, hex_color, parse_hex_color};
+    if app.workspace.is_none() {
+        ui.label(egui::RichText::new(tr("Open a project to define its scopes and file colors.")).color(muted));
+        return;
+    }
+    let mut draft = app.explorer.scopes.draft.take().unwrap_or_else(|| app.explorer.scopes.draft());
+    egui::ScrollArea::vertical().id_salt("scopes_page").max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.label(egui::RichText::new(tr("Scopes")).font(theme::bold(13.0)));
+        ui.label(egui::RichText::new(tr("Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.")).size(12.0).color(muted));
+        ui.add_space(6.0);
+        egui::Grid::new("builtin_scopes").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+            for (name, what) in [
+                (tr("Project Files"), tr("Every file of the project except the excluded folders").to_string()),
+                (tr("Tests"), scopes::TESTS_PATTERN.to_string()),
+                (tr("Changed Files"), tr("Files git reports as changed").to_string()),
+            ] {
+                ui.label(name);
+                ui.label(egui::RichText::new(what).color(muted));
+                ui.end_row();
+            }
+        });
+        ui.add_space(6.0);
+        let mut remove = None;
+        for i in 0..draft.user.len() {
+            ui.horizontal(|ui| {
+                let old = draft.user[i].name.clone();
+                ui.add(egui::TextEdit::singleline(&mut draft.user[i].name).hint_text(tr("Name")).desired_width(130.0));
+                ui.add(egui::TextEdit::singleline(&mut draft.user[i].pattern).hint_text("src/**/*.rs, !target/**").font(egui::TextStyle::Monospace).desired_width(290.0));
+                if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+                // A renamed scope keeps its colour.
+                let new = draft.user[i].name.trim().to_string();
+                if new != old.trim() {
+                    for c in draft.colors.iter_mut().filter(|c| c.scope == old.trim()) {
+                        c.scope = new.clone();
+                    }
+                }
+            });
+            if let Some(problem) = scopes::draft_problem(&draft, i) {
+                ui.label(egui::RichText::new(problem).size(12.0).color(error));
+            }
+        }
+        if let Some(i) = remove {
+            let gone = draft.user.remove(i).name;
+            draft.colors.retain(|c| c.scope != gone.trim());
+        }
+        if ui.button(tr("Add Scope")).clicked() {
+            draft.user.push(NamedScope { name: format!("{} {}", tr("Scope"), draft.user.len() + 1), pattern: String::new() });
+        }
+        ui.add_space(14.0);
+        ui.label(egui::RichText::new(tr("File Colors")).font(theme::bold(13.0)));
+        ui.label(egui::RichText::new(tr("Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.")).size(12.0).color(muted));
+        ui.add_space(6.0);
+        let mut choices: Vec<(String, String)> = [scopes::PROJECT, scopes::TESTS, scopes::CHANGED].iter().map(|k| (k.to_string(), app.explorer.scopes.label(k))).collect();
+        choices.extend(draft.user.iter().map(|s| s.name.trim().to_string()).filter(|n| !n.is_empty()).map(|n| (n.clone(), n)));
+        let mut remove = None;
+        let mut swap = None;
+        let count = draft.colors.len();
+        for (i, c) in draft.colors.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                let label = choices.iter().find(|(k, _)| *k == c.scope).map_or_else(|| c.scope.clone(), |(_, n)| n.clone());
+                egui::ComboBox::from_id_salt(("file_color_scope", i)).selected_text(label).width(180.0).show_ui(ui, |ui| {
+                    for (key, name) in &choices {
+                        if ui.selectable_label(c.scope == *key, name).clicked() {
+                            c.scope = key.clone();
+                        }
+                    }
+                });
+                let mut rgb = parse_hex_color(&c.color).unwrap_or(scopes::DEFAULT_COLOR);
+                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    c.color = hex_color(rgb);
+                }
+                if theme::icon_button(ui, rc_kit::ico::CHEVRON_UP, i > 0, tr("Move Up")).clicked() {
+                    swap = Some(i - 1);
+                }
+                if theme::icon_button(ui, rc_kit::ico::CHEVRON_DOWN, i + 1 < count, tr("Move Down")).clicked() {
+                    swap = Some(i);
+                }
+                if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = swap
+            && i + 1 < draft.colors.len()
+        {
+            draft.colors.swap(i, i + 1);
+        }
+        if let Some(i) = remove {
+            draft.colors.remove(i);
+        }
+        let free = choices.iter().find(|(k, _)| !draft.colors.iter().any(|c| c.scope == *k)).map(|(k, _)| k.clone());
+        if ui.add_enabled(free.is_some(), egui::Button::new(tr("Add Color"))).clicked()
+            && let Some(scope) = free
+        {
+            draft.colors.push(FileColor { scope, color: hex_color(scopes::DEFAULT_COLOR) });
+        }
+    });
+    app.explorer.scopes.draft = Some(draft);
 }
 
 /// Settings › Copyright: the header of the project's files, with a preview. Saved with the
