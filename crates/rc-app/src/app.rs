@@ -93,6 +93,8 @@ pub struct CrabCraftApp {
     pub feature_search: crate::feature_nav::FeatureSearch,
     /// The project's copyright header profile (saved with the session).
     pub copyright: crate::copyright::Copyright,
+    /// Crate names (crates.io search, local registry) for `Cargo.toml` completion.
+    pub crate_names: crate::manifest_completion::CrateNames,
     /// The last external page opened from the editor (docs.rs).
     pub opened_url: Option<String>,
     /// Share in Playground uploads (N-18).
@@ -299,6 +301,7 @@ impl CrabCraftApp {
             dep_versions: crate::dep_versions::DepVersions::new(waker.clone()),
             feature_search: Default::default(),
             copyright: Default::default(),
+            crate_names: crate::manifest_completion::CrateNames::new(waker.clone()),
             opened_url: None,
             playground: crate::playground::Playground::new(waker.clone()),
             cargo_open: Default::default(),
@@ -801,6 +804,18 @@ impl CrabCraftApp {
         let doc = &mut self.docs.list[i];
         doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, GutterIcon::FeatureOn | GutterIcon::FeatureOff));
         doc.editor.gutter_icons.extend(icons);
+    }
+
+    /// The quick fix of an outdated dependency: writes `version` as the requirement of the
+    /// dependency declared on `line` of the active `Cargo.toml`, in its editor (undoable).
+    pub fn update_dependency(&mut self, line: usize, version: &str) {
+        let Ok(version) = semver::Version::parse(version) else { return };
+        let Some(doc) = self.docs.active_doc_mut() else { return };
+        let text = doc.editor.buffer.rope().to_string();
+        let Some(dep) = rc_cargo::dependency_lines(&text).into_iter().find(|d| d.line == line) else { return };
+        let Some((start, end)) = rc_cargo::versions::dep_spans(&text, &dep).req else { return };
+        let req = rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version);
+        doc.editor.replace(start, end, &req);
     }
 
     /// Click on the docs.rs icon of a `Cargo.toml` dependency: opens its documentation for the
@@ -1438,7 +1453,8 @@ impl CrabCraftApp {
         }
         // Cargo.toml is completed here: the Rust server does not complete TOML.
         if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
-            crate::manifest_completion::complete(&mut self.docs.list[i], true);
+            let mut cx = crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online: self.settings.check_crates_io };
+            crate::manifest_completion::complete(&mut self.docs.list[i], true, &mut cx);
             return;
         }
         // Cargo features and their `cfg` uses: rust-analyzer does not go between them.
@@ -1449,6 +1465,27 @@ impl CrabCraftApp {
             }
             if crate::manifest_completion::is_manifest(&self.docs.list[i]) {
                 self.notify(tr("Place the caret on a feature name to go to it or find its uses"), false);
+                return;
+            }
+        }
+        // The quick fix of an outdated dependency (C-04) is made here, not by a server.
+        if action == Action::ShowIntentions && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
+            let doc = &self.docs.list[i];
+            let line = doc.editor.caret_line_col().0;
+            if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
+                let version = version.to_string();
+                let command = rc_lsp::lsp_types::Command {
+                    title: trf("Update to {version}", &[("version", &version)]),
+                    command: crate::insight::UPDATE_DEPENDENCY_COMMAND.to_string(),
+                    arguments: Some(vec![serde_json::json!(line), serde_json::json!(version)]),
+                };
+                let action = rc_lsp::lsp_types::CodeAction {
+                    title: command.title.clone(),
+                    kind: Some(rc_lsp::lsp_types::CodeActionKind::QUICKFIX),
+                    command: Some(command),
+                    ..Default::default()
+                };
+                self.dialog = Some(Dialog::CodeActions { list: vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(action)], selected: 0 });
                 return;
             }
         }
@@ -2945,7 +2982,14 @@ impl eframe::App for CrabCraftApp {
         }
         self.update_test_markers();
         self.update_feature_icons();
-        self.dep_versions.update(&mut self.docs, self.cfg_epoch, self.settings.check_crates_io);
+        let online = self.settings.check_crates_io;
+        let waits = [
+            self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online),
+            crate::manifest_completion::CrateNames::update(&mut self.docs, &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online }),
+        ];
+        if let Some(wait) = waits.into_iter().flatten().min() {
+            ctx.request_repaint_after(wait);
+        }
         self.poll_feature_search();
         self.poll_playground(&ctx);
         let dark = self.dark(&ctx);

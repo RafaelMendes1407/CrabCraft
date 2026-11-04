@@ -1725,8 +1725,21 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
     }
     if let Some(i) = chosen {
         let action = list.swap_remove(i);
-        if let rc_lsp::lsp_types::CodeActionOrCommand::Command(c) = &action {
+        // Local commands, also behind a local quick fix (a code action with only a command).
+        let local = match &action {
+            A::Command(c) => Some(c),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND),
+            A::CodeAction(_) => None,
+        };
+        if let Some(c) = local {
             let ran = match c.command.as_str() {
+                crate::insight::UPDATE_DEPENDENCY_COMMAND => {
+                    let args = c.arguments.clone().unwrap_or_default();
+                    if let (Some(line), Some(version)) = (args.first().and_then(|v| v.as_u64()), args.get(1).and_then(|v| v.as_str())) {
+                        app.update_dependency(usize::try_from(line).unwrap_or(usize::MAX), version);
+                    }
+                    true
+                }
                 crate::insight::RENAME_COMMAND => {
                     app.run_insight_action(rc_editor::Action::Rename, pos);
                     true

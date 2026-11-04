@@ -153,7 +153,7 @@ pub fn rustup_check(rustup: &Path) -> anyhow::Result<Vec<ToolchainUpdate>> {
     Ok(list)
 }
 
-fn home() -> Option<PathBuf> {
+pub(crate) fn home() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }
 

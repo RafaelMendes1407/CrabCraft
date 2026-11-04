@@ -8,6 +8,7 @@
 //! safe on a project the user has not trusted. Build, run and test execute the project's code
 //! (`build.rs`, proc macros) and only start from an explicit user action.
 
+pub mod crates_io;
 pub mod explain;
 pub mod feature_nav;
 pub mod format;
@@ -30,5 +31,5 @@ pub use metadata::{CargoWorkspace, Library, LoadLog, Package, Target, TargetKind
 pub use ops::{BeforeLaunch, CargoOptions, PrepareEvent, RunTarget, inspect_args, start_prepare, command_line, prepare, start_build, start_command, start_process, start_run, start_scratch, start_tests, target_command};
 pub use triple::{TripleChoice, load_triple_choices, project_build_targets, valid_triple};
 pub use tree::{DepKind, DepNode, has_children, load_tree_logged, parse_tree};
-pub use versions::{DepSource, Locked, Lockfile, ManifestDep, Published, dependency_lines, fetch_crates_io_versions, find_lockfile, valid_crate_name};
+pub use versions::{DepProblem, DepSource, Locked, Lockfile, ManifestDep, Published, dependency_lines, fetch_crates_io_versions, find_lockfile, valid_crate_name};
 pub use toolchain::{Cargo, ToolchainInfo, ToolchainUpdate, detect_toolchain, locate_rust_analyzer, parse_rustup_check, print_cfg, rustup_check, rustup_path};

@@ -1884,6 +1884,118 @@ fn cargo_toml_shows_locked_versions_and_docs_rs_icons() {
     assert!(!root.join("target").exists(), "nothing was built");
 }
 
+/// In a dependency table, typing a crate name lists crates.io's answers (given beforehand, so
+/// nothing goes to the network); choosing one writes `name = ""` and lists its versions, newest
+/// stable first with its short forms. Offline, names come from the lock and the local registry.
+#[test]
+fn cargo_toml_completes_crate_names_and_versions() {
+    use rc_cargo::crates_io::CrateHit;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, _root) = dep_versions_harness(dir.path(), false);
+    let hits = vec![
+        CrateHit { name: "tokio".into(), version: Some("1.40.0".into()), description: Some("An event-driven runtime".into()), downloads: 400_000_000 },
+        CrateHit { name: "tokio-util".into(), version: Some("0.7.12".into()), description: None, downloads: 0 },
+    ];
+    for q in ["t", "to", "tok"] {
+        h.state_mut().crate_names.set_answer(q, hits.clone());
+    }
+    h.state_mut().dep_versions.set_published("tokio", rc_cargo::versions::parse_index("{\"vers\":\"1.39.0\"}\n{\"vers\":\"1.40.0\"}\n{\"vers\":\"1.41.0\",\"yanked\":true}"));
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    // The caret on a new line after `helper = { path = "helper" }`.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let at = editor.buffer.rope().to_string().find("\n\n[dev-dependencies]").unwrap();
+        editor.selection = rc_text::Selection::point(at);
+    }
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "tok");
+    assert_eq!(completion_labels(&h), vec!["tokio", "tokio-util"]);
+    let c = h.state().docs.active_doc().unwrap().editor.popups.completion.clone().unwrap();
+    let first = c.selected_item().unwrap();
+    assert_eq!((first.detail.as_str(), first.doc.as_deref()), ("1.40.0", Some("An event-driven runtime")));
+    assert!(h.state().crate_names.searching().is_none(), "answered: nothing sent");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).contains("helper\" }\ntokio = \"\"\n"), "{}", text(&h));
+    assert_eq!(completion_labels(&h), vec!["1.40.0", "1.40", "1", "1.39.0"]);
+    h.key_press(egui::Key::ArrowDown);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    assert!(text(&h).contains("\ntokio = \"1.40\"\n"), "{}", text(&h));
+
+    // Offline: the lock's and the local registry's names, nothing asked.
+    h.state_mut().settings.check_crates_io = false;
+    h.state_mut().crate_names.set_local(vec!["rayon".into(), "regex".into()]);
+    h.key_press(egui::Key::End);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    type_chars(&mut h, "ra");
+    assert_eq!(completion_labels(&h), vec!["rand", "rayon"]);
+    assert!(h.state().crate_names.searching().is_none());
+}
+
+/// With the online check on, a dependency on a crate crates.io does not have is an error, a
+/// requirement no published version matches a warning, and one the newest stable version is
+/// outside a weak warning whose quick fix (Alt+Enter) updates it. Off, they are gone.
+#[test]
+fn cargo_toml_warns_about_unknown_and_outdated_crates() {
+    use rc_editor::Severity;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut h, root) = dep_versions_harness(dir.path(), false);
+    h.state_mut().dep_versions.set_missing("no-such-crate");
+    h.state_mut().dep_versions.set_published("anyhow", rc_cargo::versions::parse_index("{\"vers\":\"1.0.0\"}\n{\"vers\":\"2.0.1\"}"));
+    h.state_mut().dep_versions.set_published("log", rc_cargo::versions::parse_index("{\"vers\":\"0.4.20\"}"));
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let text = editor.buffer.rope().to_string();
+        let at = text.find("rand = \"0.7\"\n").unwrap() + "rand = \"0.7\"\n".len();
+        editor.replace(at, at, "anyhow = \"1\"\nno-such-crate = \"1\"\nlog = { version = \"0.5\" }\n");
+    }
+    h.run_steps(3);
+    let ours = |h: &Harness<'static, CrabCraftApp>| {
+        let doc = h.state().docs.active_doc().unwrap();
+        let text = doc.editor.buffer.rope().to_string();
+        let mut out: Vec<(usize, String, Severity)> = doc
+            .editor
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.as_deref() == Some(crate::dep_versions::DIAG_CODE))
+            .map(|d| (text.chars().take(d.start).filter(|&c| c == '\n').count(), text.chars().skip(d.start).take(d.end - d.start).collect(), d.severity))
+            .collect();
+        out.sort_by_key(|d| d.0);
+        out
+    };
+    assert_eq!(ours(&h), vec![(11, "1".to_string(), Severity::Info), (12, "no-such-crate".to_string(), Severity::Error), (13, "0.5".to_string(), Severity::Warning)]);
+    let path = root.join("Cargo.toml");
+    let problems = h.state().insight.problems.get(&path).cloned().unwrap_or_default();
+    assert_eq!(problems.iter().map(|d| d.severity).collect::<Vec<_>>(), vec![Severity::Error, Severity::Warning], "the Problems window lists errors and warnings");
+    assert!(problems[0].message.contains("no-such-crate"), "{}", problems[0].message);
+
+    // Alt+Enter on the outdated line offers the update.
+    {
+        let editor = &mut h.state_mut().docs.active_doc_mut().unwrap().editor;
+        let at = editor.buffer.rope().line_to_char(11) + 2;
+        editor.selection = rc_text::Selection::point(at);
+    }
+    h.state_mut().run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::new(100.0, 100.0));
+    h.run_steps(1);
+    assert!(matches!(&h.state().dialog, Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) if list.len() == 1));
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert!(text.contains("\nanyhow = \"2.0.1\"\n"), "{text}");
+    assert_eq!(ours(&h).iter().map(|d| d.0).collect::<Vec<_>>(), vec![12, 13]);
+
+    // The online check off: no crates.io diagnostics.
+    h.state_mut().settings.check_crates_io = false;
+    h.run_steps(2);
+    assert!(ours(&h).is_empty());
+    assert!(h.state().insight.problems.get(&path).is_none_or(|l| l.iter().all(|d| d.code.as_deref() != Some(crate::dep_versions::DIAG_CODE))));
+}
+
 #[test]
 #[ignore = "Requires a GPU; writes target/snapshots/cargo-dep-versions-*.png"]
 fn cargo_dep_versions_capture() {

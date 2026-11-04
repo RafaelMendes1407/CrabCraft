@@ -3539,6 +3539,7 @@ dependencies = [
  "rc-text",
  "rc-vcs",
  "rfd",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",

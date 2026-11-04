@@ -1142,7 +1142,12 @@
   "depversions": {
     "{locked} · {latest} available": "{locked} · 可用 {latest}",
     "Show newer versions of dependencies from crates.io": "显示 crates.io 上依赖项的较新版本",
-    "Only crate names are sent to crates.io.": "仅向 crates.io 发送 crate 名称。"
+    "Only crate names are sent to crates.io.": "仅向 crates.io 发送 crate 名称。",
+    "requirement": "版本要求",
+    "No crate named `{name}` on crates.io": "crates.io 上没有名为 `{name}` 的 crate",
+    "No version of `{name}` on crates.io matches `{req}`": "crates.io 上没有与 `{req}` 匹配的 `{name}` 版本",
+    "Newer version {version} is outside `{req}`": "较新版本 {version} 不在 `{req}` 范围内",
+    "Update to {version}": "更新到 {version}"
   },
   "lens": {
     "Show a code preview when hovering the scrollbar": "悬停在滚动条上时显示代码预览"

@@ -1142,7 +1142,12 @@
   "depversions": {
     "{locked} · {latest} available": "{locked} · {latest} verfügbar",
     "Show newer versions of dependencies from crates.io": "Neuere Versionen der Abhängigkeiten von crates.io anzeigen",
-    "Only crate names are sent to crates.io.": "Nur die Namen der Crates werden an crates.io gesendet."
+    "Only crate names are sent to crates.io.": "Nur die Namen der Crates werden an crates.io gesendet.",
+    "requirement": "Anforderung",
+    "No crate named `{name}` on crates.io": "Kein Crate namens `{name}` auf crates.io",
+    "No version of `{name}` on crates.io matches `{req}`": "Keine Version von `{name}` auf crates.io passt zu `{req}`",
+    "Newer version {version} is outside `{req}`": "Die neuere Version {version} liegt außerhalb von `{req}`",
+    "Update to {version}": "Auf {version} aktualisieren"
   },
   "lens": {
     "Show a code preview when hovering the scrollbar": "Codevorschau beim Überfahren der Bildlaufleiste anzeigen"

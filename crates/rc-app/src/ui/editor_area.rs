@@ -401,13 +401,15 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     // Before the insertion reaches the server, which resolves the item's import on the old text.
     if let Some(data) = out.accepted_completion {
         if data >= crate::manifest_completion::LOCAL_ITEM_THEN_VALUE {
-            crate::manifest_completion::accepted(doc, data);
+            let mut cx = crate::manifest_completion::Cx { names: &mut app.crate_names, deps: &mut app.dep_versions, online: app.settings.check_crates_io };
+            crate::manifest_completion::accepted(doc, data, &mut cx);
         } else {
             app.insight.completion_accepted(doc, data);
         }
     }
     if crate::manifest_completion::is_manifest(doc) {
-        crate::manifest_completion::on_editor_events(doc, &out.events);
+        let mut cx = crate::manifest_completion::Cx { names: &mut app.crate_names, deps: &mut app.dep_versions, online: app.settings.check_crates_io };
+        crate::manifest_completion::on_editor_events(doc, &out.events, &mut cx);
     }
     // ⌘+click on a Cargo feature or its `cfg` use is answered here (N-13), not by the server.
     let feature_click = out.events.iter().find_map(|e| match e {

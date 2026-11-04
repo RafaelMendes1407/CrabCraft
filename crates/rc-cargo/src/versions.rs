@@ -197,7 +197,7 @@ pub fn dependency_lines(text: &str) -> Vec<ManifestDep> {
 
 /// The most a `Cargo.lock` or an index reply may weigh.
 const MAX_LOCK_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_INDEX_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_INDEX_BYTES: usize = 16 * 1024 * 1024;
 
 /// A package locked in `Cargo.lock`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -268,11 +268,13 @@ pub fn find_lockfile(manifest: &Path) -> Option<PathBuf> {
     manifest.parent()?.ancestors().take(16).map(|d| d.join("Cargo.lock")).find(|p| p.is_file())
 }
 
-/// The newest stable and the newest of all versions of a crate in its sparse index file.
+/// The versions of a crate in its sparse index file, without the yanked ones.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Published {
     pub stable: Option<Version>,
     pub any: Option<Version>,
+    /// Every version that is not yanked, newest first.
+    pub versions: Vec<Version>,
 }
 
 impl Published {
@@ -312,31 +314,138 @@ pub fn parse_index(body: &str) -> Published {
             out.stable = Some(version.clone());
         }
         if out.any.as_ref().is_none_or(|s| version > *s) {
-            out.any = Some(version);
+            out.any = Some(version.clone());
+        }
+        out.versions.push(version);
+    }
+    out.versions.sort_unstable_by(|a, b| b.cmp(a));
+    out.versions.dedup();
+    out
+}
+
+/// The crates.io sparse index.
+pub const CRATES_IO_INDEX: &str = "https://index.crates.io";
+
+/// Asks the crates.io sparse index for the versions of `name`. Blocks up to `timeout`; run it on
+/// a background thread. The request carries only the crate name. `Ok(None)`: the index has no
+/// such crate.
+pub fn fetch_crates_io_versions(name: &str, timeout: Duration) -> anyhow::Result<Option<Published>> {
+    fetch_index_versions(CRATES_IO_INDEX, name, timeout)
+}
+
+/// [`fetch_crates_io_versions`] against the sparse index at `base` (no trailing `/`).
+pub fn fetch_index_versions(base: &str, name: &str, timeout: Duration) -> anyhow::Result<Option<Published>> {
+    let path = index_path(name).ok_or_else(|| anyhow::anyhow!("not a crate name"))?;
+    let url = format!("{base}/{path}");
+    let body = crate::crates_io::get_capped(&url, timeout, MAX_INDEX_BYTES, None)?;
+    Ok(body.map(|b| parse_index(&b)))
+}
+
+/// What is wrong with a crates.io dependency (C-04).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DepProblem {
+    /// No crate of that name on crates.io.
+    Missing,
+    /// The requirement matches no published version.
+    NoMatch,
+    /// The newest stable version is newer than every version the requirement accepts.
+    Outdated(Version),
+}
+
+/// Checks the requirement `req` of a crate against its published versions. `None` when it is
+/// fine or cannot be read (Cargo reports bad requirements itself).
+pub fn check_requirement(req: &str, published: &Published) -> Option<DepProblem> {
+    let parsed = VersionReq::parse(req.trim()).ok()?;
+    let newest_match = published.versions.iter().find(|v| parsed.matches(v));
+    let Some(newest_match) = newest_match else {
+        return (!published.versions.is_empty()).then_some(DepProblem::NoMatch);
+    };
+    let stable = published.stable.as_ref()?;
+    (stable > newest_match && !parsed.matches(stable)).then(|| DepProblem::Outdated(stable.clone()))
+}
+
+/// The requirement that replaces `old` to accept `version`: the version, after the operator of a
+/// single `^`, `~` or `=` comparator.
+pub fn updated_requirement(old: &str, version: &Version) -> String {
+    let old = old.trim();
+    let op = if old.contains(',') { "" } else { ["^", "~", "="].into_iter().find(|op| old.starts_with(op)).unwrap_or("") };
+    format!("{op}{version}")
+}
+
+/// The version strings to suggest for a requirement, newest first: the newest stable version
+/// with its shorter forms (`1.0.229`, `1.0`, `1`; `0.8.5`, `0.8` below 1.0), then the other
+/// versions, up to `limit`. The flag marks a shorter form.
+pub fn version_choices(published: &Published, limit: usize) -> Vec<(String, bool)> {
+    let mut out: Vec<(String, bool)> = Vec::new();
+    if let Some(s) = &published.stable {
+        out.push((s.to_string(), false));
+        out.push((format!("{}.{}", s.major, s.minor), true));
+        if s.major > 0 {
+            out.push((s.major.to_string(), true));
+        }
+    }
+    for v in &published.versions {
+        if out.len() >= limit {
+            break;
+        }
+        let text = v.to_string();
+        if !out.iter().any(|(t, _)| *t == text) {
+            out.push((text, false));
         }
     }
     out
 }
 
-/// Asks the crates.io sparse index for the versions of `name`. Blocks up to `timeout`; run it on
-/// a background thread. The request carries only the crate name.
-pub fn fetch_crates_io_versions(name: &str, timeout: Duration) -> anyhow::Result<Published> {
-    let path = index_path(name).ok_or_else(|| anyhow::anyhow!("not a crate name"))?;
-    let url = format!("https://index.crates.io/{path}");
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-    let body = runtime.block_on(async {
-        let http = reqwest::Client::builder().user_agent(concat!("CrabCraft/", env!("CARGO_PKG_VERSION"))).connect_timeout(timeout).timeout(timeout).build()?;
-        let mut resp = http.get(&url).send().await?;
-        let status = resp.status();
-        anyhow::ensure!(status.is_success(), "GET {url}: {status}");
-        let mut body = Vec::new();
-        while let Some(chunk) = resp.chunk().await? {
-            body.extend_from_slice(&chunk);
-            anyhow::ensure!(body.len() as u64 <= MAX_INDEX_BYTES, "the index reply is too large");
+/// Char ranges of a dependency in the manifest text: its key and the inside of its version
+/// string.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DepSpans {
+    pub key: Option<(usize, usize)>,
+    pub req: Option<(usize, usize)>,
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == '-'
+}
+
+/// Finds the key and the version string of `dep` (from [`dependency_lines`] on the same text).
+pub fn dep_spans(text: &str, dep: &ManifestDep) -> DepSpans {
+    let mut out = DepSpans::default();
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut starts = Vec::with_capacity(lines.len());
+    let mut start = 0usize;
+    for line in &lines {
+        starts.push(start);
+        start += line.chars().count() + 1;
+    }
+    let Some(first) = lines.get(dep.line) else { return out };
+    let chars: Vec<char> = first.chars().collect();
+    let key: Vec<char> = dep.key.chars().collect();
+    out.key = (0..chars.len())
+        .find(|&i| chars[i..].starts_with(&key) && (i == 0 || !is_word_char(chars[i - 1])) && chars.get(i + key.len()).is_none_or(|c| !is_word_char(*c)))
+        .map(|i| (starts[dep.line] + i, starts[dep.line] + i + key.len()));
+    let Some(req) = &dep.req else { return out };
+    let req: Vec<char> = req.chars().collect();
+    for (n, line) in lines.iter().enumerate().skip(dep.line).take(64) {
+        if n > dep.line && header(line).is_some() {
+            break;
         }
-        Ok(String::from_utf8_lossy(&body).into_owned())
-    })?;
-    Ok(parse_index(&body))
+        let chars: Vec<char> = line.chars().collect();
+        for (i, &q) in chars.iter().enumerate() {
+            if !(q == '"' || q == '\'') || !chars[i + 1..].starts_with(&req) || chars.get(i + 1 + req.len()) != Some(&q) {
+                continue;
+            }
+            let before: String = chars[..i].iter().collect();
+            let Some(lhs) = before.trim_end().strip_suffix('=') else { continue };
+            let lhs = lhs.rsplit(['{', ',']).next().unwrap_or(lhs);
+            let parts = split_key(lhs);
+            if parts.last().is_some_and(|p| p == "version") || parts == [dep.key.clone()] {
+                out.req = Some((starts[n] + i + 1, starts[n] + i + 1 + req.len()));
+                return out;
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -471,6 +580,62 @@ version = "not a version"
         assert_eq!(p.newer_than(&v("1.2.0")), None);
         assert_eq!(p.newer_than(&v("2.0.0-alpha.1")), Some(&v("2.0.0-beta.1")));
         assert_eq!(parse_index(""), Published::default());
+        assert_eq!(p.versions, vec![v("2.0.0-beta.1"), v("1.2.0"), v("1.0.3")]);
+    }
+
+    #[test]
+    fn requirements_are_checked_against_the_published_versions() {
+        let p = parse_index(concat!(
+            "{\"vers\":\"1.0.3\",\"yanked\":false}\n",
+            "{\"vers\":\"1.2.0\",\"yanked\":false}\n",
+            "{\"vers\":\"2.0.1\",\"yanked\":false}\n",
+            "{\"vers\":\"3.0.0\",\"yanked\":true}\n",
+            "{\"vers\":\"4.0.0-rc.1\",\"yanked\":false}\n",
+        ));
+        assert_eq!(check_requirement("2", &p), None);
+        assert_eq!(check_requirement(">=1, <3", &p), None);
+        assert_eq!(check_requirement("1", &p), Some(DepProblem::Outdated(v("2.0.1"))));
+        assert_eq!(check_requirement("1.2", &p), Some(DepProblem::Outdated(v("2.0.1"))));
+        assert_eq!(check_requirement("3", &p), Some(DepProblem::NoMatch), "only a yanked one");
+        assert_eq!(check_requirement("1.5", &p), Some(DepProblem::NoMatch));
+        assert_eq!(check_requirement("4.0.0-rc.1", &p), None, "ahead of the newest stable");
+        assert_eq!(check_requirement("*", &p), None);
+        assert_eq!(check_requirement("not a req", &p), None);
+        assert_eq!(check_requirement("1", &Published::default()), None);
+        assert_eq!(updated_requirement("1", &v("2.0.1")), "2.0.1");
+        assert_eq!(updated_requirement(" ~1.2", &v("2.0.1")), "~2.0.1");
+        assert_eq!(updated_requirement(">=1, <2", &v("2.0.1")), "2.0.1");
+    }
+
+    #[test]
+    fn version_choices_start_with_the_newest_stable_and_its_short_forms() {
+        let p = parse_index("{\"vers\":\"1.0.228\"}\n{\"vers\":\"1.0.229\"}\n{\"vers\":\"1.1.0-rc.1\"}\n{\"vers\":\"1.0.230\",\"yanked\":true}");
+        let got: Vec<(String, bool)> = version_choices(&p, 50);
+        let labels: Vec<&str> = got.iter().map(|(t, _)| t.as_str()).collect();
+        assert_eq!(labels, vec!["1.0.229", "1.0", "1", "1.1.0-rc.1", "1.0.228"]);
+        assert_eq!(got.iter().filter(|(_, short)| *short).count(), 2);
+        let zero = parse_index("{\"vers\":\"0.8.5\"}");
+        assert_eq!(version_choices(&zero, 50).into_iter().map(|(t, _)| t).collect::<Vec<_>>(), vec!["0.8.5", "0.8"]);
+        assert_eq!(version_choices(&p, 2).len(), 3, "the short forms always come");
+    }
+
+    #[test]
+    fn spans_find_the_key_and_the_version_string() {
+        let text = "[dependencies]\nserde = \"1\"\ntokio = { features = [\"rt\"], version = '1.40' }\nx.version = \"0.1\"\n\n[dependencies.regex]\nfeatures = [\"1.10\"]\nversion = \"1.10\"\n";
+        let deps = dependency_lines(text);
+        let take = |r: Option<(usize, usize)>| r.map(|(a, b)| text.chars().skip(a).take(b - a).collect::<String>());
+        let span = |name: &str| {
+            let d = deps.iter().find(|d| d.key == name).unwrap();
+            let s = dep_spans(text, d);
+            (take(s.key), take(s.req))
+        };
+        assert_eq!(span("serde"), (Some("serde".into()), Some("1".into())));
+        assert_eq!(span("tokio"), (Some("tokio".into()), Some("1.40".into())));
+        assert_eq!(span("x"), (Some("x".into()), Some("0.1".into())));
+        assert_eq!(span("regex"), (Some("regex".into()), Some("1.10".into())));
+        let d = deps.iter().find(|d| d.key == "regex").unwrap();
+        let req = dep_spans(text, d).req.unwrap();
+        assert_eq!(text.chars().take(req.0).filter(|&c| c == '\n').count(), 7, "not the feature named 1.10");
     }
 
     #[test]
@@ -486,9 +651,11 @@ version = "not a version"
     #[test]
     #[ignore = "Needs the network"]
     fn crates_io_knows_serde() {
-        let p = fetch_crates_io_versions("serde", Duration::from_secs(20)).unwrap();
+        let p = fetch_crates_io_versions("serde", Duration::from_secs(20)).unwrap().unwrap();
         let stable = p.stable.unwrap();
         eprintln!("serde: newest stable {stable}, newest {:?}", p.any);
         assert!(stable >= v("1.0.200"));
+        let missing = fetch_crates_io_versions("crabcraft-no-such-crate-x7q", Duration::from_secs(20)).unwrap();
+        assert_eq!(missing, None, "404 for a crate that does not exist");
     }
 }
