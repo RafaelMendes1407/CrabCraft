@@ -3465,7 +3465,7 @@ fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
     let mut h = playground_harness(home.path(), dir.path(), true);
     // A program that runs long enough to be sampled (the harness's own ends at once).
     let main_rs = dir.path().join("demo/src/main.rs");
-    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    println!(\"{}\", fib(std::hint::black_box(34)));\n}\n").unwrap();
+    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    let t = std::time::Instant::now();\n    let mut n = 0;\n    while t.elapsed().as_millis() < 300 {\n        n += fib(std::hint::black_box(20));\n    }\n    println!(\"{n}\");\n}\n").unwrap();
     assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::Profile));
     h.state_mut().pending.push(rc_editor::Action::Profile);
     h.run_steps(2);
