@@ -179,6 +179,11 @@ pub struct Insight {
     pub problems: BTreeMap<PathBuf, Vec<rc_editor::Diagnostic>>,
     /// The text the positions of `problems` refer to, for files that are not open.
     pub problem_text: BTreeMap<PathBuf, rc_text::Rope>,
+    /// The features rustc says hide what a diagnostic is about, per file and diagnostic message
+    /// (from the rendered `cargo check` output rust-analyzer passes along), for C-10.
+    pub feature_gates: HashMap<PathBuf, Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)>>,
+    /// IDE quick fixes listed before the server's in the next Alt+Enter popup.
+    pub local_fixes: Vec<lsp::CodeActionOrCommand>,
     raw_items: Vec<lsp::CompletionItem>,
     completion: Option<CompletionRequest>,
     /// The completion item whose documentation was asked for (`None` pending: resolved).
@@ -272,6 +277,8 @@ impl Insight {
             env: Vec::new(),
             problems: BTreeMap::new(),
             problem_text: BTreeMap::new(),
+            feature_gates: HashMap::new(),
+            local_fixes: Vec::new(),
             raw_items: Vec::new(),
             completion: None,
             resolve: None,
@@ -595,6 +602,19 @@ impl Insight {
                             Err(_) => Vec::new(),
                         },
                     };
+                    let gates: Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)> = diagnostics
+                        .iter()
+                        .filter_map(|x| {
+                            let rendered = x.data.as_ref()?.get("rendered")?.as_str()?;
+                            let gates = rc_cargo::feature_fix::feature_gates(rendered);
+                            (!gates.is_empty()).then(|| (x.message.clone(), gates))
+                        })
+                        .collect();
+                    if gates.is_empty() {
+                        self.feature_gates.remove(&path);
+                    } else {
+                        self.feature_gates.insert(path.clone(), gates);
+                    }
                     if let Some(d) = doc {
                         d.editor.set_diagnostics(converted.clone());
                     }
@@ -1221,7 +1241,12 @@ impl Insight {
             && let Some(r) = p.poll()
         {
             self.actions = None;
-            let list = r.ok().flatten().unwrap_or_default();
+            let mut list = r.ok().flatten().unwrap_or_default();
+            // The IDE's own fixes (C-10) come first.
+            let local = std::mem::take(&mut self.local_fixes);
+            if !local.is_empty() && self.optimizing.is_none() && !self.refactor_only && !self.generate_only {
+                list.splice(0..0, local);
+            }
             if self.optimizing.is_some() {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {

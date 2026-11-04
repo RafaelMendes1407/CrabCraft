@@ -1302,5 +1302,12 @@
     "This file belongs to a dependency or the toolchain": "このファイルは依存関係またはツールチェーンに属しています",
     "This file is generated (in the build output folder)": "このファイルは生成されたものです (ビルド出力フォルダー内)",
     "This file is outside the project": "このファイルはプロジェクトの外にあります"
+  },
+  "featurefix": {
+    "Turn on feature `{feature}` for code analysis": "コード解析で feature `{feature}` を有効にする",
+    "Add `{feature}` to the default features of {package}": "`{feature}` を {package} のデフォルト feature に追加",
+    "Add feature `{feature}` to the {name} dependency": "依存関係 {name} に feature `{feature}` を追加",
+    "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "{package} の feature {feature} をコード解析で有効にしました。Cargo.toml のガターで無効にできます",
+    "The feature is already turned on in Cargo.toml": "この feature は Cargo.toml で既に有効です"
   }
 }

@@ -1302,5 +1302,12 @@
     "This file belongs to a dependency or the toolchain": "Ten plik należy do zależności lub zestawu narzędzi",
     "This file is generated (in the build output folder)": "Ten plik jest generowany (w folderze wyników kompilacji)",
     "This file is outside the project": "Ten plik znajduje się poza projektem"
+  },
+  "featurefix": {
+    "Turn on feature `{feature}` for code analysis": "Włącz feature `{feature}` w analizie kodu",
+    "Add `{feature}` to the default features of {package}": "Dodaj `{feature}` do domyślnych features pakietu {package}",
+    "Add feature `{feature}` to the {name} dependency": "Dodaj feature `{feature}` do zależności {name}",
+    "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "Feature {feature} pakietu {package} jest włączona w analizie kodu; wyłącz ją na marginesie Cargo.toml",
+    "The feature is already turned on in Cargo.toml": "Feature jest już włączona w Cargo.toml"
   }
 }

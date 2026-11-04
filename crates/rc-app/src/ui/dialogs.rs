@@ -1796,7 +1796,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         // Local commands, also behind a local quick fix (a code action with only a command).
         let local = match &action {
             A::Command(c) => Some(c),
-            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| c.command == crate::insight::UPDATE_DEPENDENCY_COMMAND || c.command == crate::feature_fix::ENABLE_FEATURE_COMMAND),
             A::CodeAction(_) => None,
         };
         if let Some(c) = local {
@@ -1805,6 +1805,13 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     let args = c.arguments.clone().unwrap_or_default();
                     if let (Some(line), Some(version)) = (args.first().and_then(|v| v.as_u64()), args.get(1).and_then(|v| v.as_str())) {
                         app.update_dependency(usize::try_from(line).unwrap_or(usize::MAX), version);
+                    }
+                    true
+                }
+                crate::feature_fix::ENABLE_FEATURE_COMMAND => {
+                    let fix = c.arguments.as_ref().and_then(|a| a.first()).and_then(|v| serde_json::from_value::<crate::feature_fix::FeatureFix>(v.clone()).ok());
+                    if let Some(fix) = fix {
+                        app.apply_feature_fix(fix);
                     }
                     true
                 }

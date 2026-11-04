@@ -10,6 +10,7 @@
 
 pub mod crates_io;
 pub mod explain;
+pub mod feature_fix;
 pub mod feature_nav;
 pub mod format;
 pub mod manifest_complete;

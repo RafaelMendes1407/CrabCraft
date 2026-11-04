@@ -7,6 +7,7 @@ mod convert;
 mod copyright;
 mod debugger;
 mod dep_versions;
+mod feature_fix;
 mod feature_nav;
 mod disassembly_view;
 mod insight;

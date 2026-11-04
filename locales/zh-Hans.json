@@ -1302,5 +1302,12 @@
     "This file belongs to a dependency or the toolchain": "此文件属于依赖项或工具链",
     "This file is generated (in the build output folder)": "此文件是生成的（位于构建输出文件夹中）",
     "This file is outside the project": "此文件位于项目之外"
+  },
+  "featurefix": {
+    "Turn on feature `{feature}` for code analysis": "为代码分析启用 feature `{feature}`",
+    "Add `{feature}` to the default features of {package}": "将 `{feature}` 添加到 {package} 的默认 features",
+    "Add feature `{feature}` to the {name} dependency": "将 feature `{feature}` 添加到依赖项 {name}",
+    "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml": "{package} 的 feature {feature} 已为代码分析启用；可在 Cargo.toml 的边栏中关闭",
+    "The feature is already turned on in Cargo.toml": "该 feature 已在 Cargo.toml 中启用"
   }
 }

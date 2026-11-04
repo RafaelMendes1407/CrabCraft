@@ -1498,6 +1498,15 @@ impl CrabCraftApp {
                 return;
             }
         }
+        // A name hidden behind a Cargo feature (C-10): the IDE's fixes, then the server's.
+        if action == Action::ShowIntentions {
+            let fixes: Vec<_> = self.feature_fixes(i).iter().map(crate::feature_fix::FeatureFix::action).collect();
+            if !fixes.is_empty() && !self.insight.ready() {
+                self.dialog = Some(Dialog::CodeActions { list: fixes, selected: 0 });
+                return;
+            }
+            self.insight.local_fixes = fixes;
+        }
         // JSON and XML are formatted here; C# by the server.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);

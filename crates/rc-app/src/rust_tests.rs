@@ -3899,3 +3899,79 @@ fn a_rename_lists_its_conflicts_before_it_is_made() {
     assert_eq!(std::fs::read_to_string(&lib).unwrap().matches("pub fn bye(").count(), 2);
     assert!(app.dialog.is_none());
 }
+
+/// C-10: `cargo check` (run by rust-analyzer) says what a feature hides; Alt+Enter turns it on.
+/// A dependency's feature goes into its `features` in `Cargo.toml` (undoable, in the editor), the
+/// package's own into the analysis or `default`; with the fixes the errors go away. Uses tokio
+/// from the local Cargo cache, offline.
+#[test]
+fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
+    use crate::feature_fix::FeatureFix;
+    use rc_editor::Action;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    const MANIFEST: &str = "[package]\nname = \"gated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[features]\nextra = []\n\n[dependencies]\ntokio = { version = \"1\", default-features = false }\n\n[workspace]\n";
+    write(&root.join("Cargo.toml"), MANIFEST);
+    write(&root.join("src/main.rs"), "use tokio::fs::File;\n\n#[cfg(feature = \"extra\")]\nfn helper() -> u32 {\n    1\n}\n\nfn main() {\n    let _ = helper();\n    let _f: Option<File> = None;\n}\n");
+    let locked = std::process::Command::new("cargo").args(["generate-lockfile", "--offline"]).current_dir(&root).output().is_ok_and(|o| o.status.success());
+    if !locked {
+        eprintln!("skipped: tokio is not in the local Cargo cache");
+        return;
+    }
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    let has = |a: &CrabCraftApp, code: &str| a.docs.list.iter().find(|d| d.path == main).is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some(code)));
+    // `cargo check` runs on save.
+    app.insight.did_save(&main);
+    pump(&mut app, "cargo check's errors", |a| has(a, "E0432") && has(a, "E0425") && a.insight.feature_gates.get(&main).is_some_and(|g| g.len() == 2));
+    let i = app.docs.index_of(&main).unwrap();
+    let manifest = root.join("Cargo.toml");
+
+    // On the import: tokio's `fs` feature, in the dependency.
+    app.docs.list[i].editor.goto(0, 12);
+    let tokio = FeatureFix::Dependency { manifest: manifest.clone(), key: "tokio".into(), name: "tokio".into(), feature: "fs".into() };
+    assert_eq!(app.feature_fixes(i), vec![tokio.clone()]);
+    // Alt+Enter lists it first, before the server's actions.
+    app.run_insight_action(Action::ShowIntentions, egui::Pos2::ZERO);
+    pump(&mut app, "the actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    let Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) = &app.dialog else { unreachable!() };
+    let first = match &list[0] {
+        rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(a) => a.title.clone(),
+        rc_lsp::lsp_types::CodeActionOrCommand::Command(c) => c.title.clone(),
+    };
+    assert_eq!(first, "Add feature `fs` to the tokio dependency");
+    app.dialog = None;
+    app.apply_feature_fix(tokio);
+    let edited = MANIFEST.replace("default-features = false }", "default-features = false, features = [\"fs\"] }");
+    let text = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    assert_eq!(app.docs.active_doc().unwrap().path, manifest);
+    assert_eq!(text(&app), edited);
+    // Undoable, and not saved for the user.
+    app.docs.active_doc_mut().unwrap().editor.undo();
+    assert_eq!(text(&app), MANIFEST);
+    app.docs.active_doc_mut().unwrap().editor.redo();
+    assert_eq!(text(&app), edited);
+    assert_eq!(std::fs::read_to_string(&manifest).unwrap(), MANIFEST);
+
+    // On the call: the package's own `extra`, for the analysis or in `default`.
+    app.open_file(&main);
+    app.docs.list[i].editor.goto(8, 12);
+    let fixes = app.feature_fixes(i);
+    assert_eq!(fixes, vec![FeatureFix::Analysis { package: "gated".into(), feature: "extra".into() }, FeatureFix::Default { manifest: manifest.clone(), package: "gated".into(), feature: "extra".into() }]);
+    app.apply_feature_fix(fixes[0].clone());
+    assert_eq!(app.cargo_features, vec!["gated/extra".to_string()]);
+    // Once on, it is not offered again.
+    assert!(app.feature_fixes(i).is_empty());
+
+    // Saved, `cargo check` with both features finds neither error.
+    app.save_all_docs();
+    app.insight.did_save(&main);
+    pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && a.insight.feature_gates.get(&main).is_none());
+    app.insight.stop();
+}
