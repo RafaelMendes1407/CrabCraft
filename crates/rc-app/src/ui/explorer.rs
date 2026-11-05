@@ -834,28 +834,53 @@ fn new_item_menu(ui: &mut Ui, target: &Path, dotnet: bool, filter: &mut String, 
     use crate::item_templates::ItemKind;
     ui.set_min_width(260.0);
     ui.set_max_width(320.0);
-    ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Search file type")).desired_width(260.0));
+    let pass = ui.ctx().cumulative_pass_nr();
+    let focus_id = ui.id().with("new_item_search_opened");
+    let opened = ui.ctx().data_mut(|data| {
+        let (last, opened) = data.get_temp::<(u64, u64)>(focus_id).unwrap_or((pass, pass));
+        let opened = if last.saturating_add(1) < pass { pass } else { opened };
+        data.insert_temp(focus_id, (pass, opened));
+        opened
+    });
+    let field = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Search file type")).desired_width(260.0));
+    if pass <= opened.saturating_add(1) { field.request_focus(); }
+    let enter = (field.has_focus() || field.lost_focus()) && ui.input(|input| input.key_pressed(Key::Enter));
     ui.separator();
-    let query = filter.to_lowercase();
-    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+    let query = filter.trim().to_lowercase();
+    let mut first = None;
+    let mut count = 0;
+    let height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 16.0).clamp(80.0, 360.0);
+    egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
         for entry in if dotnet { ItemKind::MENU } else { ItemKind::RUST_MENU } {
             if let Some(kind) = entry {
                 let title = tr(kind.title());
                 if !title.to_lowercase().contains(&query) { continue; }
+                let action = ExplorerAction::NewItem(target.to_path_buf(), *kind);
+                if first.is_none() { first = Some(action.clone()); }
+                count += 1;
                 if theme::menu_item(ui, Some(kind.icon()), title, false).clicked() {
-                    actions.push(ExplorerAction::NewItem(target.to_path_buf(), *kind));
+                    actions.push(action);
                     ui.close();
                 }
             } else if query.is_empty() { ui.separator(); }
         }
         if !dotnet && tr("Cargo Crate").to_lowercase().contains(&query) {
             ui.separator();
+            let action = ExplorerAction::NewCrate(target.to_path_buf());
+            if first.is_none() { first = Some(action.clone()); }
+            count += 1;
             if theme::menu_item(ui, Some(ico::LIBRARY), tr("Cargo Crate"), false).clicked() {
-                actions.push(ExplorerAction::NewCrate(target.to_path_buf()));
+                actions.push(action);
                 ui.close();
             }
         }
+        if count == 0 { ui.label(tr("No file type matches the filter")); }
     });
+    if enter && let Some(action) = first {
+        actions.push(action);
+        ui.close();
+    }
+
 }
 
 #[cfg(test)]
@@ -934,4 +959,44 @@ use egui_kittest::Harness;
  #[test]fn native_tree_waits_for_real_worker_and_refreshes_without_running_cargo(){use egui_kittest::kittest::Queryable;let root=fixture();let path=root.path().to_path_buf();let mut state=ExplorerState::default();state.expanded.insert("sln".into());let mut first=true;let mut h=Harness::new_ui_state(move|ui,state:&mut ExplorerState|{if std::mem::take(&mut first){rc_kit::theme::install_fonts(ui.ctx());return;}let _=show(ui,state,None,&path,"Rust",None);},state);let until=std::time::Instant::now()+std::time::Duration::from_secs(5);while !h.state().dir_cache.contains_key(root.path()){h.run_steps(2);assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"src");std::fs::write(root.path().join("after_refresh.rs"),"pub const N:usize=42;").unwrap();h.get_by_label(tr("Refresh")).click();loop{h.run_steps(2);if h.state().dir_cache.get(root.path()).is_some_and(|nodes|nodes.iter().any(|node|node.name=="after_refresh.rs")){break;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"after_refresh.rs");assert!(!root.path().join("executed-marker").exists());}
  #[test]fn oversized_real_directory_reports_limit_and_refresh_recovers(){let root=fixture();for index in 0..5001{std::fs::write(root.path().join(format!("file-{index}.rs")),"// Rust\n").unwrap();}let mut state=ExplorerState::default();state.expanded.insert("sln".into());wait(&mut state,root.path());assert!(state.dir_cache.is_empty());assert_eq!(state.io.error(&explorer_io::Key::Directory(root.path().into())),Some(explorer_io::Error::Limit));for index in 0..5001{std::fs::remove_file(root.path().join(format!("file-{index}.rs"))).unwrap();}state.io.reset();wait(&mut state,root.path());assert!(state.dir_cache[root.path()].iter().any(|node|node.name=="Cargo.toml"));assert!(!root.path().join("executed-marker").exists());}
  #[test]#[cfg(unix)]fn fifo_project_is_rejected_and_static_xml_is_loaded_off_the_render_path(){use std::os::unix::ffi::OsStrExt;let root=fixture();let fifo=root.path().join("hostile.csproj");let path=std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();assert_eq!(unsafe{libc::mkfifo(path.as_ptr(),0o600)},0);let mut state=ExplorerState::default();state.poll_io(root.path());assert!(state.project(&fifo).is_none());let until=std::time::Instant::now()+std::time::Duration::from_secs(5);while state.io.busy(){state.poll_io(root.path());assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(state.io.error(&explorer_io::Key::Project(fifo)),Some(explorer_io::Error::Unsupported));let project=root.path().join("Static.csproj");std::fs::write(&project,"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();assert!(state.project(&project).is_none());while state.io.busy(){state.poll_io(root.path());assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(state.projects[&project].target_frameworks,["net8.0"]);assert!(!root.path().join("executed-marker").exists());}
+}
+
+#[cfg(test)]
+mod template_picker_tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    fn picker() -> Harness<'static, (String, Vec<ExplorerAction>)> {
+        Harness::new_ui_state(|ui, state: &mut (String, Vec<ExplorerAction>)| {
+            let button = ui.button("Add template");
+            egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), false, &mut state.0, &mut state.1));
+        }, (String::new(), Vec::new()))
+    }
+
+    #[test]
+    fn template_search_receives_typing_and_enter_selects_the_filtered_item() {
+        let mut h = picker();
+        h.get_by_label("Add template").click();
+        h.run_steps(3);
+        h.input_mut().events.push(egui::Event::Text(tr("Rust Module").to_string()));
+        h.run_steps(2);
+        assert_eq!(h.state().0, tr("Rust Module"));
+        assert!(h.query_by_label(tr("Rust File")).is_none());
+        h.input_mut().events.push(egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+        assert_eq!(h.state().1, [ExplorerAction::NewItem(PathBuf::from("/project/src"), crate::item_templates::ItemKind::RustModule)]);
+    }
+
+    #[test]
+    fn template_search_explains_empty_results_and_enter_does_not_create_a_file() {
+        let mut h = picker();
+        h.get_by_label("Add template").click();
+        h.run_steps(3);
+        h.input_mut().events.push(egui::Event::Text("  no-such-template  ".into()));
+        h.run_steps(2);
+        assert!(h.query_by_label(tr("No file type matches the filter")).is_some());
+        h.input_mut().events.push(egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+        assert!(h.state().1.is_empty());
+    }
 }

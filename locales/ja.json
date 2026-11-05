@@ -3004,5 +3004,8 @@
     "Save": "保存",
     "Search file type": "ファイルの種類を検索",
     "Move to New Window": "新しいウィンドウに移動"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "フィルターに一致するファイルの種類はありません"
   }
 }

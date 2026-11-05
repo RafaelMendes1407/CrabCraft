@@ -3004,5 +3004,8 @@
     "Save": "保存",
     "Search file type": "搜索文件类型",
     "Move to New Window": "移动到新窗口"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "没有与筛选条件匹配的文件类型"
   }
 }

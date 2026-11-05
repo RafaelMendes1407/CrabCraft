@@ -3004,5 +3004,8 @@
     "Save": "Speichern",
     "Search file type": "Dateityp suchen",
     "Move to New Window": "In neues Fenster verschieben"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "Kein Dateityp entspricht dem Filter"
   }
 }

@@ -27,6 +27,10 @@ A área de páginas usa layout vertical explícito, preserva os limites do modal
 barras quando necessárias. Verificação por `tools_settings_fields_fit_the_fixed_page_width`,
 teste de estabilidade das categorias e captura `settings-tools-stacked.png`.
 
+O seletor de templates recebe o foco ao abrir, filtra também a pesquisa com espaços nas
+bordas, permite escolher o primeiro resultado com Enter e informa quando não há resultados.
+Os testes `template_picker_tests` exercitam digitação imediata, Enter e busca vazia de resultados.
+
 ## Legenda
 
 | Status | Significado |
