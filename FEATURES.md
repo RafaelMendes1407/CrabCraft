@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 191 |
+| ✅ Pronto | 192 |
 | 🚧 Em andamento | 9 |
-| 🟢 Herdado | 12 |
+| 🟢 Herdado | 11 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -94,7 +94,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-07 | Colchetes pareados e fechamento automático | ✅ | M1 | Testes nativos headless em projetos Cargo: ()/[]/{}/aspas duplas fecham automaticamente, digitar o fechamento existente avança, parser Rust encontra os pares; lifetimes, labels, char Unicode e closures com parâmetros/|| produzem Rust compilável. Corrigido: pareamento genérico deixava apóstrofo extra em &'a; em Rust o apóstrofo é literal (wrapping de seleção e avanço sobre fechamento existente preservados). Pipes são literais. Resultados compilados com rustc real; ver docs/rust-editor-audit.md |
 | E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
 | E-09 | Sticky lines | ✅ | M3 | Até 5 linhas de abertura dos blocos em volta do topo (dobras do tree-sitter) ficam fixas; clique leva à linha; opção em Configurações > Editor. Teste de UI em código Rust e captura conferida |
-| E-10 | Zoom do editor e da IDE | 🟢 | M1 | |
+| E-10 | Zoom do editor e da IDE | ✅ | M1 | Teste headless num projeto Cargo real: ações Zoom In/Out/Reset alteram o fator efetivo do egui; preferências aplicam fonte do editor de 21 pt e zoom da IDE de 140%, persistidos nas configurações, sem alterar buffer nem arquivo Rust. Zoom global segue os atalhos do keymap; fonte do editor muda em Configurações. Não há zoom independente do editor pela roda do mouse |
 | E-11 | Temas claro/escuro e esquemas de cores | 🟢 | M1 | |
 | E-12 | Salvar e reverter alterações | 🚧 | M1 | Salvar e recarga externa verificados em projeto Cargo Rust real: preservação de BOM/CRLF, conflito mantém edições locais até Load from Disk e resultado compila com rustc. Corrigidos BOM/terminadores alterados externamente: a recarga adota a codificação nova antes do próximo salvamento, inclusive quando o texto normalizado é igual. Falta: ação explícita Reverter do disco fora de conflitos e mover I/O de documentos para segundo plano. Teste editor_rust_audit::rust_save_and_disk_reload_preserve_new_bom_and_line_endings |
 | E-13 | Local History | ✅ | M3 | Cada salvamento e recarga guarda a versão anterior e a nova em history/ na pasta de dados (rc-core::history: hash do caminho, sem duplicatas consecutivas, até 100 versões e 30 dias), gravadas numa thread própria. "Show Local History" (menu da aba, Find Action, menu File) lista as versões com prévia das linhas alteradas, "Show Diff" lado a lado e "Revert to This Version" como edição desfazível. Teste de UI num projeto Cargo: screens::local_history_lists_saved_versions_and_reverts_as_an_undoable_edit. |

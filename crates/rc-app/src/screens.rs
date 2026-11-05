@@ -3776,3 +3776,41 @@ fn portable_preferences_are_previewed_and_applied_in_a_rust_workspace() {
     assert_eq!(h.state().settings.trusted_projects, original.trusted_projects);
     assert!(h.state().runner.cargo_workspace.is_some());
 }
+
+#[test]
+fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("src")).unwrap();
+    std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"zoom_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    let source = root.path().join("src/main.rs");
+    let text = "fn main() { println!(\"zoom\"); }\n";
+    std::fs::write(&source, text).unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_workspace(root.path());
+    app.open_file(&source);
+    let mut harness = harness(app, vec2(1280.0, 800.0));
+    let ctx = harness.ctx.clone();
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomIn);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.1).abs() < f32::EPSILON);
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomOut);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
+    let mut settings = harness.state().settings.clone();
+    settings.editor_font_size = 21.0;
+    settings.ui_zoom = 1.4;
+    harness.state_mut().apply_settings(&ctx, settings);
+    harness.run_steps(2);
+    assert_eq!(harness.state().editor_config.font.size, 21.0);
+    assert!((harness.ctx.zoom_factor() - 1.4).abs() < f32::EPSILON);
+    let saved = Settings::load();
+    assert_eq!(saved.editor_font_size, 21.0);
+    assert_eq!(saved.ui_zoom, 1.4);
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomReset);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
+    assert_eq!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), text);
+    assert_eq!(std::fs::read_to_string(source).unwrap(), text);
+}
