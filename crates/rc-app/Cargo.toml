@@ -10,6 +10,9 @@ name = "crabcraft"
 path = "src/main.rs"
 
 [dependencies]
+tokio-postgres = "0.7.18"
+bytes = "1"
+futures-util = "0.3"
 fallible-iterator = "0.3"
 rusqlite = { version = "0.40.1", features = ["bundled", "hooks", "limits", "extra_check"] }
 anyhow.workspace = true

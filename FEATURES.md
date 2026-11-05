@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 228 |
-| 🚧 Em andamento | 10 |
+| ✅ Pronto | 231 |
+| 🚧 Em andamento | 7 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 15 |
@@ -343,10 +343,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| Y-01 | Conexão a bancos e explorador de esquemas | 🚧 | M6 | SQLite nativo verificado: conexão/criação explícitas com confiança, leitura padrão, tabelas/views/colunas/PK/índices/triggers e esquema SQL. Worker cancelável, limites e SQLite defensivo; projeto Rust e banco reais. PostgreSQL ainda indisponível; [escopo](docs/database.md). |
-| Y-02 | Console SQL e editor de dados | 🚧 | M6 | SQLite: console de uma instrução, páginas de 500 linhas e edição tipada parametrizada por rowid/PK com versão de esquema/snapshot e recusa de alterações externas; leitura padrão, escrita explícita, cancelamento real e teste nativo + consumidor Rust. Sem PostgreSQL/transações manuais; [limites](docs/database.md). |
+| Y-01 | Conexão a bancos e explorador de esquemas | ✅ | M6 | SQLite e PostgreSQL local verificados em projetos Rust/bancos reais: conexão explícita após confiança, leitura padrão, tabelas/views/colunas/PK/índices/triggers; PostgreSQL inclui constraints e schema qualificado. Socket Unix/loopback SCRAM; remoto/TLS visivelmente indisponível. Worker cancelável e limites; [escopo](docs/database.md). |
+| Y-02 | Console SQL e editor de dados | ✅ | M6 | SQLite/PostgreSQL: console de uma instrução, páginas de 500 linhas e edição tipada parametrizada por rowid/PK com snapshot/versão de esquema e recusa de alterações externas; leitura padrão e escrita explícita. Cancelamento real, UI nativa e consumidores Rust contra ambos os bancos. Transações manuais indisponíveis; [limites](docs/database.md). |
 | Y-03 | SQL injetado em strings | ✅ | M6 | Rust: cores SQL em literais normais/raw por marcador ou APIs reconhecidas, Ctrl+Space local de palavras-chave e esquema SQLite conectado, menu copia SQL decodificado ao console sem executar; escapes/delimitadores preservados, prioridade contra token semântico de string. Projeto Rust e SQLite reais, edição nativa/compilação/execução e testes Unicode/escapes/limites; sem LSP SQL ou interpolação dinâmica; [escopo](docs/sql-injection.md). |
-| Y-04 | Exportar e importar dados | 🚧 | M6 | SQLite: JSON tipado versionado preserva NULL/inteiros/reais/Unicode/BLOB, exportação sem sobrescrever, importação parametrizada e atômica com rollback por erro/cancelamento; teste nativo e Rust real. Sem PostgreSQL/CSV nesta etapa; [escopo](docs/database.md). |
+| Y-04 | Exportar e importar dados | ✅ | M6 | SQLite/PostgreSQL: JSON tipado versionado e CSV UTF-8 documentado, exportação sem sobrescrever, importação parametrizada e atômica com rollback por erro/cancelamento. Preserva NULL/Unicode/BLOB e NUMERIC PostgreSQL; CSV segue afinidade/tipos do destino, JSON mantém tipos SQLite exatos. UI e Rust reais; [formato/limites](docs/database.md). |
 | Y-05 | Implantação por SFTP/FTP | ⬜ | M6 | |
 | Y-06 | Comparar e editar arquivos remotos | ⬜ | M6 | |
 | Y-07 | Configurações SSH e terminal SSH | ⬜ | M6 | |

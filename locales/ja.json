@@ -2398,5 +2398,20 @@
     "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "ソースと時間の制限内にトレイト階層を解決できませんでした。rust-analyzer を確認して再試行してください。",
     "Resolving type relationships…": "型の関係を解決中…",
     "Type and trait hierarchy of {name}": "{name} の型とトレイトの階層"
+  },
+  "database_postgres": {
+    "Database engine": "データベースエンジン",
+    "User": "ユーザー",
+    "Password": "パスワード",
+    "Database passwords stay in memory and are never saved to project settings.": "データベースのパスワードはメモリ内に保持され、プロジェクト設定には保存されません。",
+    "PostgreSQL: Unix socket or loopback only; remote TLS connections are not supported.": "PostgreSQL：Unix ソケットまたはループバックのみ。リモート TLS 接続には対応していません。",
+    "Enter a valid value for the selected data type; BLOB uses hexadecimal": "選択したデータ型の有効な値を入力してください。BLOB は16進数です",
+    "Choose a regular input file and an explicit transfer path": "通常の入力ファイルと明示的な転送パスを選択してください",
+    "Transfer file (.json or .csv)": "転送ファイル（.json または .csv）",
+    "Export table": "テーブルをエクスポート",
+    "Import into table": "テーブルにインポート",
+    "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV は明示的な NULL・バイナリマーカーを使用し、JSON は SQLite の正確な値型を保持します。",
+    "Database connection or statement timed out": "データベース接続またはステートメントがタイムアウトしました",
+    "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "実行ごとに1つのステートメント。成功したリクエストは自動コミットされます。書き込みには明示的な許可が必要です。"
   }
 }

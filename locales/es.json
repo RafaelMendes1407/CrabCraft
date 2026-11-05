@@ -2398,5 +2398,20 @@
     "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "No se pudo resolver la jerarquía dentro de sus límites de código y tiempo. Revisa rust-analyzer y reintenta.",
     "Resolving type relationships…": "Resolviendo relaciones de tipos…",
     "Type and trait hierarchy of {name}": "Jerarquía de tipos y traits de {name}"
+  },
+  "database_postgres": {
+    "Database engine": "Motor de base de datos",
+    "User": "Usuario",
+    "Password": "Contraseña",
+    "Database passwords stay in memory and are never saved to project settings.": "Las contraseñas permanecen en memoria y nunca se guardan en la configuración del proyecto.",
+    "PostgreSQL: Unix socket or loopback only; remote TLS connections are not supported.": "PostgreSQL: solo socket Unix o bucle local; no se admiten conexiones TLS remotas.",
+    "Enter a valid value for the selected data type; BLOB uses hexadecimal": "Introduzca un valor válido para el tipo seleccionado; BLOB usa hexadecimal",
+    "Choose a regular input file and an explicit transfer path": "Elija un archivo de entrada normal y una ruta de transferencia explícita",
+    "Transfer file (.json or .csv)": "Archivo de transferencia (.json o .csv)",
+    "Export table": "Exportar tabla",
+    "Import into table": "Importar en tabla",
+    "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV usa marcadores NULL y binarios explícitos; JSON conserva los tipos exactos de SQLite.",
+    "Database connection or statement timed out": "Se agotó el tiempo de conexión o instrucción de base de datos",
+    "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "Una instrucción por ejecución; las solicitudes correctas se confirman automáticamente. La escritura requiere autorización explícita."
   }
 }

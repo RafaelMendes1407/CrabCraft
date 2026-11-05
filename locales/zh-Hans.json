@@ -2398,5 +2398,20 @@
     "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "无法在源代码和时间限制内解析 trait 层次结构。请检查 rust-analyzer 后重试。",
     "Resolving type relationships…": "正在解析类型关系…",
     "Type and trait hierarchy of {name}": "{name} 的类型和 trait 层次结构"
+  },
+  "database_postgres": {
+    "Database engine": "数据库引擎",
+    "User": "用户",
+    "Password": "密码",
+    "Database passwords stay in memory and are never saved to project settings.": "数据库密码仅保留在内存中，绝不会保存到项目设置。",
+    "PostgreSQL: Unix socket or loopback only; remote TLS connections are not supported.": "PostgreSQL：仅支持 Unix 套接字或回环地址；不支持远程 TLS 连接。",
+    "Enter a valid value for the selected data type; BLOB uses hexadecimal": "请输入所选数据类型的有效值；BLOB 使用十六进制",
+    "Choose a regular input file and an explicit transfer path": "请选择普通输入文件和明确的传输路径",
+    "Transfer file (.json or .csv)": "传输文件（.json 或 .csv）",
+    "Export table": "导出表",
+    "Import into table": "导入到表",
+    "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV 使用明确的 NULL 和二进制标记；JSON 保留精确的 SQLite 值类型。",
+    "Database connection or statement timed out": "数据库连接或语句超时",
+    "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "每次运行一条语句；成功的请求自动提交。写入需要明确启用。"
   }
 }
