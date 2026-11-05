@@ -2199,23 +2199,9 @@ impl CrabCraftApp {
         // `code` was checked: `E` and four digits, safe as a file name.
         let path = rc_core::paths::explanations_dir().join(format!("{code}.md"));
         let body = format!("# {code}\n\n{text}\n");
-        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
-            self.notify(trf("Could not show the explanation: {error}", &[("error", &e.to_string())]), true);
-            return;
-        }
-        match self.docs.open(&path) {
-            Ok(i) => {
-                let d = &mut self.docs.list[i];
-                d.generated = true;
-                if d.editor.buffer.rope() != body.as_str() {
-                    d.editor.reload(&body);
-                }
-                d.editor.read_only = true;
-                d.md_view = Some(crate::docs::MdView::Preview);
-                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
-            }
-            Err(e) => self.notify(e, true),
-        }
+        let index = self.docs.insert_generated(path, &body);
+        self.docs.list[index].md_view = Some(crate::docs::MdView::Preview);
+        self.focus_editor = true;
     }
 
     pub fn close_tab(&mut self, i: usize) {

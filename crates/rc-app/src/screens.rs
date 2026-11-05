@@ -2395,6 +2395,7 @@ fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
     {
         let d = h.state().docs.active_doc().unwrap();
         assert!(d.editor.read_only && d.generated);
+        assert!(!d.path.exists(), "generated explanation stays in memory");
         assert_eq!(d.md_view, Some(crate::docs::MdView::Preview));
         let text = d.editor.buffer.rope().to_string();
         assert!(text.starts_with("# E0308") && text.contains("Expected type did not match the received type"), "{text}");

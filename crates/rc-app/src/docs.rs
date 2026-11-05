@@ -325,8 +325,9 @@ impl Docs {
                 self.activate(index); return index;
             }
             let stem=path.file_stem().unwrap_or_default().to_string_lossy();
+            let extension=path.extension().unwrap_or_default().to_string_lossy();
             for suffix in 0..=self.list.len() {
-                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.rs",self.next_id));
+                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.{extension}",self.next_id));
                 if self.index_of(&candidate).is_none() {path=candidate;break;}
             }
         }
@@ -645,5 +646,18 @@ pub fn settled(kind: rc_editor::BreakpointKind) -> rc_editor::BreakpointKind {
     match kind {
         rc_editor::BreakpointKind::Verified | rc_editor::BreakpointKind::Invalid => rc_editor::BreakpointKind::Normal,
         k => k,
+    }
+}
+
+#[cfg(test)]
+mod generated_view_tests {
+    use super::*;
+    #[test]
+    fn markdown_generated_views_never_read_overwrite_or_save_an_existing_document() {
+        let root=tempfile::tempdir().unwrap();let path=root.path().join("E0308.md");std::fs::write(&path,"user notes").unwrap();
+        let mut docs=Docs::new(ParserPool::new(rc_core::Waker::noop().as_fn()));docs.open(&path).unwrap();
+        let index=docs.insert_generated(path.clone(),"# E0308\n\nexplanation");
+        assert_ne!(docs.list[index].path,path);assert_eq!(docs.list[index].path.extension().unwrap(),"md");assert!(docs.list[index].generated && docs.list[index].editor.read_only);assert!(!docs.list[index].path.exists());
+        docs.save(index).unwrap();assert!(!docs.list[index].path.exists());assert_eq!(docs.list[0].editor.buffer.rope().to_string(),"user notes");assert_eq!(std::fs::read_to_string(path).unwrap(),"user notes");
     }
 }
