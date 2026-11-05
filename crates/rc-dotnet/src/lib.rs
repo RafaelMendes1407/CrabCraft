@@ -33,3 +33,5 @@ pub use sdk::{Dotnet, RuntimeInfo, SdkInfo};
 pub use solution::{ProjectRef, Solution, SolutionItem};
 pub use test::{DiscoveredTest, TestEvent, TestFilter, TestRequest, TestRunResult, start_tests};
 pub use trx::{TestOutcome, TestResult};
+
+mod config_text;

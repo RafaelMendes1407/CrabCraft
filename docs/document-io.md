@@ -49,3 +49,5 @@ filesystem-wide compare-and-swap semantics.
 Test fixtures explicitly await the same worker-backed opening API through a cfg(test) helper;
 they do not replace its reader, preparation or stale-result checks. New-file template carets,
 recent-location offsets and breakpoint navigation are applied after their document arrives.
+
+Static inherited .NET solution/project/launch-settings reads use regular descriptors, nonblocking Unix opens and a 4 MiB limit. Solution parsing accepts already-read text and bounds item/folder/path depth before recursive tree construction. The 39 rc-dotnet unit tests include FIFO-without-writer, oversize and hostile nested solution configuration; no project tool is run to inspect these files.

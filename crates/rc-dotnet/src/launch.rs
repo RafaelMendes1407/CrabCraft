@@ -68,7 +68,7 @@ impl LaunchSettings {
     /// Loads the settings of a project; `Ok(None)` when it has none.
     pub fn load(project: &Path) -> anyhow::Result<Option<LaunchSettings>> {
         let path = Self::path_for(project);
-        match std::fs::read_to_string(&path) {
+        match crate::config_text::read(&path) {
             Ok(text) => Ok(Some(Self::parse(&text)?)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e.into()),

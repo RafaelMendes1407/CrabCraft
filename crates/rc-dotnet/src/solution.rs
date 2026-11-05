@@ -29,7 +29,24 @@ pub struct Solution {
 
 impl Solution {
     pub fn load(path: &Path) -> anyhow::Result<Solution> {
-        let text = std::fs::read_to_string(path)?;
+        let text = crate::config_text::read(path)?;
+        Self::from_text(path, &text)
+    }
+
+    /// Parses a bounded, already-read solution without reopening its path.
+    pub fn from_text(path: &Path, text: &str) -> anyhow::Result<Solution> {
+        anyhow::ensure!(text.len() <= 4 * 1024 * 1024, "Solution exceeds its 4 MiB limit");
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("slnx")) {
+            let tree=roxmltree::Document::parse(text)?;
+            anyhow::ensure!(tree.descendants().take(4097).count() <= 4096, "Solution exceeds its item limit");
+            for node in tree.descendants() {
+                anyhow::ensure!(node.ancestors().take(66).count() <= 65, "Solution exceeds its nesting limit");
+                for attr in node.attributes() { anyhow::ensure!(attr.value().split(['/', '\\']).take(66).count() <= 65, "Solution exceeds its path nesting limit"); }
+            }
+        } else {
+            anyhow::ensure!(text.lines().filter(|line|line.trim_start().starts_with("Project(")).take(4097).count() <= 4096, "Solution exceeds its item limit");
+            anyhow::ensure!(text.lines().filter(|line|line.to_ascii_uppercase().contains(FOLDER_TYPE)).take(65).count() <= 64, "Solution exceeds its folder limit");
+        }
         let dir = path.parent().unwrap_or(Path::new("."));
         let items = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("slnx")) { parse_slnx(&text, dir)? } else { parse_sln(&text, dir) };
         let name = path.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned());

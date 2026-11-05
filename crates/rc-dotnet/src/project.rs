@@ -28,7 +28,7 @@ pub struct ProjectInfo {
 
 impl ProjectInfo {
     pub fn load(path: &Path) -> anyhow::Result<ProjectInfo> {
-        let text = std::fs::read_to_string(path)?;
+        let text = crate::config_text::read(path)?;
         Self::parse(&text, path)
     }
 
