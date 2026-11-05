@@ -1,10 +1,33 @@
 # Reviewed administrator execution
 
-The Administrator Run native toolwindow provides an initial Linux-only route for launching a prebuilt console executable from the current trusted project through the separately installed `/usr/bin/pkexec` and the operating system's PolicyKit authentication agent. It is deliberately separate from ordinary build/run configurations. Build the executable as your ordinary user first. Interactive program stdin, GUI applications, forwarded project environment, automatic rerun and other platforms are visibly unsupported in this execution flow. A separate Administrator Debug tab implements the guarded partial route described in [administrator-debugging.md](administrator-debugging.md).
+The Administrator Run native toolwindow provides an initial Linux-only route for launching a prebuilt console executable from the current trusted project through the separately installed `/usr/bin/pkexec` and the operating system's PolicyKit authentication agent. The review/authorization flow remains separate from ordinary Run. You can inspect a prebuilt executable, or explicitly choose **Build and Review Selected Administrator Run** for the selected Cargo binary configuration. Preparation builds as your ordinary user and never launches the resulting program or requests privileges. Interactive program stdin, GUI applications, forwarded project environment, automatic rerun and other platforms are visibly unsupported in this execution flow. A separate Administrator Debug tab implements the guarded partial route described in [administrator-debugging.md](administrator-debugging.md).
 
 Opening a project, restoring the panel or inspecting a binary never requests privileges. Program paths, arguments, previews and output stay in memory. Inspect runs a cancellable worker and accepts only an absolute canonical regular ELF executable inside the project's canonical directory, with executable permission, at most 64 MiB. It refuses symlinks, scripts and nonregular files. At most 32 separate arguments, each at most 4096 bytes, fit into a 64 KiB serialized request. There is no host shell parsing.
 
 The UI shows the exact program/arguments, SHA-256 and working directory. Request Administrator Execution requires project trust and a separate review checkbox. Editing the input invalidates its preview. The backend independently checks trust, confirmation and the frozen request. Nothing requests authorization automatically on project opening or restores an armed root-run configuration. Each request consumes the preview and requires another inspection before rerun.
+
+## Selected Cargo configuration
+
+The explicit build/review button uses the runner's selected binary, Cargo channel/profile/features,
+required features, arguments and exact configured Cargo provider/environment. It does not locate a
+fallback Cargo. The normal asynchronous Save barrier runs before preparation; a change of selected
+configuration/options/provider while saving refuses the deferred request. Builds are cancellable.
+
+This bounded route refuses PTY, parallel runs, stdin files, run-environment overrides, custom working
+directories and before-launch tasks. Arguments must be nonempty single-line values (up to 32,
+4,096 bytes each and the existing 64 KiB request limit), so the native review can represent them
+without reparsing or silently dropping values. Only binaries whose manifest and resulting canonical
+ELF artifact belong to the current project are accepted. Cargo's normal build environment may be
+needed to compile; it is **not** forwarded to the administrator process.
+
+The review binds root, selected configuration/options, exact Cargo provider, metadata epoch and
+up to 256 open source-document identities/versions/saved states. A change invalidates the review
+before it is displayed or authorized. Provider switching also cancels preparation through the app's
+existing toolchain switch path. Late replies from canceled inspections/builds cannot rearm a review.
+Editing a reviewed program/argument field explicitly discards its configuration binding and review.
+Every completed build starts with the authorization checkbox clear. Canceling a running administrator
+operation retains its pending lifecycle until the supervisor reports completion; preparing a new
+configuration never bypasses that cleanup.
 
 ## Authentication and privileged supervisor
 
@@ -18,15 +41,18 @@ The program has a one-hour supervisor deadline and the request has a bounded ove
 
 ## Evidence and remaining work
 
-`cargo test -p rc-app privileged_run::tests -- --nocapture` passes four tests with a compiled Rust executable in a real Cargo project. They prove:
+`cargo test -p rc-app privileged_run::tests -- --nocapture` passes six tests with a compiled Rust executable in a real Cargo project. They prove:
 
+- The native selected-configuration route saves an edited real Rust source, builds through a configured Cargo wrapper, preserves a quoted argument containing spaces, enables a feature required to compile the fixture, uses the release profile, and stops at an unarmed review without executing the artifact or clicking the OS authorization button. Configuration edits, unsupported PTY and provider changes invalidate/refuse preparation. A canceled late inspection cannot reactivate its preview.
 - Backend trust/confirmation refusal occurs before any `pkexec` invocation, and an ordinary user is rejected by the root-required helper.
 - A cancellable supervisor run **as an ordinary test user**, using the same child/watchdog logic with a test-only root-check bypass, terminates a real compiled Rust child on controller EOF and reaps it before its delayed write. This is not evidence of host administrator execution.
 - Closed control input before launch, changed executable bytes, symlink/script/outside-project paths, unknown helper fields and oversized arguments fail without executing the artifact.
 - The native inspection/review UI refuses an untrusted request and a trusted request without confirmation. The test intentionally stops after checking the review checkbox, **before clicking the enabled OS authorization button**. It never displays an OS credential prompt or runs a privileged program.
 
-The installed PolicyKit tool reports version 124, but no real administrator credential or authorization has been exercised. B-10 therefore remains partial. This is a guarded prebuilt-artifact flow rather than complete elevated Cargo run-configuration/PTY integration. D-23 now has a separate partial GDB DAP flow with an independent watchdog/control socket and explicit review. It remains unverified with real administrator authorization; see [administrator-debugging.md](administrator-debugging.md). Prefixing a debugger with `sudo`/`pkexec` without that lifecycle is insufficient.
+The installed PolicyKit tool reports version 124, but no real administrator credential or authorization has been exercised. B-10 therefore remains partial. Selected Cargo binary configuration preparation is now integrated, but real administrator authorization and complete elevated run/PTY integration remain unverified/unsupported. D-23 now has a separate partial GDB DAP flow with an independent watchdog/control socket and explicit review. It remains unverified with real administrator authorization; see [administrator-debugging.md](administrator-debugging.md). Prefixing a debugger with `sudo`/`pkexec` without that lifecycle is insufficient.
 
 ## Public reference
 
 [PolicyKit pkexec manual](https://www.freedesktop.org/software/polkit/docs/latest/pkexec.1.html) describes OS authentication agents, `--disable-internal-agent`, safe environment handling, authorization exit codes and the need to validate arguments. Its [upstream source](https://github.com/polkit-org/polkit/blob/master/docs/man/pkexec.xml) is also available. CrabCraft adds no system authorization policy or bundled privilege service.
+
+Selected-configuration preparation follows the public [Cargo build reference](https://doc.rust-lang.org/cargo/commands/cargo-build.html) for package/binary selection, features, profiles and artifact messages.

@@ -2946,5 +2946,11 @@
     "Documents changed while opening the workspace; existing buffers were kept": "文档在打开工作区时发生变化；现有缓冲区已保留",
     "Opening workspace…": "正在打开工作区…",
     "Existing buffers stay open until workspace preparation finishes": "工作区准备完成之前，现有缓冲区将保持打开"
+  },
+  "administrator_run_config": {
+    "Build and Review Selected Administrator Run": "构建并审查选定的管理员运行",
+    "Build the selected Cargo configuration as your normal user, then review its exact artifact and arguments; no authorization is requested by preparing it": "以普通用户构建选定的 Cargo 配置，然后审查确切的产物和参数；准备操作不会请求授权",
+    "Administrator build review supports Cargo binaries without PTY, parallel runs, stdin files, environment overrides, custom working directories or before-launch tasks; arguments must be nonempty single-line values": "管理员构建审查支持不使用 PTY、并行运行、标准输入文件、环境覆盖、自定义工作目录或启动前任务的 Cargo 二进制；参数必须为非空单行值",
+    "The run configuration, provider or saved source changed; build and review again": "运行配置、提供者或已保存的源码已更改；请重新构建和审查"
   }
 }

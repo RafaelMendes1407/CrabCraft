@@ -595,6 +595,7 @@ impl CrabCraftApp {
     pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
         self.workspace_open.cancel();
         self.cancel_disk_save();
+        self.privileged_run.cancel();
         if self.privileged_debug.running {self.debugger.stop();}self.privileged_debug.cancel();
         self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
         self.cargo_load=None;self.libraries_load=None;self.attached_load=None;self.rustc_cfg_load=None;self.triple_load=None;self.toolchain_load=None;self.explain_load=None;self.explanations.clear();

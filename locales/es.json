@@ -2946,5 +2946,11 @@
     "Documents changed while opening the workspace; existing buffers were kept": "Los documentos cambiaron durante la apertura; se conservaron los búferes",
     "Opening workspace…": "Abriendo espacio de trabajo…",
     "Existing buffers stay open until workspace preparation finishes": "Los búferes existentes permanecen abiertos hasta finalizar la preparación"
+  },
+  "administrator_run_config": {
+    "Build and Review Selected Administrator Run": "Compilar y revisar la ejecución seleccionada como administrador",
+    "Build the selected Cargo configuration as your normal user, then review its exact artifact and arguments; no authorization is requested by preparing it": "Compila la configuración Cargo seleccionada como usuario normal y revisa su artefacto y argumentos exactos; prepararla no solicita autorización",
+    "Administrator build review supports Cargo binaries without PTY, parallel runs, stdin files, environment overrides, custom working directories or before-launch tasks; arguments must be nonempty single-line values": "La revisión de compilación como administrador admite binarios Cargo sin PTY, ejecución paralela, archivos stdin, variables de entorno, directorios personalizados ni tareas previas; los argumentos deben tener una sola línea y no estar vacíos",
+    "The run configuration, provider or saved source changed; build and review again": "La configuración, proveedor o fuente guardada cambió; compila y revisa de nuevo"
   }
 }
