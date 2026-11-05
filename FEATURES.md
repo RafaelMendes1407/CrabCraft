@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 198 |
-| 🚧 Em andamento | 11 |
+| ✅ Pronto | 199 |
+| 🚧 Em andamento | 12 |
 | 🟢 Herdado | 6 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 38 |
+| ⬜ A fazer | 36 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -123,8 +123,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
 | I-05 | Auto-import ao digitar e ao colar | ✅ | M3 | Ao digitar: aceitar uma sugestão da completação de um item de outro módulo adiciona o `use` (testado). Ao colar código Rust: para cada nome tipo-tipo do trecho, o rust-analyzer é consultado; os que têm uma só importação ganham a linha `use` (após os `use` do arquivo, ou após comentários e atributos iniciais) e os ambíguos são avisados para escolher em Mostrar ações de contexto; opção em Configurações › Editor. Testado com rust-analyzer real (`HashMap` importado, `Ordering` ambíguo). Falta: importar sem completação enquanto digita |
 | I-06 | Excluir itens do auto-import | ✅ | M3 | Configurações › Editor › Nunca importar: caminhos (item ou módulo, um por linha) que a completação nunca oferece importar, via `completion.autoimport.exclude` do rust-analyzer, aplicados sem reiniciar o servidor. Testado com rust-analyzer real: `std::sync::atomic::Ordering` some das sugestões e `std::cmp::Ordering` fica Proteção adicional contra respostas antigas do servidor: ao mudar exclusões, completações pendentes/abertas são descartadas; candidatos de auto-import com caminho explicitado pelo rust-analyzer são filtrados localmente por item/módulo antes de aparecer. Teste unitário e rust-analyzer real; Ref #25. |
-| I-07 | Adicionar crate popular ao colar código | ⬜ | M4 | |
-| I-08 | Sugerir crates ainda não adicionados | ⬜ | M4 | |
+| I-07 | Adicionar crate popular ao colar código | ✅ | M4 | Proposta nativa após paste para 20 crates e bibliotecas locais verificadas; revisão e Add explícito via C05, confiança/offline/cancelamento, membro e normal/dev/build. Workspace Rust real: serde offline + path local dev e cargo check; [limites](docs/missing-crates.md). |
+| I-08 | Sugerir crates ainda não adicionados | 🚧 | M4 | Análise local assíncrona ao editar Rust, catálogo conservador e bibliotecas de workspaces carregados, aliases/módulos/globs sem duplicações; teste nativo real. Nomes arbitrários fora do catálogo e resolução por macros/cfg complexo exigem revisão manual; [escopo](docs/missing-crates.md). |
 | I-09 | Ordenação de completar por ML | 🚫 | - | Sem modelo próprio; rust-analyzer ordena |
 | I-10 | Hover e documentação rápida | ✅ | M1 | Hover testado com rust-analyzer real |
 | I-11 | Abrir documentação em docs.rs | ✅ | M3 | Shift+F1 pede a página a `experimental/externalDocs` e abre no navegador; endereço testado com rust-analyzer real, abertura do navegador não exercitada |

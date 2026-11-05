@@ -10,6 +10,7 @@
 
 pub mod crates_io;
 pub mod dependencies;
+pub mod dependency_names;
 pub mod explain;
 pub mod feature_fix;
 pub mod feature_nav;

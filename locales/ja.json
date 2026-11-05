@@ -1998,5 +1998,14 @@
     "Enter an HTTP or HTTPS base URL without a query or fragment": "クエリやフラグメントのない HTTP または HTTPS のベース URL を入力してください",
     "Fill all route parameters; unsupported parameter syntax cannot be generated": "すべてのルートパラメーターを入力してください。未対応の構文は生成できません",
     "Choose a supported HTTP method": "対応する HTTP メソッドを選んでください"
+  },
+  "missing_crates": {
+    "Dependency proposals could not read the package manifest": "依存関係の候補でパッケージのマニフェストを読み取れませんでした",
+    "Dependency proposal analysis reached its limit": "依存関係の候補の解析が上限に達しました",
+    "Dependency {crate} is ambiguous; review the manifest manually": "依存関係 {crate} が曖昧です。マニフェストを手動で確認してください",
+    "Dependency {crate} may be available through an alias or glob; review the manifest manually": "依存関係 {crate} はエイリアスや glob インポートで利用可能な場合があります。マニフェストを手動で確認してください",
+    "Pasted code may need {crate} in {package} [{scope}]": "貼り付けたコードには {package} [{scope}] の {crate} が必要な場合があります",
+    "Code may need {crate} in {package} [{scope}]": "コードには {package} [{scope}] の {crate} が必要な場合があります",
+    "Review dependency…": "依存関係を確認…"
   }
 }

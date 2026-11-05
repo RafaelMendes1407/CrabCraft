@@ -77,6 +77,7 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
+    pub missing_crates: crate::missing_crates::MissingCrates,
     pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
@@ -313,6 +314,7 @@ impl CrabCraftApp {
             cargo_input: String::new(),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
+            missing_crates: crate::missing_crates::MissingCrates::new(waker.clone()),
             cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
             attached_load: None,
@@ -425,6 +427,7 @@ impl CrabCraftApp {
         };
         self.close_workspace();
         self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
+        self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         let (solution, solution_error) = match ws.solution() {
             Some(sln) => match Solution::load(sln) {
@@ -1342,6 +1345,7 @@ impl CrabCraftApp {
         self.files.close();
         self.vcs.close();
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
+        self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.find_in_files = None;
         self.search_everywhere = None;
@@ -3434,6 +3438,7 @@ impl eframe::App for CrabCraftApp {
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
+        self.missing_crates.update(&self.docs, &self.runner, self.cfg_epoch, &ctx);
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);

@@ -8,6 +8,7 @@
 
 mod cfg;
 mod context;
+pub mod crate_refs;
 mod derive;
 mod highlight;
 pub mod http;

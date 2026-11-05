@@ -1998,5 +1998,14 @@
     "Enter an HTTP or HTTPS base URL without a query or fragment": "Informe uma URL base HTTP ou HTTPS sem consulta ou fragmento",
     "Fill all route parameters; unsupported parameter syntax cannot be generated": "Preencha os parâmetros; sintaxe não suportada não pode ser gerada",
     "Choose a supported HTTP method": "Escolha um método HTTP suportado"
+  },
+  "missing_crates": {
+    "Dependency proposals could not read the package manifest": "As sugestões de dependências não puderam ler o manifesto do pacote",
+    "Dependency proposal analysis reached its limit": "A análise de sugestões de dependências atingiu o limite",
+    "Dependency {crate} is ambiguous; review the manifest manually": "A dependência {crate} é ambígua; revise o manifesto manualmente",
+    "Dependency {crate} may be available through an alias or glob; review the manifest manually": "A dependência {crate} pode estar disponível por um alias ou importação global; revise o manifesto manualmente",
+    "Pasted code may need {crate} in {package} [{scope}]": "O código colado pode precisar de {crate} em {package} [{scope}]",
+    "Code may need {crate} in {package} [{scope}]": "O código pode precisar de {crate} em {package} [{scope}]",
+    "Review dependency…": "Revisar dependência…"
   }
 }

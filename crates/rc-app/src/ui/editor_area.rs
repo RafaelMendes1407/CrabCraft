@@ -300,6 +300,13 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
         editor_rect.min.y = banner.bottom();
     }
+    if app.docs.active == Some(active) && (!app.missing_crates.report.proposals.is_empty() || !app.missing_crates.report.notices.is_empty()) {
+        let height = ((app.missing_crates.report.proposals.len() + app.missing_crates.report.notices.len()) as f32 * 30.0).min(120.0);
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), height));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::top_down(egui::Align::LEFT)));
+        egui::ScrollArea::vertical().id_salt(("missing_crates",active)).max_height(height - 8.0).show(&mut child, |ui| crate::missing_crates::banner(app, ui));
+        editor_rect.min.y = banner.bottom();
+    }
     // LightEdit: a file opened without its project; offer to open the whole project.
     if app.workspace.is_none()
         && let Some(project) = app.docs.list[active].light_project.clone()
@@ -390,6 +397,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         });
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    if out.events.contains(&EditorEvent::Pasted) {
+        let doc = &app.docs.list[active];
+        app.missing_crates.pasted(doc.editor.id, doc.editor.buffer.version(), doc.editor.last_paste);
+    }
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     // Shown first, so the frame of the click that opens it does not count as a click outside.
     gutter_menu(app, ui);

@@ -1998,5 +1998,14 @@
     "Enter an HTTP or HTTPS base URL without a query or fragment": "请输入不含查询或片段的 HTTP 或 HTTPS 基础 URL",
     "Fill all route parameters; unsupported parameter syntax cannot be generated": "请填写所有路由参数；无法生成不支持的参数语法",
     "Choose a supported HTTP method": "请选择支持的 HTTP 方法"
+  },
+  "missing_crates": {
+    "Dependency proposals could not read the package manifest": "依赖建议无法读取软件包清单",
+    "Dependency proposal analysis reached its limit": "依赖建议分析已达到限制",
+    "Dependency {crate} is ambiguous; review the manifest manually": "依赖 {crate} 存在歧义；请手动检查清单",
+    "Dependency {crate} may be available through an alias or glob; review the manifest manually": "依赖 {crate} 可能已通过别名或通配导入提供；请手动检查清单",
+    "Pasted code may need {crate} in {package} [{scope}]": "粘贴的代码可能需要在 {package} [{scope}] 中添加 {crate}",
+    "Code may need {crate} in {package} [{scope}]": "代码可能需要在 {package} [{scope}] 中添加 {crate}",
+    "Review dependency…": "检查依赖…"
   }
 }

@@ -42,6 +42,12 @@ impl CargoDependencies {
             installed: Vec::new(), hits: Vec::new(), query: String::new(), name: String::new(), version: String::new(), features: String::new(), path: String::new(), scope: Scope::Normal,
             optional: false, defaults: true, offline: false, editable: true, output: String::new(), error: None, loading: false, reload_project: false, remove: None }
     }
+    /// Prefill a local proposal. This reads the manifest but never searches or changes it.
+    pub fn review(&mut self, manifest: &Path, name: &str, scope: Scope, local: Option<&Path>) {
+        self.cancel(); self.form(); self.scope = scope; self.query = name.to_string(); self.name = name.to_string();
+        self.path = local.map(|path| path.to_string_lossy().into_owned()).unwrap_or_default();
+        self.load(manifest.to_path_buf());
+    }
     pub fn cancel(&mut self) {
         if let Some(cancel) = self.search_cancel.take() { cancel.store(true, Ordering::Relaxed); }
         if let Some(operation) = self.operation.take() { operation.cancel(); }
@@ -61,11 +67,17 @@ impl CargoDependencies {
         let out = self.files.sender();
         std::thread::spawn(move || {
             use std::io::Read;
-            let result = std::fs::File::open(manifest).map_err(|_| DependencyError::Manifest).and_then(|file| {
+            let result = (|| {
+                let metadata = std::fs::symlink_metadata(&manifest).map_err(|_| DependencyError::Manifest)?;
+                if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 { return Err(DependencyError::Manifest); }
+                let mut options = std::fs::OpenOptions::new(); options.read(true);
+                #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW); }
+                let file = options.open(manifest).map_err(|_| DependencyError::Manifest)?;
+                if !file.metadata().map_err(|_| DependencyError::Manifest)?.is_file() { return Err(DependencyError::Manifest); }
                 let mut text = String::new();
                 file.take(4 * 1024 * 1024 + 1).read_to_string(&mut text).map_err(|_| DependencyError::Manifest)?;
                 dependencies::installed(&text)
-            });
+            })();
             out.send((generation, result));
         });
     }
@@ -328,4 +340,45 @@ mod tests {
         assert!(h.state().dialog.is_none());
         assert!(h.state().cargo_dependencies.manifest.is_none());
     }
+    #[test]
+    fn pasted_imports_review_then_explicit_offline_add_in_the_correct_rust_member() {
+        let _lock = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home=tempfile::tempdir().unwrap(); let project=tempfile::tempdir().unwrap(); let root=project.path().canonicalize().unwrap();
+        std::fs::write(root.join("Cargo.toml"),"[workspace]\nmembers=[\"app\",\"helper-lib\"]\nresolver=\"2\"\n").unwrap();
+        for name in ["app","helper-lib"] {
+            let dir=root.join(name); std::fs::create_dir_all(dir.join("src")).unwrap();
+            std::fs::write(dir.join("Cargo.toml"),format!("[package]\nname=\"{name}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n")).unwrap();
+            std::fs::write(dir.join("src/lib.rs"),"pub fn value() -> u32 { 42 }\n").unwrap();
+            std::fs::write(dir.join("build.rs"),"fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
+        }
+        let manifest=root.join("app/Cargo.toml"); let before=std::fs::read(&manifest).unwrap(); let helper_before=std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap();
+        let mut app=test_app(home.path(),true); app.open_workspace(&root); let mut h=harness(app,egui::vec2(1440.0,1100.0));
+        pump(&mut h,|app| app.runner.cargo_workspace.is_some()); h.state_mut().open_file(&root.join("app/src/lib.rs")); h.state_mut().docs.active_doc_mut().unwrap().editor.selection=rc_text::Selection::point(0); h.run_steps(3);
+        h.event(egui::Event::Paste("use serde::de::DeserializeOwned;\nfn decode<T: DeserializeOwned>() {}\n#[cfg(test)] mod tests { use helper_lib::value; #[test] fn local(){assert_eq!(value(),42);} }\n".into())); h.run_steps(2);
+        pump(&mut h,|app| app.missing_crates.report.proposals.len()==2);
+        assert!(h.state().missing_crates.report.proposals.iter().all(|proposal| proposal.pasted));
+        assert_eq!(std::fs::read(&manifest).unwrap(),before); assert!(h.state().cargo_dependencies.search_cancel.is_none()); assert!(h.state().cargo_dependencies.operation.is_none());
+        // Review is safe before trust: no search or edit starts. The existing Add stays gated.
+        let proposal=h.state().missing_crates.report.proposals.iter().find(|proposal| proposal.name=="serde").unwrap().clone();
+        h.state_mut().cargo_dependencies.review(&proposal.manifest,&proposal.name,proposal.scope,None); h.state_mut().dialog=Some(crate::ui::dialogs::Dialog::CargoDependencies); h.run_steps(3); pump(&mut h,|app| !app.cargo_dependencies.loading);
+        assert_eq!(h.state().cargo_dependencies.manifest.as_ref(),Some(&manifest)); assert_eq!(h.state().cargo_dependencies.scope,Scope::Normal); assert!(h.state().cargo_dependencies.search_cancel.is_none());
+        let cargo=rc_cargo::Cargo::locate().unwrap(); h.state_mut().cargo_dependencies.start(&cargo,Ok(vec![]),false); assert!(h.state().cargo_dependencies.operation.is_none());
+        h.state_mut().settings.trusted_projects.push(root.clone()); h.state_mut().cargo_dependencies.offline=true; h.run_steps(2); h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(2);
+        pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="serde"));
+        assert!(!root.join("app/build-ran").exists()); assert!(!root.join("helper-lib/build-ran").exists());
+        h.get_by_label(tr("Close")).click(); h.run_steps(2);
+        pump(&mut h,|app| app.missing_crates.report.proposals.len()==1 && app.missing_crates.report.proposals[0].name=="helper-lib");
+        h.get_by_label(tr("Review dependency…")).click(); h.run_steps(2); pump(&mut h,|app| !app.cargo_dependencies.loading);
+        assert_eq!(h.state().cargo_dependencies.scope,Scope::Dev); assert_eq!(h.state().cargo_dependencies.path,root.join("helper-lib").to_string_lossy());
+        h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(2); pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="helper-lib"));
+        assert_eq!(std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap(),helper_before); assert!(!root.join("app/build-ran").exists());
+        let active=h.state().docs.active.unwrap(); h.state_mut().docs.save(active).unwrap();
+        let output=std::process::Command::new("cargo").args(["check","--offline","--tests","--manifest-path"]).arg(&manifest).output().unwrap(); assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+        h.get_by_label(tr("Close")).click(); h.run_steps(2);
+        h.event(egui::Event::Text("use regex::Regex;\n".into())); h.run_steps(2);
+        pump(&mut h,|app| app.missing_crates.report.proposals.iter().any(|proposal| proposal.name=="regex" && !proposal.pasted));
+        assert!(h.state().cargo_dependencies.operation.is_none()); assert!(h.state().cargo_dependencies.search_cancel.is_none());
+
+    }
+
 }
