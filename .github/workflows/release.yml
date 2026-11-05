@@ -81,8 +81,12 @@ jobs:
           Copy-Item target/x86_64-pc-windows-msvc/release/crabcraft.exe CrabCraft/CrabCraft.exe
           python scripts/copy_notices.py CrabCraft
           if ($LASTEXITCODE -ne 0) { throw "Copying license notices failed" }
-          $reported = & ./CrabCraft/CrabCraft.exe --version
-          if ($LASTEXITCODE -ne 0 -or $reported -ne "CrabCraft $version") {
+          # GUI-subsystem executables need an explicit wait; PowerShell otherwise closes
+          # its capture pipe before the process writes. Redirect to a file instead.
+          $versionOutput = Join-Path $env:RUNNER_TEMP 'crabcraft-version.txt'
+          $process = Start-Process -FilePath (Resolve-Path ./CrabCraft/CrabCraft.exe) -ArgumentList '--version' -Wait -PassThru -RedirectStandardOutput $versionOutput
+          $reported = (Get-Content -Raw $versionOutput).Trim()
+          if ($process.ExitCode -ne 0 -or $reported -ne "CrabCraft $version") {
             throw "Packaged executable reported an unexpected version: $reported"
           }
           Compress-Archive -Path CrabCraft -DestinationPath "CrabCraft-$version-windows-x64.zip"
