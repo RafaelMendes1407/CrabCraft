@@ -1,23 +1,8 @@
 //! Central native-egui menus. Commands use the same dispatch path as keyboard shortcuts.
 use crate::{app::CrabCraftApp, toolwindow::ToolWindow};
-use egui::{Id, Ui};
+use egui::Ui;
 use rc_editor::Action;
 use rc_kit::{i18n::tr, ico, theme};
-
-pub fn toggle(ctx: &egui::Context) {
-    ctx.data_mut(|data| {
-        let id = Id::new("main_menu_visible");
-        let visible = data.get_temp::<bool>(id).unwrap_or(false);
-        data.insert_temp(id, !visible);
-    });
-}
-
-pub fn visible(ctx: &egui::Context) -> bool {
-    ctx.data(|data| {
-        data.get_temp::<bool>(Id::new("main_menu_visible"))
-            .unwrap_or(false)
-    })
-}
 
 pub fn groups() -> Vec<(&'static str, Vec<(&'static str, Action)>)> {
     use Action::*;
@@ -195,127 +180,125 @@ fn command(ui: &mut Ui, label: &str, icon: Option<rc_kit::Ico>, enabled: bool) -
 }
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
-    egui::MenuBar::new().ui(ui, |ui| {
-        for (category, actions) in groups() {
-            ui.menu_button(category, |ui| {
-                ui.set_width(360.0);
-                let height =
-                    (ui.ctx().content_rect().bottom() - ui.cursor().top() - 12.0).max(100.0);
-                ui.set_max_height(height);
-                // Bound long menus independently of the editor and the tool windows.
-                egui::ScrollArea::vertical()
-                    .max_height(height)
-                    .show(ui, |ui| {
-                        if category == tr("File") {
-                            file_commands(app, ui);
-                        }
-                        for (label, action) in actions {
-                            let enabled = match action {
-                                Action::ShowSettings
-                                | Action::ZoomIn
-                                | Action::ZoomOut
-                                | Action::ZoomReset
-                                | Action::NewScratchFile => true,
-                                Action::Save
-                                | Action::CloseTab
-                                | Action::NextTab
-                                | Action::PreviousTab
-                                | Action::RevertFromDisk
-                                | Action::ShowLocalHistory
-                                | Action::Find
-                                | Action::Replace
-                                | Action::GotoLine => app.docs.active_doc().is_some(),
-                                Action::SaveAll => !app.docs.list.is_empty(),
-                                Action::ExpandMacroStep if !cfg!(unix) => false,
-                                _ if action.is_editing() => app.docs.active_doc().is_some(),
-                                _ => app.workspace.is_some(),
-                            };
-                            let shortcut = app.keymap.shortcut_text(action);
-                            if theme::menu_entry(
-                                ui,
-                                crate::search::action_icon(action),
-                                label,
-                                shortcut.as_deref(),
-                                false,
-                                enabled,
-                            )
-                            .clicked()
-                            {
-                                app.pending.push(action);
-                                app.focus_editor = true;
-                                ui.close();
-                            }
-                        }
-                        if category == tr("File") {
-                            ui.separator();
-                            if command(ui, tr("Quit CrabCraft"), None, true) {
-                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                            }
-                        }
-                        if category == tr("View") {
-                            ui.separator();
-                            ui.menu_button(tr("Tool Windows"), |ui| {
-                                for tool in ToolWindow::ALL {
-                                    if theme::menu_entry(
-                                        ui,
-                                        Some(tool.icon()),
-                                        tool.title(),
-                                        None,
-                                        app.dock.is_open(tool),
-                                        app.workspace.is_some(),
-                                    )
-                                    .clicked()
-                                    {
-                                        app.toggle_tool(tool);
-                                        ui.close();
-                                    }
-                                }
-                            });
-                        }
-                        if category == tr("Build") {
-                            build_commands(app, ui);
-                        }
-                        if category == tr("Run")
-                            && command(
-                                ui,
-                                tr("Edit Run Configuration…"),
-                                Some(ico::SETTINGS),
-                                app.workspace.is_some(),
-                            )
+    ui.set_width(200.0);
+    for (category, actions) in groups() {
+        ui.menu_button(category, |ui| {
+            ui.set_width(360.0);
+            let height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 12.0).max(100.0);
+            ui.set_max_height(height);
+            // Bound long menus independently of the editor and the tool windows.
+            egui::ScrollArea::vertical()
+                .max_height(height)
+                .show(ui, |ui| {
+                    if category == tr("File") {
+                        file_commands(app, ui);
+                    }
+                    for (label, action) in actions {
+                        let enabled = match action {
+                            Action::ShowSettings
+                            | Action::ZoomIn
+                            | Action::ZoomOut
+                            | Action::ZoomReset
+                            | Action::NewScratchFile => true,
+                            Action::Save
+                            | Action::CloseTab
+                            | Action::NextTab
+                            | Action::PreviousTab
+                            | Action::RevertFromDisk
+                            | Action::ShowLocalHistory
+                            | Action::Find
+                            | Action::Replace
+                            | Action::GotoLine => app.docs.active_doc().is_some(),
+                            Action::SaveAll => !app.docs.list.is_empty(),
+                            Action::ExpandMacroStep if !cfg!(unix) => false,
+                            _ if action.is_editing() => app.docs.active_doc().is_some(),
+                            _ => app.workspace.is_some(),
+                        };
+                        let shortcut = app.keymap.shortcut_text(action);
+                        if theme::menu_entry(
+                            ui,
+                            crate::search::action_icon(action),
+                            label,
+                            shortcut.as_deref(),
+                            false,
+                            enabled,
+                        )
+                        .clicked()
                         {
-                            app.edit_run_config(None);
+                            app.pending.push(action);
+                            app.focus_editor = true;
+                            ui.close();
                         }
-                        if category == tr("Tools") {
-                            tools(app, ui);
+                    }
+                    if category == tr("File") {
+                        ui.separator();
+                        if command(ui, tr("Quit CrabCraft"), None, true) {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        if category == tr("Git") && app.vcs.repo.is_some() {
-                            ui.separator();
-                            crate::ui::git::branches_menu(app, ui);
-                        }
-                        if category == tr("Window") {
-                            crate::ui::editor_area::window_menu(app, ui);
-                            if command(ui, tr("Minimize"), None, true) {
-                                ui.ctx()
-                                    .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+                    if category == tr("View") {
+                        ui.separator();
+                        ui.menu_button(tr("Tool Windows"), |ui| {
+                            for tool in ToolWindow::ALL {
+                                if theme::menu_entry(
+                                    ui,
+                                    Some(tool.icon()),
+                                    tool.title(),
+                                    None,
+                                    app.dock.is_open(tool),
+                                    app.workspace.is_some(),
+                                )
+                                .clicked()
+                                {
+                                    app.toggle_tool(tool);
+                                    ui.close();
+                                }
                             }
+                        });
+                    }
+                    if category == tr("Build") {
+                        build_commands(app, ui);
+                    }
+                    if category == tr("Run")
+                        && command(
+                            ui,
+                            tr("Edit Run Configuration…"),
+                            Some(ico::SETTINGS),
+                            app.workspace.is_some(),
+                        )
+                    {
+                        app.edit_run_config(None);
+                    }
+                    if category == tr("Tools") {
+                        tools(app, ui);
+                    }
+                    if category == tr("Git") && app.vcs.repo.is_some() {
+                        ui.separator();
+                        crate::ui::git::branches_menu(app, ui);
+                    }
+                    if category == tr("Window") {
+                        crate::ui::editor_area::window_menu(app, ui);
+                        if command(ui, tr("Minimize"), None, true) {
+                            ui.ctx()
+                                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
-                        if category == tr("Help") {
-                            if command(
-                                ui,
-                                tr("Find Action…"),
-                                Some(ico::SEARCH),
-                                app.workspace.is_some(),
-                            ) {
-                                app.pending.push(Action::FindAction);
-                            }
-                            if command(ui, tr("About CrabCraft"), Some(ico::INFO), true) {
-                                app.dialog = Some(crate::ui::dialogs::Dialog::About);
-                            }
+                    }
+                    if category == tr("Help") {
+                        if command(
+                            ui,
+                            tr("Find Action…"),
+                            Some(ico::SEARCH),
+                            app.workspace.is_some(),
+                        ) {
+                            app.pending.push(Action::FindAction);
                         }
-                    });
-            });
-        }
-    });
+                        if command(ui, tr("About CrabCraft"), Some(ico::INFO), true) {
+                            app.dialog = Some(crate::ui::dialogs::Dialog::About);
+                        }
+                    }
+                });
+        });
+    }
 }
 
 fn file_commands(app: &mut CrabCraftApp, ui: &mut Ui) {

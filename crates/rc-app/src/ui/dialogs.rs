@@ -269,14 +269,17 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
             let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
             ui.painter().rect_filled(line, 0.0, p.control_border);
             ui.add_space(15.0);
-            egui::ScrollArea::both().max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).auto_shrink([false, false]).max_width(SETTINGS_PAGE_W).show(ui, |ui| {
-                ui.set_width(SETTINGS_PAGE_W);
+            // Reserve the floating scrollbar's full width as well as its allocated gutter.
+            let content_width = SETTINGS_PAGE_W - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0;
+            egui::ScrollArea::new([*page != SettingsPage::Tools, true]).max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded).auto_shrink([false, false]).max_width(SETTINGS_PAGE_W).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_width(content_width);
                 ui.set_height(page_h);
                 let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
                 ui.label(egui::RichText::new(name).font(theme::bold(14.0)));
                 ui.add_space(10.0);
                 // Pages that lay out their own lists, sized to the page.
                 match page {
+                    SettingsPage::Tools => return tools_page(ui, app, draft),
                     SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
                     SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
                     SettingsPage::Copyright => {
@@ -382,52 +385,12 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         });
                         ui.end_row();
                     }
-                    SettingsPage::Tools => {
-                        app.load_toolchain();
-                        toolchain_rows(ui, app);
-                        ui.label(tr("Rust debugger"));
-                        egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
-                            rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
-                        }).show_ui(ui, |ui| {
-                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
-                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
-                        });
-                        ui.end_row();
-                        for (label, value) in [
-                            (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
-                            (tr("HTML language server"), &mut draft.web_html_server),
-                            (tr("CSS language server"), &mut draft.web_css_server),
-                            (tr("JavaScript/TypeScript language server"), &mut draft.web_typescript_server),
-                            (tr("Global tsserver.js path"), &mut draft.web_tsserver_path),
-                            (tr("GDB executable"), &mut draft.gdb_path),
-                            (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
-                            (tr(".NET CLI"), &mut draft.dotnet_path),
-                            (tr("Roslyn language server"), &mut draft.roslyn_path),
-                            (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
-                        ] {
-                            ui.label(label);
-                            ui.horizontal(|ui| {
-                                let mut text = value.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-                                let web=label==tr("HTML language server")||label==tr("CSS language server")||label==tr("JavaScript/TypeScript language server")||label==tr("Global tsserver.js path");
-                                let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(300.0));
-                                if resp.changed() {
-                                    *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
-                                }
-                                if ui.button(tr("Browse…")).clicked()
-                                    && let Some(p) = rfd::FileDialog::new().pick_file()
-                                {
-                                    *value = Some(p);
-                                }
-                            });
-                            ui.end_row();
-                        }
-                        rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
-                    }
+                    SettingsPage::Tools => {}
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
                     SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections | SettingsPage::Backup => {}
                 });
                 });
-            });
+            }));
         });
         buttons(ui, tr("OK"), true)
     });
@@ -903,23 +866,70 @@ fn external_tools_rows(ui: &mut Ui, tools: &mut Vec<rc_core::external_tools::Ext
     ui.end_row();
 }
 
+/// Labels above controls keep long tool names and executable paths within the page.
+fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings) {
+    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+    let p = rc_kit::pal(ui);
+    app.load_toolchain();
+    toolchain_rows(ui, app);
+    ui.separator();
+    ui.label(tr("Rust debugger"));
+    egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
+        rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
+    }).show_ui(ui, |ui| {
+        ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
+        ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
+    });
+    ui.add_space(8.0);
+    for (label, value) in [
+        (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
+        (tr("HTML language server"), &mut draft.web_html_server),
+        (tr("CSS language server"), &mut draft.web_css_server),
+        (tr("JavaScript/TypeScript language server"), &mut draft.web_typescript_server),
+        (tr("Global tsserver.js path"), &mut draft.web_tsserver_path),
+        (tr("GDB executable"), &mut draft.gdb_path),
+        (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
+        (tr(".NET CLI"), &mut draft.dotnet_path),
+        (tr("Roslyn language server"), &mut draft.roslyn_path),
+        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
+    ] {
+        let label_response = ui.label(label);
+        let browse_width = ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), p.text)).size().x + 24.0;
+        let field_width = (ui.available_width() - browse_width - ui.spacing().item_spacing.x).max(80.0);
+        ui.horizontal(|ui| {
+            let mut text = value.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+            let web=label==tr("HTML language server")||label==tr("CSS language server")||label==tr("JavaScript/TypeScript language server")||label==tr("Global tsserver.js path");
+            let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(field_width)).labelled_by(label_response.id);
+            if resp.changed() {
+                *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
+            }
+            if ui.button(tr("Browse…")).clicked()
+                && let Some(p) = rfd::FileDialog::new().pick_file()
+            {
+                *value = Some(p);
+            }
+        });
+        ui.add_space(8.0);
+    }
+    rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
+}
+
 /// How rustfmt runs for Reformat Code, on save and at commit.
 fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui::Color32, muted: egui::Color32) {
     ui.label(tr("rustfmt arguments"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width(300.0));
-    ui.end_row();
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width((ui.available_width() - 8.0).max(80.0)));
+    ui.add_space(8.0);
     ui.label(tr("rustfmt channel"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width(300.0));
-    ui.end_row();
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width((ui.available_width() - 8.0).max(80.0)));
+    ui.add_space(8.0);
     ui.label(tr("rustfmt environment"));
-    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width(300.0));
-    ui.end_row();
-    ui.label("");
+    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width((ui.available_width() - 8.0).max(80.0)));
+    ui.add_space(8.0);
     match rc_cargo::Rustfmt::check(rustfmt) {
         Ok(()) => ui.label(egui::RichText::new(tr("Used by Reformat Code, on save and at commit. The channel runs through rustup.")).color(muted)),
         Err(e) => ui.label(egui::RichText::new(crate::vcs::rustfmt_failure(e)).color(error)),
     };
-    ui.end_row();
+    ui.add_space(8.0);
 }
 
 /// The versions in use, read from the tools themselves, with rustup's installs and updates.

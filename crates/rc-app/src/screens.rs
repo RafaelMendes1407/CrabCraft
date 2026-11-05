@@ -3871,17 +3871,21 @@ fn central_menu_commands_and_project_templates_work_in_a_rust_project() {
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.get_by_label(tr("Main Menu")).click();
     h.run_steps(2);
-    h.get_by_label(tr("Edit")).click();
+    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
     h.run_steps(2);
     h.get_by_label(tr("Duplicate Line or Selection")).click();
     h.run_steps(3);
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 2);
-    h.get_by_label(tr("Edit")).click();
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
     h.run_steps(2);
     h.get_by_label(tr("Undo")).click();
     h.run_steps(3);
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 1);
-    h.get_by_label(tr("Tools")).click();
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("Tools"))).click();
     h.run_steps(2);
     h.query_all_by_label(tr("ACP Agents")).find(|node| node.rect().width() > 100.0).unwrap().click();
     h.run_steps(2);
@@ -3926,7 +3930,7 @@ fn central_menus_and_docking_capture() {
     for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.get_by_label(tr("Main Menu")).click(); h.run_steps(2);
-    h.get_by_label(tr("File")).click(); h.run_steps(3);
+    h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
     h.render().unwrap().save(out.join("central-menu-file.png")).unwrap();
     h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
     h.get_by_label(tr("New File…")).click(); h.run_steps(3);
@@ -3962,4 +3966,37 @@ fn editor_docking_guides_create_the_requested_split() {
     assert!(matches!(h.state().layout.main, crate::layout::Node::Split { vertical: true, .. }));
     assert_eq!(h.state().layout.main.groups().len(), 2);
     assert!(h.state().tab_drag.is_none());
+}
+
+#[test]
+fn tools_settings_fields_fit_the_fixed_page_width() {
+    use egui_kittest::kittest::Queryable;
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    h.state_mut().open_settings(SettingsPage::Tools);
+    h.run_steps(5);
+    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+    assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
+    let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
+    assert!(fields.len() >= 10);
+    for field in fields {
+        assert!(field.left() >= modal.left() && field.right() <= modal.right() - 8.0, "tool field must fit inside the modal: {field:?}, {modal:?}");
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes the Tools settings layout"]
+fn tools_settings_layout_capture() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    h.state_mut().open_settings(SettingsPage::Tools);
+    run_frames(&mut h, "the installed toolchain versions", |app| app.toolchain.is_some());
+    h.run_steps(6);
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    h.render().unwrap().save(out.join("settings-tools-stacked.png")).unwrap();
 }

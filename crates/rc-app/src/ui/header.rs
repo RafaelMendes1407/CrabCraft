@@ -114,9 +114,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let zoom = ui.ctx().zoom_factor().max(0.1);
                 ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
-                if theme::icon_button_sized(ui, ico::MENU, true, tr("Main Menu"), 30.0).clicked() {
-                    crate::ui::main_menu::toggle(ui.ctx());
-                }
+                let menu = theme::icon_button_sized(ui, ico::MENU, true, tr("Main Menu"), 30.0);
+                egui::Popup::menu(&menu).show(|ui| crate::ui::main_menu::show(app, ui));
                 project_widget(app, ui);
                 if app.workspace.is_some() {
                     // VCS widget: the current branch and the branches popup.

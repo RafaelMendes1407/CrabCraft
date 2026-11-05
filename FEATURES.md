@@ -12,7 +12,7 @@ e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limit
 dimensões para impedir o crescimento vertical contínuo do modal.
 Validação visual interativa pendente; sem alteração dos status de prontidão.
 
-Menu principal nativo centralizado no botão ☰, com 12 categorias, atalhos, todos os comandos
+Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável
 de templates existentes. A identidade do projeto usa uma cor difusa gaussiana na barra
 superior, desenhada em egui, sem novos assets. Durante o arraste, o editor recebe uma
@@ -20,6 +20,12 @@ sobreposição cinza, mapa de encaixes, nome do arquivo e prévia animada do des
 Evidência: testes de edição/desfazer e criação de arquivo em projeto Cargo, captura GPU
 `central_menus_and_docking_capture` e regressão de movimentação de abas. As referências
 visuais locais fornecidas pelo usuário não são distribuídas com a aplicação.
+
+Configurações › Ferramentas: formulário vertical, com nomes acima dos campos e largura
+reservada para Procurar; textos longos quebram linha e caminhos permanecem no campo.
+A área de páginas usa layout vertical explícito, preserva os limites do modal e só mostra
+barras quando necessárias. Verificação por `tools_settings_fields_fit_the_fixed_page_width`,
+teste de estabilidade das categorias e captura `settings-tools-stacked.png`.
 
 ## Legenda
 
