@@ -2389,5 +2389,14 @@
     "Source code: {file}": "Quellcode: {file}",
     "Source code editor": "Quellcode-Editor",
     "Accessible text is limited to the context around the caret": "Der zugängliche Text ist auf den Kontext um den Cursor begrenzt"
+  },
+  "type_hierarchy": {
+    "Supertraits": "Übergeordnete Traits",
+    "Subtraits": "Untergeordnete Traits",
+    "The trait hierarchy exceeds its source limits or could not be started.": "Die Trait-Hierarchie überschreitet die Quelltextgrenzen oder konnte nicht gestartet werden.",
+    "Rust source changed while collecting the hierarchy. Request it again.": "Der Rust-Quelltext wurde während der Erfassung geändert. Fordern Sie die Hierarchie erneut an.",
+    "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "Die Trait-Hierarchie konnte innerhalb der Quelltext- und Zeitgrenzen nicht aufgelöst werden. Prüfen Sie rust-analyzer und versuchen Sie es erneut.",
+    "Resolving type relationships…": "Typbeziehungen werden aufgelöst…",
+    "Type and trait hierarchy of {name}": "Typ- und Trait-Hierarchie von {name}"
   }
 }

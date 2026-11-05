@@ -4567,3 +4567,50 @@ fn the_snake_case_fix_renames_a_function() {
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    teste_de_escrita();\n}\n\nfn teste_de_escrita() {}\n");
     app.insight.stop();
 }
+
+#[test]
+fn native_trait_hierarchy_resolves_aliases_homonyms_transitive_and_unsaved_relations() {
+    use egui_kittest::kittest::Queryable;
+    const SOURCE: &str = "pub mod left {\n    pub trait Base {}\n    pub trait Child: Base {}\n}\npub mod right {\n    pub trait Base {}\n    pub trait Wrong: Base {}\n}\nuse left::Base as Alias;\npub trait Leaf: Alias {}\npub trait Where where Self: Leaf {}\nstruct Value;\nimpl left::Base for Value {}\nfn main() {}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap();
+    demo(&root); let file = root.join("src/main.rs"); write(&file,SOURCE);
+    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace(&root); app.open_file(&file);
+    pump(&mut app,"trait fixture analysis",|a| a.insight.status==InsightStatus::Ready);
+    pump(&mut app,"trait fixture indexing",|a| a.docs.active_doc().is_some_and(|doc| a.insight.runnables.contains_key(&doc.editor.id)));
+    let ask = |app: &mut CrabCraftApp, position:usize| {
+        let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,position);
+        pump(app,"semantic trait hierarchy",|a| !a.insight.type_hierarchy_pending() && a.insight.call_tree.is_some());
+        app.insight.call_tree.as_ref().unwrap().rows().into_iter().map(|(_,node)|node.name.clone()).collect::<Vec<_>>()
+    };
+    let base = SOURCE.find("trait Base").unwrap()+"trait B".len();
+    let names=ask(&mut app,base);
+    assert!(names.contains(&"Child".into()),"{names:?}"); assert!(names.contains(&"Leaf".into()),"{names:?}"); assert!(names.contains(&"Where".into()),"{names:?}");
+    assert!(!names.contains(&"Wrong".into()),"homonymous trait leaked: {names:?}");
+    assert!(names.iter().any(|s|s.starts_with("impl left::Base for Value")),"{names:?}");
+    let right = SOURCE.find("pub mod right").unwrap()+SOURCE[SOURCE.find("pub mod right").unwrap()..].find("trait Base").unwrap()+"trait B".len();
+    let names=ask(&mut app,right); assert!(names.contains(&"Wrong".into())); assert!(!names.contains(&"Leaf".into()));
+    let leaf=SOURCE.find("trait Leaf").unwrap()+"trait L".len();
+    let names=ask(&mut app,leaf); assert!(names.contains(&"Base".into()),"alias did not resolve: {names:?}"); assert!(names.contains(&"Where".into()));
+    let doc=app.docs.active_doc_mut().unwrap(); let end=doc.editor.buffer.len_chars(); doc.editor.replace(end,end,"pub trait Unsaved: Alias {}\n");
+    let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+    let names=ask(&mut app,base); assert!(names.contains(&"Unsaved".into()),"{names:?}"); assert_eq!(std::fs::read_to_string(&file).unwrap(),SOURCE);
+    app.dock.show(crate::toolwindow::ToolWindow::Hierarchy);
+    let mut h=crate::screens::harness(app,egui::vec2(1280.,900.));
+    h.get_by_label("Unsaved").click(); h.run_steps(2);
+    let doc=h.state().docs.active_doc().unwrap(); assert_eq!(doc.editor.caret_line_col().0,SOURCE.lines().count());
+    // A source edit invalidates the complete graph snapshot, including other open buffers.
+    {
+        let app=h.state_mut(); let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,base);
+        let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+        app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// changed\n");
+        let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+        assert!(!app.insight.type_hierarchy_pending()); assert!(app.insight.call_tree.is_none());
+    }
+    // Cancel is available immediately, even before the background scan is scheduled.
+    {
+        let app=h.state_mut(); let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,base+"// changed\n".len());
+        assert!(app.insight.type_hierarchy_pending()); app.insight.cancel_type_hierarchy(); assert!(!app.insight.type_hierarchy_pending());
+        app.insight.stop();
+    }
+}

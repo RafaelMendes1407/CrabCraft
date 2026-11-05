@@ -212,6 +212,8 @@ pub struct Insight {
     external_docs: Option<Pending<Value>>,
     expand_macro: Option<Pending<Value>>,
     types: Option<(Target, Pending<Value>)>,
+    trait_request: Option<(Target, u64, u64)>,
+    trait_hierarchy: Option<(Target, crate::type_hierarchy::Job)>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
     /// The levels being loaded, with the tree they belong to.
@@ -308,6 +310,8 @@ impl Insight {
             nav: None,
             calls: None,
             types: None,
+            trait_request: None,
+            trait_hierarchy: None,
             external_docs: None,
             expand_macro: None,
             call_levels: Vec::new(),
@@ -565,6 +569,7 @@ impl Insight {
         self.signature = None;
         self.nav = None;
         self.calls = None;
+        self.cancel_type_hierarchy();
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
@@ -1240,11 +1245,36 @@ impl Insight {
         let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, pos) });
         let (line, col) = doc.editor.buffer.line_col(pos);
         let root = Target { path: doc.path.clone(), line, col, preview: word_at(&doc.editor.buffer.line_text(line), col) };
-        self.types = Some((root, session.client.request_raw("textDocument/implementation", params)));
+        if self.rust && self.execution_allowed {
+            self.trait_request = Some((root,doc.editor.id,doc.editor.buffer.version())); self.trait_hierarchy = None; self.types = None; self.call_tree = None;
+        } else { self.types = Some((root, session.client.request_raw("textDocument/implementation", params))); }
     }
 
+    pub fn type_hierarchy_pending(&self) -> bool { self.trait_request.is_some() || self.trait_hierarchy.is_some() || self.types.is_some() }
+    pub fn cancel_type_hierarchy(&mut self) { self.trait_request = None; self.trait_hierarchy = None; self.types = None; }
     fn poll_types(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree};
+        if let Some((origin,id,version)) = self.trait_request.take() {
+            if !docs.list.iter().any(|d| d.editor.id==id && d.editor.buffer.version()==version && d.path==origin.path) { out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())); return; }
+            if let (Some(root), Some(session)) = (&self.root, &self.session) {
+                match crate::type_hierarchy::Job::start(root.clone(), origin.clone(), session.client.clone(), docs, self.waker.clone()) {
+                    Ok(job) => { self.trait_hierarchy = Some((origin, job)); out.push(InsightOutput::ShowCallTree); },
+                    Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy exceeds its source limits or could not be started.").into()))
+                }
+            }
+        }
+        if self.trait_hierarchy.as_ref().is_some_and(|(_,job)| !job.current(docs)) {
+            self.trait_hierarchy = None;
+            out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into()));
+        }
+        if let Some(result) = self.trait_hierarchy.as_ref().and_then(|(_,job)| job.poll()) {
+            let Some((_origin,_)) = self.trait_hierarchy.take() else { return; };
+            match result {
+                Ok(tree) => { self.call_generation += 1; self.call_tree = Some(crate::type_hierarchy::into_call_tree(tree)); out.push(InsightOutput::ShowCallTree); },
+                Err(crate::type_hierarchy::Error::Changed) => out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())),
+                Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.").into()))
+            }
+        }
         let Some((_, p)) = &mut self.types else { return };
         let Some(reply) = p.poll() else { return };
         let Some((root, _)) = self.types.take() else { return };

@@ -2389,5 +2389,14 @@
     "Source code: {file}": "ソースコード: {file}",
     "Source code editor": "ソースコードエディター",
     "Accessible text is limited to the context around the caret": "アクセシブルなテキストはカーソル周辺のコンテキストに制限されます"
+  },
+  "type_hierarchy": {
+    "Supertraits": "上位トレイト",
+    "Subtraits": "下位トレイト",
+    "The trait hierarchy exceeds its source limits or could not be started.": "トレイト階層がソースの制限を超えているか、開始できませんでした。",
+    "Rust source changed while collecting the hierarchy. Request it again.": "階層の収集中に Rust ソースが変更されました。再度要求してください。",
+    "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "ソースと時間の制限内にトレイト階層を解決できませんでした。rust-analyzer を確認して再試行してください。",
+    "Resolving type relationships…": "型の関係を解決中…",
+    "Type and trait hierarchy of {name}": "{name} の型とトレイトの階層"
   }
 }

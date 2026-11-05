@@ -2389,5 +2389,14 @@
     "Source code: {file}": "源代码：{file}",
     "Source code editor": "源代码编辑器",
     "Accessible text is limited to the context around the caret": "无障碍文本仅限于光标附近的上下文"
+  },
+  "type_hierarchy": {
+    "Supertraits": "父 trait",
+    "Subtraits": "子 trait",
+    "The trait hierarchy exceeds its source limits or could not be started.": "Trait 层次结构超出源代码限制或无法启动。",
+    "Rust source changed while collecting the hierarchy. Request it again.": "收集层次结构时 Rust 源代码发生了变化。请重新请求。",
+    "The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.": "无法在源代码和时间限制内解析 trait 层次结构。请检查 rust-analyzer 后重试。",
+    "Resolving type relationships…": "正在解析类型关系…",
+    "Type and trait hierarchy of {name}": "{name} 的类型和 trait 层次结构"
   }
 }

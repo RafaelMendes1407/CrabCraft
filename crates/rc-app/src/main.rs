@@ -19,6 +19,7 @@ mod macro_tester;
 mod local_ai;
 mod local_ai_client;
 mod local_ai_proposal;
+mod type_hierarchy;
 mod doctest_completion;
 mod settings_backup;
 mod settings_migration;

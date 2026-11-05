@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 227 |
-| 🚧 Em andamento | 11 |
+| ✅ Pronto | 228 |
+| 🚧 Em andamento | 10 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 15 |
@@ -164,7 +164,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-07 | Arquivos e locais recentes | ✅ | M1 | MRU da sessão (até 50 arquivos e 30 locais), filtro e listas roláveis; clique/teclado reabrem arquivo e preservam posição de caractere/coluna em arquivo fechado, limitada ao tamanho atual. Sem persistência entre sessões. `docs/inherited-ui-audit.md`. |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
 | N-09 | Hierarquia de chamadas | ✅ | M3 | Janela Hierarquia com árvore: Ctrl+Alt+H abre quem chama, botão troca para o que é chamado, cada nível carrega ao abrir; visto na janela nativa |
-| N-10 | Hierarquia de tipos e traits | 🚧 | M3 | Ctrl+Alt+Shift+H lista os `impl` de um trait ou tipo na janela Hierarquia, via `textDocument/implementation`, um nível; supertraits e subtraits faltam, o rust-analyzer não tem hierarquia de tipos |
+| N-10 | Hierarquia de tipos e traits | ✅ | M3 | [#40](https://github.com/RafaelMendes1407/CrabCraft/issues/40): grafo nativo de super/subtraits transitivos com identidade RA, aliases, homônimos e `where Self`; mantém impls de trait/tipo, overlays unsaved, navegação, worker limitado/cancelável e guardas de versão. Prova Cargo+RA real e clique nativo; externos como folhas, sem macro-gerados/trait aliases/paridade. Veja `docs/type-hierarchy.md`. |
 | N-11 | Ir para o trait / para o `impl` | ✅ | M3 | Ctrl+U vai do método do `impl` ao trait; Ctrl+Alt+B vai do trait aos `impl`; teste real |
 | N-12 | Bookmarks | ✅ | M3 | Ctrl+F11 marca a linha, Ctrl+Shift+F11 lista; acompanham edições e sobrevivem ao fechar a aba; sem atalho F11 porque ele é Step Into |
 | N-13 | Navegar entre features e `cfg` | ✅ | M4 | Sem servidor: no `Cargo.toml`, Ctrl+B, Ctrl+clique ou Localizar usos na chave de `[features]` lista na janela Localizar os `cfg`, `cfg!` e `cfg_attr` (inclusive dentro de `all`/`any`/`not`) do código do pacote, em segundo plano e cancelável, com o texto não salvo das abas; numa feature ativada por outra (`full = ["std"]`) Ctrl+B vai à linha dela e Voltar retorna. Num `.rs`, Ctrl+B ou Ctrl+clique em `"x"` de `feature = "x"` leva à linha da feature no `Cargo.toml` do pacote. Ignora comentários, strings comuns, `target/`, pastas ocultas e pacotes aninhados; `dep:x` e `x/y` não são features. Testado de ponta a ponta (headless) num crate de exemplo e a análise no crate real egui 0.36.2 do registro (serde, persistence, callstack); captura da janela não conferida |

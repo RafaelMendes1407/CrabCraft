@@ -270,6 +270,10 @@ fn structure(app: &mut CrabCraftApp, ui: &mut Ui) {
 }
 
 fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
+    if app.insight.type_hierarchy_pending() {
+        ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Resolving type relationships…")); if ui.button(tr("Cancel")).clicked() { app.insight.cancel_type_hierarchy(); } });
+        return;
+    }
     let Some(tree) = &app.insight.call_tree else {
         let (title, hint) = empty_text(ToolWindow::Hierarchy);
         empty_state(ui, ToolWindow::Hierarchy.icon(), title, hint);
@@ -277,6 +281,7 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
     };
     let p = rc_kit::pal(ui);
     let direction = match (tree.types, tree.callers) {
+        (true, _) if tree.root.item.get("trait_hierarchy").and_then(serde_json::Value::as_bool) == Some(true) => tr("Type and trait hierarchy of {name}"),
         (true, _) => tr("Implementations of {name}"),
         (false, true) => tr("Callers of {name}"),
         (false, false) => tr("Calls made by {name}"),
