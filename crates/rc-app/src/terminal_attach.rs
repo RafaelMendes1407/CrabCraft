@@ -76,7 +76,7 @@ mod tests {
         let source="unsafe extern \"C\" { fn prctl(option:i32, arg:u64, ...)->i32; }\nfn main() {\n    unsafe { prctl(0x59616d61, u64::MAX); }\n    let mut rounds=0u64;\n    while !std::path::Path::new(\"finish\").exists() {\n        rounds+=1;\n        std::thread::sleep(std::time::Duration::from_millis(10));\n    }\n    std::fs::write(\"survived\", rounds.to_string()).unwrap();\n}\n";
         let path=root.path().join("src/main.rs");std::fs::write(&path,source).unwrap();
         let built=std::process::Command::new("cargo").args(["build","--offline","--quiet"]).current_dir(root.path()).output().unwrap();assert!(built.status.success(),"{}",String::from_utf8_lossy(&built.stderr));
-        let mut app=crate::screens::test_app(home.path(),false);app.open_workspace(root.path());app.trust_project_tools_for_test();app.open_file(&path);
+        let mut app=crate::screens::test_app(home.path(),false);app.open_workspace(root.path());app.trust_project_tools_for_test();app.open_file_and_wait(&path);
         app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(5,rc_editor::BreakpointKind::Normal);
         let spec=rc_term::SpawnSpec::shell(Some(root.path().to_path_buf()));
         let id=app.terminals.open(&spec,Waker::noop()).unwrap();

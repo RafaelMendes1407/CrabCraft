@@ -129,7 +129,7 @@ mod tests {
         let mut harness = crate::screens::harness(app, egui::vec2(1450.0, 900.0));
         wait(&mut harness, |a| a.runner.cargo_workspace.is_some());
         for path in [&first, &second] {
-            harness.state_mut().open_file(path);
+            harness.state_mut().open_file_and_wait(path);
             harness.state_mut().docs.active_doc_mut().unwrap().editor.breakpoints.insert(2, rc_editor::BreakpointKind::Normal);
         }
         harness.state_mut().runner.selected = harness.state().runner.configs.iter().position(|c| c.name == "parallel-audit").unwrap();

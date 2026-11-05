@@ -85,7 +85,7 @@ fn screens() {
         let mut app = test_app(home.path(), dark);
         let sln = fixtures().join("Shop/Shop.sln");
         app.open_path(&sln);
-        app.open_file(&sln);
+        app.open_file_and_wait(&sln);
         app.open_path(&razor);
         let mut h = harness(app, vec2(1280.0, 800.0));
         h.run_steps(6);
@@ -100,9 +100,9 @@ fn screens() {
         app.open_workspace(&fixtures().join("Shop/Shop.sln"));
         app.explorer.expanded.insert(format!("proj:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
         app.explorer.expanded.insert(format!("deps:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
-        app.open_file(&fixtures().join("Shop/src/Shop.Api/Program.cs"));
-        app.open_file(&fixtures().join("Shop/src/Shop.Api/Controllers/WeatherForecastController.cs"));
-        app.open_file(&fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj"));
+        app.open_file_and_wait(&fixtures().join("Shop/src/Shop.Api/Program.cs"));
+        app.open_file_and_wait(&fixtures().join("Shop/src/Shop.Api/Controllers/WeatherForecastController.cs"));
+        app.open_file_and_wait(&fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj"));
         app.docs.activate(1);
         app.locate_active();
         let mut h = harness(app, vec2(1440.0, 900.0));
@@ -147,7 +147,7 @@ fn screens() {
         {
             let app = h.state_mut();
             for f in ["Shop/src/Shop.Core/Order.cs", "Shop/src/Shop.Core/OrderLine.cs", "Shop/src/Shop.Core/PriceCalculator.cs", "Shop/src/Shop.Api/Controllers/OrdersController.cs", "Shop/src/Shop.Api/appsettings.json", "Shop/tests/Shop.Core.XunitTests/PriceCalculatorTests.cs", "Shop/src/Shop.Cli/Program.cs", "Shop/Shop.sln"] {
-                app.open_file(&fixtures().join(f));
+                app.open_file_and_wait(&fixtures().join(f));
             }
             let i = app.docs.index_of(&fixtures().join("Shop/src/Shop.Core/Order.cs").canonicalize().unwrap()).unwrap();
             app.docs.list[i].pinned = true;
@@ -161,7 +161,7 @@ fn screens() {
         h.state_mut().settings.tabs_multirow = false;
         // Right-click in the editor: the context menu.
         let calc = fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
-        h.state_mut().open_file(&calc);
+        h.state_mut().open_file_and_wait(&calc);
         h.run_steps(3);
         let at = egui::pos2(760.0, 300.0);
         h.event(egui::Event::PointerMoved(at));
@@ -183,7 +183,7 @@ fn screens() {
         // Reformat Code on a JSON file.
         let json = samples.path().join("settings.json");
         std::fs::write(&json, "{\"Logging\":{\"LogLevel\":{\"Default\":\"Information\"}},\"AllowedHosts\":\"*\",\"Ports\":[5000,5001]}\n").unwrap();
-        h.state_mut().open_file(&json);
+        h.state_mut().open_file_and_wait(&json);
         h.state_mut().pending.push(rc_editor::Action::Reformat);
         h.run_steps(4);
         let formatted = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
@@ -198,7 +198,7 @@ fn screens() {
             "# Shop\n\nSample solution for **CrabCraft**: an API, a CLI and *three* test projects.\n\n![icon](docs/icon.png)\n\n## Projects\n\n- `Shop.Core`: orders and prices\n- `Shop.Api`: ASP.NET Core minimal API\n  - Swagger at `/swagger`\n- [ ] Blazor front end\n- [x] Tests\n\n## Run\n\n```bash\ndotnet run --project src/Shop.Api\n```\n\n| Project | Framework |\n| --- | --- |\n| Shop.Core | net8.0 |\n| Shop.Api | net8.0 |\n\n> Prices include VAT.\n\nSee the [.NET docs](https://learn.microsoft.com/dotnet/).\n",
         )
         .unwrap();
-        h.state_mut().open_file(&md);
+        h.state_mut().open_file_and_wait(&md);
         h.run_steps(6);
         h.render().unwrap().save(out.join(format!("markdown-{suffix}.png"))).unwrap();
         if let Some(d) = h.state_mut().docs.active_doc_mut() {
@@ -381,8 +381,8 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     app.open_workspace(&sln);
     let w = app.workspace.as_ref().unwrap();
     assert_eq!(w.solution.as_ref().unwrap().projects().len(), 10);
-    app.open_file(&file_a);
-    app.open_file(&file_b);
+    app.open_file_and_wait(&file_a);
+    app.open_file_and_wait(&file_b);
     app.docs.list[0].editor.goto(2, 8);
     app.dock.toggle(crate::toolwindow::ToolWindow::Problems);
     app.docs.activate(0);
@@ -435,7 +435,7 @@ fn tabs_drag_into_splits_and_floating_windows_and_the_layout_is_restored() {
     let mut app = test_app(&home.path().join("home"), true);
     app.open_workspace(&root);
     for f in ["lib.rs", "main.rs", "util.rs"] {
-        app.open_file(&root.join("src").join(f));
+        app.open_file_and_wait(&root.join("src").join(f));
     }
     let size = vec2(1280.0, 800.0);
     let mut h = harness(app, size);
@@ -493,7 +493,7 @@ fn screens_tools() {
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&fixtures().join("Shop/Shop.sln"));
     let test_file = std::fs::read_dir(fixtures().join("Shop/tests/Shop.Core.XunitTests")).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "cs")).unwrap();
-    app.open_file(&test_file);
+    app.open_file_and_wait(&test_file);
     let mut h = harness(app, vec2(1440.0, 900.0));
     // Tests.
     {
@@ -576,7 +576,7 @@ fn screens_git() {
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root.join("Shop.sln"));
     app.trust_project_tools_for_test();
-    app.open_file(&calc);
+    app.open_file_and_wait(&calc);
     let doc = app.docs.active_doc_mut().unwrap();
     let t = doc.editor.buffer.rope().to_string();
     let at = doc.editor.buffer.rope().byte_to_char(t.find("{").unwrap() + 1);
@@ -783,7 +783,7 @@ fn screens_insight() {
     assert!(std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap().success());
     app.open_workspace(&root.join("Shop.sln"));
     let program = root.join("src/Shop.Cli/Program.cs");
-    app.open_file(&program);
+    app.open_file_and_wait(&program);
     let mut h = harness(app, vec2(1440.0, 900.0));
     run_frames(&mut h, "Roslyn", |a| a.insight.status == crate::insight::InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
     if std::env::var_os("CRABCRAFT_DEBUG_DIAGS").is_some() {
@@ -860,8 +860,8 @@ fn screens_readme() {
         app.open_workspace(&shop.join("Shop.sln"));
     app.trust_project_tools_for_test();
         app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
-        app.open_file(&shop.join("src/Shop.Core/Order.cs"));
-        app.open_file(&calc);
+        app.open_file_and_wait(&shop.join("src/Shop.Core/Order.cs"));
+        app.open_file_and_wait(&calc);
         app.locate_active();
         app.docs.active_doc_mut().unwrap().editor.goto(26, 12);
         let mut h = harness(app, vec2(1440.0, 900.0));
@@ -906,9 +906,9 @@ fn screens_rust_icons() {
         for d in ["src", "tests"] {
             app.explorer.expanded.insert(format!("dir:{}", root.join(d).display()));
         }
-        app.open_file(&root.join("Cargo.toml"));
-        app.open_file(&root.join("Cargo.lock"));
-        app.open_file(&root.join("src/main.rs"));
+        app.open_file_and_wait(&root.join("Cargo.toml"));
+        app.open_file_and_wait(&root.join("Cargo.lock"));
+        app.open_file_and_wait(&root.join("src/main.rs"));
         let mut h = harness(app, vec2(1100.0, 600.0));
         h.run_steps(10);
         let suffix = if dark { "dark" } else { "light" };
@@ -936,7 +936,7 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
     let main = root.join("src/main.rs");
     let mut app = test_app(home.path(), true);
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1200.0, 800.0));
     let ctx = h.ctx.clone();
     const ONE: &str = "fn main() {\n    println!(\"one\");\n}\n";
@@ -1346,7 +1346,7 @@ fn cut_copy_and_paste_from_the_editor_context_menu() {
     let file = home.path().join("notes.txt");
     std::fs::write(&file, "alpha beta\ngamma\n").unwrap();
     let mut app = test_app(home.path(), true);
-    app.open_file(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
     let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
@@ -1440,16 +1440,16 @@ fn the_project_code_style_applies_on_open_and_save() {
     let mut app = test_app(&dir.path().join("home"), false);
     app.open_workspace(&root);
 
-    app.open_file(&root.join("notes.txt"));
+    app.open_file_and_wait(&root.join("notes.txt"));
     let doc = app.docs.active_doc().unwrap();
     assert_eq!(doc.editor.indent.unit, "  ");
     assert_eq!(doc.editor.right_margin, None);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let doc = app.docs.active_doc().unwrap();
     assert_eq!(doc.editor.indent.unit, "\t", "rustfmt.toml wins for Rust files");
     assert_eq!(doc.editor.right_margin, Some(90));
 
-    app.open_file(&root.join("notes.txt"));
+    app.open_file_and_wait(&root.join("notes.txt"));
     let i = app.docs.active.unwrap();
     app.docs.list[i].editor.goto(0, 0);
     app.docs.list[i].editor.replace(0, 0, "z");
@@ -1457,7 +1457,7 @@ fn the_project_code_style_applies_on_open_and_save() {
     // The caret's line keeps its spaces; the others lose theirs, and a newline ends the file.
     assert_eq!(std::fs::read_to_string(root.join("notes.txt")).unwrap(), "za  \n    b\n    c\n");
 
-    app.open_file(&root.join("README.md"));
+    app.open_file_and_wait(&root.join("README.md"));
     let i = app.docs.active.unwrap();
     app.docs.list[i].editor.replace(0, 0, "x");
     app.docs.list[i].editor.goto(0, 0);
@@ -1574,7 +1574,7 @@ fn external_tools_capture() {
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), true);
     h.state_mut().settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
-    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().open_file_and_wait(&root.join("beta/src/lib.rs"));
     h.state_mut().run_external_tool("Count lines");
     run_frames(&mut h, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
     h.run_steps(4);
@@ -1635,7 +1635,7 @@ fn live_templates_expand_with_tab_and_visit_their_stops() {
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), false);
     let file = root.join("beta/src/lib.rs");
-    h.state_mut().open_file(&file);
+    h.state_mut().open_file_and_wait(&file);
     let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
     h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
     h.run_steps(3);
@@ -1683,7 +1683,7 @@ fn cargo_toml_completes_tables_keys_and_values() {
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), false);
     let file = root.join("alpha/Cargo.toml");
-    h.state_mut().open_file(&file);
+    h.state_mut().open_file_and_wait(&file);
     let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
     h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
     h.run_steps(3);
@@ -1737,7 +1737,7 @@ fn cargo_toml_completion_capture() {
     std::fs::create_dir_all(&out).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), true);
-    h.state_mut().open_file(&root.join("alpha/Cargo.toml"));
+    h.state_mut().open_file_and_wait(&root.join("alpha/Cargo.toml"));
     let end = h.state().docs.active_doc().unwrap().editor.buffer.len_chars();
     h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(end);
     h.run_steps(3);
@@ -1793,7 +1793,7 @@ fn intention_preview_capture() {
         let dir = tempfile::tempdir().unwrap();
         let (mut h, root) = two_crates_harness(dir.path(), dark);
         let lib = root.join("alpha/src/lib.rs");
-        h.state_mut().open_file(&lib);
+        h.state_mut().open_file_and_wait(&lib);
         h.run_steps(3);
         let edit = |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
         let mut changes = std::collections::HashMap::new();
@@ -1871,7 +1871,7 @@ fn a_paste_records_its_range() {
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), false);
-    h.state_mut().open_file(&root.join("beta/src/lib.rs"));
+    h.state_mut().open_file_and_wait(&root.join("beta/src/lib.rs"));
     h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(0);
     h.run_steps(3);
     h.event(egui::Event::Paste("use x;\n".into()));
@@ -1988,7 +1988,7 @@ fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>,
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("Cargo.toml"));
+    app.open_file_and_wait(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
     h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
@@ -2067,7 +2067,7 @@ fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     app.dep_versions.set_published("rand", rc_cargo::versions::parse_index("{\"vers\":\"0.7.3\",\"yanked\":false}"));
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("Cargo.toml"));
+    app.open_file_and_wait(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1100.0, 520.0));
     run_frames(&mut h, "the Cargo workspace and the lock", |a| a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty()));
     (h, root)
@@ -2310,7 +2310,7 @@ fn cfg_inactive_capture() {
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&repo);
     let file = repo.join("crates/rc-app/src/instance.rs");
-    app.open_file(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the cfg of the crate", |a| a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some()));
     let text = std::fs::read_to_string(&file).unwrap();
@@ -2337,7 +2337,7 @@ fn cargo_dep_versions_on_crabcraft_capture() {
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&repo);
     let file = repo.join("crates/rc-cargo/Cargo.toml");
-    app.open_file(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 600.0));
     let text = std::fs::read_to_string(&file).unwrap();
     let line_of = |key: &str| text.lines().position(|l| l.starts_with(key)).unwrap();
@@ -2375,7 +2375,7 @@ fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
     let mut app = test_app(home.path(), false);
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let target = h.state().workspace.as_ref().unwrap().ws.key_path().to_path_buf();
@@ -2418,7 +2418,7 @@ fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
     close(&mut h);
 
     // The editor's hover of the problem offers the same link.
-    h.state_mut().open_file(&main);
+    h.state_mut().open_file_and_wait(&main);
     {
         let d = h.state_mut().docs.active_doc_mut().unwrap();
         let pos = d.editor.buffer.rope().to_string().find("\"text\"").unwrap();
@@ -2459,7 +2459,7 @@ fn explain_error_capture() {
     let main = root.join("src/main.rs");
     let mut app = test_app(home.path(), true);
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1280.0, 800.0));
     {
         let d = h.state_mut().docs.active_doc_mut().unwrap();
@@ -2573,7 +2573,7 @@ fn targets_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, 
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the target list", |a| !a.triple_choices.is_empty() && a.runner.cargo_workspace.is_some());
     h.run_steps(3);
@@ -2735,7 +2735,7 @@ fn feature_uses_capture() {
         let root = root.canonicalize().unwrap();
         let mut app = test_app(&dir.path().join("home"), dark);
         app.open_workspace(&root);
-        app.open_file(&root.join("Cargo.toml"));
+        app.open_file_and_wait(&root.join("Cargo.toml"));
         app.docs.active_doc_mut().unwrap().editor.goto(8, 2);
         app.run_insight_action(rc_editor::Action::FindUsages, egui::Pos2::ZERO);
         let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2783,7 +2783,7 @@ fn playground_harness(home: &Path, dir: &Path, dark: bool) -> Harness<'static, C
     let mut app = test_app(home, dark);
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
     h
@@ -2942,7 +2942,7 @@ fn copyright_headers_on_new_and_old_files() {
     assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret()), Some(text.chars().count()));
 
     // Update Copyright on the old file: 2020 becomes 2020-<this year>, once.
-    h.state_mut().open_file(&root.join("src/old.rs"));
+    h.state_mut().open_file_and_wait(&root.join("src/old.rs"));
     h.run_steps(2);
     h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
     h.run_steps(3);
@@ -2952,7 +2952,7 @@ fn copyright_headers_on_new_and_old_files() {
     h.run_steps(3);
     assert_eq!(doc(&h), format!("// Copyright (c) 2020-{year} Ada Lovelace\n// Part of ws.\n\npub fn old() {{}}\n"));
     // A file without a header gets one at the top, before its inner attributes.
-    h.state_mut().open_file(&root.join("src/lib.rs"));
+    h.state_mut().open_file_and_wait(&root.join("src/lib.rs"));
     h.run_steps(2);
     h.state_mut().pending.push(rc_editor::Action::UpdateCopyright);
     h.run_steps(3);
@@ -3191,7 +3191,7 @@ fn scopes_capture() {
             ],
         });
         for f in ["src/main.rs", "src/net.rs", "tests/it.rs", "src/lib.rs"] {
-            h.state_mut().open_file(&root.join(f));
+            h.state_mut().open_file_and_wait(&root.join(f));
         }
         h.state_mut().explorer.locate(&root.join("tests/it.rs"), None, &root);
         h.state_mut().explorer.locate(&root.join("src/lib.rs"), None, &root);
@@ -3335,7 +3335,7 @@ fn breakpoint_list_capture() {
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&root);
     app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(1, BreakpointKind::Normal);
-    app.open_file(&main_rs);
+    app.open_file_and_wait(&main_rs);
     for line in [3, 4, 5] {
         app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     }
@@ -3682,7 +3682,7 @@ fn bottom_tool_window_capture() {
     let mut h = playground_harness(home.path(), dir.path(), true);
     let lib = dir.path().join("demo/src/lib.rs");
     std::fs::write(&lib, "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n").unwrap();
-    h.state_mut().open_file(&lib.canonicalize().unwrap());
+    h.state_mut().open_file_and_wait(&lib.canonicalize().unwrap());
     h.run_steps(3);
     let id = h.state().docs.active_doc().unwrap().editor.id;
     let group = h.state().layout.group_of(id).unwrap();
@@ -3714,8 +3714,8 @@ fn context_actions_open_at_the_active_editor_of_a_split() {
     let mut app = test_app(home.path(), true);
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&other);
-    app.open_file(&main);
+    app.open_file_and_wait(&other);
+    app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1600.0, 900.0));
     h.run_steps(3);
     // other.rs goes to a group on the right; main.rs stays on the left and is the active one.
@@ -3812,7 +3812,7 @@ fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
     std::fs::write(&source, text).unwrap();
     let mut app = test_app(home.path(), false);
     app.open_workspace(root.path());
-    app.open_file(&source);
+    app.open_file_and_wait(&source);
     let mut harness = harness(app, vec2(1280.0, 800.0));
     let ctx = harness.ctx.clone();
     harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomIn);

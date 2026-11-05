@@ -187,7 +187,7 @@ fn markdown_preview_updates_and_switches_views_inside_a_rust_project() {
     std::fs::write(&readme, "# Rust guide\n\nFerris overview\n\n```rust\nlet answer = 42;\n```\n").unwrap();
     let mut app = crate::screens::test_app(home.path(), true);
     app.open_workspace(dir.path());
-    app.open_file(&readme);
+    app.open_file_and_wait(&readme);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     h.get_by_label("Rust guide");
     h.get_by_label("Ferris overview");
@@ -225,7 +225,7 @@ fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     for (name, language) in [("config.json", rc_syntax::Lang::Json), ("config.xml", rc_syntax::Lang::Xml)] {
         let file = dir.path().join("src").join(name);
-        h.state_mut().open_file(&file);
+        h.state_mut().open_file_and_wait(&file);
         h.run_steps(3);
         let original = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
         h.state_mut().run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
@@ -260,7 +260,7 @@ fn rust_reference_keymap_is_selected_and_routes_native_actions_in_a_cargo_projec
     let home = tempfile::tempdir().unwrap();
     let mut app = crate::screens::test_app(home.path(), true);
     app.open_workspace(dir.path());
-    app.open_file(&path);
+    app.open_file_and_wait(&path);
     app.open_settings(SettingsPage::Keymap);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     h.get_by(|node| node.value().as_deref() == Some("Rider")).click();
@@ -314,7 +314,7 @@ fn interface_languages_render_native_settings_for_a_rust_project() {
     app.apply_settings(&egui::Context::default(), settings);
     assert_eq!(rc_kit::i18n::lang(), Lang::from_locale(&code));
     app.open_workspace(dir.path());
-    app.open_file(&path);
+    app.open_file_and_wait(&path);
     app.open_settings(crate::ui::dialogs::SettingsPage::Appearance);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     for label in ["Settings", "Appearance", "Theme", "Language", "OK", "Cancel"] {

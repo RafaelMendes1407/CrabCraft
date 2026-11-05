@@ -203,7 +203,7 @@ mod tests {
         let other = root.join("src/other.rs");
         let mut app = crate::screens::test_app(&dir.path().join("home"), true);
         app.open_workspace(&root);
-        app.open_file(&main);
+        app.open_file_and_wait(&main);
         let index = app.docs.index_of(&main).unwrap();
         app.docs.list[index].editor.replace(0, 0, "// unsaved café\n");
         let before = app.docs.list[index].editor.buffer.rope().to_string();

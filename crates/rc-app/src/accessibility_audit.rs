@@ -17,7 +17,7 @@ fn source_editor_exposes_text_selection_unicode_readonly_and_bounded_large_conte
     std::fs::write(&path, source).unwrap();
     let mut app = crate::screens::test_app(home.path(), false);
     app.open_workspace(root.path());
-    app.open_file(&path);
+    app.open_file_and_wait(&path);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 900.0));
     h.run_steps(2);
     let label = trf("Source code: {file}", &[("file", &"main.rs")]);
@@ -143,7 +143,7 @@ fn source_editor_exposes_text_selection_unicode_readonly_and_bounded_large_conte
     );
     let big = root.path().join("src/large.rs");
     std::fs::write(&big, large).unwrap();
-    h.state_mut().open_file(&big);
+    h.state_mut().open_file_and_wait(&big);
     h.run_steps(2);
     let label = trf("Source code: {file}", &[("file", &"large.rs")]);
     assert!(

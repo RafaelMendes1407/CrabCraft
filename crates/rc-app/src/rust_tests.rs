@@ -108,7 +108,7 @@ fn rust_insight_build_run_and_tests_end_to_end() {
     // Insight.
     app.trust_project();
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     // Colours from the server.
@@ -132,7 +132,7 @@ fn rust_insight_build_run_and_tests_end_to_end() {
     pump(&mut app, "the definition", |a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("src/lib.rs")));
 
     // A type error is reported by the analysis as you type, and with its position by the build.
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let bad = "fn main() {\n    let x: u32 = \"text\";\n}\n";
     let doc = app.docs.active_doc_mut().unwrap();
     let end = doc.editor.buffer.len_chars();
@@ -160,7 +160,7 @@ fn rust_language_features() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     // Structure of the file and inlay hints arrive with the refresh.
@@ -248,7 +248,7 @@ fn rust_navigation_and_hints() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     // Inlay hints: the inferred type and the parameter name.
@@ -323,7 +323,7 @@ fn gutter_icons_run_tests_and_binaries() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     let icon = |a: &mut CrabCraftApp, line: usize| {
@@ -350,7 +350,7 @@ fn gutter_icons_run_tests_and_binaries() {
     assert_eq!((t.passed, t.failed), (1, 1));
 
     // The icon of `fn main` runs its binary.
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the icon of main", |a| icon(a, 0) == Some(GutterIcon::RunApp));
     app.run_binary_at(&egui::Context::default(), 0);
     pump(&mut app, "the program's output", |a| a.runner.runs.iter().any(|r| r.console.term.screen_lines().join("\n").contains("from the icon")));
@@ -371,7 +371,7 @@ fn a_gutter_icon_runs_a_benchmark() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("benches/plain.rs"));
+    app.open_file_and_wait(&root.join("benches/plain.rs"));
     pump(&mut app, "the benchmark's icon", |a| {
         a.update_test_markers();
         a.docs.active_doc().is_some_and(|d| d.editor.gutter_icons.get(&0) == Some(&GutterIcon::RunApp))
@@ -411,7 +411,7 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     write(&file, MAIN);
 
     // Unsaved text in the editor is not what the compiler read either.
-    app.open_file(&file);
+    app.open_file_and_wait(&file);
     app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "\n");
     app.apply_build_fix(&file, &fix);
     assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), format!("\n{MAIN}"));
@@ -440,13 +440,13 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/lone.rs"));
+    app.open_file_and_wait(&root.join("src/lone.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the unlinked file", |a| unlinked(a, "src/lone.rs"));
 
     // A declared file is not reported.
-    app.open_file(&root.join("src/main.rs"));
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     let settled = Instant::now();
     pump(&mut app, "the other files", |_| settled.elapsed() > Duration::from_secs(3));
     assert!(!unlinked(&app, "src/main.rs") && !unlinked(&app, "src/lib.rs"));
@@ -458,8 +458,8 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     assert!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap().starts_with("mod lone;\n"));
 
     // Open parent: its unsaved text stays and nothing is written yet.
-    app.open_file(&root.join("src/lib.rs"));
-    app.open_file(&root.join("src/open.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/open.rs"));
     let saved = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
     app.declare_module(&root.join("src/lib.rs"), "open", true);
     assert_eq!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap(), saved);
@@ -509,7 +509,7 @@ fn optimize_imports_removes_the_unused_and_merges_the_rest() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the symbols", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::OptimizeImports);
@@ -530,7 +530,7 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let line = MAIN.lines().position(|l| l.contains("println")).unwrap();
     let doc = app.docs.active_doc_mut().unwrap();
     doc.editor.toggle_bookmark(line);
@@ -546,7 +546,7 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     app.close_tab(i);
     assert!(app.docs.index_of(&main).is_none());
     assert_eq!(app.bookmark_list().len(), 1);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     assert!(app.docs.active_doc().unwrap().editor.bookmarks.contains(&line));
 
     // The list removes it, open or closed.
@@ -567,7 +567,7 @@ fn external_documentation_finds_the_page_of_an_item() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
     let i = app.docs.active.unwrap();
@@ -594,7 +594,7 @@ fn a_macro_call_expands_recursively_into_a_read_only_tab() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
     // On `twice!`: both levels expanded. Asked again until the server has indexed the file.
@@ -638,7 +638,7 @@ fn the_type_hierarchy_lists_implementations() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
     let i = app.docs.active.unwrap();
@@ -667,7 +667,7 @@ fn the_action_popup_keeps_its_keys_from_the_editor() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.focus_editor = true;
     let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
     h.run_steps(3);
@@ -718,7 +718,7 @@ fn logpoints_print_and_a_breakpoint_can_remove_itself() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let ctx = egui::Context::default();
 
     let (log, once) = (3, 4);
@@ -774,7 +774,7 @@ fn integers_switch_to_hexadecimal_while_paused() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(6, BreakpointKind::Normal);
     app.run_ide_action(&ctx, Action::Debug);
@@ -841,7 +841,7 @@ fn paused_before_doubling(dir: &Path) -> CrabCraftApp {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
     app.run_ide_action(&egui::Context::default(), Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
@@ -978,7 +978,7 @@ fn paused_at(dir: &Path, main_rs: &str, line: usize) -> CrabCraftApp {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     app.run_ide_action(&egui::Context::default(), Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
@@ -1230,7 +1230,7 @@ fn step_into_walks_past_the_standard_library() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(6, BreakpointKind::Normal);
     app.run_ide_action(&ctx, Action::Debug);
@@ -1308,7 +1308,7 @@ fn forced_steps_enter_the_library_and_pass_breakpoints_by() {
     assert!(skips.contains("core|alloc|std") && skips.contains(" y "), "{skips}");
 
     // Force Run to Cursor passes the breakpoint in `own` twice.
-    app.open_file(&main_rs);
+    app.open_file_and_wait(&main_rs);
     app.docs.active_doc_mut().unwrap().editor.goto(9, 0);
     run(&mut app, Action::ForceRunToCursor, "the forced run to cursor");
     assert_eq!(line(&app), Some(9), "{}", top(&app));
@@ -1352,7 +1352,7 @@ fn completion_imports_and_works_inside_derives_and_macros() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     let c = complete_at_end(&mut app, "#[derive(De|)]\nstruct A;\nfn main() {}\n");
@@ -1424,6 +1424,7 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     let frame = t.results["checks::bad"][0].stack_trace.first().cloned().expect("a frame");
     assert_eq!((frame.file.as_deref(), frame.line), (Some(root.join("src/lib.rs").as_path()), Some(14)));
     app.goto_test("checks::bad");
+    pump(&mut app, "failed test source", |app| !app.disk_open.busy());
     let doc = app.docs.active_doc().unwrap();
     assert!(doc.path.ends_with("src/lib.rs"));
     assert_eq!(doc.editor.caret_line_col().0, 13);
@@ -1480,7 +1481,7 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     let ready = |a: &CrabCraftApp| a.insight.status == InsightStatus::Ready && a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty());
     let start = Instant::now();
@@ -1553,7 +1554,7 @@ fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, secs: u64, done: &dyn Fn(&CrabCraftApp) -> bool| {
         let start = Instant::now();
@@ -1644,8 +1645,8 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
     assert!(app.runner.cargo_workspace.is_none());
-    app.open_file(&root.join("src/lib.rs"));
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
 
     // Untrusted: neither Cargo metadata, cargo clean nor the language server may run.
     app.invalidate_caches(true);
@@ -1719,7 +1720,7 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let indexed = |a: &CrabCraftApp| a.files.index.as_ref().filter(|i| i.is_ready()).map(|i| i.snapshot().get("src/generated/mod.rs").is_some());
     pump(&mut app, "the file index", |a| indexed(a).is_some());
@@ -1796,7 +1797,7 @@ fn renaming_a_module_file_updates_its_declaration_and_paths() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let src = root.join("src");
-    app.open_file(&src.join("util.rs"));
+    app.open_file_and_wait(&src.join("util.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let read = |name: &str| std::fs::read_to_string(src.join(name)).unwrap();
 
@@ -1891,7 +1892,7 @@ fn search_everywhere_finds_classes_symbols_and_library_types() {
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
         let start = Instant::now();
@@ -1966,7 +1967,7 @@ fn a_test_stops_on_a_breakpoint_from_its_gutter_icon() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the runnables", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.get(&d.editor.id).is_some_and(|(_, r)| r.iter().any(|x| x.line == 7))));
 
@@ -2022,7 +2023,7 @@ fn the_debugger_steps_and_evaluates_a_rust_program() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let ctx = egui::Context::default();
     let line = |a: &CrabCraftApp| a.docs.active_doc().and_then(|d| d.editor.execution_line);
 
@@ -2105,7 +2106,7 @@ fn the_debugger_stops_a_panic_at_the_code_that_panicked() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::Debug);
     pump_debugger(&mut app, "the panic");
     let s = app.debugger.session.as_ref().unwrap();
@@ -2130,7 +2131,7 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
     let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
         let start = Instant::now();
@@ -2212,7 +2213,7 @@ fn the_debugger_attaches_to_a_running_program() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
     let outs = app.debugger.attach_gdb(pid, "demo", &app.docs);
     app.handle_debug(outs);
@@ -2326,7 +2327,7 @@ fn reformat_code_runs_rustfmt() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
     app.insight.format(&app.docs.list[i]);
@@ -2380,7 +2381,7 @@ fn refactorings_of_the_language_server() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     apply_assist(&mut app, "fn main() {\n    let x = (|1 + 2|) * 3;\n    drop(x);\n}\n", "Extract into variable", "= 1 + 2;");
@@ -2412,7 +2413,7 @@ fn problems_of_a_closed_file_show_their_real_line() {
     pump(&mut app, "the build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some()));
     let start = app.insight.problems[&bad][0].start;
     assert_eq!(app.insight.problem_line(&app.docs, &bad, start), 2);
-    app.open_file(&bad);
+    app.open_file_and_wait(&bad);
     assert_eq!(app.insight.problem_line(&app.docs, &bad, start), 2);
 }
 
@@ -2461,9 +2462,9 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
     let library = app.explorer.libraries.iter().find(|l| l.name == "stdlib").unwrap().root.clone();
     assert!(app.explorer.in_library(&library.join("core/src/lib.rs")));
     assert!(!app.explorer.in_library(&near.join("src/lib.rs")));
-    app.open_file(&library.join("core/src/lib.rs"));
+    app.open_file_and_wait(&library.join("core/src/lib.rs"));
     assert!(app.docs.active_doc().unwrap().editor.read_only);
-    app.open_file(&near.join("src/lib.rs"));
+    app.open_file_and_wait(&near.join("src/lib.rs"));
     assert!(!app.docs.active_doc().unwrap().editor.read_only);
 }
 
@@ -2567,7 +2568,7 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let text = |a: &CrabCraftApp| a.docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
 
     // Reformat Code: the document changes, the file waits for a save.
@@ -2677,7 +2678,7 @@ fn navigation_reaches_the_standard_library_and_compiler_fixes_apply() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the libraries", |a| a.explorer.libraries.iter().any(|l| l.name == "stdlib"));
     let i = app.docs.active.unwrap();
@@ -2700,7 +2701,7 @@ fn navigation_reaches_the_standard_library_and_compiler_fixes_apply() {
     });
     assert!(target.path.ends_with("alloc/src/vec/mod.rs"), "{:?}", target.path);
     assert!(target.preview.contains("pub struct Vec"), "{:?}", target.preview);
-    app.open_file(&target.path);
+    app.open_file_and_wait(&target.path);
     assert!(app.docs.active_doc().unwrap().editor.read_only);
     app.docs.active = Some(i);
 
@@ -2732,7 +2733,7 @@ fn generate_offers_only_what_writes_code() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
     let title = |a: &rc_lsp::lsp_types::CodeActionOrCommand| match a {
@@ -2806,7 +2807,7 @@ fn the_call_hierarchy_is_a_tree_of_callers_and_callees() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
     // The labels of the open tree, as (depth, name), once `want` lines are loaded.
@@ -2975,7 +2976,7 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     app.settings.trusted_projects.push(root.clone());
     app.settings.format_on_save = true;
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let lint = |a: &mut CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("len_zero")));
     assert!(!lint(&mut app), "cargo check has no such lint");
@@ -3011,7 +3012,7 @@ fn a_warning_is_suppressed_for_its_statement_or_the_file() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     // rustc's warning arrives with `cargo check` on save, named by its lint.
     app.insight.did_save(&main);
@@ -3076,7 +3077,7 @@ fn main() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     let lines = |a: &CrabCraftApp| a.find_results.as_ref().map(|(_, t)| t.iter().map(|t| t.line).collect::<Vec<_>>());
@@ -3126,7 +3127,7 @@ fn an_external_tool_runs_on_the_active_file() {
     app.settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.run_external_tool("Count lines");
     pump(&mut app, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
     let run = &app.runner.runs[0];
@@ -3196,7 +3197,7 @@ fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     let name = app.runner.configs[0].name.clone();
     app.runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Greet".into()], ..Default::default() });
     app.runner.selected = 0;
@@ -3348,7 +3349,7 @@ fn a_rename_preview_applies_only_the_checked_changes() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
@@ -3457,7 +3458,7 @@ fn an_attached_cargo_project_is_analysed() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&lib);
+    app.open_file_and_wait(&lib);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let mismatch = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("mismatched types") || x.code.as_deref() == Some("E0308")));
     // Give the server time to say what it knows about the file.
@@ -3498,7 +3499,7 @@ fn excluded_paths_are_not_offered_for_import() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let paths = |c: &rc_editor::Completion| c.items.iter().filter(|i| i.label.starts_with("Ordering")).map(|i| format!("{} {}", i.label, i.detail)).collect::<Vec<_>>();
 
@@ -3534,7 +3535,7 @@ fn pasted_code_gets_its_unambiguous_imports() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
     let before = "use demo::Greeter;\n\nfn main() {\n    \n}\n";
@@ -3563,7 +3564,7 @@ fn imports_go_after_the_leading_comments() {
     let file = dir.path().join("lib.rs");
     write(&file, "//! Crate docs.\n#![allow(dead_code)]\n\nfn f() {}\n");
     let mut app = new_app(dir.path());
-    app.open_file(&file);
+    app.open_file_and_wait(&file);
     let i = app.docs.active.unwrap();
     let added = crate::insight::insert_rust_uses(&mut app.docs.list[i], &["std::fmt::Write".into(), "std::fmt::Write".into()]);
     assert_eq!(added, ["std::fmt::Write"]);
@@ -3586,7 +3587,7 @@ fn rust_scratches_are_analysed_and_run() {
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let scratch = rc_core::scratch::create(&rc_core::paths::scratches_dir(), rc_core::scratch::Kind::Rust).unwrap();
     std::fs::write(&scratch, "fn main() {\n    let x = 6u8;\n    let y = x * 7;\n    println!(\"{y}\");\n}\n").unwrap();
-    app.open_file(&scratch);
+    app.open_file_and_wait(&scratch);
     let i = app.docs.active.unwrap();
     assert!(app.docs.list[i].scratch);
     pump(&mut app, "the scratch's type hints", |a| a.docs.list.get(i).is_some_and(|d| !d.editor.inlays.is_empty()));
@@ -3623,7 +3624,7 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     let i = app.docs.active.unwrap();
     let start = text.find("fn other").unwrap();
     app.docs.list[i].editor.selection = rc_text::Selection::single(rc_text::Range::new(start, text.len() - 1));
@@ -3647,7 +3648,7 @@ fn code_disabled_by_cfg_is_faded() {
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
         a.update_cfg_sets();
         let doc = a.docs.active_doc_mut().unwrap();
@@ -3685,7 +3686,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the cfg of the crate", |a| {
         a.update_cfg_sets();
         a.docs.active_doc().is_some_and(|d| d.editor.cfg.is_some())
@@ -3698,7 +3699,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     };
     assert_eq!(faded(&mut app), 1, "extra is off");
 
-    app.open_file(&root.join("Cargo.toml"));
+    app.open_file_and_wait(&root.join("Cargo.toml"));
     app.update_feature_icons();
     let icons = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.gutter_icons.clone();
     // default, std (on through default) and extra (off), on lines 6 to 8.
@@ -3711,7 +3712,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     app.update_feature_icons();
     assert_eq!(icons(&app).get(&8), Some(&GutterIcon::FeatureOn));
 
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     assert_eq!(faded(&mut app), 0, "extra is on");
     app.save_session();
     assert_eq!(rc_core::Session::load(&root).cargo_features, vec!["demo/extra".to_string()]);
@@ -3723,7 +3724,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     // Turned off, the running server reloads the workspace without restarting.
     let started = app.insight.session.as_ref().map(|s| s.started);
     std::fs::remove_file(root.join("BUILD_FEATURES")).unwrap();
-    app.open_file(&root.join("Cargo.toml"));
+    app.open_file_and_wait(&root.join("Cargo.toml"));
     app.toggle_feature_at(8);
     assert!(app.cargo_features.is_empty());
     assert_eq!(app.insight.session.as_ref().map(|s| s.started), started);
@@ -3754,7 +3755,7 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
         a.update_cfg_sets();
         let doc = a.docs.active_doc_mut().unwrap();
@@ -3854,7 +3855,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     };
 
     // From the `extra = []` key: its uses, from a scan in the background.
-    app.open_file(&manifest);
+    app.open_file_and_wait(&manifest);
     caret_on(&mut app, 8, 2);
     app.run_insight_action(Action::GotoDeclaration, egui::Pos2::ZERO);
     assert!(app.feature_search.busy());
@@ -3870,7 +3871,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     assert_eq!(here(&app), ("tests/it.rs".into(), 1));
 
     // Find Usages on `"std"` in the array of `full`; Go to Declaration there jumps to `std = []`.
-    app.open_file(&manifest);
+    app.open_file_and_wait(&manifest);
     caret_on(&mut app, 9, 10);
     app.run_insight_action(Action::FindUsages, egui::Pos2::ZERO);
     assert_eq!(uses(&mut app, "Uses of feature std").len(), 1);
@@ -3882,7 +3883,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     assert_eq!(here(&app), ("Cargo.toml".into(), 9));
 
     // From `"extra"` in a `cfg` of a Rust file to `extra = []`, with no language server.
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     caret_on(&mut app, 3, 44);
     let pos = app.docs.active_doc().unwrap().editor.caret();
     assert!(crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos), "⌃+click is answered locally");
@@ -3890,7 +3891,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     assert_eq!(here(&app), ("Cargo.toml".into(), 8));
     assert!(app.insight.session.is_none());
     // Elsewhere in a Rust file the server keeps the click.
-    app.open_file(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/lib.rs"));
     caret_on(&mut app, 6, 8);
     let pos = app.docs.active_doc().unwrap().editor.caret();
     assert!(!crate::feature_nav::handles_click(app.docs.active_doc().unwrap(), pos));
@@ -3971,7 +3972,7 @@ fn a_rename_lists_its_conflicts_before_it_is_made() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let pos = MAIN.find("Greeter.hello").unwrap() + "Greeter.".len() + 1;
     let i = app.docs.active.unwrap();
@@ -4038,7 +4039,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
     let has = |a: &CrabCraftApp, code: &str| a.docs.list.iter().find(|d| d.path == main).is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some(code)));
     // `cargo check` runs on save.
@@ -4074,7 +4075,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     assert_eq!(std::fs::read_to_string(&manifest).unwrap(), MANIFEST);
 
     // On the call: the package's own `extra`, for the analysis or in `default`.
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     app.docs.list[i].editor.goto(8, 12);
     let fixes = app.feature_fixes(i);
     assert_eq!(fixes, vec![FeatureFix::Analysis { package: "gated".into(), feature: "extra".into() }, FeatureFix::Default { manifest: manifest.clone(), package: "gated".into(), feature: "extra".into() }]);
@@ -4114,12 +4115,12 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
 
     // A breakpoint in price.rs, which is then closed: it stays.
-    app.open_file(&price_rs);
+    app.open_file_and_wait(&price_rs);
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(1, BreakpointKind::Normal);
     let i = app.docs.index_of(&price_rs).unwrap();
     app.docs.close(i);
     assert_eq!(app.docs.closed_breakpoints.get(&price_rs).and_then(|b| b.get(&1)), Some(&BreakpointKind::Normal));
-    app.open_file(&main_rs);
+    app.open_file_and_wait(&main_rs);
     for line in [3, 4] {
         app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     }
@@ -4188,7 +4189,7 @@ fn set_execution_point_skips_and_repeats_lines_with_gdb() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&main_rs);
+    app.open_file_and_wait(&main_rs);
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(5, BreakpointKind::Normal);
     app.run_ide_action(&egui::Context::default(), Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
@@ -4207,11 +4208,11 @@ fn set_execution_point_skips_and_repeats_lines_with_gdb() {
 
     // Refused: a line in another function, and a line without code. The program stays.
     let notices = app.notices.len();
-    app.open_file(&root.join("src/other.rs"));
+    app.open_file_and_wait(&root.join("src/other.rs"));
     jump_to(&mut app, 1);
     settle_debugger(&mut app, "the refusal", &|a| a.notices.len() > notices);
     assert!(app.notices.last().unwrap().text.contains("current function"), "{}", app.notices.last().unwrap().text);
-    app.open_file(&main_rs);
+    app.open_file_and_wait(&main_rs);
     jump_to(&mut app, 1);
     settle_debugger(&mut app, "the second refusal", &|a| a.notices.len() > notices + 1);
     assert!(app.notices.last().unwrap().text.contains("No statement"), "{}", app.notices.last().unwrap().text);
@@ -4275,7 +4276,7 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
     app.open_workspace(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
-    app.open_file(&root.join("src/main.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
     let before = spawn();
     std::thread::sleep(Duration::from_millis(300));
@@ -4330,7 +4331,7 @@ fn the_highlighted_intention_is_previewed_before_it_is_applied() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
     pump(&mut app, "the unresolved name", |a| a.docs.active_doc().is_some_and(|d| !d.editor.diagnostics.is_empty()));
     let i = app.docs.index_of(&main).unwrap();
@@ -4397,7 +4398,7 @@ fn an_ide_quick_fix_is_previewed_without_a_server() {
     write(&root.join("Cargo.toml"), MANIFEST);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_file(&root.join("Cargo.toml"));
+    app.open_file_and_wait(&root.join("Cargo.toml"));
     let command = rc_lsp::lsp_types::Command { title: "Update to 1.0.200".into(), command: crate::insight::UPDATE_DEPENDENCY_COMMAND.into(), arguments: Some(vec![serde_json::json!(6), serde_json::json!("1.0.200")]) };
     let mut list = vec![rc_lsp::lsp_types::CodeActionOrCommand::CodeAction(rc_lsp::lsp_types::CodeAction { title: command.title.clone(), command: Some(command), ..Default::default() })];
     let start = Instant::now();
@@ -4431,7 +4432,7 @@ fn inspection_profiles_change_the_level_of_findings() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
     app.insight.did_save(&main);
     let level = |a: &CrabCraftApp| a.docs.list.iter().find(|d| d.path == main).and_then(|d| d.editor.diagnostics.iter().find(|x| x.code.as_deref() == Some("unused_variables") && x.message.starts_with("unused variable")).map(|x| x.severity));
@@ -4475,7 +4476,7 @@ fn inspection_profiles_change_the_level_of_findings() {
     let manifest = root.join("Cargo.toml");
     let text = std::fs::read_to_string(&manifest).unwrap().replace("edition = \"2021\"", "edition = \"2021\"\nautthors = []");
     std::fs::write(&manifest, text).unwrap();
-    app.open_file(&manifest);
+    app.open_file_and_wait(&manifest);
     let unknown = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.diagnostics.iter().find(|d| d.message.contains("autthors")).map(|d| d.severity);
     pump(&mut app, "the manifest inspection", |a| {
         a.manifest_inspections.update(&mut a.docs, &mut a.insight.problems, a.cfg_epoch, &a.insight.profile.clone());
@@ -4508,8 +4509,8 @@ fn a_fix_that_renames_a_module_file_renames_it() {
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
     let module = root.join("src/MyMod.rs");
-    app.open_file(&module);
-    app.open_file(&main);
+    app.open_file_and_wait(&module);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
     pump(&mut app, "the case warning", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("snake_case"))));
     let i = app.docs.index_of(&main).unwrap();
@@ -4551,7 +4552,7 @@ fn the_snake_case_fix_renames_a_function() {
     app.settings.trusted_projects.push(root.clone());
     app.open_workspace(&root);
     let main = root.join("src/main.rs");
-    app.open_file(&main);
+    app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
     pump(&mut app, "the case warning", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("snake_case"))));
     let i = app.docs.index_of(&main).unwrap();
@@ -4580,7 +4581,7 @@ fn native_trait_hierarchy_resolves_aliases_homonyms_transitive_and_unsaved_relat
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap();
     demo(&root); let file = root.join("src/main.rs"); write(&file,SOURCE);
-    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace(&root); app.open_file(&file);
+    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace(&root); app.open_file_and_wait(&file);
     pump(&mut app,"trait fixture analysis",|a| a.insight.status==InsightStatus::Ready);
     pump(&mut app,"trait fixture indexing",|a| a.docs.active_doc().is_some_and(|doc| a.insight.runnables.contains_key(&doc.editor.id)));
     let ask = |app: &mut CrabCraftApp, position:usize| {
@@ -4630,7 +4631,7 @@ fn native_one_step_macro_expansion_uses_unsaved_definition_and_keeps_nested_call
     assert!(std::env::var_os("CRABCRAFT_MACRO_WORKER").is_some());
     let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);
     let file=root.join("src/main.rs");write(&file,SOURCE);
-    let mut app=new_app(home.path());app.open_workspace(&root);app.open_file(&file);
+    let mut app=new_app(home.path());app.open_workspace(&root);app.open_file_and_wait(&file);
     app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
     assert!(!app.insight.macro_step_pending());assert!(app.insight.session.is_none());
     app.trust_project();pump(&mut app,"one-step macro analysis",|a|a.insight.status==InsightStatus::Ready);
@@ -4665,7 +4666,7 @@ fn signature_backend_updates_alias_calls_and_semantic_parameter_shorthand_withou
     const LIBRARY:&str="struct Counter {left:i32}\npub fn calculate(left:i32,right:i32,spare:i32)->i32{let spare=1;let record=Counter{left};record.left+right+spare-1}\n";
     const CALLER:&str="use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2,99),42);}\n";
     write(&lib,LIBRARY);write(&main,CALLER);write(&root.join("Cargo.lock"),"# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n");
-    let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file(&main);app.open_file(&lib);
+    let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file_and_wait(&main);app.open_file_and_wait(&lib);
     pump(&mut app,"signature backend analysis",|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|doc|a.insight.runnables.contains_key(&doc.editor.id)));
     let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:1,column:9};let (sender,receiver)=std::sync::mpsc::channel();
     std::thread::spawn(move ||{let context=backend::Context::new(client, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));sender.send(backend::prepare(capture,origin,&context)).unwrap();});
@@ -4694,7 +4695,7 @@ fn signature_backend_refuses_alias_function_values_used_parameters_effects_and_s
     ] {
         let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);let lib=root.join("src/lib.rs");let main=root.join("src/main.rs");
         write(&lib,"pub fn calculate(left:i32,right:i32)->i32{left+right}\n");write(&main,caller);write(&root.join("Cargo.lock"),"# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n");
-        let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file(&lib);
+        let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file_and_wait(&lib);
         pump(&mut app,name,|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|d|a.insight.runnables.contains_key(&d.editor.id)));
         let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:0,column:9};let (tx,rx)=std::sync::mpsc::channel();let expected=expected.to_owned();
         let main_copy=main.clone();std::thread::spawn(move||{let ctx=backend::Context::new(client,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(expected=="cancel")));let result=(||{let prepared=std::sync::Arc::new(backend::prepare(capture,origin,&ctx)?);let mut input=prepared.function.input();if expected=="used"{input.parameters.pop();}else{input.parameters.swap(0,1);}if expected=="stale"{std::fs::write(main_copy,"fn main(){}\n").unwrap();}backend::preview(prepared,input,&ctx).map(|_|())})();tx.send(result).unwrap();});

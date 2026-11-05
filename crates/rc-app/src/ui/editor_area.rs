@@ -1098,7 +1098,7 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
     let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
     for path in dropped {
         if path.is_file() {
-            app.open_file(&path);
+            app.open_file_sync(&path);
         }
     }
 }

@@ -1,6 +1,6 @@
 # Document I/O migration
 
-Interactive file opens from the Project explorer (including preview tabs), Search Everywhere,
+Ordinary editor file opening, including Project preview tabs, Search Everywhere,
 line/column navigation (including language-server targets and diagnostics), and Back/Forward
 now prepare their document on a bounded worker. Path canonicalization, checked
 UTF-8 reads, BOM/CRLF decoding, code-style and LightEdit project discovery, Rope construction,
@@ -29,10 +29,14 @@ preview replacement, closed-file Back/Forward history without clearing its forwa
 actual subsequent Cargo execution, FIFO rejection, explicit cancellation,
 128 MiB rejection, and large/read-only syntax policy. Six search, three navigation, six Cargo-feature and five native UI regressions also pass.
 
-This is a staged migration. Session restoration, open-file dialogs, general plain-file opening, some
-refactoring paths and saving still have synchronous callers. Saving/build/run/test/
+This is a staged migration. Session restoration, multi-file open/drop batches, manifest/build
+fixes that depend on an immediate edit, and saving still have synchronous callers. Saving/build/run/test/
 debug must move together behind a completion barrier so execution cannot observe stale disk
 contents. E-12 remains partial until those paths and ordering are implemented and verified.
 The generic atomic writer already uses unique sibling temporaries, preserves existing file
 permissions and rejects special destinations; it does not promise power-loss durability or
 filesystem-wide compare-and-swap semantics.
+
+Test fixtures explicitly await the same worker-backed opening API through a cfg(test) helper;
+they do not replace its reader, preparation or stale-result checks. New-file template carets,
+recent-location offsets and breakpoint navigation are applied after their document arrives.

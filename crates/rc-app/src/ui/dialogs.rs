@@ -1888,11 +1888,10 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
                     app.declare_module(parent, &module, *public);
                 }
                 if !kind.is_folder() {
-                    app.open_file(first);
-                    // The caret where the template put `$0`.
-                    if let (Some(d), Some(at)) = (app.docs.active_doc_mut(), content.find("$0")) {
-                        let pos = content[..at].chars().count();
-                        d.editor.set_selection(rc_text::Selection::point(pos));
+                    // Apply the template caret only after its worker-prepared document arrives.
+                    match content.find("$0") {
+                        Some(at) => app.request_open_offset(first,content[..at].chars().count()),
+                        None => app.open_file(first),
                     }
                 }
                 return Outcome::Close;
@@ -2703,12 +2702,7 @@ fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize)
         });
     });
     if let Some((path, position)) = open {
-        app.open_file(&path);
-        if let Some(doc) = app.docs.active_doc_mut().filter(|doc| doc.path == path) {
-            let position = position.min(doc.editor.buffer.len_chars());
-            doc.editor.set_selection(rc_text::Selection::point(position));
-            doc.editor.request_scroll_to_caret();
-        }
+        app.request_open_offset(&path,position);
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }

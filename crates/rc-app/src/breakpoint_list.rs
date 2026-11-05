@@ -120,9 +120,6 @@ impl CrabCraftApp {
 
     /// Opens the file of a breakpoint at its line.
     pub fn go_to_breakpoint(&mut self, path: &Path, line: usize) {
-        self.open_file(path);
-        if let Some(d) = self.docs.active_doc_mut().filter(|d| d.path == path) {
-            d.editor.goto(line, 0);
-        }
+        self.open_at(path,line,0);
     }
 }

@@ -2106,7 +2106,21 @@ impl CrabCraftApp {
     }
 
     /// Opens a file in an editor tab, remembering the current place for "Back".
-    pub fn open_file(&mut self, path: &Path) {
+    pub fn open_file(&mut self, path: &Path) { self.request_open_file(path); }
+
+    #[cfg(test)]
+    pub(crate) fn open_file_and_wait(&mut self,path:&Path) {
+        self.open_file(path);
+        let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
+        while self.disk_open.busy() {
+            self.poll_disk_open();
+            assert!(std::time::Instant::now()<until,"file opening did not finish: {}",path.display());
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
+    /// Synchronous legacy adapter for paths whose dependent edits/batch ordering are not yet migrated.
+    pub(crate) fn open_file_sync(&mut self, path: &Path) {
         self.disk_open.cancel();
         self.push_nav();
         match self.docs.open(path) {
@@ -2583,7 +2597,7 @@ impl CrabCraftApp {
             self.notify(stale, true);
             return;
         };
-        self.open_file(file);
+        self.open_file_sync(file);
         if let Some(doc) = self.docs.active_doc_mut() {
             doc.editor.apply_text_edits(changes);
         }
@@ -3111,7 +3125,7 @@ impl CrabCraftApp {
         } else if self.opens_workspace(path) {
             self.open_workspace(path);
         } else if path.is_file() {
-            self.open_file(path);
+            self.open_file_sync(path);
         } else {
             self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the file does not exist"))]), true);
         }

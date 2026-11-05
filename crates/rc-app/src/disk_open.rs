@@ -274,7 +274,7 @@ mod tests {
         .unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace(root.path());
-        app.open_file(&main);
+        app.open_file_and_wait(&main);
         app.docs
             .active_doc_mut()
             .unwrap()

@@ -435,7 +435,7 @@ mod tests {
         );
     }
     fn select(app: &mut CrabCraftApp, path: &std::path::Path, needle: &str) {
-        app.open_file(path);
+        app.open_file_and_wait(path);
         let doc = app.docs.active_doc_mut().unwrap();
         let source = doc.editor.buffer.rope().to_string();
         let byte = source.find(needle).unwrap() + needle.rfind(' ').map_or(0, |space| space + 1);
@@ -470,7 +470,7 @@ mod tests {
         let mut app = test_app(home.path(), true);
         app.open_workspace(&root);
         for path in [&main, &from, &to] {
-            app.open_file(path);
+            app.open_file_and_wait(path);
         }
         select(&mut app, &from, "fn score");
         open(&mut app);

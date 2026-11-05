@@ -575,7 +575,7 @@ mod tests {
         let mut app = crate::screens::test_app(home.path(), false);
         app.settings.trusted_projects.push(root.clone());
         app.open_workspace(&root);
-        app.open_file(&lib);
+        app.open_file_and_wait(&lib);
         let mut h = crate::screens::harness(app, egui::vec2(1400., 1000.));
         let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>,
                     ready: &dyn Fn(&CrabCraftApp) -> bool| {
