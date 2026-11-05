@@ -1237,11 +1237,18 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     let rope = state.buffer.rope().clone();
     let mut chars = text.chars();
     if let (Some(ch), None) = (chars.next(), chars.next()) {
+        // Rust uses apostrophes for lifetimes and labels as well as character literals.
+        // Inserting a second quote before the next character is known corrupts `&'a`.
+        // Keep explicit selection wrapping and type-over of an existing closing quote.
+        let literal_apostrophe = state.lang() == rc_syntax::Lang::Rust && ch == '\''
+            && state.selection.ranges().iter().all(|range| range.is_empty())
+            && !state.selection.ranges().iter().all(|range| rope.get_char(range.head) == Some('\''));
+        let auto_pair = config.auto_pair && !literal_apostrophe;
         // Typing `}` on a blank line re-indents it to its block (electric brace).
         let edited = if ch == '}' && state.selection.len() == 1 && state.selection.primary().is_empty() {
-            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, config.auto_pair))
+            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, auto_pair))
         } else {
-            commands::type_char(&rope, &state.selection, ch, config.auto_pair)
+            commands::type_char(&rope, &state.selection, ch, auto_pair)
         };
         state.apply(edited, EditKind::Insert);
         markup_assist(state, ch);

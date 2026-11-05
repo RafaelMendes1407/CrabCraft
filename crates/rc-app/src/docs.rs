@@ -394,7 +394,14 @@ impl Docs {
             return; // our own save
         }
         let Ok((text, bom, mtime)) = read_text(path) else { return };
-        if *doc.editor.buffer.rope() == text.replace("\r\n", "\n") {
+        if *doc.editor.buffer.rope() == text.replace("\r\n", "\n").replace('\r', "\n") {
+            // A BOM or line-ending-only external edit still changes how the next save must
+            // be encoded. Do not silently rewrite it with the old document's encoding.
+            if !doc.is_modified() {
+                doc.bom = bom;
+                doc.editor.buffer.set_line_ending(rc_text::LineEnding::detect(&text));
+                doc.editor.buffer.mark_saved();
+            }
             doc.mtime = mtime;
             return;
         }

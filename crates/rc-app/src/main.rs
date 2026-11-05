@@ -55,6 +55,8 @@ mod insight_tests;
 mod rust_tests;
 #[cfg(test)]
 mod screens;
+#[cfg(test)]
+mod editor_rust_audit;
 mod docs;
 mod file_ops;
 mod file_rename;

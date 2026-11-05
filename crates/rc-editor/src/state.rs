@@ -434,10 +434,12 @@ impl EditorState {
         let (line, col) = self.caret_line_col();
         let sel = self.selection.clone();
         let old_len = self.buffer.len_chars();
-        let normalized = text.replace("\r\n", "\n");
+        let line_ending = rc_text::LineEnding::detect(text);
+        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
         let cs = ChangeSet::single(rc_text::Change::new(0, old_len, normalized));
         let edits = self.buffer.apply(&cs, &sel, &Selection::point(0), EditKind::Other);
         self.after_change(&cs, edits);
+        self.buffer.set_line_ending(line_ending);
         self.buffer.mark_saved();
         let pos = self.buffer.pos_at(line, col);
         self.selection = Selection::point(pos);
