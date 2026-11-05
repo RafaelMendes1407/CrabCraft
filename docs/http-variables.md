@@ -20,9 +20,9 @@ The request source and editor offsets are preserved.
 A missing reference, cycle, missing closing braces or excessive expansion prevents the
 request from being sent. Limits: 256 declared variables, 32 nested references and 1 MB
 per expanded field and across cached variable values. Plain fields without substitutions
-keep the existing HTTP client limits. No process environment, environment JSON file,
-response script or OAuth helper is evaluated. Secrets stay in the file supplied by the user;
-no variables are automatically loaded from the project.
+keep the existing HTTP client limits. The resolver does not read the process environment or
+execute code. Environment files, OAuth acquisition and response scripts require separate
+explicit actions described below; no variables are automatically loaded from the project.
 
 ## Explicit environment files
 
@@ -54,8 +54,8 @@ The CLI accepts both flags together:
 crabcraft http requests.http --request 1 --env-file ./http-client.env.json --env local
 ```
 
-No private-file merging, OAuth acquisition, JavaScript response handlers, or ambient variables
-are provided. Files must be regular UTF-8 JSON, at most 1 MiB, with 64 environments,
+There is no private-file merging or ambient-variable access. OAuth and reviewed scripts are
+separate graphical-client actions below. Files must be regular UTF-8 JSON, at most 1 MiB, with 64 environments,
 256 variables per object and 256 merged variables; names are bounded. FIFO/device reads are
 rejected before opening and checked again on the opened descriptor. JSON nesting uses
 serde_json's recursion limit. A native egui test loads an environment without making a request,
@@ -94,5 +94,54 @@ PKCE, device flow, password grant, CLI acquisition, discovery or persistent cred
 Seventeen HTTP tests pass, including native acquisition/use against an actual local token
 endpoint in a real Cargo project, Basic/form encoding, origin/header conflicts, expiry,
 redirect refusal on both requests, invalid/oversize replies and cancellation. The project
-build script remains untouched until a separate explicit Cargo test. Response scripts remain
-unsupported and never run implicitly.
+build script remains untouched until a separate explicit Cargo test. Response scripts require the separate review below and never run implicitly.
+
+## Reviewed response scripts
+
+One complete inline `> {% ... %}` response script (up to 64 KiB) is retained with its request
+snapshot. Sending the HTTP request **never** runs it. In the HTTP Client, select the finished
+request and open **Reviewed response script**. The project must be trusted. Select an absolute
+path to a separately installed Node.js executable, review the complete source, approve one
+execution, then click **Run reviewed response script**. A new selection/runtime or revoked
+trust clears approval; each run consumes it. Files changed since the request was sent do not
+replace the reviewed snapshot. The CLI never runs scripts.
+
+```http
+GET http://127.0.0.1:3000/items
+
+> {%
+client.test("status", () => client.assert(response.status === 200));
+client.test("body", () => client.assert(response.body.value === 42));
+client.log(response.headers.valueOf("Content-Type"));
+%}
+```
+
+Supported synchronous helpers are `client.test(name, callback)`, `client.assert(condition,
+message?)`, `client.log(value)`, `response.status`, `response.body`, `response.contentType`,
+and case-insensitive `response.headers.valueOf(name)`. JSON bodies are decoded when declared
+JSON; other UTF-8 bodies remain strings. Results show individual pass/fail reports and logs.
+There is no global-variable mutation, environment mutation, pre-request scripts, external
+script loading, async completion, imports API, automatic chaining or protocol compatibility
+claim with other editors. Missing, multiple, malformed and oversized inline handlers remain
+visibly unsupported. Responses must be complete UTF-8, up to 1 MiB, with headers up to 64 KiB;
+serialized input is capped at 2 MiB. Request credentials/OAuth settings are not passed to
+Node; the script receives its response, which itself may contain sensitive service data.
+
+The fixed driver runs on a background worker in a private temporary directory, with an empty
+inherited environment, a 128 MiB Node heap setting, five-second synchronous VM timeout,
+ten-second process timeout, and stdout/stderr limits of 128 KiB each. Cancel, switching
+selection/project, exiting, or revoking trust terminates the owned process group. Cancellation
+does not undo script side effects or contain a trusted script that deliberately detaches.
+The script can access files and network with the user's OS permissions. These resource
+limits **are not an OS sandbox**: Node's [VM documentation](https://nodejs.org/api/vm.html)
+explicitly excludes it as a security boundary. Only approve scripts you trust. Node is not
+bundled or installed automatically.
+
+Three script tests passed with real Node 18.19.1: bounded parsing and binary rejection,
+actual JS/JSON assertions with an intentional failure and logs, cancellation, and a native
+review/trust flow in a real Rust project against a real local HTTP response. The last test
+proves that sending/opening/rejecting does not execute the handler, one approval permits one
+run, changing selection clears it, and the build script runs only during a subsequent
+explicit Cargo command. The two Node-dependent tests are opt-in (`cargo test -p rc-app
+http_client::scripts -- --include-ignored`); the normal HTTP regression suite passes 18 tests
+with five opt-in tests ignored.

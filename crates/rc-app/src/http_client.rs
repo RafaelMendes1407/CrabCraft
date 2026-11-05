@@ -7,11 +7,12 @@
 //! re-indented without being rebuilt (key order and numbers stay as sent).
 //!
 //! File variables and explicit environment snapshots use bounded recursion. Missing variables
-//! and file bodies prevent sending; response scripts remain unsupported. OAuth client-credentials
+//! and file bodies prevent sending; response scripts require separate trust/review. OAuth client-credentials
 //! acquisition is explicit and binds Bearer tokens to a reviewed resource origin.
 
 pub mod environment;
 pub mod oauth;
+pub mod scripts;
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_syntax::http::{HttpRequest, UnsupportedKind};
@@ -76,7 +77,7 @@ pub fn unsupported_text(kind: &UnsupportedKind) -> String {
         UnsupportedKind::Variable(name) => trf("Unresolved HTTP variable: {variable}", &[("variable", &format!("{{{{{name}}}}}"))]),
         UnsupportedKind::FileVariable(name) => trf("File variables are not supported yet: @{name}", &[("name", name)]),
         UnsupportedKind::BodyFile => tr("Bodies read from a file (< file) are not supported yet").to_string(),
-        UnsupportedKind::Handler => tr("Response handler scripts are not supported yet and will not run").to_string(),
+        UnsupportedKind::Handler => tr("Response scripts never run automatically; review supported inline scripts in HTTP Client").to_string(),
         UnsupportedKind::Redirect => tr("Saving the response to a file (>> file) is not supported yet").to_string(),
         UnsupportedKind::Method(m) => trf("{method} requests are not supported", &[("method", m)]),
         UnsupportedKind::Directive(d) => trf("The @{directive} option is not supported yet and is ignored", &[("directive", d)]),
@@ -332,6 +333,7 @@ pub struct Exchange {
     pub notes: Vec<String>,
     pub outcome: Outcome,
     pub started: Instant,
+    pub response_script: Option<String>,
 }
 
 #[derive(Debug)]
@@ -352,11 +354,12 @@ pub struct HttpClient {
     next_id: u64,
     pub environment: environment::State,
     pub oauth: oauth::State,
+    pub scripts: scripts::State,
 }
 
 impl HttpClient {
     pub fn new(waker: Waker) -> Self {
-        HttpClient { oauth: oauth::State::new(waker.clone()), environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
+        HttpClient { scripts: scripts::State::new(waker.clone()), oauth: oauth::State::new(waker.clone()), environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
     }
 
     pub fn running(&self) -> bool {
@@ -385,7 +388,7 @@ impl HttpClient {
             }
             Err(e) => Outcome::Failed(e),
         };
-        let exchange = Exchange { id, title: req.title(), method: req.method.clone(), url: req.url.clone(), file, line: req.line, notes, outcome, started: Instant::now() };
+        let exchange = Exchange { id, title: req.title(), method: req.method.clone(), url: req.url.clone(), file, line: req.line, notes, outcome, started: Instant::now(), response_script: req.response_script.clone() };
         self.history.insert(0, exchange);
         // The oldest finished ones go first; running requests are kept until they end.
         while self.history.len() > HISTORY {
@@ -407,6 +410,7 @@ impl HttpClient {
     }
 
     pub fn cancel_all(&mut self) {
+        self.scripts.cancel();
         for i in 0..self.history.len() {
             self.cancel(i);
         }
@@ -414,7 +418,7 @@ impl HttpClient {
 
     /// Takes the finished requests; true when something changed.
     pub fn poll(&mut self) -> bool {
-        let environment_changed = self.environment.poll() | self.oauth.poll();
+        let environment_changed = self.environment.poll() | self.oauth.poll() | self.scripts.poll();
         let done = self.inbox.drain();
         let changed = environment_changed || !done.is_empty();
         for (id, result) in done {

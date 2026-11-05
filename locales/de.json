@@ -2687,5 +2687,26 @@
     "Clear OAuth credentials": "OAuth-Anmeldedaten löschen",
     "Use this OAuth token for matching requests": "Dieses OAuth-Token für passende Anfragen verwenden",
     "OAuth token ready; value hidden": "OAuth-Token bereit; Wert verborgen"
+  },
+  "http_scripts": {
+    "Trust the project and explicitly approve the response script before running it.": "Vertrauen Sie dem Projekt und genehmigen Sie das Antwortskript vor der Ausführung ausdrücklich.",
+    "The response script or response is missing, stale, binary, or exceeds its limit.": "Antwortskript oder Antwort fehlt, ist veraltet, binär oder überschreitet das Limit.",
+    "The response script runtime failed; install Node.js separately and select its executable.": "Die Skript-Laufzeit ist fehlgeschlagen; installieren Sie Node.js separat und wählen Sie die Programmdatei.",
+    "The response script returned invalid or oversized results.": "Das Antwortskript lieferte ungültige oder zu große Ergebnisse.",
+    "The response script exceeded its time or output limit.": "Das Antwortskript überschritt das Zeit- oder Ausgabelimit.",
+    "Reviewed response script": "Geprüftes Antwortskript",
+    "Inline scripts never run on send. Node.js runs with your user permissions and can access files and network; this is not an OS sandbox.": "Inline-Skripte starten nie beim Senden. Node.js nutzt Ihre Rechte und kann auf Dateien und Netzwerk zugreifen; dies ist keine Betriebssystem-Sandbox.",
+    "Node.js executable": "Node.js-Programmdatei",
+    "Send a request with one inline response script first.": "Senden Sie zuerst eine Anfrage mit einem Inline-Antwortskript.",
+    "Only one complete inline response script is supported; external scripts are unavailable.": "Nur ein vollständiges Inline-Antwortskript wird unterstützt; externe Skripte sind nicht verfügbar.",
+    "Review the complete script before approving execution.": "Prüfen Sie das vollständige Skript vor der Genehmigung.",
+    "I trust this script and approve one execution with my user permissions": "Ich vertraue diesem Skript und genehmige eine Ausführung mit meinen Benutzerrechten",
+    "Run reviewed response script": "Geprüftes Antwortskript ausführen",
+    "Response scripts never run automatically; review supported inline scripts in HTTP Client": "Antwortskripte starten nie automatisch; prüfen Sie unterstützte Inline-Skripte im HTTP-Client",
+    "HTTP script test limit reached": "HTTP-Skript-Testlimit erreicht",
+    "HTTP script assertion limit reached": "HTTP-Skript-Zusicherungslimit erreicht",
+    "HTTP script assertion failed": "HTTP-Skript-Zusicherung fehlgeschlagen",
+    "HTTP script log limit reached": "HTTP-Skript-Protokolllimit erreicht",
+    "Response script": "Antwortskript"
   }
 }

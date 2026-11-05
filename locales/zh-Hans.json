@@ -2687,5 +2687,26 @@
     "Clear OAuth credentials": "清除 OAuth 凭据",
     "Use this OAuth token for matching requests": "为匹配的请求使用此 OAuth 令牌",
     "OAuth token ready; value hidden": "OAuth 令牌已就绪；值已隐藏"
+  },
+  "http_scripts": {
+    "Trust the project and explicitly approve the response script before running it.": "运行响应脚本前，请信任项目并明确批准。",
+    "The response script or response is missing, stale, binary, or exceeds its limit.": "响应脚本或响应缺失、过期、为二进制或超出限制。",
+    "The response script runtime failed; install Node.js separately and select its executable.": "响应脚本运行时失败；请单独安装 Node.js 并选择其可执行文件。",
+    "The response script returned invalid or oversized results.": "响应脚本返回了无效或过大的结果。",
+    "The response script exceeded its time or output limit.": "响应脚本超出时间或输出限制。",
+    "Reviewed response script": "已审核的响应脚本",
+    "Inline scripts never run on send. Node.js runs with your user permissions and can access files and network; this is not an OS sandbox.": "内联脚本不会在发送时执行。Node.js 使用您的用户权限，可访问文件和网络；这不是操作系统沙箱。",
+    "Node.js executable": "Node.js 可执行文件",
+    "Send a request with one inline response script first.": "请先发送包含一个内联响应脚本的请求。",
+    "Only one complete inline response script is supported; external scripts are unavailable.": "仅支持一个完整的内联响应脚本；不支持外部脚本。",
+    "Review the complete script before approving execution.": "批准执行前请审核完整脚本。",
+    "I trust this script and approve one execution with my user permissions": "我信任此脚本并批准以我的用户权限执行一次",
+    "Run reviewed response script": "运行已审核的响应脚本",
+    "Response scripts never run automatically; review supported inline scripts in HTTP Client": "响应脚本不会自动运行；请在 HTTP 客户端审核受支持的内联脚本",
+    "HTTP script test limit reached": "已达到 HTTP 脚本测试数量限制",
+    "HTTP script assertion limit reached": "已达到 HTTP 脚本断言数量限制",
+    "HTTP script assertion failed": "HTTP 脚本断言失败",
+    "HTTP script log limit reached": "已达到 HTTP 脚本日志数量限制",
+    "Response script": "响应脚本"
   }
 }

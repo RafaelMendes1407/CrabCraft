@@ -2687,5 +2687,26 @@
     "Clear OAuth credentials": "OAuth 認証情報をクリア",
     "Use this OAuth token for matching requests": "一致するリクエストにこの OAuth トークンを使用",
     "OAuth token ready; value hidden": "OAuth トークン準備完了。値は非表示"
+  },
+  "http_scripts": {
+    "Trust the project and explicitly approve the response script before running it.": "実行前にプロジェクトを信頼し、応答スクリプトを明示的に承認してください。",
+    "The response script or response is missing, stale, binary, or exceeds its limit.": "応答スクリプトまたは応答が存在しない、古い、バイナリ、または上限を超えています。",
+    "The response script runtime failed; install Node.js separately and select its executable.": "応答スクリプトのランタイムに失敗しました。Node.js を別途インストールし、実行ファイルを選択してください。",
+    "The response script returned invalid or oversized results.": "応答スクリプトが無効または大きすぎる結果を返しました。",
+    "The response script exceeded its time or output limit.": "応答スクリプトが時間または出力の上限を超えました。",
+    "Reviewed response script": "確認済みの応答スクリプト",
+    "Inline scripts never run on send. Node.js runs with your user permissions and can access files and network; this is not an OS sandbox.": "インラインスクリプトは送信時には実行されません。Node.js はユーザー権限で動作し、ファイルやネットワークにアクセスできます。OS サンドボックスではありません。",
+    "Node.js executable": "Node.js 実行ファイル",
+    "Send a request with one inline response script first.": "まずインライン応答スクリプトを 1 つ含むリクエストを送信してください。",
+    "Only one complete inline response script is supported; external scripts are unavailable.": "完全なインライン応答スクリプトを 1 つのみ使用できます。外部スクリプトは使用できません。",
+    "Review the complete script before approving execution.": "実行を承認する前にスクリプト全体を確認してください。",
+    "I trust this script and approve one execution with my user permissions": "このスクリプトを信頼し、ユーザー権限での 1 回の実行を承認します",
+    "Run reviewed response script": "確認済みの応答スクリプトを実行",
+    "Response scripts never run automatically; review supported inline scripts in HTTP Client": "応答スクリプトは自動実行されません。HTTP クライアントで対応するインラインスクリプトを確認してください",
+    "HTTP script test limit reached": "HTTP スクリプトのテスト数の上限に達しました",
+    "HTTP script assertion limit reached": "HTTP スクリプトのアサーション数の上限に達しました",
+    "HTTP script assertion failed": "HTTP スクリプトのアサーションに失敗しました",
+    "HTTP script log limit reached": "HTTP スクリプトのログ数の上限に達しました",
+    "Response script": "応答スクリプト"
   }
 }

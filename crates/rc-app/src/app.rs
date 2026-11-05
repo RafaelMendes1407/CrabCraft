@@ -3627,6 +3627,7 @@ impl eframe::App for CrabCraftApp {
         let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
         self.database.poll(database_trusted);
         self.remote.poll(database_trusted);
+        self.http.scripts.enforce_trust(self.runner.require_trust().is_ok());
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();
