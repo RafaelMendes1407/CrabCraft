@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 169 |
-| 🚧 Em andamento | 7 |
+| 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 54 |
+| ⬜ A fazer | 53 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -104,7 +104,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-17 | Postfix completion (`.if`, `.match`…) | ✅ | M3 | Postfix chega ao completar, testado com rust-analyzer real |
 | E-18 | Pré-visualização de Markdown | 🟢 | M1 | |
 | E-19 | Suporte a JSON e XML | 🟢 | M1 | |
-| E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | ⬜ | M6 | Realce primeiro |
+| E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | 🚧 | M6 | Realce por tree-sitter em HTML, CSS, JS (também JSX/mjs/cjs), TS (também mts/cts) e TSX, com comentários e dobramento; HTML usa gramática própria e preserva fechamento de tags e aspas. Testado com os assets de `tests/fixtures/RustWeb`, incluídos num binário Rust real, e queries reais. Falta: análise semântica, completação, refatorações e realce de JavaScript/CSS embutidos em HTML |
 | E-21 | Emmet | 🚫 | - | Depende do suporte web |
 | E-22 | Cabeçalhos de copyright | ✅ | M6 | Configurações › Copyright: perfil do projeto salvo na sessão, com modelo (`$year`, `$file`, `$project`, `$author` = `user.name` do Git, lido numa thread), licença SPDX opcional (expressão inválida fica de fora), opção de pôr o cabeçalho em arquivos novos e prévia. Code › Update Copyright (menu, Find Action) insere o cabeçalho no estilo de comentário da linguagem (`//` em Rust, `#` em TOML, bloco onde não há comentário de linha; JSON não recebe) depois de shebang/BOM/declaração XML e antes de `#![…]`, ou só estende o ano do cabeçalho existente (`2020` → `2020-2026`, também em `/* */`), como edição desfazível; doc comments não contam como cabeçalho. Modelo vindo da sessão é limitado e o casamento não degenera. Teste headless num projeto Cargo com Git real (`screens::copyright_headers_on_new_and_old_files`: New › Rust File, atualização idempotente) e num `main.rs` real do CrabCraft. Captura da página não conferida. Falta: vários perfis por escopo de arquivos e atualizar o projeto inteiro de uma vez |
 | E-23 | Breadcrumbs | ✅ | M3 | Barra de status mostra pasta, arquivo e os símbolos em volta do cursor; visto na janela nativa; o clique no símbolo não foi exercitado lá |

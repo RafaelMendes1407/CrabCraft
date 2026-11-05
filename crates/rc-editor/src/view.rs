@@ -1268,10 +1268,10 @@ fn markup_assist(state: &mut EditorState, ch: char) {
     use rc_syntax::Lang;
     use rc_text::markup;
     let lang = state.syntax.lang;
-    if !matches!(lang, Lang::Razor | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+    if !matches!(lang, Lang::Razor | Lang::Html | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return;
     }
-    let html = lang == Lang::Razor;
+    let html = matches!(lang, Lang::Razor | Lang::Html);
     let caret = state.caret();
     let rope = state.buffer.rope().clone();
     let mut remove = 0;

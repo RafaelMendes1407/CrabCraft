@@ -9,6 +9,11 @@ pub enum Lang {
     Rust,
     Toml,
     CSharp,
+    Html,
+    Css,
+    JavaScript,
+    TypeScript,
+    Tsx,
     Xml,
     Json,
     Markdown,
@@ -32,8 +37,12 @@ impl Lang {
             | "vbproj" | "runsettings" | "xsd" | "svg" => Lang::Xml,
             "json" | "jsonc" => Lang::Json,
             "md" | "markdown" => Lang::Markdown,
-            // Plain HTML reads well as Razor without `@` (its markup lexer colours the tags).
-            "razor" | "cshtml" | "html" | "htm" => Lang::Razor,
+            "html" | "htm" => Lang::Html,
+            "css" => Lang::Css,
+            "js" | "mjs" | "cjs" | "jsx" => Lang::JavaScript,
+            "ts" | "mts" | "cts" => Lang::TypeScript,
+            "tsx" => Lang::Tsx,
+            "razor" | "cshtml" => Lang::Razor,
             "sln" => Lang::Sln,
             "http" | "rest" => Lang::Http,
             _ => {
@@ -52,7 +61,7 @@ impl Lang {
     /// Prefix used by "Comment with line comment".
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
-            Lang::Rust | Lang::CSharp | Lang::Json => Some("//"),
+            Lang::Rust | Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json => Some("//"),
             Lang::Toml | Lang::Sln | Lang::Http => Some("#"),
             _ => None,
         }
@@ -61,8 +70,8 @@ impl Lang {
     /// Block comment delimiters (XML has no line comments).
     pub fn block_comment(self) -> Option<(&'static str, &'static str)> {
         match self {
-            Lang::Rust | Lang::CSharp => Some(("/*", "*/")),
-            Lang::Xml | Lang::Markdown => Some(("<!--", "-->")),
+            Lang::Rust | Lang::CSharp | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => Some(("/*", "*/")),
+            Lang::Xml | Lang::Markdown | Lang::Html => Some(("<!--", "-->")),
             Lang::Razor => Some(("@*", "*@")),
             _ => None,
         }
@@ -73,6 +82,11 @@ impl Lang {
             Lang::Rust => "Rust",
             Lang::Toml => "TOML",
             Lang::CSharp => "C#",
+            Lang::Html => "HTML",
+            Lang::Css => "CSS",
+            Lang::JavaScript => "JavaScript",
+            Lang::TypeScript => "TypeScript",
+            Lang::Tsx => "TSX",
             Lang::Xml => "XML",
             Lang::Json => "JSON",
             Lang::Markdown => "Markdown",
@@ -88,6 +102,11 @@ impl Lang {
             Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
             Lang::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
             Lang::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
+            Lang::Html => tree_sitter_html::LANGUAGE.into(),
+            Lang::Css => tree_sitter_css::LANGUAGE.into(),
+            Lang::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+            Lang::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            Lang::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             Lang::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
             Lang::Markdown => tree_sitter_md::LANGUAGE.into(),
@@ -98,19 +117,29 @@ impl Lang {
 
     /// The highlight query, compiled once.
     pub(crate) fn query(self) -> Option<&'static Query> {
-        static RUST: OnceLock<Query> = OnceLock::new();
-        static TOML: OnceLock<Query> = OnceLock::new();
-        static CS: OnceLock<Query> = OnceLock::new();
-        static XML: OnceLock<Query> = OnceLock::new();
-        static JSON: OnceLock<Query> = OnceLock::new();
-        static MD: OnceLock<Query> = OnceLock::new();
-        static RAZOR: OnceLock<Query> = OnceLock::new();
+        static RUST: OnceLock<Option<Query>> = OnceLock::new();
+        static TOML: OnceLock<Option<Query>> = OnceLock::new();
+        static CS: OnceLock<Option<Query>> = OnceLock::new();
+        static XML: OnceLock<Option<Query>> = OnceLock::new();
+        static JSON: OnceLock<Option<Query>> = OnceLock::new();
+        static MD: OnceLock<Option<Query>> = OnceLock::new();
+        static RAZOR: OnceLock<Option<Query>> = OnceLock::new();
+        static HTML: OnceLock<Option<Query>> = OnceLock::new();
+        static CSS: OnceLock<Option<Query>> = OnceLock::new();
+        static JS: OnceLock<Option<Query>> = OnceLock::new();
+        static TS: OnceLock<Option<Query>> = OnceLock::new();
+        static TSX: OnceLock<Option<Query>> = OnceLock::new();
+        static TS_SOURCE: OnceLock<String> = OnceLock::new();
         // Razor's C# uses the C# grammar's node kinds: the C# patterns apply, Razor's come after.
         static RAZOR_SOURCE: OnceLock<String> = OnceLock::new();
         let (cell, source) = match self {
             Lang::Rust => (&RUST, include_str!("../queries/rust.scm")),
             Lang::Toml => (&TOML, include_str!("../queries/toml.scm")),
             Lang::CSharp => (&CS, include_str!("../queries/csharp.scm")),
+            Lang::Html => (&HTML, include_str!("../queries/html.scm")),
+            Lang::Css => (&CSS, include_str!("../queries/css.scm")),
+            Lang::JavaScript => (&JS, include_str!("../queries/javascript.scm")),
+            Lang::TypeScript | Lang::Tsx => (if self == Lang::Tsx { &TSX } else { &TS }, TS_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/javascript.scm"), include_str!("../queries/typescript.scm"))).as_str()),
             Lang::Xml => (&XML, include_str!("../queries/xml.scm")),
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
@@ -118,13 +147,28 @@ impl Lang {
             Lang::Sln | Lang::Http | Lang::Plain => return None,
         };
         let language = self.language()?;
-        Some(cell.get_or_init(|| Query::new(&language, source).unwrap_or_else(|e| panic!("bad {self:?} query: {e}"))))
+        cell.get_or_init(|| Query::new(&language, source).ok()).as_ref()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_extensions_and_comments_use_their_own_language() {
+        for ext in ["html", "htm"] { assert_eq!(Lang::from_path(Path::new(&format!("index.{ext}"))), Lang::Html); }
+        for ext in ["js", "mjs", "cjs", "jsx"] { assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::JavaScript); }
+        for ext in ["ts", "mts", "cts"] { assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::TypeScript); }
+        assert_eq!(Lang::from_path(Path::new("view.TSX")), Lang::Tsx);
+        assert_eq!(Lang::Html.block_comment(), Some(("<!--", "-->")));
+        assert_eq!(Lang::Html.line_comment(), None);
+        assert_eq!(Lang::Css.line_comment(), None);
+        for lang in [Lang::Css, Lang::JavaScript, Lang::TypeScript, Lang::Tsx] {
+            assert_eq!(lang.block_comment(), Some(("/*", "*/")));
+        }
+        for lang in [Lang::JavaScript, Lang::TypeScript, Lang::Tsx] { assert_eq!(lang.line_comment(), Some("//")); }
+    }
 
     #[test]
     fn rust_project_files_get_their_language_and_comments() {
