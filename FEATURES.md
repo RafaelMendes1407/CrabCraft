@@ -7,7 +7,9 @@ a funcionalidade**.
 Interface: removidos o gerenciador e o cliente NuGet herdados; configurações com largura
 horizontal limitada, margens nos painéis de ferramentas, menu de edição/compilação/execução/ajuda,
 halo suave no projeto e transição no destino de arraste de abas. O teste
-`settings_keep_the_same_width_when_switching_pages` verifica a largura entre categorias.
+`settings_keep_the_same_width_when_switching_pages` verifica a largura entre todas as categorias
+e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limita ambas as
+dimensões para impedir o crescimento vertical contínuo do modal.
 Validação visual interativa pendente; sem alteração dos status de prontidão.
 
 ## Legenda

@@ -3839,9 +3839,16 @@ fn settings_keep_the_same_width_when_switching_pages() {
     let home = tempfile::tempdir().unwrap();
     let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
     let mut widths = Vec::new();
-    for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::Appearance] {
+    for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::ExternalTools, SettingsPage::LiveTemplates, SettingsPage::Copyright, SettingsPage::Scopes, SettingsPage::Inspections, SettingsPage::Backup, SettingsPage::Appearance] {
         h.state_mut().open_settings(page);
         h.run_steps(4);
+        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap().height();
+        for _ in 0..30 {
+            h.run_steps(1);
+            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+            assert!((rect.height() - initial_height).abs() < 1.0, "settings height must remain stable: {page:?}: {initial_height} -> {}", rect.height());
+            assert!(rect.height() <= 760.0, "settings must stay inside the viewport: {page:?}: {rect:?}");
+        }
         let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
         widths.push(rect.width());
     }

@@ -269,7 +269,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
             let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
             ui.painter().rect_filled(line, 0.0, p.control_border);
             ui.add_space(15.0);
-            egui::ScrollArea::horizontal().id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).auto_shrink([false, false]).max_width(SETTINGS_PAGE_W).show(ui, |ui| {
+            egui::ScrollArea::both().max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).auto_shrink([false, false]).max_width(SETTINGS_PAGE_W).show(ui, |ui| {
                 ui.set_width(SETTINGS_PAGE_W);
                 ui.set_height(page_h);
                 let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
