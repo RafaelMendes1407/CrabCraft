@@ -354,7 +354,7 @@ mod tests {
         }
         let manifest=root.join("app/Cargo.toml"); let before=std::fs::read(&manifest).unwrap(); let helper_before=std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap();
         let mut app=test_app(home.path(),true); app.open_workspace(&root); app.trust_project_tools_for_test(); let mut h=harness(app,egui::vec2(1440.0,1100.0));
-        pump(&mut h,|app| app.runner.cargo_workspace.is_some()); h.state_mut().open_file(&root.join("app/src/lib.rs")); h.state_mut().docs.active_doc_mut().unwrap().editor.selection=rc_text::Selection::point(0); h.run_steps(3);
+        pump(&mut h,|app| app.runner.cargo_workspace.is_some()); h.state_mut().open_file_and_wait(&root.join("app/src/lib.rs")); h.state_mut().docs.active_doc_mut().unwrap().editor.selection=rc_text::Selection::point(0); h.run_steps(3);
         h.event(egui::Event::Paste("use serde::de::DeserializeOwned;\nfn decode<T: DeserializeOwned>() {}\n#[cfg(test)] mod tests { use helper_lib::value; #[test] fn local(){assert_eq!(value(),42);} }\n".into())); h.run_steps(2);
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==2);
         assert!(h.state().missing_crates.report.proposals.iter().all(|proposal| proposal.pasted));
@@ -396,7 +396,7 @@ mod tests {
         let source = project.path().join("src/main.rs");
         std::fs::write(&source, "fn main() { let mut buffer = itoa::Buffer::new(); assert_eq!(buffer.format(42), \"42\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(project.path()); app.trust_project_tools_for_test(); app.open_file(&source);
+        app.open_workspace(project.path()); app.trust_project_tools_for_test(); app.open_file_and_wait(&source);
         let mut h = crate::screens::harness(app, egui::vec2(1440.0, 1100.0));
         let wait = |h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, done: &dyn Fn(&crate::app::CrabCraftApp) -> bool| {
             let deadline = Instant::now() + Duration::from_secs(25);

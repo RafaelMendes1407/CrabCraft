@@ -25,6 +25,12 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Http),
         _ => {}
     }
+    egui::ScrollArea::vertical().id_salt("http_connection_settings").max_height((ui.available_height() - 80.0).clamp(60.0, 320.0)).show(ui, |ui| {
+        app.http.environment.show(ui);
+        app.http.oauth.show(ui);
+        let trusted = app.runner.require_trust().is_ok();
+        app.http.scripts.show(ui, app.http.history.get(app.http.selected), trusted);
+    });
     if app.http.history.is_empty() {
         empty_state(ui, ToolWindow::Http.icon(), tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request."));
         return;

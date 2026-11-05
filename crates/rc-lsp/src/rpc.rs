@@ -127,6 +127,9 @@ pub fn frame(body: &str) -> String {
 }
 
 impl Client {
+    /// Whether two handles still address the same language-server connection.
+    pub fn same_connection(&self, other: &Self) -> bool { Arc::ptr_eq(&self.shared, &other.shared) }
+
     /// Starts `program` and talks LSP over its stdin/stdout. Must be called inside the tokio
     /// runtime (`rc_core::Runtime::handle().enter()` or from a task).
     pub fn spawn(program: &Path, args: &[String], cwd: &Path, env: &[(String, String)], incoming: Outbox<Incoming>) -> std::io::Result<Client> {
@@ -165,10 +168,12 @@ impl Client {
             if code.is_none() { Client { shared: reader_shared, child: exit_child }.kill(); }
             reader_incoming.send(Incoming::Exited(code));
         });
+        let stderr_client=Client { shared: shared.clone(), child: child.clone() };
         tokio::spawn(async move {
-            let mut lines = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                incoming.send(Incoming::Stderr(line));
+            if let Err(error)=stderr_loop(stderr,&incoming,2*1024*1024).await {
+                for (_,tx) in stderr_client.shared.pending.lock().drain() { let _=tx.send(Err(error.clone())); }
+                incoming.send(Incoming::Stderr(error.message));
+                stderr_client.kill();
             }
         });
         Ok(Client { shared, child })
@@ -261,6 +266,13 @@ async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Strin
             return;
         }
     }
+}
+
+/// Transport limits are reported to pending requests rather than allocating unbounded log lines.
+pub const STDERR_LIMIT_ERROR:i64=-32097;
+async fn stderr_loop(stderr:impl tokio::io::AsyncRead+Unpin,incoming:&Outbox<Incoming>,budget:usize)->Result<(),RpcError>{
+ let mut reader=BufReader::new(stderr);let mut total=0usize;let mut lines=0usize;
+ loop {let mut line=String::new();let count=(&mut reader).take(8193).read_line(&mut line).await.map_err(|_|RpcError{code:STDERR_LIMIT_ERROR,message:"language server stderr is invalid or unreadable".into()})?;if count==0{return Ok(());}total=total.saturating_add(count);lines=lines.saturating_add(1);if count>8192||total>budget||lines>8192{return Err(RpcError{code:STDERR_LIMIT_ERROR,message:"language server stderr exceeded its line or session limit".into()});}let text=line.trim_end_matches(['\r','\n']).to_owned();if !incoming.send(Incoming::Stderr(text)){return Ok(());}}
 }
 
 /// Reads framed messages until the pipe closes.
@@ -412,4 +424,19 @@ while True:
         }
     }
 
+}
+
+#[cfg(test)]
+mod stderr_budget_tests {
+ use super::*;
+ #[test]
+ fn fragmented_utf8_logs_are_preserved_and_both_budgets_are_enforced(){rc_core::Runtime::block_on(async{
+  let inbox=rc_core::Inbox::new(rc_core::Waker::noop());let(mut writer,reader)=tokio::io::duplex(8);let task=tokio::spawn(async move{for byte in "log 🦀\r\n".as_bytes(){writer.write_all(&[*byte]).await.unwrap();tokio::task::yield_now().await;} });stderr_loop(reader,&inbox.sender(),64).await.unwrap();task.await.unwrap();let lines=inbox.drain();assert!(matches!(&lines[..],[Incoming::Stderr(line)]if line=="log 🦀"));
+  let error=stderr_loop(&b"123456789\n"[..],&inbox.sender(),8).await.unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(inbox.drain().is_empty());let bytes=vec![b'x';8193];let error=stderr_loop(bytes.as_slice(),&inbox.sender(),20000).await.unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(inbox.drain().is_empty());
+ });}
+ #[cfg(unix)]
+ #[test]
+ fn oversized_stderr_fails_pending_requests_and_terminates_the_server(){rc_core::Runtime::block_on(async{
+  let inbox=rc_core::Inbox::new(rc_core::Waker::noop());let client=Client::spawn(Path::new("/bin/sh"),&["-c".into(),"sleep 0.1; printf '%8193s' '' >&2; sleep 60".into()],Path::new("/tmp"),&[],inbox.sender()).unwrap();let request=client.request_raw::<Value>("initialize",json!({}));let error=tokio::time::timeout(std::time::Duration::from_secs(5),request.wait()).await.unwrap().unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(client.child.lock().is_none());
+ });}
 }

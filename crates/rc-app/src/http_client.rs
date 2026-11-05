@@ -6,9 +6,13 @@
 //! the body is cut at [`MAX_BODY_BYTES`], shown as text only when it is UTF-8, and JSON is
 //! re-indented without being rebuilt (key order and numbers stay as sent).
 //!
-//! File variables are expanded with bounded recursion. Missing variables and file bodies
-//! prevent sending; response scripts, environment files and OAuth helpers remain unsupported.
+//! File variables and explicit environment snapshots use bounded recursion. Missing variables
+//! and file bodies prevent sending; response scripts require separate trust/review. OAuth client-credentials
+//! acquisition is explicit and binds Bearer tokens to a reviewed resource origin.
 
+pub mod environment;
+pub mod oauth;
+pub mod scripts;
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_syntax::http::{HttpRequest, UnsupportedKind};
@@ -32,6 +36,8 @@ pub const MAX_SHOWN_CHARS: usize = 512 * 1024;
 pub enum HttpError {
     /// The request uses something not supported yet (texts for the user).
     Unsupported(Vec<String>),
+    Environment(environment::Error),
+    OAuth(oauth::Error),
     /// The URL cannot be read, or is not `http`/`https`.
     BadUrl(String),
     Variable(rc_syntax::http::vars::VariableError),
@@ -46,6 +52,8 @@ impl HttpError {
     /// The text shown in the response view.
     pub fn text(&self) -> String {
         match self {
+            HttpError::OAuth(error) => error.text(),
+            HttpError::Environment(error) => error.text(),
             HttpError::Unsupported(what) => format!("{}\n{}", tr("This request was not sent: it uses features that are not supported yet."), what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")),
             HttpError::Variable(error) => match error {
                 rc_syntax::http::vars::VariableError::Undefined(name) => trf("Undefined HTTP variable: {name}", &[("name", name)]),
@@ -69,7 +77,7 @@ pub fn unsupported_text(kind: &UnsupportedKind) -> String {
         UnsupportedKind::Variable(name) => trf("Unresolved HTTP variable: {variable}", &[("variable", &format!("{{{{{name}}}}}"))]),
         UnsupportedKind::FileVariable(name) => trf("File variables are not supported yet: @{name}", &[("name", name)]),
         UnsupportedKind::BodyFile => tr("Bodies read from a file (< file) are not supported yet").to_string(),
-        UnsupportedKind::Handler => tr("Response handler scripts are not supported yet and will not run").to_string(),
+        UnsupportedKind::Handler => tr("Response scripts never run automatically; review supported inline scripts in HTTP Client").to_string(),
         UnsupportedKind::Redirect => tr("Saving the response to a file (>> file) is not supported yet").to_string(),
         UnsupportedKind::Method(m) => trf("{method} requests are not supported", &[("method", m)]),
         UnsupportedKind::Directive(d) => trf("The @{directive} option is not supported yet and is ignored", &[("directive", d)]),
@@ -84,6 +92,7 @@ pub struct Prepared {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: String,
+    pub oauth: bool,
 }
 
 /// Checks `req` and makes its URL absolute: `/path` uses the `Host` header, a URL without a
@@ -121,7 +130,7 @@ pub fn prepare(req: &HttpRequest) -> Result<Prepared, HttpError> {
             return Err(HttpError::BadHeader(format!("{k}: {v}")));
         }
     }
-    Ok(Prepared { method: req.method.clone(), url: parsed.to_string(), headers: req.headers.clone(), body: req.body.clone() })
+    Ok(Prepared { method: req.method.clone(), url: parsed.to_string(), headers: req.headers.clone(), body: req.body.clone(), oauth: false })
 }
 
 /// A response, as far as it was read.
@@ -156,6 +165,7 @@ pub fn send(req: &Prepared, timeout: Duration, max: usize, cancel: &AtomicBool) 
         let url = reqwest::Url::parse(&req.url).map_err(|_| HttpError::BadUrl(req.url.clone()))?;
         let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
         let mut builder = reqwest::Client::builder().user_agent(USER_AGENT).connect_timeout(timeout).timeout(timeout);
+        if req.oauth { builder = builder.redirect(reqwest::redirect::Policy::none()).no_proxy(); }
         if loopback {
             builder = builder.no_proxy();
         }
@@ -323,6 +333,7 @@ pub struct Exchange {
     pub notes: Vec<String>,
     pub outcome: Outcome,
     pub started: Instant,
+    pub response_script: Option<String>,
 }
 
 #[derive(Debug)]
@@ -341,11 +352,14 @@ pub struct HttpClient {
     /// Headers instead of the body.
     pub show_headers: bool,
     next_id: u64,
+    pub environment: environment::State,
+    pub oauth: oauth::State,
+    pub scripts: scripts::State,
 }
 
 impl HttpClient {
     pub fn new(waker: Waker) -> Self {
-        HttpClient { inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
+        HttpClient { scripts: scripts::State::new(waker.clone()), oauth: oauth::State::new(waker.clone()), environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
     }
 
     pub fn running(&self) -> bool {
@@ -362,7 +376,7 @@ impl HttpClient {
         let id = self.next_id;
         self.next_id += 1;
         let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_))).map(|u| unsupported_text(&u.kind)).collect();
-        let outcome = match prepare(req) {
+        let outcome = match self.environment.resolve(req).and_then(|request| prepare(&request)).and_then(|prepared| self.oauth.authorize(prepared)) {
             Ok(prepared) => {
                 let cancel = Arc::new(AtomicBool::new(false));
                 let flag = cancel.clone();
@@ -374,7 +388,7 @@ impl HttpClient {
             }
             Err(e) => Outcome::Failed(e),
         };
-        let exchange = Exchange { id, title: req.title(), method: req.method.clone(), url: req.url.clone(), file, line: req.line, notes, outcome, started: Instant::now() };
+        let exchange = Exchange { id, title: req.title(), method: req.method.clone(), url: req.url.clone(), file, line: req.line, notes, outcome, started: Instant::now(), response_script: req.response_script.clone() };
         self.history.insert(0, exchange);
         // The oldest finished ones go first; running requests are kept until they end.
         while self.history.len() > HISTORY {
@@ -396,6 +410,7 @@ impl HttpClient {
     }
 
     pub fn cancel_all(&mut self) {
+        self.scripts.cancel();
         for i in 0..self.history.len() {
             self.cancel(i);
         }
@@ -403,8 +418,9 @@ impl HttpClient {
 
     /// Takes the finished requests; true when something changed.
     pub fn poll(&mut self) -> bool {
+        let environment_changed = self.environment.poll() | self.oauth.poll() | self.scripts.poll();
         let done = self.inbox.drain();
-        let changed = !done.is_empty();
+        let changed = environment_changed || !done.is_empty();
         for (id, result) in done {
             let Some(e) = self.history.iter_mut().find(|e| e.id == id) else { continue };
             e.outcome = match result {
@@ -604,3 +620,5 @@ mod tests {
         assert_eq!(e.notes.len(), 1, "the handler is noted: {:?}", e.notes);
     }
 }
+
+impl Drop for HttpClient { fn drop(&mut self) { self.cancel_all(); } }

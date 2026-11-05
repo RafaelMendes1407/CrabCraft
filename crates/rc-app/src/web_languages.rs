@@ -382,7 +382,7 @@ mod tests {
             Some("/tmp/crabcraft-web-tools/node_modules/typescript/lib/tsserver.js".into());
         app.open_workspace(&root);
         for file in ["index.html", "app.css", "app.js", "app.ts"] {
-            app.open_file(&root.join("static").join(file));
+            app.open_file_and_wait(&root.join("static").join(file));
         }
         let mut h = harness(app, egui::vec2(1500.0, 1000.0));
         h.run_steps(3);
@@ -407,7 +407,7 @@ mod tests {
             ("app.js", "greetJ", "greetJs"),
             ("app.ts", "greetT", "greetTs"),
         ] {
-            h.state_mut().open_file(&root.join("static").join(file));
+            h.state_mut().open_file_and_wait(&root.join("static").join(file));
             caret(h.state_mut(), prefix, true);
             h.run_steps(2);
             h.state_mut()
@@ -455,7 +455,7 @@ mod tests {
                 "{file}"
             );
         }
-        h.state_mut().open_file(&root.join("static/app.css"));
+        h.state_mut().open_file_and_wait(&root.join("static/app.css"));
         let doc = h.state_mut().docs.active_doc_mut().unwrap();
         let length = doc.editor.buffer.len_chars();
         doc.editor.replace(0, length, ".card{color:red;}");
@@ -481,7 +481,7 @@ mod tests {
             ("app.js", "greetJs", "renamedJs"),
             ("app.ts", "greetTs", "renamedTs"),
         ] {
-            h.state_mut().open_file(&root.join("static").join(file));
+            h.state_mut().open_file_and_wait(&root.join("static").join(file));
             caret(h.state_mut(), symbol, false);
             h.run_steps(2);
             h.state_mut()
@@ -542,7 +542,7 @@ mod tests {
                     .any(|problem| problem.code.as_deref() == Some("2322"))
             })
         });
-        h.state_mut().open_file(&root.join("static/index.html"));
+        h.state_mut().open_file_and_wait(&root.join("static/index.html"));
         h.state_mut()
             .docs
             .active_doc_mut()
@@ -576,7 +576,7 @@ mod tests {
         assert!(root.join("build-ran").exists());
         // Explicitly start Rust analysis after the authorized Rust compilation. Web sessions
         // remain separate and cannot consume Rust edits or resolve its completion popup.
-        h.state_mut().open_file(&root.join("src/main.rs"));
+        h.state_mut().open_file_and_wait(&root.join("src/main.rs"));
         let doc = h.state_mut().docs.active_doc_mut().unwrap();
         let source = doc.editor.buffer.rope().to_string();
         let at = source[..source.rfind('}').unwrap()].chars().count();
@@ -667,7 +667,7 @@ mod edit_tests {
         std::fs::write(&path, "const name=1;\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace(&root);
-        app.open_file(&path);
+        app.open_file_and_wait(&path);
         let uri = rc_lsp::path_to_uri(&path);
         let edit:rc_lsp::lsp_types::WorkspaceEdit=serde_json::from_value(json!({"changes":{uri.as_str():[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":10}},"newText":"renamed"}]}})).unwrap();
         let version = app.docs.active_doc().unwrap().editor.buffer.version();
@@ -713,7 +713,7 @@ mod edit_tests {
         let external = tempfile::tempdir().unwrap();
         let external_path = external.path().join("external.ts");
         std::fs::write(&external_path, "const outside=1;").unwrap();
-        app.open_file(&external_path);
+        app.open_file_and_wait(&external_path);
         let external_uri = rc_lsp::path_to_uri(&external_path);
         let external_edit:rc_lsp::lsp_types::WorkspaceEdit=serde_json::from_value(json!({"changes":{external_uri.as_str():[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":13}},"newText":"renamed"}]}})).unwrap();
         let external_snapshot = HashMap::from([(

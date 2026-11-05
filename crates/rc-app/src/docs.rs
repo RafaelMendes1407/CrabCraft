@@ -158,6 +158,7 @@ pub enum TextReadError {
     Binary,
     InvalidUtf8,
     Changed,
+    Cancelled,
 }
 impl std::fmt::Display for TextReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -167,6 +168,7 @@ impl std::fmt::Display for TextReadError {
             Self::TooLarge(size) => trf("The file exceeds the editor's 128 MB limit ({size} MB)", &[("size", &(size / 1024 / 1024))]),
             Self::Binary => rc_kit::i18n::tr("This is a binary file and cannot be edited").to_string(),
             Self::InvalidUtf8 => rc_kit::i18n::tr("This file is not valid UTF-8 and cannot be edited").to_string(),
+            Self::Cancelled => rc_kit::i18n::tr("File opening cancelled").to_string(),
             Self::Changed => rc_kit::i18n::tr("The file changed while reading it; try opening it again").to_string(),
         })
     }
@@ -183,9 +185,15 @@ fn same_metadata(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool 
     true
 }
 
-/// Checked legacy document reader. Opening and watcher reload still run synchronously;
-/// regular-file guards prevent FIFOs/devices from blocking an otherwise ordinary read.
+/// Checked document reader for legacy synchronous callers and cancellable workers.
+/// Regular-file guards reject FIFOs/devices before opening and on the descriptor.
 pub fn read_text_checked(path: &Path) -> Result<(String, bool, Option<SystemTime>), TextReadError> {
+    read_text_cancellable(path, None)
+}
+
+pub(crate) fn read_text_cancellable(path: &Path, cancel: Option<&std::sync::atomic::AtomicBool>) -> Result<(String, bool, Option<SystemTime>), TextReadError> {
+    let check = || if cancel.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire)) { Err(TextReadError::Cancelled) } else { Ok(()) };
+    check()?;
     if !std::fs::metadata(path)?.is_file() { return Err(TextReadError::NotRegular); }
     let mut options = std::fs::OpenOptions::new(); options.read(true);
     #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
@@ -196,6 +204,7 @@ pub fn read_text_checked(path: &Path) -> Result<(String, bool, Option<SystemTime
     let mut bytes = Vec::new();
     let mut chunk = [0u8; 64 * 1024];
     loop {
+        check()?;
         let count = match file.read(&mut chunk) {
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
@@ -205,6 +214,7 @@ pub fn read_text_checked(path: &Path) -> Result<(String, bool, Option<SystemTime
         bytes.extend_from_slice(&chunk[..count]);
     }
     if !same_metadata(&metadata, &file.metadata()?) || !same_metadata(&metadata, &std::fs::metadata(path)?) { return Err(TextReadError::Changed); }
+    check()?;
     if bytes.contains(&0) { return Err(TextReadError::Binary); }
     let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
     if bom { bytes.drain(..3); }
@@ -232,6 +242,21 @@ impl Docs {
 
     pub fn active_doc_mut(&mut self) -> Option<&mut Doc> {
         self.active.and_then(|i| self.list.get_mut(i))
+    }
+
+    pub(crate) fn reserve_id(&mut self) -> u64 { let id = self.next_id; self.next_id = self.next_id.saturating_add(1); id }
+
+    /// Installs a worker-prepared document without disk I/O or buffer construction.
+    pub(crate) fn insert_prepared(&mut self, mut doc: Doc, preview: bool, parse: bool) -> usize {
+        if let Some(index) = self.index_of(&doc.path) { self.activate(index); return index; }
+        let old = preview.then(|| self.list.iter().position(|doc| doc.preview && !doc.is_modified())).flatten();
+        doc.preview = preview;
+        doc.editor.bookmarks = self.closed_bookmarks.remove(&doc.path).unwrap_or_default();
+        doc.editor.breakpoints = self.closed_breakpoints.remove(&doc.path).unwrap_or_default();
+        if parse { doc.editor.request_parse(&self.pool); }
+        self.list.push(doc); let mut index = self.list.len()-1;
+        if let Some(old) = old { let doc = self.list.remove(index); let replaced = std::mem::replace(&mut self.list[old], doc); self.keep_bookmarks(&replaced); index = old; }
+        self.activate(index); index
     }
 
     /// Opens `path` (or switches to it) and makes it active.
@@ -300,8 +325,9 @@ impl Docs {
                 self.activate(index); return index;
             }
             let stem=path.file_stem().unwrap_or_default().to_string_lossy();
+            let extension=path.extension().unwrap_or_default().to_string_lossy();
             for suffix in 0..=self.list.len() {
-                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.rs",self.next_id));
+                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.{extension}",self.next_id));
                 if self.index_of(&candidate).is_none() {path=candidate;break;}
             }
         }
@@ -620,5 +646,18 @@ pub fn settled(kind: rc_editor::BreakpointKind) -> rc_editor::BreakpointKind {
     match kind {
         rc_editor::BreakpointKind::Verified | rc_editor::BreakpointKind::Invalid => rc_editor::BreakpointKind::Normal,
         k => k,
+    }
+}
+
+#[cfg(test)]
+mod generated_view_tests {
+    use super::*;
+    #[test]
+    fn markdown_generated_views_never_read_overwrite_or_save_an_existing_document() {
+        let root=tempfile::tempdir().unwrap();let path=root.path().join("E0308.md");std::fs::write(&path,"user notes").unwrap();
+        let mut docs=Docs::new(ParserPool::new(rc_core::Waker::noop().as_fn()));docs.open(&path).unwrap();
+        let index=docs.insert_generated(path.clone(),"# E0308\n\nexplanation");
+        assert_ne!(docs.list[index].path,path);assert_eq!(docs.list[index].path.extension().unwrap(),"md");assert!(docs.list[index].generated && docs.list[index].editor.read_only);assert!(!docs.list[index].path.exists());
+        docs.save(index).unwrap();assert!(!docs.list[index].path.exists());assert_eq!(docs.list[0].editor.buffer.rope().to_string(),"user notes");assert_eq!(std::fs::read_to_string(path).unwrap(),"user notes");
     }
 }

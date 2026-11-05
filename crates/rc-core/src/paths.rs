@@ -43,12 +43,60 @@ pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }
 
-/// Writes `bytes` atomically: a crash halfway never leaves a truncated file.
+/// Replaces a regular file atomically using an exclusively created sibling temporary file.
+/// Existing permissions are preserved; this does not promise power-loss durability.
 pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+    use std::io::Write;
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| std::path::Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let permissions = match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => Some(metadata.permissions()),
+        Ok(_) => return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let mut temporary = tempfile::Builder::new().prefix(".crabcraft-save-").tempfile_in(parent)?;
+    temporary.write_all(bytes)?;
+    if let Some(permissions) = permissions { temporary.as_file().set_permissions(permissions)?; }
+    temporary.persist(path).map_err(|error| error.error)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn atomic_replacement_never_touches_predictable_sibling_names() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("main.rs");
+        let sibling = root.path().join("main.tmp");
+        std::fs::write(&source, "fn main() {}\n").unwrap();
+        std::fs::write(&sibling, "unrelated user file").unwrap();
+        write_atomic(&source, b"fn main() { println!(\"saved\"); }\n").unwrap();
+        assert!(std::fs::read_to_string(&source).unwrap().contains("saved"));
+        assert_eq!(std::fs::read_to_string(&sibling).unwrap(), "unrelated user file");
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 2);
+        assert!(write_atomic(root.path(), b"invalid").is_err());
     }
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)
+    #[cfg(unix)]
+    #[test]
+    fn preplanted_symlinks_are_not_followed_and_permissions_are_preserved() {
+        use std::os::unix::{fs::{PermissionsExt, symlink}, ffi::OsStrExt};
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("main.rs");
+        let victim = root.path().join("unrelated.txt");
+        std::fs::write(&source, "old").unwrap();
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o640)).unwrap();
+        std::fs::write(&victim, "keep").unwrap();
+        symlink(&victim, source.with_extension("tmp")).unwrap();
+        write_atomic(&source, b"new").unwrap();
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+        assert_eq!(std::fs::metadata(&source).unwrap().permissions().mode() & 0o777, 0o640);
+        let link = root.path().join("link.rs"); symlink(&victim, &link).unwrap();
+        assert!(write_atomic(&link, b"replace").is_err());
+        let fifo = root.path().join("fifo"); let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(write_atomic(&fifo, b"replace").is_err());
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+    }
 }

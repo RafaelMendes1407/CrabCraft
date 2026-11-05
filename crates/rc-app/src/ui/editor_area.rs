@@ -675,6 +675,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
             entry(ui, Some(ico::TW_FIND), tr("Find Usages"), Action::FindUsages);
             entry(ui, Some(ico::EDIT), tr("Rename…"), Action::Rename);
             entry(ui, Some(ico::BULB), tr("Refactor This…"), Action::RefactorThis);
+            entry(ui, Some(ico::BULB), tr("Move public Rust item…"), Action::MoveItem);
             ui.separator();
         }
         for (icon, text, cmd) in [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)] {
@@ -1097,7 +1098,7 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
     let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
     for path in dropped {
         if path.is_file() {
-            app.open_file(&path);
+            app.open_file_sync(&path);
         }
     }
 }

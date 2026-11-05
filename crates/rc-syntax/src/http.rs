@@ -8,7 +8,8 @@
 //!
 //! File-wide variables (`{{name}}`, `@name = value`) are expanded by the client through
 //! [`vars::Resolver`]. Unresolved references, file bodies, response scripts and response
-//! redirects are reported as [`Unsupported`]. No environment or script is evaluated.
+//! redirects are reported as [`Unsupported`]. A bounded inline handler is retained for
+//! explicit review; this parser never evaluates an environment or script.
 
 use crate::highlight::{Hl, Span};
 #[path = "http_vars.rs"]
@@ -90,6 +91,8 @@ pub struct HttpRequest {
     pub headers: Vec<(String, String)>,
     pub body: String,
     pub unsupported: Vec<Unsupported>,
+    /// One complete inline response handler, retained for explicit review only.
+    pub response_script: Option<String>,
     /// File-wide declarations before request lines; shared across all request blocks.
     pub variables: std::sync::Arc<std::collections::BTreeMap<String, String>>,
 }
@@ -350,6 +353,12 @@ fn parse_block(lines: &[&str], roles: &[LineRole], starts: &[usize], first_line:
         body.pop();
     }
     req.body = body.join("\n");
+    let handler_lines: Vec<_> = lines.iter().zip(roles).filter(|(_, role)| **role == LineRole::Handler).map(|(line, _)| line.trim_end_matches('\r')).collect();
+    let handler_bytes = handler_lines.iter().fold(0usize, |total, line| total.saturating_add(line.len().saturating_add(1)));
+    if handler_bytes <= 64 * 1024 {
+        let handler = handler_lines.join("\n");
+        req.response_script = handler.trim().strip_prefix("> {%").and_then(|body| body.strip_suffix("%}")).filter(|body| !body.contains("%}") && !body.contains("{%" )).map(str::to_string);
+    }
     req.name = name;
     (req, found)
 }

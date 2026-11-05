@@ -107,8 +107,7 @@ pub fn triple_choices(host: Option<&str>, rustup: &[(String, bool)], config: &[S
 
 /// The host triple, from `rustc -vV` next to `cargo`. It compiles nothing. This blocks.
 pub fn host_triple(cargo: &Cargo) -> Option<String> {
-    let rustc = cargo.path().with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" });
-    let out = std::process::Command::new(rustc).arg("-vV").stdin(std::process::Stdio::null()).output().ok().filter(|o| o.status.success())?;
+    let out = cargo.std_tool_command("rustc").arg("-vV").stdin(std::process::Stdio::null()).output().ok().filter(|o| o.status.success())?;
     parse_host(&String::from_utf8_lossy(&out.stdout))
 }
 

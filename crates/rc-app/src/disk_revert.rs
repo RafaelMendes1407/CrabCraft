@@ -240,7 +240,7 @@ mod tests {
         let path = root.path().join("src/main.rs");
         let mut app = crate::screens::test_app(home.path(), false);
         app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap(), solution: None });
-        app.open_file(&path);
+        app.open_file_and_wait(&path);
         let disk = b"\xEF\xBB\xBFfn main() { println!(\"current disk\"); }\r\n";
         std::fs::write(&path, disk).unwrap();
         assert!(!app.docs.list[0].is_modified() && !app.docs.list[0].conflict);
@@ -265,7 +265,7 @@ mod tests {
         let path = root.path().join("src/main.rs");
         let mut app = crate::screens::test_app(home.path(), false);
         app.open_workspace(root.path());
-        app.open_file(&path);
+        app.open_file_and_wait(&path);
         app.docs.list[0].editor.replace(0, 0, "// unsaved local change\n");
         let dirty_text = app.docs.list[0].editor.buffer.rope().to_string();
         let disk = b"\xEF\xBB\xBFfn main() {\r\n    println!(\"new disk version\");\r\n}\r\n";

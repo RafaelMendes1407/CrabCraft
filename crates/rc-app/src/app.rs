@@ -63,6 +63,7 @@ pub struct CrabCraftApp {
     pub docs: Docs,
     pub disk_revert: Option<crate::disk_revert::Job>,
     pub disk_watch: crate::disk_watch::Watch,
+    pub disk_open: crate::disk_open::State,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -78,6 +79,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub criticalup_provider: crate::criticalup_provider::Provider,
     pub privileged_run: crate::privileged_run::PrivilegedRun,
     pub dev_containers: crate::dev_containers::DevContainers,
     pub containers: crate::containers::Containers,
@@ -163,6 +165,8 @@ pub struct CrabCraftApp {
     pub repl_starting: Option<crate::repl::Starting>,
     pub repl_variables: crate::repl_variables::State,
     pub macro_tester: crate::macro_tester::Tester,
+    pub signature_change: crate::signature_change::State,
+    pub move_items: Option<crate::move_items::MoveItems>,
     pub local_ai: crate::local_ai::Assistant,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
@@ -186,7 +190,7 @@ pub struct CrabCraftApp {
     statement_completion: Option<crate::complete_statement::Job>,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
-    cargo_load: Option<Inbox<(Result<rc_cargo::CargoWorkspace, String>, Option<rc_cargo::LoadLog>)>>,
+    cargo_load: Option<Inbox<(Result<(rc_cargo::CargoWorkspace,rc_cargo::Cargo), String>, Option<rc_cargo::LoadLog>)>>,
     /// Every load of the Cargo model, newest last (the Build window's Sync tab).
     pub sync_log: crate::sync_log::SyncLog,
     /// What Settings › Tools shows, read once it is needed.
@@ -299,6 +303,7 @@ impl CrabCraftApp {
         CrabCraftApp {
             disk_revert: None,
             disk_watch: Default::default(),
+            disk_open: Default::default(),
             keymap,
             editor_config,
             workspace: None,
@@ -339,6 +344,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            criticalup_provider: crate::criticalup_provider::Provider::new(waker.clone()),
             privileged_run: crate::privileged_run::PrivilegedRun::new(waker.clone()),
             dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
             containers: crate::containers::Containers::new(waker.clone()),
@@ -409,6 +415,8 @@ impl CrabCraftApp {
             repl_starting: None,
             repl_variables: Default::default(),
             macro_tester: Default::default(),
+            signature_change: Default::default(),
+            move_items: None,
             local_ai: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
@@ -470,7 +478,9 @@ impl CrabCraftApp {
                 return;
             }
         };
+        let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
         self.close_workspace();
+        if let Some(provider)=retained_provider{self.criticalup_provider=provider;}
         self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -520,10 +530,10 @@ impl CrabCraftApp {
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
         if ws.cargo_manifest().is_some() {
-            if self.settings.trusted_projects.iter().any(|p| p == &ws.root) {
+            if self.settings.trusted_projects.iter().any(|p| p == &ws.root) && !self.criticalup_provider.selected {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
             } else {
-                self.insight.wait_for_trust(&ws.root);
+                if !self.criticalup_provider.selected{self.insight.wait_for_trust(&ws.root);}else{self.insight.stop();}
             }
         } else if self.settings.trusted_projects.contains(&ws.root) {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
@@ -544,11 +554,24 @@ impl CrabCraftApp {
         self.docs.style_root = Some(ws.root.canonicalize().unwrap_or_else(|_| ws.root.clone()));
         self.workspace = Some(WorkspaceState { ws, solution });
         self.restore_session(session);
+        if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
         // Scratches reopened with the session are analysed too.
         self.update_linked();
         if let Some(manifest) = manifest {
             self.load_cargo_workspace(manifest);
         }
+    }
+
+    pub(crate) fn cargo_choice(&self)->crate::criticalup_provider::Choice{self.criticalup_provider.choice()}
+    pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
+        self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
+        self.cargo_load=None;self.libraries_load=None;self.attached_load=None;self.rustc_cfg_load=None;self.triple_load=None;self.toolchain_load=None;self.explain_load=None;self.explanations.clear();
+        self.runner.cargo_workspace=None;self.runner.configs.clear();self.runner.attached.clear();self.explorer.libraries.clear();self.toolchain=None;self.rustc_cfg=None;
+        if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}else{self.runner.set_cargo_tool(None);}
+        let Some(root)=self.workspace.as_ref().map(|w|w.ws.root.clone())else{return;};
+        if !self.settings.trusted_projects.contains(&root){return;}
+        if matches!(change,crate::criticalup_provider::Change::Default){self.insight.start_rust(&root,self.settings.rust_analyzer_path.clone(),self.settings.use_clippy);}
+        if !matches!(change,crate::criticalup_provider::Change::Blocked){if let Some(manifest)=self.workspace.as_ref().and_then(|w|w.ws.cargo_manifest()).map(Path::to_path_buf){self.load_cargo_workspace(manifest);}}
     }
 
     /// Cargo metadata can execute project-selected tools and wrappers, even with --no-deps.
@@ -558,13 +581,14 @@ impl CrabCraftApp {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
-            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
-                Some(cargo) => {
+            let result = match choice.resolve(env) {
+                Ok(cargo) => {
                     let (result, log) = rc_cargo::load_workspace_logged(&cargo, &manifest);
-                    (result.map_err(|e| e.to_string()), Some(log))
+                    (result.map(|workspace|(workspace,cargo)).map_err(|e| e.to_string()), Some(log))
                 }
-                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
+                Err(error) => (Err(error), None),
             };
             out.send(result);
         });
@@ -601,9 +625,9 @@ impl CrabCraftApp {
                 self.sync_log.push(crate::sync_log::SyncKind::Project, log);
             }
             match result {
-                Ok(workspace) => {
+                Ok((workspace,cargo)) => {
                     let root = workspace.root.clone();
-                    self.runner.set_cargo_workspace(workspace, self.cargo_remembered.as_deref());
+                    self.runner.set_cargo_workspace_with_tool(workspace,Some(cargo), self.cargo_remembered.as_deref());
                     self.prune_features();
                     self.cfg_epoch += 1;
                     self.load_rustc_cfg(root.clone());
@@ -631,8 +655,9 @@ impl CrabCraftApp {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
-            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
+            let Ok(cargo) = choice.resolve(env) else {out.send(Vec::new()); return };
             out.send(manifests.iter().map(|m| {
                 let (result, log) = rc_cargo::load_workspace_logged(&cargo, m);
                 (result.map_err(|e| e.to_string()), log)
@@ -650,8 +675,9 @@ impl CrabCraftApp {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
-            let Some(cargo) = rc_cargo::Cargo::locate().map(|c| c.with_env(env)) else { return };
+            let Ok(cargo) = choice.resolve(env) else {out.send((Vec::new(),None)); return };
             let (list, log) = rc_cargo::load_libraries_logged(&cargo, &manifest);
             let mut list = list.unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
@@ -771,15 +797,17 @@ impl CrabCraftApp {
         let configured = self.settings.rust_analyzer_path.clone();
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
             let analyzer = rc_cargo::locate_rust_analyzer(configured.as_deref());
-            out.send(rc_cargo::detect_toolchain(rc_cargo::Cargo::locate().as_ref(), analyzer.as_deref(), project.as_deref()));
+            out.send(rc_cargo::detect_toolchain(choice.resolve(Vec::new()).ok().as_ref(), analyzer.as_deref(), project.as_deref()));
         });
         self.toolchain_load = Some(inbox);
     }
 
     /// `rustup`, if Rust was installed with it.
     pub fn rustup(&self) -> Option<PathBuf> {
+        if self.criticalup_provider.selected{return None;}
         rc_cargo::Cargo::locate().and_then(|c| rc_cargo::rustup_path(&c))
     }
 
@@ -818,7 +846,7 @@ impl CrabCraftApp {
             self.toolchain = None;
             self.toolchain_load = None;
             self.toolchain_updates = None;
-            self.runner.set_cargo_tool(cargo);
+            if !self.criticalup_provider.selected{self.runner.set_cargo_tool(cargo);}
             if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf) {
                 self.load_cargo_workspace(manifest);
             }
@@ -1073,11 +1101,12 @@ impl CrabCraftApp {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let target = self.cargo_target.clone();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
             // Without a choice, what Cargo and rust-analyzer build for: the project's
             // `[build] target`, else the host.
             let target = target.or_else(|| rc_cargo::project_build_targets(&dir).into_iter().next());
-            out.send(rc_cargo::Cargo::locate().and_then(|c| rc_cargo::print_cfg(&c, &dir, target.as_deref())))
+            out.send(choice.resolve(Vec::new()).ok().and_then(|c| rc_cargo::print_cfg(&c, &dir, target.as_deref())))
         });
         self.rustc_cfg_load = Some(inbox);
     }
@@ -1088,7 +1117,8 @@ impl CrabCraftApp {
         if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
-        std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(rc_cargo::Cargo::locate().as_ref(), &root)));
+        let choice=self.cargo_choice();
+        std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(choice.resolve(Vec::new()).ok().as_ref(), &root)));
         self.triple_load = Some(inbox);
     }
 
@@ -1154,17 +1184,19 @@ impl CrabCraftApp {
 
     /// Reads the dependency tree of `package` in the background; `cargo tree` builds nothing.
     pub fn load_dep_tree(&mut self, manifest: PathBuf, package: String) {
+        if self.runner.require_trust().is_err(){return;}
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
         let (m, p) = (manifest.clone(), package.clone());
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
-            let result = match rc_cargo::Cargo::locate().map(|c| c.with_env(env)) {
-                Some(cargo) => {
+            let result = match choice.resolve(env) {
+                Ok(cargo) => {
                     let (result, log) = rc_cargo::load_tree_logged(&cargo, &m, &p);
                     (result.map_err(|e| e.to_string()), Some(log))
                 }
-                None => (Err(tr("Cargo was not found. Install Rust with rustup.").to_string()), None),
+                Err(error) => (Err(error), None),
             };
             out.send(result);
         });
@@ -1299,7 +1331,7 @@ impl CrabCraftApp {
             self.vcs.message = message;
         }
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
-            self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            if !self.criticalup_provider.selected{self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);}else{self.insight.stop();}
             self.load_cargo_workspace(manifest);
         } else {
             let solution = self.workspace.as_ref().and_then(|w| w.solution.as_ref().map(|s| s.path.clone()));
@@ -1350,7 +1382,7 @@ impl CrabCraftApp {
         self.vcs.refresh();
         let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
         if let Some(manifest) = manifest {
-            if self.settings.trusted_projects.contains(&root) {
+            if self.settings.trusted_projects.contains(&root) && !self.criticalup_provider.selected {
                 self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
             }
             if clean {
@@ -1425,6 +1457,7 @@ impl CrabCraftApp {
 
     pub fn close_workspace(&mut self) {
         self.disk_watch = Default::default();
+        self.disk_open = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
@@ -1442,6 +1475,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.criticalup_provider = crate::criticalup_provider::Provider::new(self.waker.clone());
         self.privileged_run = crate::privileged_run::PrivilegedRun::new(self.waker.clone());
         self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
         self.containers = crate::containers::Containers::new(self.waker.clone());
@@ -1454,6 +1488,7 @@ impl CrabCraftApp {
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
         self.remote = crate::remote::Remote::new(self.waker.clone());
+        self.http = crate::http_client::HttpClient::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -1465,6 +1500,8 @@ impl CrabCraftApp {
         self.repl_starting = None;
         self.repl_variables = Default::default();
         self.macro_tester = Default::default();
+        self.signature_change = Default::default();
+        self.move_items = None;
         self.local_ai = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
@@ -2049,8 +2086,42 @@ impl CrabCraftApp {
 
     // ------------------------------------------------------------------ documents
 
+    pub(crate) fn request_open_file(&mut self, path: &Path) { self.request_open(path, None, false); }
+    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) { self.request_open(path, Some(crate::disk_open::Position::LineColumn(line,col)), false); }
+    pub(crate) fn request_open_offset(&mut self,path:&Path,offset:usize) {self.request_open(path,Some(crate::disk_open::Position::Offset(offset)),false);}
+    fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
+    fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
+        if record {self.push_nav();} self.disk_open.cancel();
+        if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some(position)=position { position.apply(&mut self.docs.list[index].editor); } self.focus_editor=true;self.session_dirty=true;return; }
+        let mut request=crate::disk_open::Request::new(&mut self.docs,path,position); request.preview=preview;
+        if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
+    }
+    pub(crate) fn poll_disk_open(&mut self) {
+        for result in self.disk_open.poll(self.waker.clone()) {
+            match result {
+                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);if let Some(position)=position {position.apply(&mut self.docs.list[index].editor);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
+                Err(error)=>self.notify(error.to_string(),true),
+            }
+        }
+    }
+
     /// Opens a file in an editor tab, remembering the current place for "Back".
-    pub fn open_file(&mut self, path: &Path) {
+    pub fn open_file(&mut self, path: &Path) { self.request_open_file(path); }
+
+    #[cfg(test)]
+    pub(crate) fn open_file_and_wait(&mut self,path:&Path) {
+        self.open_file(path);
+        let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
+        while self.disk_open.busy() {
+            self.poll_disk_open();
+            assert!(std::time::Instant::now()<until,"file opening did not finish: {}",path.display());
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
+    /// Synchronous legacy adapter for paths whose dependent edits/batch ordering are not yet migrated.
+    pub(crate) fn open_file_sync(&mut self, path: &Path) {
+        self.disk_open.cancel();
         self.push_nav();
         match self.docs.open(path) {
             Ok(i) => {
@@ -2067,10 +2138,7 @@ impl CrabCraftApp {
 
     /// Opens `path` and puts the caret at (line, col).
     pub fn open_at(&mut self, path: &Path, line: usize, col: usize) {
-        self.open_file(path);
-        if let Some(d) = self.docs.active_doc_mut() {
-            d.editor.goto(line, col);
-        }
+        self.request_open_at(path,line,col);
     }
 
     pub fn push_nav(&mut self) {
@@ -2092,18 +2160,13 @@ impl CrabCraftApp {
     }
 
     pub fn navigate(&mut self, back: bool) {
+        self.disk_open.cancel();
         let (from, to) = if back { (&mut self.nav_back, &mut self.nav_forward) } else { (&mut self.nav_forward, &mut self.nav_back) };
         let Some((path, pos)) = from.pop() else { return };
         if let Some(d) = self.docs.active_doc() {
             to.push((d.path.clone(), d.editor.caret()));
         }
-        if self.docs.open(&path).is_ok()
-            && let Some(d) = self.docs.active_doc_mut()
-        {
-            let pos = pos.min(d.editor.buffer.len_chars());
-            d.editor.set_selection(rc_text::Selection::point(pos));
-            self.focus_editor = true;
-        }
+        self.open_navigation(&path,Some(crate::disk_open::Position::Offset(pos)),false,false);
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
@@ -2137,14 +2200,16 @@ impl CrabCraftApp {
         // The project's toolchain file applies only once the project is trusted: naming a
         // missing toolchain would otherwise make rustup reach the network.
         let dir = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
-        let env = self.runner.project_env_pairs();
+        if self.criticalup_provider.selected&&dir.is_none(){self.notify(tr("Trust this project before running project tools or code"),true);return;}
+        let env = if dir.is_some(){self.runner.project_env_pairs()}else{Vec::new()};
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let asked = code.clone();
+        let choice=self.cargo_choice();
         std::thread::spawn(move || {
-            let result = match rc_cargo::Cargo::locate() {
-                Some(cargo) => rc_cargo::Explainer { dir, env, ..rc_cargo::Explainer::new(rc_cargo::explain::rustc_path(&cargo)) }.explain(&asked),
-                None => Err(rc_cargo::ExplainError::NoRustc(tr("Cargo was not found. Install Rust with rustup.").to_string())),
+            let result = match choice.resolve(env) {
+                Ok(cargo) => rc_cargo::Explainer { dir, ..rc_cargo::Explainer::for_cargo(&cargo) }.explain(&asked),
+                Err(error) => Err(rc_cargo::ExplainError::NoRustc(error)),
             };
             out.send(result);
         });
@@ -2180,26 +2245,13 @@ impl CrabCraftApp {
         // `code` was checked: `E` and four digits, safe as a file name.
         let path = rc_core::paths::explanations_dir().join(format!("{code}.md"));
         let body = format!("# {code}\n\n{text}\n");
-        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
-            self.notify(trf("Could not show the explanation: {error}", &[("error", &e.to_string())]), true);
-            return;
-        }
-        match self.docs.open(&path) {
-            Ok(i) => {
-                let d = &mut self.docs.list[i];
-                d.generated = true;
-                if d.editor.buffer.rope() != body.as_str() {
-                    d.editor.reload(&body);
-                }
-                d.editor.read_only = true;
-                d.md_view = Some(crate::docs::MdView::Preview);
-                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
-            }
-            Err(e) => self.notify(e, true),
-        }
+        let index = self.docs.insert_generated(path, &body);
+        self.docs.list[index].md_view = Some(crate::docs::MdView::Preview);
+        self.focus_editor = true;
     }
 
     pub fn close_tab(&mut self, i: usize) {
+        self.disk_open.cancel();
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
         {
@@ -2440,6 +2492,8 @@ impl CrabCraftApp {
             Action::UpdateCopyright => self.update_copyright(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::TestDeclarativeMacro => crate::macro_tester::open(self),
+            Action::ChangeSignature => crate::signature_change::open(self),
+            Action::MoveItem => crate::move_items::open(self),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
@@ -2543,7 +2597,7 @@ impl CrabCraftApp {
             self.notify(stale, true);
             return;
         };
-        self.open_file(file);
+        self.open_file_sync(file);
         if let Some(doc) = self.docs.active_doc_mut() {
             doc.editor.apply_text_edits(changes);
         }
@@ -2675,7 +2729,7 @@ impl CrabCraftApp {
     pub fn can_open_rust_repl(&self) -> bool {
         self.workspace.as_ref().is_some_and(|w| {
             matches!(w.ws.kind, rc_core::WorkspaceKind::Cargo(_))
-                && self.settings.trusted_projects.contains(&w.ws.root)
+                && self.settings.trusted_projects.contains(&w.ws.root) && !self.criticalup_provider.selected
         })
     }
 
@@ -2836,7 +2890,8 @@ impl CrabCraftApp {
         let Some(manifest) = self.runner.cargo_workspace.as_ref().filter(|workspace| workspace.root == root).map(|workspace| workspace.manifest.clone()) else { return; };
         self.save_all_docs();
         match self.runner.cargo_tool() {
-            Ok(cargo) => self.coverage.start(root, manifest, cargo.path().to_path_buf(), self.runner.project_env_pairs()),
+            Ok(cargo) if !cargo.is_criticalup() => self.coverage.start(root, manifest, cargo.path().to_path_buf(), self.runner.project_env_pairs()),
+            Ok(_) => self.coverage.error=Some(crate::criticalup_provider::unsupported()),
             Err(error) => self.coverage.error = Some(error),
         }
     }
@@ -3070,7 +3125,7 @@ impl CrabCraftApp {
         } else if self.opens_workspace(path) {
             self.open_workspace(path);
         } else if path.is_file() {
-            self.open_file(path);
+            self.open_file_sync(path);
         } else {
             self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the file does not exist"))]), true);
         }
@@ -3187,14 +3242,8 @@ impl CrabCraftApp {
     pub fn handle_explorer(&mut self, ctx: &Context, actions: Vec<ExplorerAction>) {
         for a in actions {
             match a {
-                ExplorerAction::Open(p) => self.open_file(&p),
-                ExplorerAction::Preview(p) => {
-                    self.push_nav();
-                    match self.docs.open_preview(&p) {
-                        Ok(_) => self.session_dirty = true,
-                        Err(e) => self.notify(e, true),
-                    }
-                }
+                ExplorerAction::Open(p) => self.request_open_file(&p),
+                ExplorerAction::Preview(p) => self.request_open(&p,None,true),
                 ExplorerAction::Collapse => {
                     self.explorer.expanded.retain(|k| k == "sln");
                     self.session_dirty = true;
@@ -3289,6 +3338,7 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        for change in self.criticalup_provider.poll(acp_trusted){self.change_cargo_provider(change);}
         self.privileged_run.poll(acp_trusted);
         self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
@@ -3601,6 +3651,8 @@ impl eframe::App for CrabCraftApp {
         self.handle_debug(outs);
         self.poll_auto_attach();
         self.poll_repl();
+        self.poll_disk_open();
+        self.disk_open.show(&ctx);
         self.poll_disk_revert();
         self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {
@@ -3626,6 +3678,7 @@ impl eframe::App for CrabCraftApp {
         let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
         self.database.poll(database_trusted);
         self.remote.poll(database_trusted);
+        self.http.scripts.enforce_trust(self.runner.require_trust().is_ok());
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();

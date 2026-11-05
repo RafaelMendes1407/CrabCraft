@@ -19,3 +19,6 @@ rc-core = { path = "../rc-core" }
 # Process handling and the build, run and test events the UI already understands.
 rc-dotnet = { path = "../rc-dotnet" }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "sync", "time", "macros"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -43,7 +43,7 @@ fn workspace(home: &Path, dark: bool) -> (tempfile::TempDir, Harness<'static, Cr
     std::fs::write(root.path().join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
     let mut app = crate::screens::test_app(home, dark);
     app.open_workspace(root.path());
-    app.open_file(&root.path().join("src/main.rs"));
+    app.open_file_and_wait(&root.path().join("src/main.rs"));
     (root, crate::screens::harness(app, vec2(1280.0, 800.0)))
 }
 
@@ -168,12 +168,13 @@ fn native_recent_files_filter_and_closed_location_restore_the_rust_caret() {
     let helper = root.path().join("src/helper.rs").canonicalize().unwrap();
     let manifest = root.path().join("Cargo.toml").canonicalize().unwrap();
     harness.state_mut().open_at(&helper, 2, 5);
+    frames(&mut harness, "helper navigation", |app| !app.disk_open.busy());
     let position = harness.state().docs.active_doc().unwrap().editor.caret();
-    harness.state_mut().open_file(&main);
+    harness.state_mut().open_file_and_wait(&main);
     let index = harness.state().docs.index_of(&helper).unwrap();
     harness.state_mut().close_tab(index);
-    harness.state_mut().open_file(&manifest);
-    harness.state_mut().open_file(&main);
+    harness.state_mut().open_file_and_wait(&manifest);
+    harness.state_mut().open_file_and_wait(&main);
     let ctx = harness.ctx.clone();
     harness.state_mut().run_ide_action(&ctx, Action::RecentFiles); harness.run_steps(2);
     harness.input_mut().events.push(egui::Event::Text("Cargo.toml".into())); harness.run_steps(2);
@@ -182,14 +183,16 @@ fn native_recent_files_filter_and_closed_location_restore_the_rust_caret() {
     harness.state_mut().run_ide_action(&ctx, Action::RecentFiles); harness.run_steps(2);
     let rect = harness.get_by_label(&helper.display().to_string()).rect();
     harness.get_by_label(&helper.display().to_string()).click(); harness.run_steps(2);
+    frames(&mut harness, "recent file opening", |app| !app.disk_open.busy());
     assert_eq!(harness.state().docs.active_doc().unwrap().path, helper, "row={rect:?}, dialog={}, notices={:?}", harness.state().dialog.is_some(), harness.state().notices.iter().map(|notice| &notice.text).collect::<Vec<_>>());
-    harness.state_mut().open_file(&main);
+    harness.state_mut().open_file_and_wait(&main);
     let index = harness.state().docs.index_of(&helper).unwrap();
     harness.state_mut().close_tab(index);
     let selected = harness.state().nav_back.iter().rev().take(30).position(|(path, saved)| path == &helper && *saved == position).unwrap();
     harness.state_mut().run_ide_action(&ctx, Action::RecentLocations); harness.run_steps(2);
     for _ in 0..selected { harness.key_press(egui::Key::ArrowDown); harness.run_steps(1); }
     harness.key_press(egui::Key::Enter); harness.run_steps(3);
+    frames(&mut harness, "recent location opening", |app| !app.disk_open.busy());
     let doc = harness.state().docs.active_doc().unwrap();
     assert_eq!(doc.path, helper);
     assert_eq!(doc.editor.caret_line_col(), (2, 5));

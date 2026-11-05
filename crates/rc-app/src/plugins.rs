@@ -926,7 +926,7 @@ mod tests {
         let file = root.join("src/lib.rs");
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace(&root);
-        app.open_file(&file);
+        app.open_file_and_wait(&file);
         app.plugins.source = path.to_string_lossy().into();
         app.dock
             .sizes

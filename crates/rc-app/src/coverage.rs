@@ -257,7 +257,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     let busy = app.coverage.busy();
     let cargo = app.runner.cargo_workspace.is_some();
     let actions = [
-        (rc_kit::ico::RUN_ALL, tr("Run with Coverage"), cargo && !busy),
+        (rc_kit::ico::RUN_ALL, tr("Run with Coverage"), cargo && !busy && !app.criticalup_provider.selected),
         (rc_kit::ico::STOP, tr("Stop"), busy),
         (rc_kit::ico::OPEN, tr("Import LCOV…"), cargo && !busy),
     ];
@@ -269,6 +269,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
         _ => {}
     }
     ui.label(tr("Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically."));
+    if app.criticalup_provider.selected{ui.label(crate::criticalup_provider::unsupported());}
     if busy { ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Collecting coverage…")); }); }
     if let Some(error) = &app.coverage.error { ui.colored_label(rc_kit::pal(ui).error, error); }
     let mut remove = false;

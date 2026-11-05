@@ -69,6 +69,8 @@ pub enum Action {
     ShowIntentions,
     Generate,
     RefactorThis,
+    MoveItem,
+    ChangeSignature,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -263,6 +265,8 @@ impl Action {
                 | ZoomReset
                 | ShareInPlayground
                 | TestDeclarativeMacro
+                | MoveItem
+                | ChangeSignature
                 | Profile
         )
     }

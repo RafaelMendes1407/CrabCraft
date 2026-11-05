@@ -139,7 +139,7 @@ impl CrabCraftApp {
         if manifest.file_name().is_none_or(|n| n != "Cargo.toml") {
             return;
         }
-        self.open_file(manifest);
+        self.open_file_sync(manifest);
         let Some(doc) = self.docs.active_doc_mut().filter(|d| d.path == manifest) else { return };
         let text = doc.editor.buffer.rope().to_string();
         match edit(&text) {

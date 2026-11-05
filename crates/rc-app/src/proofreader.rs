@@ -390,7 +390,7 @@ mod tests {
             .unwrap_or_else(|_| "http://127.0.0.1:8086".into());
         let mut app = crate::screens::test_app(home.path(), false);
         app.open_workspace(root.path());
-        app.open_file(&path);
+        app.open_file_and_wait(&path);
         app.proofreader.endpoint = endpoint.clone();
         assert!(matches!(
             app.proofreader.start(&app.docs, false, Waker::noop()),

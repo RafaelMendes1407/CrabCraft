@@ -48,7 +48,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     assert_eq!(app.vcs.branch_name().as_deref(), Some("main"));
 
     // Edit the file: a modified line and an added one show in the gutter.
-    app.open_file(&root.join("Program.cs"));
+    app.open_file_and_wait(&root.join("Program.cs"));
     let doc = app.docs.active_doc_mut().unwrap();
     let pos = doc.editor.buffer.pos_at(2, 4);
     doc.editor.replace(pos, pos + 8, "void N(int x) { }\n    int y;");
@@ -855,7 +855,7 @@ fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() 
     git(&root, &["add", "."]);
     git(&root, &["commit", "-qm", "Rust project"]);
     let mut app = open_app(&root);
-    app.open_file(&root.join("lib.rs"));
+    app.open_file_and_wait(&root.join("lib.rs"));
     let doc = app.docs.active_doc_mut().unwrap();
     let at = doc.editor.buffer.pos_at(1, 4);
     doc.editor.replace(at, at + 1, "2");

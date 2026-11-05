@@ -878,13 +878,13 @@ mod native_views {
         std::fs::write(&lib, "pub struct Item;\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
         app.open_workspace(root.path());
-        app.open_file(&main);
+        app.open_file_and_wait(&main);
         app.show_macro_expansion("view", "inner!(21)");
         let path = app.docs.active_doc().unwrap().path.clone();
         assert!(!path.exists());
         app.docs.save(app.docs.active.unwrap()).unwrap();
         assert!(!path.exists());
-        app.open_file(&lib);
+        app.open_file_and_wait(&lib);
         app.show_macro_expansion("view", "inner!(22)");
         assert_eq!(app.docs.list.len(), 3);
         let mut h = crate::screens::harness(app, egui::vec2(1280., 900.));

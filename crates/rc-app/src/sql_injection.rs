@@ -213,7 +213,7 @@ fn main(){
         let mut app = test_app(home.path(), true);
         app.open_workspace(&root);
         app.settings.trusted_projects.push(root.clone());
-        app.open_file(&path);
+        app.open_file_and_wait(&path);
         let at = source.find("peo WHERE").unwrap() + 3;
         let doc = app.docs.active_doc_mut().unwrap();
         doc.editor

@@ -61,7 +61,7 @@ fn csharp_insight_end_to_end() {
     pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
 
     let program = root.join("App/Program.cs");
-    app.open_file(&program);
+    app.open_file_and_wait(&program);
     // Diagnostics: the undefined name is an error, with the right range.
     pump(&mut app, "diagnostics", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("CS0103"))));
     let d = app.docs.active_doc().unwrap();
@@ -95,7 +95,7 @@ fn csharp_insight_end_to_end() {
     assert!(lib.contains("public string Greet("), "{lib}");
 
     // Pasting code with an unresolved type adds its using.
-    app.open_file(&program);
+    app.open_file_and_wait(&program);
     let doc = app.docs.active_doc_mut().unwrap();
     let end = doc.editor.buffer.len_chars();
     doc.editor.replace(end, end, "\nvar sb = new StringBuilder();\n");
@@ -106,7 +106,7 @@ fn csharp_insight_end_to_end() {
     assert!(text.starts_with("using Lib;\nusing System.Text;\n") || text.starts_with("using System.Text;\nusing Lib;\n"), "{text}");
 
     // `///` above a method: Roslyn inserts the doc comment skeleton with its parameter.
-    app.open_file(&root.join("Lib/Greeter.cs"));
+    app.open_file_and_wait(&root.join("Lib/Greeter.cs"));
     pump(&mut app, "Greeter.cs to load", |a| a.docs.active_doc().is_some_and(|d| !d.editor.semantic.is_empty()));
     let doc = app.docs.active_doc_mut().unwrap();
     let text = doc.editor.buffer.rope().to_string();
@@ -144,7 +144,7 @@ fn go_to_declaration_and_back() {
     let (program, greeter) = (root.join("App/Program.cs"), root.join("Lib/Greeter.cs"));
     let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace(&sln);
-    app.open_file(&program);
+    app.open_file_and_wait(&program);
     // Clicked while the projects still load: it goes there once they have.
     pump(&mut app, "the server", |a| a.insight.ready());
     let click = |app: &mut CrabCraftApp, word: &str| {

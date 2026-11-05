@@ -7,16 +7,21 @@ pub struct Cargo {
     path: PathBuf,
     /// The project's environment, set on every command.
     env: Vec<(String, String)>,
+    criticalup: Option<std::sync::Arc<crate::criticalup::Context>>,
 }
 
 impl Cargo {
     pub fn new(path: impl Into<PathBuf>) -> Cargo {
-        Cargo { path: path.into(), env: Vec::new() }
+        Cargo {
+            path: path.into(),
+            env: Vec::new(),
+            criticalup: None,
+        }
     }
 
     /// The same `cargo`, with `env` set on every command it starts.
     pub fn with_env(mut self, env: Vec<(String, String)>) -> Cargo {
-        self.env = env;
+        self.env = self.provider_env(env);
         self
     }
 
@@ -27,28 +32,166 @@ impl Cargo {
     /// The first `cargo` found: `$PATH`, then `~/.cargo/bin` (apps opened from a desktop launcher
     /// often have a `PATH` without it).
     pub fn locate() -> Option<Cargo> {
-        candidates(std::env::var_os("PATH"), home()).into_iter().find(|p| p.is_file()).map(Cargo::new)
+        candidates(std::env::var_os("PATH"), home())
+            .into_iter()
+            .find(|p| p.is_file())
+            .map(Cargo::new)
     }
 
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    pub(crate) fn from_criticalup(
+        path: PathBuf,
+        context: std::sync::Arc<crate::criticalup::Context>,
+    ) -> Self {
+        let mut cargo = Self {
+            path,
+            env: Vec::new(),
+            criticalup: Some(context),
+        };
+        cargo.env = cargo.provider_env(Vec::new());
+        cargo
+    }
+    pub fn is_criticalup(&self) -> bool {
+        self.criticalup.is_some()
+    }
+    pub fn criticalup_release(&self) -> Option<&str> {
+        self.criticalup
+            .as_ref()
+            .map(|context| context.snapshot.release())
+    }
+    pub fn criticalup_manifest(&self) -> Option<&Path> {
+        self.criticalup
+            .as_ref()
+            .map(|context| context.snapshot.path())
+    }
+    pub fn tool_path(&self, name: &str) -> Option<PathBuf> {
+        if let Some(context) = &self.criticalup {
+            context.tools.get(name).cloned()
+        } else {
+            Some(if name=="cargo"{self.path.clone()}else{self.path.with_file_name(exe(name))})
+        }
+    }
+    pub fn rustc_path(&self) -> PathBuf {
+        self.criticalup.as_ref().map_or_else(
+            || self.path.with_file_name(exe("rustc")),
+            |context| context.tool("rustc"),
+        )
+    }
+    fn compiler_override(key: &str) -> bool {
+        if key.to_ascii_uppercase().starts_with("CRITICALUP_"){return true;}
+        [
+            "RUSTC",
+            "RUSTDOC",
+            "CARGO",
+            "RUSTUP_TOOLCHAIN",
+            "RUSTC_WRAPPER",
+            "RUSTC_WORKSPACE_WRAPPER",
+        ]
+        .iter()
+        .any(|name| key.eq_ignore_ascii_case(name))
+    }
+    fn provider_env(&self, mut env: Vec<(String, String)>) -> Vec<(String, String)> {
+        if let Some(context) = &self.criticalup {
+            env.retain(|(key, _)| !Self::compiler_override(key));
+            for (key, tool) in [
+                ("RUSTC", "rustc"),
+                ("RUSTDOC", "rustdoc"),
+                ("CARGO", "cargo"),
+            ] {
+                env.push((
+                    key.into(),
+                    context.tool(tool).to_string_lossy().into_owned(),
+                ));
+            }
+        }
+        env
+    }
     pub fn command(&self) -> tokio::process::Command {
-        let mut cmd = tokio::process::Command::new(&self.path);
+        self.tool_command("cargo")
+    }
+    pub fn supports_cargo_args(&self,args:&[String])->bool{
+        if !self.is_criticalup(){return true;}
+        matches!(args.first().map(String::as_str),Some("add"|"remove"|"build"|"check"|"clean"|"clippy"|"doc"|"fetch"|"fix"|"fmt"|"generate-lockfile"|"init"|"install"|"locate-project"|"metadata"|"new"|"package"|"pkgid"|"publish"|"read-manifest"|"run"|"rustc"|"rustdoc"|"search"|"test"|"tree"|"uninstall"|"update"|"vendor"|"verify-project"|"version"|"help"|"--version"|"-V"|"--help"|"-h"))
+    }
+    pub fn command_with_args(&self,args:&[String])->tokio::process::Command{
+        if !self.supports_cargo_args(args){return tokio::process::Command::new(self.criticalup_manifest().unwrap_or_else(||Path::new("/")).with_file_name("unsupported-cargo-subcommand"));}
+        let mut cmd=if self.is_criticalup(){match args.first().map(String::as_str){Some("clippy")=>self.tool_command("cargo-clippy"),Some("fmt")=>self.tool_command("cargo-fmt"),_=>self.command()}}else{self.command()};cmd.args(args);cmd
+    }
+    pub fn std_command(&self) -> std::process::Command {
+        self.std_tool_command("cargo")
+    }
+    pub fn tool_command(&self, name: &str) -> tokio::process::Command {
+        let mut cmd = tokio::process::Command::new(if self.criticalup.is_some() {
+            self.path.clone()
+        } else {
+            if name == "cargo" {
+                self.path.clone()
+            } else {
+                self.path.with_file_name(exe(name))
+            }
+        });
+        if let Some(context) = &self.criticalup {
+            cmd.args(["run", "--strict", "--project"])
+                .arg(context.snapshot.path())
+                .arg(name)
+                .current_dir(context.snapshot.root());
+            for key in [
+                "RUSTUP_TOOLCHAIN",
+                "RUSTC_WRAPPER",
+                "RUSTC_WORKSPACE_WRAPPER",
+                "CRITICALUP_CURRENT_PROJ_MANIFEST_CANONICAL_PATH",
+                "CRITICALUP_TEST_OVERRIDE_ARG",
+                "CRITICALUP_TOKEN",
+            ] {
+                cmd.env_remove(key);
+            }
+        }
         cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        if self.is_criticalup(){cmd.env("RUSTC_WRAPPER", "").env("RUSTC_WORKSPACE_WRAPPER", "");}
         cmd
     }
-
-    pub fn std_command(&self) -> std::process::Command {
-        let mut cmd = std::process::Command::new(&self.path);
+    pub fn std_tool_command(&self, name: &str) -> std::process::Command {
+        let mut cmd = std::process::Command::new(if self.criticalup.is_some() {
+            self.path.clone()
+        } else {
+            if name == "cargo" {
+                self.path.clone()
+            } else {
+                self.path.with_file_name(exe(name))
+            }
+        });
+        if let Some(context) = &self.criticalup {
+            cmd.args(["run", "--strict", "--project"])
+                .arg(context.snapshot.path())
+                .arg(name)
+                .current_dir(context.snapshot.root());
+            for key in [
+                "RUSTUP_TOOLCHAIN",
+                "RUSTC_WRAPPER",
+                "RUSTC_WORKSPACE_WRAPPER",
+                "CRITICALUP_CURRENT_PROJ_MANIFEST_CANONICAL_PATH",
+                "CRITICALUP_TEST_OVERRIDE_ARG",
+                "CRITICALUP_TOKEN",
+            ] {
+                cmd.env_remove(key);
+            }
+        }
         cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        if self.is_criticalup(){cmd.env("RUSTC_WRAPPER", "").env("RUSTC_WORKSPACE_WRAPPER", "");}
         cmd
     }
 
     /// `cargo 1.99.0 (...)`, as printed.
     pub fn version(&self) -> anyhow::Result<String> {
-        let out = neutral_output(&self.path, &["--version"]).ok_or_else(|| anyhow::anyhow!("cargo --version failed"))?;
+        let out = if self.is_criticalup() {
+            self.std_command().arg("--version").output().ok()
+        } else {
+            neutral_output(&self.path, &["--version"])
+        }
+        .ok_or_else(|| anyhow::anyhow!("cargo --version failed"))?;
         anyhow::ensure!(out.status.success(), "cargo --version failed");
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
@@ -76,6 +219,11 @@ pub fn detect_toolchain(cargo: Option<&Cargo>, analyzer: Option<&Path>, project:
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|s| !s.is_empty())
     };
     let Some(cargo) = cargo else { return ToolchainInfo::default() };
+    if cargo.is_criticalup(){
+        let Some(dir)=project else{return ToolchainInfo::default();};
+        let named=|name:&str,args:&[&str]|{let out=cargo.std_tool_command(name).args(args).current_dir(dir).stdin(std::process::Stdio::null()).output().ok()?;out.status.success().then(||String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|s|!s.is_empty())};
+        return ToolchainInfo{cargo:named("cargo",&["--version"]),rustc:named("rustc",&["--version"]),rust_analyzer:None,stdlib:named("rustc",&["--print","sysroot"]).and_then(|s|stdlib_sources(Path::new(&s)))};
+    }
     let rustc = cargo.path().with_file_name(exe("rustc"));
     ToolchainInfo {
         cargo: output(cargo.path(), &["--version"]),
@@ -109,8 +257,7 @@ fn neutral_output(program: &Path, args: &[&str]) -> Option<std::process::Output>
 /// `rust-toolchain.toml` there picks the compiler. It compiles nothing, and works for targets
 /// that are not installed. An invalid triple gives `None`. This blocks.
 pub fn print_cfg(cargo: &Cargo, dir: &Path, target: Option<&str>) -> Option<String> {
-    let rustc = cargo.path().with_file_name(exe("rustc"));
-    let mut cmd = std::process::Command::new(rustc);
+    let mut cmd = cargo.std_tool_command("rustc");
     cmd.args(["--print", "cfg"]);
     if let Some(t) = target {
         if !crate::triple::valid_triple(t) {
@@ -129,6 +276,7 @@ pub fn stdlib_sources(sysroot: &Path) -> Option<PathBuf> {
 
 /// `rustup`, next to `cargo` (where rustup installs its proxies).
 pub fn rustup_path(cargo: &Cargo) -> Option<PathBuf> {
+    if cargo.is_criticalup(){return None;}
     Some(cargo.path().with_file_name(exe("rustup"))).filter(|p| p.is_file())
 }
 

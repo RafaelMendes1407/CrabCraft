@@ -35,6 +35,7 @@ pub enum ToolWindow {
     Containers,
     DevContainers,
     PrivilegedRun,
+    RustProvider,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,7 +71,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 26] = [
+    pub const ALL: [ToolWindow; 27] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -96,6 +97,7 @@ impl ToolWindow {
         ToolWindow::Containers,
         ToolWindow::DevContainers,
         ToolWindow::PrivilegedRun,
+        ToolWindow::RustProvider,
         ToolWindow::Notifications,
     ];
 
@@ -127,6 +129,7 @@ impl ToolWindow {
             ToolWindow::Containers => "docker",
             ToolWindow::DevContainers => "dev_containers",
             ToolWindow::PrivilegedRun => "privileged_run",
+            ToolWindow::RustProvider => "rust_provider",
         }
     }
 
@@ -158,6 +161,7 @@ impl ToolWindow {
             ToolWindow::Containers => tr("Docker"),
             ToolWindow::DevContainers => tr("Dev Containers"),
             ToolWindow::PrivilegedRun => tr("Administrator Run"),
+            ToolWindow::RustProvider => tr("Rust Toolchain Provider"),
         }
     }
 
@@ -189,6 +193,7 @@ impl ToolWindow {
             ToolWindow::Containers => ico::RUN_ANYTHING,
             ToolWindow::DevContainers => ico::RUN_ANYTHING,
             ToolWindow::PrivilegedRun => ico::RUN_ANYTHING,
+            ToolWindow::RustProvider => ico::RUN_ANYTHING,
         }
     }
 
@@ -196,7 +201,7 @@ impl ToolWindow {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
             ToolWindow::Proofreading => Side::Right,
-            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers | ToolWindow::PrivilegedRun => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers | ToolWindow::PrivilegedRun | ToolWindow::RustProvider => Side::Right,
             _ => Side::Bottom,
         }
     }

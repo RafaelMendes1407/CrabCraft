@@ -4493,6 +4493,7 @@ name = "rc-cargo"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "libc",
  "rc-core",
  "rc-dotnet",
  "reqwest",

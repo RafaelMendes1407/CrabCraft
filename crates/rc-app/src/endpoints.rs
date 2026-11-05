@@ -471,7 +471,7 @@ mod tests {
         assert_eq!(h.state().endpoints.snapshot.routes.len(), 4);
         h.state_mut().open_at(&root.join("src/lib.rs"), 0, 0); h.run_steps(3);
         assert!(h.state().docs.active_doc().unwrap().editor.end_hints.values().any(|hint| hint.contains("GET /api/users/{id}")));
-        h.state_mut().open_file(&path); h.run_steps(3);
+        h.state_mut().open_file_and_wait(&path); h.run_steps(3);
         let caret = original[..original.find("?keep").unwrap()].chars().count();
         h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
         let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();

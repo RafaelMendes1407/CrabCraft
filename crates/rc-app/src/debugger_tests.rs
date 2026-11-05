@@ -119,7 +119,7 @@ fn debugs_the_cli_and_the_api_from_the_ide() {
     let tax_line = line_of(&calc, "var tax = Math.Round");
 
     // A conditional breakpoint in the loop (the second line, the mouse) and a plain one after it.
-    app.open_file(&calc);
+    app.open_file_and_wait(&calc);
     let d = app.docs.active_doc_mut().unwrap();
     d.editor.breakpoints.insert(loop_line, BreakpointKind::Conditional);
     d.editor.breakpoints.insert(discount_line, BreakpointKind::Normal);
@@ -200,7 +200,7 @@ fn debugs_the_cli_and_the_api_from_the_ide() {
     app.docs.active_doc_mut().unwrap().editor.breakpoints.clear();
     let controller = crate::screens::fixtures().join("Shop/src/Shop.Api/Controllers/OrdersController.cs");
     let line = line_of(&controller, "var order = Order.Sample();");
-    app.open_file(&controller);
+    app.open_file_and_wait(&controller);
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
     let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     app.debugger.env = vec![("ASPNETCORE_URLS".into(), format!("http://127.0.0.1:{port}"))];
@@ -253,7 +253,7 @@ fn debug_screens() {
         let home = tempfile::tempdir().unwrap();
         let mut app = app(home.path());
         app.settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
-        app.open_file(&calc);
+        app.open_file_and_wait(&calc);
         let d = app.docs.active_doc_mut().unwrap();
         d.editor.breakpoints.insert(loop_line, BreakpointKind::Conditional);
         d.editor.breakpoints.insert(discount_line, BreakpointKind::Normal);
@@ -311,7 +311,7 @@ fn breakpoint_conditions_and_disabled_state_survive_the_session() {
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
     app.trust_project_tools_for_test();
-    app.open_file(&calc);
+    app.open_file_and_wait(&calc);
     let d = app.docs.active_doc_mut().unwrap();
     d.editor.breakpoints.insert(20, BreakpointKind::Conditional);
     d.editor.breakpoints.insert(26, BreakpointKind::Disabled);
