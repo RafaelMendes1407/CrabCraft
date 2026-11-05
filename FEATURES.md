@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 181 |
+| ✅ Pronto | 186 |
 | 🚧 Em andamento | 9 |
-| 🟢 Herdado | 22 |
+| 🟢 Herdado | 17 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -301,11 +301,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| V-01 | Alterações e commit | 🟢 | M1 | |
-| V-02 | Branches | 🟢 | M1 | |
-| V-03 | Diff lado a lado | 🟢 | M1 | |
-| V-04 | Marcas na margem e blame | 🟢 | M1 | |
-| V-05 | Fetch, pull e push | 🟢 | M1 | Confirmar a cobertura |
+| V-01 | Alterações e commit | ✅ | M1 | Verificado em projeto Cargo real: alteração de lib.rs aparece no status, commit pela aplicação guarda apenas os arquivos selecionados e o projeto passa cargo test; teste `vcs_tests::rust_git_changes_commit_branches_blame_and_remote_operations_work_together`. |
+| V-02 | Branches | ✅ | M1 | Criação e checkout de branch pela aplicação em projeto Cargo com Git real, acompanhando status e log; teste integrado `rust_git_changes_commit_branches_blame_and_remote_operations_work_together`. |
+| V-03 | Diff lado a lado | ✅ | M1 | Diff de lib.rs entre HEAD e árvore de trabalho, com realce Rust dos dois lados, linhas alinhadas e fundo de alterações; teste integrado no projeto Cargo e teste headless de diff nativo em G-12. |
+| V-04 | Marcas na margem e blame | ✅ | M1 | Edição de linha em lib.rs produz marca Modified na margem; blame anota todas as linhas com o autor correto. Verificado pela aplicação num projeto Cargo real no teste integrado de Git. |
+| V-05 | Fetch, pull e push | ✅ | M1 | Fetch, pull e push pela aplicação testados num projeto Cargo real com remoto bare local e segundo clone: push cria upstream, fetch mantém HEAD, pull recebe a alteração Rust e cargo test passa. As três ações agora usam operação cancelável, com progresso; cancelamento de cada entrada também testado. SSH/HTTPS e autenticação remota não exercitados nesse teste. |
 | V-06 | Log e histórico de arquivo | ✅ | M5 | Log com filtros de texto da mensagem (literal), autor e branch (ou todos), "Carregar mais" depois de 500 commits e mensagem quando nada corresponde. Mostrar histórico do Git (aba do editor e Explorer, também para pastas) abre o Log só daquele caminho, seguindo renomeações. Testado num repositório real; captura conferida. |
 | V-07 | Merge, rebase e cherry-pick | ✅ | M5 | Merge… e Rebase… na janela Git, no popup de branches e no menu de contexto do Log (com o branch ou commit escolhido); merge com fast-forward, `--no-ff`, `--ff-only`, `--squash` e `--no-commit`; rebase com `--autostash` e aviso de reescrita; Cherry-Pick de um ou vários commits marcados no Log (commits de merge recusados). Tudo em segundo plano, com o progresso do git, Cancelar (mata o git) e a saída mostrada. Faixa da operação em andamento (merge, rebase com passo n de m, cherry-pick, revert) nas janelas Git e Commit, com os arquivos em conflito, Resolver conflitos… (aceitar um lado por arquivo, abrir, marcar como resolvido recusando marcadores restantes), Continuar, Pular commit e Abortar com confirmação. Erros tipados (alterações locais, commit vazio, sem fast-forward, históricos sem relação, operação já em andamento). Testado com repositórios git reais; capturas conferidas. Fora: cherry-pick de merge (`-m`), rebase interativo (V-15) e `rebase --onto` com três argumentos |
 | V-08 | Resolução de conflitos em 3 painéis | ✅ | M5 | Merge… (diálogo Conflitos, menu de contexto ou duplo clique de arquivo em conflito na janela Commit) abre a ferramenta na área do editor: seus (estágio 2) \| resultado editável \| deles (estágio 3), com nomes certos para merge, rebase e cherry-pick. Mudanças de um lado só já vêm aplicadas; conflitos em vermelho, aplicados em verde. Setas » e « entre os painéis e barra para a mudança atual (aceitar esquerda, direita, ambos ou manter a base; anterior/próxima), aplicar as sem conflito e tudo de um lado para o arquivo. Edição livre do resultado (desfazer/refazer devolvem o estado das mudanças), rolagem sincronizada e "Salvar e marcar como resolvido" (`git add`), com confirmação se faltar algo; CRLF preservado. Arquivo binário ou apagado de um lado: recusado, com aceitar um lado (que agora remove o arquivo quando o lado o apagou). Testado com repositórios git reais (inclui teste de propriedade do merge de 3 vias); capturas conferidas. Fora: painel da base visível, destaque por caractere e curvas ligando os painéis |

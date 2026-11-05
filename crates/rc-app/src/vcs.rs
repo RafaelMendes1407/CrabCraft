@@ -606,7 +606,7 @@ impl Vcs {
         self.status.as_ref().map(|s| s.conflicts().map(|e| e.path.clone()).collect()).unwrap_or_default()
     }
 
-    /// A merge, rebase or cherry-pick (or a step of one) is running.
+    /// A cancellable Git operation is running.
     pub fn sequence_running(&self) -> bool {
         self.op_cancel.is_some()
     }
@@ -717,7 +717,7 @@ impl Vcs {
         });
     }
 
-    /// Runs a merge, rebase or cherry-pick step: cancellable, its progress shown, and what git
+    /// Runs a cancellable Git operation, showing its progress and keeping what git
     /// printed (or why it stopped) kept in [`Vcs::op_output`].
     fn sequence<F, Fut>(&mut self, what: &'static str, f: F)
     where
@@ -1033,20 +1033,27 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let upstream = self.status.as_ref().and_then(|s| s.branch.upstream.clone());
         let branch = self.status.as_ref().and_then(|s| s.branch.head.clone());
-        self.op("push", async move {
+        self.sequence("push", move |cancel, progress| async move {
             let opts = if upstream.is_none() { PushOptions { refspec: branch, set_upstream: true, ..Default::default() } } else { PushOptions::default() };
-            repo.push(&opts, None, None).await
+            repo.push(&opts, Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
         });
     }
 
     pub fn pull(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        self.op("pull", async move { repo.pull(&PullOptions::default(), None, None).await });
+        self.sequence("pull", move |cancel, progress| async move {
+            repo.pull(&PullOptions::default(), Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
+        });
     }
 
     pub fn fetch(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        self.op("fetch", async move { repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, None, None).await });
+        self.sequence("fetch", move |cancel, progress| async move {
+            repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
+        });
     }
 
     pub fn checkout(&mut self, branch: &Branch) {

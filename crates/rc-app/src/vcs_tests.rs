@@ -836,3 +836,74 @@ fn the_merge_tool_resolves_a_conflicted_file() {
     pump(&mut app, "merged", |a| a.vcs.busy.is_none() && a.vcs.operation.state.is_none() && a.vcs.log.first().is_some_and(|c| c.is_merge()));
     assert_eq!(git_out(&root, &["show", "HEAD:lib.rs"]), expected);
 }
+
+
+#[test]
+fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, remote, root) = repo_with_remote();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"git_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[lib]\npath=\"lib.rs\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("lib.rs"), "pub fn answer() -> u32 {\n    1\n}\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "Rust project"]);
+    let mut app = open_app(&root);
+    app.open_file(&root.join("lib.rs"));
+    let doc = app.docs.active_doc_mut().unwrap();
+    let at = doc.editor.buffer.pos_at(1, 4);
+    doc.editor.replace(at, at + 1, "2");
+    pump(&mut app, "Rust gutter mark", |a| a.docs.active_doc().unwrap().editor.line_changes.get(&1) == Some(&rc_editor::LineChange::Modified));
+    app.save_all_docs();
+    app.vcs.refresh();
+    pump(&mut app, "Rust changed file", |a| a.vcs.changes().iter().any(|c| c.path == "lib.rs"));
+    app.vcs.open_diff("lib.rs");
+    pump(&mut app, "Rust diff", |a| a.vcs.diff.is_some());
+    let diff = app.vcs.diff.as_ref().unwrap();
+    assert_eq!(diff.left.lang(), rc_syntax::Lang::Rust);
+    assert_eq!(diff.right.lang(), rc_syntax::Lang::Rust);
+    assert!(!diff.right.line_backgrounds.is_empty());
+    app.vcs.message = "Rust answer edit".into();
+    app.vcs.commit(false, None);
+    pump(&mut app, "Rust commit", |a| a.vcs.busy.is_none() && a.vcs.log.iter().any(|c| c.subject == "Rust answer edit"));
+    app.vcs.new_branch("feature/rust");
+    pump(&mut app, "Rust branch", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("feature/rust"));
+    let text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    app.vcs.toggle_blame(&root.join("lib.rs"), text, &mut app.docs);
+    pump(&mut app, "Rust blame", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
+    assert!(app.docs.active_doc().unwrap().editor.annotations.as_ref().unwrap().iter().all(|line| line.contains("Test")));
+    app.vcs.push();
+    assert!(app.vcs.sequence_running(), "push must expose cancellation");
+    pump(&mut app, "Rust push", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(git_out(remote.path(), &["rev-parse", "refs/heads/feature/rust"]).trim(), git_out(&root, &["rev-parse", "HEAD"]).trim());
+    let peer = tempfile::tempdir().unwrap();
+    git(peer.path(), &["clone", "-q", "--branch", "feature/rust", &format!("file://{}", remote.path().display()), "."]);
+    git(peer.path(), &["config", "user.name", "Peer"]);
+    git(peer.path(), &["config", "user.email", "peer@example.com"]);
+    git(peer.path(), &["config", "commit.gpgsign", "false"]);
+    std::fs::write(peer.path().join("lib.rs"), "pub fn answer() -> u32 {\n    3\n}\n").unwrap();
+    git(peer.path(), &["commit", "-qam", "Remote Rust edit"]);
+    git(peer.path(), &["push", "-q"]);
+    let before = git_out(&root, &["rev-parse", "HEAD"]);
+    app.vcs.fetch();
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "Rust fetch", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(git_out(&root, &["rev-parse", "HEAD"]), before, "fetch must preserve the current checkout");
+    app.vcs.pull();
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "Rust pull", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn answer() -> u32 {\n    3\n}\n");
+    // Network entry points keep the same cancellation contract as merge operations.
+    for action in [crate::vcs::Vcs::fetch, crate::vcs::Vcs::pull, crate::vcs::Vcs::push] {
+        action(&mut app.vcs);
+        app.vcs.cancel_operation();
+        pump(&mut app, "cancelled Git remote operation", |a| a.vcs.busy.is_none());
+        assert_eq!(app.vcs.error.as_deref(), Some(rc_kit::i18n::tr("Cancelled")));
+    }
+    let checked = std::process::Command::new("cargo").args(["test", "--offline"]).current_dir(&root).output().unwrap();
+    assert!(checked.status.success(), "{}", String::from_utf8_lossy(&checked.stderr));
+}
