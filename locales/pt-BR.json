@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Este perfil de atalhos é para Windows e Linux; escolha Rider ou VS Code para macOS.",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "Não foi possível ler a versão do disco: {error}",
+    "Revert from Disk requires a regular file": "Reverter do disco exige um arquivo regular",
+    "Revert from Disk supports files up to 8 MB": "Reverter do disco aceita arquivos de até 8 MB",
+    "Revert from Disk requires a UTF-8 text file": "Reverter do disco exige um arquivo de texto UTF-8",
+    "The file changed while reading it; try Revert from Disk again": "O arquivo mudou durante a leitura; tente Reverter do disco novamente",
+    "The document changed or closed while loading; its edits were kept": "O documento mudou ou foi fechado durante a leitura; suas edições foram mantidas",
+    "Disk reload cancelled": "Recarga do disco cancelada",
+    "Only regular files can be opened in the editor": "Apenas arquivos regulares podem ser abertos no editor",
+    "This file is not valid UTF-8 and cannot be edited": "Este arquivo não é UTF-8 válido e não pode ser editado",
+    "The file changed while reading it; try opening it again": "O arquivo mudou durante a leitura; tente abri-lo novamente",
+    "Generated documents cannot be reverted from disk": "Documentos gerados não podem ser revertidos do disco",
+    "Revert from Disk": "Reverter do disco",
+    "Revert from Disk…": "Reverter do disco…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "Descartar as alterações não salvas de {file} e carregar sua versão atual do disco?",
+    "Undo can restore the discarded text. Disk contents are not changed.": "Desfazer pode restaurar o texto descartado. O conteúdo do disco não é alterado.",
+    "Discard and Reload": "Descartar e recarregar",
+    "Reading disk version…": "Lendo versão do disco…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "O arquivo excede o limite de 128 MB do editor ({size} MB)"
   }
 }

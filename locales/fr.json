@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Ce profil de raccourcis cible Windows et Linux ; choisissez Rider ou VS Code pour macOS.",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "Impossible de lire la version sur disque : {error}",
+    "Revert from Disk requires a regular file": "Le rétablissement depuis le disque nécessite un fichier ordinaire",
+    "Revert from Disk supports files up to 8 MB": "Le rétablissement depuis le disque accepte les fichiers jusqu’à 8 Mo",
+    "Revert from Disk requires a UTF-8 text file": "Le rétablissement depuis le disque nécessite un fichier texte UTF-8",
+    "The file changed while reading it; try Revert from Disk again": "Le fichier a changé pendant la lecture ; réessayez le rétablissement depuis le disque",
+    "The document changed or closed while loading; its edits were kept": "Le document a changé ou a été fermé pendant le chargement ; ses modifications ont été conservées",
+    "Disk reload cancelled": "Rechargement depuis le disque annulé",
+    "Only regular files can be opened in the editor": "Seuls les fichiers ordinaires peuvent être ouverts dans l’éditeur",
+    "This file is not valid UTF-8 and cannot be edited": "Ce fichier n’est pas un UTF-8 valide et ne peut pas être modifié",
+    "The file changed while reading it; try opening it again": "Le fichier a changé pendant la lecture ; essayez de l’ouvrir à nouveau",
+    "Generated documents cannot be reverted from disk": "Les documents générés ne peuvent pas être rétablis depuis le disque",
+    "Revert from Disk": "Rétablir depuis le disque",
+    "Revert from Disk…": "Rétablir depuis le disque…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "Abandonner les modifications non enregistrées de {file} et charger sa version actuelle sur disque ?",
+    "Undo can restore the discarded text. Disk contents are not changed.": "Annuler peut restaurer le texte abandonné. Le contenu du disque n’est pas modifié.",
+    "Discard and Reload": "Abandonner et recharger",
+    "Reading disk version…": "Lecture de la version sur disque…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "Le fichier dépasse la limite de 128 Mo de l’éditeur ({size} Mo)"
   }
 }

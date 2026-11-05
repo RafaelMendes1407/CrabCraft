@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Este perfil de atajos es para Windows y Linux; elige Rider o VS Code para macOS.",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "No se pudo leer la versión del disco: {error}",
+    "Revert from Disk requires a regular file": "Revertir desde disco requiere un archivo normal",
+    "Revert from Disk supports files up to 8 MB": "Revertir desde disco admite archivos de hasta 8 MB",
+    "Revert from Disk requires a UTF-8 text file": "Revertir desde disco requiere un archivo de texto UTF-8",
+    "The file changed while reading it; try Revert from Disk again": "El archivo cambió durante la lectura; vuelve a intentar Revertir desde disco",
+    "The document changed or closed while loading; its edits were kept": "El documento cambió o se cerró durante la carga; se conservaron sus cambios",
+    "Disk reload cancelled": "Recarga desde disco cancelada",
+    "Only regular files can be opened in the editor": "Solo se pueden abrir archivos normales en el editor",
+    "This file is not valid UTF-8 and cannot be edited": "Este archivo no es UTF-8 válido y no se puede editar",
+    "The file changed while reading it; try opening it again": "El archivo cambió durante la lectura; vuelve a abrirlo",
+    "Generated documents cannot be reverted from disk": "Los documentos generados no se pueden revertir desde disco",
+    "Revert from Disk": "Revertir desde disco",
+    "Revert from Disk…": "Revertir desde disco…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "¿Descartar los cambios sin guardar de {file} y cargar su versión actual del disco?",
+    "Undo can restore the discarded text. Disk contents are not changed.": "Deshacer puede restaurar el texto descartado. El contenido del disco no cambia.",
+    "Discard and Reload": "Descartar y recargar",
+    "Reading disk version…": "Leyendo versión del disco…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "El archivo supera el límite de 128 MB del editor ({size} MB)"
   }
 }

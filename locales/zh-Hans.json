@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "此快捷键配置适用于 Windows 和 Linux；macOS 请选用 Rider 或 VS Code。",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "无法读取磁盘版本：{error}",
+    "Revert from Disk requires a regular file": "从磁盘还原需要普通文件",
+    "Revert from Disk supports files up to 8 MB": "从磁盘还原支持最大 8 MB 的文件",
+    "Revert from Disk requires a UTF-8 text file": "从磁盘还原需要 UTF-8 文本文件",
+    "The file changed while reading it; try Revert from Disk again": "文件在读取时发生更改；请再次尝试从磁盘还原",
+    "The document changed or closed while loading; its edits were kept": "文档在加载时发生更改或已关闭；其编辑内容已保留",
+    "Disk reload cancelled": "已取消从磁盘重新加载",
+    "Only regular files can be opened in the editor": "编辑器只能打开普通文件",
+    "This file is not valid UTF-8 and cannot be edited": "此文件不是有效的 UTF-8，无法编辑",
+    "The file changed while reading it; try opening it again": "文件在读取时发生更改；请尝试重新打开",
+    "Generated documents cannot be reverted from disk": "生成的文档无法从磁盘还原",
+    "Revert from Disk": "从磁盘还原",
+    "Revert from Disk…": "从磁盘还原…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "要放弃 {file} 未保存的更改并加载其当前磁盘版本吗？",
+    "Undo can restore the discarded text. Disk contents are not changed.": "撤销可恢复被放弃的文本。磁盘内容不会更改。",
+    "Discard and Reload": "放弃并重新加载",
+    "Reading disk version…": "正在读取磁盘版本…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "文件超过编辑器的 128 MB 限制（{size} MB）"
   }
 }

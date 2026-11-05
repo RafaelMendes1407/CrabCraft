@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Dieses Tastenkürzelprofil gilt für Windows und Linux; wählen Sie Rider oder VS Code für macOS.",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "Die Dateiversion auf dem Datenträger konnte nicht gelesen werden: {error}",
+    "Revert from Disk requires a regular file": "Das Zurücksetzen vom Datenträger erfordert eine reguläre Datei",
+    "Revert from Disk supports files up to 8 MB": "Das Zurücksetzen vom Datenträger unterstützt Dateien bis 8 MB",
+    "Revert from Disk requires a UTF-8 text file": "Das Zurücksetzen vom Datenträger erfordert eine UTF-8-Textdatei",
+    "The file changed while reading it; try Revert from Disk again": "Die Datei wurde während des Lesens geändert; versuchen Sie das Zurücksetzen erneut",
+    "The document changed or closed while loading; its edits were kept": "Das Dokument wurde beim Laden geändert oder geschlossen; seine Änderungen wurden beibehalten",
+    "Disk reload cancelled": "Neuladen vom Datenträger abgebrochen",
+    "Only regular files can be opened in the editor": "Im Editor können nur reguläre Dateien geöffnet werden",
+    "This file is not valid UTF-8 and cannot be edited": "Diese Datei enthält kein gültiges UTF-8 und kann nicht bearbeitet werden",
+    "The file changed while reading it; try opening it again": "Die Datei wurde während des Lesens geändert; öffnen Sie sie erneut",
+    "Generated documents cannot be reverted from disk": "Generierte Dokumente können nicht vom Datenträger zurückgesetzt werden",
+    "Revert from Disk": "Vom Datenträger zurücksetzen",
+    "Revert from Disk…": "Vom Datenträger zurücksetzen…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "Ungespeicherte Änderungen an {file} verwerfen und die aktuelle Dateiversion vom Datenträger laden?",
+    "Undo can restore the discarded text. Disk contents are not changed.": "Rückgängig kann den verworfenen Text wiederherstellen. Der Dateiinhalt auf dem Datenträger bleibt unverändert.",
+    "Discard and Reload": "Verwerfen und neu laden",
+    "Reading disk version…": "Dateiversion wird vom Datenträger gelesen…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "Die Datei überschreitet das 128-MB-Limit des Editors ({size} MB)"
   }
 }

@@ -24,6 +24,7 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    RevertDisk(crate::disk_revert::Ticket),
     CloneRepository,
     CargoDependencies,
     /// Picks a running process for the debugger.
@@ -134,6 +135,7 @@ enum Outcome {
 pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut dialog) = app.dialog.take() else { return };
     let outcome = match &mut dialog {
+        Dialog::RevertDisk(ticket) => revert_disk(app, ctx, ticket),
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
         Dialog::CloneRepository => if crate::clone_project::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
@@ -2067,6 +2069,19 @@ fn finish_rename(app: &mut CrabCraftApp, r: &mut crate::file_rename::FileRename,
 /// A line of code short enough for one row.
 fn clip(s: &str) -> String {
     if s.chars().count() > 60 { format!("{}…", s.chars().take(59).collect::<String>()) } else { s.to_string() }
+}
+
+fn revert_disk(app: &mut CrabCraftApp, ctx: &Context, ticket: &crate::disk_revert::Ticket) -> Outcome {
+    let valid = ticket.index(&app.docs).is_some();
+    let ((ok, cancel), esc) = modal(ctx, "revert_disk", 520.0, |ui| {
+        title(ui, tr("Revert from Disk"));
+        ui.label(trf("Discard the unsaved changes to {file} and load its current disk version?", &[("file", &ticket.path.display())]));
+        ui.label(tr("Undo can restore the discarded text. Disk contents are not changed."));
+        if !valid { ui.colored_label(rc_kit::pal(ui).error, crate::disk_revert::Error::Stale.to_string()); }
+        buttons(ui, tr("Discard and Reload"), valid)
+    });
+    if ok { app.start_disk_revert(ticket.clone()); return Outcome::Close; }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> Outcome {

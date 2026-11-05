@@ -61,6 +61,7 @@ pub struct CrabCraftApp {
     pub editor_config: EditorConfig,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
+    pub disk_revert: Option<crate::disk_revert::Job>,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -273,6 +274,7 @@ impl CrabCraftApp {
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
+            disk_revert: None,
             keymap,
             editor_config,
             workspace: None,
@@ -1341,6 +1343,7 @@ impl CrabCraftApp {
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
+        self.disk_revert = None;
         self.repl_starting = None;
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
@@ -1564,6 +1567,36 @@ impl CrabCraftApp {
         let inbox = rc_core::Inbox::new(self.waker.clone());
         h.list(&doc.path, inbox.sender());
         self.dialog = Some(Dialog::LocalHistory(Box::new(crate::ui::dialogs::LocalHistoryView::new(doc.path.clone(), inbox))));
+    }
+
+    pub fn request_disk_revert(&mut self, index: usize) {
+        let Some(doc) = self.docs.list.get(index) else { return; };
+        if doc.generated { self.notify(tr("Generated documents cannot be reverted from disk"), false); return; }
+        let ticket = crate::disk_revert::Ticket::capture(doc);
+        let dirty = doc.is_modified();
+        self.disk_revert = None;
+        if dirty { self.dialog = Some(Dialog::RevertDisk(ticket)); }
+        else { self.start_disk_revert(ticket); }
+    }
+
+    pub fn start_disk_revert(&mut self, ticket: crate::disk_revert::Ticket) {
+        if ticket.index(&self.docs).is_none() {
+            self.notify(crate::disk_revert::Error::Stale.to_string(), true);
+            return;
+        }
+        match crate::disk_revert::Job::start(ticket, self.waker.clone()) {
+            Ok(job) => self.disk_revert = Some(job),
+            Err(error) => self.notify(error.to_string(), true),
+        }
+    }
+
+    fn poll_disk_revert(&mut self) {
+        let Some(result) = self.disk_revert.as_ref().and_then(crate::disk_revert::Job::poll) else { return; };
+        let Some(job) = self.disk_revert.take() else { return; };
+        match result.and_then(|snapshot| crate::disk_revert::apply(&mut self.docs, &job.ticket, snapshot)) {
+            Ok(_) => { self.session_dirty = true; }
+            Err(error) => self.notify(error.to_string(), true),
+        }
     }
 
     pub fn save_all_docs(&mut self) {
@@ -2078,6 +2111,9 @@ impl CrabCraftApp {
             self.runner.external_tools = self.settings.external_tools.clone();
         }
         match action {
+            Action::RevertFromDisk => {
+                if let Some(index) = self.docs.active { self.request_disk_revert(index); }
+            }
             Action::SaveAll | Action::Save => {
                 self.save_all_docs();
                 self.save_session();
@@ -3376,6 +3412,7 @@ impl eframe::App for CrabCraftApp {
         self.handle_debug(outs);
         self.poll_auto_attach();
         self.poll_repl();
+        self.poll_disk_revert();
         self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {

@@ -7,17 +7,20 @@ use rc_kit::i18n::trf;
 use rc_syntax::ParserPool;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::io::Read;
 use std::time::SystemTime;
 
 /// Files bigger than this open read-only (no syntax tree).
 const LARGE_FILE: u64 = 8 * 1024 * 1024;
 /// Files bigger than this do not open at all.
-const HUGE_FILE: u64 = 64 * 1024 * 1024;
+const HUGE_FILE: u64 = 128 * 1024 * 1024;
 
 pub struct Doc {
     pub editor: EditorState,
     pub path: PathBuf,
     pub mtime: Option<SystemTime>,
+    /// Invalidates pending disk snapshots after writes, reloads or watcher events.
+    pub disk_epoch: u64,
     pub bom: bool,
     pub pinned: bool,
     /// Opened with a single click and not edited yet: the next single-click open replaces it
@@ -147,25 +150,71 @@ pub fn style_fixes(editor: &EditorState, style: &rc_core::code_style::CodeStyle)
     edits
 }
 
-/// Reads a text file: (text without BOM, had BOM). Binary files are refused.
+#[derive(Debug)]
+pub enum TextReadError {
+    Io(std::io::Error),
+    NotRegular,
+    TooLarge(u64),
+    Binary,
+    InvalidUtf8,
+    Changed,
+}
+impl std::fmt::Display for TextReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            Self::Io(error) => error.to_string(),
+            Self::NotRegular => rc_kit::i18n::tr("Only regular files can be opened in the editor").to_string(),
+            Self::TooLarge(size) => trf("The file exceeds the editor's 128 MB limit ({size} MB)", &[("size", &(size / 1024 / 1024))]),
+            Self::Binary => rc_kit::i18n::tr("This is a binary file and cannot be edited").to_string(),
+            Self::InvalidUtf8 => rc_kit::i18n::tr("This file is not valid UTF-8 and cannot be edited").to_string(),
+            Self::Changed => rc_kit::i18n::tr("The file changed while reading it; try opening it again").to_string(),
+        })
+    }
+}
+impl std::error::Error for TextReadError {}
+impl From<std::io::Error> for TextReadError { fn from(error: std::io::Error) -> Self { Self::Io(error) } }
+
+fn same_metadata(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
+    if !after.is_file() || before.len() != after.len() || before.modified().ok() != after.modified().ok() { return false; }
+    #[cfg(unix)] {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != after.dev() || before.ino() != after.ino() { return false; }
+    }
+    true
+}
+
+/// Checked legacy document reader. Opening and watcher reload still run synchronously;
+/// regular-file guards prevent FIFOs/devices from blocking an otherwise ordinary read.
+pub fn read_text_checked(path: &Path) -> Result<(String, bool, Option<SystemTime>), TextReadError> {
+    if !std::fs::metadata(path)?.is_file() { return Err(TextReadError::NotRegular); }
+    let mut options = std::fs::OpenOptions::new(); options.read(true);
+    #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    let mut file = options.open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() { return Err(TextReadError::NotRegular); }
+    if metadata.len() > HUGE_FILE { return Err(TextReadError::TooLarge(metadata.len())); }
+    let mut bytes = Vec::new();
+    let mut chunk = [0u8; 64 * 1024];
+    loop {
+        let count = match file.read(&mut chunk) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if count == 0 { break; }
+        if bytes.len() as u64 + count as u64 > HUGE_FILE { return Err(TextReadError::TooLarge(bytes.len() as u64 + count as u64)); }
+        bytes.extend_from_slice(&chunk[..count]);
+    }
+    if !same_metadata(&metadata, &file.metadata()?) || !same_metadata(&metadata, &std::fs::metadata(path)?) { return Err(TextReadError::Changed); }
+    if bytes.contains(&0) { return Err(TextReadError::Binary); }
+    let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
+    if bom { bytes.drain(..3); }
+    let text = String::from_utf8(bytes).map_err(|_| TextReadError::InvalidUtf8)?;
+    Ok((text, bom, metadata.modified().ok()))
+}
+
+/// String-error adapter for existing document/refactoring callers.
 pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), String> {
-    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
-    if meta.len() > HUGE_FILE {
-        return Err(trf("The file is too large to open ({size} MB)", &[("size", &(meta.len() / 1024 / 1024))]));
-    }
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let (bytes, bom) = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
-        Some(rest) => (rest.to_vec(), true),
-        None => (bytes, false),
-    };
-    if bytes.iter().take(8000).any(|&b| b == 0) {
-        return Err(rc_kit::i18n::tr("This is a binary file and cannot be edited").to_string());
-    }
-    let text = match String::from_utf8(bytes) {
-        Ok(t) => t,
-        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
-    };
-    Ok((text, bom, meta.modified().ok()))
+    read_text_checked(path).map_err(|error| error.to_string())
 }
 
 impl Docs {
@@ -221,7 +270,7 @@ impl Docs {
         };
         apply_style(&mut editor, &style);
         let light_project = if self.style_root.is_none() && !scratch { cargo_project_of(&path) } else { None };
-        self.list.push(Doc { editor, path: path.clone(), mtime, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
+        self.list.push(Doc { editor, path: path.clone(), mtime, disk_epoch: 0, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -345,6 +394,7 @@ impl Docs {
         bytes.extend_from_slice(doc.editor.buffer.to_disk_string().as_bytes());
         rc_core::paths::write_atomic(&doc.path, &bytes).map_err(|e| trf("Could not save {file}: {error}", &[("file", &doc.name()), ("error", &e)]))?;
         doc.editor.buffer.mark_saved();
+        doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         doc.mtime = std::fs::metadata(&doc.path).and_then(|m| m.modified()).ok();
         doc.conflict = false;
         // The version on disk before this save, then the saved one (equal ones are skipped).
@@ -369,6 +419,7 @@ impl Docs {
         let Some(doc) = self.list.get_mut(i) else { return };
         let previous = doc.saved.clone();
         doc.editor.reload(text);
+        doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         doc.bom = bom;
         doc.mtime = mtime;
         doc.conflict = false;
@@ -389,6 +440,7 @@ impl Docs {
     pub fn on_disk_change(&mut self, path: &Path) {
         let Some(i) = self.index_of(path) else { return };
         let doc = &mut self.list[i];
+        doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
         if mtime.is_some() && mtime == doc.mtime {
             return; // our own save
@@ -483,6 +535,16 @@ mod tests {
         docs.active = Some(1);
         docs.close(1);
         assert_eq!(docs.active, Some(0));
+    }
+
+    #[test]
+    fn checked_reads_reject_invalid_utf8_and_oversized_regular_files() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("unsafe.rs");
+        std::fs::write(&file, [0xFF]).unwrap();
+        assert!(matches!(read_text_checked(&file), Err(TextReadError::InvalidUtf8)));
+        std::fs::File::create(&file).unwrap().set_len(HUGE_FILE + 1).unwrap();
+        assert!(matches!(read_text_checked(&file), Err(TextReadError::TooLarge(_))));
     }
 
     #[test]

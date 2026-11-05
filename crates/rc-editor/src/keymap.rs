@@ -106,6 +106,7 @@ pub enum Action {
     NavigateForward,
     Save,
     SaveAll,
+    RevertFromDisk,
     CloseTab,
     NextTab,
     PreviousTab,
@@ -216,6 +217,7 @@ impl Action {
                 | NavigateForward
                 | Save
                 | SaveAll
+                | RevertFromDisk
                 | CloseTab
                 | NextTab
                 | PreviousTab

@@ -1957,5 +1957,25 @@
   "keymap": {
     "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Ten profil skrótów jest dla Windows i Linux; dla macOS wybierz Rider lub VS Code.",
     "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+  },
+  "disk_revert": {
+    "Could not read the disk version: {error}": "Nie można odczytać wersji z dysku: {error}",
+    "Revert from Disk requires a regular file": "Przywracanie z dysku wymaga zwykłego pliku",
+    "Revert from Disk supports files up to 8 MB": "Przywracanie z dysku obsługuje pliki do 8 MB",
+    "Revert from Disk requires a UTF-8 text file": "Przywracanie z dysku wymaga pliku tekstowego UTF-8",
+    "The file changed while reading it; try Revert from Disk again": "Plik zmienił się podczas odczytu; spróbuj ponownie przywrócić go z dysku",
+    "The document changed or closed while loading; its edits were kept": "Dokument zmienił się lub został zamknięty podczas ładowania; zachowano jego zmiany",
+    "Disk reload cancelled": "Anulowano ponowne ładowanie z dysku",
+    "Only regular files can be opened in the editor": "W edytorze można otwierać tylko zwykłe pliki",
+    "This file is not valid UTF-8 and cannot be edited": "Ten plik nie ma poprawnego kodowania UTF-8 i nie może być edytowany",
+    "The file changed while reading it; try opening it again": "Plik zmienił się podczas odczytu; spróbuj otworzyć go ponownie",
+    "Generated documents cannot be reverted from disk": "Nie można przywracać wygenerowanych dokumentów z dysku",
+    "Revert from Disk": "Przywróć z dysku",
+    "Revert from Disk…": "Przywróć z dysku…",
+    "Discard the unsaved changes to {file} and load its current disk version?": "Odrzucić niezapisane zmiany w {file} i załadować aktualną wersję z dysku?",
+    "Undo can restore the discarded text. Disk contents are not changed.": "Cofnięcie przywróci odrzucony tekst. Zawartość dysku nie ulega zmianie.",
+    "Discard and Reload": "Odrzuć i załaduj ponownie",
+    "Reading disk version…": "Odczytywanie wersji z dysku…",
+    "The file exceeds the editor's 128 MB limit ({size} MB)": "Plik przekracza limit edytora wynoszący 128 MB ({size} MB)"
   }
 }
