@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0
+
+### New and improved
+- **Rust editing:** reviewed Change Signature and Move Items refactorings, one-step macro
+  expansion, borrow-checker ranges, hierarchy/navigation and Cargo dependency workflows.
+- **Responsive workspace:** background document opening, saving, formatting, session restoration
+  and Project tree reads with cancellation and stale-result checks.
+- **Debugging:** GDB and LLVM LLDB DAP selection, multiple sessions and parallel stacks,
+  with adapter-specific capabilities documented.
+- **Remote work:** a native SSH Rust editor with remote rust-analyzer/Cargo and reviewed writes;
+  SFTP and explicit FTPS file deployment with integrity checks and bounded protocol support.
+- **Optional integrations:** web-language syntax and configured LSP servers, HTTP environments,
+  reviewed GUI OAuth/response scripts, Axum endpoint assistance, SQLite/local PostgreSQL,
+  local Ollama assistance, ACP agents and local plugins. Tools and services remain separate.
+- **Documentation and distribution:** a complete documentation index, clearer trust and platform
+  prerequisites, consistent package versions, and bundled third-party license notices.
+
+### Validation and limitations
+- [FEATURES.md](https://github.com/RafaelMendes1407/CrabCraft/blob/v0.4.0/FEATURES.md) records 246 ready features, seven partial and five out of scope.
+  Ready entries cite real Rust-project evidence within their documented scope.
+- The seven partial entries are real Windows/WSL workflow validation; licensed Ferrocene SDK
+  validation; real public Playground gist upload; authenticated administrator execution;
+  authenticated administrator debugging; Docker runtime execution; and Dev Containers runtime
+  workflows. Several also retain unsupported operations. Docker testing was limited by host
+  AppArmor/runtime restrictions; fixture success does not establish container execution.
+- Linux and Windows CI build/core-test coverage does not verify interactive Windows desktop
+  behavior. Desktop/debugger/accessibility evidence is documented per guide, primarily on Linux.
+- This remains an early preview, with no claim of feature parity with RustRover. Opening a
+  project does not run its code; Rust tool execution requires explicit project trust.
+- Builds are unsigned. Optional integrations need separately installed tools/services and
+  reviewed execution; consult [the documentation index](https://github.com/RafaelMendes1407/CrabCraft/blob/v0.4.0/docs/README.md) before use.
+
+### Downloads
+- `CrabCraft-0.4.0-setup.exe`: Windows installer.
+- `CrabCraft-0.4.0-windows-x64.zip`: portable Windows build.
+- `CrabCraft-0.4.0-linux-x86_64.tar.gz`: Linux archive with `install.sh`.
+- `SHA256SUMS.txt`: release checksums.
+
 ## 0.3.0
 
 ### New

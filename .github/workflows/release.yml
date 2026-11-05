@@ -43,7 +43,9 @@ jobs:
           mkdir -p "$dir"
           install -m 755 target/release/crabcraft packaging/linux/install.sh "$dir/"
           install -m 644 assets/icon.png "$dir/crabcraft.png"
-          install -m 644 assets/crabcraft.desktop LICENSE-MIT LICENSE-APACHE "$dir/"
+          install -m 644 assets/crabcraft.desktop "$dir/"
+          python3 scripts/copy_notices.py "$dir"
+          "$dir/crabcraft" --version | grep -Fx "CrabCraft $version"
           tar -czf "CrabCraft-$version-linux-x86_64.tar.gz" "$dir"
           ldd "$dir/crabcraft"
 
@@ -77,7 +79,12 @@ jobs:
           "VERSION=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           New-Item -ItemType Directory CrabCraft | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/crabcraft.exe CrabCraft/CrabCraft.exe
-          Copy-Item LICENSE-MIT, LICENSE-APACHE CrabCraft/
+          python scripts/copy_notices.py CrabCraft
+          if ($LASTEXITCODE -ne 0) { throw "Copying license notices failed" }
+          $reported = & ./CrabCraft/CrabCraft.exe --version
+          if ($LASTEXITCODE -ne 0 -or $reported -ne "CrabCraft $version") {
+            throw "Packaged executable reported an unexpected version: $reported"
+          }
           Compress-Archive -Path CrabCraft -DestinationPath "CrabCraft-$version-windows-x64.zip"
           # The exe must only need system DLLs (the C runtime is linked statically).
           $objdump = Get-ChildItem "$(rustc --print sysroot)/lib/rustlib" -Recurse -Filter llvm-objdump.exe | Select-Object -First 1
@@ -120,6 +127,6 @@ jobs:
         run: |
           (cd dist && sha256sum * > SHA256SUMS.txt)
           version=${GITHUB_REF_NAME#v}
-          awk -v v="## $version" 'index($0, v) == 1 { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
+          awk -v v="## $version" '$0 == v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
           test -s notes.md
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "CrabCraft $version" --notes-file notes.md

@@ -12,8 +12,8 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-text` | Rope buffer, change sets, multi-cursor selections, grouped undo, UTF-16 positions. No UI. |
 | `rc-syntax` | tree-sitter parsing on a background thread, highlighting, folding, bracket matching. |
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
-| `rc-lsp` | JSON-RPC/LSP client and the rust-analyzer and Roslyn adapters. |
-| `rc-dap` | DAP client and the GDB and netcoredbg sessions. |
+| `rc-lsp` | JSON-RPC/LSP client, rust-analyzer, explicitly configured web-language servers, and the inherited Roslyn adapter. |
+| `rc-dap` | DAP client, GDB and LLVM LLDB DAP sessions, and inherited netcoredbg support. |
 | `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
 | `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
 | `rc-vcs` | Git through the `git` CLI. |
@@ -36,19 +36,36 @@ or on the shared tokio runtime and reports back through channels that wake the U
 - **Look.** Colours come from `rc_kit::pal(ui)` (UI) and `rc_kit::theme::scheme(dark)`
   (editor/terminal), icons from `rc_kit::ico::*` painted with `rc_kit::icons::paint` (16 pt,
   pixel-snapped). Row height 24 pt for trees/lists, 36 pt tool window headers, 13 pt text.
-- **Tests.** No synthetic input to real windows. UI is tested with `egui_kittest` (headless;
-  GPU captures are `#[ignore]` tests writing to `target/snapshots/`). Integration tests run
-  against the real `dotnet` SDK (8.0 and 10.0 installed), Roslyn and netcoredbg, with the
-  fixtures in `tests/fixtures/` (`Shop`: console, class library, ASP.NET API and xUnit /
-  NUnit / MSTest projects; `TenProjects`: ten libraries in a `.slnx`).
-- **Commits.** One commit per finished task, short one-line Spanish messages, capitalized
-  (e.g. "Añade parser de TRX"), no attribution trailers.
+- **Tests.** Use a current stable Rust toolchain with the checked-in lockfile. Core library
+  tests run without a window; UI widget tests use `egui_kittest` headlessly. GPU captures
+  and tests needing external services or publication are individually ignored with prerequisites.
+  Rust integration tests use real Cargo projects and explicitly installed tools such as
+  rust-analyzer, Git, GDB or LLVM `lldb-dap`. Optional HTTP, database, SSH, container, AI and
+  coverage workflows document their own prerequisites; a fixture or build does not prove a
+  real target-platform workflow. Inherited .NET fixtures remain separate from Rust evidence.
+  See [the documentation index](README.md) and [FEATURES.md](../FEATURES.md).
+- **Commits.** Make small, reviewable commits with short English messages. Update
+  `FEATURES.md` in the commit that changes a feature and run
+  `python3 scripts/features_summary.py`. Mark a feature ready only with real Rust-project evidence.
 
 ## Packaging
 
-Everything the app needs (fonts, icons, translations) is embedded in the binary.
-`scripts/bundle.sh` builds `CrabCraft.app` (`--universal`, `--dmg`, `--zip`) and the Windows
-x64/ARM64 executables with cargo-xwin (`--windows`, DirectX 12, statically linked C runtime,
-icon from `assets/icon.ico` via `crates/rc-app/build.rs`). Application icons are generated
-from `assets/icon.svg` by `scripts/make_icon.py`. The Roslyn language server and netcoredbg
-are not bundled: they are located or downloaded on first use into the data folder.
+Fonts, icons and translations are embedded in the binary. External toolchains, language
+servers, debuggers and optional services have separate installation and trust requirements;
+opening a project must not install or execute them automatically.
+
+The official [release workflow](../.github/workflows/release.yml) builds a Linux x86_64
+archive, Windows x64 portable archive and Windows installer. Tag publication uses the matching
+workspace version, the version section in [CHANGELOG.md](../CHANGELOG.md), and SHA-256 checksums.
+Manual workflow runs produce artifacts without publishing a release. The Linux package includes
+its desktop entry, icon and installer; Windows packaging checks runtime DLL dependencies.
+
+`scripts/copy_notices.py` copies project licenses and third-party asset notices into each
+package while preserving their relative paths. Source and license details are in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Keep these files in distributed packages.
+
+The optional `scripts/bundle.sh` supports macOS application bundles, universal binaries, DMG/ZIP,
+and cargo-xwin Windows builds. These are separate from the official Linux/Windows release jobs;
+their existence is not evidence of tested macOS desktop support. Application icons are generated
+from `assets/icon.svg` by `scripts/make_icon.py`; Windows embeds `assets/icon.ico` through
+`crates/rc-app/build.rs`.
