@@ -206,19 +206,6 @@ fn screens() {
         }
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("markdown-preview-{suffix}.png"))).unwrap();
-        // NuGet: installed packages with updates from nuget.org, one selected.
-        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Nuget);
-        h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 420.0);
-        h.run_steps(3);
-        h.state_mut().nuget.select_for_test("xunit");
-        let start = std::time::Instant::now();
-        while start.elapsed() < std::time::Duration::from_secs(25) && !h.state().nuget.ready_for_test() {
-            h.run_steps(1);
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        h.run_steps(3);
-        h.render().unwrap().save(out.join(format!("nuget-{suffix}.png"))).unwrap();
-        h.state_mut().dock.bottom = None;
         // Split right, then a tab in its own window.
         {
             let app = h.state_mut();
@@ -3843,4 +3830,20 @@ fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
     assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
     assert_eq!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), text);
     assert_eq!(std::fs::read_to_string(source).unwrap(), text);
+}
+
+#[test]
+fn settings_keep_the_same_width_when_switching_pages() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    let mut widths = Vec::new();
+    for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::Appearance] {
+        h.state_mut().open_settings(page);
+        h.run_steps(4);
+        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        widths.push(rect.width());
+    }
+    assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "settings widths: {widths:?}");
 }

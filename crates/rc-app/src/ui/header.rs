@@ -118,7 +118,28 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
-                        ui.set_min_width(200.0);
+                        ui.set_min_width(260.0);
+                        for (label, actions) in [
+                            (tr("Edit"), vec![(tr("Undo"), Action::Undo), (tr("Redo"), Action::Redo), (tr("Find"), Action::Find)]),
+                            (tr("Build"), vec![(tr("Build Project"), Action::Build)]),
+                            (tr("Run"), vec![(tr("Run"), Action::Run), (tr("Debug"), Action::Debug), (tr("Run Tests"), Action::RunTests), (tr("Stop"), Action::StopRun)]),
+                        ] {
+                            ui.menu_button(label, |ui| {
+                                for (label, action) in actions {
+                                    if theme::menu_item(ui, crate::search::action_icon(action), label, false).clicked() {
+                                        app.pending.push(action);
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        }
+                        ui.menu_button(tr("Help"), |ui| {
+                            if theme::menu_item(ui, Some(ico::INFO), tr("About CrabCraft"), false).clicked() {
+                                app.dialog = Some(crate::ui::dialogs::Dialog::About);
+                                ui.close();
+                            }
+                        });
+                        ui.separator();
                         if theme::menu_item(ui, Some(ico::RUN_ANYTHING), tr("Local AI assistant"), false).clicked() {
                             app.local_ai.open = true;
                             ui.close();
@@ -326,6 +347,9 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.workspace.is_some() {
         let hash = name.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
         let (a, b) = BADGE_COLORS[(hash as usize) % BADGE_COLORS.len()];
+        for spread in (1..=6).rev() {
+            ui.painter().rect_filled(sq.expand(spread as f32 * 0.55), 5.0 + spread as f32 * 0.55, rgb(a).gamma_multiply(0.025));
+        }
         ui.painter().add(egui::Shape::mesh(gradient_rounded_rect(sq, 5.0, rgb(a), rgb(b))));
         ui.painter().text(sq.center() + vec2(0.0, 0.5), Align2::CENTER_CENTER, initials(&name), theme::bold(10.0), Color32::WHITE);
     } else {

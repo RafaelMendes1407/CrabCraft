@@ -509,49 +509,6 @@
     "Needs cargo-nextest installed. Doctests do not run with it.": "需要安装 cargo-nextest。使用它时不运行文档测试。",
     "Run tests with cargo-nextest": "使用 cargo-nextest 运行测试"
   },
-  "nuget": {
-    "Could not search NuGet: {error}": "无法搜索 NuGet：{error}",
-    "Install": "安装",
-    "Installed": "已安装",
-    "Installed version: {version}": "已安装版本：{version}",
-    "Latest": "最新",
-    "Manage NuGet Packages…": "管理 NuGet 包…",
-    "No packages found": "未找到包",
-    "No packages installed. Type to search nuget.org.": "未安装任何包。键入以搜索 nuget.org。",
-    "NuGet Packages — {project}": "NuGet 包 — {project}",
-    "Prerelease": "预发行版",
-    "Remove": "移除",
-    "Search packages on nuget.org": "在 nuget.org 上搜索包",
-    "Select a package to see its versions": "选择一个包以查看其版本",
-    "Update": "更新",
-    "Version": "版本",
-    "{id} installed": "已安装 {id}",
-    "{id} removed": "已移除 {id}",
-    "{n} downloads": "{n} 次下载"
-  },
-  "nugetwindow": {
-    "1 project": "1 个项目",
-    "Browse": "浏览",
-    "Consolidate ({n})": "合并 ({n})",
-    "Every package is up to date": "所有包都是最新的",
-    "Every project uses the same versions": "所有项目使用相同的版本",
-    "Filter installed packages": "筛选已安装的包",
-    "Install or update in {n} selected": "在 {n} 个所选项目中安装或更新",
-    "Installed ({n})": "已安装 ({n})",
-    "Installing {id} {version} in {project}…": "正在将 {id} {version} 安装到 {project}…",
-    "Project": "项目",
-    "Project site": "项目网站",
-    "Remove from selected": "从所选项目中移除",
-    "Removing {id} from {project}…": "正在从 {project} 移除 {id}…",
-    "Search packages": "搜索包",
-    "Select a package to see its details and the projects that use it": "选择一个包以查看其详细信息和使用它的项目",
-    "Source": "源",
-    "The solution has no package references": "解决方案没有包引用",
-    "Updates ({n})": "更新 ({n})",
-    "by {authors}": "作者：{authors}",
-    "{id}: done": "{id}：完成",
-    "{n} projects": "{n} 个项目"
-  },
   "project-env": {
     "Line {line} is not NAME=value with a valid name.": "第 {line} 行不是名称有效的 NAME=value 格式。",
     "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "每行一个 NAME=value。应用于每个 Cargo 命令、其启动的程序以及 rust-analyzer；运行配置中的变量优先。",
@@ -602,7 +559,6 @@
     "Rerun": "重新运行",
     "Rerun Failed Tests": "重新运行失败的测试",
     "Restore": "还原",
-    "Restore NuGet Packages": "还原 NuGet 包",
     "Running tests of {project}…": "正在运行 {project} 的测试…",
     "Running… {passed} passed, {failed} failed": "正在运行… {passed} 通过，{failed} 失败",
     "Show Passed": "显示已通过",
@@ -3028,5 +2984,13 @@
     "Invalid container settings or Linux source path": "容器设置或 Linux 源文件路径无效",
     "Container operation timed out": "容器操作超时",
     "Container error: {error}": "容器错误：{error}"
+  },
+  "packages": {
+    "Install": "安装",
+    "Remove": "移除",
+    "Update": "更新",
+    "{n} downloads": "{n} 次下载",
+    "1 project": "1 个项目",
+    "{n} projects": "{n} 个项目"
   }
 }

@@ -4,6 +4,12 @@ Lista de tudo o que o **RustRover 2026.2** oferece, com a situação de cada ite
 É o documento de acompanhamento do projeto: **atualize o status no mesmo commit que implementa
 a funcionalidade**.
 
+Interface: removidos o gerenciador e o cliente NuGet herdados; configurações com largura
+horizontal limitada, margens nos painéis de ferramentas, menu de edição/compilação/execução/ajuda,
+halo suave no projeto e transição no destino de arraste de abas. O teste
+`settings_keep_the_same_width_when_switching_pages` verifica a largura entre categorias.
+Validação visual interativa pendente; sem alteração dos status de prontidão.
+
 ## Legenda
 
 | Status | Significado |

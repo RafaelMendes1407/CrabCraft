@@ -260,7 +260,18 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
                 _ => (None, None),
             };
             if let Some(zone) = zone {
-                painter.rect(zone.shrink(4.0), 6.0, p.accent.gamma_multiply(0.16), egui::Stroke::new(1.5, p.accent), egui::StrokeKind::Inside);
+                let animation_id = egui::Id::new(("tab_drop_animation", g.id, doc, format!("{drop:?}")));
+                let now = ui.input(|input| input.time);
+                let started = ui.ctx().data_mut(|data| {
+                    let (last, started) = data.get_temp::<(f64, f64)>(animation_id).unwrap_or((now, now));
+                    let started = if now - last > 0.1 { now } else { started };
+                    data.insert_temp(animation_id, (now, started));
+                    started
+                });
+                let progress = ((now - started) as f32 / 0.18).clamp(0.0, 1.0);
+                if progress < 1.0 { ui.ctx().request_repaint(); }
+                let inset = 4.0 + (1.0 - progress) * 14.0;
+                painter.rect(zone.shrink(inset), 6.0, p.accent.gamma_multiply(0.08 + progress * 0.12), egui::Stroke::new(1.5 + progress, p.accent), egui::StrokeKind::Inside);
             }
             drop
         }

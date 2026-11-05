@@ -509,49 +509,6 @@
     "Needs cargo-nextest installed. Doctests do not run with it.": "Requiere cargo-nextest instalado. Con él no se ejecutan los doctests.",
     "Run tests with cargo-nextest": "Ejecutar pruebas con cargo-nextest"
   },
-  "nuget": {
-    "Could not search NuGet: {error}": "No se pudo buscar en NuGet: {error}",
-    "Install": "Instalar",
-    "Installed": "Instalado",
-    "Installed version: {version}": "Versión instalada: {version}",
-    "Latest": "Más reciente",
-    "Manage NuGet Packages…": "Administrar paquetes NuGet…",
-    "No packages found": "No se encontraron paquetes",
-    "No packages installed. Type to search nuget.org.": "No hay paquetes instalados. Escribe para buscar en nuget.org.",
-    "NuGet Packages — {project}": "Paquetes NuGet — {project}",
-    "Prerelease": "Versión preliminar",
-    "Remove": "Quitar",
-    "Search packages on nuget.org": "Buscar paquetes en nuget.org",
-    "Select a package to see its versions": "Selecciona un paquete para ver sus versiones",
-    "Update": "Actualizar",
-    "Version": "Versión",
-    "{id} installed": "{id} instalado",
-    "{id} removed": "{id} eliminado",
-    "{n} downloads": "{n} descargas"
-  },
-  "nugetwindow": {
-    "1 project": "1 proyecto",
-    "Browse": "Explorar",
-    "Consolidate ({n})": "Consolidar ({n})",
-    "Every package is up to date": "Todos los paquetes están actualizados",
-    "Every project uses the same versions": "Todos los proyectos usan las mismas versiones",
-    "Filter installed packages": "Filtrar paquetes instalados",
-    "Install or update in {n} selected": "Instalar o actualizar en {n} seleccionados",
-    "Installed ({n})": "Instalados ({n})",
-    "Installing {id} {version} in {project}…": "Instalando {id} {version} en {project}…",
-    "Project": "Proyecto",
-    "Project site": "Sitio del proyecto",
-    "Remove from selected": "Quitar de los seleccionados",
-    "Removing {id} from {project}…": "Quitando {id} de {project}…",
-    "Search packages": "Buscar paquetes",
-    "Select a package to see its details and the projects that use it": "Selecciona un paquete para ver sus detalles y los proyectos que lo usan",
-    "Source": "Origen",
-    "The solution has no package references": "La solución no tiene referencias a paquetes",
-    "Updates ({n})": "Actualizaciones ({n})",
-    "by {authors}": "de {authors}",
-    "{id}: done": "{id}: hecho",
-    "{n} projects": "{n} proyectos"
-  },
   "project-env": {
     "Line {line} is not NAME=value with a valid name.": "La línea {line} no es NOMBRE=valor con un nombre válido.",
     "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Un NOMBRE=valor por línea. Se aplican a todos los comandos de Cargo, a los programas que inician y a rust-analyzer; las variables de una configuración de ejecución tienen prioridad.",
@@ -602,7 +559,6 @@
     "Rerun": "Volver a ejecutar",
     "Rerun Failed Tests": "Volver a ejecutar las pruebas fallidas",
     "Restore": "Restaurar",
-    "Restore NuGet Packages": "Restaurar paquetes NuGet",
     "Running tests of {project}…": "Ejecutando las pruebas de {project}…",
     "Running… {passed} passed, {failed} failed": "Ejecutando… {passed} correctas, {failed} fallidas",
     "Show Passed": "Mostrar las correctas",
@@ -3028,5 +2984,13 @@
     "Invalid container settings or Linux source path": "Configuración del contenedor o ruta Linux no válida",
     "Container operation timed out": "La operación del contenedor agotó el tiempo",
     "Container error: {error}": "Error del contenedor: {error}"
+  },
+  "packages": {
+    "Install": "Instalar",
+    "Remove": "Quitar",
+    "Update": "Actualizar",
+    "{n} downloads": "{n} descargas",
+    "1 project": "1 proyecto",
+    "{n} projects": "{n} proyectos"
   }
 }

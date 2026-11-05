@@ -88,7 +88,6 @@ pub enum ExplorerAction {
     ShowHistory(PathBuf),
     CopyPath(PathBuf),
     OpenInTerminal(PathBuf),
-    ManagePackages(PathBuf),
     /// Add New Project to this solution.
     AddProject(PathBuf),
     /// Exclude the folder or file from the index, Find in Files and the analysis (`true`), or
@@ -721,12 +720,6 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         ui.close();
     }
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };
-    if let NodeKind::Project(p) | NodeKind::Packages(p) | NodeKind::Dependencies(p) = &row.kind
-        && theme::menu_item(ui, Some(ico::PACKAGE), tr("Manage NuGet Packages…"), false).clicked()
-    {
-        actions.push(ExplorerAction::ManagePackages(p.clone()));
-        ui.close();
-    }
     let (path, is_dir) = match &row.kind {
         NodeKind::File(p) => (p.clone(), false),
         NodeKind::Dir(p) => (p.clone(), true),

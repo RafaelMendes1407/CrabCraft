@@ -12,7 +12,7 @@ use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::build::{BuildAction, BuildEvent, BuildRequest, start_build};
 use rc_dotnet::run::{RunEvent, RunRequest, start_run};
 use rc_dotnet::test::{TestEvent, TestFilter, TestRequest, discover_tests, start_tests};
-use rc_dotnet::{CancelToken, Dotnet, Severity, Stream, TestOutcome, msbuild, nuget};
+use rc_dotnet::{CancelToken, Dotnet, Severity, Stream, TestOutcome, msbuild};
 
 static FIXTURE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -389,43 +389,6 @@ fn discovers_tests_with_fully_qualified_names() {
     assert_eq!(projects.len(), 3);
     let nunit = tests.iter().find(|t| t.name.ends_with("(9,0)")).unwrap();
     assert_eq!((nunit.class_name.as_str(), nunit.method_name.as_str()), ("Shop.Core.NunitTests.OrderTests", "BulkOrdersGetFivePercent"));
-}
-
-#[test]
-fn adds_and_removes_a_cached_package() {
-    if std::process::Command::new("dotnet").arg("--version").output().map_or(true, |o| !o.status.success()) {
-        eprintln!("skipped: the .NET SDK is not installed");
-        return;
-    }
-    // Newtonsoft.Json 13.0.3 is in the global packages folder, so no network is needed.
-    let (_tmp, root) = temp_copy();
-    let project = root.join("src/Shop.Core/Shop.Core.csproj");
-    let d = dotnet();
-    Runtime::block_on(async {
-        let out = nuget::add_package(&d, &project, "Newtonsoft.Json", Some("13.0.3"), false).await.unwrap();
-        assert!(out.success, "{}", out.output);
-        let info = rc_dotnet::ProjectInfo::load(&project).unwrap();
-        assert!(info.packages.iter().any(|p| p.name == "Newtonsoft.Json" && p.version == "13.0.3"));
-        let out = nuget::remove_package(&d, &project, "Newtonsoft.Json").await.unwrap();
-        assert!(out.success, "{}", out.output);
-        assert!(rc_dotnet::ProjectInfo::load(&project).unwrap().packages.is_empty());
-    });
-}
-
-#[test]
-#[ignore = "needs network access to nuget.org"]
-fn searches_nuget_org_and_lists_versions() {
-    Runtime::block_on(async {
-        let client = nuget::NugetClient::new().unwrap();
-        let r = client.search("Newtonsoft.Json", false, 0, 5).await.unwrap();
-        assert!(r.total_hits > 0);
-        let p = r.packages.iter().find(|p| p.id == "Newtonsoft.Json").unwrap();
-        assert!(p.verified && !p.versions.is_empty() && !p.version.contains('-'));
-        let pre = client.search("Microsoft.Extensions.AI", true, 0, 20).await.unwrap();
-        assert!(!pre.packages.is_empty());
-        let versions = client.versions("Newtonsoft.Json").await.unwrap();
-        assert!(versions.contains(&"13.0.3".to_string()));
-    });
 }
 
 /// `dotnet new` through `new_project`: a solution with a console app, then a test project
