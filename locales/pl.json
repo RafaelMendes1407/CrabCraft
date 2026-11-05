@@ -1492,7 +1492,6 @@
     "The scope needs a name": "Zakres musi mieć nazwę",
     "Another scope has this name": "Inny zakres ma tę nazwę",
     "Scope:": "Zakres:",
-    "Scope": "Zakres",
     "Scopes": "Zakresy",
     "Open a project to define its scopes and file colors.": "Otwórz projekt, aby określić jego zakresy i kolory plików.",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globy oddzielone przecinkami; ! wyklucza pliki. Glob z / dopasowuje ścieżkę od folderu projektu, bez / – nazwę pliku.",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "Wczytaj środowisko HTTP",
     "Clear HTTP environment": "Wyczyść środowisko HTTP",
     "Loaded {count} HTTP variables. Available environments: {names}": "Wczytano {count} zmiennych HTTP. Dostępne środowiska: {names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth wymaga HTTPS, źródła zasobu i danych klienta; lokalny HTTP jest dozwolony do testów.",
+    "The OAuth token request failed. Credentials and server details are hidden.": "Żądanie tokenu OAuth nie powiodło się. Dane logowania i szczegóły serwera są ukryte.",
+    "The OAuth server returned an invalid or unsupported token response.": "Serwer OAuth zwrócił nieprawidłową lub nieobsługiwaną odpowiedź tokenu.",
+    "Acquire a current OAuth token before sending this request.": "Uzyskaj aktualny token OAuth przed wysłaniem tego żądania.",
+    "The request origin does not match the reviewed OAuth resource origin.": "Źródło żądania nie odpowiada sprawdzonemu źródłu zasobu OAuth.",
+    "Remove the request Authorization header before enabling the OAuth token.": "Usuń nagłówek Authorization przed włączeniem tokenu OAuth.",
+    "OAuth 2.0 client credentials": "Dane klienta OAuth 2.0",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "Uzyskaj jawnie i włącz dla jednego źródła zasobu. Dane i tokeny pozostają w pamięci; bez odświeżania i logowania przez przeglądarkę.",
+    "Token endpoint": "Punkt końcowy tokenu",
+    "Client ID": "ID klienta",
+    "Client secret": "Sekret klienta",
+    "Scope": "Zakres",
+    "Resource origin": "Źródło zasobu",
+    "Acquire OAuth token": "Uzyskaj token OAuth",
+    "Clear OAuth credentials": "Wyczyść dane OAuth",
+    "Use this OAuth token for matching requests": "Używaj tego tokenu OAuth dla pasujących żądań",
+    "OAuth token ready; value hidden": "Token OAuth gotowy; wartość ukryta"
   }
 }

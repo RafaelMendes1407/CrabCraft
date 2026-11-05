@@ -1492,7 +1492,6 @@
     "The scope needs a name": "La portée doit avoir un nom",
     "Another scope has this name": "Une autre portée porte ce nom",
     "Scope:": "Portée :",
-    "Scope": "Portée",
     "Scopes": "Portées",
     "Open a project to define its scopes and file colors.": "Ouvrez un projet pour définir ses portées et ses couleurs de fichiers.",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs séparés par des virgules ; ! exclut des fichiers. Un glob avec / correspond au chemin depuis le dossier du projet, un glob sans / au nom du fichier.",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "Charger l’environnement HTTP",
     "Clear HTTP environment": "Effacer l’environnement HTTP",
     "Loaded {count} HTTP variables. Available environments: {names}": "{count} variables HTTP chargées. Environnements disponibles : {names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth exige HTTPS, une origine de ressource et des identifiants client ; HTTP local est autorisé pour les tests.",
+    "The OAuth token request failed. Credentials and server details are hidden.": "La demande de jeton OAuth a échoué. Les identifiants et détails du serveur sont masqués.",
+    "The OAuth server returned an invalid or unsupported token response.": "Le serveur OAuth a renvoyé une réponse de jeton invalide ou non prise en charge.",
+    "Acquire a current OAuth token before sending this request.": "Obtenez un jeton OAuth valide avant d’envoyer cette requête.",
+    "The request origin does not match the reviewed OAuth resource origin.": "L’origine de la requête ne correspond pas à l’origine de ressource OAuth vérifiée.",
+    "Remove the request Authorization header before enabling the OAuth token.": "Retirez l’en-tête Authorization avant d’activer le jeton OAuth.",
+    "OAuth 2.0 client credentials": "Identifiants client OAuth 2.0",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "Obtenez explicitement le jeton puis activez-le pour une origine. Identifiants et jetons restent en mémoire ; sans renouvellement ni connexion par navigateur.",
+    "Token endpoint": "Point de terminaison du jeton",
+    "Client ID": "ID client",
+    "Client secret": "Secret client",
+    "Scope": "Portée",
+    "Resource origin": "Origine de la ressource",
+    "Acquire OAuth token": "Obtenir un jeton OAuth",
+    "Clear OAuth credentials": "Effacer les identifiants OAuth",
+    "Use this OAuth token for matching requests": "Utiliser ce jeton OAuth pour les requêtes correspondantes",
+    "OAuth token ready; value hidden": "Jeton OAuth prêt ; valeur masquée"
   }
 }

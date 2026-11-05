@@ -1492,7 +1492,6 @@
     "The scope needs a name": "范围需要名称",
     "Another scope has this name": "另一个范围已使用此名称",
     "Scope:": "范围:",
-    "Scope": "范围",
     "Scopes": "范围",
     "Open a project to define its scopes and file colors.": "打开项目以定义其范围和文件颜色。",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "用逗号分隔的通配符；! 排除文件。含 / 的通配符匹配从项目文件夹开始的路径，不含 / 的匹配文件名。",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "加载 HTTP 环境",
     "Clear HTTP environment": "清除 HTTP 环境",
     "Loaded {count} HTTP variables. Available environments: {names}": "已加载 {count} 个 HTTP 变量。可用环境：{names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth 需要 HTTPS 端点、资源源和客户端凭据；本地测试允许使用回环 HTTP。",
+    "The OAuth token request failed. Credentials and server details are hidden.": "OAuth 令牌请求失败。凭据和服务器详细信息已隐藏。",
+    "The OAuth server returned an invalid or unsupported token response.": "OAuth 服务器返回了无效或不支持的令牌响应。",
+    "Acquire a current OAuth token before sending this request.": "发送此请求前请获取有效的 OAuth 令牌。",
+    "The request origin does not match the reviewed OAuth resource origin.": "请求源与已审核的 OAuth 资源源不匹配。",
+    "Remove the request Authorization header before enabling the OAuth token.": "启用 OAuth 令牌前请删除请求的 Authorization 标头。",
+    "OAuth 2.0 client credentials": "OAuth 2.0 客户端凭据",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "请明确获取令牌后为一个资源源启用。凭据和令牌仅保留在内存中；不提供刷新或浏览器登录。",
+    "Token endpoint": "令牌端点",
+    "Client ID": "客户端 ID",
+    "Client secret": "客户端密钥",
+    "Scope": "范围",
+    "Resource origin": "资源源",
+    "Acquire OAuth token": "获取 OAuth 令牌",
+    "Clear OAuth credentials": "清除 OAuth 凭据",
+    "Use this OAuth token for matching requests": "为匹配的请求使用此 OAuth 令牌",
+    "OAuth token ready; value hidden": "OAuth 令牌已就绪；值已隐藏"
   }
 }

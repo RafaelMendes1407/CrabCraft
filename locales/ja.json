@@ -1492,7 +1492,6 @@
     "The scope needs a name": "スコープには名前が必要です",
     "Another scope has this name": "別のスコープがこの名前を使っています",
     "Scope:": "スコープ:",
-    "Scope": "スコープ",
     "Scopes": "スコープ",
     "Open a project to define its scopes and file colors.": "プロジェクトを開いてスコープとファイルの色を定義します。",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "カンマ区切りのグロブ。! でファイルを除外します。/ を含むグロブはプロジェクトフォルダーからのパスに、含まないものはファイル名に一致します。",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "HTTP 環境を読み込む",
     "Clear HTTP environment": "HTTP 環境をクリア",
     "Loaded {count} HTTP variables. Available environments: {names}": "{count} 個の HTTP 変数を読み込みました。利用可能な環境: {names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth には HTTPS エンドポイント、リソースのオリジン、クライアント認証情報が必要です。ローカルテストではループバック HTTP を使用できます。",
+    "The OAuth token request failed. Credentials and server details are hidden.": "OAuth トークンのリクエストに失敗しました。認証情報とサーバーの詳細は非表示です。",
+    "The OAuth server returned an invalid or unsupported token response.": "OAuth サーバーから無効または未対応のトークン応答が返されました。",
+    "Acquire a current OAuth token before sending this request.": "このリクエストを送信する前に有効な OAuth トークンを取得してください。",
+    "The request origin does not match the reviewed OAuth resource origin.": "リクエストのオリジンが確認済みの OAuth リソースのオリジンと一致しません。",
+    "Remove the request Authorization header before enabling the OAuth token.": "OAuth トークンを有効にする前にリクエストの Authorization ヘッダーを削除してください。",
+    "OAuth 2.0 client credentials": "OAuth 2.0 クライアント認証情報",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "明示的に取得し、1 つのリソースのオリジンに対して有効にしてください。認証情報とトークンはメモリ内に保持されます。更新やブラウザーログインは行いません。",
+    "Token endpoint": "トークンエンドポイント",
+    "Client ID": "クライアント ID",
+    "Client secret": "クライアントシークレット",
+    "Scope": "スコープ",
+    "Resource origin": "リソースのオリジン",
+    "Acquire OAuth token": "OAuth トークンを取得",
+    "Clear OAuth credentials": "OAuth 認証情報をクリア",
+    "Use this OAuth token for matching requests": "一致するリクエストにこの OAuth トークンを使用",
+    "OAuth token ready; value hidden": "OAuth トークン準備完了。値は非表示"
   }
 }

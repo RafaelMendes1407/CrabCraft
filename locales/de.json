@@ -1492,7 +1492,6 @@
     "The scope needs a name": "Der Bereich braucht einen Namen",
     "Another scope has this name": "Ein anderer Bereich hat diesen Namen",
     "Scope:": "Bereich:",
-    "Scope": "Bereich",
     "Scopes": "Bereiche",
     "Open a project to define its scopes and file colors.": "Öffnen Sie ein Projekt, um seine Bereiche und Dateifarben festzulegen.",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs durch Kommas getrennt; ! schließt Dateien aus. Ein Glob mit / passt auf den Pfad ab dem Projektordner, einer ohne / auf den Dateinamen.",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "HTTP-Umgebung laden",
     "Clear HTTP environment": "HTTP-Umgebung löschen",
     "Loaded {count} HTTP variables. Available environments: {names}": "{count} HTTP-Variablen geladen. Verfügbare Umgebungen: {names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth erfordert HTTPS, einen Ressourcenursprung und Client-Anmeldedaten; lokales HTTP ist für Tests erlaubt.",
+    "The OAuth token request failed. Credentials and server details are hidden.": "Die OAuth-Token-Anfrage ist fehlgeschlagen. Anmeldedaten und Serverdetails sind verborgen.",
+    "The OAuth server returned an invalid or unsupported token response.": "Der OAuth-Server lieferte eine ungültige oder nicht unterstützte Token-Antwort.",
+    "Acquire a current OAuth token before sending this request.": "Fordern Sie vor dem Senden dieser Anfrage ein gültiges OAuth-Token an.",
+    "The request origin does not match the reviewed OAuth resource origin.": "Der Anfrageursprung entspricht nicht dem geprüften OAuth-Ressourcenursprung.",
+    "Remove the request Authorization header before enabling the OAuth token.": "Entfernen Sie den Authorization-Header, bevor Sie das OAuth-Token aktivieren.",
+    "OAuth 2.0 client credentials": "OAuth-2.0-Client-Anmeldedaten",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "Explizit anfordern und für einen Ressourcenursprung aktivieren. Anmeldedaten und Token bleiben im Speicher; keine Erneuerung oder Browser-Anmeldung.",
+    "Token endpoint": "Token-Endpunkt",
+    "Client ID": "Client-ID",
+    "Client secret": "Client-Geheimnis",
+    "Scope": "Geltungsbereich",
+    "Resource origin": "Ressourcenursprung",
+    "Acquire OAuth token": "OAuth-Token anfordern",
+    "Clear OAuth credentials": "OAuth-Anmeldedaten löschen",
+    "Use this OAuth token for matching requests": "Dieses OAuth-Token für passende Anfragen verwenden",
+    "OAuth token ready; value hidden": "OAuth-Token bereit; Wert verborgen"
   }
 }

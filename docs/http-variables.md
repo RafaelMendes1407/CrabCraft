@@ -62,3 +62,37 @@ serde_json's recursion limit. A native egui test loads an environment without ma
 sends explicitly to a real loopback server with an authorization header, rejects stale fields,
 and compiles/runs its real Cargo project only afterward. CLI, resolver, cancellation and
 FIFO tests accompany it.
+
+## OAuth 2.0 client credentials
+
+The HTTP Client has a separate, explicit client-credentials panel. Enter the token endpoint,
+client ID, client secret, optional scope, and resource **origin** (scheme, host, optional port;
+no path). Acquire the token, then explicitly enable its use. Acquisition never sends the
+resource request. The password field is masked; tokens and credentials are kept only in
+memory, hidden from diagnostics and history, and cleared when switching projects.
+
+The worker POSTs `grant_type=client_credentials` and scope as form data. Client credentials
+use HTTP Basic with individually form-encoded ID/secret, as described by
+[RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1) and
+[§4.4](https://www.rfc-editor.org/rfc/rfc6749#section-4.4). The acquired Bearer token goes
+only into the Authorization header, following
+[RFC 6750 §2.1](https://www.rfc-editor.org/rfc/rfc6750#section-2.1), and only for the reviewed
+resource origin. A pre-existing Authorization header is rejected. Both endpoints require
+HTTPS; literal loopback/localhost HTTP is accepted for local service testing. URL credentials,
+fragments, endpoint queries, resource paths and origins without a host are rejected. Neither
+token requests nor resource requests carrying these tokens follow redirects or use a proxy.
+
+Changing any OAuth field invalidates the token. Expired/missing tokens block a request when
+the use checkbox is enabled, rather than silently sending it without authentication. Token
+responses are bounded to 64 KiB and must contain a Bearer `access_token` (up to 8192 ASCII
+bearer characters) and integer `expires_in` between 1 and 86400 seconds. Expiry is measured
+conservatively from before the exchange. Requests time out after 30 seconds; cancellation
+closes the exchange. Server bodies and network details are deliberately omitted from errors
+to avoid exposing credentials. There is no automatic refresh/retry, browser authorization,
+PKCE, device flow, password grant, CLI acquisition, discovery or persistent credential store.
+
+Seventeen HTTP tests pass, including native acquisition/use against an actual local token
+endpoint in a real Cargo project, Basic/form encoding, origin/header conflicts, expiry,
+redirect refusal on both requests, invalid/oversize replies and cancellation. The project
+build script remains untouched until a separate explicit Cargo test. Response scripts remain
+unsupported and never run implicitly.

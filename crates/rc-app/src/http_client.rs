@@ -7,9 +7,11 @@
 //! re-indented without being rebuilt (key order and numbers stay as sent).
 //!
 //! File variables and explicit environment snapshots use bounded recursion. Missing variables
-//! and file bodies prevent sending; response scripts and OAuth helpers remain unsupported.
+//! and file bodies prevent sending; response scripts remain unsupported. OAuth client-credentials
+//! acquisition is explicit and binds Bearer tokens to a reviewed resource origin.
 
 pub mod environment;
+pub mod oauth;
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_syntax::http::{HttpRequest, UnsupportedKind};
@@ -34,6 +36,7 @@ pub enum HttpError {
     /// The request uses something not supported yet (texts for the user).
     Unsupported(Vec<String>),
     Environment(environment::Error),
+    OAuth(oauth::Error),
     /// The URL cannot be read, or is not `http`/`https`.
     BadUrl(String),
     Variable(rc_syntax::http::vars::VariableError),
@@ -48,6 +51,7 @@ impl HttpError {
     /// The text shown in the response view.
     pub fn text(&self) -> String {
         match self {
+            HttpError::OAuth(error) => error.text(),
             HttpError::Environment(error) => error.text(),
             HttpError::Unsupported(what) => format!("{}\n{}", tr("This request was not sent: it uses features that are not supported yet."), what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")),
             HttpError::Variable(error) => match error {
@@ -87,6 +91,7 @@ pub struct Prepared {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: String,
+    pub oauth: bool,
 }
 
 /// Checks `req` and makes its URL absolute: `/path` uses the `Host` header, a URL without a
@@ -124,7 +129,7 @@ pub fn prepare(req: &HttpRequest) -> Result<Prepared, HttpError> {
             return Err(HttpError::BadHeader(format!("{k}: {v}")));
         }
     }
-    Ok(Prepared { method: req.method.clone(), url: parsed.to_string(), headers: req.headers.clone(), body: req.body.clone() })
+    Ok(Prepared { method: req.method.clone(), url: parsed.to_string(), headers: req.headers.clone(), body: req.body.clone(), oauth: false })
 }
 
 /// A response, as far as it was read.
@@ -159,6 +164,7 @@ pub fn send(req: &Prepared, timeout: Duration, max: usize, cancel: &AtomicBool) 
         let url = reqwest::Url::parse(&req.url).map_err(|_| HttpError::BadUrl(req.url.clone()))?;
         let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
         let mut builder = reqwest::Client::builder().user_agent(USER_AGENT).connect_timeout(timeout).timeout(timeout);
+        if req.oauth { builder = builder.redirect(reqwest::redirect::Policy::none()).no_proxy(); }
         if loopback {
             builder = builder.no_proxy();
         }
@@ -345,11 +351,12 @@ pub struct HttpClient {
     pub show_headers: bool,
     next_id: u64,
     pub environment: environment::State,
+    pub oauth: oauth::State,
 }
 
 impl HttpClient {
     pub fn new(waker: Waker) -> Self {
-        HttpClient { environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
+        HttpClient { oauth: oauth::State::new(waker.clone()), environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
     }
 
     pub fn running(&self) -> bool {
@@ -366,7 +373,7 @@ impl HttpClient {
         let id = self.next_id;
         self.next_id += 1;
         let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_))).map(|u| unsupported_text(&u.kind)).collect();
-        let outcome = match self.environment.resolve(req).and_then(|request| prepare(&request)) {
+        let outcome = match self.environment.resolve(req).and_then(|request| prepare(&request)).and_then(|prepared| self.oauth.authorize(prepared)) {
             Ok(prepared) => {
                 let cancel = Arc::new(AtomicBool::new(false));
                 let flag = cancel.clone();
@@ -407,7 +414,7 @@ impl HttpClient {
 
     /// Takes the finished requests; true when something changed.
     pub fn poll(&mut self) -> bool {
-        let environment_changed = self.environment.poll();
+        let environment_changed = self.environment.poll() | self.oauth.poll();
         let done = self.inbox.drain();
         let changed = environment_changed || !done.is_empty();
         for (id, result) in done {

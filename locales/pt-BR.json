@@ -1492,7 +1492,6 @@
     "The scope needs a name": "O escopo precisa de um nome",
     "Another scope has this name": "Outro escopo tem este nome",
     "Scope:": "Escopo:",
-    "Scope": "Escopo",
     "Scopes": "Escopos",
     "Open a project to define its scopes and file colors.": "Abra um projeto para definir seus escopos e cores de arquivo.",
     "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.": "Globs separados por vírgulas; ! deixa arquivos de fora. Um glob com / corresponde ao caminho a partir da pasta do projeto; um sem / ao nome do arquivo.",
@@ -2669,5 +2668,24 @@
     "Load HTTP environment": "Carregar ambiente HTTP",
     "Clear HTTP environment": "Limpar ambiente HTTP",
     "Loaded {count} HTTP variables. Available environments: {names}": "{count} variáveis HTTP carregadas. Ambientes disponíveis: {names}"
+  },
+  "http_oauth": {
+    "OAuth requires HTTPS endpoints, a resource origin, and client credentials; loopback HTTP is allowed for local testing.": "OAuth exige HTTPS, uma origem de recurso e credenciais do cliente; HTTP loopback é permitido para testes locais.",
+    "The OAuth token request failed. Credentials and server details are hidden.": "A requisição do token OAuth falhou. Credenciais e detalhes do servidor estão ocultos.",
+    "The OAuth server returned an invalid or unsupported token response.": "O servidor OAuth retornou uma resposta de token inválida ou não suportada.",
+    "Acquire a current OAuth token before sending this request.": "Obtenha um token OAuth válido antes de enviar esta requisição.",
+    "The request origin does not match the reviewed OAuth resource origin.": "A origem da requisição não corresponde à origem revisada do recurso OAuth.",
+    "Remove the request Authorization header before enabling the OAuth token.": "Remova o cabeçalho Authorization da requisição antes de habilitar o token OAuth.",
+    "OAuth 2.0 client credentials": "Credenciais do cliente OAuth 2.0",
+    "Acquire explicitly, then enable for one resource origin. Credentials and tokens stay in memory; no refresh or browser login.": "Obtenha explicitamente e habilite para uma origem de recurso. Credenciais e tokens ficam na memória; sem renovação ou login pelo navegador.",
+    "Token endpoint": "Endpoint do token",
+    "Client ID": "ID do cliente",
+    "Client secret": "Segredo do cliente",
+    "Scope": "Escopo",
+    "Resource origin": "Origem do recurso",
+    "Acquire OAuth token": "Obter token OAuth",
+    "Clear OAuth credentials": "Limpar credenciais OAuth",
+    "Use this OAuth token for matching requests": "Usar este token OAuth nas requisições correspondentes",
+    "OAuth token ready; value hidden": "Token OAuth pronto; valor oculto"
   }
 }
