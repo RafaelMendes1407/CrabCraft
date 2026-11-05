@@ -179,126 +179,246 @@ fn command(ui: &mut Ui, label: &str, icon: Option<rc_kit::Ico>, enabled: bool) -
     clicked
 }
 
-pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
-    ui.set_width(200.0);
-    for (category, actions) in groups() {
-        ui.menu_button(category, |ui| {
-            ui.set_width(360.0);
-            let height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 12.0).max(100.0);
-            ui.set_max_height(height);
-            // Bound long menus independently of the editor and the tool windows.
-            egui::ScrollArea::vertical()
-                .max_height(height)
-                .show(ui, |ui| {
-                    if category == tr("File") {
-                        file_commands(app, ui);
-                    }
-                    for (label, action) in actions {
-                        let enabled = match action {
-                            Action::ShowSettings
-                            | Action::ZoomIn
-                            | Action::ZoomOut
-                            | Action::ZoomReset
-                            | Action::NewScratchFile => true,
-                            Action::Save
-                            | Action::CloseTab
-                            | Action::NextTab
-                            | Action::PreviousTab
-                            | Action::RevertFromDisk
-                            | Action::ShowLocalHistory
-                            | Action::Find
-                            | Action::Replace
-                            | Action::GotoLine => app.docs.active_doc().is_some(),
-                            Action::SaveAll => !app.docs.list.is_empty(),
-                            Action::ExpandMacroStep if !cfg!(unix) => false,
-                            _ if action.is_editing() => app.docs.active_doc().is_some(),
-                            _ => app.workspace.is_some(),
-                        };
-                        let shortcut = app.keymap.shortcut_text(action);
-                        if theme::menu_entry(
-                            ui,
-                            crate::search::action_icon(action),
-                            label,
-                            shortcut.as_deref(),
-                            false,
-                            enabled,
-                        )
-                        .clicked()
-                        {
-                            app.pending.push(action);
-                            app.focus_editor = true;
-                            ui.close();
-                        }
-                    }
-                    if category == tr("File") {
-                        ui.separator();
-                        if command(ui, tr("Quit CrabCraft"), None, true) {
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    }
-                    if category == tr("View") {
-                        ui.separator();
-                        ui.menu_button(tr("Tool Windows"), |ui| {
-                            for tool in ToolWindow::ALL {
-                                if theme::menu_entry(
-                                    ui,
-                                    Some(tool.icon()),
-                                    tool.title(),
-                                    None,
-                                    app.dock.is_open(tool),
-                                    app.workspace.is_some(),
-                                )
-                                .clicked()
-                                {
-                                    app.toggle_tool(tool);
-                                    ui.close();
-                                }
-                            }
-                        });
-                    }
-                    if category == tr("Build") {
-                        build_commands(app, ui);
-                    }
-                    if category == tr("Run")
-                        && command(
-                            ui,
-                            tr("Edit Run Configuration…"),
-                            Some(ico::SETTINGS),
-                            app.workspace.is_some(),
-                        )
-                    {
-                        app.edit_run_config(None);
-                    }
-                    if category == tr("Tools") {
-                        tools(app, ui);
-                    }
-                    if category == tr("Git") && app.vcs.repo.is_some() {
-                        ui.separator();
-                        crate::ui::git::branches_menu(app, ui);
-                    }
-                    if category == tr("Window") {
-                        crate::ui::editor_area::window_menu(app, ui);
-                        if command(ui, tr("Minimize"), None, true) {
-                            ui.ctx()
-                                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                    }
-                    if category == tr("Help") {
-                        if command(
-                            ui,
-                            tr("Find Action…"),
-                            Some(ico::SEARCH),
-                            app.workspace.is_some(),
-                        ) {
-                            app.pending.push(Action::FindAction);
-                        }
-                        if command(ui, tr("About CrabCraft"), Some(ico::INFO), true) {
-                            app.dialog = Some(crate::ui::dialogs::Dialog::About);
-                        }
-                    }
-                });
-        });
+/// Use the same preconditions as the command handlers and the debug toolbar.
+fn action_enabled(app: &CrabCraftApp, action: Action) -> bool {
+    use crate::runner::ConfigKind;
+    let selected = app.runner.selected_config();
+    let paused = app.debugger.stopped();
+    let document = app.docs.active_doc().is_some();
+    match action {
+        Action::ShowSettings
+        | Action::ZoomIn
+        | Action::ZoomOut
+        | Action::ZoomReset
+        | Action::NewScratchFile => true,
+        Action::Save
+        | Action::CloseTab
+        | Action::NextTab
+        | Action::PreviousTab
+        | Action::RevertFromDisk
+        | Action::ShowLocalHistory
+        | Action::Find
+        | Action::Replace
+        | Action::GotoLine
+        | Action::ToggleBreakpoint
+        | Action::ToggleBookmark => document,
+        Action::SaveAll => !app.docs.list.is_empty(),
+        Action::Run => selected.is_some(),
+        Action::Debug => {
+            paused
+                || selected.is_some_and(|config| {
+                    matches!(
+                        config.kind,
+                        ConfigKind::Cargo { .. } | ConfigKind::App { .. }
+                    )
+                })
+        }
+        Action::Profile => {
+            cfg!(target_os = "linux")
+                && selected.is_some_and(|config| matches!(config.kind, ConfigKind::Cargo { .. }))
+        }
+        Action::StopRun => {
+            app.runner.busy()
+                || app.debugger.active()
+                || app.disk_save.saves.busy()
+                || app.disk_save.continuation.is_some()
+        }
+        Action::Resume
+        | Action::StepOver
+        | Action::StepInto
+        | Action::StepOut
+        | Action::ForceStepOver
+        | Action::Evaluate => paused,
+        Action::RunToCursor | Action::ForceRunToCursor => paused && document,
+        Action::ForceStepInto => {
+            paused
+                && app
+                    .debugger
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| session.can_force_step_in())
+        }
+        Action::SetExecutionPoint => {
+            paused
+                && document
+                && app
+                    .debugger
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| session.can_set_execution_point())
+        }
+        Action::AttachToProcess => app.runner.cargo_workspace.is_some(),
+        Action::Commit => app.vcs.repo.is_some(),
+        Action::NavigateBack => !app.nav_back.is_empty(),
+        Action::NavigateForward => !app.nav_forward.is_empty(),
+        Action::ExpandMacroStep if !cfg!(unix) => false,
+        _ if action.is_editing() => document,
+        _ => app.workspace.is_some(),
     }
+}
+
+fn configuration_editable(app: &CrabCraftApp) -> bool {
+    use crate::runner::ConfigKind;
+    app.runner.selected_config().is_some_and(|config| {
+        matches!(
+            config.kind,
+            ConfigKind::App { .. }
+                | ConfigKind::Cargo { .. }
+                | ConfigKind::WasmPack { .. }
+                | ConfigKind::Compound { .. }
+        )
+    })
+}
+
+fn disabled_hint(app: &CrabCraftApp, action: Action) -> Option<&'static str> {
+    use crate::runner::ConfigKind;
+    match action {
+        Action::Debug => match app.runner.selected_config().map(|config| &config.kind) {
+            Some(ConfigKind::WasmPack { .. }) => {
+                Some(tr("Debugging wasm-pack configurations is not supported"))
+            }
+            Some(ConfigKind::Tests { .. } | ConfigKind::TestSelection { .. }) => Some(tr(
+                "Test configurations cannot be debugged yet: use Debug in the gutter of the test",
+            )),
+            _ => Some(tr("Choose an application run configuration to debug")),
+        },
+        Action::Profile if !cfg!(target_os = "linux") => Some(tr(
+            "The profiler uses perf, which is only available on Linux.",
+        )),
+        Action::Profile => Some(tr(
+            "Choose the run configuration of a Rust binary to profile it",
+        )),
+        Action::ForceStepInto if app.debugger.stopped() => {
+            Some(tr("This debugger cannot force step into"))
+        }
+        _ => None,
+    }
+}
+
+fn scroll_menu(ui: &mut Ui, width: f32, id: &'static str, contents: impl FnOnce(&mut Ui)) {
+    ui.set_width(width);
+    // Popup placement depends on its measured size. A limit based on the current
+    // anchor feeds that placement back into the next frame and can shrink forever.
+    let height = (ui.ctx().content_rect().height() - 64.0).max(80.0);
+    ui.set_max_height(height);
+    egui::ScrollArea::vertical()
+        .id_salt(id)
+        .max_height(height)
+        .show(ui, contents);
+}
+
+pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
+    scroll_menu(ui, 200.0, "main_menu_categories", |ui| {
+        for (category, actions) in groups() {
+            ui.menu_button(category, |ui| {
+                ui.set_width(360.0);
+                let height = (ui.ctx().content_rect().height() - 64.0).max(80.0);
+                ui.set_max_height(height);
+                // Bound long menus independently of the editor and the tool windows.
+                egui::ScrollArea::vertical()
+                    .max_height(height)
+                    .show(ui, |ui| {
+                        if category == tr("File") {
+                            file_commands(app, ui);
+                        }
+                        for (label, action) in actions {
+                            let enabled = action_enabled(app, action);
+                            let shortcut = app.keymap.shortcut_text(action);
+                            let response = theme::menu_entry(
+                                ui,
+                                crate::search::action_icon(action),
+                                label,
+                                shortcut.as_deref(),
+                                false,
+                                enabled,
+                            );
+                            let response = if !enabled {
+                                if let Some(hint) = disabled_hint(app, action) {
+                                    response.on_hover_text(hint)
+                                } else {
+                                    response
+                                }
+                            } else {
+                                response
+                            };
+                            if response.clicked() {
+                                app.pending.push(action);
+                                app.focus_editor = true;
+                                ui.close();
+                            }
+                        }
+                        if category == tr("File") {
+                            ui.separator();
+                            if command(ui, tr("Quit CrabCraft"), None, true) {
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                        if category == tr("View") {
+                            ui.separator();
+                            ui.menu_button(tr("Tool Windows"), |ui| {
+                                scroll_menu(ui, 240.0, "main_menu_tool_windows", |ui| {
+                                    for tool in ToolWindow::ALL {
+                                        if theme::menu_entry(
+                                            ui,
+                                            Some(tool.icon()),
+                                            tool.title(),
+                                            None,
+                                            app.dock.is_open(tool),
+                                            app.workspace.is_some(),
+                                        )
+                                        .clicked()
+                                        {
+                                            app.toggle_tool(tool);
+                                            ui.close();
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                        if category == tr("Build") {
+                            build_commands(app, ui);
+                        }
+                        if category == tr("Run")
+                            && command(
+                                ui,
+                                tr("Edit Run Configuration…"),
+                                Some(ico::SETTINGS),
+                                configuration_editable(app),
+                            )
+                        {
+                            app.edit_run_config(None);
+                        }
+                        if category == tr("Tools") {
+                            tools(app, ui);
+                        }
+                        if category == tr("Git") && app.vcs.repo.is_some() {
+                            ui.separator();
+                            crate::ui::git::branches_menu(app, ui);
+                        }
+                        if category == tr("Window") {
+                            crate::ui::editor_area::window_menu(app, ui);
+                            if command(ui, tr("Minimize"), None, true) {
+                                ui.ctx()
+                                    .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            }
+                        }
+                        if category == tr("Help") {
+                            if command(
+                                ui,
+                                tr("Find Action…"),
+                                Some(ico::SEARCH),
+                                app.workspace.is_some(),
+                            ) {
+                                app.pending.push(Action::FindAction);
+                            }
+                            if command(ui, tr("About CrabCraft"), Some(ico::INFO), true) {
+                                app.dialog = Some(crate::ui::dialogs::Dialog::About);
+                            }
+                        }
+                    });
+            });
+        }
+    });
 }
 
 fn file_commands(app: &mut CrabCraftApp, ui: &mut Ui) {
@@ -320,11 +440,48 @@ fn file_commands(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.pick_file();
     }
     ui.menu_button(tr("Recent Projects"), |ui| {
-        for path in app.settings.recent_workspaces.clone() {
-            if command(ui, &path.display().to_string(), Some(ico::FOLDER), true) {
-                app.open_workspace(&path);
+        scroll_menu(ui, 300.0, "main_menu_recent_projects", |ui| {
+            for path in app.settings.recent_workspaces.clone() {
+                let name = path
+                    .file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy();
+                let chars: Vec<_> = name.chars().take(128).collect();
+                let available = (ui.available_width() - 46.0).max(40.0);
+                let fits = |text: &str| {
+                    ui.painter()
+                        .layout_no_wrap(
+                            text.to_string(),
+                            egui::FontId::proportional(13.0),
+                            rc_kit::pal(ui).text,
+                        )
+                        .size()
+                        .x
+                        <= available
+                };
+                let mut label: String = chars.iter().collect();
+                if name.chars().count() > chars.len() || !fits(&label) {
+                    let (mut low, mut high) = (0, chars.len());
+                    while low < high {
+                        let mid = low + (high - low).div_ceil(2);
+                        let candidate = chars[..mid].iter().collect::<String>() + "…";
+                        if fits(&candidate) {
+                            low = mid;
+                        } else {
+                            high = mid - 1;
+                        }
+                    }
+                    label = chars[..low].iter().collect::<String>() + "…";
+                }
+                if theme::menu_entry(ui, Some(ico::FOLDER), &label, None, false, true)
+                    .on_hover_text(path.display().to_string())
+                    .clicked()
+                {
+                    ui.close();
+                    app.open_workspace(&path);
+                }
             }
-        }
+        });
     });
     if command(
         ui,
@@ -441,5 +598,160 @@ mod tests {
                 "command missing from central menus: {label}"
             );
         }
+    }
+
+    #[test]
+    fn unavailable_run_and_debug_commands_are_disabled_before_a_session() {
+        use super::{action_enabled, configuration_editable, disabled_hint};
+        use crate::runner::{ConfigKind, RunConfig};
+        use rc_editor::Action;
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        for action in [
+            Action::Run,
+            Action::Debug,
+            Action::Profile,
+            Action::StopRun,
+            Action::Resume,
+            Action::StepOver,
+            Action::StepInto,
+            Action::StepOut,
+            Action::ForceStepOver,
+            Action::ForceStepInto,
+            Action::Evaluate,
+            Action::RunToCursor,
+            Action::SetExecutionPoint,
+        ] {
+            assert!(
+                !action_enabled(&app, action),
+                "{action:?} must not be offered without its required run/debug context"
+            );
+        }
+        assert!(!configuration_editable(&app));
+        app.runner.configs = vec![RunConfig {
+            name: "wasm".into(),
+            kind: ConfigKind::WasmPack {
+                manifest: home.path().join("Cargo.toml"),
+            },
+        }];
+        assert!(action_enabled(&app, Action::Run));
+        assert!(!action_enabled(&app, Action::Debug));
+        assert!(!action_enabled(&app, Action::Profile));
+        assert!(disabled_hint(&app, Action::Debug).is_some());
+        assert!(configuration_editable(&app));
+        app.runner.configs[0].kind = ConfigKind::Tests {
+            target: home.path().join("Cargo.toml"),
+        };
+        assert!(action_enabled(&app, Action::Run));
+        assert!(!action_enabled(&app, Action::Debug));
+        assert!(!configuration_editable(&app));
+        app.runner.configs[0].kind = ConfigKind::Cargo {
+            package: "example".into(),
+            bin: "example".into(),
+        };
+        assert!(action_enabled(&app, Action::Run));
+        assert!(action_enabled(&app, Action::Debug));
+        assert_eq!(
+            action_enabled(&app, Action::Profile),
+            cfg!(target_os = "linux")
+        );
+        assert!(configuration_editable(&app));
+    }
+
+    fn scroll_down(
+        harness: &mut egui_kittest::Harness<'static, crate::app::CrabCraftApp>,
+        pointer: egui::Pos2,
+    ) {
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::PointerMoved(pointer));
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -2000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+        });
+        harness.run_steps(15);
+    }
+
+    #[test]
+    fn root_dropdown_scrolls_to_help_in_a_short_viewport() {
+        use egui_kittest::kittest::Queryable;
+        use rc_kit::i18n::tr;
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut harness = crate::screens::harness(
+            crate::screens::test_app(home.path(), true),
+            egui::vec2(800.0, 300.0),
+        );
+        harness.get_by_label(tr("Main Menu")).click();
+        harness.run_steps(3);
+        scroll_down(&mut harness, egui::pos2(100.0, 200.0));
+        let help_label = format!("{} ⏵", tr("Help"));
+        let help = harness.get_by_label(&help_label);
+        assert!(
+            help.rect().bottom() < 300.0,
+            "Help must remain reachable: {:?}",
+            help.rect()
+        );
+        help.click();
+        harness.run_steps(3);
+        harness.get_by_label(tr("About CrabCraft")).click();
+        harness.run_steps(3);
+        assert!(matches!(
+            harness.state().dialog,
+            Some(crate::ui::dialogs::Dialog::About)
+        ));
+    }
+
+    #[test]
+    fn recent_projects_submenu_fits_long_names_and_scrolls() {
+        use egui_kittest::kittest::Queryable;
+        use rc_kit::i18n::tr;
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.settings.recent_workspaces = (0..60)
+            .map(|index| {
+                home.path()
+                    .join(format!("project-{index:02}-{}", "語".repeat(80)))
+            })
+            .collect();
+        let mut harness = crate::screens::harness(app, egui::vec2(800.0, 340.0));
+        harness.get_by_label(tr("Main Menu")).click();
+        harness.run_steps(3);
+        harness.get_by_label(&format!("{} ⏵", tr("File"))).click();
+        harness.run_steps(3);
+        harness
+            .get_by_label(&format!("{} ⏵", tr("Recent Projects")))
+            .click();
+        harness.run_steps(3);
+        let first = harness
+            .query_all_by_label_contains("project-00-")
+            .find(|node| node.rect().width() > 100.0 && node.rect().width() < 320.0)
+            .unwrap()
+            .rect();
+        assert!(
+            first.width() < 320.0 && first.left() >= 0.0 && first.right() <= 800.0,
+            "recent item must fit the viewport: {first:?}"
+        );
+        scroll_down(&mut harness, first.center());
+        let last = harness
+            .query_all_by_label_contains("project-59-")
+            .find(|node| node.rect().width() > 100.0 && node.rect().width() < 320.0)
+            .unwrap()
+            .rect();
+        assert!(
+            last.top() >= 0.0 && last.bottom() < 340.0,
+            "last recent project must be reachable: {last:?}"
+        );
     }
 }

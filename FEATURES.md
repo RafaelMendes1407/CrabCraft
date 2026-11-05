@@ -42,6 +42,14 @@ da detecção estar desabilitada em vez de um carregamento contínuo. Testes:
 `completed_interface_theme_and_size_capture` verifica temas claro/escuro e janelas compactas
 em um projeto Cargo real; imagens em `target/snapshots/completed-*.png` (não distribuídas).
 
+Disponibilidade dos menus: Executar/Depurar/Perfil, Parar, passos do depurador e edição
+da configuração respeitam a seleção, a plataforma e o estado da sessão. Ações sem suporte
+mostram as dicas existentes. O dropdown principal, Ferramentas de janela e Projetos recentes
+têm rolagem limitada pela altura estável do viewport, sem encolher ao reposicionar o popup.
+Nomes longos de projetos são elididos e o caminho completo fica no hover. Verificado pelos
+quatro testes de `ui::main_menu::tests`, inclusive acesso ao último de 60 projetos recentes
+e à Ajuda em janela baixa, além da execução de comandos no projeto Cargo de teste.
+
 ## Legenda
 
 | Status | Significado |
