@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "Ausgabevorschau ist auf 16.384 Zeichen begrenzt",
     "Administrator Run": "Administratorausführung",
     "Inspect a compiled program before requesting OS administrator authorization": "Programm vor der OS-Administratoranfrage prüfen"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "Kommentarkorrektur anwenden",
+    "Check Comments": "Kommentare prüfen",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "Rust-Kommentare mit einem separat installierten lokalen LanguageTool-Server prüfen. Text wird nur nach ausdrücklicher Prüfung gesendet; Projektcode wird nicht ausgeführt.",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "Einen HTTP-Korrekturserver auf Loopback ohne Zugangsdaten oder Proxy-Pfad wählen",
+    "Could not reach the local proofreading server": "Lokaler Korrekturserver nicht erreichbar",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "Einen LanguageTool-Sprachcode wie en-US oder pt-BR eingeben",
+    "Grammar": "Grammatik",
+    "Local proofreading server": "Lokaler Korrekturserver",
+    "No prose comments found outside code fences": "Keine Prosakommentare außerhalb von Codeblöcken gefunden",
+    "No spelling or grammar issues found": "Keine Rechtschreib- oder Grammatikprobleme gefunden",
+    "Open an editable Rust source file with valid syntax": "Eine bearbeitbare Rust-Quelldatei mit gültiger Syntax öffnen",
+    "Original text": "Originaltext",
+    "Proofreading exceeded its source, comment or response limits": "Korrektur überschritt die Grenzen für Quelle, Kommentare oder Antwort",
+    "Proofreading server returned HTTP {status}": "Korrekturserver meldete HTTP {status}",
+    "Spelling": "Rechtschreibung",
+    "Spelling and Grammar": "Rechtschreibung und Grammatik",
+    "Text language code": "Sprachcode des Textes",
+    "The proofreading server returned an invalid or unsafe correction": "Der Korrekturserver lieferte eine ungültige oder unsichere Korrektur",
+    "The source changed; check comments again": "Die Quelle wurde geändert; Kommentare erneut prüfen",
+    "Trust this project before checking comments": "Diesem Projekt vor der Kommentarprüfung vertrauen"
   }
 }

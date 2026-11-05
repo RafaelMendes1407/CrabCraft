@@ -82,6 +82,7 @@ pub struct CrabCraftApp {
     pub dev_containers: crate::dev_containers::DevContainers,
     pub containers: crate::containers::Containers,
     pub plugins: crate::plugins::Plugins,
+    pub proofreader: crate::proofreader::Proofreader,
     pub acp: crate::acp::Acp,
     pub hosting: crate::hosting::Hosting,
     pub issue_tracker: crate::issue_tracker::Tracker,
@@ -342,6 +343,7 @@ impl CrabCraftApp {
             dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
             containers: crate::containers::Containers::new(waker.clone()),
             plugins: crate::plugins::Plugins::new(waker.clone()),
+            proofreader: Default::default(),
             acp: crate::acp::Acp::new(waker.clone()),
             hosting: crate::hosting::Hosting::new(waker.clone()),
             issue_tracker: crate::issue_tracker::Tracker::new(waker.clone()),
@@ -1444,6 +1446,7 @@ impl CrabCraftApp {
         self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
         self.containers = crate::containers::Containers::new(self.waker.clone());
         self.plugins = crate::plugins::Plugins::new(self.waker.clone());
+        self.proofreader = Default::default();
         self.acp = crate::acp::Acp::new(self.waker.clone());
         self.hosting = crate::hosting::Hosting::new(self.waker.clone());
         self.issue_tracker = crate::issue_tracker::Tracker::new(self.waker.clone());
@@ -2938,6 +2941,7 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Proofreading { self.proofreader.cancel(); }
         if was_open && tw == ToolWindow::Database { self.database.cancel(); }
         if was_open && tw == ToolWindow::Remote { self.remote.cancel(); }
         if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
@@ -3289,6 +3293,7 @@ impl CrabCraftApp {
         self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
         self.plugins.poll(acp_trusted);
+        self.proofreader.poll(&self.docs, acp_trusted);
         if self.acp.poll(acp_trusted) { self.dock.show(ToolWindow::Agents); }
         self.hosting.poll();
         if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {

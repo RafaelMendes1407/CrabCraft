@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "La vista previa se limita a 16.384 caracteres",
     "Administrator Run": "Ejecutar como administrador",
     "Inspect a compiled program before requesting OS administrator authorization": "Inspecciona el programa antes de pedir autorización del sistema"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "Aplicar corrección del comentario",
+    "Check Comments": "Revisar comentarios",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "Revisa comentarios Rust con un servidor LanguageTool local instalado por separado. Solo una revisión explícita envía el texto; no se ejecuta código del proyecto.",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "Elige un servidor HTTP local sin credenciales ni rutas de proxy",
+    "Could not reach the local proofreading server": "No se pudo conectar al servidor local de revisión",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "Introduce un código de idioma de LanguageTool como en-US o pt-BR",
+    "Grammar": "Gramática",
+    "Local proofreading server": "Servidor local de revisión",
+    "No prose comments found outside code fences": "No hay comentarios de texto fuera de los bloques de código",
+    "No spelling or grammar issues found": "No se encontraron problemas de ortografía o gramática",
+    "Open an editable Rust source file with valid syntax": "Abre un archivo Rust editable con sintaxis válida",
+    "Original text": "Texto original",
+    "Proofreading exceeded its source, comment or response limits": "La revisión superó los límites de código, comentarios o respuesta",
+    "Proofreading server returned HTTP {status}": "El servidor de revisión devolvió HTTP {status}",
+    "Spelling": "Ortografía",
+    "Spelling and Grammar": "Ortografía y gramática",
+    "Text language code": "Código de idioma del texto",
+    "The proofreading server returned an invalid or unsafe correction": "El servidor devolvió una corrección inválida o no segura",
+    "The source changed; check comments again": "El código cambió; vuelve a revisar los comentarios",
+    "Trust this project before checking comments": "Confía en este proyecto antes de revisar los comentarios"
   }
 }

@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "L’aperçu est limité à 16 384 caractères",
     "Administrator Run": "Exécution administrateur",
     "Inspect a compiled program before requesting OS administrator authorization": "Inspectez le programme avant de demander l’autorisation système"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "Appliquer la correction du commentaire",
+    "Check Comments": "Vérifier les commentaires",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "Vérifiez les commentaires Rust avec un serveur LanguageTool local installé séparément. Seule une vérification explicite envoie le texte ; aucun code du projet n’est exécuté.",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "Choisissez un serveur HTTP sur l’interface locale sans identifiants ni chemin de proxy",
+    "Could not reach the local proofreading server": "Impossible de joindre le serveur local de correction",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "Saisissez un code de langue LanguageTool comme en-US ou pt-BR",
+    "Grammar": "Grammaire",
+    "Local proofreading server": "Serveur local de correction",
+    "No prose comments found outside code fences": "Aucun commentaire en prose trouvé hors des blocs de code",
+    "No spelling or grammar issues found": "Aucun problème d’orthographe ou de grammaire trouvé",
+    "Open an editable Rust source file with valid syntax": "Ouvrez un fichier Rust modifiable avec une syntaxe valide",
+    "Original text": "Texte original",
+    "Proofreading exceeded its source, comment or response limits": "La correction a dépassé les limites de source, de commentaires ou de réponse",
+    "Proofreading server returned HTTP {status}": "Le serveur de correction a renvoyé HTTP {status}",
+    "Spelling": "Orthographe",
+    "Spelling and Grammar": "Orthographe et grammaire",
+    "Text language code": "Code de langue du texte",
+    "The proofreading server returned an invalid or unsafe correction": "Le serveur a renvoyé une correction invalide ou dangereuse",
+    "The source changed; check comments again": "La source a changé ; vérifiez à nouveau les commentaires",
+    "Trust this project before checking comments": "Approuvez ce projet avant de vérifier les commentaires"
   }
 }

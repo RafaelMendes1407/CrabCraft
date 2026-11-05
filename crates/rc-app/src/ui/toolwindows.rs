@@ -39,6 +39,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Remote => crate::remote::show(app, ui),
         ToolWindow::Agents => crate::acp::show(app, ui),
         ToolWindow::Plugins => crate::plugins::show(app, ui),
+        ToolWindow::Proofreading => crate::proofreader::show(app, ui),
         ToolWindow::Containers => crate::containers::show(app, ui),
         ToolWindow::DevContainers => crate::dev_containers::show(app, ui),
         ToolWindow::PrivilegedRun => crate::privileged_run::show(app, ui),
@@ -530,6 +531,7 @@ pub fn header(ui: &mut Ui, title: &str) -> bool {
 
 fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
     match tw {
+        ToolWindow::Proofreading => (tr("Spelling and Grammar"), ""),
         ToolWindow::Structure => (tr("No structure"), tr("Open a source file to see its items.")),
         ToolWindow::Commit => (tr("No changes"), tr("Changed files will show up here, ready to commit.")),
         ToolWindow::Run => (tr("Nothing is running"), tr("Run a project to see its output here.")),

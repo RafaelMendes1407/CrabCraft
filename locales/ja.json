@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "管理者プログラムの出力プレビューは 16,384 文字までです",
     "Administrator Run": "管理者実行",
     "Inspect a compiled program before requesting OS administrator authorization": "OS 管理者認証の要求前にプログラムを確認してください"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "コメントの修正を適用",
+    "Check Comments": "コメントを確認",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "別途インストールしたローカル LanguageTool サーバーで Rust のコメントを確認します。明示的な確認時のみテキストを送信し、プロジェクトのコードは実行しません。",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "認証情報やプロキシパスを含まないループバック HTTP 校正サーバーを選択してください",
+    "Could not reach the local proofreading server": "ローカル校正サーバーに接続できませんでした",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "en-US や pt-BR などの LanguageTool 言語コードを入力してください",
+    "Grammar": "文法",
+    "Local proofreading server": "ローカル校正サーバー",
+    "No prose comments found outside code fences": "コードフェンス外に文章のコメントが見つかりません",
+    "No spelling or grammar issues found": "スペルや文法の問題は見つかりませんでした",
+    "Open an editable Rust source file with valid syntax": "構文が正しい編集可能な Rust ソースファイルを開いてください",
+    "Original text": "元のテキスト",
+    "Proofreading exceeded its source, comment or response limits": "校正がソース、コメント、または応答の制限を超えました",
+    "Proofreading server returned HTTP {status}": "校正サーバーが HTTP {status} を返しました",
+    "Spelling": "スペル",
+    "Spelling and Grammar": "スペルと文法",
+    "Text language code": "テキストの言語コード",
+    "The proofreading server returned an invalid or unsafe correction": "校正サーバーが無効または安全でない修正を返しました",
+    "The source changed; check comments again": "ソースが変更されました。コメントを再確認してください",
+    "Trust this project before checking comments": "コメントを確認する前にこのプロジェクトを信頼してください"
   }
 }

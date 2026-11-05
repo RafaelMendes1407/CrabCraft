@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "管理员程序输出预览限于 16,384 个字符",
     "Administrator Run": "管理员运行",
     "Inspect a compiled program before requesting OS administrator authorization": "请求系统管理员授权前请检查程序"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "应用注释更正",
+    "Check Comments": "检查注释",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "使用单独安装的本地 LanguageTool 服务器检查 Rust 注释。仅在明确检查时发送注释文本；不会运行项目代码。",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "请选择不含凭据或代理路径的回环 HTTP 校对服务器",
+    "Could not reach the local proofreading server": "无法连接本地校对服务器",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "请输入 en-US 或 pt-BR 等 LanguageTool 语言代码",
+    "Grammar": "语法",
+    "Local proofreading server": "本地校对服务器",
+    "No prose comments found outside code fences": "代码围栏外未找到文本注释",
+    "No spelling or grammar issues found": "未发现拼写或语法问题",
+    "Open an editable Rust source file with valid syntax": "请打开语法有效的可编辑 Rust 源文件",
+    "Original text": "原始文本",
+    "Proofreading exceeded its source, comment or response limits": "校对超出了源文件、注释或响应限制",
+    "Proofreading server returned HTTP {status}": "校对服务器返回 HTTP {status}",
+    "Spelling": "拼写",
+    "Spelling and Grammar": "拼写和语法",
+    "Text language code": "文本语言代码",
+    "The proofreading server returned an invalid or unsafe correction": "校对服务器返回了无效或不安全的更正",
+    "The source changed; check comments again": "源文件已更改；请重新检查注释",
+    "Trust this project before checking comments": "请在检查注释前信任此项目"
   }
 }

@@ -2632,5 +2632,27 @@
     "Administrator program output preview is limited to 16,384 characters": "Podgląd wyjścia jest ograniczony do 16 384 znaków",
     "Administrator Run": "Uruchom jako administrator",
     "Inspect a compiled program before requesting OS administrator authorization": "Sprawdź program przed żądaniem autoryzacji systemowej"
+  },
+  "proofreading": {
+    "Apply Comment Correction": "Zastosuj poprawkę komentarza",
+    "Check Comments": "Sprawdź komentarze",
+    "Check Rust comments with a separately installed local LanguageTool server. Only an explicit check sends comment text; no project code is run.": "Sprawdzaj komentarze Rust przez osobno zainstalowany lokalny serwer LanguageTool. Tekst jest wysyłany tylko na żądanie; kod projektu nie jest uruchamiany.",
+    "Choose an HTTP proofreading server on loopback without credentials or proxy paths": "Wybierz serwer korekty HTTP na interfejsie lokalnym bez danych logowania i ścieżek proxy",
+    "Could not reach the local proofreading server": "Nie można połączyć się z lokalnym serwerem korekty",
+    "Enter a LanguageTool language code such as en-US or pt-BR": "Wpisz kod języka LanguageTool, np. en-US lub pt-BR",
+    "Grammar": "Gramatyka",
+    "Local proofreading server": "Lokalny serwer korekty",
+    "No prose comments found outside code fences": "Nie znaleziono komentarzy poza blokami kodu",
+    "No spelling or grammar issues found": "Nie znaleziono błędów pisowni ani gramatyki",
+    "Open an editable Rust source file with valid syntax": "Otwórz edytowalny plik Rust z poprawną składnią",
+    "Original text": "Tekst oryginalny",
+    "Proofreading exceeded its source, comment or response limits": "Korekta przekroczyła limity źródła, komentarzy lub odpowiedzi",
+    "Proofreading server returned HTTP {status}": "Serwer korekty zwrócił HTTP {status}",
+    "Spelling": "Pisownia",
+    "Spelling and Grammar": "Pisownia i gramatyka",
+    "Text language code": "Kod języka tekstu",
+    "The proofreading server returned an invalid or unsafe correction": "Serwer korekty zwrócił nieprawidłową lub niebezpieczną poprawkę",
+    "The source changed; check comments again": "Źródło zmieniło się; sprawdź komentarze ponownie",
+    "Trust this project before checking comments": "Zaufaj projektowi przed sprawdzeniem komentarzy"
   }
 }

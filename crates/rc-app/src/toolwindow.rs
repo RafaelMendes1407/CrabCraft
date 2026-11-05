@@ -31,6 +31,7 @@ pub enum ToolWindow {
     Remote,
     Agents,
     Plugins,
+    Proofreading,
     Containers,
     DevContainers,
     PrivilegedRun,
@@ -69,7 +70,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 25] = [
+    pub const ALL: [ToolWindow; 26] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -91,6 +92,7 @@ impl ToolWindow {
         ToolWindow::Remote,
         ToolWindow::Agents,
         ToolWindow::Plugins,
+        ToolWindow::Proofreading,
         ToolWindow::Containers,
         ToolWindow::DevContainers,
         ToolWindow::PrivilegedRun,
@@ -121,6 +123,7 @@ impl ToolWindow {
             ToolWindow::Remote => "remote",
             ToolWindow::Agents => "acp_agents",
             ToolWindow::Plugins => "local_plugins",
+            ToolWindow::Proofreading => "proofreading",
             ToolWindow::Containers => "docker",
             ToolWindow::DevContainers => "dev_containers",
             ToolWindow::PrivilegedRun => "privileged_run",
@@ -151,6 +154,7 @@ impl ToolWindow {
             ToolWindow::Remote => tr("Remote files"),
             ToolWindow::Agents => tr("ACP Agents"),
             ToolWindow::Plugins => tr("Local Plugins"),
+            ToolWindow::Proofreading => tr("Spelling and Grammar"),
             ToolWindow::Containers => tr("Docker"),
             ToolWindow::DevContainers => tr("Dev Containers"),
             ToolWindow::PrivilegedRun => tr("Administrator Run"),
@@ -181,6 +185,7 @@ impl ToolWindow {
             ToolWindow::Remote => ico::TW_DEPENDENCIES,
             ToolWindow::Agents => ico::RUN_ANYTHING,
             ToolWindow::Plugins => ico::RUN_ANYTHING,
+            ToolWindow::Proofreading => ico::TW_PROBLEMS,
             ToolWindow::Containers => ico::RUN_ANYTHING,
             ToolWindow::DevContainers => ico::RUN_ANYTHING,
             ToolWindow::PrivilegedRun => ico::RUN_ANYTHING,
@@ -190,6 +195,7 @@ impl ToolWindow {
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
+            ToolWindow::Proofreading => Side::Right,
             ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers | ToolWindow::PrivilegedRun => Side::Right,
             _ => Side::Bottom,
         }
@@ -197,6 +203,7 @@ impl ToolWindow {
 
     /// Whether the button sits on the lower part of the left stripe (bottom tool windows).
     pub fn default_size(self, side: Side) -> f32 {
+        if self == ToolWindow::Proofreading && side == Side::Right { return 480.0; }
         if self == ToolWindow::Remote && side == Side::Bottom { return 700.0; }
         if self == ToolWindow::Agents && side == Side::Right { return 480.0; }
         if self == ToolWindow::Database && side == Side::Bottom { return 560.0; }

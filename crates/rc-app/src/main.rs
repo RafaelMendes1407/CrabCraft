@@ -215,6 +215,8 @@ mod hosting;
 
 mod acp;
 mod plugins;
+mod proofreader;
+mod proofreader_core;
 mod containers;
 mod dev_containers;
 mod privileged_run;
