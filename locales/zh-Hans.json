@@ -2040,5 +2040,11 @@
     "Restricted mode": "受限模式",
     "Trust this project before running project tools or code": "运行项目工具或代码前请信任此项目",
     "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.": "受限模式：项目工具已禁用。信任后允许执行 Cargo 配置、工具链、构建脚本和过程宏。"
+  },
+  "rust_debugger": {
+    "Rust debugger": "Rust 调试器",
+    "GDB executable": "GDB 可执行文件",
+    "LLDB DAP executable": "LLDB DAP 可执行文件",
+    "LLDB DAP was not found. Install lldb-dap or configure its executable path.": "未找到 LLDB DAP。请安装 lldb-dap 或配置其可执行文件路径。"
   }
 }

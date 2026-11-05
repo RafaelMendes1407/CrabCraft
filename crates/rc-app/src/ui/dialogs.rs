@@ -383,8 +383,18 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     SettingsPage::Tools => {
                         app.load_toolchain();
                         toolchain_rows(ui, app);
+                        ui.label(tr("Rust debugger"));
+                        egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
+                            rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
+                        }).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
+                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
+                        });
+                        ui.end_row();
                         for (label, value) in [
                             (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
+                            (tr("GDB executable"), &mut draft.gdb_path),
+                            (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
                             (tr("Roslyn language server"), &mut draft.roslyn_path),
                             (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),

@@ -507,7 +507,7 @@ impl DebugSession {
             DebugTarget::Attach { pid } => {
                 s.attach_pid = Some(pid);
                 s.debuggee_pid = Some(pid);
-                let a = if s.is_gdb() { gdb_attach_arguments(pid) } else { attach_arguments(pid, &s.options) };
+                let a = if s.is_gdb() || s.adapter.origin == crate::netcoredbg::Origin::Lldb { gdb_attach_arguments(pid) } else { attach_arguments(pid, &s.options) };
                 s.spawn_adapter("attach", a);
             }
         }
@@ -515,7 +515,11 @@ impl DebugSession {
     }
 
     fn launch_arguments(&self, config: &LaunchConfig) -> Value {
-        if self.adapter.origin == crate::netcoredbg::Origin::Gdb { gdb_launch_arguments(config, &self.options) } else { launch_arguments(config, &self.options) }
+        match self.adapter.origin {
+            crate::netcoredbg::Origin::Gdb => gdb_launch_arguments(config, &self.options),
+            crate::netcoredbg::Origin::Lldb => crate::launch::lldb_launch_arguments(config, &self.options),
+            _ => launch_arguments(config, &self.options),
+        }
     }
 
     fn spawn_adapter(&mut self, command: &'static str, arguments: Value) {
@@ -526,7 +530,7 @@ impl DebugSession {
                 let init = json!({
                     "clientID": "crabcraft",
                     "clientName": "CrabCraft",
-                    "adapterID": "coreclr",
+                    "adapterID": match self.adapter.origin { crate::netcoredbg::Origin::Gdb => "gdb", crate::netcoredbg::Origin::Lldb => "lldb", _ => "coreclr" },
                     "locale": "en-US",
                     "pathFormat": "path",
                     "linesStartAt1": true,

@@ -306,6 +306,9 @@ impl CrabCraftApp {
             debugger: {
                 let mut debugger = crate::debugger::Debugger::new(waker.clone());
                 debugger.hex = settings.debugger_hex;
+                debugger.rust_backend = settings.rust_debugger;
+                debugger.gdb_path = settings.gdb_path.clone();
+                debugger.lldb_dap_path = settings.lldb_dap_path.clone();
                 debugger
             },
             window_title: String::new(),
@@ -3062,6 +3065,9 @@ impl CrabCraftApp {
         let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
         let imports_changed = new.autoimport_exclude != self.settings.autoimport_exclude;
         self.settings = new;
+        self.debugger.rust_backend = self.settings.rust_debugger;
+        self.debugger.gdb_path = self.settings.gdb_path.clone();
+        self.debugger.lldb_dap_path = self.settings.lldb_dap_path.clone();
         if imports_changed {
             for doc in &mut self.docs.list { doc.editor.popups.completion = None; }
         }

@@ -1,0 +1,4 @@
+Rust debugger	Depurador de Rust	Débogueur Rust	Depurador Rust	Rust-Debugger	Debuger Rust	Rust 调试器	Rust デバッガー
+GDB executable	Ejecutable GDB	Exécutable GDB	Executável GDB	GDB-Programm	Program GDB	GDB 可执行文件	GDB 実行ファイル
+LLDB DAP executable	Ejecutable LLDB DAP	Exécutable LLDB DAP	Executável LLDB DAP	LLDB-DAP-Programm	Program LLDB DAP	LLDB DAP 可执行文件	LLDB DAP 実行ファイル
+LLDB DAP was not found. Install lldb-dap or configure its executable path.	No se encontró LLDB DAP. Instala lldb-dap o configura la ruta del ejecutable.	LLDB DAP est introuvable. Installez lldb-dap ou configurez le chemin de son exécutable.	LLDB DAP não encontrado. Instale lldb-dap ou configure o caminho do executável.	LLDB DAP wurde nicht gefunden. Installieren Sie lldb-dap oder konfigurieren Sie den Programmpfad.	Nie znaleziono LLDB DAP. Zainstaluj lldb-dap lub skonfiguruj ścieżkę programu.	未找到 LLDB DAP。请安装 lldb-dap 或配置其可执行文件路径。	LLDB DAP が見つかりません。lldb-dap をインストールするか、実行ファイルのパスを設定してください。

@@ -60,6 +60,9 @@ pub struct ValueEdit {
 }
 
 pub struct Debugger {
+    pub rust_backend: rc_core::settings::RustDebugger,
+    pub gdb_path: Option<PathBuf>,
+    pub lldb_dap_path: Option<PathBuf>,
     pub session: Option<DebugSession>,
     pub console: Option<crate::runner::Console>,
     pub name: String,
@@ -118,6 +121,7 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(waker: Waker) -> Self {
         Debugger {
+            rust_backend: Default::default(), gdb_path: None, lldb_dap_path: None,
             session: None,
             console: None,
             name: String::new(),
@@ -152,6 +156,15 @@ impl Debugger {
             temp: None,
             urls: Vec::new(),
             env: Vec::new(),
+        }
+    }
+
+    fn rust_adapter(&self) -> Result<rc_dap::netcoredbg::AdapterCommand, String> {
+        match self.rust_backend {
+            rc_core::settings::RustDebugger::Gdb => rc_dap::gdb::locate_configured(self.gdb_path.as_deref())
+                .ok_or_else(|| tr("GDB was not found. Install it to debug Rust programs.").into()),
+            rc_core::settings::RustDebugger::Lldb => rc_dap::lldb::locate(self.lldb_dap_path.as_deref())
+                .ok_or_else(|| tr("LLDB DAP was not found. Install lldb-dap or configure its executable path.").into()),
         }
     }
 
@@ -196,8 +209,9 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.stop();
         }
-        let Some(adapter) = rc_dap::gdb::locate() else {
-            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        let adapter = match self.rust_adapter() {
+            Ok(adapter) => adapter,
+            Err(message) => return vec![DebugOutput::Notify(message, true)],
         };
         self.urls.clear();
         let console = crate::runner::Console::new(&self.waker);
@@ -219,8 +233,9 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.stop();
         }
-        let Some(adapter) = rc_dap::gdb::locate() else {
-            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        let adapter = match self.rust_adapter() {
+            Ok(adapter) => adapter,
+            Err(message) => return vec![DebugOutput::Notify(message, true)],
         };
         target.env.extend(self.env.iter().cloned());
         self.urls.clear();

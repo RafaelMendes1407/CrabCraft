@@ -18,7 +18,17 @@ fn in_path(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
 
 /// `rust-gdb` when the toolchain has it and GDB is installed, or plain `gdb`.
 pub fn locate() -> Option<AdapterCommand> {
-    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").iter().flat_map(std::env::split_paths).collect();
+    locate_configured(None)
+}
+
+pub fn locate_configured(configured: Option<&Path>) -> Option<AdapterCommand> {
+    if let Some(path) = configured {
+        if !path.is_absolute() || !path.is_file() { return None; }
+        let mut command = AdapterCommand::new(path, Origin::Gdb);
+        command.prefix = ARGS.iter().map(ToString::to_string).collect();
+        return Some(command);
+    }
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").iter().flat_map(std::env::split_paths).filter(|p| p.is_absolute()).collect();
     dirs.extend(std::env::var_os("HOME").map(|h| Path::new(&h).join(".cargo").join("bin")));
     let gdb = in_path("gdb", &dirs)?;
     let program = in_path("rust-gdb", &dirs).unwrap_or(gdb);

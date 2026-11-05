@@ -31,13 +31,15 @@ pub enum Origin {
     Path,
     /// GDB, which speaks DAP natively.
     Gdb,
+    /// LLVM's native DAP adapter, without netcoredbg's interpreter switch.
+    Lldb,
 }
 
 impl AdapterCommand {
     /// Arguments that make netcoredbg speak DAP on stdin/stdout.
     pub fn args(&self) -> Vec<String> {
         let mut a = self.prefix.clone();
-        if self.origin != Origin::Gdb {
+        if !matches!(self.origin, Origin::Gdb | Origin::Lldb) {
             a.push("--interpreter=vscode".to_string());
         }
         a

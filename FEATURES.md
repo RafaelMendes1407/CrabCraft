@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 206 |
+| ✅ Pronto | 207 |
 | 🚧 Em andamento | 12 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 35 |
+| ⬜ A fazer | 34 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -276,7 +276,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-18 | Disassembly view | ✅ | M4 | Aba "Disassembly" na janela Debug: instruções em volta da instrução atual do frame selecionado (endereço, bytes, instrução) lidas com `disassemble`, com cabeçalho quando muda a função ou a linha do fonte e a instrução atual marcada. Segue o frame selecionado (num chamador mostra o endereço de retorno) e relê a cada parada; "carregar anteriores/seguintes" sob demanda. O GDB 15 não desmonta para trás (`instructionOffset` negativo dá instruções erradas), então as anteriores são lidas de bytes antes do endereço e só aceitas quando a decodificação cai exatamente nele. Step Over/Into Instruction (`next`/`stepIn` com `granularity: instruction`) quando o adaptador anuncia `supportsSteppingGranularity`; adaptador sem `supportsDisassembleRequest` mostra "Este depurador não consegue desmontar". Testado num programa Rust real sob GDB (`the_disassembly_view_marks_the_current_instruction_of_the_function`). Breakpoints em instruções e sintaxe Intel ficam fora do escopo |
 | D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
 | D-20 | Parallel stacks | ✅ | M4 | Janela Debug › Pilhas paralelas: captura das threads pausadas, com pilhas idênticas agrupadas por função/arquivo/linha; escolher uma thread e um quadro muda o contexto de variáveis e a posição no código. Até 64 threads × 64 quadros, quatro pedidos DAP simultâneos e timeout de oito segundos; limites e falhas visíveis. Atualizar relê threads/pilhas; Cancelar, esconder a aba e retomar descartam os pedidos (cancel DAP só quando suportado); nova parada/sessão invalida os dados. Respeita allThreadsStopped: sem confirmação do adaptador, consulta apenas a thread pausada. Nomes, caminhos e erros limitados; agrupamento calculado ao receber respostas. Teste real com GDB 15.1 e programa Rust Cargo de três threads (alpha/beta/main), Cancelar/Atualizar nativos, seleção de quadro, limite e cancelamento de pedidos, limpeza ao retomar; regressão de depuração Rust existente e 44 testes rc-dap passaram. Fora: grafo de callers parcialmente compartilhados, tarefas async e sessões simultâneas Entrega verificada: `fd7a0f0`, [#80](https://github.com/RafaelMendes1407/CrabCraft/issues/80). |
-| D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
+| D-21 | Escolher GDB ou LLDB | ✅ | M3 | Settings › Tools permite escolher GDB ou LLVM LLDB DAP e configurar caminhos absolutos; persistência local, erro explícito sem fallback silencioso. Launch e attach usam o backend escolhido após confiança. Teste nativo troca os dois sem executar projeto; GDB e LLVM 19 DAP reais comprovam breakpoint, variáveis Rust, step, stdout e saída. Capacidades avançadas continuam específicas de cada adaptador. Ver docs/rust-debuggers.md; Closes #81. |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
 | D-23 | Depurar como root | ⬜ | M6 | |
 | D-24 | Pause, resume, restart e stop | ✅ | M2 | Testado com GDB real; botões vistos na janela |

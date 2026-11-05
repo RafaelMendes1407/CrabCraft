@@ -15,6 +15,7 @@ pub mod client;
 pub mod disassembly;
 pub mod format;
 pub mod gdb;
+pub mod lldb;
 pub mod launch;
 pub mod memory;
 pub mod netcoredbg;

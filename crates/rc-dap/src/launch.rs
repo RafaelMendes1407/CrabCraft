@@ -105,6 +105,15 @@ pub fn gdb_attach_arguments(pid: u32) -> Value {
     json!({ "pid": pid })
 }
 
+/// LLVM DAP uses `stopOnEntry` and a map of environment overrides, like GDB.
+pub fn lldb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Value {
+    let mut args = gdb_launch_arguments(config, options);
+    args["type"] = json!("lldb");
+    args["request"] = json!("launch");
+    args["initCommands"] = json!(["settings set target.disable-aslr false"]);
+    args
+}
+
 pub fn attach_arguments(pid: u32, options: &DebugOptions) -> Value {
     json!({
         "name": ".NET Attach",

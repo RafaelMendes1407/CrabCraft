@@ -2040,5 +2040,11 @@
     "Restricted mode": "Eingeschränkter Modus",
     "Trust this project before running project tools or code": "Diesem Projekt vor dem Ausführen seiner Werkzeuge oder seines Codes vertrauen",
     "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.": "Eingeschränkter Modus: Projektwerkzeuge sind deaktiviert. Vertrauen erlaubt die Ausführung von Cargo-Konfiguration, Toolchains, Build-Skripten und prozeduralen Makros."
+  },
+  "rust_debugger": {
+    "Rust debugger": "Rust-Debugger",
+    "GDB executable": "GDB-Programm",
+    "LLDB DAP executable": "LLDB-DAP-Programm",
+    "LLDB DAP was not found. Install lldb-dap or configure its executable path.": "LLDB DAP wurde nicht gefunden. Installieren Sie lldb-dap oder konfigurieren Sie den Programmpfad."
   }
 }
