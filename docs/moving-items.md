@@ -16,7 +16,7 @@ The verified scope is deliberately conservative:
   `pub` or `pub(crate)`; unit structs are accepted. Existing impl blocks stay in the original
   module and resolve the re-exported type. Private fields would change access, so are refused.
 - Public enums with primitive payloads/simple discriminants, literal/local primitive constants,
-  and aliases to primitive/local types whose identities remain inside the moved item.
+  and aliases to primitive types.
 
 Examples of the two changes shown together:
 
