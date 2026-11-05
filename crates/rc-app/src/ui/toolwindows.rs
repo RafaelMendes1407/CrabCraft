@@ -38,6 +38,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Database => crate::database::show(app, ui),
         ToolWindow::Remote => crate::remote::show(app, ui),
         ToolWindow::Agents => crate::acp::show(app, ui),
+        ToolWindow::Plugins => crate::plugins::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -544,6 +545,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
         ToolWindow::Agents => (tr("ACP Agents"), tr("Start a trusted ACP agent explicitly")),
+        ToolWindow::Plugins => (tr("Local Plugins"), tr("Install and run trusted local process extensions explicitly")),
         ToolWindow::Database => (tr("Database"), tr("Connect to a SQLite database explicitly")),
         ToolWindow::Remote => (tr("Remote files"), tr("Explicit SSH connections and reviewed SFTP transfers")),
         ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),

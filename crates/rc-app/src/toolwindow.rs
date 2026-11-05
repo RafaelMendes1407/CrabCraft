@@ -30,6 +30,7 @@ pub enum ToolWindow {
     Database,
     Remote,
     Agents,
+    Plugins,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,7 +66,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 21] = [
+    pub const ALL: [ToolWindow; 22] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -86,6 +87,7 @@ impl ToolWindow {
         ToolWindow::Database,
         ToolWindow::Remote,
         ToolWindow::Agents,
+        ToolWindow::Plugins,
         ToolWindow::Notifications,
     ];
 
@@ -112,6 +114,7 @@ impl ToolWindow {
             ToolWindow::Database => "database",
             ToolWindow::Remote => "remote",
             ToolWindow::Agents => "acp_agents",
+            ToolWindow::Plugins => "local_plugins",
         }
     }
 
@@ -138,6 +141,7 @@ impl ToolWindow {
             ToolWindow::Database => tr("Database"),
             ToolWindow::Remote => tr("Remote files"),
             ToolWindow::Agents => tr("ACP Agents"),
+            ToolWindow::Plugins => tr("Local Plugins"),
         }
     }
 
@@ -164,13 +168,14 @@ impl ToolWindow {
             ToolWindow::Database => ico::TW_DEPENDENCIES,
             ToolWindow::Remote => ico::TW_DEPENDENCIES,
             ToolWindow::Agents => ico::RUN_ANYTHING,
+            ToolWindow::Plugins => ico::RUN_ANYTHING,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
-            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins => Side::Right,
             _ => Side::Bottom,
         }
     }

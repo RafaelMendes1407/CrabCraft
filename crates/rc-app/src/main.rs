@@ -209,3 +209,4 @@ mod issue_tracker;
 mod hosting;
 
 mod acp;
+mod plugins;
