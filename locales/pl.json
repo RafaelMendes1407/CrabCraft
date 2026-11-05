@@ -2384,5 +2384,10 @@
     "I reviewed this AI edit": "Przejrzano tę edycję SI",
     "Apply reviewed AI edit": "Zastosuj przejrzaną edycję SI",
     "Reject AI edit": "Odrzuć edycję SI"
+  },
+  "accessibility": {
+    "Source code: {file}": "Kod źródłowy: {file}",
+    "Source code editor": "Edytor kodu źródłowego",
+    "Accessible text is limited to the context around the caret": "Dostępny tekst jest ograniczony do kontekstu wokół kursora"
   }
 }

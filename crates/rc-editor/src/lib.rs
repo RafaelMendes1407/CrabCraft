@@ -3,6 +3,7 @@
 //! hints, diagnostics and the code-insight popups.
 
 pub mod keymap;
+mod accessibility;
 pub mod layout;
 pub mod lens;
 pub mod popup;

@@ -2384,5 +2384,10 @@
     "I reviewed this AI edit": "この AI 編集を確認しました",
     "Apply reviewed AI edit": "確認済みの AI 編集を適用",
     "Reject AI edit": "AI 編集を拒否"
+  },
+  "accessibility": {
+    "Source code: {file}": "ソースコード: {file}",
+    "Source code editor": "ソースコードエディター",
+    "Accessible text is limited to the context around the caret": "アクセシブルなテキストはカーソル周辺のコンテキストに制限されます"
   }
 }

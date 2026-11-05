@@ -191,6 +191,8 @@ mod terminal_completion_audit;
 
 #[cfg(test)]
 mod key_sequence_audit;
+#[cfg(test)]
+mod accessibility_audit;
 
 mod shelves;
 

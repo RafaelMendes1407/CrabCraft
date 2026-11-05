@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 227 |
-| 🚧 Em andamento | 10 |
+| 🚧 Em andamento | 11 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 16 |
+| ⬜ A fazer | 15 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -365,7 +365,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-05 | Interface em vários idiomas (inclui pt-BR) | ✅ | M1 | Inglês + es/fr/pt-BR/de/pl/zh-Hans/ja; testes de unicidade, placeholders e cobertura das chamadas de tradução. Teste nativo em processo isolado por idioma abre projeto Cargo real, verifica Configurações/Sobre, glyphs, idioma persistido e fonte Rust compilável sem iniciar análise/código automaticamente. Noto Sans CJK SC 2.004 incorporada (OFL 1.1, origem e SHA-256 em assets/fonts/README.md), sem depender de fonte CJK instalada no sistema; famílias proporcional/mono/negrito/itálico verificadas. Licenças completas das fontes incorporadas e acessíveis em Sobre. Corrigida colisão Profile de inspeções/profiler com contexto próprio. Testes editor_rust_audit::interface_languages_render_native_settings_for_a_rust_project e theme::tests::embedded_fonts_cover_every_interface_language. |
 | G-06 | Backup e sincronização de configurações | ✅ | M6 | Backup JSON versionado até 1 MiB com prévia e allowlist mantém caminhos, confiança, histórico, programas e ambiente locais. Sincronização explícita com URL HTTPS privada GET/PUT e Bearer opcional, ambos só em memória; Download abre prévia, Apply altera rascunho e OK confirma. Upload usa ETag forte/If-Match ou If-None-Match para impedir sobrescrita concorrente; conflitos exigem novo download, sem redirects; cancelável com timeout e limites. Testes HTTP reais e UI nativa num Cargo não confiável comprovam round-trip, conflitos, dados secretos ausentes, prévia, cancelamento e nenhum build ao abrir. Sem sync automático/provedor próprio. Ver docs/settings-sync.md. |
 | G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |
-| G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |
+| G-08 | Acessibilidade e leitores de tela | 🚧 | M6 | Bridge nativa AccessKit habilitada no eframe. Editor de código expõe nome, texto Unicode, caret/seleção, foco e somente leitura; ações de seleção validadas antes de converter offsets, contexto limitado a 16.384 caracteres/256 linhas, layout em cache e sem alocação extra quando inativo. Teste nativo em Cargo real lê árvore AccessKit, seleciona após Unicode, edita/compila/executa Rust, verifica somente leitura, offsets inválidos e arquivo grande. Falta: sessão real Orca/NVDA/VoiceOver e auditoria de terminal, árvores customizadas, anúncios, folding/geometria. Não se declara compatibilidade plena; docs/accessibility.md. |
 | G-09 | Plugins | ⬜ | M6 | |
 | G-10 | Migração a partir do VS Code e do RustRover | ✅ | M6 | Importação nativa revisada de preferências portáveis do VS Code settings.json/JSONC e XML de opções/esquemas RustRover: fonte, espaçamento, temas padrão, zoom, hints/guias/régua/autosave e perfil de atalhos conforme formato. Worker cancelável, limites, recusa de arquivos especiais/DTD/valores inválidos; prévia lista chaves não suportadas, Apply altera só rascunho e OK persiste. Não importa comandos, credenciais, plugins, confiança, ZIP ou atalhos personalizados; limites em docs/editor-migration.md. Teste nativo exercita ambos os formatos em Cargo real, verifica confiança/ausência de execução ao importar e cargo run posterior; quatro testes de parser/segurança passaram. |
 | G-11 | CLI: abrir arquivos | ✅ | M3 | `crabcraft [--line N] [--column N] arquivo[:linha[:coluna]]…`, com `--help` e `--version` traduzidos; arquivos vão para a janela já aberta (socket do usuário em `$XDG_RUNTIME_DIR` ou na pasta de dados; no Windows porta local com token), pasta ou `Cargo.toml` abre outra janela. Visto na janela nativa: `crabcraft src/main.rs:4:20` pôs o cursor em 4:20 no CrabCraft aberto. Falta `--wait` |

@@ -2384,5 +2384,10 @@
     "I reviewed this AI edit": "我已审阅此 AI 编辑",
     "Apply reviewed AI edit": "应用已审阅的 AI 编辑",
     "Reject AI edit": "拒绝 AI 编辑"
+  },
+  "accessibility": {
+    "Source code: {file}": "源代码：{file}",
+    "Source code editor": "源代码编辑器",
+    "Accessible text is limited to the context around the caret": "无障碍文本仅限于光标附近的上下文"
   }
 }
