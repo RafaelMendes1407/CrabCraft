@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "启动时重新打开上一个项目",
     "Filter actions": "筛选操作",
-    "No action matches the filter": "没有与筛选条件匹配的操作"
+    "No action matches the filter": "没有与筛选条件匹配的操作",
+    "Preferences backup": "偏好设置备份",
+    "Export preferences": "导出偏好设置",
+    "Import preferences": "导入偏好设置",
+    "Apply imported preferences": "应用导入的偏好设置",
+    "Preferences to replace:": "将替换的偏好设置：",
+    "Preferences exported.": "偏好设置已导出。",
+    "Appearance and editor preferences": "外观和编辑器偏好设置",
+    "Keymap and shortcuts": "键位映射和快捷键",
+    "Auto-import preferences": "自动导入偏好设置",
+    "Inspection levels": "检查级别",
+    "The preferences backup exceeds 1 MB.": "偏好设置备份超过 1 MB。",
+    "This preferences backup format or version is not supported.": "不支持此偏好设置备份的格式或版本。",
+    "The preferences backup contains invalid or unsupported settings.": "偏好设置备份包含无效或不受支持的设置。",
+    "Could not transfer preferences": "无法传输偏好设置",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "将外观、编辑器偏好、模板、快捷键和检查级别导出为 JSON。导入会加载预览；应用导入的设置后，点击确定保存。",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "信任决定、项目路径、历史记录、工具程序和环境变量保留在此计算机上。不支持云同步。"
   },
   "split": {
     "Move to Main Window": "移到主窗口",

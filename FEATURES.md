@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 169 |
-| 🚧 Em andamento | 8 |
+| 🚧 Em andamento | 9 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 53 |
+| ⬜ A fazer | 52 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -363,7 +363,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-03 | Keymaps | 🟢 | M1 | Rider (macOS e Windows/Linux), Visual Studio e VS Code (macOS e Windows/Linux, atalhos padrão da referência pública do VS Code; acordes de duas etapas como Ctrl+K Ctrl+S ainda não existem). VS Code testado headless: Ctrl+P, Ctrl+Shift+P e Ctrl+D. Falta o keymap do RustRover: o herdado é o do Rider |
 | G-04 | Configurar atalhos | ✅ | M3 | Configurações › Keymap › Atalhos: cada ação do Find Action com seu atalho; Gravar atalho captura a próxima tecla com modificadores (Esc cancela), Remover deixa sem atalho e Restaurar volta ao do keymap; o atalho tomado sai da outra ação; guardado nas configurações e aplicado sem reiniciar. Teste headless. Falta: ações de edição fora do Find Action |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | |
-| G-06 | Backup e sincronização de configurações | ⬜ | M6 | Exportar/importar arquivo |
+| G-06 | Backup e sincronização de configurações | 🚧 | M6 | Configurações › Backup de preferências exporta/importa JSON versionado (até 1 MB), com prévia das categorias, aplicação no rascunho e confirmação em OK. Diálogos e disco numa thread; cancelável; gravação atômica. Inclui aparência, editor, modelos, atalhos e níveis de inspeção; confiança, caminhos, histórico, programas e ambiente permanecem locais. Campos fora da lista permitida, números fora dos limites e versões desconhecidas são recusados. Testes de ida/volta, entradas hostis e UI num workspace Cargo real comprovam prévia antes de aplicar e preservação da confiança. Falta: sincronização entre máquinas/nuvem. |
 | G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |
 | G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |
 | G-09 | Plugins | ⬜ | M6 | |

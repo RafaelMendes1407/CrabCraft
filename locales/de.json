@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "Letztes Projekt beim Start erneut öffnen",
     "Filter actions": "Aktionen filtern",
-    "No action matches the filter": "Keine Aktion passt zum Filter"
+    "No action matches the filter": "Keine Aktion passt zum Filter",
+    "Preferences backup": "Sicherung der Einstellungen",
+    "Export preferences": "Einstellungen exportieren",
+    "Import preferences": "Einstellungen importieren",
+    "Apply imported preferences": "Importierte Einstellungen übernehmen",
+    "Preferences to replace:": "Zu ersetzende Einstellungen:",
+    "Preferences exported.": "Einstellungen exportiert.",
+    "Appearance and editor preferences": "Darstellungs- und Editoreinstellungen",
+    "Keymap and shortcuts": "Tastenbelegung und Tastenkürzel",
+    "Auto-import preferences": "Einstellungen für automatische Importe",
+    "Inspection levels": "Inspektionsstufen",
+    "The preferences backup exceeds 1 MB.": "Die Sicherung der Einstellungen überschreitet 1 MB.",
+    "This preferences backup format or version is not supported.": "Das Format oder die Version dieser Sicherung wird nicht unterstützt.",
+    "The preferences backup contains invalid or unsupported settings.": "Die Sicherung enthält ungültige oder nicht unterstützte Einstellungen.",
+    "Could not transfer preferences": "Einstellungen konnten nicht übertragen werden",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "Exportieren Sie Darstellung, Editoreinstellungen, Vorlagen, Tastenkürzel und Inspektionsstufen in JSON. Der Import zeigt eine Vorschau; übernehmen Sie die Einstellungen und speichern Sie mit OK.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "Vertrauen, Projektpfade, Verlauf, Werkzeugprogramme und Umgebungsvariablen bleiben auf diesem Computer. Cloud-Synchronisierung wird nicht unterstützt."
   },
   "split": {
     "Move to Main Window": "In das Hauptfenster verschieben",

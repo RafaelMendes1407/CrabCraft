@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "起動時に前回のプロジェクトを開く",
     "Filter actions": "アクションを絞り込む",
-    "No action matches the filter": "フィルターに一致するアクションはありません"
+    "No action matches the filter": "フィルターに一致するアクションはありません",
+    "Preferences backup": "設定のバックアップ",
+    "Export preferences": "設定をエクスポート",
+    "Import preferences": "設定をインポート",
+    "Apply imported preferences": "インポートした設定を適用",
+    "Preferences to replace:": "置き換える設定：",
+    "Preferences exported.": "設定をエクスポートしました。",
+    "Appearance and editor preferences": "外観とエディターの設定",
+    "Keymap and shortcuts": "キーマップとショートカット",
+    "Auto-import preferences": "自動インポートの設定",
+    "Inspection levels": "検査レベル",
+    "The preferences backup exceeds 1 MB.": "設定のバックアップが 1 MB を超えています。",
+    "This preferences backup format or version is not supported.": "この設定バックアップの形式またはバージョンは未対応です。",
+    "The preferences backup contains invalid or unsupported settings.": "バックアップに無効または未対応の設定が含まれています。",
+    "Could not transfer preferences": "設定を転送できませんでした",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "外観、エディター設定、テンプレート、ショートカット、検査レベルを JSON にエクスポートします。インポート後にプレビューが表示されます。設定を適用し、OK で保存してください。",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "信頼の判断、プロジェクトのパス、履歴、ツールのプログラム、環境変数はこのコンピューターに保持されます。クラウド同期には未対応です。"
   },
   "split": {
     "Move to Main Window": "メインウィンドウへ移動",

@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "Otwieraj ostatni projekt przy uruchomieniu",
     "Filter actions": "Filtruj akcje",
-    "No action matches the filter": "Żadna akcja nie pasuje do filtra"
+    "No action matches the filter": "Żadna akcja nie pasuje do filtra",
+    "Preferences backup": "Kopia preferencji",
+    "Export preferences": "Eksportuj preferencje",
+    "Import preferences": "Importuj preferencje",
+    "Apply imported preferences": "Zastosuj importowane preferencje",
+    "Preferences to replace:": "Preferencje do zastąpienia:",
+    "Preferences exported.": "Preferencje wyeksportowane.",
+    "Appearance and editor preferences": "Preferencje wyglądu i edytora",
+    "Keymap and shortcuts": "Mapowanie klawiszy i skróty",
+    "Auto-import preferences": "Preferencje automatycznego importu",
+    "Inspection levels": "Poziomy inspekcji",
+    "The preferences backup exceeds 1 MB.": "Kopia preferencji przekracza 1 MB.",
+    "This preferences backup format or version is not supported.": "Format lub wersja kopii nie jest obsługiwana.",
+    "The preferences backup contains invalid or unsupported settings.": "Kopia zawiera nieprawidłowe lub nieobsługiwane preferencje.",
+    "Could not transfer preferences": "Nie można przenieść preferencji",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "Eksportuj wygląd, preferencje edytora, szablony, skróty i poziomy inspekcji do JSON. Import pokazuje podgląd; zastosuj preferencje i kliknij OK, aby zapisać.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "Zaufanie, ścieżki projektów, historia, programy narzędzi i zmienne środowiskowe pozostają na tym komputerze. Synchronizacja w chmurze nie jest obsługiwana."
   },
   "split": {
     "Move to Main Window": "Przenieś do okna głównego",

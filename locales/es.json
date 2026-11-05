@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "Reabrir el último proyecto al iniciar",
     "Filter actions": "Filtrar acciones",
-    "No action matches the filter": "Ninguna acción coincide con el filtro"
+    "No action matches the filter": "Ninguna acción coincide con el filtro",
+    "Preferences backup": "Copia de preferencias",
+    "Export preferences": "Exportar preferencias",
+    "Import preferences": "Importar preferencias",
+    "Apply imported preferences": "Aplicar preferencias importadas",
+    "Preferences to replace:": "Preferencias que se sustituirán:",
+    "Preferences exported.": "Preferencias exportadas.",
+    "Appearance and editor preferences": "Preferencias de apariencia y editor",
+    "Keymap and shortcuts": "Mapa de teclas y atajos",
+    "Auto-import preferences": "Preferencias de importación automática",
+    "Inspection levels": "Niveles de inspección",
+    "The preferences backup exceeds 1 MB.": "La copia de preferencias supera 1 MB.",
+    "This preferences backup format or version is not supported.": "El formato o versión de la copia no es compatible.",
+    "The preferences backup contains invalid or unsupported settings.": "La copia contiene preferencias no válidas o no compatibles.",
+    "Could not transfer preferences": "No se pudieron transferir las preferencias",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "Exporta apariencia, preferencias del editor, plantillas, atajos y niveles de inspección a JSON. Importar carga una vista previa; aplica las preferencias y pulsa OK para guardar.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "La confianza, rutas de proyectos, historial, programas y variables de entorno permanecen en este equipo. Sincronización en la nube no compatible."
   },
   "split": {
     "Move to Main Window": "Mover a la ventana principal",

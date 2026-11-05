@@ -828,7 +828,23 @@
   "settings": {
     "Reopen the last project on startup": "Rouvrir le dernier projet au démarrage",
     "Filter actions": "Filtrer les actions",
-    "No action matches the filter": "Aucune action ne correspond au filtre"
+    "No action matches the filter": "Aucune action ne correspond au filtre",
+    "Preferences backup": "Sauvegarde des préférences",
+    "Export preferences": "Exporter les préférences",
+    "Import preferences": "Importer les préférences",
+    "Apply imported preferences": "Appliquer les préférences importées",
+    "Preferences to replace:": "Préférences à remplacer :",
+    "Preferences exported.": "Préférences exportées.",
+    "Appearance and editor preferences": "Préférences d’apparence et d’éditeur",
+    "Keymap and shortcuts": "Clavier et raccourcis",
+    "Auto-import preferences": "Préférences d’importation automatique",
+    "Inspection levels": "Niveaux d’inspection",
+    "The preferences backup exceeds 1 MB.": "La sauvegarde des préférences dépasse 1 Mo.",
+    "This preferences backup format or version is not supported.": "Le format ou la version de cette sauvegarde n’est pas pris en charge.",
+    "The preferences backup contains invalid or unsupported settings.": "La sauvegarde contient des préférences invalides ou non prises en charge.",
+    "Could not transfer preferences": "Impossible de transférer les préférences",
+    "Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save.": "Exportez l’apparence, les préférences de l’éditeur, les modèles, les raccourcis et les niveaux d’inspection vers JSON. L’importation affiche un aperçu ; appliquez les préférences, puis OK pour enregistrer.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported.": "La confiance, les chemins de projets, l’historique, les programmes et les variables d’environnement restent sur cet ordinateur. La synchronisation cloud n’est pas prise en charge."
   },
   "split": {
     "Move to Main Window": "Déplacer vers la fenêtre principale",

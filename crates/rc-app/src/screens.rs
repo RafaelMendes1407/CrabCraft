@@ -3743,3 +3743,36 @@ fn settings_pages_capture() {
     eprintln!("{sizes:?}");
     assert!(sizes.windows(2).all(|w| (w[0].1 - w[1].1).length() < 1.0), "{sizes:?}");
 }
+
+
+#[test]
+fn portable_preferences_are_previewed_and_applied_in_a_rust_workspace() {
+    use crate::ui::dialogs::{Dialog, SettingsPage};
+    use rc_core::settings_transfer::Backup;
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(home.path(), true);
+    let original = h.state().settings.clone();
+    let mut source = original.clone();
+    source.editor_font_size = 19.0;
+    source.trusted_projects.push(root.clone());
+    let path = home.path().join("preferences.json");
+    Backup::from_settings(&source).unwrap().write(&path).unwrap();
+    h.state_mut().settings_backup.preview = Some(Backup::read(&path).unwrap());
+    h.state_mut().open_settings(SettingsPage::Backup);
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, original.editor_font_size);
+    h.get_by_label(rc_kit::i18n::tr("Apply imported preferences")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, original.editor_font_size);
+    if let Some(Dialog::Settings { draft, .. }) = &h.state().dialog {
+        assert_eq!(draft.editor_font_size, 19.0);
+        assert_eq!(draft.trusted_projects, original.trusted_projects);
+    } else { panic!("settings closed before confirmation"); }
+    h.get_by_label(rc_kit::i18n::tr("OK")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, 19.0);
+    assert_eq!(h.state().settings.trusted_projects, original.trusted_projects);
+    assert!(h.state().runner.cargo_workspace.is_some());
+}

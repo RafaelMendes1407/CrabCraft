@@ -20,6 +20,7 @@ pub enum SettingsPage {
     Copyright,
     Scopes,
     Inspections,
+    Backup,
 }
 
 pub enum Dialog {
@@ -210,7 +211,7 @@ fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
 }
 
 /// The pages of Settings, in the order of its menu.
-fn settings_pages() -> [(SettingsPage, &'static str); 9] {
+fn settings_pages() -> [(SettingsPage, &'static str); 10] {
     [
         (SettingsPage::Appearance, tr("Appearance")),
         (SettingsPage::Editor, tr("Editor")),
@@ -221,6 +222,7 @@ fn settings_pages() -> [(SettingsPage, &'static str); 9] {
         (SettingsPage::Copyright, tr("Copyright")),
         (SettingsPage::Scopes, tr("Scopes")),
         (SettingsPage::Inspections, tr("Inspections")),
+        (SettingsPage::Backup, tr("Preferences backup")),
     ]
 }
 
@@ -265,6 +267,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 ui.add_space(10.0);
                 // Pages that lay out their own lists, sized to the page.
                 match page {
+                    SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
                     SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
                     SettingsPage::Copyright => {
                         egui::ScrollArea::vertical().id_salt("copyright_page").auto_shrink([false, false]).show(ui, |ui| copyright_page(ui, app, p.text_muted, p.error));
@@ -396,7 +399,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
+                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections | SettingsPage::Backup => {}
                 });
                 });
             });
@@ -404,6 +407,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         buttons(ui, tr("OK"), true)
     });
     if ok {
+        app.settings_backup.cancel();
         app.apply_settings(ctx, draft.clone());
         if let Some(profile) = app.copyright.draft.take() {
             app.set_copyright_profile(profile);
@@ -417,6 +421,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc {
+        app.settings_backup.cancel();
         app.copyright.draft = None;
         app.explorer.scopes.draft = None;
         app.inspections.draft = None;

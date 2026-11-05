@@ -137,6 +137,7 @@ pub struct CrabCraftApp {
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
     pub terminals: rc_term::Terminals,
+    pub settings_backup: crate::settings_backup::State,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -347,6 +348,7 @@ impl CrabCraftApp {
             find_bar: None,
             find_in_files: None,
             terminals: rc_term::Terminals::new(),
+            settings_backup: Default::default(),
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
