@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 220 |
+| ✅ Pronto | 221 |
 | 🚧 Em andamento | 10 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 23 |
+| ⬜ A fazer | 22 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -325,7 +325,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | F-01 | Terminal | ✅ | M1 | Terminal nativo PTY/alacritty em projeto Rust real: teste headless abre shell na pasta Cargo com espaços, roda `cargo run --offline --quiet` e confere a saída; duas sessões independentes, troca por abas e fechamento preservam o shell original. Inicialização do PTY corrigida para segundo plano com Cancelar; fechar projeto cancela. ANSI, entrada, redimensionamento, seleção e encerramento cobertos pelos testes reais de rc-term. Não se presume paridade com RustRover |
-| F-02 | Depurar processo a partir do terminal | ⬜ | M6 | |
+| F-02 | Depurar processo a partir do terminal | ✅ | M6 | Linux: botão nativo Debug Terminal Process lista somente shell/descendentes do terminal ativo em worker cancelável; filtro/refresh/cancel, limites e revalidação de PID/start-time/executável/ancestralidade antes do attach. Exige Cargo confiável; reaproveita debugger, breakpoints e variáveis. Teste real compila Cargo, executa no shell PTY, seleciona pela UI, para no breakpoint GDB e desconecta: programa conclui e shell permanece vivo. Outros sistemas mostram indisponibilidade explícita. Ver docs/terminal-debugging.md; Closes #103. |
 | F-03 | HTTP Client (arquivos `.http`) | ✅ | M5 | Arquivos `.http` e `.rest` com realce; requisições separadas por `###` (método, URL com linhas `?`/`&` de continuação, cabeçalhos, corpo, nome por `### nome` ou `# @name`); ícone de execução na margem de cada requisição envia em segundo plano (cancelável, tempo limite de 60 s, corpo limitado a 8 MB). Janela HTTP Client: histórico da sessão, status, tempos, tamanho, cabeçalhos e corpo (JSON reindentado sem reordenar), link de volta à requisição; funciona também com arquivo avulso. Variáveis de arquivo são resolvidas por F-04; variáveis não resolvidas, `< arquivo`, scripts `> {% %}`, `>> arquivo` e diretivas `# @…` aparecem como avisos (referências não resolvidas e `< arquivo` impedem o envio). Testado contra servidor HTTP local; capturas conferidas. Fora: tudo de F-04, WebSocket/gRPC/GraphQL, cookies entre requisições, abrir a resposta no editor |
 | F-04 | HTTP Client: variáveis, OAuth 2.0, scripts | 🚧 | M5 | Variáveis de arquivo `@nome = valor` e referências `{{nome}}` em URL, cabeçalhos e corpo, no cliente gráfico e na CLI; escopo de arquivo, última declaração prevalece e referências aninhadas. Ausentes, ciclos e chaves incompletas impedem envio; limites de 256 variáveis, 32 níveis e 1 MB expandido/cache. Sem acesso implícito ao ambiente ou execução de scripts. Testes de parser/resolvedor, UI, servidor HTTP local com referências aninhadas e rejeição de ciclos/expansão exponencial; corpos sem variáveis mantêm o limite anterior. Ver docs/http-variables.md. Falta: arquivos de ambiente, OAuth 2.0 e scripts. Avanço parcial: `b882459`, [#105](https://github.com/RafaelMendes1407/CrabCraft/issues/105). |
 | F-05 | HTTP Client CLI | ✅ | M6 | `crabcraft http arquivo.http [--request N]` envia uma requisição sem abrir janela ou carregar projeto. Arquivos com várias requisições exigem seleção explícita. JSON no stdout inclui status, cabeçalhos, corpo, duração e avisos; corpo binário usa vetor de bytes, sem imprimir escapes remotos diretamente no terminal. Limites de arquivo e resposta de 8 MB, timeout de 60 s e Ctrl+C; código 1 para HTTP >= 400, falha de rede ou resposta cortada. Usa o resolvedor de variáveis de arquivo de F-04; variáveis não resolvidas e corpo de arquivo impedem envio. Teste com servidor HTTP local, resposta 404 e escapes no corpo, dentro de projeto Cargo com build.rs que falharia se executado; seleção e rejeição de casos ambíguos/variáveis também testadas. Leitura recusa arquivos especiais e verifica o descritor aberto; no Unix, a abertura não bloqueia em FIFOs mesmo com troca do caminho. Entrega verificada: `79444b4`, [#106](https://github.com/RafaelMendes1407/CrabCraft/issues/106). |

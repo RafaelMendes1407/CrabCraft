@@ -585,6 +585,7 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         (ico::SPLIT_DOWN, tr("Split Terminal Down"), ready && has),
         (ico::SEARCH, tr("Find in Terminal"), has),
         (ico::CLOSE, tr("Close Terminal Split"), app.terminals.active().is_some_and(|tab| app.terminal_tools.split.is_some_and(|split| split.contains(tab.id())))),
+        (ico::DEBUG, tr("Debug Terminal Process"), cfg!(target_os="linux") && has && app.runner.cargo_workspace.is_some() && app.runner.trusted_project.is_some()),
     ];
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
@@ -592,8 +593,20 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(2) => app.split_terminal(true),
         Some(3) => app.terminal_tools.search.toggle(),
         Some(4) => app.terminal_tools.split = None,
+        Some(5) => {
+            if let Some(tab)=app.terminals.active() && let Some(pid)=tab.session.pid() {
+                app.terminal_attach.open(tab.id(),pid,app.waker.clone());
+            }
+        }
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
+    }
+    if !cfg!(target_os="linux") { ui.label(tr("Debugging terminal processes is currently supported on Linux")); }
+    if let Some(process)=app.terminal_attach.show(ui,&app.terminals,app.waker.clone()) {
+        if app.runner.trusted_project.is_some() && app.runner.cargo_workspace.is_some() {
+            let outputs=app.debugger.attach_gdb(process.process.pid,&process.process.name,&app.docs);
+            app.handle_debug(outputs);
+        }
     }
     let mut cancel_startup = false;
     if app.terminal_starting.is_some() {

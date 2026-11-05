@@ -2,6 +2,7 @@
 
 mod app;
 mod complete_statement;
+mod terminal_attach;
 mod database_core;
 mod database;
 mod sql_injection;

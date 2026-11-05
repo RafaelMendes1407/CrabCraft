@@ -2268,5 +2268,12 @@
     "Doctest completion requires resolved offline Cargo metadata for this package": "A completação de doctests exige metadados Cargo resolvidos offline para este pacote",
     "Install rust-src to complete Rust standard library APIs in doctests": "Instale rust-src para completar APIs da biblioteca padrão Rust em doctests",
     "Completion tool pipes were unavailable": "Os pipes da ferramenta de completação estavam indisponíveis"
+  },
+  "terminal_attach": {
+    "Debug Terminal Process": "Depurar processo do terminal",
+    "Terminal processes changed or could not be read; refresh the list": "Os processos do terminal mudaram ou não puderam ser lidos; atualize a lista",
+    "Choose a process from this terminal; attaching pauses it under the debugger": "Escolha um processo deste terminal; o depurador o pausará ao conectar",
+    "No attachable processes in this terminal": "Nenhum processo disponível neste terminal",
+    "Debugging terminal processes is currently supported on Linux": "A depuração de processos do terminal está disponível atualmente no Linux"
   }
 }

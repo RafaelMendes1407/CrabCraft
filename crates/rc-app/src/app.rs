@@ -155,6 +155,7 @@ pub struct CrabCraftApp {
     pub macro_tester: crate::macro_tester::Tester,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
+    pub terminal_attach: crate::terminal_attach::Picker,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -389,6 +390,7 @@ impl CrabCraftApp {
             macro_tester: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
+            terminal_attach: Default::default(),
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -1396,6 +1398,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
         self.debug_sessions = Default::default();

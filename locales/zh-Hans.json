@@ -2268,5 +2268,12 @@
     "Doctest completion requires resolved offline Cargo metadata for this package": "此包的文档测试补全需要已离线解析的 Cargo 元数据",
     "Install rust-src to complete Rust standard library APIs in doctests": "请安装 rust-src 以在文档测试中补全 Rust 标准库 API",
     "Completion tool pipes were unavailable": "补全工具的管道不可用"
+  },
+  "terminal_attach": {
+    "Debug Terminal Process": "调试终端进程",
+    "Terminal processes changed or could not be read; refresh the list": "终端进程已更改或无法读取；请刷新列表",
+    "Choose a process from this terminal; attaching pauses it under the debugger": "请选择此终端的进程；附加调试器会暂停该进程",
+    "No attachable processes in this terminal": "此终端中没有可附加的进程",
+    "Debugging terminal processes is currently supported on Linux": "目前仅在 Linux 上支持终端进程调试"
   }
 }
