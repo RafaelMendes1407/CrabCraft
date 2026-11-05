@@ -94,10 +94,18 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.add_space(8.0);
         let (console_tab, memory_tab) = (app.debugger.show_console, app.debugger.show_memory && !app.debugger.show_console);
         let disassembly_tab = app.debugger.show_disassembly && !console_tab && !memory_tab;
-        if theme::tab(ui, !console_tab && !memory_tab && !disassembly_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
+        let parallel_tab = app.debugger.show_parallel_stacks && !console_tab && !memory_tab && !disassembly_tab;
+        if theme::tab(ui, !console_tab && !memory_tab && !disassembly_tab && !parallel_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
             app.debugger.show_console = false;
             app.debugger.show_memory = false;
             app.debugger.show_disassembly = false;
+            app.debugger.show_parallel_stacks = false;
+        }
+        if theme::tab(ui, parallel_tab, Some(ico::THREADS), tr("Parallel Stacks"), false).0.clicked() {
+            app.debugger.show_console = false;
+            app.debugger.show_memory = false;
+            app.debugger.show_disassembly = false;
+            app.debugger.show_parallel_stacks = true;
         }
         if theme::tab(ui, console_tab, Some(ico::FILE_SHELL), tr("Console"), false).0.clicked() {
             app.debugger.show_console = true;
@@ -150,6 +158,12 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if app.debugger.show_disassembly {
         disassembly(ui, &mut app.debugger);
+        return;
+    }
+    if app.debugger.show_parallel_stacks {
+        if let Some(session) = &mut app.debugger.session {
+            crate::parallel_stacks::show(ui, &mut app.debugger.parallel_stacks, session);
+        }
         return;
     }
     let avail = ui.available_rect_before_wrap();

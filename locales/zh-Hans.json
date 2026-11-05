@@ -1876,5 +1876,19 @@
     "Trust this Cargo project before measuring coverage": "测量覆盖率前请先信任此 Cargo 项目",
     "Test Results": "测试结果",
     "Coverage report must be a regular file": "覆盖率报告必须是普通文件"
+  },
+  "parallel_stacks": {
+    "Parallel Stacks": "并行堆栈",
+    "The stopped thread list is unavailable. Refresh to retry.": "暂停线程列表不可用。请刷新以重试。",
+    "Stack request timed out": "堆栈请求超时",
+    "This thread is no longer stopped or available": "此线程已不再暂停或不可用",
+    "Pause the program to compare thread stacks": "暂停程序以比较线程堆栈",
+    "{loaded} of {total} thread stacks loaded": "已加载 {loaded}/{total} 个线程堆栈",
+    "Other threads may be running; only the stopped thread is shown": "其他线程可能仍在运行；仅显示已暂停的线程",
+    "Only the first 64 stopped threads are shown": "仅显示前 64 个暂停线程",
+    "Stack loading cancelled. Refresh to load again.": "堆栈加载已取消。刷新以重新加载。",
+    "No stack frames": "无堆栈帧",
+    "{count} threads: {function}": "{count} 个线程：{function}",
+    "Only the first 64 frames are shown": "仅显示前 64 个堆栈帧"
   }
 }

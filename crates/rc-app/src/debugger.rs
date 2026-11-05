@@ -99,6 +99,8 @@ pub struct Debugger {
     /// The group of each breakpoint in one (D-27).
     pub groups: HashMap<(PathBuf, usize), String>,
     pub show_console: bool,
+    pub show_parallel_stacks: bool,
+    pub parallel_stacks: crate::parallel_stacks::ParallelStacks,
     /// The Memory tab is shown (instead of Threads & Variables or the Console).
     pub show_memory: bool,
     pub memory: crate::memory_view::MemoryView,
@@ -141,6 +143,8 @@ impl Debugger {
             console_input: String::new(),
             console_commands: Vec::new(),
             show_console: false,
+            show_parallel_stacks: false,
+            parallel_stacks: Default::default(),
             show_memory: false,
             memory: Default::default(),
             show_disassembly: false,
@@ -201,6 +205,7 @@ impl Debugger {
         self.console = Some(console);
         self.name = name.to_string();
         self.expanded.clear();
+        self.parallel_stacks.reset();
         self.memory.reset();
         self.disassembly.reset();
         let mut session = DebugSession::start(adapter, DebugTarget::Attach { pid }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
@@ -224,6 +229,7 @@ impl Debugger {
         self.console = Some(console);
         self.name = config.name.clone();
         self.expanded.clear();
+        self.parallel_stacks.reset();
         self.memory.reset();
         self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
@@ -263,6 +269,7 @@ impl Debugger {
         self.console = Some(console);
         self.name = config.name.clone();
         self.expanded.clear();
+        self.parallel_stacks.reset();
         self.memory.reset();
         self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
@@ -507,6 +514,7 @@ impl Debugger {
         let Some(session) = &mut self.session else { return out };
         let events = session.pump();
         for ev in events {
+            self.parallel_stacks.on_event(&ev);
             self.memory.on_event(&ev, session);
             self.disassembly.on_event(&ev, session);
             match ev {
@@ -660,6 +668,7 @@ impl Debugger {
                 _ => {}
             }
         }
+        self.parallel_stacks.sync(session, self.show_parallel_stacks && !self.show_console && !self.show_memory && !self.show_disassembly);
         // The Disassembly tab follows the selected frame and reads again at each stop.
         if self.show_disassembly && !self.show_console && !self.show_memory {
             self.disassembly.sync(session);

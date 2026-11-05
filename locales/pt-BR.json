@@ -1876,5 +1876,19 @@
     "Trust this Cargo project before measuring coverage": "Confie neste projeto Cargo antes de medir a cobertura",
     "Test Results": "Resultados dos testes",
     "Coverage report must be a regular file": "O relatório de cobertura deve ser um arquivo regular"
+  },
+  "parallel_stacks": {
+    "Parallel Stacks": "Pilhas paralelas",
+    "The stopped thread list is unavailable. Refresh to retry.": "A lista de threads pausadas não está disponível. Atualize para tentar novamente.",
+    "Stack request timed out": "Tempo limite excedido ao carregar a pilha",
+    "This thread is no longer stopped or available": "Esta thread não está mais pausada ou disponível",
+    "Pause the program to compare thread stacks": "Pause o programa para comparar as pilhas das threads",
+    "{loaded} of {total} thread stacks loaded": "{loaded} de {total} pilhas de threads carregadas",
+    "Other threads may be running; only the stopped thread is shown": "Outras threads podem estar em execução; apenas a thread pausada é mostrada",
+    "Only the first 64 stopped threads are shown": "Apenas as primeiras 64 threads pausadas são mostradas",
+    "Stack loading cancelled. Refresh to load again.": "Carregamento de pilhas cancelado. Atualize para carregar novamente.",
+    "No stack frames": "Sem quadros de pilha",
+    "{count} threads: {function}": "{count} threads: {function}",
+    "Only the first 64 frames are shown": "Apenas os primeiros 64 quadros são mostrados"
   }
 }

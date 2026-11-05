@@ -1876,5 +1876,19 @@
     "Trust this Cargo project before measuring coverage": "カバレッジを測定する前にこの Cargo プロジェクトを信頼してください",
     "Test Results": "テスト結果",
     "Coverage report must be a regular file": "カバレッジレポートは通常のファイルである必要があります"
+  },
+  "parallel_stacks": {
+    "Parallel Stacks": "並列スタック",
+    "The stopped thread list is unavailable. Refresh to retry.": "停止中のスレッド一覧を取得できません。更新して再試行してください。",
+    "Stack request timed out": "スタック要求がタイムアウトしました",
+    "This thread is no longer stopped or available": "このスレッドは停止中でないか、利用できません",
+    "Pause the program to compare thread stacks": "プログラムを一時停止してスレッドスタックを比較してください",
+    "{loaded} of {total} thread stacks loaded": "{total} 個中 {loaded} 個のスレッドスタックを読み込み済み",
+    "Other threads may be running; only the stopped thread is shown": "他のスレッドは実行中の可能性があります。停止中のスレッドのみ表示します",
+    "Only the first 64 stopped threads are shown": "最初の64個の停止中スレッドのみ表示します",
+    "Stack loading cancelled. Refresh to load again.": "スタックの読み込みをキャンセルしました。更新して再読み込みしてください。",
+    "No stack frames": "スタックフレームがありません",
+    "{count} threads: {function}": "{count} 個のスレッド: {function}",
+    "Only the first 64 frames are shown": "最初の64フレームのみ表示します"
   }
 }

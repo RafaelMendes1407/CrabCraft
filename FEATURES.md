@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 180 |
+| ✅ Pronto | 181 |
 | 🚧 Em andamento | 9 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 42 |
+| ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -275,7 +275,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-17 | Memory view | ✅ | M4 | Aba "Memory" na janela Debug: "Show in Memory View" no menu de contexto de Variables/Watches (usa o `memoryReference` da variável ou o endereço de `&expr`) ou um endereço/expressão digitado (`&x`, `0x7ffd…`). Dump hex com coluna de endereço, 16 bytes por linha e ASCII; bytes ilegíveis aparecem como `??`; páginas de 512 bytes lidas sob demanda (anterior/próxima) com `readMemory`. Relê a página a cada parada e destaca os bytes que mudaram desde a parada anterior. O GDB 15.1 anuncia `supportsReadMemoryRequest` e dá `memoryReference` só para ponteiros (arrays usam `&nome`); quando a leitura falha ele recusa a página inteira, sem leitura parcial. Testado num programa Rust real sob GDB (`the_memory_view_shows_bytes_and_highlights_what_a_step_changed`). Escrever na memória fica fora do escopo |
 | D-18 | Disassembly view | ✅ | M4 | Aba "Disassembly" na janela Debug: instruções em volta da instrução atual do frame selecionado (endereço, bytes, instrução) lidas com `disassemble`, com cabeçalho quando muda a função ou a linha do fonte e a instrução atual marcada. Segue o frame selecionado (num chamador mostra o endereço de retorno) e relê a cada parada; "carregar anteriores/seguintes" sob demanda. O GDB 15 não desmonta para trás (`instructionOffset` negativo dá instruções erradas), então as anteriores são lidas de bytes antes do endereço e só aceitas quando a decodificação cai exatamente nele. Step Over/Into Instruction (`next`/`stepIn` com `granularity: instruction`) quando o adaptador anuncia `supportsSteppingGranularity`; adaptador sem `supportsDisassembleRequest` mostra "Este depurador não consegue desmontar". Testado num programa Rust real sob GDB (`the_disassembly_view_marks_the_current_instruction_of_the_function`). Breakpoints em instruções e sintaxe Intel ficam fora do escopo |
 | D-19 | Inteiros em hexadecimal | ✅ | M4 | "Show Integers in Hex" no menu de contexto de Variables, no menu Run e no Find Action; vale para Variables, Watches, valores inline, hover e Evaluate, sem reiniciar a sessão, e fica salvo nas configurações. O GDB 15.1 respeita o `ValueFormat { hex }` do DAP (`output-radix 16`, negativos em complemento de dois pela largura do tipo); adaptadores sem esse suporte convertem no cliente. Testado num programa Rust real sob GDB (`integers_switch_to_hexadecimal_while_paused`). Com hex, `char` aparece como número (`0x61`), como o GDB imprime |
-| D-20 | Parallel stacks | ⬜ | M4 | |
+| D-20 | Parallel stacks | ✅ | M4 | Janela Debug › Pilhas paralelas: captura das threads pausadas, com pilhas idênticas agrupadas por função/arquivo/linha; escolher uma thread e um quadro muda o contexto de variáveis e a posição no código. Até 64 threads × 64 quadros, quatro pedidos DAP simultâneos e timeout de oito segundos; limites e falhas visíveis. Atualizar relê threads/pilhas; Cancelar, esconder a aba e retomar descartam os pedidos (cancel DAP só quando suportado); nova parada/sessão invalida os dados. Respeita allThreadsStopped: sem confirmação do adaptador, consulta apenas a thread pausada. Nomes, caminhos e erros limitados; agrupamento calculado ao receber respostas. Teste real com GDB 15.1 e programa Rust Cargo de três threads (alpha/beta/main), Cancelar/Atualizar nativos, seleção de quadro, limite e cancelamento de pedidos, limpeza ao retomar; regressão de depuração Rust existente e 44 testes rc-dap passaram. Fora: grafo de callers parcialmente compartilhados, tarefas async e sessões simultâneas |
 | D-21 | Escolher GDB ou LLDB | ⬜ | M3 | |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
 | D-23 | Depurar como root | ⬜ | M6 | |

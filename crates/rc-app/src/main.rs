@@ -13,6 +13,7 @@ mod convert;
 mod copyright;
 mod coverage;
 mod debugger;
+mod parallel_stacks;
 mod dep_versions;
 mod feature_fix;
 mod feature_nav;

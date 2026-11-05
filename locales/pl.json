@@ -1876,5 +1876,19 @@
     "Trust this Cargo project before measuring coverage": "Zaufaj temu projektowi Cargo przed pomiarem pokrycia",
     "Test Results": "Wyniki testów",
     "Coverage report must be a regular file": "Raport pokrycia musi być zwykłym plikiem"
+  },
+  "parallel_stacks": {
+    "Parallel Stacks": "Stosy równoległe",
+    "The stopped thread list is unavailable. Refresh to retry.": "Lista zatrzymanych wątków jest niedostępna. Odśwież, aby ponowić próbę.",
+    "Stack request timed out": "Przekroczono czas żądania stosu",
+    "This thread is no longer stopped or available": "Ten wątek nie jest już zatrzymany lub dostępny",
+    "Pause the program to compare thread stacks": "Wstrzymaj program, aby porównać stosy wątków",
+    "{loaded} of {total} thread stacks loaded": "Wczytano {loaded} z {total} stosów wątków",
+    "Other threads may be running; only the stopped thread is shown": "Inne wątki mogą działać; pokazano tylko zatrzymany wątek",
+    "Only the first 64 stopped threads are shown": "Pokazano tylko pierwsze 64 zatrzymane wątki",
+    "Stack loading cancelled. Refresh to load again.": "Anulowano wczytywanie stosów. Odśwież, aby wczytać ponownie.",
+    "No stack frames": "Brak ramek stosu",
+    "{count} threads: {function}": "Wątki ({count}): {function}",
+    "Only the first 64 frames are shown": "Pokazano tylko pierwsze 64 ramki"
   }
 }

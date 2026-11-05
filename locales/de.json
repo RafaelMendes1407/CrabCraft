@@ -1876,5 +1876,19 @@
     "Trust this Cargo project before measuring coverage": "Diesem Cargo-Projekt vor der Abdeckungsmessung vertrauen",
     "Test Results": "Testergebnisse",
     "Coverage report must be a regular file": "Der Abdeckungsbericht muss eine reguläre Datei sein"
+  },
+  "parallel_stacks": {
+    "Parallel Stacks": "Parallele Aufrufstapel",
+    "The stopped thread list is unavailable. Refresh to retry.": "Die Liste angehaltener Threads ist nicht verfügbar. Zum Wiederholen aktualisieren.",
+    "Stack request timed out": "Zeitlimit beim Abrufen des Aufrufstapels überschritten",
+    "This thread is no longer stopped or available": "Dieser Thread ist nicht mehr angehalten oder verfügbar",
+    "Pause the program to compare thread stacks": "Programm anhalten, um Aufrufstapel zu vergleichen",
+    "{loaded} of {total} thread stacks loaded": "{loaded} von {total} Aufrufstapeln geladen",
+    "Other threads may be running; only the stopped thread is shown": "Andere Threads können laufen; nur der angehaltene Thread wird angezeigt",
+    "Only the first 64 stopped threads are shown": "Nur die ersten 64 angehaltenen Threads werden angezeigt",
+    "Stack loading cancelled. Refresh to load again.": "Laden der Aufrufstapel abgebrochen. Zum erneuten Laden aktualisieren.",
+    "No stack frames": "Keine Stapelrahmen",
+    "{count} threads: {function}": "{count} Threads: {function}",
+    "Only the first 64 frames are shown": "Nur die ersten 64 Stapelrahmen werden angezeigt"
   }
 }
