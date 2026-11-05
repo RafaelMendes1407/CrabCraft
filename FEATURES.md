@@ -50,6 +50,12 @@ Nomes longos de projetos são elididos e o caminho completo fica no hover. Verif
 quatro testes de `ui::main_menu::tests`, inclusive acesso ao último de 60 projetos recentes
 e à Ajuda em janela baixa, além da execução de comandos no projeto Cargo de teste.
 
+Encaixe de abas concluído nos casos estreitos: guias proporcionais sem sobreposição,
+com a mesma geometria no desenho e no destino; sobreposição e prévia limitadas ao grupo;
+nome do arquivo limitado à janela e desenhado acima da prévia. Escape também cancela
+o arraste quando recebido na janela de destino. Verificado por `docking_tests`, encaixe
+pelas guias, restauração de splits/janelas flutuantes e capturas claras/escuras em Cargo.
+
 ## Legenda
 
 | Status | Significado |

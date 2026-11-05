@@ -82,11 +82,14 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
 /// The window the drag started in: where the pointer is, and whether the button is still down.
 fn track_drag(app: &mut CrabCraftApp, ctx: &egui::Context) {
     let Some(d) = &mut app.tab_drag else { return };
-    if d.viewport != ctx.viewport_id() {
-        return;
-    }
+    // Escape may arrive in a destination viewport while a tab is held by its source.
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.tab_drag = None;
+        app.focus_editor = true;
+        ctx.request_repaint_of(egui::ViewportId::ROOT);
+        return;
+    }
+    if d.viewport != ctx.viewport_id() {
         return;
     }
     if let Some(p) = ctx.input(|i| i.pointer.latest_pos()) {
@@ -223,17 +226,15 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
     let from = app.layout.group_of(doc);
     let alone = from.and_then(|f| app.layout.group(f)).is_some_and(|f| f.tabs.len() == 1);
     // Keep every editor visible under a neutral veil, with a map of valid destinations.
-    painter.rect_filled(body, 4.0, egui::Color32::from_rgba_unmultiplied(130, 138, 150, 48));
+    let overlay = painter.with_clip_rect(body.intersect(ui.clip_rect()));
+    overlay.rect_filled(body, 4.0, egui::Color32::from_rgba_unmultiplied(130, 138, 150, 48));
     let can_split = !g.tabs.is_empty() && !(from == Some(g.id) && alone);
-    docking_guides(ui, &painter, body, pointer, can_split, from != Some(g.id));
-    if !over_strip && !body.contains(pointer) { return; }
-    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    if let Some(document) = app.docs.list.iter().find(|document| document.editor.id == doc) {
-        let text = painter.layout_no_wrap(document.name(), theme::bold(12.0), p.text);
-        let card = Rect::from_min_size(pointer + vec2(18.0, 20.0), text.size() + vec2(28.0, 16.0));
-        painter.rect(card, 5.0, p.main_bg, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
-        painter.galley(card.min + vec2(14.0, 8.0), text, p.text);
+    let can_merge = from != Some(g.id);
+    if !over_strip && !body.contains(pointer) {
+        docking_guides(ui, &overlay, body, pointer, can_split, can_merge);
+        return;
     }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
 
     let target = match strip {
         Some((strip, tabs)) if over_strip => {
@@ -241,7 +242,7 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
             match tabs.get(index.min(tabs.len().saturating_sub(1))) {
                 Some(r) => {
                     let x = if index < tabs.len() { r.left() - 1.0 } else { r.right() + 1.0 };
-                    painter.vline(x, r.y_range(), egui::Stroke::new(2.0, p.accent));
+                    painter.with_clip_rect(strip.intersect(ui.clip_rect())).vline(x, r.y_range(), egui::Stroke::new(2.0, p.accent));
                 }
                 None => {
                     painter.rect_stroke(strip.shrink(2.0), 4.0, egui::Stroke::new(1.5, p.accent), egui::StrokeKind::Inside);
@@ -250,10 +251,10 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
             Some(Drop::Group { group: g.id, index: Some(index) })
         }
         _ => {
-            let near = docking_edge(body, pointer);
+            let near = docking_edge(body, pointer, can_split, can_merge);
             let (zone, drop) = match near {
                 // An empty group (the main window's, every tab elsewhere) only takes tabs.
-                Some(edge) if !g.tabs.is_empty() && !(from == Some(g.id) && alone) => {
+                Some(edge) if can_split => {
                     let c = body.center();
                     let half = match edge {
                         Edge::Left => Rect::from_min_max(body.min, pos2(c.x, body.bottom())),
@@ -263,7 +264,7 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
                     };
                     (Some(half), Some(Drop::Split { group: g.id, edge }))
                 }
-                _ if from != Some(g.id) => (Some(body), Some(Drop::Group { group: g.id, index: None })),
+                _ if can_merge => (Some(body), Some(Drop::Group { group: g.id, index: None })),
                 _ => (None, None),
             };
             if let Some(zone) = zone {
@@ -277,32 +278,50 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
                 });
                 let progress = ((now - started) as f32 / 0.18).clamp(0.0, 1.0);
                 if progress < 1.0 { ui.ctx().request_repaint(); }
-                let inset = 4.0 + (1.0 - progress) * 14.0;
-                painter.rect(zone.shrink(inset), 6.0, p.accent.gamma_multiply(0.08 + progress * 0.12), egui::Stroke::new(1.5 + progress, p.accent), egui::StrokeKind::Inside);
+                let inset = (4.0 + (1.0 - progress) * 14.0).min(zone.width().min(zone.height()).max(0.0) * 0.25);
+                overlay.rect(zone.shrink(inset), 6.0, p.accent.gamma_multiply(0.08 + progress * 0.12), egui::Stroke::new(1.5 + progress, p.accent), egui::StrokeKind::Inside);
             }
             drop
         }
     };
+    // Draw the map and file card after the translucent preview so they remain crisp.
+    docking_guides(ui, &overlay, body, pointer, can_split, can_merge);
+    if let Some(document) = app.docs.list.iter().find(|document| document.editor.id == doc) {
+        let text = painter.layout_no_wrap(document.name(), theme::bold(12.0), p.text);
+        let viewport = ui.ctx().viewport_rect().shrink(8.0);
+        let size = (text.size() + vec2(28.0, 16.0)).min(viewport.size().max(vec2(0.0, 0.0)));
+        let position = (pointer + vec2(18.0, 20.0)).clamp(viewport.min, (viewport.max - size).max(viewport.min));
+        let card = Rect::from_min_size(position, size);
+        painter.rect(card, 5.0, p.main_bg, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+        painter.with_clip_rect(card.shrink2(vec2(8.0, 4.0))).galley(card.min + vec2(14.0, 8.0), text, p.text);
+    }
     if let Some(d) = &mut app.tab_drag {
         d.target = target;
     }
 }
 
-fn docking_tiles(body: Rect) -> [(Option<Edge>, Rect); 5] {
+/// Scale the complete guide map together; independently moving fixed-size plates makes
+/// them overlap in narrow splits and gives the visible center a different hit target.
+fn docking_tiles(body: Rect, can_split: bool, can_merge: bool) -> impl Iterator<Item = (Option<Edge>, Rect)> {
     let center = body.center();
-    let dx = (body.width() * 0.5 - 26.0).clamp(0.0, 64.0);
-    let dy = (body.height() * 0.5 - 26.0).clamp(0.0, 52.0);
+    let scale = ((body.width() - 8.0) / 168.0).min((body.height() - 8.0) / 136.0).clamp(0.0, 1.0);
+    let dx = 64.0 * scale;
+    let dy = 52.0 * scale;
     [
         (Some(Edge::Left), center - vec2(dx, 0.0)),
         (Some(Edge::Right), center + vec2(dx, 0.0)),
         (Some(Edge::Top), center - vec2(0.0, dy)),
         (Some(Edge::Bottom), center + vec2(0.0, dy)),
         (None, center),
-    ].map(|(edge, position)| (edge, Rect::from_center_size(position, vec2(40.0, 32.0))))
+    ].into_iter()
+        .filter(move |(edge, _)| scale > 0.0 && if edge.is_some() { can_split } else { can_merge })
+        .map(move |(edge, position)| (edge, Rect::from_center_size(position, vec2(40.0, 32.0) * scale)))
 }
 
-fn docking_edge(body: Rect, pointer: Pos2) -> Option<Edge> {
-    if let Some((edge, _)) = docking_tiles(body).into_iter().find(|(_, tile)| tile.contains(pointer)) { return edge; }
+fn docking_edge(body: Rect, pointer: Pos2, can_split: bool, can_merge: bool) -> Option<Edge> {
+    if !body.contains(pointer) { return None; }
+    if let Some((edge, _)) = docking_tiles(body, can_split, can_merge).find(|(_, tile)| tile.contains(pointer)) { return edge; }
+    if !can_split { return None; }
     let fx = (pointer.x - body.left()) / body.width().max(1.0);
     let fy = (pointer.y - body.top()) / body.height().max(1.0);
     [(fx, Edge::Left), (1.0 - fx, Edge::Right), (fy, Edge::Top), (1.0 - fy, Edge::Bottom)]
@@ -312,12 +331,11 @@ fn docking_edge(body: Rect, pointer: Pos2) -> Option<Edge> {
 /// A docking map is informational: the complete edge region remains the drop target.
 fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, can_split: bool, can_merge: bool) {
     let p = rc_kit::pal(ui);
-    let selected = docking_edge(body, pointer);
-    for (edge, tile) in docking_tiles(body) {
-        if edge.is_some() && !can_split || edge.is_none() && !can_merge { continue; }
+    let selected = docking_edge(body, pointer, can_split, can_merge);
+    for (edge, tile) in docking_tiles(body, can_split, can_merge) {
         let active = body.contains(pointer) && selected == edge;
         painter.rect(tile, 5.0, if active { p.selection } else { p.main_bg }, egui::Stroke::new(1.0, if active { p.accent } else { p.muted }), egui::StrokeKind::Inside);
-        let glyph = tile.shrink2(vec2(8.0, 7.0));
+        let glyph = tile.shrink2(tile.size() * vec2(0.2, 0.21875));
         painter.rect_stroke(glyph, 1.0, egui::Stroke::new(1.0, p.text_muted), egui::StrokeKind::Inside);
         let half = match edge {
             Some(Edge::Left) => Rect::from_min_max(glyph.min, pos2(glyph.center().x, glyph.bottom())),
@@ -326,7 +344,7 @@ fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, c
             Some(Edge::Bottom) => Rect::from_min_max(pos2(glyph.left(), glyph.center().y), glyph.max),
             None => glyph,
         };
-        painter.rect_filled(half.shrink(1.0), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
+        painter.rect_filled(half.shrink(half.width().min(half.height()).max(0.0).min(2.0) * 0.5), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
     }
 }
 
@@ -1219,4 +1237,44 @@ pub fn floating_windows(app: &mut CrabCraftApp, ctx: &egui::Context) {
     }
     finish_drag(app);
     app.editor_frame = None;
+}
+
+#[cfg(test)]
+mod docking_tests {
+    use super::*;
+
+    #[test]
+    fn every_visible_docking_guide_matches_its_destination_in_narrow_and_short_groups() {
+        for size in [vec2(900.0, 600.0), vec2(100.0, 400.0), vec2(400.0, 60.0), vec2(30.0, 30.0)] {
+            let body = Rect::from_min_size(pos2(40.0, 80.0), size);
+            let guides: Vec<_> = docking_tiles(body, true, true).collect();
+            assert_eq!(guides.len(), 5);
+            for (index, (edge, tile)) in guides.iter().enumerate() {
+                assert!(body.contains_rect(*tile), "guide must stay inside its editor: {size:?}: {tile:?}");
+                assert_eq!(docking_edge(body, tile.center(), true, true), *edge, "visible guide and hit target must agree: {size:?}");
+                for (_, other) in guides.iter().skip(index + 1) { assert!(!tile.intersects(*other), "guides must not overlap: {size:?}"); }
+            }
+            assert_eq!(docking_edge(body, body.center(), false, true), None);
+            assert_eq!(docking_tiles(body, false, true).count(), 1);
+            assert_eq!(docking_tiles(body, false, false).count(), 0);
+        }
+    }
+
+    #[test]
+    fn escape_in_a_destination_viewport_cancels_the_source_drag() {
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.tab_drag = Some(TabDrag { doc: 1, viewport: egui::ViewportId::ROOT, screen: Some(pos2(200.0, 200.0)), target: Some(Drop::Group { group: app.layout.focused, index: None }), over_window: true, released: false });
+        let mut input = egui::RawInput::default();
+        input.viewport_id = egui::ViewportId::from_hash_of("destination");
+        input.viewports.insert(input.viewport_id, Default::default());
+        input.events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        let context = egui::Context::default();
+        let mut output = context.run_ui(input, |ui| track_drag(&mut app, ui.ctx()));
+        output.textures_delta.clear();
+        assert!(app.tab_drag.is_none());
+        finish_drag(&mut app);
+        assert!(app.layout.windows.is_empty());
+    }
 }
