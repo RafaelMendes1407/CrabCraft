@@ -2932,5 +2932,11 @@
     "The document changed while preparing the edit; unsaved edits were kept": "O documento mudou durante a preparação; as edições não salvas foram preservadas",
     "The file edit exceeds its size or change limit": "A edição excede o limite de tamanho ou de alterações",
     "Open at most 256 files and 512 MB at a time": "Abra no máximo 256 arquivos e 512 MB por vez"
+  },
+  "accessibility_linux": {
+    "Project files": "Arquivos do projeto",
+    "Terminal: {name}": "Terminal: {name}",
+    "Accessible terminal text is limited to the visible context; text actions never send commands": "O texto acessível do terminal limita-se ao contexto visível; ações de texto nunca enviam comandos",
+    "Accessible project hierarchy is limited to visible items and 64 ancestor levels": "A hierarquia acessível do projeto limita-se aos itens visíveis e a 64 níveis de ancestrais"
   }
 }

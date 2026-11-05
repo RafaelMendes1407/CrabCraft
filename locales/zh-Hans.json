@@ -2932,5 +2932,11 @@
     "The document changed while preparing the edit; unsaved edits were kept": "准备编辑时文档已更改；未保存的编辑已保留",
     "The file edit exceeds its size or change limit": "文件编辑超出了大小或更改次数限制",
     "Open at most 256 files and 512 MB at a time": "每次最多打开 256 个文件和 512 MB"
+  },
+  "accessibility_linux": {
+    "Project files": "项目文件",
+    "Terminal: {name}": "终端：{name}",
+    "Accessible terminal text is limited to the visible context; text actions never send commands": "终端无障碍文本仅限于可见上下文；文本操作不会发送命令",
+    "Accessible project hierarchy is limited to visible items and 64 ancestor levels": "项目无障碍层次结构仅限于可见项和64级祖先"
   }
 }

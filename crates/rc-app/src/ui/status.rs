@@ -40,7 +40,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                         }
                         ui.add_space(4.0);
                     }
-                    ui.label(egui::RichText::new(&n.text).color(if n.error { p.error } else { p.text_muted }).size(12.5));
+                    let notice=ui.label(egui::RichText::new(&n.text).color(if n.error { p.error } else { p.text_muted }).size(12.5));
+                    ui.ctx().accesskit_node_builder(notice.id,|node|{node.set_role(if n.error{egui::accesskit::Role::Alert}else{egui::accesskit::Role::Status});node.set_label(n.text.chars().take(2048).collect::<String>());node.set_live(if n.error{egui::accesskit::Live::Assertive}else{egui::accesskit::Live::Polite});node.set_live_atomic();});
                 }
                 if let Some(url) = open {
                     app.open_notice_url(url);

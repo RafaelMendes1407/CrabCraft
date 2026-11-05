@@ -2932,5 +2932,11 @@
     "The document changed while preparing the edit; unsaved edits were kept": "編集の準備中に文書が変更されました。未保存の編集は保持されました",
     "The file edit exceeds its size or change limit": "ファイル編集がサイズまたは変更数の上限を超えています",
     "Open at most 256 files and 512 MB at a time": "一度に開けるのは最大 256 ファイル、512 MB です"
+  },
+  "accessibility_linux": {
+    "Project files": "プロジェクトファイル",
+    "Terminal: {name}": "ターミナル: {name}",
+    "Accessible terminal text is limited to the visible context; text actions never send commands": "ターミナルのアクセシブルなテキストは表示中の範囲に限られ、テキスト操作でコマンドを送信することはありません",
+    "Accessible project hierarchy is limited to visible items and 64 ancestor levels": "アクセシブルなプロジェクト階層は表示中の項目と64段階の祖先に限られます"
   }
 }
