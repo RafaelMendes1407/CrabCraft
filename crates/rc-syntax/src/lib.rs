@@ -12,6 +12,7 @@ pub mod crate_refs;
 mod derive;
 mod highlight;
 pub mod http;
+pub mod sql;
 pub mod axum;
 mod lang;
 mod parse;

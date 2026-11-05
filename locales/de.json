@@ -2251,5 +2251,12 @@
     "Complete Current Statement": "Aktuelle Anweisung vervollständigen",
     "Open an editable Rust file with one caret": "Eine bearbeitbare Rust-Datei mit einem Cursor öffnen",
     "This statement needs manual editing; no changes were made": "Diese Anweisung muss manuell bearbeitet werden; keine Änderungen vorgenommen"
+  },
+  "sql_injection": {
+    "SQL keyword": "SQL-Schlüsselwort",
+    "Connected database table": "Tabelle der verbundenen Datenbank",
+    "Connected database column": "Spalte der verbundenen Datenbank",
+    "Open SQL in database console…": "SQL in Datenbankkonsole öffnen…",
+    "SQL copied to the database console; review and run explicitly": "SQL in Datenbankkonsole kopiert; prüfen und ausdrücklich ausführen"
   }
 }

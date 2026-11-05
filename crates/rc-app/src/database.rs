@@ -310,8 +310,9 @@ impl Database {
             self.edit = None;
         }
         ui.horizontal(|ui|{ui.label(tr("SQL console"));ui.small(tr("One statement per run; connections use autocommit. Writes require explicit opt-in."));});
+        let mut sql_layout=|ui:&egui::Ui,text:&dyn egui::TextBuffer,width:f32|crate::sql_injection::layout(ui,text.as_str(),width);
         ui.add(
-            egui::TextEdit::multiline(&mut self.sql)
+            egui::TextEdit::multiline(&mut self.sql).layouter(&mut sql_layout)
                 .code_editor()
                 .desired_rows(3)
                 .char_limit(64 * 1024)

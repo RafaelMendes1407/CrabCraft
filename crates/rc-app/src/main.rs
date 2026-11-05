@@ -4,6 +4,7 @@ mod app;
 mod complete_statement;
 mod database_core;
 mod database;
+mod sql_injection;
 mod cli;
 mod endpoints;
 mod clone_project;

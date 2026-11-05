@@ -648,6 +648,8 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
     let mut actions = Vec::new();
     let mut edit = None;
     let mut usings = false;
+    let sql_fragment = crate::sql_injection::current(&app.docs.list[active]).is_some();
+    let mut open_sql = false;
     resp.context_menu(|ui| {
         ui.set_min_width(260.0);
         ui.set_max_width(320.0);
@@ -657,6 +659,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
                 ui.close();
             }
         };
+        if sql_fragment && theme::menu_item(ui, Some(ico::TW_DEPENDENCIES), tr("Open SQL in database console…"), false).clicked() { open_sql=true; ui.close(); }
         if manifest {
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, Some(ico::TW_FIND), tr("Find Usages of Feature"), Action::FindUsages);
@@ -704,6 +707,7 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
     if usings && let Some(i) = app.docs.active {
         app.insight.add_missing_usings(&app.docs.list[i]);
     }
+    if open_sql { crate::sql_injection::open_console(app, active); }
     app.pending.extend(actions);
 }
 

@@ -2251,5 +2251,12 @@
     "Complete Current Statement": "补全当前语句",
     "Open an editable Rust file with one caret": "打开只有一个光标的可编辑 Rust 文件",
     "This statement needs manual editing; no changes were made": "此语句需要手动编辑；未作任何更改"
+  },
+  "sql_injection": {
+    "SQL keyword": "SQL 关键字",
+    "Connected database table": "已连接数据库的表",
+    "Connected database column": "已连接数据库的列",
+    "Open SQL in database console…": "在数据库控制台中打开 SQL…",
+    "SQL copied to the database console; review and run explicitly": "SQL 已复制到数据库控制台；请检查后明确执行"
   }
 }

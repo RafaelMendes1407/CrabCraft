@@ -769,6 +769,18 @@ impl EditorState {
 
 /// Semantic spans override syntax spans where they overlap.
 fn merge_spans(syntax: &[Span], semantic: &[Span]) -> Vec<Span> {
+    // A language server can classify the enclosing Rust string as one token. Preserve
+    // locally injected SQL regions while retaining semantics everywhere outside them.
+    let mut filtered=Vec::new();
+    for token in semantic {
+        let mut start=token.start;
+        for protected in syntax.iter().filter(|span|rc_syntax::sql::is_injected(span.hl)&&span.end>token.start&&span.start<token.end) {
+            if start<protected.start {filtered.push(Span{start,end:protected.start.min(token.end),hl:token.hl});}
+            start=start.max(protected.end);
+        }
+        if start<token.end {filtered.push(Span{start,end:token.end,hl:token.hl});}
+    }
+    let semantic=filtered.as_slice();
     let mut out: Vec<Span> = Vec::new();
     for s in syntax {
         let mut start = s.start;
@@ -851,5 +863,21 @@ pub fn detect_indent(buffer: &Buffer) -> Indent {
         Indent { unit: "  ".into(), tab_width: 4 }
     } else {
         Indent::default()
+    }
+}
+
+#[cfg(test)]
+mod sql_injection_colors {
+    use super::*;
+    #[test]
+    fn whole_string_semantic_tokens_keep_injected_sql_and_rust_escape_colors() {
+        let source="// language=SQL\nconst Q: &str = \"SELECT \\\"name\\\" FROM people\";\n";
+        let mut editor=EditorState::new(1,Some(std::path::PathBuf::from("main.rs")),source);editor.parse_blocking();
+        let length=editor.buffer.rope().line(1).len_chars();
+        editor.set_semantic(vec![Vec::new(),vec![Span{start:0,end:length,hl:Hl::String}]]);
+        let spans=&editor.line_spans(1,1)[0];
+        assert!(spans.iter().any(|span|span.hl==Hl::SqlKeyword));
+        assert!(spans.iter().any(|span|span.hl==Hl::SqlEscape));
+        assert!(spans.iter().any(|span|span.hl==Hl::String&&span.start==0));
     }
 }

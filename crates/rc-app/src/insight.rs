@@ -399,6 +399,12 @@ impl Insight {
         }
     }
 
+    /// A local SQL completion owns the popup; pending language-server results must not
+    /// replace it or resolve its opaque local item indices.
+    pub fn cancel_local_completion_requests(&mut self) {
+        self.completion=None;self.resolve=None;self.raw_items.clear();
+    }
+
     /// Paths completion never imports (Settings › Editor); applied to a running server.
     pub fn set_autoimport_exclude(&mut self, list: Vec<String>) {
         if list == self.autoimport_exclude {

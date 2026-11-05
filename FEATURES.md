@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 218 |
+| ✅ Pronto | 219 |
 | 🚧 Em andamento | 11 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 24 |
+| ⬜ A fazer | 23 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -345,7 +345,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | Y-01 | Conexão a bancos e explorador de esquemas | 🚧 | M6 | SQLite nativo verificado: conexão/criação explícitas com confiança, leitura padrão, tabelas/views/colunas/PK/índices/triggers e esquema SQL. Worker cancelável, limites e SQLite defensivo; projeto Rust e banco reais. PostgreSQL ainda indisponível; [escopo](docs/database.md). |
 | Y-02 | Console SQL e editor de dados | 🚧 | M6 | SQLite: console de uma instrução, páginas de 500 linhas e edição tipada parametrizada por rowid/PK com versão de esquema/snapshot e recusa de alterações externas; leitura padrão, escrita explícita, cancelamento real e teste nativo + consumidor Rust. Sem PostgreSQL/transações manuais; [limites](docs/database.md). |
-| Y-03 | SQL injetado em strings | ⬜ | M6 | |
+| Y-03 | SQL injetado em strings | ✅ | M6 | Rust: cores SQL em literais normais/raw por marcador ou APIs reconhecidas, Ctrl+Space local de palavras-chave e esquema SQLite conectado, menu copia SQL decodificado ao console sem executar; escapes/delimitadores preservados, prioridade contra token semântico de string. Projeto Rust e SQLite reais, edição nativa/compilação/execução e testes Unicode/escapes/limites; sem LSP SQL ou interpolação dinâmica; [escopo](docs/sql-injection.md). |
 | Y-04 | Exportar e importar dados | 🚧 | M6 | SQLite: JSON tipado versionado preserva NULL/inteiros/reais/Unicode/BLOB, exportação sem sobrescrever, importação parametrizada e atômica com rollback por erro/cancelamento; teste nativo e Rust real. Sem PostgreSQL/CSV nesta etapa; [escopo](docs/database.md). |
 | Y-05 | Implantação por SFTP/FTP | ⬜ | M6 | |
 | Y-06 | Comparar e editar arquivos remotos | ⬜ | M6 | |

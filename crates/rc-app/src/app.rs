@@ -1765,6 +1765,10 @@ impl CrabCraftApp {
                 return;
             }
         }
+        if action == Action::Complete && crate::sql_injection::complete(&mut self.docs.list[i], &self.database.tables) {
+            self.insight.cancel_local_completion_requests();
+            return;
+        }
         if action == Action::Complete && self.endpoints.complete_http(&mut self.docs.list[i]) {
             return;
         }
