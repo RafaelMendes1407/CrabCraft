@@ -2455,5 +2455,35 @@
     "ACP agent log": "Log do agente ACP",
     "ACP Agents": "Agentes ACP",
     "Start a trusted ACP agent explicitly": "Inicie explicitamente um agente ACP confiável"
+  },
+  "remote_files": {
+    "Remote files": "Arquivos remotos",
+    "SSH private key": "Chave privada SSH",
+    "Verified known_hosts file": "Arquivo known_hosts verificado",
+    "Remote absolute path": "Caminho remoto absoluto",
+    "Local deploy file": "Arquivo local para implantação",
+    "Load remote file": "Carregar arquivo remoto",
+    "Preview remote edit": "Pré-visualizar edição remota",
+    "Preview local deployment": "Pré-visualizar implantação local",
+    "Open SSH terminal": "Abrir terminal SSH",
+    "Trust the project before connecting to SSH": "Confie no projeto antes de conectar por SSH",
+    "Remote snapshot": "Snapshot remoto",
+    "Proposed remote text": "Texto remoto proposto",
+    "Review upload before confirmation": "Revise o envio antes da confirmação",
+    "Confirm remote overwrite": "Confirmar sobrescrita remota",
+    "Invalid SSH settings or unsupported remote text/path": "Configurações SSH inválidas ou texto/caminho remoto não suportado",
+    "Remote operation exceeded its transfer or output limit": "A operação remota excedeu o limite de transferência ou saída",
+    "SSH operation timed out": "A operação SSH excedeu o tempo limite",
+    "Local or remote content changed; load and preview again": "O conteúdo local ou remoto mudou; carregue e pré-visualize novamente",
+    "SSH error: {error}": "Erro SSH: {error}",
+    "Remote file loaded; no changes uploaded": "Arquivo remoto carregado; nenhuma alteração enviada",
+    "Remote transfer completed; refresh before another edit": "Transferência remota concluída; atualize antes de outra edição",
+    "Explicit SSH connections and reviewed SFTP transfers": "Conexões SSH explícitas e transferências SFTP revisadas",
+    "Existing UTF-8 files only, up to 2 MB. No directory sync, automatic upload or remote project execution.": "Apenas arquivos UTF-8 existentes, até 2 MB. Sem sincronização de diretórios, envio automático ou execução remota do projeto.",
+    "SFTP uses OpenSSH keys and a preverified known_hosts file. FTP and password prompts are unsupported.": "SFTP usa chaves OpenSSH e um arquivo known_hosts previamente verificado. FTP e prompts de senha não são suportados.",
+    "Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.": "O conteúdo remoto é verificado novamente antes do envio. SFTP não bloqueia escritas concorrentes; cancelar pode deixar um arquivo temporário ou um envio já confirmado."
+  },
+  "remote_preview_limit": {
+    "Previews show up to 16,384 characters. Files over 64 KB cannot be edited here; local deployment remains available.": "As prévias mostram até 16.384 caracteres. Arquivos acima de 64 KB não podem ser editados aqui; a implantação local continua disponível."
   }
 }

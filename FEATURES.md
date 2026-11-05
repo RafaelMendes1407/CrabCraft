@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 232 |
-| 🚧 Em andamento | 7 |
+| ✅ Pronto | 234 |
+| 🚧 Em andamento | 8 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 14 |
+| ⬜ A fazer | 11 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -347,9 +347,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Y-02 | Console SQL e editor de dados | ✅ | M6 | SQLite/PostgreSQL: console de uma instrução, páginas de 500 linhas e edição tipada parametrizada por rowid/PK com snapshot/versão de esquema e recusa de alterações externas; leitura padrão e escrita explícita. Cancelamento real, UI nativa e consumidores Rust contra ambos os bancos. Transações manuais indisponíveis; [limites](docs/database.md). |
 | Y-03 | SQL injetado em strings | ✅ | M6 | Rust: cores SQL em literais normais/raw por marcador ou APIs reconhecidas, Ctrl+Space local de palavras-chave e esquema SQLite conectado, menu copia SQL decodificado ao console sem executar; escapes/delimitadores preservados, prioridade contra token semântico de string. Projeto Rust e SQLite reais, edição nativa/compilação/execução e testes Unicode/escapes/limites; sem LSP SQL ou interpolação dinâmica; [escopo](docs/sql-injection.md). |
 | Y-04 | Exportar e importar dados | ✅ | M6 | SQLite/PostgreSQL: JSON tipado versionado e CSV UTF-8 documentado, exportação sem sobrescrever, importação parametrizada e atômica com rollback por erro/cancelamento. Preserva NULL/Unicode/BLOB e NUMERIC PostgreSQL; CSV segue afinidade/tipos do destino, JSON mantém tipos SQLite exatos. UI e Rust reais; [formato/limites](docs/database.md). |
-| Y-05 | Implantação por SFTP/FTP | ⬜ | M6 | |
-| Y-06 | Comparar e editar arquivos remotos | ⬜ | M6 | |
-| Y-07 | Configurações SSH e terminal SSH | ⬜ | M6 | |
+| Y-05 | Implantação por SFTP/FTP | 🚧 | M6 | SFTP OpenSSH nativo: arquivo UTF-8 existente até 2 MB, prévia local/remota e confirmação explícita, verificação de conteúdo local/remoto e upload temporário+rename; confiança/hostkey estrita, worker cancelável. Rust real, servidor SSH e UI verificados. FTP, novos arquivos, binários e sincronização ainda indisponíveis; SFTP não oferece CAS contra corrida concorrente; [escopo](docs/remote-files.md). |
+| Y-06 | Comparar e editar arquivos remotos | ✅ | M6 | Comparação textual lado a lado e edição nativa de arquivo SFTP existente: snapshot remoto somente leitura, proposta editável até 64 KB, prévia/confirmar, verificação contra alterações externas e recusa de conteúdo obsoleto. Prévias limitadas e limitações de rename/CAS explícitas; controles nativos + Rust real em servidor OpenSSH testados; [escopo](docs/remote-files.md). |
+| Y-07 | Configurações SSH e terminal SSH | ✅ | M6 | Host/porta/usuário/chave/known_hosts explícitos em memória, hostkey obrigatório, -F none sem configuração SSH/proxy/forward/agente herdados; terminal SSH na PTY nativa somente após confiança e ação explícita. Fixture OpenSSH real verifica autenticação/recusa de host desconhecido, cancelamento e comando digitado no terminal. Sem perfis persistidos/password prompts/aliases; [escopo](docs/remote-files.md). |
 | Y-08 | Desenvolvimento remoto | ⬜ | M6 | |
 | Y-09 | Dev Containers | ⬜ | M6 | |
 | Y-10 | Colaboração em tempo real | 🚫 | - | Exige serviço próprio |

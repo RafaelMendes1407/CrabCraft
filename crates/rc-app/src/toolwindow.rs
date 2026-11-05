@@ -28,6 +28,7 @@ pub enum ToolWindow {
     Profiler,
     Endpoints,
     Database,
+    Remote,
     Agents,
 }
 
@@ -64,7 +65,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 20] = [
+    pub const ALL: [ToolWindow; 21] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -83,6 +84,7 @@ impl ToolWindow {
         ToolWindow::Profiler,
         ToolWindow::Endpoints,
         ToolWindow::Database,
+        ToolWindow::Remote,
         ToolWindow::Agents,
         ToolWindow::Notifications,
     ];
@@ -108,6 +110,7 @@ impl ToolWindow {
             ToolWindow::Profiler => "profiler",
             ToolWindow::Endpoints => "endpoints",
             ToolWindow::Database => "database",
+            ToolWindow::Remote => "remote",
             ToolWindow::Agents => "acp_agents",
         }
     }
@@ -133,6 +136,7 @@ impl ToolWindow {
             ToolWindow::Profiler => tr("Profiler"),
             ToolWindow::Endpoints => tr("Endpoints"),
             ToolWindow::Database => tr("Database"),
+            ToolWindow::Remote => tr("Remote files"),
             ToolWindow::Agents => tr("ACP Agents"),
         }
     }
@@ -158,6 +162,7 @@ impl ToolWindow {
             ToolWindow::Profiler => ico::THREADS,
             ToolWindow::Endpoints => ico::CONFIG_WEB,
             ToolWindow::Database => ico::TW_DEPENDENCIES,
+            ToolWindow::Remote => ico::TW_DEPENDENCIES,
             ToolWindow::Agents => ico::RUN_ANYTHING,
         }
     }
@@ -172,6 +177,7 @@ impl ToolWindow {
 
     /// Whether the button sits on the lower part of the left stripe (bottom tool windows).
     pub fn default_size(self, side: Side) -> f32 {
+        if self == ToolWindow::Remote && side == Side::Bottom { return 700.0; }
         if self == ToolWindow::Agents && side == Side::Right { return 480.0; }
         if self == ToolWindow::Database && side == Side::Bottom { return 560.0; }
         if self == ToolWindow::Endpoints && side == Side::Bottom { return 420.0; }

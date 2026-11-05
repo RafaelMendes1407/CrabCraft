@@ -2455,5 +2455,35 @@
     "ACP agent log": "ACP 代理日志",
     "ACP Agents": "ACP 代理",
     "Start a trusted ACP agent explicitly": "显式启动可信 ACP 代理"
+  },
+  "remote_files": {
+    "Remote files": "远程文件",
+    "SSH private key": "SSH 私钥",
+    "Verified known_hosts file": "已验证的 known_hosts 文件",
+    "Remote absolute path": "远程绝对路径",
+    "Local deploy file": "本地部署文件",
+    "Load remote file": "加载远程文件",
+    "Preview remote edit": "预览远程编辑",
+    "Preview local deployment": "预览本地部署",
+    "Open SSH terminal": "打开 SSH 终端",
+    "Trust the project before connecting to SSH": "连接 SSH 前请信任项目",
+    "Remote snapshot": "远程快照",
+    "Proposed remote text": "建议的远程文本",
+    "Review upload before confirmation": "确认前检查上传内容",
+    "Confirm remote overwrite": "确认覆盖远程文件",
+    "Invalid SSH settings or unsupported remote text/path": "SSH 设置无效或远程文本/路径不受支持",
+    "Remote operation exceeded its transfer or output limit": "远程操作超出传输或输出限制",
+    "SSH operation timed out": "SSH 操作超时",
+    "Local or remote content changed; load and preview again": "本地或远程内容已更改；请重新加载并预览",
+    "SSH error: {error}": "SSH 错误：{error}",
+    "Remote file loaded; no changes uploaded": "已加载远程文件；未上传任何更改",
+    "Remote transfer completed; refresh before another edit": "远程传输已完成；再次编辑前请刷新",
+    "Explicit SSH connections and reviewed SFTP transfers": "明确发起的 SSH 连接和经检查的 SFTP 传输",
+    "Existing UTF-8 files only, up to 2 MB. No directory sync, automatic upload or remote project execution.": "仅支持不超过 2 MB 的现有 UTF-8 文件。不支持目录同步、自动上传或远程项目执行。",
+    "SFTP uses OpenSSH keys and a preverified known_hosts file. FTP and password prompts are unsupported.": "SFTP 使用 OpenSSH 密钥和预先验证的 known_hosts 文件。不支持 FTP 和密码提示。",
+    "Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.": "上传前会再次检查远程内容。SFTP 无法阻止并发写入；取消可能留下临时文件或已提交的上传。"
+  },
+  "remote_preview_limit": {
+    "Previews show up to 16,384 characters. Files over 64 KB cannot be edited here; local deployment remains available.": "预览最多显示 16,384 个字符。超过 64 KB 的文件无法在此编辑；仍可从本地部署。"
   }
 }

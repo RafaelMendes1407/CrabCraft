@@ -2455,5 +2455,35 @@
     "ACP agent log": "ACP エージェントのログ",
     "ACP Agents": "ACP エージェント",
     "Start a trusted ACP agent explicitly": "信頼する ACP エージェントを明示的に起動してください"
+  },
+  "remote_files": {
+    "Remote files": "リモートファイル",
+    "SSH private key": "SSH 秘密鍵",
+    "Verified known_hosts file": "検証済み known_hosts ファイル",
+    "Remote absolute path": "リモート絶対パス",
+    "Local deploy file": "ローカルのデプロイファイル",
+    "Load remote file": "リモートファイルを読み込む",
+    "Preview remote edit": "リモート編集をプレビュー",
+    "Preview local deployment": "ローカルデプロイをプレビュー",
+    "Open SSH terminal": "SSH ターミナルを開く",
+    "Trust the project before connecting to SSH": "SSH に接続する前にプロジェクトを信頼してください",
+    "Remote snapshot": "リモートのスナップショット",
+    "Proposed remote text": "提案されたリモートテキスト",
+    "Review upload before confirmation": "確認前にアップロードを確認",
+    "Confirm remote overwrite": "リモートの上書きを確認",
+    "Invalid SSH settings or unsupported remote text/path": "SSH 設定が無効か、リモートテキストまたはパスが未対応です",
+    "Remote operation exceeded its transfer or output limit": "リモート操作が転送または出力の制限を超えました",
+    "SSH operation timed out": "SSH 操作がタイムアウトしました",
+    "Local or remote content changed; load and preview again": "ローカルまたはリモートの内容が変更されました。再読み込みしてプレビューしてください",
+    "SSH error: {error}": "SSH エラー：{error}",
+    "Remote file loaded; no changes uploaded": "リモートファイルを読み込みました。変更は送信されていません",
+    "Remote transfer completed; refresh before another edit": "リモート転送が完了しました。次の編集前に更新してください",
+    "Explicit SSH connections and reviewed SFTP transfers": "明示的な SSH 接続と確認済みの SFTP 転送",
+    "Existing UTF-8 files only, up to 2 MB. No directory sync, automatic upload or remote project execution.": "既存の UTF-8 ファイルのみ、最大2 MB。ディレクトリ同期、自動アップロード、リモートプロジェクト実行はありません。",
+    "SFTP uses OpenSSH keys and a preverified known_hosts file. FTP and password prompts are unsupported.": "SFTP は OpenSSH 鍵と事前に検証した known_hosts ファイルを使用します。FTP とパスワード入力には対応していません。",
+    "Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.": "アップロード前にリモート内容を再確認します。SFTP は同時書き込みをロックできません。キャンセル後も一時ファイルやコミット済みのアップロードが残る場合があります。"
+  },
+  "remote_preview_limit": {
+    "Previews show up to 16,384 characters. Files over 64 KB cannot be edited here; local deployment remains available.": "プレビューは最大16,384文字です。64 KB を超えるファイルはここで編集できませんが、ローカルデプロイは利用できます。"
   }
 }

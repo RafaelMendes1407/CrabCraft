@@ -83,6 +83,7 @@ pub struct CrabCraftApp {
     pub history_edit: crate::history_edit::HistoryEdit,
     pub shelves: crate::shelves::Shelves,
     pub database: crate::database::Database,
+    pub remote: crate::remote::Remote,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -337,6 +338,7 @@ impl CrabCraftApp {
             history_edit: crate::history_edit::HistoryEdit::new(waker.clone()),
             shelves: crate::shelves::Shelves::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
+            remote: crate::remote::Remote::new(waker.clone()),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -1433,6 +1435,7 @@ impl CrabCraftApp {
         self.history_edit = crate::history_edit::HistoryEdit::new(self.waker.clone());
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
+        self.remote = crate::remote::Remote::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -2625,6 +2628,15 @@ impl CrabCraftApp {
         }
     }
 
+    pub fn open_ssh_terminal(&mut self, spec: rc_term::SpawnSpec) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        if self.terminal_starting.is_some() { return; }
+        match crate::repl::Starting::new(spec, self.waker.clone()) {
+            Ok(starting) => { self.terminal_starting = Some(starting); self.dock.show(ToolWindow::Terminal); }
+            Err(error) => self.notify(rc_kit::i18n::trf("Could not start the terminal: {error}", &[("error", &error)]), true),
+        }
+    }
+
     pub fn split_terminal(&mut self, stacked: bool) {
         if self.terminal_starting.is_some() { return; }
         let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else { return; };
@@ -2925,6 +2937,7 @@ impl CrabCraftApp {
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
         if was_open && tw == ToolWindow::Database { self.database.cancel(); }
+        if was_open && tw == ToolWindow::Remote { self.remote.cancel(); }
         if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
@@ -3596,6 +3609,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_playground(&ctx);
         let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
         self.database.poll(database_trusted);
+        self.remote.poll(database_trusted);
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();

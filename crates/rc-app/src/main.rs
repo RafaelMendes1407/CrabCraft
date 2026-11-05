@@ -6,6 +6,8 @@ mod terminal_attach;
 mod database_core;
 mod database_csv;
 mod database;
+mod remote;
+mod remote_transfer;
 mod database_postgres;
 mod sql_injection;
 mod cli;
