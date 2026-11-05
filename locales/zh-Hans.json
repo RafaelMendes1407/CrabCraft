@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "Rust REPL 已退出",
     "REPL input changed; refresh the variables again": "REPL 输入已更改；请重新刷新变量",
     "Type": "类型"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "搁置仅支持已跟踪的普通文件；不支持未跟踪文件、符号链接和子模块",
+    "The shelf is invalid, changed or exceeds its safety limits": "搁置无效、已更改或超出安全限制",
+    "No unstaged changes in the selected tracked files": "选中的已跟踪文件没有未暂存更改",
+    "Shelf operation cancelled; saved shelves are retained": "搁置操作已取消；已保存的搁置会保留",
+    "Local changes": "本地更改",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "IDE 本地搁置独立于 Git stash 保存已跟踪文件的未暂存更改。索引不会更改。",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "不支持未跟踪文件、符号链接和子模块。搁置前请保存文件；恢复后保留搁置。",
+    "Use Checked Files": "使用已勾选文件",
+    "Selected files": "所选文件",
+    "Refresh Shelves": "刷新搁置",
+    "Save project files and wait for formatting before shelving or restoring": "搁置或恢复前请保存项目文件并等待格式化完成",
+    "Shelf name": "搁置名称",
+    "Keep changes in the working tree": "在工作树中保留更改",
+    "Shelve Checked Files": "搁置已勾选文件",
+    "Preview Shelf": "预览搁置",
+    "Restore Shelf": "恢复搁置",
+    "Delete Shelf…": "删除搁置…",
+    "Permanently delete this local shelf? Working files are unchanged.": "永久删除此本地搁置？工作文件不会更改。",
+    "Delete Shelf": "删除搁置",
+    "Patch preview (first 64 KiB)": "补丁预览（前 64 KiB）",
+    "Shelve Checked…": "搁置已勾选文件…",
+    "Shelves": "搁置"
   }
 }

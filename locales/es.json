@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "El REPL de Rust ha finalizado",
     "REPL input changed; refresh the variables again": "La entrada del REPL cambió; actualice las variables de nuevo",
     "Type": "Tipo"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "Las estanterías solo admiten archivos normales rastreados; no admiten archivos sin seguimiento, enlaces simbólicos ni submódulos",
+    "The shelf is invalid, changed or exceeds its safety limits": "La estantería no es válida, cambió o supera los límites de seguridad",
+    "No unstaged changes in the selected tracked files": "No hay cambios sin preparar en los archivos rastreados seleccionados",
+    "Shelf operation cancelled; saved shelves are retained": "Operación cancelada; se conservan las estanterías guardadas",
+    "Local changes": "Cambios locales",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "Las estanterías locales de la IDE guardan cambios sin preparar separados de los stashes Git. El índice no se modifica.",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "No se admiten archivos sin seguimiento, enlaces ni submódulos. Guarda los archivos antes de guardar en estantería; restaurar conserva la estantería.",
+    "Use Checked Files": "Usar archivos marcados",
+    "Selected files": "Archivos seleccionados",
+    "Refresh Shelves": "Actualizar estanterías",
+    "Save project files and wait for formatting before shelving or restoring": "Guarda los archivos y espera al formato antes de guardar o restaurar",
+    "Shelf name": "Nombre de estantería",
+    "Keep changes in the working tree": "Conservar cambios en el árbol de trabajo",
+    "Shelve Checked Files": "Guardar archivos marcados en estantería",
+    "Preview Shelf": "Vista previa de estantería",
+    "Restore Shelf": "Restaurar estantería",
+    "Delete Shelf…": "Eliminar estantería…",
+    "Permanently delete this local shelf? Working files are unchanged.": "¿Eliminar permanentemente esta estantería local? Los archivos de trabajo no cambian.",
+    "Delete Shelf": "Eliminar estantería",
+    "Patch preview (first 64 KiB)": "Vista previa del parche (primeros 64 KiB)",
+    "Shelve Checked…": "Guardar marcados en estantería…",
+    "Shelves": "Estanterías"
   }
 }

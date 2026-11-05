@@ -75,6 +75,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub shelves: crate::shelves::Shelves,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -317,6 +318,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            shelves: crate::shelves::Shelves::new(waker.clone()),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -1394,6 +1396,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -3204,6 +3207,7 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        if self.shelves.poll() { self.vcs.refresh(); }
         self.endpoints.poll(&mut self.docs);
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();

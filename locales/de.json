@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "Die Rust-REPL wurde beendet",
     "REPL input changed; refresh the variables again": "REPL-Eingabe geändert; Variablen erneut aktualisieren",
     "Type": "Typ"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "Ablagen unterstützen nur versionierte reguläre Dateien; unversionierte Dateien, symbolische Links und Submodule sind nicht unterstützt",
+    "The shelf is invalid, changed or exceeds its safety limits": "Die Ablage ist ungültig, geändert oder überschreitet ihre Sicherheitsgrenzen",
+    "No unstaged changes in the selected tracked files": "Keine ungestagten Änderungen in den ausgewählten versionierten Dateien",
+    "Shelf operation cancelled; saved shelves are retained": "Ablagevorgang abgebrochen; gespeicherte Ablagen bleiben erhalten",
+    "Local changes": "Lokale Änderungen",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "IDE-lokale Ablagen speichern ungestagte Änderungen getrennt von Git-Stashes. Der Index bleibt unverändert.",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "Unversionierte Dateien, Links und Submodule sind nicht unterstützt. Dateien vorher speichern; Wiederherstellen behält die Ablage.",
+    "Use Checked Files": "Markierte Dateien verwenden",
+    "Selected files": "Ausgewählte Dateien",
+    "Refresh Shelves": "Ablagen aktualisieren",
+    "Save project files and wait for formatting before shelving or restoring": "Projektdateien speichern und Formatierung abwarten, bevor Änderungen abgelegt oder wiederhergestellt werden",
+    "Shelf name": "Ablagename",
+    "Keep changes in the working tree": "Änderungen im Arbeitsverzeichnis behalten",
+    "Shelve Checked Files": "Markierte Dateien ablegen",
+    "Preview Shelf": "Ablagevorschau",
+    "Restore Shelf": "Ablage wiederherstellen",
+    "Delete Shelf…": "Ablage löschen…",
+    "Permanently delete this local shelf? Working files are unchanged.": "Diese lokale Ablage dauerhaft löschen? Arbeitsdateien bleiben unverändert.",
+    "Delete Shelf": "Ablage löschen",
+    "Patch preview (first 64 KiB)": "Patchvorschau (erste 64 KiB)",
+    "Shelve Checked…": "Markierte ablegen…",
+    "Shelves": "Ablagen"
   }
 }

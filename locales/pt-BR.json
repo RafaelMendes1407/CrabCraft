@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "O REPL Rust foi encerrado",
     "REPL input changed; refresh the variables again": "A entrada do REPL mudou; atualize as variáveis novamente",
     "Type": "Tipo"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "Prateleiras aceitam apenas arquivos regulares rastreados; arquivos não rastreados, symlinks e submódulos não são suportados",
+    "The shelf is invalid, changed or exceeds its safety limits": "A prateleira é inválida, foi alterada ou excede os limites de segurança",
+    "No unstaged changes in the selected tracked files": "Nenhuma alteração fora do índice nos arquivos rastreados selecionados",
+    "Shelf operation cancelled; saved shelves are retained": "Operação cancelada; prateleiras salvas são mantidas",
+    "Local changes": "Alterações locais",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "Prateleiras locais da IDE guardam alterações fora do índice separadamente dos stashes Git. O índice nunca é alterado.",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "Arquivos não rastreados, symlinks e submódulos não são suportados. Salve antes de guardar; restaurar mantém a prateleira.",
+    "Use Checked Files": "Usar arquivos marcados",
+    "Selected files": "Arquivos selecionados",
+    "Refresh Shelves": "Atualizar prateleiras",
+    "Save project files and wait for formatting before shelving or restoring": "Salve os arquivos e aguarde a formatação antes de guardar ou restaurar",
+    "Shelf name": "Nome da prateleira",
+    "Keep changes in the working tree": "Manter alterações na árvore de trabalho",
+    "Shelve Checked Files": "Guardar arquivos marcados na prateleira",
+    "Preview Shelf": "Prévia da prateleira",
+    "Restore Shelf": "Restaurar prateleira",
+    "Delete Shelf…": "Excluir prateleira…",
+    "Permanently delete this local shelf? Working files are unchanged.": "Excluir permanentemente esta prateleira local? Os arquivos de trabalho não são alterados.",
+    "Delete Shelf": "Excluir prateleira",
+    "Patch preview (first 64 KiB)": "Prévia do patch (primeiros 64 KiB)",
+    "Shelve Checked…": "Guardar marcados na prateleira…",
+    "Shelves": "Prateleiras"
   }
 }

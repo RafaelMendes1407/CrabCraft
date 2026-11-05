@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "Rust REPL が終了しました",
     "REPL input changed; refresh the variables again": "REPL 入力が変更されました。変数を再度更新してください",
     "Type": "型"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "シェルフは追跡済みの通常ファイルのみ対応します。未追跡ファイル、シンボリックリンク、サブモジュールには対応しません",
+    "The shelf is invalid, changed or exceeds its safety limits": "シェルフが無効、変更済み、または安全制限を超えています",
+    "No unstaged changes in the selected tracked files": "選択した追跡済みファイルに未ステージの変更はありません",
+    "Shelf operation cancelled; saved shelves are retained": "シェルフ操作を中止しました。保存済みシェルフは保持されます",
+    "Local changes": "ローカルの変更",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "IDE のローカルシェルフは未ステージの変更を Git stash と別に保存します。インデックスは変更しません。",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "未追跡ファイル、リンク、サブモジュールは未対応です。搁置前にファイルを保存してください。復元後もシェルフは保持されます。",
+    "Use Checked Files": "チェック済みファイルを使用",
+    "Selected files": "選択したファイル",
+    "Refresh Shelves": "シェルフを更新",
+    "Save project files and wait for formatting before shelving or restoring": "シェルフへの保存や復元前にファイルを保存し、整形の完了を待ってください",
+    "Shelf name": "シェルフ名",
+    "Keep changes in the working tree": "作業ツリーの変更を保持",
+    "Shelve Checked Files": "チェック済みファイルをシェルフへ",
+    "Preview Shelf": "シェルフをプレビュー",
+    "Restore Shelf": "シェルフを復元",
+    "Delete Shelf…": "シェルフを削除…",
+    "Permanently delete this local shelf? Working files are unchanged.": "このローカルシェルフを完全に削除しますか？作業ファイルは変更しません。",
+    "Delete Shelf": "シェルフを削除",
+    "Patch preview (first 64 KiB)": "パッチのプレビュー（先頭 64 KiB）",
+    "Shelve Checked…": "チェック済みをシェルフへ…",
+    "Shelves": "シェルフ"
   }
 }

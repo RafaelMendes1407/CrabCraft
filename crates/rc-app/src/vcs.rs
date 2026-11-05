@@ -140,6 +140,7 @@ pub enum GitTab {
     Log,
     Tags,
     Stashes,
+    Shelves,
     Worktrees,
 }
 

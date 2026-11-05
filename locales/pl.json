@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "Rust REPL został zakończony",
     "REPL input changed; refresh the variables again": "Wejście REPL zmieniono; odśwież zmienne ponownie",
     "Type": "Typ"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "Półki obsługują tylko zwykłe śledzone pliki; nieśledzone pliki, dowiązania i podmoduły nie są obsługiwane",
+    "The shelf is invalid, changed or exceeds its safety limits": "Półka jest nieprawidłowa, zmieniona lub przekracza limity bezpieczeństwa",
+    "No unstaged changes in the selected tracked files": "Brak niezindeksowanych zmian w wybranych śledzonych plikach",
+    "Shelf operation cancelled; saved shelves are retained": "Operacja anulowana; zapisane półki zostają zachowane",
+    "Local changes": "Zmiany lokalne",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "Lokalne półki IDE przechowują niezindeksowane zmiany osobno od schowków Git. Indeks pozostaje niezmieniony.",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "Nieśledzone pliki, dowiązania i podmoduły nie są obsługiwane. Zapisz pliki przed odłożeniem; przywracanie zachowuje półkę.",
+    "Use Checked Files": "Użyj zaznaczonych plików",
+    "Selected files": "Wybrane pliki",
+    "Refresh Shelves": "Odśwież półki",
+    "Save project files and wait for formatting before shelving or restoring": "Zapisz pliki i poczekaj na formatowanie przed odłożeniem lub przywróceniem",
+    "Shelf name": "Nazwa półki",
+    "Keep changes in the working tree": "Zachowaj zmiany w drzewie roboczym",
+    "Shelve Checked Files": "Odłóż zaznaczone pliki",
+    "Preview Shelf": "Podgląd półki",
+    "Restore Shelf": "Przywróć półkę",
+    "Delete Shelf…": "Usuń półkę…",
+    "Permanently delete this local shelf? Working files are unchanged.": "Trwale usunąć tę lokalną półkę? Pliki robocze pozostaną bez zmian.",
+    "Delete Shelf": "Usuń półkę",
+    "Patch preview (first 64 KiB)": "Podgląd łatki (pierwsze 64 KiB)",
+    "Shelve Checked…": "Odłóż zaznaczone…",
+    "Shelves": "Półki"
   }
 }

@@ -2062,5 +2062,29 @@
     "The Rust REPL has exited": "Le REPL Rust s’est terminé",
     "REPL input changed; refresh the variables again": "L’entrée REPL a changé ; actualisez à nouveau les variables",
     "Type": "Type"
+  },
+  "shelves": {
+    "Shelves support tracked regular files only; untracked files, symlinks and submodules are unsupported": "Les étagères acceptent uniquement les fichiers ordinaires suivis ; fichiers non suivis, liens symboliques et sous-modules non pris en charge",
+    "The shelf is invalid, changed or exceeds its safety limits": "L’étagère est invalide, modifiée ou dépasse ses limites de sécurité",
+    "No unstaged changes in the selected tracked files": "Aucune modification non indexée dans les fichiers suivis sélectionnés",
+    "Shelf operation cancelled; saved shelves are retained": "Opération annulée ; les étagères enregistrées sont conservées",
+    "Local changes": "Modifications locales",
+    "IDE-local shelves keep unstaged tracked-file changes separately from Git stashes. The index is never changed.": "Les étagères locales de l’IDE gardent les modifications non indexées séparément des stashes Git. L’index reste inchangé.",
+    "Untracked files, symlinks and submodules are unsupported. Save files before shelving; restore keeps the shelf.": "Fichiers non suivis, liens et sous-modules non pris en charge. Enregistrez les fichiers avant le rangement ; restaurer conserve l’étagère.",
+    "Use Checked Files": "Utiliser les fichiers cochés",
+    "Selected files": "Fichiers sélectionnés",
+    "Refresh Shelves": "Actualiser les étagères",
+    "Save project files and wait for formatting before shelving or restoring": "Enregistrez les fichiers et attendez le formatage avant de ranger ou restaurer",
+    "Shelf name": "Nom de l’étagère",
+    "Keep changes in the working tree": "Conserver les modifications dans l’arbre de travail",
+    "Shelve Checked Files": "Ranger les fichiers cochés",
+    "Preview Shelf": "Aperçu de l’étagère",
+    "Restore Shelf": "Restaurer l’étagère",
+    "Delete Shelf…": "Supprimer l’étagère…",
+    "Permanently delete this local shelf? Working files are unchanged.": "Supprimer définitivement cette étagère locale ? Les fichiers de travail restent inchangés.",
+    "Delete Shelf": "Supprimer l’étagère",
+    "Patch preview (first 64 KiB)": "Aperçu du patch (64 premiers Kio)",
+    "Shelve Checked…": "Ranger les fichiers cochés…",
+    "Shelves": "Étagères"
   }
 }

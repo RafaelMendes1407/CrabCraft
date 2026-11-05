@@ -101,6 +101,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.vcs.open_diff(&c.path);
         }
         let busy = app.vcs.busy.is_some();
+        if ui.add_enabled(!included.is_empty() && !busy, egui::Button::new(tr("Shelve Checked…"))).clicked() {
+            app.shelves.files = included.clone(); app.vcs.tab = GitTab::Shelves; app.dock.show(ToolWindow::Git);
+        }
         if ui.add_enabled_ui(!included.is_empty() && !busy, |ui| theme::secondary_button(ui, tr("Stash Checked…"))).inner.clicked() {
             app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: included.clone() });
         }
@@ -301,6 +304,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         if theme::tab(ui, app.vcs.tab == GitTab::Stashes, Some(ico::HISTORY), &stashes, false).0.clicked() {
             app.vcs.tab = GitTab::Stashes;
         }
+        if theme::tab(ui, app.vcs.tab == GitTab::Shelves, Some(ico::HISTORY), tr("Shelves"), false).0.clicked() { app.vcs.tab = GitTab::Shelves; }
         let worktrees = trf("Worktrees ({n})", &[("n", &app.vcs.worktrees.len())]);
         if theme::tab(ui, app.vcs.tab == GitTab::Worktrees, Some(ico::FOLDER), &worktrees, false).0.clicked() {
             app.vcs.tab = GitTab::Worktrees;
@@ -328,6 +332,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         GitTab::Tags => tags_view(app, ui),
         GitTab::Stashes => stashes_view(app, ui),
         GitTab::Worktrees => worktrees_view(app, ui),
+        GitTab::Shelves => { if let Some(repo) = app.vcs.repo.clone() { let checked = app.vcs.included(); let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.shelves.show(ui, repo, checked, app.vcs.busy.is_some(), unsaved); } },
     }
     // Git refused to remove a worktree with local changes: offer to force it.
     if let Some(path) = app.vcs.force_remove.take()

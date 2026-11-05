@@ -169,3 +169,5 @@ mod project_trust;
 
 #[cfg(test)]
 mod large_file_audit;
+
+mod shelves;
