@@ -14,7 +14,8 @@ fn fake(dir: &Path, mode: &str) -> (AdapterCommand, PathBuf) {
 }
 
 fn requests(log: &Path) -> Vec<Value> {
-    std::fs::read_to_string(log).unwrap_or_default().lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+    // The adapter writes concurrently; only a newline terminates a committed JSONL row.
+    std::fs::read_to_string(log).unwrap_or_default().split_inclusive('\n').filter(|line| line.ends_with('\n')).map(|line| serde_json::from_str(line).unwrap()).collect()
 }
 
 fn commands(log: &Path) -> Vec<String> {
