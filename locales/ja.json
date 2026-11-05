@@ -1768,5 +1768,22 @@
     "Starting Rust REPL…": "Rust REPL を起動中…",
     "Could not start the Rust REPL: {error}": "Rust REPL を起動できませんでした: {error}",
     "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "信頼済みの Cargo プロジェクトと PATH 内の evcxr が必要です。cargo install --locked evcxr_repl でインストール。:dep で依存関係を追加し、:vars で変数を一覧表示します。"
+  },
+  "cargo_generate": {
+    "Git Template": "Git テンプレート",
+    "Generate a Rust project from a Git repository with cargo-generate": "cargo-generate で Git リポジトリから Rust プロジェクトを生成",
+    "Template repository": "テンプレートリポジトリ",
+    "Template branch (optional)": "テンプレートのブランチ（任意）",
+    "Requires cargo-generate 0.26 or newer. Install with: cargo install --locked cargo-generate": "cargo-generate 0.26 以降が必要です。インストール: cargo install --locked cargo-generate",
+    "Templates may run hook scripts. Review the repository before trusting it. Shell commands and Git submodules are disabled; custom placeholders must have defaults.": "テンプレートはフックスクリプトを実行する場合があります。信頼する前にリポジトリを確認してください。シェルコマンドと Git サブモジュールは無効です。独自の変数には既定値が必要です。",
+    "I trust this template repository": "このテンプレートリポジトリを信頼する",
+    "Enter a Git template repository URL or local path": "Git テンプレートの URL またはローカルパスを入力してください",
+    "Enter a valid template branch": "有効なテンプレートのブランチを入力してください",
+    "Trust the template before generating a project": "プロジェクトを生成する前にテンプレートを信頼してください",
+    "Could not start cargo-generate: {error}": "cargo-generate を起動できませんでした: {error}",
+    "Template generation failed ({code}): {output}": "テンプレートの生成に失敗しました ({code}): {output}",
+    "Template generation cancelled": "テンプレートの生成をキャンセルしました",
+    "The template did not create a Cargo.toml in {path}": "テンプレートは {path} に Cargo.toml を作成しませんでした",
+    "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "cargo-generate が見つかりません。インストール: cargo install --locked cargo-generate"
   }
 }

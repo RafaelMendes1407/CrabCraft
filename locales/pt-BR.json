@@ -1768,5 +1768,22 @@
     "Starting Rust REPL…": "Iniciando REPL Rust…",
     "Could not start the Rust REPL: {error}": "Não foi possível iniciar o REPL Rust: {error}",
     "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "Exige um projeto Cargo confiável e evcxr no PATH. Instale com cargo install --locked evcxr_repl. Use :dep para adicionar dependências e :vars para listar variáveis."
+  },
+  "cargo_generate": {
+    "Git Template": "Modelo Git",
+    "Generate a Rust project from a Git repository with cargo-generate": "Gerar um projeto Rust de um repositório Git com cargo-generate",
+    "Template repository": "Repositório do modelo",
+    "Template branch (optional)": "Branch do modelo (opcional)",
+    "Requires cargo-generate 0.26 or newer. Install with: cargo install --locked cargo-generate": "Exige cargo-generate 0.26 ou mais recente. Instale com: cargo install --locked cargo-generate",
+    "Templates may run hook scripts. Review the repository before trusting it. Shell commands and Git submodules are disabled; custom placeholders must have defaults.": "Modelos podem executar scripts de hooks. Revise o repositório antes de confiar. Comandos de shell e submódulos Git estão desativados; variáveis personalizadas precisam de valores padrão.",
+    "I trust this template repository": "Confio neste repositório de modelos",
+    "Enter a Git template repository URL or local path": "Informe a URL ou caminho local do repositório Git do modelo",
+    "Enter a valid template branch": "Informe um branch válido do modelo",
+    "Trust the template before generating a project": "Confie no modelo antes de gerar um projeto",
+    "Could not start cargo-generate: {error}": "Não foi possível iniciar cargo-generate: {error}",
+    "Template generation failed ({code}): {output}": "Falha ao gerar o modelo ({code}): {output}",
+    "Template generation cancelled": "Geração do modelo cancelada",
+    "The template did not create a Cargo.toml in {path}": "O modelo não criou um Cargo.toml em {path}",
+    "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "cargo-generate não encontrado. Instale com: cargo install --locked cargo-generate"
   }
 }

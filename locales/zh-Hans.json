@@ -1768,5 +1768,22 @@
     "Starting Rust REPL…": "正在启动 Rust REPL…",
     "Could not start the Rust REPL: {error}": "无法启动 Rust REPL：{error}",
     "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "需要受信任的 Cargo 项目及 PATH 中的 evcxr。使用 cargo install --locked evcxr_repl 安装。使用 :dep 添加依赖，使用 :vars 列出变量。"
+  },
+  "cargo_generate": {
+    "Git Template": "Git 模板",
+    "Generate a Rust project from a Git repository with cargo-generate": "使用 cargo-generate 从 Git 仓库生成 Rust 项目",
+    "Template repository": "模板仓库",
+    "Template branch (optional)": "模板分支（可选）",
+    "Requires cargo-generate 0.26 or newer. Install with: cargo install --locked cargo-generate": "需要 cargo-generate 0.26 或更新版本。安装命令：cargo install --locked cargo-generate",
+    "Templates may run hook scripts. Review the repository before trusting it. Shell commands and Git submodules are disabled; custom placeholders must have defaults.": "模板可能运行钩子脚本。信任前请检查仓库。Shell 命令和 Git 子模块已禁用；自定义占位符必须有默认值。",
+    "I trust this template repository": "我信任此模板仓库",
+    "Enter a Git template repository URL or local path": "输入 Git 模板仓库 URL 或本地路径",
+    "Enter a valid template branch": "输入有效的模板分支",
+    "Trust the template before generating a project": "生成项目前请信任模板",
+    "Could not start cargo-generate: {error}": "无法启动 cargo-generate：{error}",
+    "Template generation failed ({code}): {output}": "模板生成失败（{code}）：{output}",
+    "Template generation cancelled": "模板生成已取消",
+    "The template did not create a Cargo.toml in {path}": "模板未在 {path} 中创建 Cargo.toml",
+    "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "未找到 cargo-generate。安装命令：cargo install --locked cargo-generate"
   }
 }

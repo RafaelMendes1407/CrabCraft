@@ -1768,5 +1768,22 @@
     "Starting Rust REPL…": "Uruchamianie REPL Rust…",
     "Could not start the Rust REPL: {error}": "Nie można uruchomić REPL Rust: {error}",
     "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "Wymaga zaufanego projektu Cargo i evcxr w PATH. Instalacja: cargo install --locked evcxr_repl. Użyj :dep, aby dodać zależności, i :vars, aby wyświetlić zmienne."
+  },
+  "cargo_generate": {
+    "Git Template": "Szablon Git",
+    "Generate a Rust project from a Git repository with cargo-generate": "Utwórz projekt Rust z Git przez cargo-generate",
+    "Template repository": "Repozytorium szablonu",
+    "Template branch (optional)": "Gałąź szablonu (opcjonalnie)",
+    "Requires cargo-generate 0.26 or newer. Install with: cargo install --locked cargo-generate": "Wymaga cargo-generate 0.26 lub nowszego. Instalacja: cargo install --locked cargo-generate",
+    "Templates may run hook scripts. Review the repository before trusting it. Shell commands and Git submodules are disabled; custom placeholders must have defaults.": "Szablony mogą wykonywać skrypty hooków. Sprawdź repozytorium przed zaufaniem. Polecenia powłoki i podmoduły Git są wyłączone; zmienne muszą mieć wartości domyślne.",
+    "I trust this template repository": "Ufam temu repozytorium szablonu",
+    "Enter a Git template repository URL or local path": "Podaj adres URL lub ścieżkę lokalną repozytorium szablonu",
+    "Enter a valid template branch": "Podaj prawidłową gałąź szablonu",
+    "Trust the template before generating a project": "Zaufaj szablonowi przed utworzeniem projektu",
+    "Could not start cargo-generate: {error}": "Nie można uruchomić cargo-generate: {error}",
+    "Template generation failed ({code}): {output}": "Generowanie szablonu nie powiodło się ({code}): {output}",
+    "Template generation cancelled": "Anulowano generowanie szablonu",
+    "The template did not create a Cargo.toml in {path}": "Szablon nie utworzył Cargo.toml w {path}",
+    "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "Nie znaleziono cargo-generate. Instalacja: cargo install --locked cargo-generate"
   }
 }
