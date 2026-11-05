@@ -60,6 +60,9 @@ pub struct ValueEdit {
 }
 
 pub struct Debugger {
+    pub rust_backend: rc_core::settings::RustDebugger,
+    pub gdb_path: Option<PathBuf>,
+    pub lldb_dap_path: Option<PathBuf>,
     pub session: Option<DebugSession>,
     pub console: Option<crate::runner::Console>,
     pub name: String,
@@ -118,6 +121,7 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(waker: Waker) -> Self {
         Debugger {
+            rust_backend: Default::default(), gdb_path: None, lldb_dap_path: None,
             session: None,
             console: None,
             name: String::new(),
@@ -155,6 +159,15 @@ impl Debugger {
         }
     }
 
+    fn rust_adapter(&self) -> Result<rc_dap::netcoredbg::AdapterCommand, String> {
+        match self.rust_backend {
+            rc_core::settings::RustDebugger::Gdb => rc_dap::gdb::locate_configured(self.gdb_path.as_deref())
+                .ok_or_else(|| tr("GDB was not found. Install it to debug Rust programs.").into()),
+            rc_core::settings::RustDebugger::Lldb => rc_dap::lldb::locate(self.lldb_dap_path.as_deref())
+                .ok_or_else(|| tr("LLDB DAP was not found. Install lldb-dap or configure its executable path.").into()),
+        }
+    }
+
     pub fn active(&self) -> bool {
         self.session.as_ref().is_some_and(|s| !s.state().is_ended())
     }
@@ -162,6 +175,10 @@ impl Debugger {
     pub fn stopped(&self) -> bool {
         self.session.as_ref().is_some_and(|s| s.state().is_stopped())
     }
+
+    /// The editor's inline values belong to the selected session, even if both sessions
+    /// stopped at the same source line and frame id.
+    pub fn became_selected(&mut self) { self.inline_frame = None; }
 
     /// Drops what a removed breakpoint had set.
     pub fn forget_breakpoint(&mut self, path: &Path, line: usize) {
@@ -196,8 +213,9 @@ impl Debugger {
         if let Some(s) = &mut self.session {
             s.stop();
         }
-        let Some(adapter) = rc_dap::gdb::locate() else {
-            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        let adapter = match self.rust_adapter() {
+            Ok(adapter) => adapter,
+            Err(message) => return vec![DebugOutput::Notify(message, true)],
         };
         self.urls.clear();
         let console = crate::runner::Console::new(&self.waker);
@@ -215,12 +233,32 @@ impl Debugger {
     }
 
     /// Starts debugging a Rust binary under GDB.
+    pub fn start_remote(&mut self, target: rc_dap::remote::RemoteTarget, docs: &Docs) -> Vec<DebugOutput> {
+        let Some(adapter) = rc_dap::gdb::locate_configured(self.gdb_path.as_deref()) else {
+            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        };
+        if let Some(session) = &mut self.session { session.stop(); }
+        self.name = target.endpoint().into();
+        self.urls.clear();
+        self.expanded.clear();
+        self.parallel_stacks.reset();
+        self.memory.reset();
+        self.disassembly.reset();
+        self.console = Some(crate::runner::Console::new(&self.waker));
+        let mut session = DebugSession::start(adapter, DebugTarget::Remote(target), DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
+        self.session = Some(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
+    /// Starts debugging a Rust binary with the selected native DAP adapter.
     pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
         if let Some(s) = &mut self.session {
             s.stop();
         }
-        let Some(adapter) = rc_dap::gdb::locate() else {
-            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        let adapter = match self.rust_adapter() {
+            Ok(adapter) => adapter,
+            Err(message) => return vec![DebugOutput::Notify(message, true)],
         };
         target.env.extend(self.env.iter().cloned());
         self.urls.clear();
@@ -283,6 +321,9 @@ impl Debugger {
     }
 
     pub fn stop(&mut self) {
+        if let Some(download) = self.download.take() { download.cancel(); }
+        self.pending = None;
+        self.downloading = None;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -488,6 +529,14 @@ impl Debugger {
     }
 
     pub fn update(&mut self, docs: &mut Docs) -> Vec<DebugOutput> {
+        self.update_inner(docs, true)
+    }
+
+    pub fn update_background(&mut self, docs: &mut Docs) -> Vec<DebugOutput> {
+        self.update_inner(docs, false)
+    }
+
+    fn update_inner(&mut self, docs: &mut Docs, visible: bool) -> Vec<DebugOutput> {
         let mut out = Vec::new();
         for ev in self.downloads.drain() {
             match ev {
@@ -674,6 +723,7 @@ impl Debugger {
             self.disassembly.sync(session);
         }
         // Execution point and breakpoint state in the editors.
+        if visible {
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
         if let Some((path, line)) = &exec
             && let Some(frame) = session.selected_frame().map(|f| f.id)
@@ -725,6 +775,7 @@ impl Debugger {
                     }
                 }
             }
+        }
         }
         out
     }

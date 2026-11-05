@@ -484,9 +484,11 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
         || tr("Code"),
         &[
             &act(Action::Complete, || tr("Code Completion")),
+            &act(Action::CompleteStatement, || tr("Complete Current Statement")),
             &act(Action::ParameterInfo, || tr("Parameter Info")),
             &act(Action::ExternalDocs, || tr("External Documentation")),
             &act(Action::ExpandMacro, || tr("Expand Macro Recursively")),
+            &act(Action::TestDeclarativeMacro, || tr("Test Declarative Macro…")),
             &act(Action::QuickDoc, || tr("Quick Documentation")),
             &act(Action::ShowIntentions, || tr("Show Context Actions")),
             &sep(),

@@ -43,6 +43,21 @@ pub struct Backup {
     preferences: Map<String, Value>,
 }
 impl Backup {
+    /// The same validated portable format for files and explicit remote synchronization.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TransferError> {
+        if bytes.len() > MAX_BYTES { return Err(TransferError::TooLarge); }
+        let backup: Self = serde_json::from_slice(bytes).map_err(TransferError::Json)?;
+        backup.validate()?;
+        Ok(backup)
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, TransferError> {
+        self.validate()?;
+        let bytes = serde_json::to_vec_pretty(self).map_err(TransferError::Json)?;
+        if bytes.len() > MAX_BYTES { return Err(TransferError::TooLarge); }
+        Ok(bytes)
+    }
+
     pub fn from_settings(settings: &Settings) -> Result<Self, TransferError> {
         let value = serde_json::to_value(settings).map_err(TransferError::Json)?;
         let preferences = value.as_object().ok_or(TransferError::Invalid)?.iter()

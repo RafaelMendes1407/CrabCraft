@@ -268,6 +268,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 app.pending.push(rc_editor::Action::AttachToProcess);
                                 ui.close();
                             }
+                            if theme::menu_item(ui, Some(ico::DEBUG), tr("Connect to GDB Server…"), false).clicked() {
+                                app.dialog = Some(crate::ui::dialogs::Dialog::RemoteDebug(Default::default()));
+                                ui.close();
+                            }
                         }
                         // Compound configurations: several applications at once.
                         if app.runner.app_names().len() > 1 {

@@ -9,6 +9,30 @@ use rc_kit::i18n::tr;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+#[test]
+fn native_rust_debugger_choice_is_explicit_and_persists_without_running_project_code() {
+    let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let (root, mut harness) = workspace(home.path(), true);
+    harness.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    harness.run_steps(2);
+    harness.get_by_value("GDB").click(); harness.run_steps(2);
+    harness.get_by_label("LLDB").click(); harness.run_steps(2);
+    harness.get_by_label(tr("OK")).click(); harness.run_steps(2);
+    assert_eq!(harness.state().settings.rust_debugger, rc_core::settings::RustDebugger::Lldb);
+    assert_eq!(harness.state().debugger.rust_backend, rc_core::settings::RustDebugger::Lldb);
+    assert_eq!(rc_core::Settings::load().rust_debugger, rc_core::settings::RustDebugger::Lldb);
+    assert!(!root.path().join("build-ran").exists());
+    assert!(harness.state().debugger.session.is_none());
+    harness.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    harness.run_steps(2);
+    harness.get_by_value("LLDB").click(); harness.run_steps(2);
+    harness.get_by_label("GDB").click(); harness.run_steps(2);
+    harness.get_by_label(tr("OK")).click(); harness.run_steps(2);
+    assert_eq!(rc_core::Settings::load().rust_debugger, rc_core::settings::RustDebugger::Gdb);
+    assert!(!root.path().join("build-ran").exists());
+}
+
 fn workspace(home: &Path, dark: bool) -> (tempfile::TempDir, Harness<'static, CrabCraftApp>) {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir(root.path().join("src")).unwrap();

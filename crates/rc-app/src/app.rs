@@ -69,12 +69,17 @@ pub struct CrabCraftApp {
     pub insight: Insight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
+    pub debug_sessions: crate::debug_sessions::Sessions,
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub issue_tracker: crate::issue_tracker::Tracker,
+    pub history_edit: crate::history_edit::HistoryEdit,
+    pub shelves: crate::shelves::Shelves,
+    pub database: crate::database::Database,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -146,8 +151,11 @@ pub struct CrabCraftApp {
     pub terminals: rc_term::Terminals,
     pub settings_backup: crate::settings_backup::State,
     pub repl_starting: Option<crate::repl::Starting>,
+    pub repl_variables: crate::repl_variables::State,
+    pub macro_tester: crate::macro_tester::Tester,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
+    pub terminal_attach: crate::terminal_attach::Picker,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -155,7 +163,7 @@ pub struct CrabCraftApp {
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
     /// The Rust test being debugged, for Restart.
-    debug_test: Option<(crate::runner::RunConfig, rc_cargo::RunTarget)>,
+    pub(crate) debug_test: Option<(crate::runner::RunConfig, rc_cargo::RunTarget)>,
     /// The Run/Debug menu of a gutter icon: its line and where it opens.
     pub gutter_menu: Option<(usize, egui::Pos2)>,
     /// Binary target run by the icon of each line of the active Rust document.
@@ -164,6 +172,7 @@ pub struct CrabCraftApp {
     pub bench_markers: std::collections::BTreeMap<usize, Vec<String>>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
+    statement_completion: Option<crate::complete_statement::Job>,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
     cargo_load: Option<Inbox<(Result<rc_cargo::CargoWorkspace, String>, Option<rc_cargo::LoadLog>)>>,
@@ -306,13 +315,21 @@ impl CrabCraftApp {
             debugger: {
                 let mut debugger = crate::debugger::Debugger::new(waker.clone());
                 debugger.hex = settings.debugger_hex;
+                debugger.rust_backend = settings.rust_debugger;
+                debugger.gdb_path = settings.gdb_path.clone();
+                debugger.lldb_dap_path = settings.lldb_dap_path.clone();
                 debugger
             },
+            debug_sessions: Default::default(),
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            issue_tracker: crate::issue_tracker::Tracker::new(waker.clone()),
+            history_edit: crate::history_edit::HistoryEdit::new(waker.clone()),
+            shelves: crate::shelves::Shelves::new(waker.clone()),
+            database: crate::database::Database::new(waker.clone()),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -369,8 +386,11 @@ impl CrabCraftApp {
             terminals: rc_term::Terminals::new(),
             settings_backup: Default::default(),
             repl_starting: None,
+            repl_variables: Default::default(),
+            macro_tester: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
+            terminal_attach: Default::default(),
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -382,6 +402,7 @@ impl CrabCraftApp {
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
+            statement_completion: None,
             _watcher: None,
             cargo_load: None,
             sync_log: Default::default(),
@@ -1377,6 +1398,10 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.terminal_attach = Default::default();
+        self.statement_completion = None;
+        self.stop_all_debug_sessions();
+        self.debug_sessions = Default::default();
         if self.workspace.is_some() {
             self.save_all_docs();
             self.save_session();
@@ -1389,6 +1414,10 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.issue_tracker = crate::issue_tracker::Tracker::new(self.waker.clone());
+        self.history_edit = crate::history_edit::HistoryEdit::new(self.waker.clone());
+        self.shelves = crate::shelves::Shelves::new(self.waker.clone());
+        self.database = crate::database::Database::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -1398,6 +1427,8 @@ impl CrabCraftApp {
         self.find_bar = None;
         self.disk_revert = None;
         self.repl_starting = None;
+        self.repl_variables = Default::default();
+        self.macro_tester = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
@@ -1424,6 +1455,7 @@ impl CrabCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        self.issue_tracker.restore(s.issue_tracker.clone());
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
@@ -1556,6 +1588,7 @@ impl CrabCraftApp {
         let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
         let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
+            issue_tracker: Some(self.issue_tracker.config.clone()),
             files,
             active: self.docs.active,
             editor_layout: Some(editor_layout),
@@ -1721,11 +1754,23 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        if action == Action::CompleteStatement {
+            self.statement_completion = None;
+            match crate::complete_statement::Job::start(&self.docs, self.waker.clone()) {
+                Ok(job) => self.statement_completion = Some(job),
+                Err(message) => self.notify(message, false),
+            }
+            return;
+        }
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
         if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
             if self.rustfmt_document(i, false) {
                 return;
             }
+        }
+        if action == Action::Complete && crate::sql_injection::complete(&mut self.docs.list[i], &self.database.tables) {
+            self.insight.cancel_local_completion_requests();
+            return;
         }
         if action == Action::Complete && self.endpoints.complete_http(&mut self.docs.list[i]) {
             return;
@@ -2364,6 +2409,7 @@ impl CrabCraftApp {
             Action::InspectCode => self.inspect_code(),
             Action::UpdateCopyright => self.update_copyright(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
+            Action::TestDeclarativeMacro => crate::macro_tester::open(self),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
@@ -2612,6 +2658,7 @@ impl CrabCraftApp {
             Ok(session) => {
                 let id = self.terminals.push(session);
                 self.terminals.rename(id, Some(tr("Rust REPL").to_string()));
+                self.repl_variables.register(id);
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }
@@ -2710,7 +2757,7 @@ impl CrabCraftApp {
     }
 
     /// Starts the selected configuration under the debugger.
-    fn start_debugging(&mut self) {
+    pub(crate) fn start_debugging(&mut self) {
         if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         self.debug_test = None;
         self.save_all_docs();
@@ -2855,6 +2902,7 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Database { self.database.cancel(); }
         if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
@@ -3062,6 +3110,9 @@ impl CrabCraftApp {
         let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
         let imports_changed = new.autoimport_exclude != self.settings.autoimport_exclude;
         self.settings = new;
+        self.debugger.rust_backend = self.settings.rust_debugger;
+        self.debugger.gdb_path = self.settings.gdb_path.clone();
+        self.debugger.lldb_dap_path = self.settings.lldb_dap_path.clone();
         if imports_changed {
             for doc in &mut self.docs.list { doc.editor.popups.completion = None; }
         }
@@ -3074,6 +3125,8 @@ impl CrabCraftApp {
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = build_keymap(&self.settings);
+            Keymap::cancel_sequence(ctx, egui::Id::new("app_key_sequence"));
+            if self.native_menu.is_some() && let Some(menu) = NativeMenu::install(ctx, &self.keymap) { self.native_menu = Some(menu); }
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -3194,6 +3247,13 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
+            self.statement_completion = None;
+            if let Err(message) = result { self.notify(message, false); }
+        }
+        self.issue_tracker.poll();
+        if self.history_edit.poll() { self.vcs.refresh(); }
+        if self.shelves.poll() { self.vcs.refresh(); }
         self.endpoints.poll(&mut self.docs);
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();
@@ -3275,9 +3335,13 @@ impl CrabCraftApp {
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
     /// fields don't see them.
     fn global_shortcuts(&mut self, ctx: &Context) {
+        if ctx.input(|input| input.events.iter().any(|event| matches!(event, egui::Event::PointerButton { pressed: true, .. } | egui::Event::WindowFocused(false) | egui::Event::Ime(_)))) {
+            Keymap::cancel_sequence(ctx, egui::Id::new("app_key_sequence"));
+        }
         // Settings › Keymap is recording a shortcut: the key belongs to it.
         if ctx.data(|d| d.get_temp::<String>(egui::Id::new("recording_shortcut")).is_some()) {
-            return;
+            if matches!(&self.dialog, Some(Dialog::Settings { page: crate::ui::dialogs::SettingsPage::Keymap, .. })) { return; }
+            crate::ui::dialogs::cancel_shortcut_recording(ctx);
         }
         let now = ctx.input(|i| i.time);
         // Shift, Shift: Search Everywhere.
@@ -3293,19 +3357,27 @@ impl CrabCraftApp {
             self.pending.push(Action::RunAnything);
         }
         let keymap = &self.keymap;
+        let editor_focused = self.docs.active_doc().is_some_and(|doc| ctx.memory(|memory| memory.focused()) == Some(rc_editor::EditorView::id_for(doc.editor.id)));
+        let events = ctx.input(|input| input.events.clone());
+        let mut consumed = std::collections::BTreeSet::new();
         let mut found = Vec::new();
-        ctx.input_mut(|i| {
-            i.events.retain(|e| {
-                if let egui::Event::Key { key, pressed: true, modifiers, .. } = e
-                    && let Some(a) = keymap.lookup(*key, *modifiers)
-                    && a.is_ide()
-                {
-                    found.push(a);
-                    return false;
+        for (index,event) in events.iter().enumerate() {
+            if let egui::Event::Key { key, pressed: true, modifiers, repeat, .. } = event {
+                if *repeat && Keymap::sequence_repeat(ctx, egui::Id::new("app_key_sequence"), *key) { consumed.insert(index); continue; }
+                if !repeat {
+                    match keymap.sequence_key(ctx, egui::Id::new("app_key_sequence"), *key, *modifiers, editor_focused) {
+                        rc_editor::keymap::SequenceKey::Waiting => { consumed.insert(index); continue; }
+                        rc_editor::keymap::SequenceKey::Action(action) => { found.push(action); consumed.insert(index); continue; }
+                        rc_editor::keymap::SequenceKey::Pass => {},
+                    }
                 }
-                true
-            })
-        });
+                if let Some(action) = keymap.lookup(*key,*modifiers).filter(|action| action.is_ide()) {
+                    found.push(action); consumed.insert(index);
+                }
+            } else if let egui::Event::Text(text) = event
+                && Keymap::sequence_text(ctx, egui::Id::new("app_key_sequence"), text) { consumed.insert(index); }
+        }
+        ctx.input_mut(|input| { let mut index = 0; input.events.retain(|_| { let keep = !consumed.contains(&index); index += 1; keep }); });
         self.pending.extend(found);
         // The mouse's back / forward buttons.
         let (back, forward) = ctx.input(|i| (i.pointer.button_pressed(egui::PointerButton::Extra1), i.pointer.button_pressed(egui::PointerButton::Extra2)));
@@ -3469,6 +3541,7 @@ impl eframe::App for CrabCraftApp {
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
         self.poll_inspection();
+        self.poll_background_debug_sessions();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         self.poll_auto_attach();
@@ -3495,6 +3568,8 @@ impl eframe::App for CrabCraftApp {
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);
+        let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        self.database.poll(database_trusted);
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();
@@ -3520,7 +3595,7 @@ impl eframe::App for CrabCraftApp {
         self.runner.stop_all();
         self.http.cancel_all();
         self.profiler.cancel();
-        self.debugger.stop();
+        self.stop_all_debug_sessions();
         self.insight.stop();
         self.save_all_docs();
         self.save_session();
@@ -3530,7 +3605,13 @@ impl eframe::App for CrabCraftApp {
 /// The keymap of the settings with the user's shortcuts. Unknown actions or shortcuts in the
 /// settings file are skipped.
 pub fn build_keymap(settings: &Settings) -> Keymap {
-    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts))
+    let actions = crate::search::action_items();
+    let sequences: Vec<_> = settings.shortcuts.iter().filter_map(|(id,text)| {
+        let action = actions.iter().map(|(_,a)| *a).find(|a| format!("{a:?}") == *id)?;
+        let (first,second) = rc_editor::keymap::parse_sequence(text)?;
+        Some((action,first,second))
+    }).collect();
+    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts)).with_sequences(&sequences)
 }
 
 /// The user's shortcuts as (action, shortcut) pairs; only actions of Find Action can change.
@@ -3547,13 +3628,16 @@ pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> V
         .collect()
 }
 
-pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
+pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind { keymap_kind_for(choice, cfg!(target_os = "macos")) }
+
+pub(crate) fn keymap_kind_for(choice: KeymapChoice, mac: bool) -> KeymapKind {
     match choice {
+        KeymapChoice::RustRover if mac => KeymapKind::RustRoverMac,
         KeymapChoice::RustRover => KeymapKind::RustRover,
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
-        KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
+        KeymapChoice::VsCode if mac => KeymapKind::VsCodeMac,
         KeymapChoice::VsCode => KeymapKind::VsCode,
-        KeymapChoice::Rider if cfg!(target_os = "macos") => KeymapKind::RiderMac,
+        KeymapChoice::Rider if mac => KeymapKind::RiderMac,
         KeymapChoice::Rider => KeymapKind::Rider,
     }
 }

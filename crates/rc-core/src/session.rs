@@ -124,7 +124,12 @@ pub struct EditorWindow {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct IssueTrackerConfig { pub provider: String, pub base_url: String, pub project: String }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Session {
+    pub issue_tracker: Option<IssueTrackerConfig>,
     /// Whole-file local changelists. Session data is validated before use.
     pub changelists: crate::changelists::Changelists,
     pub files: Vec<OpenFile>,

@@ -371,7 +371,8 @@ mod tests {
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==1 && app.missing_crates.report.proposals[0].name=="helper-lib");
         h.get_by_label(tr("Review dependency…")).click(); h.run_steps(2); pump(&mut h,|app| !app.cargo_dependencies.loading);
         assert_eq!(h.state().cargo_dependencies.scope,Scope::Dev); assert_eq!(h.state().cargo_dependencies.path,root.join("helper-lib").to_string_lossy());
-        h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(2); pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="helper-lib"));
+        h.run_steps(5);
+        h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(5); pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="helper-lib"));
         assert_eq!(std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap(),helper_before); assert!(!root.join("app/build-ran").exists());
         let active=h.state().docs.active.unwrap(); h.state_mut().docs.save(active).unwrap();
         let output=std::process::Command::new("cargo").args(["check","--offline","--tests","--manifest-path"]).arg(&manifest).output().unwrap(); assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
@@ -382,4 +383,49 @@ mod tests {
 
     }
 
+    #[test]
+    #[ignore = "Explicit public crates.io lookup; requires network and cached itoa for offline Cargo add"]
+    fn native_lookup_finds_a_non_catalog_crate_and_checks_the_real_rust_project() {
+        use egui_kittest::kittest::Queryable;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir(project.path().join("src")).unwrap();
+        let manifest = project.path().join("Cargo.toml");
+        std::fs::write(&manifest, "[package]\nname='lookup-audit'\nversion='0.1.0'\nedition='2024'\n[workspace]\n").unwrap();
+        let source = project.path().join("src/main.rs");
+        std::fs::write(&source, "fn main() { let mut buffer = itoa::Buffer::new(); assert_eq!(buffer.format(42), \"42\"); }\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(project.path()); app.trust_project_tools_for_test(); app.open_file(&source);
+        let mut h = crate::screens::harness(app, egui::vec2(1440.0, 1100.0));
+        let wait = |h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, done: &dyn Fn(&crate::app::CrabCraftApp) -> bool| {
+            let deadline = Instant::now() + Duration::from_secs(25);
+            while !done(h.state()) { h.run_steps(2); assert!(Instant::now() < deadline, "native lookup did not settle"); std::thread::sleep(Duration::from_millis(10)); }
+        };
+        wait(&mut h, &|a| a.missing_crates.report.proposals.iter().any(|p| p.root == "itoa"));
+        assert!(!project.path().join("target").exists());
+        h.get_by_label(tr("Look up crate…")).click(); h.run_steps(2);
+        assert!(h.state().cargo_dependencies.name.is_empty());
+        assert_eq!(h.state().cargo_dependencies.query, "itoa");
+        // Review itself never contacts the registry or changes the manifest.
+        assert!(!std::fs::read_to_string(&manifest).unwrap().contains("[dependencies]"));
+        // Loading is asynchronous; native Search becomes enabled after the manifest read.
+        wait(&mut h, &|a| !a.cargo_dependencies.loading);
+        h.run_steps(4);
+        h.get_by_label(tr("Search")).click(); h.run_steps(4);
+        wait(&mut h, &|a| a.cargo_dependencies.search_cancel.is_none());
+        let manager = &h.state().cargo_dependencies;
+        let hit = manager.hits.iter().find(|hit| hit.name == "itoa").unwrap_or_else(|| panic!("search failed: {:?}; {:?}", manager.error, manager.hits));
+        let label = format!("itoa  {}", hit.version.as_deref().unwrap_or_default());
+        h.run_steps(5);
+        h.get_by_label(&label).click(); h.run_steps(5);
+        assert_eq!(h.state().cargo_dependencies.name, "itoa");
+        h.state_mut().cargo_dependencies.version = "1.0".into();
+        h.get_by_label(tr("Offline")).click(); h.run_steps(1);
+        h.run_steps(5);
+        h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(5);
+        wait(&mut h, &|a| a.cargo_dependencies.operation.is_none() && std::fs::read_to_string(&manifest).unwrap().contains("itoa"));
+        let result = std::process::Command::new("cargo").args(["run", "--offline", "--manifest-path"]).arg(&manifest).output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    }
 }

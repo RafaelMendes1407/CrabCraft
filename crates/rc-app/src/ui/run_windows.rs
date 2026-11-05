@@ -573,6 +573,7 @@ fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, select
 // ---------------------------------------------------------------------------------- Terminal
 
 pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
+    app.repl_variables.retain(&app.terminals);
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
@@ -584,6 +585,7 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         (ico::SPLIT_DOWN, tr("Split Terminal Down"), ready && has),
         (ico::SEARCH, tr("Find in Terminal"), has),
         (ico::CLOSE, tr("Close Terminal Split"), app.terminals.active().is_some_and(|tab| app.terminal_tools.split.is_some_and(|split| split.contains(tab.id())))),
+        (ico::DEBUG, tr("Debug Terminal Process"), cfg!(target_os="linux") && has && app.runner.cargo_workspace.is_some() && app.runner.trusted_project.is_some()),
     ];
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
@@ -591,8 +593,20 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(2) => app.split_terminal(true),
         Some(3) => app.terminal_tools.search.toggle(),
         Some(4) => app.terminal_tools.split = None,
+        Some(5) => {
+            if let Some(tab)=app.terminals.active() && let Some(pid)=tab.session.pid() {
+                app.terminal_attach.open(tab.id(),pid,app.waker.clone());
+            }
+        }
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
+    }
+    if !cfg!(target_os="linux") { ui.label(tr("Debugging terminal processes is currently supported on Linux")); }
+    if let Some(process)=app.terminal_attach.show(ui,&app.terminals,app.waker.clone()) {
+        if app.runner.trusted_project.is_some() && app.runner.cargo_workspace.is_some() {
+            let outputs=app.debugger.attach_gdb(process.process.pid,&process.process.name,&app.docs);
+            app.handle_debug(outputs);
+        }
     }
     let mut cancel_startup = false;
     if app.terminal_starting.is_some() {
@@ -678,7 +692,8 @@ fn terminal_pane(app: &mut CrabCraftApp, ui: &mut Ui, id: u64, focus: bool) {
     let Some(tab) = app.terminals.get(id) else { return; };
     let cwd = tab.session.cwd().map(std::path::Path::to_path_buf);
     let config = rc_term::TermConfig::default();
-    let output = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
+    let locked = app.repl_variables.show(&tab.session, ui);
+    let output = rc_term::TerminalView::new(&tab.session, &config).input_enabled(!locked).focus(focus && !locked).show(ui);
     for event in output.events {
         match event {
             rc_term::ViewEvent::LinkClicked(link) => open_link(app, link, cwd.clone()),

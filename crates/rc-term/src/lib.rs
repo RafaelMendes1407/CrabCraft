@@ -13,6 +13,7 @@
 //! }
 //! ```
 
+pub mod capture;
 pub mod colors;
 pub mod keys;
 pub mod links;

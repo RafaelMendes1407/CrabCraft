@@ -10,10 +10,13 @@ name = "crabcraft"
 path = "src/main.rs"
 
 [dependencies]
+fallible-iterator = "0.3"
+rusqlite = { version = "0.40.1", features = ["bundled", "hooks", "limits", "extra_check"] }
 anyhow.workspace = true
 tempfile = "3"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 # Dependency versions in Cargo.toml (C-02, C-04).
 semver = "1"
 # The HTTP Client (F-03): the same client and runtime the other crates use.

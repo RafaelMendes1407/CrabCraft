@@ -129,11 +129,12 @@ pub struct TerminalView<'a> {
     config: &'a TermConfig,
     id: Id,
     focus: bool,
+    input_enabled: bool,
 }
 
 impl<'a> TerminalView<'a> {
     pub fn new(session: &'a TermSession, config: &'a TermConfig) -> Self {
-        TerminalView { session, config, id: Self::id_for(session.id()), focus: false }
+        TerminalView { session, config, id: Self::id_for(session.id()), focus: false, input_enabled: true }
     }
 
     /// Widget id of the view of session `id` (to request focus from outside).
@@ -147,15 +148,18 @@ impl<'a> TerminalView<'a> {
         self
     }
 
+    /// Prevent protocol input from interleaving while an explicit request is pending.
+    pub fn input_enabled(mut self, enabled: bool) -> Self { self.input_enabled = enabled; self }
+
     pub fn show(self, ui: &mut Ui) -> TermOutput {
-        let TerminalView { session, config, id, focus } = self;
+        let TerminalView { session, config, id, focus, input_enabled } = self;
         let dark = ui.visuals().dark_mode;
         session.set_dark(dark);
         let rect = ui.available_rect_before_wrap();
         let response = ui.interact(rect, id, Sense::click_and_drag());
         ui.advance_cursor_after_rect(rect);
         let mut events = Vec::new();
-        if focus {
+        if focus && input_enabled {
             response.request_focus();
         }
         let mut vs: ViewState = ui.data(|d| d.get_temp(id)).unwrap_or_default();
@@ -166,7 +170,7 @@ impl<'a> TerminalView<'a> {
         let cell_px = ((m.cell_w * m.ppp).round() as u16, (m.row_h * m.ppp).round() as u16);
         session.resize(m.cols as u16, m.rows as u16, cell_px.0, cell_px.1);
 
-        let focused = response.has_focus();
+        let focused = response.has_focus() && input_enabled;
         if focused {
             ui.memory_mut(|mem| mem.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true }));
         }
@@ -189,7 +193,7 @@ impl<'a> TerminalView<'a> {
         }
         st.term.is_focused = focused;
         let mode = st.mode();
-        if (gained || lost) && mode.contains(TermMode::FOCUS_IN_OUT) {
+        if input_enabled && (gained || lost) && mode.contains(TermMode::FOCUS_IN_OUT) {
             session.write(if gained { b"\x1b[I".to_vec() } else { b"\x1b[O".to_vec() });
         }
 
@@ -198,8 +202,8 @@ impl<'a> TerminalView<'a> {
         if focused {
             handle_keyboard(ui, session, &mut st, config, &mut vs, mac);
         }
-        let hovered_link = handle_mouse(ui, session, &mut st, config, &m, rect, &response, &mut vs, &mut events, mac);
-        handle_wheel(ui, session, &mut st, &m, &response, &mut vs);
+        let hovered_link = if input_enabled { handle_mouse(ui, session, &mut st, config, &m, rect, &response, &mut vs, &mut events, mac) } else { None };
+        if input_enabled { handle_wheel(ui, session, &mut st, &m, &response, &mut vs); }
 
         // ---------------------------------------------------------------- paint
         let colors = TermColors::for_theme(dark);

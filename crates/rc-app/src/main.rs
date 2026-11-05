@@ -1,6 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod complete_statement;
+mod terminal_attach;
+mod database_core;
+mod database;
+mod sql_injection;
 mod cli;
 mod endpoints;
 mod clone_project;
@@ -9,6 +14,9 @@ mod cargo_dependencies;
 mod missing_crates;
 mod borrow_errors;
 mod repl;
+mod repl_variables;
+mod macro_tester;
+mod doctest_completion;
 mod settings_backup;
 mod instance;
 mod auto_attach;
@@ -109,6 +117,7 @@ fn i18n_from_settings() {
 }
 
 fn main() -> eframe::Result {
+    if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();
     let mut options = eframe::NativeOptions { viewport: rc_kit::window_chrome::viewport(), ..Default::default() };
@@ -165,3 +174,22 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod project_trust;
+
+mod remote_debug;
+mod debug_sessions;
+mod settings_sync;
+
+#[cfg(test)]
+mod large_file_audit;
+
+#[cfg(test)]
+mod terminal_completion_audit;
+
+#[cfg(test)]
+mod key_sequence_audit;
+
+mod shelves;
+
+mod history_edit;
+
+mod issue_tracker;

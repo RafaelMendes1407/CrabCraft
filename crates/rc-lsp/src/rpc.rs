@@ -140,6 +140,10 @@ impl Client {
         for (k, v) in env {
             cmd.env(k, v);
         }
+        #[cfg(unix)]
+        cmd.process_group(0);
+        #[cfg(windows)]
+        cmd.creation_flags(0x0800_0000 | 0x0000_0200);
         let mut child = cmd.spawn()?;
         let stdin = child.stdin.take().expect("piped");
         let stdout = child.stdout.take().expect("piped");
@@ -158,6 +162,7 @@ impl Client {
                 let _ = tx.send(Err(RpcError { code: -1, message: "the language server stopped".into() }));
             }
             let code = exit_child.lock().as_mut().and_then(|c| c.try_wait().ok().flatten()).and_then(|s| s.code());
+            if code.is_none() { Client { shared: reader_shared, child: exit_child }.kill(); }
             reader_incoming.send(Incoming::Exited(code));
         });
         tokio::spawn(async move {
@@ -217,7 +222,31 @@ impl Client {
     /// Kills the server process.
     pub fn kill(&self) {
         if let Some(mut c) = self.child.lock().take() {
-            let _ = c.start_kill();
+            #[cfg(unix)]
+            if let Some(pid) = c.id() {
+                // SAFETY: spawn created this child's own group; never signal the IDE group.
+                unsafe { libc::killpg(pid as libc::pid_t, libc::SIGKILL); }
+            }
+            #[cfg(windows)]
+            {
+                rc_core::Runtime::spawn(async move {
+                    if let Some(pid) = c.id() {
+                        let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| "C:\\Windows".into());
+                        let mut command = tokio::process::Command::new(root.join("System32/taskkill.exe"));
+                        command.args(["/PID", &pid.to_string(), "/T", "/F"]).creation_flags(0x0800_0000)
+                            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+                        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), command.status()).await;
+                    }
+                    let _ = c.start_kill(); let _ = c.wait().await;
+                });
+                return;
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = c.start_kill();
+                // Reap a killed child asynchronously instead of leaving it as a zombie.
+                rc_core::Runtime::spawn(async move { let _ = c.wait().await; });
+            }
         }
     }
 
@@ -239,12 +268,15 @@ async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, inc
     let mut reader = BufReader::new(stdout);
     loop {
         let mut len: Option<usize> = None;
+        let mut header_bytes = 0usize;
         loop {
             let mut line = String::new();
-            match reader.read_line(&mut line).await {
+            match (&mut reader).take(8193).read_line(&mut line).await {
                 Ok(0) | Err(_) => return,
                 Ok(_) => {}
             }
+            header_bytes += line.len();
+            if line.len() > 8192 || header_bytes > 32 * 1024 { return; }
             let line = line.trim_end();
             if line.is_empty() {
                 break;
@@ -253,7 +285,8 @@ async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, inc
                 len = v.trim().parse().ok();
             }
         }
-        let Some(len) = len else { continue };
+        let Some(len) = len else { return };
+        if len > 32 * 1024 * 1024 { return; }
         let mut body = vec![0u8; len];
         if reader.read_exact(&mut body).await.is_err() {
             return;
@@ -334,4 +367,49 @@ while True:
         assert!(matches!(note, Incoming::Notification { method, .. } if method == "log"));
         client.kill();
     }
+    #[test]
+    fn oversized_or_malformed_lsp_frames_fail_pending_requests_without_allocating_the_body() {
+        use std::time::{Duration, Instant};
+        for header in ["Content-Length: 9999999999999999999\r\n\r\n".to_string(), format!("X: {}\r\n\r\n", "a".repeat(9000))] {
+            let dir = tempfile::tempdir().unwrap(); let script = dir.path().join("bad_frame.py");
+            let header = serde_json::to_string(&header).unwrap();
+            std::fs::write(&script, format!("import sys,time\nsys.stdin.buffer.readline()\nsys.stdout.buffer.write(({header}).encode());sys.stdout.buffer.flush()\ntime.sleep(30)\n")).unwrap();
+            let inbox = Inbox::new(Waker::noop());
+            let _runtime = Runtime::handle().enter();
+            let client = Client::spawn(Path::new("python3"), &[script.display().to_string()], dir.path(), &[], inbox.sender()).unwrap();
+            let mut request = client.request_raw::<Value>("test", json!({}));
+            let end = Instant::now() + Duration::from_secs(3);
+            loop {
+                if let Some(reply) = request.poll() { assert!(reply.is_err()); break; }
+                assert!(Instant::now() < end); std::thread::sleep(Duration::from_millis(10));
+            }
+            client.kill();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn killing_a_language_server_stops_its_owned_helper_process_group() {
+        use std::time::{Duration, Instant};
+        let dir = tempfile::tempdir().unwrap(); let script = dir.path().join("server.py");
+        let pid_file = dir.path().join("helper.pid");
+        let pid_json = serde_json::to_string(&pid_file.to_string_lossy()).unwrap();
+        std::fs::write(&script, format!("import subprocess,time\nchild=subprocess.Popen(['sleep','30'])\nwith open({pid_json},'w') as f: f.write(str(child.pid))\ntime.sleep(30)\n")).unwrap();
+        let _runtime = Runtime::handle().enter(); let inbox = Inbox::new(Waker::noop());
+        let client = Client::spawn(Path::new("python3"), &[script.display().to_string()], dir.path(), &[], inbox.sender()).unwrap();
+        let end = Instant::now() + Duration::from_secs(3);
+        let pid = loop {
+            if let Some(pid) = std::fs::read_to_string(&pid_file).ok().and_then(|text| text.parse::<u32>().ok()) { break pid; }
+            assert!(Instant::now() < end); std::thread::sleep(Duration::from_millis(10));
+        };
+        client.kill();
+        loop {
+            let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok();
+            let running = stat.as_deref().and_then(|stat| stat.rsplit_once(") ")).is_some_and(|(_, state)| !state.starts_with('Z'));
+            if !running { break; }
+            assert!(Instant::now() < end, "the killed server's helper is still running");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
 }

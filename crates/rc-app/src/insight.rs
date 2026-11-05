@@ -149,6 +149,9 @@ struct CompletionRequest {
     anchor: usize,
     version: u64,
     pending: Pending<Value>,
+    manual: bool,
+    caret: usize,
+    path: PathBuf,
 }
 
 pub struct Insight {
@@ -197,6 +200,8 @@ pub struct Insight {
     pub local_fixes: Vec<lsp::CodeActionOrCommand>,
     raw_items: Vec<lsp::CompletionItem>,
     completion: Option<CompletionRequest>,
+    doctest_completion: Option<crate::doctest_completion::Job>,
+    doctest_items: bool,
     /// The completion item whose documentation was asked for (`None` pending: resolved).
     resolve: Option<(usize, Option<Pending<lsp::CompletionItem>>)>,
     hover: Option<(u64, usize, egui::Pos2, Pending<Option<lsp::Hover>>)>,
@@ -295,6 +300,8 @@ impl Insight {
             local_fixes: Vec::new(),
             raw_items: Vec::new(),
             completion: None,
+            doctest_completion: None,
+            doctest_items: false,
             resolve: None,
             hover: None,
             signature: None,
@@ -399,6 +406,12 @@ impl Insight {
         }
     }
 
+    /// A local SQL completion owns the popup; pending language-server results must not
+    /// replace it or resolve its opaque local item indices.
+    pub fn cancel_local_completion_requests(&mut self) {
+        self.completion=None;self.resolve=None;self.raw_items.clear();
+    }
+
     /// Paths completion never imports (Settings › Editor); applied to a running server.
     pub fn set_autoimport_exclude(&mut self, list: Vec<String>) {
         if list == self.autoimport_exclude {
@@ -406,6 +419,8 @@ impl Insight {
         }
         self.autoimport_exclude = list.clone();
         self.completion = None;
+        self.doctest_completion = None;
+        self.doctest_items = false;
         self.resolve = None;
         self.raw_items.clear();
         if self.rust
@@ -483,7 +498,7 @@ impl Insight {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            let ra = rc_lsp::rust_analyzer::RaSettings { clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone(), features: self.features.clone(), target: self.target.clone() };
+            let ra = rc_lsp::rust_analyzer::RaSettings { isolated_projection: false, clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone(), features: self.features.clone(), target: self.target.clone() };
             match LanguageSession::start_rust(&program, &root, ra, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
@@ -543,6 +558,8 @@ impl Insight {
 
     fn reset_requests(&mut self) {
         self.completion = None;
+        self.doctest_completion = None;
+        self.doctest_items = false;
         self.resolve = None;
         self.hover = None;
         self.signature = None;
@@ -890,13 +907,52 @@ impl Insight {
         for id in done.drain(..) {
             self.symbols.remove(&id);
         }
-        self.poll_completion(docs);
+        self.poll_completion(docs, out);
         self.poll_popups(docs);
         self.poll_paste_imports(docs, out);
         self.poll_navigation(docs, out);
     }
 
-    fn poll_completion(&mut self, docs: &mut Docs) {
+    fn poll_doctest(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        let Some(job) = &self.doctest_completion else { return; };
+        let valid = self.execution_allowed && self.root.as_ref() == Some(&job.root) && self.features == job.features && self.target == job.target && self.env == job.env && job.buffers_match(docs)
+            && docs.active_doc().is_some_and(|doc| {
+            doc.editor.id == job.doc && doc.path == job.path && doc.editor.buffer.version() == job.version && doc.editor.caret() == job.caret
+                && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading)
+        });
+        if !valid {
+            let id = job.doc;
+            self.doctest_completion = None;
+            if let Some(doc) = docs.list.iter_mut().find(|doc| doc.editor.id == id)
+                && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading) { doc.editor.popups.completion = None; }
+            return;
+        }
+        let Some(result) = job.poll() else { return; };
+        let anchor = job.anchor;
+        self.last_completion_ms = Some(job.started.elapsed().as_millis());
+        self.doctest_completion = None;
+        let Some(doc) = docs.active_doc_mut() else { return; };
+        let mut items = match result {
+            Ok(items) => items,
+            Err(error) => {
+                doc.editor.popups.completion = None;
+                if !matches!(error, crate::doctest_completion::Error::NoContext | crate::doctest_completion::Error::Cancelled) {
+                    out.push(InsightOutput::Message(error.to_string()));
+                }
+                return;
+            },
+        };
+        items.sort_by(|a, b| a.sort_text.as_deref().unwrap_or(&a.label).cmp(b.sort_text.as_deref().unwrap_or(&b.label)));
+        let rope = doc.editor.buffer.rope();
+        let editor_items = items.iter().enumerate().map(|(index, item)| convert::completion_item(rope, item, index, None)).collect();
+        let mut completion = Completion::new(anchor, editor_items, false);
+        completion.filter(&rope.slice(anchor..doc.editor.caret()).to_string());
+        doc.editor.popups.completion = (!completion.filtered.is_empty()).then_some(completion);
+        self.raw_items = items; self.completion_anchor = anchor; self.doctest_items = true; self.resolve = None;
+    }
+
+    fn poll_completion(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
+        self.poll_doctest(docs, out);
         if let Some((doc, start, p)) = &mut self.accepted_resolve
             && let Some(r) = p.poll()
         {
@@ -924,8 +980,36 @@ impl Insight {
             let Some(req) = self.completion.take() else { return };
             self.completion_anchor = req.anchor;
             self.last_completion_ms = Some(req.pending.started.elapsed().as_millis());
+            let overlay_limit = docs.list.len() > 256;
+            let overlays = if req.manual { crate::doctest_completion::overlays(docs) } else { Vec::new() };
             let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == req.doc) else { return };
+            if d.path != req.path { d.editor.popups.completion = None; return; }
             let (items, default_range) = parse_completion(r.unwrap_or(Value::Null));
+            if items.is_empty() && req.manual && self.rust && self.execution_allowed
+                && d.editor.buffer.version() == req.version && d.editor.caret() == req.caret && crate::doctest_completion::candidate(d)
+                && let Some(root) = self.root.clone()
+            {
+                if overlay_limit || self.env.len() > 256 || self.env.iter().any(|(key, value)| key.len() > 256 || value.len() > 16 * 1024)
+                    || self.features.len() > 256 || self.features.iter().any(|feature| feature.len() > 256)
+                {
+                    d.editor.popups.completion = None;
+                    out.push(InsightOutput::Message(crate::doctest_completion::Error::Limit.to_string()));
+                    return;
+                }
+                let context = crate::doctest_completion::Context {
+                    root, path: d.path.clone(), rope: d.editor.buffer.rope().clone(), caret: d.editor.caret(),
+                    overlays, analyzer: self.configured.clone(), env: self.env.clone(), features: self.features.clone(), target: self.target.clone(),
+                };
+                self.raw_items.clear(); self.resolve = None;
+                match crate::doctest_completion::Job::start(context, req.doc, req.version, req.anchor, self.waker.clone()) {
+                    Ok(job) => {
+                        self.doctest_completion = Some(job);
+                        d.editor.popups.completion = Some(Completion::new(req.anchor, Vec::new(), true));
+                    },
+                    Err(error) => { d.editor.popups.completion = None; out.push(InsightOutput::Message(error.to_string())); },
+                }
+                return;
+            }
             let rope = d.editor.buffer.rope().clone();
             let mut sorted = items;
             // didChangeConfiguration is asynchronous in rust-analyzer. Keep a stale server
@@ -956,6 +1040,20 @@ impl Insight {
         let Some(i) = docs.active else { return };
         let Some(c) = docs.list[i].editor.popups.completion.as_ref() else { return };
         let Some(&idx) = c.filtered.get(c.selected) else { return };
+        if self.doctest_items {
+            if let Some(item) = self.raw_items.get(c.items[idx].data) {
+                let documentation = item.documentation.as_ref().map(convert::documentation).map(|text| clean_hover(&text));
+                let detail = item.detail.clone().filter(|text| !text.is_empty());
+                if let Some(completion) = docs.list[i].editor.popups.completion.as_mut() {
+                    completion.doc = match (detail, documentation) {
+                        (Some(detail), Some(documentation)) => Some(format!("{detail}\n\n{documentation}")),
+                        (Some(detail), None) => Some(detail),
+                        (None, documentation) => documentation,
+                    };
+                }
+            }
+            return;
+        }
         match &mut self.resolve {
             Some((at, slot)) if *at == idx => {
                 if let Some(p) = slot
@@ -1616,6 +1714,7 @@ impl Insight {
 
     /// Code completion at the caret (⌃Space, or typing).
     pub fn complete(&mut self, doc: &mut Doc, trigger: Option<char>) {
+        self.doctest_completion = None; self.doctest_items = false;
         let Some(session) = &self.session else { return };
         let caret = doc.editor.caret();
         let rope = doc.editor.buffer.rope();
@@ -1629,7 +1728,7 @@ impl Insight {
             "textDocument/completion",
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, caret), "context": context }),
         );
-        self.completion = Some(CompletionRequest { doc: doc.editor.id, anchor, version: doc.editor.buffer.version(), pending });
+        self.completion = Some(CompletionRequest { doc: doc.editor.id, anchor, version: doc.editor.buffer.version(), pending, manual: trigger.is_none(), caret, path: doc.path.clone() });
         if trigger.is_none() {
             doc.editor.popups.completion = Some(Completion::new(anchor, Vec::new(), true));
         }
@@ -1637,6 +1736,7 @@ impl Insight {
 
     /// After the editor inserted the chosen item: additional edits (usings) and commands.
     pub fn completion_accepted(&mut self, doc: &mut Doc, index_in_items: usize) {
+        if self.doctest_items { return; }
         let Some(item) = self.raw_items.get(index_in_items).cloned() else { return };
         // Not resolved yet. The server has not seen the insertion, so it can still resolve the item.
         if self.rust
@@ -1903,7 +2003,7 @@ impl Insight {
 
 /// Items of a completion response with the list's `itemDefaults` (LSP 3.17) folded in: the
 /// shared `data` (needed to resolve), insert format and edit range, which Roslyn sends once.
-fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) {
+pub(crate) fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<lsp::Range>) {
     let (items, defaults) = match v {
         Value::Array(a) => (a, Value::Null),
         Value::Object(mut o) => (

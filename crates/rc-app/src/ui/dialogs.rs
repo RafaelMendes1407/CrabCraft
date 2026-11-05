@@ -24,6 +24,7 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    RemoteDebug(crate::remote_debug::Dialog),
     RevertDisk(crate::disk_revert::Ticket),
     CloneRepository,
     CargoDependencies,
@@ -179,6 +180,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
+        Dialog::RemoteDebug(draft) => if crate::remote_debug::show(app, ctx, draft) { Outcome::Close } else { Outcome::Keep },
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
         Dialog::WasmOptions { name, manifest, options } => wasm_options(app, ctx, name, manifest, options),
@@ -383,8 +385,18 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     SettingsPage::Tools => {
                         app.load_toolchain();
                         toolchain_rows(ui, app);
+                        ui.label(tr("Rust debugger"));
+                        egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
+                            rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
+                        }).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
+                            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
+                        });
+                        ui.end_row();
                         for (label, value) in [
                             (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
+                            (tr("GDB executable"), &mut draft.gdb_path),
+                            (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
                             (tr("Roslyn language server"), &mut draft.roslyn_path),
                             (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
@@ -415,6 +427,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         buttons(ui, tr("OK"), true)
     });
     if ok {
+        cancel_shortcut_recording(ctx);
         app.settings_backup.cancel();
         app.apply_settings(ctx, draft.clone());
         if let Some(profile) = app.copyright.draft.take() {
@@ -429,6 +442,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc {
+        cancel_shortcut_recording(ctx);
         app.settings_backup.cancel();
         app.copyright.draft = None;
         app.explorer.scopes.draft = None;
@@ -679,45 +693,86 @@ fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, err
 /// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
 /// again (the next key pressed with its modifiers) or removed.
 /// Settings › Keymap: the keymap, then every action with its shortcut, filling the page.
+pub(crate) fn cancel_shortcut_recording(ctx: &Context) {
+    ctx.data_mut(|data| {
+        data.remove::<String>(Id::new("recording_shortcut"));
+        data.remove::<rc_editor::keymap::Chord>(Id::new("recording_shortcut_first"));
+        data.remove::<bool>(Id::new("recording_shortcut_error"));
+    });
+}
+
+fn store_recorded_shortcut(draft: &mut Settings, id: &str, shortcut: String) {
+    let sequence = rc_editor::keymap::parse_sequence(&shortcut);
+    let single = rc_editor::keymap::parse_chord(&shortcut);
+    for (other, value) in &mut draft.shortcuts {
+        if other == id || value.is_empty() { continue; }
+        let existing_sequence = rc_editor::keymap::parse_sequence(value);
+        let existing_single = rc_editor::keymap::parse_chord(value);
+        if value == &shortcut || sequence.is_some_and(|(first,_)| existing_single == Some(first))
+            || single.is_some_and(|chord| existing_sequence.is_some_and(|(first,_)| first == chord)) { value.clear(); }
+    }
+    draft.shortcuts.insert(id.to_string(), shortcut);
+}
+
 fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
     ui.horizontal(|ui| {
         ui.label(tr("Keymap"));
         let name = |k: KeymapChoice| match k {
             KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
-            KeymapChoice::RustRover => tr("RustRover (Windows/Linux)"),
+            KeymapChoice::RustRover => if cfg!(target_os = "macos") { tr("RustRover (macOS)") } else { tr("RustRover (Windows/Linux)") },
             KeymapChoice::VisualStudio => "Visual Studio",
             KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
         };
         egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
             for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
-                ui.add_enabled_ui(k != KeymapChoice::RustRover || !cfg!(target_os = "macos"), |ui| {
-                    ui.selectable_value(&mut draft.keymap, k, name(k));
-                }).response.on_disabled_hover_text(tr("This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS."));
+                ui.selectable_value(&mut draft.keymap, k, name(k));
             }
         });
     });
     ui.add_space(8.0);
     let keymap = crate::app::build_keymap(draft);
-    let mac = keymap.kind.is_mac();
     let recording_id = egui::Id::new("recording_shortcut");
+    let first_id = egui::Id::new("recording_shortcut_first");
+    let mode_id = egui::Id::new("recording_shortcut_sequence");
+    let error_id = egui::Id::new("recording_shortcut_error");
     let filter_id = egui::Id::new("shortcut_filter");
-    let recording: Option<String> = ui.ctx().data(|d| d.get_temp(recording_id));
-    // The key pressed while recording: Escape cancels.
+    let mut two_step = ui.ctx().data(|data| data.get_temp::<bool>(mode_id)).unwrap_or(false);
+    if ui.checkbox(&mut two_step, tr("Record two-step shortcuts")).changed() {
+        ui.ctx().data_mut(|data| { data.insert_temp(mode_id, two_step); data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); data.remove::<bool>(error_id); });
+    }
+    let recording: Option<String> = ui.ctx().data(|data| data.get_temp(recording_id));
     if let Some(id) = &recording {
-        let pressed = ui.input(|i| {
-            i.events.iter().find_map(|e| match e {
-                egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
-                _ => None,
-            })
-        });
-        if let Some((key, mods)) = pressed {
-            if key != Key::Escape {
-                let chord = rc_editor::keymap::Chord { key, mods: egui::Modifiers { command: mods.ctrl || mods.mac_cmd, ..mods } };
-                draft.shortcuts.insert(id.clone(), rc_editor::keymap::chord_id(chord));
+        let pressed: Vec<_> = ui.input(|input| input.events.iter().filter_map(|event| match event {
+            egui::Event::Key { key, pressed: true, modifiers, repeat: false, .. } => Some((*key,*modifiers)), _ => None,
+        }).take(2).collect());
+        for (key,mods) in &pressed {
+            if *key == Key::Escape {
+                ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                break;
             }
-            ui.ctx().data_mut(|d| d.remove::<String>(recording_id));
+            let chord = rc_editor::keymap::Chord { key: *key, mods: egui::Modifiers { command: mods.ctrl || mods.mac_cmd, ..*mods } };
+            if two_step {
+                if let Some(first) = ui.ctx().data(|data| data.get_temp::<rc_editor::keymap::Chord>(first_id)) {
+                    store_recorded_shortcut(draft, id, format!("{} {}", rc_editor::keymap::chord_id(first), rc_editor::keymap::chord_id(chord)));
+                    ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                    break;
+                } else if mods.ctrl || mods.mac_cmd {
+                    ui.ctx().data_mut(|data| data.insert_temp(first_id, chord));
+                } else {
+                    ui.ctx().data_mut(|data| { data.insert_temp(error_id, true); data.remove::<String>(recording_id); });
+                    break;
+                }
+            } else {
+                store_recorded_shortcut(draft, id, rc_editor::keymap::chord_id(chord));
+                ui.ctx().data_mut(|data| data.remove::<String>(recording_id));
+                break;
+            }
+        }
+        if !pressed.is_empty() {
+            ui.input_mut(|input| input.events.retain(|event| !matches!(event, egui::Event::Key { pressed: true, .. } | egui::Event::Text(_) | egui::Event::Paste(_))));
         }
     }
+    if ui.ctx().data(|data| data.get_temp::<bool>(error_id)).unwrap_or(false) { ui.label(tr("The first shortcut must include Ctrl or Command.")); }
     let mut filter: String = ui.ctx().data(|d| d.get_temp(filter_id)).unwrap_or_default();
     if ui.add(egui::TextEdit::singleline(&mut filter).hint_text(tr("Filter actions")).desired_width(f32::INFINITY)).changed() {
         ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter.clone()));
@@ -745,9 +800,9 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
                     ui.add(egui::Label::new(label).truncate()).on_hover_text(label);
                 });
                 let text = if recording.as_deref() == Some(id.as_str()) {
-                    tr("Press a shortcut…").to_string()
+                    if two_step && ui.ctx().data(|data| data.get_temp::<rc_editor::keymap::Chord>(first_id)).is_some() { tr("Press the second shortcut…").to_string() } else { tr("Press a shortcut…").to_string() }
                 } else {
-                    keymap.chord(action).map(|c| rc_editor::keymap::format_chord(c, mac)).unwrap_or_else(|| "—".into())
+                    keymap.shortcut_text(action).unwrap_or_else(|| "—".into())
                 };
                 let changed = draft.shortcuts.contains_key(&id);
                 let text = egui::RichText::new(text).monospace();
@@ -758,12 +813,14 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
                 ui.horizontal(|ui| {
                     ui.set_width(BUTTONS_W);
                     if ui.small_button(tr("Record Shortcut")).clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(recording_id, id.clone()));
+                        ui.ctx().data_mut(|data| { data.insert_temp(recording_id, id.clone()); data.remove::<rc_editor::keymap::Chord>(first_id); data.remove::<bool>(error_id); });
                     }
                     if ui.small_button(tr("Remove")).clicked() {
+                        ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
                         draft.shortcuts.insert(id.clone(), String::new());
                     }
                     if changed && ui.small_button(tr("Reset")).clicked() {
+                        ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
                         draft.shortcuts.remove(&id);
                     }
                 });

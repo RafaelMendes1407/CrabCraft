@@ -18,6 +18,7 @@ const ROW_H: f32 = 22.0;
 const INDENT: f32 = 16.0;
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
+    crate::debug_sessions::selector(app, ui);
     let active = app.debugger.active();
     let stopped = app.debugger.stopped();
     let has = app.debugger.session.is_some();

@@ -15,11 +15,18 @@ pub enum ThemeChoice {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RustDebugger {
+    #[default]
+    Gdb,
+    Lldb,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KeymapChoice {
     /// Rider's default for the platform (macOS or Windows/Linux).
     #[default]
     Rider,
-    /// RustRover Windows/Linux shortcuts, compared against the public reference.
+    /// RustRover reference shortcuts for the host platform.
     RustRover,
     VisualStudio,
     /// VS Code's default for the platform.
@@ -73,6 +80,9 @@ pub struct Settings {
     /// Explicit path to the Roslyn language server DLL or executable.
     pub roslyn_path: Option<PathBuf>,
     pub netcoredbg_path: Option<PathBuf>,
+    pub rust_debugger: RustDebugger,
+    pub gdb_path: Option<PathBuf>,
+    pub lldb_dap_path: Option<PathBuf>,
     pub rust_analyzer_path: Option<PathBuf>,
     /// Clippy instead of `cargo check` on save.
     pub use_clippy: bool,
@@ -137,6 +147,9 @@ impl Default for Settings {
             dotnet_path: None,
             roslyn_path: None,
             netcoredbg_path: None,
+            rust_debugger: RustDebugger::default(),
+            gdb_path: None,
+            lldb_dap_path: None,
             rust_analyzer_path: None,
             use_clippy: false,
             use_nextest: false,

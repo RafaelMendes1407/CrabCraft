@@ -33,6 +33,8 @@ pub enum DebugTarget {
     Launch(LaunchConfig),
     /// Attach to a running .NET process.
     Attach { pid: u32 },
+    /// Attach to an already running gdbserver over TCP, using local symbols.
+    Remote(crate::remote::RemoteTarget),
     /// Build a Rust binary with Cargo and launch it.
     Cargo { cargo: rc_cargo::Cargo, target: rc_cargo::RunTarget },
 }
@@ -45,7 +47,7 @@ impl DebugTarget {
     }
 
     pub fn is_attach(&self) -> bool {
-        matches!(self, DebugTarget::Attach { .. })
+        matches!(self, DebugTarget::Attach { .. } | DebugTarget::Remote(_))
     }
 }
 
@@ -103,6 +105,15 @@ pub fn gdb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Va
 /// `attach` arguments of GDB's adapter.
 pub fn gdb_attach_arguments(pid: u32) -> Value {
     json!({ "pid": pid })
+}
+
+/// LLVM DAP uses `stopOnEntry` and a map of environment overrides, like GDB.
+pub fn lldb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> Value {
+    let mut args = gdb_launch_arguments(config, options);
+    args["type"] = json!("lldb");
+    args["request"] = json!("launch");
+    args["initCommands"] = json!(["settings set target.disable-aslr false"]);
+    args
 }
 
 pub fn attach_arguments(pid: u32, options: &DebugOptions) -> Value {

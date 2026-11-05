@@ -45,6 +45,8 @@ pub enum Hl {
     Link,
     /// Text the language server reports as unused or inactive.
     Dimmed,
+    /// SQL injected in a Rust literal; these roles outrank whole-string LSP tokens.
+    SqlKeyword, SqlString, SqlNumber, SqlComment, SqlIdentifier, SqlParameter, SqlOperator, SqlEscape,
 }
 
 impl Hl {
@@ -159,6 +161,17 @@ pub fn highlight_lines(lang: Lang, tree: &Tree, rope: &Rope, first: usize, count
                         *slot = Some((usize::MAX, 0, hl));
                     }
                 }
+            }
+        }
+    }
+
+    if lang == Lang::Rust {
+        for token in crate::sql::injected(tree, rope, start_byte..end_byte) {
+            let start=token.range.start.max(start_byte)-start_byte;
+            let end=token.range.end.min(end_byte)-start_byte;
+            for slot in &mut roles[start..end] {
+                if token.role==Hl::Plain { if slot.is_some_and(|(_,_,role)|role==Hl::Escape){*slot=Some((0,u32::MAX,Hl::SqlEscape));}continue; }
+                let role=if slot.is_some_and(|(_,_,role)| matches!(role,Hl::Escape|Hl::SqlEscape)){Hl::SqlEscape}else{crate::sql::injected_role(token.role)}; *slot=Some((0,u32::MAX,role));
             }
         }
     }

@@ -33,16 +33,33 @@ fn calc() -> PathBuf {
 fn pump_until(s: &mut DebugSession, all: &mut Vec<DebugEvent>, mut done: impl FnMut(&DebugEvent, &DebugSession) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(10) {
-        for e in s.pump() {
+        let mut batch = s.pump().into_iter();
+        while let Some(e) = batch.next() {
             let stop = done(&e, s);
             all.push(e);
             if stop {
+                // One pump may coalesce the stop, scopes and other replies. Keep the
+                // unread tail for the next waiter instead of losing those notifications.
+                s.events.splice(0..0, batch);
                 return;
             }
         }
         std::thread::sleep(Duration::from_millis(5));
     }
     panic!("timed out in state {:?}; events {all:#?}", s.state());
+}
+
+#[test]
+fn event_waiters_keep_coalesced_notifications_for_the_next_waiter() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, _) = fake(dir.path(), "late");
+    let mut session = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
+    session.events.extend([DebugEvent::Log("first".into()), DebugEvent::Log("second".into())]);
+    let mut events = Vec::new();
+    pump_until(&mut session, &mut events, |event,_|matches!(event,DebugEvent::Log(text) if text=="first"));
+    pump_until(&mut session, &mut events, |event,_|matches!(event,DebugEvent::Log(text) if text=="second"));
+    assert_eq!(events.iter().filter(|event|matches!(event,DebugEvent::Log(text) if text=="first"||text=="second")).count(),2);
+    session.stop();
 }
 
 /// Pumps until the session satisfies `done`.
