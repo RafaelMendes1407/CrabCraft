@@ -9,6 +9,7 @@
 //! (`build.rs`, proc macros) and only start from an explicit user action.
 
 pub mod crates_io;
+pub mod dependencies;
 pub mod explain;
 pub mod feature_fix;
 pub mod feature_nav;

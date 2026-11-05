@@ -3,6 +3,7 @@
 mod app;
 mod cli;
 mod compare_cli;
+mod cargo_dependencies;
 mod repl;
 mod settings_backup;
 mod instance;

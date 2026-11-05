@@ -24,6 +24,7 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    CargoDependencies,
     /// Picks a running process for the debugger.
     Attach { filter: String, processes: Vec<rc_core::processes::Process> },
     Settings { draft: Box<Settings>, page: SettingsPage },
@@ -158,6 +159,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
         Dialog::StashChanges { message, include_untracked, keep_index, paths } => stash_changes(app, ctx, message, include_untracked, keep_index, paths),
         Dialog::StashBranch { stash, name } => stash_branch(app, ctx, stash, name),
+        Dialog::CargoDependencies => if crate::cargo_dependencies::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
         Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),

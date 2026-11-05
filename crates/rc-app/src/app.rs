@@ -74,6 +74,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
     /// Dependency trees of the Cargo window, by `(manifest, package)`.
@@ -302,6 +303,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
             attached_load: None,
             libraries_load: None,
@@ -409,6 +411,7 @@ impl CrabCraftApp {
         };
         self.close_workspace();
         self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
+        self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         let (solution, solution_error) = match ws.solution() {
             Some(sln) => match Solution::load(sln) {
                 Ok(s) => (Some(s), None),
@@ -1314,6 +1317,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
