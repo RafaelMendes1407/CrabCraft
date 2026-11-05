@@ -2938,5 +2938,13 @@
     "Terminal: {name}": "ターミナル: {name}",
     "Accessible terminal text is limited to the visible context; text actions never send commands": "ターミナルのアクセシブルなテキストは表示中の範囲に限られ、テキスト操作でコマンドを送信することはありません",
     "Accessible project hierarchy is limited to visible items and 64 ancestor levels": "アクセシブルなプロジェクト階層は表示中の項目と64段階の祖先に限られます"
+  },
+  "workspace_open": {
+    "Workspace and session inputs must be regular bounded files": "ワークスペースとセッションには、サイズ制限内の通常ファイルが必要です",
+    "Workspace restoration supports 256 files and 512 MB of text": "ワークスペースの復元は 256 ファイル、512 MB のテキストまで対応します",
+    "Workspace opening cancelled; existing buffers were kept": "ワークスペースの読み込みをキャンセルしました。既存のバッファーは保持されています",
+    "Documents changed while opening the workspace; existing buffers were kept": "読み込み中に文書が変更されたため、既存のバッファーを保持しました",
+    "Opening workspace…": "ワークスペースを読み込んでいます…",
+    "Existing buffers stay open until workspace preparation finishes": "ワークスペースの準備が完了するまで、既存のバッファーを開いたまま保持します"
   }
 }

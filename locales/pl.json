@@ -2938,5 +2938,13 @@
     "Terminal: {name}": "Terminal: {name}",
     "Accessible terminal text is limited to the visible context; text actions never send commands": "Dostępny tekst terminala jest ograniczony do widocznego kontekstu; działania tekstowe nigdy nie wysyłają poleceń",
     "Accessible project hierarchy is limited to visible items and 64 ancestor levels": "Dostępna hierarchia projektu jest ograniczona do widocznych elementów i 64 poziomów przodków"
+  },
+  "workspace_open": {
+    "Workspace and session inputs must be regular bounded files": "Dane obszaru i sesji muszą być zwykłymi plikami o ograniczonym rozmiarze",
+    "Workspace restoration supports 256 files and 512 MB of text": "Przywracanie obsługuje 256 plików i 512 MB tekstu",
+    "Workspace opening cancelled; existing buffers were kept": "Anulowano otwieranie; istniejące bufory zachowano",
+    "Documents changed while opening the workspace; existing buffers were kept": "Dokumenty zmieniono podczas otwierania; istniejące bufory zachowano",
+    "Opening workspace…": "Otwieranie obszaru roboczego…",
+    "Existing buffers stay open until workspace preparation finishes": "Istniejące bufory pozostają otwarte do zakończenia przygotowania"
   }
 }

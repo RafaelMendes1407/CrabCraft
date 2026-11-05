@@ -65,6 +65,7 @@ pub struct CrabCraftApp {
     pub disk_watch: crate::disk_watch::Watch,
     pub disk_save: crate::disk_save::Flow,
     pub disk_open: crate::disk_open::State,
+    pub workspace_open: crate::workspace_open::State,
     pub file_edits: crate::file_edit::Edits,
     pub dock: Dock,
     pub explorer: ExplorerState,
@@ -300,9 +301,8 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        for request in startup_paths(&app.settings, from_system) {
-            app.open_request(&request);
-        }
+        let requests=startup_paths(&app.settings,from_system);
+        app.open_requests(requests);
         app
     }
 
@@ -316,6 +316,7 @@ impl CrabCraftApp {
             disk_watch: Default::default(),
             disk_save: Default::default(),
             disk_open: Default::default(),
+            workspace_open: Default::default(),
             file_edits: Default::default(),
             keymap,
             editor_config,
@@ -486,17 +487,49 @@ impl CrabCraftApp {
 
     /// Opens a folder, solution or project, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
+        self.workspace_open.target(path);
+        if !self.disk_save.saves.busy()&&!self.disk_save.auxiliary.busy(){self.disk_save.failed=false;}
+        // New navigation supersedes a waiting execution/close continuation, while retaining
+        // its actual document writers until acknowledgement.
+        self.disk_save.continuation=None;self.disk_save.pending_workspace=None;
         self.prepare_workspace_save();
-        let already_pending=self.disk_save.continuation.is_some();
-        let queued=path.to_path_buf(); if self.defer_save(false,move |app|app.open_workspace(&queued)){if !already_pending&&self.disk_save.continuation.is_some(){self.disk_save.pending_workspace=Some(path.to_path_buf());}return;}
-        self.disk_save.pending_workspace=None;
-        let ws = match Workspace::open(path) {
-            Ok(ws) => ws,
-            Err(e) => {
-                self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &e)]), true);
-                return;
-            }
-        };
+        let queued=path.to_path_buf();if self.defer_save(false,move|app|app.open_workspace(&queued)){self.disk_save.pending_workspace=Some(path.to_path_buf());return;}
+        let ids=(0..256).map(|_|self.docs.reserve_id()).collect();
+        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir(),settings:self.settings.clone()});
+    }
+
+    pub fn queue_workspace_files(&mut self,paths:Vec<PathBuf>){
+        if self.workspace_open.target.is_some()||self.disk_save.pending_workspace.is_some(){if let Err(error)=self.workspace_open.queue_files(paths){self.notify(error.to_string(),true);}}else{self.request_open_files(paths);}
+    }
+
+    pub(crate) fn poll_workspace_open(&mut self){
+        if !self.workspace_open.busy()&&self.disk_save.pending_workspace.is_none(){self.workspace_open.target=None;self.workspace_open.files.clear();}
+        if self.disk_save.failed&&self.workspace_open.target.is_some(){self.workspace_open.cancel();return;}
+        let result=self.workspace_open.ready.take().map(Ok).or_else(||self.workspace_open.poll(self.waker.clone()));
+        let Some(result)=result else{return;};
+        match result {
+            Ok(prepared) if self.file_edits.busy()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||!self.rustfmt_jobs.is_empty()||!self.disk_save.format_pending.is_empty()=>{self.workspace_open.ready=Some(prepared);return;},
+            Ok(prepared) if prepared.fingerprint==crate::workspace_open::Fingerprint::capture(&self.docs)=>{
+                if self.session_dirty&&self.workspace.is_some(){if self.workspace.as_ref().is_some_and(|w|w.ws.root==prepared.ws.root){self.workspace_open.reload_session=true;}self.save_session();}
+                if self.file_edits.busy()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||!self.rustfmt_jobs.is_empty()||!self.disk_save.format_pending.is_empty(){self.workspace_open.ready=Some(prepared);return;}
+                if self.workspace_open.reload_session {self.workspace_open.reload_session=false;if let Some(path)=self.workspace_open.target.clone(){self.open_workspace(&path);}return;}
+                let files=std::mem::take(&mut self.workspace_open.files);
+                let mut positions=std::mem::take(&mut self.workspace_open.positions);
+                let previews=std::mem::take(&mut self.workspace_open.previews);
+                self.install_workspace(prepared);self.workspace_open.target=None;
+                if !files.is_empty(){
+                    self.push_nav();let requests=files.into_iter().map(|path|{let mut request=crate::disk_open::Request::new(&mut self.docs,&path,positions.remove(&path));request.preview=previews.contains(&path);request}).collect();
+                    if let Err(error)=self.disk_open.request_many(requests,self.waker.clone()){self.notify(error.to_string(),true);}
+                }
+            },
+            Ok(_)=>{self.workspace_open.cancel();self.notify(crate::workspace_open::Error::Stale.to_string(),true);},
+            Err(error)=>{self.workspace_open.cancel();self.notify(error.to_string(),true);},
+        }
+    }
+
+    fn install_workspace(&mut self,prepared:crate::workspace_open::Prepared){
+        let crate::workspace_open::Prepared{ws,solution,session,docs,attached,linked,projects,runner,dotnet,watcher,events,warnings,..}=prepared;
+        for warning in warnings{self.notify(warning,true);}
         let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
         self.close_workspace();
         if let Some(provider)=retained_provider{self.criticalup_provider=provider;}
@@ -504,37 +537,22 @@ impl CrabCraftApp {
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
-        let (solution, solution_error) = match ws.solution() {
-            Some(sln) => match Solution::load(sln) {
-                Ok(s) => (Some(s), None),
-                Err(e) => (None, Some(e.to_string())),
-            },
-            None => (None, None),
-        };
-        if let Some(err) = &solution_error {
-            self.notify(trf("Could not read the solution: {error}", &[("error", err)]), true);
-        }
         self.settings.add_recent(ws.key_path().to_path_buf());
         self.settings.last_workspace = Some(ws.key_path().to_path_buf());
-        let _ = self.settings.save();
-        self._watcher = FileWatcher::new(&ws.root, self.fs_inbox.sender()).ok();
-        let session = Session::load(ws.key_path());
+        if let Err(error)=self.disk_save.auxiliary.queue(None,Some(self.settings.clone())){self.notify(error.to_string(),true);}
+        self._watcher=watcher;self.fs_inbox=events;
         // The user's exclusions come first: the index, the analysis and the explorer follow them.
         self.explorer.excluded = rc_core::workspace::clean_excluded(&session.excluded);
         self.insight.set_exclude(self.explorer.excluded.clone());
         // Attached Cargo projects that still exist (the session is from an earlier run).
-        self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
-        self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
+        self.explorer.attached=attached;
+        self.insight.set_linked(linked);
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
         self.vcs.changelists = session.changelists.clone().clean();
         self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
-        let projects = match &ws.kind {
-            rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
-            rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
-            rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
-        };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner=runner;self.runner.nextest=self.settings.use_nextest;self.runner.external_tools=self.settings.external_tools.clone();
         self.runner.project_root = Some(ws.root.clone());
         self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
         self.runner.project_env = session.project_env.clone();
@@ -542,7 +560,7 @@ impl CrabCraftApp {
         self.cargo_features = clean_features(&session.cargo_features);
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
-        self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
+        if self.settings.trusted_projects.contains(&ws.root){self.copyright.open(&ws.root,session.copyright.clone(),self.waker.clone());}else{self.copyright.profile=session.copyright.clone();}
         self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
         self.inspections = crate::inspection_profile::Profiles { project: session.inspection_profile.clean(), use_project: session.use_project_profile, ..Default::default() };
         self.refresh_inspection_profile();
@@ -555,27 +573,19 @@ impl CrabCraftApp {
                 if !self.criticalup_provider.selected{self.insight.wait_for_trust(&ws.root);}else{self.insight.stop();}
             }
         } else if self.settings.trusted_projects.contains(&ws.root) {
-            self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+            self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet.clone(), self.settings.roslyn_path.clone());
         } else {
             self.insight.wait_for_trust(&ws.root);
         }
-        self.runner.compounds = session.compounds.clone();
-        // The session file is the user's to edit: empty or overlong folder names are dropped.
-        self.runner.folders = session.config_folders.iter().filter(|(_, f)| !f.trim().is_empty() && f.chars().count() <= crate::runner::MAX_FOLDER_CHARS).map(|(c, f)| (c.clone(), f.trim().to_string())).collect();
         self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
-        self.runner.test_configs = session.test_configs.clone();
-        self.runner.options = session.run_options.clone();
-        // Configurations stored in the project win over the session's copy.
-        self.runner.options.extend(rc_core::run_files::load(&ws.root));
-        self.runner.set_workspace(solution.as_ref(), &projects, &dotnet_path(&self.settings), session.run_configuration.as_deref());
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
-        self.docs.style_root = Some(ws.root.canonicalize().unwrap_or_else(|_| ws.root.clone()));
+        self.docs.style_root=Some(ws.root.clone());
         self.workspace = Some(WorkspaceState { ws, solution });
-        self.restore_session(session);
+        self.restore_session(session,docs);
         if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
         // Scratches reopened with the session are analysed too.
-        self.update_linked();
+        // Linked scratch/attached paths were prepared without UI filesystem calls.
         if let Some(manifest) = manifest {
             self.load_cargo_workspace(manifest);
         }
@@ -583,6 +593,7 @@ impl CrabCraftApp {
 
     pub(crate) fn cargo_choice(&self)->crate::criticalup_provider::Choice{self.criticalup_provider.choice()}
     pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
+        self.workspace_open.cancel();
         self.cancel_disk_save();
         if self.privileged_debug.running {self.debugger.stop();}self.privileged_debug.cancel();
         self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
@@ -1341,6 +1352,7 @@ impl CrabCraftApp {
             self.settings.trusted_projects.push(root.clone());
             let _ = self.settings.save();
         }
+        self.copyright.open(&root,self.copyright.profile.clone(),self.waker.clone());
         self.runner.trusted_project = Some(root.clone());
         if !self.vcs.trusted {
             // The deferred discovery must keep the session's changelists and draft.
@@ -1365,6 +1377,7 @@ impl CrabCraftApp {
     /// server. Trust-boundary tests use the production trust_project method instead.
     #[cfg(test)]
     pub(crate) fn trust_project_tools_for_test(&mut self) {
+        self.wait_workspace_open();
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
         if !self.settings.trusted_projects.contains(&root) { self.settings.trusted_projects.push(root.clone()); }
         self.runner.trusted_project = Some(root.clone());
@@ -1477,6 +1490,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.workspace_open.cancel();
         self.prepare_workspace_save();
         if self.defer_save(false,|app|app.close_workspace()){return;}
         self.disk_watch = Default::default();
@@ -1551,7 +1565,7 @@ impl CrabCraftApp {
         self.refresh_inspection_profile();
     }
 
-    fn restore_session(&mut self, s: Session) {
+    fn restore_session(&mut self, s: Session, prepared:Vec<(usize,crate::docs::Doc,bool)>) {
         self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
         // A solution without a layout of its own starts with the last one used.
@@ -1569,30 +1583,11 @@ impl CrabCraftApp {
             }
         }
         // Editor id of each file of the session, for the layout.
-        let mut ids = Vec::with_capacity(s.files.len());
-        for f in &s.files {
-            ids.push(None);
-            if !f.path.exists() {
-                continue;
-            }
-            if let Ok(i) = self.docs.open(&f.path) {
-                if let Some(last) = ids.last_mut() {
-                    *last = Some(self.docs.list[i].editor.id);
-                }
-                let d = &mut self.docs.list[i];
-                d.pinned = f.pinned;
-                let pos = d.editor.buffer.pos_at(f.line, f.col);
-                d.editor.selection = rc_text::Selection::point(pos);
-                if d.editor.syntax.tree().is_none() {
-                    d.editor.parse_blocking();
-                }
-                for &line in &f.folded {
-                    d.editor.toggle_fold(line);
-                }
-                d.editor.set_scroll_offset(egui::vec2(0.0, f.scroll_y));
-            }
+        let mut ids=vec![None;s.files.len()];
+        for(original,doc,parse)in prepared {
+            let index=self.docs.insert_prepared(doc,false,parse);if let Some(id)=ids.get_mut(original){*id=Some(self.docs.list[index].editor.id);}
         }
-        self.docs.active = s.active.filter(|&a| a < self.docs.list.len()).or(if self.docs.list.is_empty() { None } else { Some(0) });
+        self.docs.active=s.active.and_then(|original|ids.get(original).copied().flatten()).and_then(|id|self.docs.list.iter().position(|d|d.editor.id==id)).or_else(||(!self.docs.list.is_empty()).then_some(0));
         self.layout = crate::layout::Layout::from_session(s.editor_layout.as_ref(), &s.editor_windows, |i| ids.get(i).copied().flatten());
         self.sync_layout();
         for (path, lines) in &s.bookmarks {
@@ -2100,6 +2095,18 @@ impl CrabCraftApp {
     pub(crate) fn request_open_offset(&mut self,path:&Path,offset:usize) {self.request_open(path,Some(crate::disk_open::Position::Offset(offset)),false);}
     fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
     fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
+        if let Some(target)=self.workspace_open.target.clone(){
+            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||rc_core::workspace::is_solution(&target)||rc_core::workspace::is_project(&target){target.parent().unwrap_or(&target)}else{&target};
+            let belongs_old=self.workspace.as_ref().is_some_and(|w|path.starts_with(&w.ws.root));
+            if !belongs_old||!root.is_absolute()||path.starts_with(root){
+                if let Err(error)=self.workspace_open.queue_files(vec![path.to_path_buf()]){self.notify(error.to_string(),true);return;}
+                if let Some(position)=position{self.workspace_open.positions.insert(path.to_path_buf(),position);}
+                if preview{self.workspace_open.previews.insert(path.to_path_buf());}else{self.workspace_open.previews.remove(path);}
+                return;
+            }
+            self.cancel_disk_save();
+        }
+
         if self.file_edits.busy(){self.cancel_disk_save();}
         if record {self.push_nav();} self.disk_open.cancel();
         if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some(position)=position { position.apply(&mut self.docs.list[index].editor); } self.focus_editor=true;self.session_dirty=true;return; }
@@ -2107,11 +2114,17 @@ impl CrabCraftApp {
         if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
     }
     pub(crate) fn request_open_files(&mut self, paths: Vec<PathBuf>) {
+        self.request_open_requests(paths.into_iter().map(crate::cli::OpenRequest::path).collect());
+    }
+    fn request_open_requests(&mut self, paths: Vec<crate::cli::OpenRequest>) {
         if paths.is_empty() { return; }
+        if paths.len()>256 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
         if self.file_edits.busy() { self.cancel_disk_save(); }
         self.push_nav();
-        if paths.len()>256 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
-        let requests=paths.into_iter().map(|path|crate::disk_open::Request::new(&mut self.docs,&path,None)).collect();
+        let requests=paths.into_iter().map(|request|{
+            let position=request.line.map(|line|crate::disk_open::Position::LineColumn(line.saturating_sub(1),request.column.unwrap_or(1).saturating_sub(1)));
+            crate::disk_open::Request::new(&mut self.docs,&request.path,position)
+        }).collect();
         if let Err(error)=self.disk_open.request_many(requests,self.waker.clone()) { self.notify(error.to_string(),true); }
     }
     pub(crate) fn poll_disk_open(&mut self) {
@@ -2127,7 +2140,18 @@ impl CrabCraftApp {
     pub fn open_file(&mut self, path: &Path) { self.request_open_file(path); }
 
     #[cfg(test)]
+    pub(crate) fn wait_workspace_open(&mut self){
+        let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
+        while self.workspace_open.busy()||self.file_edits.busy()||self.disk_save.continuation.is_some()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||self.disk_open.busy(){
+            self.poll_file_edits();self.poll_rustfmt();self.poll_disk_save();self.poll_workspace_open();self.poll_disk_open();assert!(std::time::Instant::now()<until,"workspace opening timed out");std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn open_workspace_and_wait(&mut self,path:&Path){self.open_workspace(path);self.wait_workspace_open();}
+
+    #[cfg(test)]
     pub(crate) fn open_file_and_wait(&mut self,path:&Path) {
+        self.wait_workspace_open();
         self.open_file(path);
         let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
         while self.disk_open.busy() {
@@ -3090,12 +3114,20 @@ impl CrabCraftApp {
 
     /// Opens what the command line or the system asked for, at its line and column (1-based).
     pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
-        match request.line {
-            Some(line) if request.path.is_file() && self.project_of_manifest(&request.path).is_none() && !self.opens_workspace(&request.path) => {
-                self.open_at(&request.path, line - 1, request.column.unwrap_or(1).saturating_sub(1));
+        self.open_requests(vec![request.clone()]);
+    }
+    /// Preserve every file and caret in one CLI/system delivery, including a pending workspace.
+    pub fn open_requests(&mut self, requests: Vec<crate::cli::OpenRequest>) {
+        if requests.len()>257 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
+        let (workspaces,files):(Vec<_>,Vec<_>)=requests.into_iter().partition(|request|self.opens_workspace(&request.path)||self.project_of_manifest(&request.path).is_some());
+        if let Some(request)=workspaces.first(){self.open_path(&request.path);}
+        if self.workspace_open.target.is_some() || self.disk_save.pending_workspace.is_some() {
+            let paths=files.iter().map(|request|request.path.clone()).collect();
+            match self.workspace_open.queue_files(paths) {
+                Ok(())=>for request in files { if let Some(line)=request.line { self.workspace_open.positions.insert(request.path,crate::disk_open::Position::LineColumn(line.saturating_sub(1),request.column.unwrap_or(1).saturating_sub(1))); } },
+                Err(error)=>self.notify(error.to_string(),true),
             }
-            _ => self.open_path(&request.path),
-        }
+        } else { self.request_open_requests(files); }
     }
 
     /// Opens a folder in a CrabCraft window of its own: a new process started as
@@ -3183,7 +3215,7 @@ impl CrabCraftApp {
         if let Some(ws) = workspaces.first() {
             self.open_path(ws);
         }
-        self.request_open_files(files);
+        self.queue_workspace_files(files);
     }
 
     pub fn pick_solution(&mut self) {
@@ -3359,6 +3391,7 @@ impl CrabCraftApp {
             }
             self.find_in_files = Some(find);
         }
+        self.poll_workspace_open();
         self.poll_cargo_workspace();
         self.poll_dep_trees();
         self.update_cfg_sets();
@@ -3572,10 +3605,8 @@ impl eframe::App for CrabCraftApp {
         }
         self.poll_toolchain_updates();
         self.poll_explanation();
-        for request in crate::open_files::take() {
-            self.open_request(&request);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-        }
+        let requests=crate::open_files::take();
+        if !requests.is_empty(){self.open_requests(requests);ctx.send_viewport_cmd(egui::ViewportCommand::Focus);}
         if let Some(menu) = &self.native_menu {
             for cmd in menu.poll() {
                 match cmd {
@@ -3667,6 +3698,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_repl();
         self.poll_disk_open();
         self.disk_open.show(&ctx);
+        if self.workspace_open.show(&ctx)&&self.disk_save.pending_workspace.is_some(){self.cancel_disk_save();}
         self.file_edits.show(&ctx);
         self.poll_disk_revert();
         self.poll_terminal_startup();

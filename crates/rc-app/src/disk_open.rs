@@ -36,6 +36,9 @@ pub struct Request {
     pub active: Option<u64>,
 }
 impl Request {
+    pub(crate) fn for_restore(id:u64,path:PathBuf,style_root:PathBuf,scratch_root:PathBuf)->Self {
+        Self { id,path,style_root:Some(style_root),read_only_roots:Vec::new(),scratch_root,position:None,preview:false,active:None }
+    }
     pub fn new(docs: &mut crate::docs::Docs, path: &Path, position: Option<Position>) -> Self {
         Self {
             id: docs.reserve_id(),
@@ -454,11 +457,12 @@ mod tests {
         let mut app=crate::screens::test_app(home.path(),true);
         app.open_file_and_wait(&paths[0]);
         app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// unsaved\n");
-        app.request_open_files(paths.clone());
+        app.open_requests(paths.iter().map(|path|crate::cli::OpenRequest{path:path.clone(),line:Some(1),column:Some(8)}).collect());
         let mut h=crate::screens::harness(app,egui::vec2(1200.0,800.0));wait(&mut h);
         assert_eq!(h.state().docs.list.len(),4);
         assert!(h.state().docs.list[0].editor.buffer.rope().to_string().starts_with("// unsaved"));
         assert_eq!(h.state().docs.active_doc().unwrap().path,paths[3]);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(),7);
         assert!(!root.path().join("BUILD_RAN").exists());
         h.state_mut().request_open_files(vec![paths[0].clone(),paths[1].clone()]);
         h.state_mut().disk_open.cancel();h.run_steps(3);
@@ -466,6 +470,17 @@ mod tests {
         h.state_mut().request_open_files(vec![paths[0].clone();257]);
         assert!(!h.state().disk_open.busy());
         assert_eq!(h.state().docs.list.len(),4);
+        let loose=home.path().join("loose.rs");std::fs::write(&loose,"pub fn outside() {}\n").unwrap();
+        h.state_mut().open_requests(vec![crate::cli::OpenRequest::path(root.path()),crate::cli::OpenRequest{path:paths[1].clone(),line:Some(1),column:Some(5)},crate::cli::OpenRequest{path:loose.clone(),line:Some(1),column:Some(10)}]);
+        let until=Instant::now()+Duration::from_secs(10);
+        while h.state().workspace_open.busy() || h.state().disk_open.busy() || h.state().disk_save.continuation.is_some() {
+            h.run_steps(1);assert!(Instant::now()<until,"CLI workspace/file batch did not finish");std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(h.state().workspace.as_ref().unwrap().ws.root,root.path());
+        assert_eq!(h.state().docs.active_doc().unwrap().path,loose);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(),9);
+        assert_eq!(h.state().docs.list[h.state().docs.index_of(&paths[1]).unwrap()].editor.caret(),4);
+        assert!(!root.path().join("BUILD_RAN").exists());
     }
     #[test]
     fn worker_reader_cancels_and_rejects_special_files_without_starting_project_tools() {
