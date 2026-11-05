@@ -291,6 +291,27 @@ impl Docs {
         let index = self.list.len()-1; self.activate(index); index
     }
 
+    /// Generated views are memory-only: no disk read/write and no synchronous parse.
+    pub(crate) fn insert_generated(&mut self, mut path: PathBuf, text: &str) -> usize {
+        if let Some(index)=self.index_of(&path) {
+            if self.list[index].generated {
+                let doc=&mut self.list[index]; doc.editor.reload(text); doc.editor.read_only=true;
+                doc.editor.request_parse(&self.pool); doc.saved=doc.editor.buffer.snapshot();
+                self.activate(index); return index;
+            }
+            let stem=path.file_stem().unwrap_or_default().to_string_lossy();
+            for suffix in 0..=self.list.len() {
+                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.rs",self.next_id));
+                if self.index_of(&candidate).is_none() {path=candidate;break;}
+            }
+        }
+        let id=self.next_id;self.next_id+=1;
+        let mut editor=EditorState::new(id,Some(path.clone()),text); editor.read_only=true; editor.request_parse(&self.pool);
+        let saved=editor.buffer.snapshot();
+        self.list.push(Doc{editor,path,mtime:None,disk_epoch:0,bom:false,pinned:false,preview:false,conflict:false,md_view:None,scratch:false,generated:true,saved,style:Default::default(),light_project:None});
+        let index=self.list.len()-1;self.activate(index);index
+    }
+
     /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
     pub fn open_preview(&mut self, path: &Path) -> Result<usize, String> {
         let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
@@ -316,6 +337,7 @@ impl Docs {
     pub fn activate(&mut self, i: usize) {
         if i < self.list.len() {
             self.active = Some(i);
+            if self.list[i].generated { return; }
             let p = self.list[i].path.clone();
             self.recent.retain(|r| r != &p);
             self.recent.insert(0, p);
@@ -396,6 +418,7 @@ impl Docs {
 
     pub fn save(&mut self, i: usize) -> Result<(), String> {
         let doc = &mut self.list[i];
+        if doc.generated { return Ok(()); }
         if !doc.editor.read_only {
             let edits = style_fixes(&doc.editor, &doc.style);
             if !edits.is_empty() {

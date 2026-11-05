@@ -2520,5 +2520,18 @@
     "Discard Plugin Preview": "プラグインのプレビューを破棄",
     "Local Plugins": "ローカルプラグイン",
     "Install and run trusted local process extensions explicitly": "信頼できるローカル拡張を明示的にインストールして実行"
+  },
+  "macro_step": {
+    "Expand Declarative Macro One Step": "宣言的マクロを1段階展開",
+    "One-step expansion supports macro_rules declarations on Unix with resource limits. Built-in, procedural and newer macro syntax are unsupported.": "1段階展開はリソース制限付き Unix 上の macro_rules に対応します。組み込みマクロ、手続きマクロ、新しい構文は非対応です。",
+    "The declarative macro or its arguments could not be matched for one-step expansion.": "1段階展開のための宣言的マクロまたは引数を照合できませんでした。",
+    "One-step macro expansion exceeds its source, token, memory or output limit.": "1段階マクロ展開がソース、トークン、メモリ、または出力の制限を超えました。",
+    "Rust source changed during one-step expansion. Request it again.": "1段階展開中に Rust ソースが変更されました。再度要求してください。",
+    "One-step macro expansion timed out.": "1段階マクロ展開がタイムアウトしました。",
+    "One-step macro expansion cancelled.": "1段階マクロ展開をキャンセルしました。",
+    "The one-step macro worker or rust-analyzer could not resolve this declaration.": "1段階展開ワーカーまたは rust-analyzer がこの宣言を解決できませんでした。",
+    "Expanding declarative macro one step…": "宣言的マクロを1段階展開中…",
+    "One-step expansion of {name}!": "{name}! の1段階展開",
+    "Expand Declarative Macro One Step (unsupported on this platform)": "宣言的マクロを1段階展開（このプラットフォームでは非対応）"
   }
 }

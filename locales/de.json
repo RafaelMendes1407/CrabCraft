@@ -2520,5 +2520,18 @@
     "Discard Plugin Preview": "Pluginvorschau verwerfen",
     "Local Plugins": "Lokale Plugins",
     "Install and run trusted local process extensions explicitly": "Vertrauenswürdige lokale Erweiterungen explizit installieren und starten"
+  },
+  "macro_step": {
+    "Expand Declarative Macro One Step": "Deklaratives Makro einen Schritt expandieren",
+    "One-step expansion supports macro_rules declarations on Unix with resource limits. Built-in, procedural and newer macro syntax are unsupported.": "Die Einzelschrittexpansion unterstützt macro_rules unter Unix mit Ressourcenlimits. Eingebaute und prozedurale Makros sowie neuere Syntax werden nicht unterstützt.",
+    "The declarative macro or its arguments could not be matched for one-step expansion.": "Das deklarative Makro oder seine Argumente konnten für die Einzelschrittexpansion nicht abgeglichen werden.",
+    "One-step macro expansion exceeds its source, token, memory or output limit.": "Die Einzelschrittexpansion überschreitet ein Quelltext-, Token-, Speicher- oder Ausgabelimit.",
+    "Rust source changed during one-step expansion. Request it again.": "Der Rust-Quelltext wurde während der Einzelschrittexpansion geändert. Fordern Sie sie erneut an.",
+    "One-step macro expansion timed out.": "Zeitüberschreitung bei der Einzelschrittexpansion.",
+    "One-step macro expansion cancelled.": "Einzelschrittexpansion abgebrochen.",
+    "The one-step macro worker or rust-analyzer could not resolve this declaration.": "Der Einzelschrittprozess oder rust-analyzer konnte diese Deklaration nicht auflösen.",
+    "Expanding declarative macro one step…": "Deklaratives Makro wird einen Schritt expandiert…",
+    "One-step expansion of {name}!": "Einzelschrittexpansion von {name}!",
+    "Expand Declarative Macro One Step (unsupported on this platform)": "Deklaratives Makro einen Schritt expandieren (auf dieser Plattform nicht unterstützt)"
   }
 }

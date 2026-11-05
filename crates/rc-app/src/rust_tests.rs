@@ -4616,3 +4616,36 @@ fn native_trait_hierarchy_resolves_aliases_homonyms_transitive_and_unsaved_relat
         app.insight.stop();
     }
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore="requires freshly built desktop binary in CRABCRAFT_MACRO_WORKER"]
+fn native_one_step_macro_expansion_uses_unsaved_definition_and_keeps_nested_calls() {
+    use rc_editor::Action;
+    const SOURCE:&str="/* café 🦀 */ macro_rules! inner { ($a:expr,$b:expr)=>{($a)+($b)}; }\n/* café 🦀 */ macro_rules! outer { ($e:expr)=>{inner!($e,$e)}; }\nfn main(){assert_eq!(outer!(21),42);}\n";
+    let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    assert!(std::env::var_os("CRABCRAFT_MACRO_WORKER").is_some());
+    let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);
+    let file=root.join("src/main.rs");write(&file,SOURCE);
+    let mut app=new_app(home.path());app.open_workspace(&root);app.open_file(&file);
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    assert!(!app.insight.macro_step_pending());assert!(app.insight.session.is_none());
+    app.trust_project();pump(&mut app,"one-step macro analysis",|a|a.insight.status==InsightStatus::Ready);
+    pump(&mut app,"one-step macro indexing",|a|a.docs.active_doc().is_some_and(|doc|a.insight.runnables.contains_key(&doc.editor.id)));
+    let unsaved=SOURCE.replace("inner!($e,$e)","inner!($e,$e) + 1");
+    let doc=app.docs.active_doc_mut().unwrap();doc.editor.replace(0,doc.editor.buffer.len_chars(),&unsaved);
+    let call=unsaved.find("outer!(21)").unwrap()+2;let line=unsaved[..call].chars().filter(|c|*c=='\n').count();let start=unsaved[..call].rfind('\n').map_or(0,|byte|byte+1);doc.editor.goto(line,unsaved[start..call].chars().count());
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    pump(&mut app,"one-step expansion tab",|a|a.docs.active_doc().is_some_and(|doc|doc.generated));
+    let generated=app.docs.active_doc().unwrap();assert!(generated.editor.read_only);let expansion=generated.editor.buffer.rope().to_string();
+    assert!(expansion.contains("inner"),"nested macro was expanded: {expansion}");assert!(expansion.contains('+')&&expansion.contains('1'),"unsaved definition ignored: {expansion}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(),SOURCE);
+    assert!(app.insight.session.as_ref().unwrap().docs.paths().iter().all(|p|p!=&generated.path));
+    let proof=root.join("one_step_proof.rs");write(&proof,&unsaved.replace("outer!(21)",&format!("({expansion})")).replace(",42)",",43)"));
+    let binary=root.join("one_step_proof");let compiler=std::process::Command::new("rustc").args(["--edition=2024"]).arg(&proof).arg("-o").arg(&binary).output().unwrap();assert!(compiler.status.success(),"{}",String::from_utf8_lossy(&compiler.stderr));assert!(std::process::Command::new(binary).status().unwrap().success());
+    let original=app.docs.index_of(&file).unwrap();app.docs.activate(original);
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    let out=app.insight.update(&mut app.docs,true);app.handle_insight(out);app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// changed\n");
+    let out=app.insight.update(&mut app.docs,true);app.handle_insight(out);assert!(!app.insight.macro_step_pending());assert!(!app.docs.active_doc().unwrap().generated);
+    app.insight.stop();
+}

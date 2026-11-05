@@ -20,6 +20,8 @@ mod borrow_errors;
 mod repl;
 mod repl_variables;
 mod macro_tester;
+mod macro_step_engine;
+mod macro_step;
 mod local_ai;
 mod local_ai_client;
 mod local_ai_proposal;
@@ -127,6 +129,7 @@ fn i18n_from_settings() {
 }
 
 fn main() -> eframe::Result {
+    if let Some(code) = macro_step_engine::internal() { std::process::exit(code); }
     if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();

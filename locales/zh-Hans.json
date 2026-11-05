@@ -2520,5 +2520,18 @@
     "Discard Plugin Preview": "丢弃插件预览",
     "Local Plugins": "本地插件",
     "Install and run trusted local process extensions explicitly": "显式安装并运行可信的本地进程扩展"
+  },
+  "macro_step": {
+    "Expand Declarative Macro One Step": "单步展开声明式宏",
+    "One-step expansion supports macro_rules declarations on Unix with resource limits. Built-in, procedural and newer macro syntax are unsupported.": "单步展开支持带资源限制的 Unix 上的 macro_rules。不支持内置宏、过程宏和更新的宏语法。",
+    "The declarative macro or its arguments could not be matched for one-step expansion.": "无法匹配声明式宏或其参数以进行单步展开。",
+    "One-step macro expansion exceeds its source, token, memory or output limit.": "单步宏展开超出了源代码、令牌、内存或输出限制。",
+    "Rust source changed during one-step expansion. Request it again.": "单步展开期间 Rust 源代码发生了变化。请重新请求。",
+    "One-step macro expansion timed out.": "单步宏展开超时。",
+    "One-step macro expansion cancelled.": "已取消单步宏展开。",
+    "The one-step macro worker or rust-analyzer could not resolve this declaration.": "单步宏进程或 rust-analyzer 无法解析此声明。",
+    "Expanding declarative macro one step…": "正在单步展开声明式宏…",
+    "One-step expansion of {name}!": "{name}! 的单步展开",
+    "Expand Declarative Macro One Step (unsupported on this platform)": "单步展开声明式宏（此平台不支持）"
   }
 }

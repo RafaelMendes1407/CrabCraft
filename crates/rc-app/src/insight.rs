@@ -59,6 +59,7 @@ pub enum InsightOutput {
     RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     /// The expansion of the macro call under the caret.
     MacroExpansion { name: String, text: String },
+    MacroStepExpansion { name: String, text: String },
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
@@ -211,6 +212,8 @@ pub struct Insight {
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
     expand_macro: Option<Pending<Value>>,
+    macro_step_request: Option<(u64,u64,usize)>,
+    macro_step: Option<crate::macro_step::Job>,
     types: Option<(Target, Pending<Value>)>,
     trait_request: Option<(Target, u64, u64)>,
     trait_hierarchy: Option<(Target, crate::type_hierarchy::Job)>,
@@ -314,6 +317,8 @@ impl Insight {
             trait_hierarchy: None,
             external_docs: None,
             expand_macro: None,
+            macro_step_request: None,
+            macro_step: None,
             call_levels: Vec::new(),
             call_generation: 0,
             call_tree: None,
@@ -570,6 +575,8 @@ impl Insight {
         self.nav = None;
         self.calls = None;
         self.cancel_type_hierarchy();
+        self.expand_macro = None;
+        self.cancel_macro_step();
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
@@ -1186,7 +1193,28 @@ impl Insight {
         }
     }
 
-    fn poll_expand_macro(&mut self, out: &mut Vec<InsightOutput>) {
+    pub fn expand_macro_step(&mut self, doc:&Doc, pos:usize) {
+        if !self.rust || !self.execution_allowed { return; }
+        self.macro_step=None;self.macro_step_request=Some((doc.editor.id,doc.editor.buffer.version(),pos));
+    }
+    pub fn macro_step_pending(&self)->bool {self.macro_step_request.is_some()||self.macro_step.is_some()}
+    pub fn cancel_macro_step(&mut self){self.macro_step_request=None;self.macro_step=None;}
+    fn poll_expand_macro(&mut self, docs:&Docs, out: &mut Vec<InsightOutput>) {
+        if let Some((id,version,pos))=self.macro_step_request.take() {
+            if let (Some(session),Some(doc))=(&self.session,docs.list.iter().find(|doc|doc.editor.id==id&&doc.editor.buffer.version()==version)) {
+                match crate::macro_step::Job::start(session.client.clone(),doc,pos,docs,self.waker.clone()) {
+                    Ok(job)=>self.macro_step=Some(job), Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
+                }
+            } else {out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
+        }
+        if self.macro_step.as_ref().is_some_and(|job|!job.current(docs)){self.macro_step=None;out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
+        if let Some(result)=self.macro_step.as_ref().and_then(|job|job.poll()) {
+            self.macro_step=None;
+            match result {
+                Ok(expansion)=>out.push(InsightOutput::MacroStepExpansion{name:expansion.name,text:expansion.text}),
+                Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
+            }
+        }
         if let Some(p) = &mut self.expand_macro
             && let Some(reply) = p.poll()
         {
@@ -1367,7 +1395,7 @@ impl Insight {
         self.poll_calls(docs, out);
         self.poll_types(docs, out);
         self.poll_external_docs(out);
-        self.poll_expand_macro(out);
+        self.poll_expand_macro(docs,out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {

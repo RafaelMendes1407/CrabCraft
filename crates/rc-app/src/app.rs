@@ -1597,11 +1597,8 @@ impl CrabCraftApp {
     }
 
     pub fn session(&self) -> Session {
-        let files = self
-            .docs
-            .list
-            .iter()
-            .map(|d| {
+        let persisted:Vec<_>=self.docs.list.iter().filter(|doc|!doc.generated).collect();
+        let files = persisted.iter().map(|d| {
                 let (line, col) = d.editor.caret_line_col();
                 let folded = d.editor.syntax.folds().iter().filter(|f| d.editor.is_folded(f.start_line)).map(|f| f.start_line).collect();
                 OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
@@ -1609,12 +1606,12 @@ impl CrabCraftApp {
             .collect();
         let all_breakpoints = self.docs.all_breakpoints();
         let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
-        let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
+        let (editor_layout, editor_windows) = self.layout.to_session(|id| persisted.iter().position(|d| d.editor.id == id));
         Session {
             hosting: Some(self.hosting.config.clone()),
             issue_tracker: Some(self.issue_tracker.config.clone()),
             files,
-            active: self.docs.active,
+            active: self.docs.active.and_then(|index|self.docs.list.get(index)).and_then(|doc|persisted.iter().position(|item|item.editor.id==doc.editor.id)),
             editor_layout: Some(editor_layout),
             editor_windows,
             tool_windows: self.dock.to_session(),
@@ -1742,6 +1739,7 @@ impl CrabCraftApp {
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
                 InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
+                InsightOutput::MacroStepExpansion { name, text } => self.show_macro_expansion_kind(&name, &text, false),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 // Every new list replaces the previous one, even with a single result or none.
                 InsightOutput::Usages { title, targets } if targets.is_empty() => {
@@ -1881,6 +1879,7 @@ impl CrabCraftApp {
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
             Action::ExpandMacro => self.insight.expand_macro(doc, caret),
+            Action::ExpandMacroStep => self.insight.expand_macro_step(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::RefactorThis => self.insight.refactor_actions(doc),
@@ -2094,32 +2093,15 @@ impl CrabCraftApp {
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
     /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
     pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
-        // Only the name's word characters reach the file name.
-        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
-        let path = rc_core::paths::expansions_dir().join(format!("{}.rs", if safe.is_empty() { "macro" } else { &safe }));
-        let body = format!("// {}
-
-{text}
-", trf("Recursive expansion of {name}!", &[("name", &name)]));
-        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
-            self.notify(trf("Could not show the expansion: {error}", &[("error", &e.to_string())]), true);
-            return;
-        }
-        match self.docs.open(&path) {
-            Ok(i) => {
-                let d = &mut self.docs.list[i];
-                d.generated = true;
-                // Already open from an earlier expansion: show the new text.
-                if d.editor.buffer.rope() != body.as_str() {
-                    d.editor.reload(&body);
-                    d.editor.parse_blocking();
-                }
-                d.editor.read_only = true;
-                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
-                self.focus_editor = true;
-            }
-            Err(e) => self.notify(e, true),
-        }
+        self.show_macro_expansion_kind(name,text,true);
+    }
+    fn show_macro_expansion_kind(&mut self,name:&str,text:&str,recursive:bool) {
+        let safe:String=name.chars().filter(|c|c.is_alphanumeric()||*c=='_').take(64).collect();
+        let safe=if safe.is_empty(){"macro"}else{&safe};
+        let path=rc_core::paths::expansions_dir().join(format!("{safe}{}.rs",if recursive{""}else{"_one_step"}));
+        let header=if recursive {trf("Recursive expansion of {name}!",&[("name",&name)])}else{trf("One-step expansion of {name}!",&[("name",&name)])};
+        self.docs.insert_generated(path,&format!("// {header}\n\n{text}\n"));
+        self.focus_editor=true;
     }
 
     /// Shows rustc's explanation of an error code (`E0308`) in a read-only tab. `rustc --explain`
