@@ -910,7 +910,14 @@
     "Unknown option: {option}": "未知选项：{option}",
     "--line and --column must come before a file": "--line 和 --column 必须位于文件之前",
     "{option} needs a number": "{option} 需要一个数字",
-    "{option} needs a number from 1 up, not {value}": "{option} 需要从 1 开始的数字，而不是 {value}"
+    "{option} needs a number from 1 up, not {value}": "{option} 需要从 1 开始的数字，而不是 {value}",
+    "Format a Cargo workspace; --check reports changes without writing": "格式化 Cargo 工作区；--check 仅检查，不写入",
+    "Run Clippy; requires --trust-project because project code may run": "运行 Clippy；可能执行项目代码，因此需要 --trust-project",
+    "Run workspace tools without accessing the network": "不访问网络运行工作区工具",
+    "Specify one Cargo.toml or project folder": "请指定一个 Cargo.toml 或项目文件夹",
+    "Specify an existing Cargo.toml or project folder": "请指定现有的 Cargo.toml 或项目文件夹",
+    "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "检查可能执行构建脚本和过程宏。仅在信任此项目时传入 --trust-project。",
+    "Could not start Cargo": "无法启动 Cargo"
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "缩进，来自项目的代码样式：{files}"

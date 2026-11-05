@@ -90,6 +90,21 @@ Call and type hierarchies, Search Everywhere (double `Shift`), breadcrumbs, book
 Tree-sitter syntax, multiple carets, folding, an integrated terminal, Git changes, diff, blame and
 commit, and an interface in eight languages.
 
+## Command line tools
+
+```bash
+crabcraft format /path/to/project
+crabcraft format --check --offline /path/to/project
+crabcraft inspect --trust-project --offline /path/to/project
+```
+
+Both commands accept a project folder or `Cargo.toml` and default to the current folder.
+They run without opening a window and return Cargo's exit code. Formatting uses `cargo fmt
+--all`; `--check` reports formatting changes without writing. Inspection uses `cargo clippy
+--workspace --all-targets -- -D warnings`, so warnings also fail the check. Inspection requires
+`--trust-project` on each invocation because build scripts and procedural macros may run.
+`--offline` prevents Cargo network access. Use Ctrl+C to cancel.
+
 ## Build from source
 
 CrabCraft needs Rust 1.90 or later (edition 2024).

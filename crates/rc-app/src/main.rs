@@ -101,6 +101,15 @@ fn main() -> eframe::Result {
     let cwd = std::env::current_dir().unwrap_or_default();
     let open = match cli::parse(std::env::args_os().skip(1), &cwd) {
         Ok(cli::Command::Open(list)) => list,
+        Ok(cli::Command::Tool(request)) => {
+            match request.run() {
+                Ok(code) => std::process::exit(code),
+                Err(error) => {
+                    eprintln!("crabcraft: {}: {error}", rc_kit::i18n::tr("Could not start Cargo"));
+                    std::process::exit(1);
+                }
+            }
+        }
         Ok(cli::Command::Help) => {
             println!("{}", cli::usage());
             return Ok(());

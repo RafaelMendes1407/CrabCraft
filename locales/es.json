@@ -910,7 +910,14 @@
     "Unknown option: {option}": "Opción desconocida: {option}",
     "--line and --column must come before a file": "--line y --column deben ir antes de un archivo",
     "{option} needs a number": "{option} necesita un número",
-    "{option} needs a number from 1 up, not {value}": "{option} necesita un número a partir de 1, no {value}"
+    "{option} needs a number from 1 up, not {value}": "{option} necesita un número a partir de 1, no {value}",
+    "Format a Cargo workspace; --check reports changes without writing": "Formatear un workspace Cargo; --check comprueba sin escribir",
+    "Run Clippy; requires --trust-project because project code may run": "Ejecutar Clippy; requiere --trust-project porque puede ejecutar código del proyecto",
+    "Run workspace tools without accessing the network": "Ejecutar herramientas sin acceder a la red",
+    "Specify one Cargo.toml or project folder": "Especifica un solo Cargo.toml o carpeta de proyecto",
+    "Specify an existing Cargo.toml or project folder": "Especifica un Cargo.toml o carpeta de proyecto existente",
+    "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "La inspección puede ejecutar scripts de compilación y macros procedurales. Usa --trust-project solo si confías en el proyecto.",
+    "Could not start Cargo": "No se pudo iniciar Cargo"
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "Sangría, del estilo de código del proyecto: {files}"

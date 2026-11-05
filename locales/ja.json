@@ -910,7 +910,14 @@
     "Unknown option: {option}": "不明なオプション: {option}",
     "--line and --column must come before a file": "--line と --column はファイルの前に指定してください",
     "{option} needs a number": "{option} には数値が必要です",
-    "{option} needs a number from 1 up, not {value}": "{option} には 1 以上の数値が必要です（{value} ではなく）"
+    "{option} needs a number from 1 up, not {value}": "{option} には 1 以上の数値が必要です（{value} ではなく）",
+    "Format a Cargo workspace; --check reports changes without writing": "Cargo ワークスペースを整形。--check は書き込まずに確認",
+    "Run Clippy; requires --trust-project because project code may run": "Clippy を実行。プロジェクトのコードが実行されるため --trust-project が必要",
+    "Run workspace tools without accessing the network": "ネットワークにアクセスせずにツールを実行",
+    "Specify one Cargo.toml or project folder": "Cargo.toml またはプロジェクトフォルダーを1つ指定してください",
+    "Specify an existing Cargo.toml or project folder": "既存の Cargo.toml またはプロジェクトフォルダーを指定してください",
+    "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "検査ではビルドスクリプトと手続きマクロが実行される場合があります。信頼できるプロジェクトにのみ --trust-project を指定してください。",
+    "Could not start Cargo": "Cargo を起動できませんでした"
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "インデント（プロジェクトのコードスタイル: {files}）"
