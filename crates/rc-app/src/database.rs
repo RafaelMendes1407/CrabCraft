@@ -9,6 +9,12 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+#[derive(Clone)]
+enum Connection { Sqlite(Config), Postgres(crate::database_postgres::Config) }
+impl Connection {
+    fn writes(&self)->bool{match self{Self::Sqlite(config)=>config.write,Self::Postgres(config)=>config.write}}
+    fn existing(&mut self){if let Self::Sqlite(config)=self{config.create=false;}}
+}
 struct Edit {
     row: usize,
     column: usize,
@@ -20,8 +26,14 @@ pub struct Database {
     pub sql: String,
     pub transfer: String,
     pub write: bool,
-    config: Option<Config>,
-    pending: Option<Config>,
+    config: Option<Connection>,
+    pending: Option<Connection>,
+    pub backend: usize,
+    pub pg_host: String,
+    pub pg_port: String,
+    pub pg_user: String,
+    pub pg_database: String,
+    pub pg_password: String,
     pub tables: Vec<Table>,
     pub page: Option<Page>,
     grid: Option<Grid>,
@@ -40,6 +52,12 @@ impl Database {
             sql: "SELECT sqlite_version();".into(),
             transfer: String::new(),
             write: false,
+            backend: 0,
+            pg_host: if cfg!(unix){"/var/run/postgresql".into()}else{"127.0.0.1".into()},
+            pg_port: "5432".into(),
+            pg_user: String::new(),
+            pg_database: "postgres".into(),
+            pg_password: String::new(),
             config: None,
             pending: None,
             tables: Vec::new(),
@@ -64,6 +82,8 @@ impl Database {
     fn disconnect(&mut self) {
         self.cancel();
         self.config = None;
+        self.write = false;
+        self.pg_password.clear();
         self.tables.clear();
         self.page = None;
         self.grid = None;
@@ -72,7 +92,7 @@ impl Database {
         self.status.clear();
         self.error = None;
     }
-    fn start(&mut self, mut config: Config, action: Action, trusted: bool) {
+    fn start(&mut self, mut config: Connection, action: Action, trusted: bool) {
         if !trusted {
             self.error = Some(tr("Trust the project before using database connections").into());
             return;
@@ -90,16 +110,16 @@ impl Database {
         let out = self.inbox.sender();
         self.pending = if matches!(action, Action::Schema) {
             let mut active = config.clone();
-            active.create = false;
+            active.existing();
             Some(active)
         } else {
             None
         };
         if !matches!(action, Action::Schema) {
-            config.create = false;
+            config.existing();
         }
         std::thread::spawn(move || {
-            let result = db::run(&config, action, cancel);
+            let result = match config {Connection::Sqlite(config)=>db::run(&config,action,cancel),Connection::Postgres(config)=>crate::database_postgres::run(&config,action,cancel)};
             out.send((generation, result));
         });
     }
@@ -167,6 +187,13 @@ impl Database {
             );
         }
     }
+    fn connect(&mut self,root:Option<&Path>,create:bool,trusted:bool){
+        let config=if self.backend==0{Connection::Sqlite(Config{path:resolve(root,&self.path),write:self.write,create})}else{
+            let Some(port)=self.pg_port.parse::<u16>().ok().filter(|port|*port>0)else{self.error=Some(error_text(db::Error::Input));return;};
+            if self.sql=="SELECT sqlite_version();"{self.sql="SELECT version();".into();}
+            Connection::Postgres(crate::database_postgres::Config{host:self.pg_host.trim().into(),port,user:self.pg_user.clone(),database:self.pg_database.clone(),password:self.pg_password.clone(),write:self.write})
+        };self.start(config,Action::Schema,trusted);
+    }
     fn ui(&mut self, ui: &mut egui::Ui, root: Option<&Path>, trusted: bool) {
         let busy = self.cancel.is_some();
         let connected = self.config.is_some();
@@ -175,51 +202,19 @@ impl Database {
         {
             self.path = root.join("project.sqlite").display().to_string();
         }
-        ui.small(tr(
-            "SQLite is available. PostgreSQL connections are not supported yet.",
-        ));
-        if !trusted {
-            ui.colored_label(
-                rc_kit::pal(ui).warn,
-                tr("Trust the project before using database connections"),
-            );
-        }
+        if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust the project before using database connections"));}
         ui.horizontal(|ui| {
-            ui.label(tr("SQLite file"));
-            ui.add_enabled(
-                !busy && !connected,
-                egui::TextEdit::singleline(&mut self.path)
-                    .char_limit(8192)
-                    .desired_width(340.0),
-            );
-            ui.add_enabled_ui(!busy && !connected, |ui| {
-                ui.checkbox(&mut self.write, tr("Enable database writes"));
-            });
-            for (label, create) in [(tr("Connect"), false), (tr("Create SQLite database"), true)] {
-                if ui
-                    .add_enabled(
-                        trusted && !busy && !connected && (!create || self.write),
-                        egui::Button::new(label),
-                    )
-                    .clicked()
-                {
-                    let path = resolve(root, &self.path);
-                    self.start(
-                        Config {
-                            path,
-                            write: self.write,
-                            create,
-                        },
-                        Action::Schema,
-                        trusted,
-                    );
-                }
-            }
-            if ui
-                .add_enabled(connected, egui::Button::new(tr("Disconnect")))
-                .clicked()
-            {
-                self.disconnect();
+            ui.label(tr("Database engine"));ui.add_enabled_ui(!busy&&!connected,|ui|{egui::ComboBox::from_id_salt("database_engine").selected_text(if self.backend==0{"SQLite"}else{"PostgreSQL"}).show_ui(ui,|ui|{ui.selectable_value(&mut self.backend,0,"SQLite");ui.selectable_value(&mut self.backend,1,"PostgreSQL");});ui.checkbox(&mut self.write,tr("Enable database writes"));});
+            if ui.add_enabled(trusted&&!busy&&!connected,egui::Button::new(tr("Connect"))).clicked(){self.connect(root,false,trusted);}
+            if self.backend==0&&ui.add_enabled(trusted&&!busy&&!connected&&self.write,egui::Button::new(tr("Create SQLite database"))).clicked(){self.connect(root,true,trusted);}
+            if ui.add_enabled(connected,egui::Button::new(tr("Disconnect"))).clicked(){self.disconnect();}
+        });
+        ui.add_enabled_ui(!busy&&!connected,|ui|{
+            if self.backend==0{ui.horizontal(|ui|{ui.label(tr("SQLite file"));ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(8192).desired_width(440.0));});}
+            else{
+                ui.horizontal_wrapped(|ui|{ui.label(tr("Host"));ui.add(egui::TextEdit::singleline(&mut self.pg_host).char_limit(8192).desired_width(220.0));ui.label(tr("Port"));ui.add(egui::TextEdit::singleline(&mut self.pg_port).char_limit(5).desired_width(55.0));ui.label(tr("User"));ui.add(egui::TextEdit::singleline(&mut self.pg_user).char_limit(1024).desired_width(110.0));ui.label(tr("Database"));ui.add(egui::TextEdit::singleline(&mut self.pg_database).char_limit(1024).desired_width(110.0));ui.label(tr("Password"));ui.add(egui::TextEdit::singleline(&mut self.pg_password).password(true).char_limit(4096).desired_width(120.0));});
+                ui.small(tr("PostgreSQL: Unix socket or loopback only; remote TLS connections are not supported."));
+                ui.small(tr("Database passwords stay in memory and are never saved to project settings."));
             }
         });
         if busy {
@@ -309,7 +304,7 @@ impl Database {
             self.grid = None;
             self.edit = None;
         }
-        ui.horizontal(|ui|{ui.label(tr("SQL console"));ui.small(tr("One statement per run; connections use autocommit. Writes require explicit opt-in."));});
+        ui.horizontal(|ui|{ui.label(tr("SQL console"));ui.small(tr("One statement per run; successful requests commit automatically. Writes require explicit opt-in."));});
         let mut sql_layout=|ui:&egui::Ui,text:&dyn egui::TextBuffer,width:f32|crate::sql_injection::layout(ui,text.as_str(),width);
         ui.add(
             egui::TextEdit::multiline(&mut self.sql).layouter(&mut sql_layout)
@@ -369,7 +364,7 @@ impl Database {
                     "Results truncated at 500 rows; use table pages or a narrower query",
                 ));
             }
-            let editable = self.config.as_ref().is_some_and(|config| config.write)
+            let editable = self.config.as_ref().is_some_and(Connection::writes)
                 && self
                     .page
                     .as_ref()
@@ -473,12 +468,12 @@ impl Database {
                         trusted,
                     );
                 } else {
-                    self.error=Some(tr("Enter a valid value for the selected SQLite type; BLOB uses hexadecimal").into());
+                    self.error=Some(tr("Enter a valid value for the selected data type; BLOB uses hexadecimal").into());
                 }
             }
         }
         ui.horizontal(|ui| {
-            ui.label(tr("Transfer JSON file"));
+            ui.label(tr("Transfer file (.json or .csv)"));
             ui.add(
                 egui::TextEdit::singleline(&mut self.transfer)
                     .char_limit(8192)
@@ -487,7 +482,7 @@ impl Database {
             let path = resolve(root, &self.transfer);
             let enabled = !busy && !self.selected.is_empty() && !self.transfer.trim().is_empty();
             if ui
-                .add_enabled(enabled, egui::Button::new(tr("Export table JSON")))
+                .add_enabled(enabled, egui::Button::new(tr("Export table")))
                 .clicked()
             {
                 self.action(
@@ -501,7 +496,7 @@ impl Database {
             if ui
                 .add_enabled(
                     enabled && self.write,
-                    egui::Button::new(tr("Import JSON into table")),
+                    egui::Button::new(tr("Import into table")),
                 )
                 .clicked()
             {
@@ -515,6 +510,7 @@ impl Database {
             }
         });
         ui.small(tr("Exports never overwrite files. Imports append rows atomically and require matching writable columns."));
+        ui.small(tr("CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types."));
     }
 }
 impl Drop for Database {
@@ -589,6 +585,7 @@ fn parse_cell(kind: usize, text: &str) -> Result<Cell, ()> {
 fn error_text(error: db::Error) -> String {
     match error {
         db::Error::Cancelled => tr("Cancelled").into(),
+        db::Error::Timeout => tr("Database connection or statement timed out").into(),
         db::Error::Limit => {
             tr("Database operation exceeded its input, result or transfer limit").into()
         }
@@ -597,7 +594,7 @@ fn error_text(error: db::Error) -> String {
             tr("Reconnect with database writes enabled before changing data").into()
         }
         db::Error::Stale => tr("The database row or schema changed; refresh before editing").into(),
-        db::Error::Path => tr("Choose a regular SQLite file and an explicit transfer path").into(),
+        db::Error::Path => tr("Choose a regular input file and an explicit transfer path").into(),
         db::Error::Exists => tr("The destination already exists; choose a new file").into(),
         db::Error::Database(error) | db::Error::Io(error) => {
             trf("Database error: {error}", &[("error", &error)])
@@ -624,6 +621,7 @@ mod tests {
     use crate::screens::{HOME_LOCK, harness, test_app};
     use egui_kittest::kittest::Queryable;
     use std::time::{Duration, Instant};
+    #[track_caller]
     fn pump(
         h: &mut egui_kittest::Harness<'static, crate::app::CrabCraftApp>,
         done: impl Fn(&Database) -> bool,
@@ -636,7 +634,7 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        panic!("database UI timeout: {:?}", h.state().database.error);
+        panic!("database UI timeout: error={:?} status={:?} connected={} busy={} tables={:?} selected={:?}", h.state().database.error,h.state().database.status,h.state().database.config.is_some(),h.state().database.cancel.is_some(),h.state().database.tables.iter().map(|table|&table.name).collect::<Vec<_>>(),h.state().database.selected);
     }
     #[test]
     fn native_sqlite_connect_console_edit_transfer_cancel_and_real_rust_consumer() {
@@ -715,12 +713,12 @@ mod tests {
         pump(&mut h, |db| db.grid.is_some() && db.cancel.is_none());
         assert_eq!(h.state().database.grid.as_ref().unwrap().affected, 1);
         h.state_mut().database.transfer = root.join("rows.json").display().to_string();
-        h.get_by_label(tr("Export table JSON")).click();
+        h.get_by_label(tr("Export table")).click();
         h.run_steps(2);
         pump(&mut h, |db| db.status.contains('1') && db.cancel.is_none());
         assert!(root.join("rows.json").is_file());
         h.state_mut().database.selected = "copy".into();
-        h.get_by_label(tr("Import JSON into table")).click();
+        h.get_by_label(tr("Import into table")).click();
         h.run_steps(2);
         pump(&mut h, |db| {
             db.cancel.is_none()
@@ -750,4 +748,26 @@ mod tests {
         );
         assert!(root.join("build-ran").exists());
     }
+    #[test]
+    #[ignore="Requires the real private PostgreSQL server; exercises native UI and builds a Rust consumer offline"]
+    fn native_postgres_connection_edit_csv_and_rust_consumer() {
+        let _home=HOME_LOCK.lock().unwrap_or_else(|error|error.into_inner());
+        let _pg=crate::database_postgres::TEST_LOCK.lock().unwrap_or_else(|error|error.into_inner());
+        let config=crate::database_postgres::Config{host:"/tmp/crabcraft-postgres/socket".into(),port:55432,user:"crabcraft".into(),database:"postgres".into(),password:String::new(),write:true};
+        let query=|sql:&str|crate::database_postgres::run(&config,Action::Query(sql.into()),Arc::new(AtomicBool::new(false))).unwrap_or_else(|error|panic!("PG setup: {error:?}"));
+        let namespace=format!("crabcraft_native_{}_{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        query(&format!("CREATE SCHEMA {namespace}"));let people=format!("{namespace}.people");let copy=format!("{namespace}.copy");query(&format!("CREATE TABLE {people}(id bigint PRIMARY KEY,name text,payload bytea)"));query(&format!("CREATE TABLE {copy}(LIKE {people} INCLUDING ALL)"));query(&format!("INSERT INTO {people} VALUES(1,'initial PG','\\x00ff')"));
+        let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();std::fs::create_dir(root.join("src")).unwrap();
+        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"postgres_ui_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\ntokio-postgres=\"0.7.18\"\ntokio={version=\"1\",features=[\"rt\",\"macros\",\"net\"]}\n").unwrap();
+        let program=format!(r#"#[tokio::main(flavor="current_thread")] async fn main(){{let mut cfg=tokio_postgres::Config::new();cfg.host_path("/tmp/crabcraft-postgres/socket").port(55432).user("crabcraft").dbname("postgres");let(client,connection)=cfg.connect(tokio_postgres::NoTls).await.unwrap();tokio::spawn(async move{{connection.await.unwrap();}});let row=client.query_one("SELECT name FROM {people} WHERE id=1",&[]).await.unwrap();assert_eq!(row.get::<_,String>(0),"changed PostgreSQL 🦀");let count=client.query_one("SELECT count(*) FROM {copy}",&[]).await.unwrap();assert_eq!(count.get::<_,i64>(0),1);}}"#);
+        std::fs::write(root.join("src/main.rs"),program).unwrap();std::fs::write(root.join("build.rs"),"fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
+        let mut app=test_app(home.path(),true);app.open_workspace(&root);app.dock.show(crate::toolwindow::ToolWindow::Database);app.dock.sizes.insert(crate::toolwindow::ToolWindow::Database,700.0);app.database.backend=1;app.database.pg_host=config.host.clone();app.database.pg_port=config.port.to_string();app.database.pg_user=config.user.clone();app.database.pg_database=config.database.clone();let mut h=harness(app,egui::vec2(1500.0,1300.0));
+        h.get_by_label(tr("Connect")).click();h.run_steps(2);assert!(h.state().database.config.is_none());h.state_mut().settings.trusted_projects.push(root.clone());h.run_steps(2);h.get_by_label(tr("Connect")).click();h.run_steps(2);pump(&mut h,|db|db.config.is_some()&&db.tables.iter().any(|table|table.name==people));
+        h.state_mut().database.selected=people.clone();h.run_steps(2);h.get_by_label(tr("Browse table")).click();h.run_steps(2);pump(&mut h,|db|db.page.is_some());h.get_by_label("name: initial PG").click();h.run_steps(2);assert!(h.state().database.edit.is_none());
+        h.state_mut().database.sql=format!("DELETE FROM {people}");h.get_by_label(tr("Run SQL")).click();h.run_steps(2);pump(&mut h,|db|db.error.is_some());assert_eq!(h.state().database.page.as_ref().unwrap().grid.rows.len(),1);
+        h.get_by_label(tr("Disconnect")).click();h.run_steps(2);h.state_mut().database.write=true;h.get_by_label(tr("Connect")).click();h.run_steps(2);pump(&mut h,|db|db.config.is_some());h.state_mut().database.selected=people.clone();h.run_steps(2);h.get_by_label(tr("Browse table")).click();h.run_steps(2);pump(&mut h,|db|db.page.is_some());h.get_by_label("name: initial PG").click();h.run_steps(2);h.state_mut().database.edit.as_mut().unwrap().text="changed PostgreSQL 🦀".into();h.get_by_label(tr("Apply cell edit")).click();h.run_steps(2);pump(&mut h,|db|db.cancel.is_none()&&db.page.as_ref().is_some_and(|page|page.grid.rows[0][1]==Cell::Text("changed PostgreSQL 🦀".into())));
+        h.state_mut().database.transfer=root.join("postgres.csv").display().to_string();h.get_by_label(tr("Export table")).click();h.run_steps(2);pump(&mut h,|db|db.cancel.is_none()&&db.status.contains('1'));assert!(root.join("postgres.csv").exists());h.state_mut().database.selected=copy.clone();h.run_steps(2);h.get_by_label(tr("Import into table")).click();h.run_steps(2);pump(&mut h,|db|db.cancel.is_none()&&db.page.as_ref().is_some_and(|page|page.table.name==copy&&page.grid.rows.len()==1));
+        assert!(!root.join("build-ran").exists());let output=std::process::Command::new("cargo").args(["run","--offline","--quiet"]).current_dir(&root).env("CARGO_BUILD_JOBS","2").output().unwrap();assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));query(&format!("DROP SCHEMA {namespace} CASCADE"));
+    }
+
 }

@@ -115,6 +115,7 @@ impl<'a> EditorView<'a> {
         // ---------------------------------------------------------------- input
         let before_sel = state.selection.clone();
         let before_version = state.buffer.version();
+        crate::accessibility::handle(ui, &response, state);
         if focused {
             handle_keyboard(ui, state, config, keymap, &mut out);
         }
@@ -210,6 +211,7 @@ impl<'a> EditorView<'a> {
         if (over_text || response.dragged()) && state.link.is_none() {
             ui.ctx().set_cursor_icon(CursorIcon::Text);
         }
+        crate::accessibility::update(ui, &response, state, config, text_rect, m.row_h);
         out
     }
 }

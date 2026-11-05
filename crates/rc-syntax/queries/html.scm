@@ -1,4 +1,4 @@
-; HTML markup roles; inline script/style parsing is intentionally not injected yet.
+; HTML markup roles. Bounded script/style layers are computed by the background parser.
 (tag_name) @tag
 (attribute_name) @xml.attribute
 (attribute_value) @string

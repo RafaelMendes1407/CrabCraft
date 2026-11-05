@@ -143,6 +143,7 @@ pub enum GitTab {
     Shelves,
     HistoryEdit,
     Issues,
+    Hosting,
     Worktrees,
 }
 

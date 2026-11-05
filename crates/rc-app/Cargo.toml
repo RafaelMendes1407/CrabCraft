@@ -10,6 +10,9 @@ name = "crabcraft"
 path = "src/main.rs"
 
 [dependencies]
+tokio-postgres = "0.7.18"
+bytes = "1"
+futures-util = "0.3"
 fallible-iterator = "0.3"
 rusqlite = { version = "0.40.1", features = ["bundled", "hooks", "limits", "extra_check"] }
 anyhow.workspace = true
@@ -19,6 +22,12 @@ serde_json.workspace = true
 sha2 = "0.10"
 # Dependency versions in Cargo.toml (C-02, C-04).
 semver = "1"
+# One-layer macro_rules expansion in a separate, bounded helper process.
+ra_ap_mbe = "=0.0.273"
+ra_ap_span = "=0.0.273"
+ra_ap_syntax-bridge = "=0.0.273"
+ra_ap_tt = "=0.0.273"
+toml = "1"
 # The HTTP Client (F-03): the same client and runtime the other crates use.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "http2", "gzip", "system-proxy"] }
 tokio.workspace = true

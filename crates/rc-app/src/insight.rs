@@ -59,6 +59,7 @@ pub enum InsightOutput {
     RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     /// The expansion of the macro call under the caret.
     MacroExpansion { name: String, text: String },
+    MacroStepExpansion { name: String, text: String },
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
@@ -165,6 +166,9 @@ pub struct Insight {
     dotnet: PathBuf,
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
+    web: Option<rc_lsp::web::Settings>,
+    web_synced: HashMap<PathBuf,u64>,
+    web_rename_snapshot: HashMap<PathBuf,u64>,
     /// Only explicit start after the application trust check may launch subprocesses.
     execution_allowed: bool,
     clippy: bool,
@@ -211,7 +215,11 @@ pub struct Insight {
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
     expand_macro: Option<Pending<Value>>,
+    macro_step_request: Option<(u64,u64,usize)>,
+    macro_step: Option<crate::macro_step::Job>,
     types: Option<(Target, Pending<Value>)>,
+    trait_request: Option<(Target, u64, u64)>,
+    trait_hierarchy: Option<(Target, crate::type_hierarchy::Job)>,
     /// The first step of a call hierarchy.
     calls: Option<(bool, Pending<Value>)>,
     /// The levels being loaded, with the tree they belong to.
@@ -289,6 +297,9 @@ impl Insight {
             projects: Vec::new(),
             dotnet: PathBuf::from("dotnet"),
             rust: false,
+            web: None,
+            web_synced: HashMap::new(),
+            web_rename_snapshot: HashMap::new(),
             execution_allowed: false,
             configured: None,
             env: Vec::new(),
@@ -308,8 +319,12 @@ impl Insight {
             nav: None,
             calls: None,
             types: None,
+            trait_request: None,
+            trait_hierarchy: None,
             external_docs: None,
             expand_macro: None,
+            macro_step_request: None,
+            macro_step: None,
             call_levels: Vec::new(),
             call_generation: 0,
             call_tree: None,
@@ -364,6 +379,7 @@ impl Insight {
         self.stop();
         self.execution_allowed = true;
         self.rust = false;
+        self.web = None;
         self.root = Some(root.to_path_buf());
         self.solution = solution.map(Path::to_path_buf);
         self.projects = projects;
@@ -382,10 +398,16 @@ impl Insight {
         self.execution_allowed = true;
         self.root = Some(root.to_path_buf());
         self.rust = true;
+        self.web = None;
         self.clippy = clippy;
         self.configured = configured;
         self.launch();
     }
+
+    pub fn start_web(&mut self, root:&Path, settings:rc_lsp::web::Settings) {
+        self.stop();self.execution_allowed=true;self.rust=false;self.root=Some(root.to_path_buf());self.web=Some(settings);self.launch();
+    }
+    fn supports(&self, doc:&Doc)->bool{has_insight_for(doc,self.web.as_ref().map(|settings|settings.kind))}
 
     /// Sets the project's environment; a running rust-analyzer restarts to take it.
     pub fn set_env(&mut self, env: Vec<(String, String)>) {
@@ -493,6 +515,12 @@ impl Insight {
     fn launch(&mut self) {
         if !self.execution_allowed { return; }
         let Some(root) = self.root.clone() else { return };
+        if let Some(settings)=self.web.clone(){
+            match LanguageSession::start_web(settings,&root,self.waker.clone()){
+                Ok(session)=>{self.session=Some(session);self.status=InsightStatus::Starting;},
+                Err(error)=>self.status=InsightStatus::Failed(error.to_string()),
+            }return;
+        }
         if self.rust {
             let Some(program) = rc_cargo::toolchain::locate_rust_analyzer(self.configured.as_deref()) else {
                 self.status = InsightStatus::RustAnalyzerMissing;
@@ -565,9 +593,13 @@ impl Insight {
         self.signature = None;
         self.nav = None;
         self.calls = None;
+        self.cancel_type_hierarchy();
+        self.expand_macro = None;
+        self.cancel_macro_step();
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
+        self.web_synced.clear();self.web_rename_snapshot.clear();
         self.rename_check = None;
         self.actions = None;
         self.action_resolve = None;
@@ -605,6 +637,8 @@ impl Insight {
         }
         let Some(session) = &mut self.session else { return out };
         let mut retry = None;
+        let web_client=session.client.clone();
+        let web_versions:HashMap<PathBuf,i32>=if self.web.is_some(){session.docs.paths().into_iter().filter_map(|path|session.docs.version(&path).map(|version|(path,version))).collect()}else{HashMap::new()};
         for ev in session.pump() {
             match ev {
                 LspEvent::StateChanged(ServerState::LoadingProjects) => self.status = InsightStatus::Loading(tr("Loading projects…").into()),
@@ -627,7 +661,8 @@ impl Insight {
                         }
                     }
                 }
-                LspEvent::Diagnostics { path, diagnostics, .. } => {
+                LspEvent::Diagnostics { path, version, mut diagnostics } => {
+                    if let Some(web)=self.web.as_ref().map(|settings|settings.kind){if version.is_some_and(|version|web_versions.get(&path)!=Some(&version))||!docs.list.iter().any(|doc|doc.path==path&&has_insight_for(doc,Some(web))&&self.web_synced.get(&path)==Some(&doc.editor.buffer.version())){continue;}diagnostics.truncate(1000);for diagnostic in &mut diagnostics{diagnostic.message=diagnostic.message.chars().take(4096).collect();}}
                     let gates: Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)> = diagnostics
                         .iter()
                         .filter_map(|x| {
@@ -643,7 +678,7 @@ impl Insight {
                     }
                     self.publish(docs, path, diagnostics, true);
                 }
-                LspEvent::ApplyEdit { id, edit } => self.pending_apply.push((id, edit)),
+                LspEvent::ApplyEdit { id, edit } => {if self.web.is_some(){web_client.reply(id,Ok(json!({"applied":false,"failureReason":"Unsolicited web edits are not supported"})));}else{self.pending_apply.push((id, edit));}},
                 LspEvent::Refresh(_) => self.refreshed.clear(),
                 LspEvent::ShowMessage { error: true, text } => out.push(InsightOutput::Message(text)),
                 _ => {}
@@ -736,18 +771,21 @@ impl Insight {
     }
 
     fn sync_documents(&mut self, docs: &mut Docs) {
+        let web=self.web.as_ref().map(|settings|settings.kind);
         let Some(session) = &mut self.session else { return };
         let now = Instant::now();
-        let open: Vec<PathBuf> = docs.list.iter().filter(|d| has_insight(d)).map(|d| d.path.clone()).collect();
+        let open: Vec<PathBuf> = docs.list.iter().filter(|d| has_insight_for(d,web)).map(|d| d.path.clone()).collect();
         for path in session.docs.paths() {
             if !open.contains(&path) {
                 session.did_close(&path);
             }
         }
-        for d in docs.list.iter_mut().filter(|d| has_insight(d)) {
+        self.web_synced.retain(|path,_|open.contains(path));
+        for d in docs.list.iter_mut().filter(|d| has_insight_for(d,web)) {
+            if web.is_some(){self.web_synced.insert(d.path.clone(),d.editor.buffer.version());}
             if !session.docs.is_open(&d.path) {
                 d.editor.take_edits();
-                let language = if d.editor.lang() == rc_syntax::Lang::Rust { "rust" } else { "csharp" };
+                let language = if d.editor.lang()==rc_syntax::Lang::JavaScript&&d.path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("jsx")){"javascriptreact"}else{crate::web_languages::language_id(d.editor.lang()).unwrap_or(if d.editor.lang() == rc_syntax::Lang::Rust { "rust" } else { "csharp" })};
                 session.did_open(&d.path, language, &d.editor.buffer.rope().to_string());
                 self.dirty.insert(d.editor.id, now - REFRESH_DELAY);
                 continue;
@@ -779,7 +817,7 @@ impl Insight {
             self.runnables_request.insert(id, (version, session.client.request_raw("experimental/runnables", json!({ "textDocument": td }))));
             let start = json!({ "textDocument": td, "position": { "line": 0, "character": 0 } });
             self.parent_request.insert(id, (version, session.client.request_raw("experimental/parentModule", start)));
-        } else {
+        } else if self.web.is_none() {
             self.diag_pull.insert(id, (version, session.client.request_raw("textDocument/diagnostic", json!({ "textDocument": td }))));
         }
         self.symbols.insert(id, (version, session.client.request_raw("textDocument/documentSymbol", json!({ "textDocument": td }))));
@@ -793,7 +831,7 @@ impl Insight {
     fn poll_requests(&mut self, docs: &mut Docs, show_inlays: bool, out: &mut Vec<InsightOutput>) {
         // Refreshes for the visible document (and any other open C# document once).
         if let Some(i) = docs.active
-            && has_insight(&docs.list[i])
+            && self.supports(&docs.list[i])
         {
             self.refresh(&docs.list[i], show_inlays);
         }
@@ -1036,8 +1074,9 @@ impl Insight {
             }
         }
         // Documentation of the selected item.
-        let fence = if self.rust { "rust" } else { "csharp" };
+        let fence = if self.rust { "rust" } else if self.web.is_some(){"typescript"}else { "csharp" };
         let Some(i) = docs.active else { return };
+        if !self.supports(&docs.list[i]){return;}
         let Some(c) = docs.list[i].editor.popups.completion.as_ref() else { return };
         let Some(&idx) = c.filtered.get(c.selected) else { return };
         if self.doctest_items {
@@ -1181,7 +1220,28 @@ impl Insight {
         }
     }
 
-    fn poll_expand_macro(&mut self, out: &mut Vec<InsightOutput>) {
+    pub fn expand_macro_step(&mut self, doc:&Doc, pos:usize) {
+        if !self.rust || !self.execution_allowed { return; }
+        self.macro_step=None;self.macro_step_request=Some((doc.editor.id,doc.editor.buffer.version(),pos));
+    }
+    pub fn macro_step_pending(&self)->bool {self.macro_step_request.is_some()||self.macro_step.is_some()}
+    pub fn cancel_macro_step(&mut self){self.macro_step_request=None;self.macro_step=None;}
+    fn poll_expand_macro(&mut self, docs:&Docs, out: &mut Vec<InsightOutput>) {
+        if let Some((id,version,pos))=self.macro_step_request.take() {
+            if let (Some(session),Some(doc))=(&self.session,docs.list.iter().find(|doc|doc.editor.id==id&&doc.editor.buffer.version()==version)) {
+                match crate::macro_step::Job::start(session.client.clone(),doc,pos,docs,self.waker.clone()) {
+                    Ok(job)=>self.macro_step=Some(job), Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
+                }
+            } else {out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
+        }
+        if self.macro_step.as_ref().is_some_and(|job|!job.current(docs)){self.macro_step=None;out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
+        if let Some(result)=self.macro_step.as_ref().and_then(|job|job.poll()) {
+            self.macro_step=None;
+            match result {
+                Ok(expansion)=>out.push(InsightOutput::MacroStepExpansion{name:expansion.name,text:expansion.text}),
+                Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
+            }
+        }
         if let Some(p) = &mut self.expand_macro
             && let Some(reply) = p.poll()
         {
@@ -1240,11 +1300,36 @@ impl Insight {
         let params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, pos) });
         let (line, col) = doc.editor.buffer.line_col(pos);
         let root = Target { path: doc.path.clone(), line, col, preview: word_at(&doc.editor.buffer.line_text(line), col) };
-        self.types = Some((root, session.client.request_raw("textDocument/implementation", params)));
+        if self.rust && self.execution_allowed {
+            self.trait_request = Some((root,doc.editor.id,doc.editor.buffer.version())); self.trait_hierarchy = None; self.types = None; self.call_tree = None;
+        } else { self.types = Some((root, session.client.request_raw("textDocument/implementation", params))); }
     }
 
+    pub fn type_hierarchy_pending(&self) -> bool { self.trait_request.is_some() || self.trait_hierarchy.is_some() || self.types.is_some() }
+    pub fn cancel_type_hierarchy(&mut self) { self.trait_request = None; self.trait_hierarchy = None; self.types = None; }
     fn poll_types(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree};
+        if let Some((origin,id,version)) = self.trait_request.take() {
+            if !docs.list.iter().any(|d| d.editor.id==id && d.editor.buffer.version()==version && d.path==origin.path) { out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())); return; }
+            if let (Some(root), Some(session)) = (&self.root, &self.session) {
+                match crate::type_hierarchy::Job::start(root.clone(), origin.clone(), session.client.clone(), docs, self.waker.clone()) {
+                    Ok(job) => { self.trait_hierarchy = Some((origin, job)); out.push(InsightOutput::ShowCallTree); },
+                    Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy exceeds its source limits or could not be started.").into()))
+                }
+            }
+        }
+        if self.trait_hierarchy.as_ref().is_some_and(|(_,job)| !job.current(docs)) {
+            self.trait_hierarchy = None;
+            out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into()));
+        }
+        if let Some(result) = self.trait_hierarchy.as_ref().and_then(|(_,job)| job.poll()) {
+            let Some((_origin,_)) = self.trait_hierarchy.take() else { return; };
+            match result {
+                Ok(tree) => { self.call_generation += 1; self.call_tree = Some(crate::type_hierarchy::into_call_tree(tree)); out.push(InsightOutput::ShowCallTree); },
+                Err(crate::type_hierarchy::Error::Changed) => out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())),
+                Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.").into()))
+            }
+        }
         let Some((_, p)) = &mut self.types else { return };
         let Some(reply) = p.poll() else { return };
         let Some((root, _)) = self.types.take() else { return };
@@ -1337,7 +1422,7 @@ impl Insight {
         self.poll_calls(docs, out);
         self.poll_types(docs, out);
         self.poll_external_docs(out);
-        self.poll_expand_macro(out);
+        self.poll_expand_macro(docs,out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -1371,6 +1456,9 @@ impl Insight {
                     let open = docs.list.iter().map(|d| (d.path.clone(), d.editor.buffer.rope().clone())).collect();
                     self.rename_check = Some(crate::refactor_conflicts::Check::start(name, edit, preview, self.root.clone(), open, self.waker.clone()));
                 }
+                Ok(Some(edit)) if self.web.is_some()=>{
+                    if crate::web_languages::valid_edit(&edit,docs,&self.web_rename_snapshot,self.root.as_deref()) {finish_rename(docs,edit,preview,out);}else{out.push(InsightOutput::Message(tr("Web edits require unchanged open workspace files; load the affected files and retry").into()));}
+                },
                 Ok(Some(edit)) => finish_rename(docs, edit, preview, out),
                 Ok(None) => out.push(InsightOutput::Message(tr("Nothing to rename").into())),
                 Err(e) if self.rust => {
@@ -1491,6 +1579,7 @@ impl Insight {
         }
         let edits = doc.editor.take_edits();
         if !edits.is_empty() {
+            if self.web.is_some(){self.web_synced.insert(doc.path.clone(),doc.editor.buffer.version());}
             session.did_change(&doc.path, &edits);
             self.dirty.insert(doc.editor.id, Instant::now());
         }
@@ -1498,7 +1587,7 @@ impl Insight {
 
     /// Reacts to what the active editor did this frame.
     pub fn on_editor_events(&mut self, doc: &mut Doc, events: &[EditorEvent]) {
-        if !self.ready() || !has_insight(doc) {
+        if !self.ready() || !self.supports(doc) {
             return;
         }
         if !events.is_empty() {
@@ -1828,6 +1917,7 @@ impl Insight {
     /// Renames the symbol at `pos`; with `preview` (the preview's title) the edits are shown
     /// for review instead of applied.
     pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str, preview: Option<String>) {
+        if self.web.is_some(){self.web_rename_snapshot=self.web_synced.clone();}
         let Some(session) = &self.session else { return };
         let p = session.client.request_raw(
             "textDocument/rename",
@@ -2085,6 +2175,9 @@ pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
     rc_syntax::derive_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())
 }
 
+fn has_insight_for(d:&Doc,web:Option<rc_lsp::web::Kind>)->bool{
+    match web{None=>has_insight(d),Some(kind)=>!d.generated&&!d.scratch&&d.editor.buffer.rope().len_bytes()<=2*1024*1024&&crate::web_languages::kind(d.editor.lang())==Some(kind)}
+}
 pub fn has_insight(d: &Doc) -> bool {
     // Rust scratches are analysed on their own (linked as detached files).
     !d.generated && (!d.scratch || d.editor.lang() == rc_syntax::Lang::Rust) && matches!(d.editor.lang(), rc_syntax::Lang::Rust | rc_syntax::Lang::CSharp)

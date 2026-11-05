@@ -33,6 +33,7 @@ pub struct ParseResult {
     pub version: u64,
     pub tree: Tree,
     pub folds: Vec<FoldRange>,
+    pub embedded: Vec<crate::embedded_web::EmbeddedSpan>,
     /// Time the parse took, for diagnostics and benchmarks.
     pub micros: u64,
 }
@@ -102,7 +103,8 @@ fn run(jobs: Receiver<Job>, results: Sender<ParseResult>, wake: Arc<dyn Fn() + S
             let Some(tree) = parse_with(parser, &job.rope, job.old.as_ref()) else { continue };
             let micros = t0.elapsed().as_micros() as u64;
             let folds = folding_ranges(job.lang, &tree, &job.rope);
-            if results.send(ParseResult { doc: job.doc, version: job.version, tree, folds, micros }).is_err() {
+            let embedded=crate::embedded_web::collect(job.lang,&tree,&job.rope);
+            if results.send(ParseResult { doc: job.doc, version: job.version, tree, folds, embedded, micros }).is_err() {
                 return;
             }
             wake();

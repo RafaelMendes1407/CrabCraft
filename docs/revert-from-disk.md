@@ -40,3 +40,28 @@ current flush-before-run ordering. Large-file responsiveness remains unverified.
 Tests use real Cargo workspaces and cover external disk changes, dirty confirmation/cancel,
 BOM/CRLF, undo/redo, a successful Cargo check, stale edits/save/rename/reopen/watcher results,
 strict UTF-8 and size limits, cancellation, and no-writer FIFO rejection in both readers.
+
+## External updates and cache invalidation
+
+Filesystem notifications and Invalidate Caches now enqueue external reads instead of
+reading source files on the UI thread. Changes coalesce by path, with at most two live
+workers and 256 queued documents. Cancelled workers remain counted until they acknowledge
+cancellation, so repeated events cannot create an unbounded number of threads. Closing a
+project/document, saving, renaming and later file events invalidate earlier tickets; buffer
+edits cause a fresh comparison so unsaved text is retained and a real disk conflict appears.
+
+The shared reader checks regular-file identity before/after a bounded read, rejects binary
+or invalid UTF-8 input, and checks cancellation between chunks. External reload is limited
+to 8 MiB; unsupported/failed reads preserve the buffer, mark a conflict and report an error.
+BOM/CRLF metadata survives reload and subsequent save. Normalization and comparison run in
+the worker; source parsing is queued after applying an unchanged-version result. No project
+tools run merely because its files changed.
+
+`cargo test -p rc-app disk_watch::tests` verifies event coalescing, new local edits,
+close/reopen identity, FIFO-without-writer rejection and actual native filesystem events in
+a Cargo project. The native test checks encoding/conflicts and a later explicit Cargo run.
+`cargo test -p rc-app invalidate_caches_rebuilds` checks asynchronous cache invalidation.
+
+E-12 remains partial: ordinary file opening and save I/O, plus ordering saves before
+build/run/test/debug, still need their asynchronous path. Synchronous `Docs` entry points
+remain available for backend fixtures and existing callers pending that migration.

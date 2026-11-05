@@ -383,6 +383,8 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     let mut ed_ui = ui.new_child(egui::UiBuilder::new().max_rect(editor_rect));
     ed_ui.set_clip_rect(editor_rect.intersect(ui.clip_rect()));
+    let ai_trusted = app.workspace.is_some() && app.runner.require_trust().is_ok();
+    crate::local_ai::editor_keys(&mut app.local_ai, &mut app.docs.list[active], &ed_ui, focused, ai_trusted);
     let doc = &mut app.docs.list[active];
     let mut from_menu = Vec::new();
     for a in &editor_actions {
@@ -397,6 +399,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         });
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    crate::local_ai::paint_inline(&app.local_ai, &app.docs.list[active], &ed_ui, out.caret_rect, app.editor_config.font.size);
     if out.events.contains(&EditorEvent::Pasted) {
         let doc = &app.docs.list[active];
         app.missing_crates.pasted(doc.editor.id, doc.editor.buffer.version(), doc.editor.last_paste);
@@ -422,7 +425,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             let mut cx = crate::manifest_completion::Cx { names: &mut app.crate_names, deps: &mut app.dep_versions, online: app.settings.check_crates_io };
             crate::manifest_completion::accepted(doc, data, &mut cx);
         } else {
-            app.insight.completion_accepted(doc, data);
+            if let Some(insight)=app.web_languages.insight(doc){insight.completion_accepted(doc,data);}else{app.insight.completion_accepted(doc, data);}
         }
     }
     if crate::manifest_completion::is_manifest(doc) {
@@ -437,7 +440,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let server_events: Vec<EditorEvent> = out.events.iter().filter(|e| feature_click.is_none() || !matches!(e, EditorEvent::NavigateAt(_))).cloned().collect();
     if app.debugger.stopped() {
         let insight_events: Vec<_> = server_events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
-        app.insight.on_editor_events(doc, &insight_events);
+        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&insight_events);}else{app.insight.on_editor_events(doc, &insight_events);}
         for e in &out.events {
             match e {
                 EditorEvent::HoverAt { pos, screen } => {
@@ -449,7 +452,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             }
         }
     } else {
-        app.insight.on_editor_events(doc, &server_events);
+        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&server_events);}else{app.insight.on_editor_events(doc, &server_events);}
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;

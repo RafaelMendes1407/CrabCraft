@@ -35,7 +35,7 @@ pub fn complete(doc: &mut Doc, tables: &[crate::database_core::Table]) -> bool {
     if sql::tokens(&injection.sql).iter().any(|token| {
         token.range.start < offset
             && offset < token.range.end
-            && matches!(token.role, rc_syntax::Hl::String | rc_syntax::Hl::Comment)
+            && matches!(token.role, rc_syntax::Hl::String | rc_syntax::Hl::Comment | rc_syntax::Hl::Property)
     }) {
         doc.editor.popups.completion = None;
         return true;
@@ -58,18 +58,18 @@ pub fn complete(doc: &mut Doc, tables: &[crate::database_core::Table]) -> bool {
         return true;
     }
     let anchor = rope.byte_to_char(source_start);
-    let mut choices: Vec<(String, String, bool)> = sql::KEYWORDS
+    let mut choices: Vec<(String, String, bool, Option<String>)> = sql::KEYWORDS
         .iter()
-        .map(|word| (word.to_string(), tr("SQL keyword").into(), true))
+        .map(|word| (word.to_string(), tr("SQL keyword").into(), true, None))
         .collect();
     let typed = prefix.to_ascii_lowercase();
+    let dotted=before[..start].ends_with('.');
+    let qualifier=before[..start].strip_suffix('.').and_then(|text|text.rsplit(|ch:char|!(ch.is_ascii_alphanumeric()||ch=='_')).next()).filter(|text|!text.is_empty()).map(|text|format!("{text}."));
     'tables: for table in tables.iter().take(200) {
-        if table.name.to_ascii_lowercase().starts_with(&typed) {
-            choices.push((
-                table.name.clone(),
-                tr("Connected database table").into(),
-                false,
-            ));
+        let label=table.local_name.as_ref().unwrap_or(&table.name);
+        let insert=if table.local_name.is_some(){if dotted{qualifier.as_ref().and_then(|prefix|table.name.strip_prefix(prefix)).map(str::to_string)}else{Some(table.name.clone())}}else{None};
+        if label.to_ascii_lowercase().starts_with(&typed)&&(!dotted||insert.is_some()) {
+            choices.push((label.clone(),format!("{}: {}",tr("Connected database table"),table.name),false,insert));
         }
         for column in table.columns.iter().take(256) {
             if column.name.to_ascii_lowercase().starts_with(&typed) {
@@ -77,6 +77,7 @@ pub fn complete(doc: &mut Doc, tables: &[crate::database_core::Table]) -> bool {
                     column.name.clone(),
                     tr("Connected database column").into(),
                     false,
+                    None,
                 ));
             }
             if choices.len() >= 512 {
@@ -85,13 +86,13 @@ pub fn complete(doc: &mut Doc, tables: &[crate::database_core::Table]) -> bool {
         }
     }
     choices.sort_by(|a, b| a.0.cmp(&b.0));
-    choices.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2);
+    choices.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2 && a.3 == b.3);
     let prefix_lower = prefix.to_ascii_lowercase();
     let items = choices
         .into_iter()
-        .filter(|(name, _, _)| name.to_ascii_lowercase().starts_with(&prefix_lower))
+        .filter(|(name, _, _, _)| name.to_ascii_lowercase().starts_with(&prefix_lower))
         .take(200)
-        .filter_map(|(label, detail, keyword)| {
+        .filter_map(|(label, detail, keyword, qualified)| {
             let reserved = sql::KEYWORDS
                 .iter()
                 .any(|word| word.eq_ignore_ascii_case(&label));
@@ -103,7 +104,7 @@ pub fn complete(doc: &mut Doc, tables: &[crate::database_core::Table]) -> bool {
                 && label
                     .chars()
                     .all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
-            let inserted = if keyword || plain {
+            let inserted = if let Some(qualified)=qualified { qualified } else if keyword || plain {
                 label.clone()
             } else {
                 format!("\"{}\"", label.replace('"', "\"\""))

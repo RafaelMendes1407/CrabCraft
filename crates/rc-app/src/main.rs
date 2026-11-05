@@ -4,7 +4,11 @@ mod app;
 mod complete_statement;
 mod terminal_attach;
 mod database_core;
+mod database_csv;
 mod database;
+mod remote;
+mod remote_transfer;
+mod database_postgres;
 mod sql_injection;
 mod cli;
 mod endpoints;
@@ -16,8 +20,15 @@ mod borrow_errors;
 mod repl;
 mod repl_variables;
 mod macro_tester;
+mod macro_step_engine;
+mod macro_step;
+mod local_ai;
+mod local_ai_client;
+mod local_ai_proposal;
+mod type_hierarchy;
 mod doctest_completion;
 mod settings_backup;
+mod settings_migration;
 mod instance;
 mod auto_attach;
 mod breakpoint_list;
@@ -33,7 +44,9 @@ mod http_client;
 mod http_cli;
 mod disassembly_view;
 mod disk_revert;
+mod disk_watch;
 mod insight;
+mod web_languages;
 mod inspection_profile;
 mod intention_preview;
 mod call_tree;
@@ -117,6 +130,8 @@ fn i18n_from_settings() {
 }
 
 fn main() -> eframe::Result {
+    if let Some(code) = macro_step_engine::internal() { std::process::exit(code); }
+    if let Some(code) = privileged_run::internal() { std::process::exit(code); }
     if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();
@@ -187,9 +202,21 @@ mod terminal_completion_audit;
 
 #[cfg(test)]
 mod key_sequence_audit;
+#[cfg(test)]
+mod accessibility_audit;
 
 mod shelves;
 
 mod history_edit;
 
 mod issue_tracker;
+
+mod hosting;
+
+mod acp;
+mod plugins;
+mod proofreader;
+mod proofreader_core;
+mod containers;
+mod dev_containers;
+mod privileged_run;

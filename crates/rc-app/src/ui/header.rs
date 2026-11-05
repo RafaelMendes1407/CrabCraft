@@ -119,6 +119,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
                     egui::Popup::menu(&more).show(|ui| {
                         ui.set_min_width(200.0);
+                        if theme::menu_item(ui, Some(ico::RUN_ANYTHING), tr("Local AI assistant"), false).clicked() {
+                            app.local_ai.open = true;
+                            ui.close();
+                        }
                         // The user's external tools, then the settings that list them.
                         ui.menu_button(tr("External Tools"), |ui| {
                             let names: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();

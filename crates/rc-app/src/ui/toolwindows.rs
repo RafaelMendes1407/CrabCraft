@@ -36,6 +36,13 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
         ToolWindow::Endpoints => crate::endpoints::show(app, ui),
         ToolWindow::Database => crate::database::show(app, ui),
+        ToolWindow::Remote => crate::remote::show(app, ui),
+        ToolWindow::Agents => crate::acp::show(app, ui),
+        ToolWindow::Plugins => crate::plugins::show(app, ui),
+        ToolWindow::Proofreading => crate::proofreader::show(app, ui),
+        ToolWindow::Containers => crate::containers::show(app, ui),
+        ToolWindow::DevContainers => crate::dev_containers::show(app, ui),
+        ToolWindow::PrivilegedRun => crate::privileged_run::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -270,6 +277,10 @@ fn structure(app: &mut CrabCraftApp, ui: &mut Ui) {
 }
 
 fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
+    if app.insight.type_hierarchy_pending() {
+        ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Resolving type relationships…")); if ui.button(tr("Cancel")).clicked() { app.insight.cancel_type_hierarchy(); } });
+        return;
+    }
     let Some(tree) = &app.insight.call_tree else {
         let (title, hint) = empty_text(ToolWindow::Hierarchy);
         empty_state(ui, ToolWindow::Hierarchy.icon(), title, hint);
@@ -277,6 +288,7 @@ fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
     };
     let p = rc_kit::pal(ui);
     let direction = match (tree.types, tree.callers) {
+        (true, _) if tree.root.item.get("trait_hierarchy").and_then(serde_json::Value::as_bool) == Some(true) => tr("Type and trait hierarchy of {name}"),
         (true, _) => tr("Implementations of {name}"),
         (false, true) => tr("Callers of {name}"),
         (false, false) => tr("Calls made by {name}"),
@@ -519,6 +531,7 @@ pub fn header(ui: &mut Ui, title: &str) -> bool {
 
 fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
     match tw {
+        ToolWindow::Proofreading => (tr("Spelling and Grammar"), ""),
         ToolWindow::Structure => (tr("No structure"), tr("Open a source file to see its items.")),
         ToolWindow::Commit => (tr("No changes"), tr("Changed files will show up here, ready to commit.")),
         ToolWindow::Run => (tr("Nothing is running"), tr("Run a project to see its output here.")),
@@ -536,7 +549,13 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
+        ToolWindow::Agents => (tr("ACP Agents"), tr("Start a trusted ACP agent explicitly")),
+        ToolWindow::Plugins => (tr("Local Plugins"), tr("Install and run trusted local process extensions explicitly")),
+        ToolWindow::Containers => (tr("Docker"), tr("Manage Docker resources only through explicit reviewed commands")),
+        ToolWindow::DevContainers => (tr("Dev Containers"), tr("Use the reference CLI only after explicitly trusting its configuration")),
+        ToolWindow::PrivilegedRun => (tr("Administrator Run"), tr("Inspect a compiled program before requesting OS administrator authorization")),
         ToolWindow::Database => (tr("Database"), tr("Connect to a SQLite database explicitly")),
+        ToolWindow::Remote => (tr("Remote files"), tr("Explicit SSH connections and reviewed SFTP transfers")),
         ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),
     }
 }

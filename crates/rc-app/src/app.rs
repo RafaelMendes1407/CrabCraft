@@ -62,11 +62,13 @@ pub struct CrabCraftApp {
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
     pub disk_revert: Option<crate::disk_revert::Job>,
+    pub disk_watch: crate::disk_watch::Watch,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     pub insight: Insight,
+    pub web_languages: crate::web_languages::WebLanguages,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
     pub debug_sessions: crate::debug_sessions::Sessions,
@@ -76,10 +78,18 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub privileged_run: crate::privileged_run::PrivilegedRun,
+    pub dev_containers: crate::dev_containers::DevContainers,
+    pub containers: crate::containers::Containers,
+    pub plugins: crate::plugins::Plugins,
+    pub proofreader: crate::proofreader::Proofreader,
+    pub acp: crate::acp::Acp,
+    pub hosting: crate::hosting::Hosting,
     pub issue_tracker: crate::issue_tracker::Tracker,
     pub history_edit: crate::history_edit::HistoryEdit,
     pub shelves: crate::shelves::Shelves,
     pub database: crate::database::Database,
+    pub remote: crate::remote::Remote,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -153,6 +163,7 @@ pub struct CrabCraftApp {
     pub repl_starting: Option<crate::repl::Starting>,
     pub repl_variables: crate::repl_variables::State,
     pub macro_tester: crate::macro_tester::Tester,
+    pub local_ai: crate::local_ai::Assistant,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
     pub terminal_attach: crate::terminal_attach::Picker,
@@ -287,6 +298,7 @@ impl CrabCraftApp {
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
             disk_revert: None,
+            disk_watch: Default::default(),
             keymap,
             editor_config,
             workspace: None,
@@ -299,6 +311,7 @@ impl CrabCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            web_languages: crate::web_languages::WebLanguages::new(waker.clone()),
             insight: {
                 let mut insight = Insight::new(waker.clone());
                 insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
@@ -326,10 +339,18 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            privileged_run: crate::privileged_run::PrivilegedRun::new(waker.clone()),
+            dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
+            containers: crate::containers::Containers::new(waker.clone()),
+            plugins: crate::plugins::Plugins::new(waker.clone()),
+            proofreader: Default::default(),
+            acp: crate::acp::Acp::new(waker.clone()),
+            hosting: crate::hosting::Hosting::new(waker.clone()),
             issue_tracker: crate::issue_tracker::Tracker::new(waker.clone()),
             history_edit: crate::history_edit::HistoryEdit::new(waker.clone()),
             shelves: crate::shelves::Shelves::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
+            remote: crate::remote::Remote::new(waker.clone()),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -388,6 +409,7 @@ impl CrabCraftApp {
             repl_starting: None,
             repl_variables: Default::default(),
             macro_tester: Default::default(),
+            local_ai: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
             terminal_attach: Default::default(),
@@ -1319,7 +1341,11 @@ impl CrabCraftApp {
     /// running programs stay. `clean` also deletes Cargo's build output.
     pub fn invalidate_caches(&mut self, clean: bool) {
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
-        self.docs.reload_all();
+        let paths: Vec<PathBuf> = self.docs.list.iter().map(|doc| doc.path.clone()).collect();
+        for path in paths {
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &path) { self.notify(error.to_string(), true); }
+        }
+        for doc in &mut self.docs.list { doc.editor.request_parse(&self.docs.pool); }
         self.files.open(&root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.refresh();
         let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
@@ -1398,6 +1424,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.disk_watch = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
@@ -1410,14 +1437,23 @@ impl CrabCraftApp {
         self.auto_attach = None;
         self._watcher = None;
         self.insight.stop();
+        self.web_languages.stop();
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.privileged_run = crate::privileged_run::PrivilegedRun::new(self.waker.clone());
+        self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
+        self.containers = crate::containers::Containers::new(self.waker.clone());
+        self.plugins = crate::plugins::Plugins::new(self.waker.clone());
+        self.proofreader = Default::default();
+        self.acp = crate::acp::Acp::new(self.waker.clone());
+        self.hosting = crate::hosting::Hosting::new(self.waker.clone());
         self.issue_tracker = crate::issue_tracker::Tracker::new(self.waker.clone());
         self.history_edit = crate::history_edit::HistoryEdit::new(self.waker.clone());
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
+        self.remote = crate::remote::Remote::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -1429,6 +1465,7 @@ impl CrabCraftApp {
         self.repl_starting = None;
         self.repl_variables = Default::default();
         self.macro_tester = Default::default();
+        self.local_ai = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
@@ -1455,6 +1492,7 @@ impl CrabCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
@@ -1574,11 +1612,8 @@ impl CrabCraftApp {
     }
 
     pub fn session(&self) -> Session {
-        let files = self
-            .docs
-            .list
-            .iter()
-            .map(|d| {
+        let persisted:Vec<_>=self.docs.list.iter().filter(|doc|!doc.generated).collect();
+        let files = persisted.iter().map(|d| {
                 let (line, col) = d.editor.caret_line_col();
                 let folded = d.editor.syntax.folds().iter().filter(|f| d.editor.is_folded(f.start_line)).map(|f| f.start_line).collect();
                 OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
@@ -1586,11 +1621,12 @@ impl CrabCraftApp {
             .collect();
         let all_breakpoints = self.docs.all_breakpoints();
         let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
-        let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
+        let (editor_layout, editor_windows) = self.layout.to_session(|id| persisted.iter().position(|d| d.editor.id == id));
         Session {
+            hosting: Some(self.hosting.config.clone()),
             issue_tracker: Some(self.issue_tracker.config.clone()),
             files,
-            active: self.docs.active,
+            active: self.docs.active.and_then(|index|self.docs.list.get(index)).and_then(|doc|persisted.iter().position(|item|item.editor.id==doc.editor.id)),
             editor_layout: Some(editor_layout),
             editor_windows,
             tool_windows: self.dock.to_session(),
@@ -1702,6 +1738,10 @@ impl CrabCraftApp {
         }
     }
 
+    pub(crate) fn poll_disk_watch(&mut self) {
+        for error in self.disk_watch.poll(&mut self.docs, self.waker.clone()) { self.notify(error, true); }
+    }
+
     /// Code-insight results that leave the editor: navigation, result lists, dialogs.
     pub fn handle_insight(&mut self, outputs: Vec<InsightOutput>) {
         for o in outputs {
@@ -1714,6 +1754,7 @@ impl CrabCraftApp {
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
                 InsightOutput::MacroExpansion { name, text } => self.show_macro_expansion(&name, &text),
+                InsightOutput::MacroStepExpansion { name, text } => self.show_macro_expansion_kind(&name, &text, false),
                 InsightOutput::ShowCallTree => self.dock.show(crate::toolwindow::ToolWindow::Hierarchy),
                 // Every new list replaces the previous one, even with a single result or none.
                 InsightOutput::Usages { title, targets } if targets.is_empty() => {
@@ -1754,6 +1795,7 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        if let Some(outputs)=self.web_languages.action(&mut self.docs.list[i],action,caret_screen){self.handle_insight(outputs);return;}
         if action == Action::CompleteStatement {
             self.statement_completion = None;
             match crate::complete_statement::Job::start(&self.docs, self.waker.clone()) {
@@ -1853,6 +1895,7 @@ impl CrabCraftApp {
             Action::QuickDoc => self.insight.quick_doc(doc, caret_screen),
             Action::ExternalDocs => self.insight.external_docs(doc, caret),
             Action::ExpandMacro => self.insight.expand_macro(doc, caret),
+            Action::ExpandMacroStep => self.insight.expand_macro_step(doc, caret),
             Action::ShowIntentions => self.insight.code_actions(doc),
             Action::Generate => self.insight.generate_actions(doc),
             Action::RefactorThis => self.insight.refactor_actions(doc),
@@ -2066,32 +2109,15 @@ impl CrabCraftApp {
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
     /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
     pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
-        // Only the name's word characters reach the file name.
-        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
-        let path = rc_core::paths::expansions_dir().join(format!("{}.rs", if safe.is_empty() { "macro" } else { &safe }));
-        let body = format!("// {}
-
-{text}
-", trf("Recursive expansion of {name}!", &[("name", &name)]));
-        if let Err(e) = rc_core::paths::write_atomic(&path, body.as_bytes()) {
-            self.notify(trf("Could not show the expansion: {error}", &[("error", &e.to_string())]), true);
-            return;
-        }
-        match self.docs.open(&path) {
-            Ok(i) => {
-                let d = &mut self.docs.list[i];
-                d.generated = true;
-                // Already open from an earlier expansion: show the new text.
-                if d.editor.buffer.rope() != body.as_str() {
-                    d.editor.reload(&body);
-                    d.editor.parse_blocking();
-                }
-                d.editor.read_only = true;
-                d.mtime = std::fs::metadata(&d.path).and_then(|m| m.modified()).ok();
-                self.focus_editor = true;
-            }
-            Err(e) => self.notify(e, true),
-        }
+        self.show_macro_expansion_kind(name,text,true);
+    }
+    fn show_macro_expansion_kind(&mut self,name:&str,text:&str,recursive:bool) {
+        let safe:String=name.chars().filter(|c|c.is_alphanumeric()||*c=='_').take(64).collect();
+        let safe=if safe.is_empty(){"macro"}else{&safe};
+        let path=rc_core::paths::expansions_dir().join(format!("{safe}{}.rs",if recursive{""}else{"_one_step"}));
+        let header=if recursive {trf("Recursive expansion of {name}!",&[("name",&name)])}else{trf("One-step expansion of {name}!",&[("name",&name)])};
+        self.docs.insert_generated(path,&format!("// {header}\n\n{text}\n"));
+        self.focus_editor=true;
     }
 
     /// Shows rustc's explanation of an error code (`E0308`) in a read-only tab. `rustc --explain`
@@ -2206,6 +2232,10 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if matches!(action, Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut | Action::ForceStepInto | Action::ForceStepOver | Action::RunToCursor | Action::ForceRunToCursor) {
+            // A list/gutter change in this frame must reach DAP before continue/step.
+            self.debugger.sync_breakpoints(&self.docs);
+        }
         if matches!(action, Action::Run | Action::Debug) {
             // "Before launch" tools see the file and caret of this moment.
             self.runner.macro_context = self.macro_context();
@@ -2603,6 +2633,15 @@ impl CrabCraftApp {
         }
     }
 
+    pub fn open_ssh_terminal(&mut self, spec: rc_term::SpawnSpec) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        if self.terminal_starting.is_some() { return; }
+        match crate::repl::Starting::new(spec, self.waker.clone()) {
+            Ok(starting) => { self.terminal_starting = Some(starting); self.dock.show(ToolWindow::Terminal); }
+            Err(error) => self.notify(rc_kit::i18n::trf("Could not start the terminal: {error}", &[("error", &error)]), true),
+        }
+    }
+
     pub fn split_terminal(&mut self, stacked: bool) {
         if self.terminal_starting.is_some() { return; }
         let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else { return; };
@@ -2902,7 +2941,9 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Proofreading { self.proofreader.cancel(); }
         if was_open && tw == ToolWindow::Database { self.database.cancel(); }
+        if was_open && tw == ToolWindow::Remote { self.remote.cancel(); }
         if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
@@ -3247,6 +3288,14 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        self.privileged_run.poll(acp_trusted);
+        self.dev_containers.poll(acp_trusted);
+        self.containers.poll(acp_trusted);
+        self.plugins.poll(acp_trusted);
+        self.proofreader.poll(&self.docs, acp_trusted);
+        if self.acp.poll(acp_trusted) { self.dock.show(ToolWindow::Agents); }
+        self.hosting.poll();
         if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
             self.statement_completion = None;
             if let Err(message) = result { self.notify(message, false); }
@@ -3288,7 +3337,7 @@ impl CrabCraftApp {
             }
         }
         for p in changed {
-            self.docs.on_disk_change(&p);
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
             // A changed solution file reloads the explorer's model.
             if let Some(w) = &mut self.workspace
                 && w.ws.solution() == Some(p.as_path())
@@ -3300,6 +3349,7 @@ impl CrabCraftApp {
                 w.solution = Some(s);
             }
         }
+        self.poll_disk_watch();
         self.docs.poll_parses();
     }
 
@@ -3536,6 +3586,11 @@ impl eframe::App for CrabCraftApp {
                 editor_actions.push(a);
             }
         }
+        let web_trusted=self.workspace.as_ref().is_some_and(|workspace|self.settings.trusted_projects.contains(&workspace.ws.root));
+        let web_outputs=self.web_languages.update(&mut self.docs,self.workspace.as_ref().map(|workspace|workspace.ws.root.as_path()),&self.settings,web_trusted);
+        if self.web_languages.initializing(){ctx.request_repaint_after(std::time::Duration::from_millis(100));}
+        self.web_languages.merge_problems(&mut self.insight);
+        self.handle_insight(web_outputs);
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
         self.handle_insight(outputs);
         let outs = self.runner.update();
@@ -3570,6 +3625,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_playground(&ctx);
         let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
         self.database.poll(database_trusted);
+        self.remote.poll(database_trusted);
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();

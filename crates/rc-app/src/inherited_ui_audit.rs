@@ -16,6 +16,7 @@ fn native_rust_debugger_choice_is_explicit_and_persists_without_running_project_
     let (root, mut harness) = workspace(home.path(), true);
     harness.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
     harness.run_steps(2);
+    harness.run_steps(10);
     harness.get_by_value("GDB").click(); harness.run_steps(2);
     harness.get_by_label("LLDB").click(); harness.run_steps(2);
     harness.get_by_label(tr("OK")).click(); harness.run_steps(2);

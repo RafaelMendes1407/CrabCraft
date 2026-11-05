@@ -28,6 +28,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
     while start.elapsed() < Duration::from_secs(180) {
         app.poll_cargo_workspace();
         app.poll_rustfmt();
+        app.poll_disk_watch();
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
         let outs = app.runner.update();
@@ -1667,6 +1668,7 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     assert_eq!(app.docs.list.len(), 2);
     assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".to_string()));
     let lib = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    pump(&mut app, "the asynchronous external reload", |app| app.docs.list[lib].editor.buffer.rope().to_string() == "pub fn changed() {}\n");
     assert_eq!(app.docs.list[lib].editor.buffer.rope().to_string(), "pub fn changed() {}\n");
     let cleaned = |a: &CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.title == "cargo clean" && b.result.as_ref().is_some_and(|r| r.success));
     pump(&mut app, "everything again", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some() && cleaned(a));
@@ -4140,6 +4142,7 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     // Turned off from the list while stopped, it no longer stops the second call.
     app.set_breakpoint_enabled(&price_rs, 1, false);
     app.run_ide_action(&egui::Context::default(), Action::Resume);
+    assert!(app.debugger.session.as_ref().and_then(|s| s.breakpoints().get(&price_rs, 2)).is_some_and(|bp| !bp.spec.enabled), "the disabled breakpoint must be synchronized before resume is sent");
     let start = Instant::now();
     while !app.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()) {
         let outs = app.debugger.update(&mut app.docs);
@@ -4565,5 +4568,85 @@ fn the_snake_case_fix_renames_a_function() {
     app.handle_insight(out);
     pump(&mut app, "the renamed function", |a| a.docs.list[i].editor.buffer.rope().to_string().contains("fn teste_de_escrita()"));
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    teste_de_escrita();\n}\n\nfn teste_de_escrita() {}\n");
+    app.insight.stop();
+}
+
+#[test]
+fn native_trait_hierarchy_resolves_aliases_homonyms_transitive_and_unsaved_relations() {
+    use egui_kittest::kittest::Queryable;
+    const SOURCE: &str = "pub mod left {\n    pub trait Base {}\n    pub trait Child: Base {}\n}\npub mod right {\n    pub trait Base {}\n    pub trait Wrong: Base {}\n}\nuse left::Base as Alias;\npub trait Leaf: Alias {}\npub trait Where where Self: Leaf {}\nstruct Value;\nimpl left::Base for Value {}\nfn main() {}\n";
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap();
+    demo(&root); let file = root.join("src/main.rs"); write(&file,SOURCE);
+    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace(&root); app.open_file(&file);
+    pump(&mut app,"trait fixture analysis",|a| a.insight.status==InsightStatus::Ready);
+    pump(&mut app,"trait fixture indexing",|a| a.docs.active_doc().is_some_and(|doc| a.insight.runnables.contains_key(&doc.editor.id)));
+    let ask = |app: &mut CrabCraftApp, position:usize| {
+        let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,position);
+        pump(app,"semantic trait hierarchy",|a| !a.insight.type_hierarchy_pending() && a.insight.call_tree.is_some());
+        app.insight.call_tree.as_ref().unwrap().rows().into_iter().map(|(_,node)|node.name.clone()).collect::<Vec<_>>()
+    };
+    let base = SOURCE.find("trait Base").unwrap()+"trait B".len();
+    let names=ask(&mut app,base);
+    assert!(names.contains(&"Child".into()),"{names:?}"); assert!(names.contains(&"Leaf".into()),"{names:?}"); assert!(names.contains(&"Where".into()),"{names:?}");
+    assert!(!names.contains(&"Wrong".into()),"homonymous trait leaked: {names:?}");
+    assert!(names.iter().any(|s|s.starts_with("impl left::Base for Value")),"{names:?}");
+    let right = SOURCE.find("pub mod right").unwrap()+SOURCE[SOURCE.find("pub mod right").unwrap()..].find("trait Base").unwrap()+"trait B".len();
+    let names=ask(&mut app,right); assert!(names.contains(&"Wrong".into())); assert!(!names.contains(&"Leaf".into()));
+    let leaf=SOURCE.find("trait Leaf").unwrap()+"trait L".len();
+    let names=ask(&mut app,leaf); assert!(names.contains(&"Base".into()),"alias did not resolve: {names:?}"); assert!(names.contains(&"Where".into()));
+    let doc=app.docs.active_doc_mut().unwrap(); let end=doc.editor.buffer.len_chars(); doc.editor.replace(end,end,"pub trait Unsaved: Alias {}\n");
+    let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+    let names=ask(&mut app,base); assert!(names.contains(&"Unsaved".into()),"{names:?}"); assert_eq!(std::fs::read_to_string(&file).unwrap(),SOURCE);
+    app.dock.show(crate::toolwindow::ToolWindow::Hierarchy);
+    let mut h=crate::screens::harness(app,egui::vec2(1280.,900.));
+    h.get_by_label("Unsaved").click(); h.run_steps(2);
+    let doc=h.state().docs.active_doc().unwrap(); assert_eq!(doc.editor.caret_line_col().0,SOURCE.lines().count());
+    // A source edit invalidates the complete graph snapshot, including other open buffers.
+    {
+        let app=h.state_mut(); let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,base);
+        let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+        app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// changed\n");
+        let outputs=app.insight.update(&mut app.docs,true); app.handle_insight(outputs);
+        assert!(!app.insight.type_hierarchy_pending()); assert!(app.insight.call_tree.is_none());
+    }
+    // Cancel is available immediately, even before the background scan is scheduled.
+    {
+        let app=h.state_mut(); let doc=app.docs.active_doc().unwrap(); app.insight.type_hierarchy(doc,base+"// changed\n".len());
+        assert!(app.insight.type_hierarchy_pending()); app.insight.cancel_type_hierarchy(); assert!(!app.insight.type_hierarchy_pending());
+        app.insight.stop();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore="requires freshly built desktop binary in CRABCRAFT_MACRO_WORKER"]
+fn native_one_step_macro_expansion_uses_unsaved_definition_and_keeps_nested_calls() {
+    use rc_editor::Action;
+    const SOURCE:&str="/* café 🦀 */ macro_rules! inner { ($a:expr,$b:expr)=>{($a)+($b)}; }\n/* café 🦀 */ macro_rules! outer { ($e:expr)=>{inner!($e,$e)}; }\nfn main(){assert_eq!(outer!(21),42);}\n";
+    let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    assert!(std::env::var_os("CRABCRAFT_MACRO_WORKER").is_some());
+    let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);
+    let file=root.join("src/main.rs");write(&file,SOURCE);
+    let mut app=new_app(home.path());app.open_workspace(&root);app.open_file(&file);
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    assert!(!app.insight.macro_step_pending());assert!(app.insight.session.is_none());
+    app.trust_project();pump(&mut app,"one-step macro analysis",|a|a.insight.status==InsightStatus::Ready);
+    pump(&mut app,"one-step macro indexing",|a|a.docs.active_doc().is_some_and(|doc|a.insight.runnables.contains_key(&doc.editor.id)));
+    let unsaved=SOURCE.replace("inner!($e,$e)","inner!($e,$e) + 1");
+    let doc=app.docs.active_doc_mut().unwrap();doc.editor.replace(0,doc.editor.buffer.len_chars(),&unsaved);
+    let call=unsaved.find("outer!(21)").unwrap()+2;let line=unsaved[..call].chars().filter(|c|*c=='\n').count();let start=unsaved[..call].rfind('\n').map_or(0,|byte|byte+1);doc.editor.goto(line,unsaved[start..call].chars().count());
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    pump(&mut app,"one-step expansion tab",|a|a.docs.active_doc().is_some_and(|doc|doc.generated));
+    let generated=app.docs.active_doc().unwrap();assert!(generated.editor.read_only);let expansion=generated.editor.buffer.rope().to_string();
+    assert!(expansion.contains("inner"),"nested macro was expanded: {expansion}");assert!(expansion.contains('+')&&expansion.contains('1'),"unsaved definition ignored: {expansion}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(),SOURCE);
+    assert!(app.insight.session.as_ref().unwrap().docs.paths().iter().all(|p|p!=&generated.path));
+    let proof=root.join("one_step_proof.rs");write(&proof,&unsaved.replace("outer!(21)",&format!("({expansion})")).replace(",42)",",43)"));
+    let binary=root.join("one_step_proof");let compiler=std::process::Command::new("rustc").args(["--edition=2024"]).arg(&proof).arg("-o").arg(&binary).output().unwrap();assert!(compiler.status.success(),"{}",String::from_utf8_lossy(&compiler.stderr));assert!(std::process::Command::new(binary).status().unwrap().success());
+    let original=app.docs.index_of(&file).unwrap();app.docs.activate(original);
+    app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
+    let out=app.insight.update(&mut app.docs,true);app.handle_insight(out);app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// changed\n");
+    let out=app.insight.update(&mut app.docs,true);app.handle_insight(out);assert!(!app.insight.macro_step_pending());assert!(!app.docs.active_doc().unwrap().generated);
     app.insight.stop();
 }

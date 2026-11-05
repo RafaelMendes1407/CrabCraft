@@ -66,7 +66,7 @@ impl Stamp {
 
 pub struct Snapshot { pub text: String, pub bom: bool, pub modified: SystemTime }
 
-fn read(path: &Path, cancel: &AtomicBool) -> Result<Snapshot, Error> {
+pub(crate) fn read(path: &Path, cancel: &AtomicBool) -> Result<Snapshot, Error> {
     if cancel.load(Ordering::Acquire) { return Err(Error::Cancelled); }
     if !std::fs::metadata(path)?.is_file() { return Err(Error::NotRegular); }
     let mut options = std::fs::OpenOptions::new(); options.read(true);

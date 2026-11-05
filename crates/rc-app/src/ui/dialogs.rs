@@ -395,6 +395,10 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.end_row();
                         for (label, value) in [
                             (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
+                            (tr("HTML language server"), &mut draft.web_html_server),
+                            (tr("CSS language server"), &mut draft.web_css_server),
+                            (tr("JavaScript/TypeScript language server"), &mut draft.web_typescript_server),
+                            (tr("Global tsserver.js path"), &mut draft.web_tsserver_path),
                             (tr("GDB executable"), &mut draft.gdb_path),
                             (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
                             (tr(".NET CLI"), &mut draft.dotnet_path),
@@ -404,7 +408,8 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                             ui.label(label);
                             ui.horizontal(|ui| {
                                 let mut text = value.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-                                let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(tr("Detect automatically")).desired_width(300.0));
+                                let web=label==tr("HTML language server")||label==tr("CSS language server")||label==tr("JavaScript/TypeScript language server")||label==tr("Global tsserver.js path");
+                                let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(300.0));
                                 if resp.changed() {
                                     *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
                                 }
@@ -2653,7 +2658,7 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
             && let Some(d) = app.docs.list.iter().find(|d| d.editor.id == doc)
         {
             let title = preview.then(|| trf("Rename '{old}' to '{new}'", &[("old", original), ("new", &name.trim())]));
-            app.insight.rename(d, pos, name.trim(), title);
+            if let Some(insight)=app.web_languages.insight(d){insight.rename(d,pos,name.trim(),title);}else{app.insight.rename(d, pos, name.trim(), title);}
         }
         return Outcome::Close;
     }

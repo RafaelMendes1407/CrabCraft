@@ -64,6 +64,7 @@ pub enum Action {
     QuickDoc,
     ExternalDocs,
     ExpandMacro,
+    ExpandMacroStep,
     TestDeclarativeMacro,
     ShowIntentions,
     Generate,
@@ -172,6 +173,7 @@ impl Action {
                 | QuickDoc
                 | ExternalDocs
                 | ExpandMacro
+                | ExpandMacroStep
                 | ShowIntentions
                 | Generate
                 | RefactorThis

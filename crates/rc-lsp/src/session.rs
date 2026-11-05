@@ -55,6 +55,7 @@ pub struct LanguageSession {
     /// Recent stderr lines, for the error message when the server dies.
     stderr: Vec<String>,
     rust: bool,
+    web: Option<crate::web::Settings>,
     /// What is set in rust-analyzer (sent again when it asks).
     ra: crate::rust_analyzer::RaSettings,
 }
@@ -81,6 +82,7 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: false,
+            web: None,
             ra: Default::default(),
         })
     }
@@ -106,8 +108,16 @@ impl LanguageSession {
             started: Instant::now(),
             stderr: Vec::new(),
             rust: true,
+            web: None,
             ra,
         })
+    }
+
+    pub fn start_web(settings: crate::web::Settings, root: &Path, waker: Waker) -> std::io::Result<Self> {
+        let inbox=Inbox::new(waker);let _rt=rc_core::Runtime::handle().enter();
+        let client=crate::web::start(&settings,root,inbox.sender())?;
+        let init=crate::web::initialize(&client,root,&settings);
+        Ok(Self{client,inbox,state:ServerState::Starting,capabilities:None,docs:OpenDocs::default(),semantic_legend:Vec::new(),init:Some(init),root:root.to_path_buf(),solution:None,projects:Vec::new(),progress:HashMap::new(),started:Instant::now(),stderr:Vec::new(),rust:false,web:Some(settings),ra:Default::default()})
     }
 
     pub fn is_ready(&self) -> bool {
@@ -137,10 +147,10 @@ impl LanguageSession {
                     }
                     self.capabilities = Some(res.capabilities);
                     self.client.notify_raw("initialized", json!({}));
-                    if !self.rust {
+                    if !self.rust && self.web.is_none() {
                         roslyn::open_solution(&self.client, self.solution.as_deref(), &self.projects);
                     }
-                    self.set_state(ServerState::LoadingProjects, &mut events);
+                    self.set_state(if self.web.is_some(){ServerState::Ready}else{ServerState::LoadingProjects}, &mut events);
                 }
                 Err(e) => self.set_state(ServerState::Failed(e.to_string()), &mut events),
             }
@@ -148,7 +158,9 @@ impl LanguageSession {
         for msg in self.inbox.drain() {
             match msg {
                 Incoming::Request { id, method, params } => {
-                    if self.rust && method == "workspace/configuration" {
+                    if self.web.is_some() && method == "workspace/configuration" {
+                        self.client.reply(id,Ok(crate::web::configuration(&params)));
+                    } else if self.rust && method == "workspace/configuration" {
                         self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, &self.ra)));
                     } else if let Some(answer) = roslyn::default_reply(&method, &params) {
                         if method == "workspace/semanticTokens/refresh" {

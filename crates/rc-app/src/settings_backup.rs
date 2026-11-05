@@ -5,6 +5,7 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 #[derive(Default)]
 pub struct State {
+    pub migration: crate::settings_migration::State,
     sync: crate::settings_sync::Sync,
     job: Option<Job>,
     pub preview: Option<Backup>,
@@ -20,7 +21,7 @@ impl Drop for Job {
     fn drop(&mut self) { self.cancelled.store(true, Ordering::Release); }
 }
 impl State {
-    pub fn cancel(&mut self) { self.job = None; self.preview = None; self.sync.clear(); }
+    pub fn cancel(&mut self) { self.job = None; self.preview = None; self.sync.clear(); self.migration.cancel(); }
 
     fn start(&mut self, export: Option<Backup>, waker: Waker) {
         let inbox = Inbox::new(waker);
@@ -49,6 +50,7 @@ impl State {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, draft: &mut Settings, waker: Waker) {
+        if ui.collapsing(tr("Import from another editor"), |ui| self.migration.ui(ui,draft,waker.clone())).body_returned.is_some() { return; }
         if let Some(result) = self.job.as_ref().and_then(|job| job.inbox.drain().into_iter().next()) {
             self.job = None;
             match result {

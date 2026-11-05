@@ -701,10 +701,7 @@ impl EditorState {
     /// the visible lines.
     pub(crate) fn spans_of_line(&self, line: usize) -> Vec<Span> {
         let rope = self.buffer.rope();
-        let mut spans = match self.syntax.tree() {
-            Some(tree) => rc_syntax::highlight_lines(self.syntax.lang, tree, rope, line, 1),
-            None => rc_syntax::highlight_lexical(self.syntax.lang, rope, line, 1).unwrap_or_default(),
-        }
+        let mut spans = self.syntax.highlight(rope,line,1)
         .pop()
         .unwrap_or_default();
         if let Some(sem) = self.semantic.get(line).filter(|s| !s.is_empty()) {
@@ -748,10 +745,7 @@ impl EditorState {
             let start = first.saturating_sub(margin);
             let total = (count + 2 * margin).min(self.buffer.len_lines() - start);
             let rope = self.buffer.rope();
-            let mut lines = match self.syntax.tree() {
-                Some(tree) => rc_syntax::highlight_lines(self.syntax.lang, tree, rope, start, total),
-                None => rc_syntax::highlight_lexical(self.syntax.lang, rope, start, total).unwrap_or_else(|| vec![Vec::new(); total]),
-            };
+            let mut lines = self.syntax.highlight(rope,start,total);
             for (i, spans) in lines.iter_mut().enumerate() {
                 if let Some(sem) = self.semantic.get(start + i)
                     && !sem.is_empty()

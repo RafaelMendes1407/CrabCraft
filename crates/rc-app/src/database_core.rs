@@ -39,10 +39,10 @@ impl Cell {
             Self::Blob(value) => value.iter().map(|byte| format!("{byte:02x}")).collect(),
         }
     }
-    fn size(&self) -> usize {
+    pub(super) fn size(&self) -> usize {
         match self {
-            Self::Text(value) => value.len(),
-            Self::Blob(value) => value.len(),
+            Self::Text(value) => value.len().max(16),
+            Self::Blob(value) => value.len().max(16),
             _ => 16,
         }
     }
@@ -81,6 +81,7 @@ pub struct Column {
 }
 #[derive(Clone, Debug)]
 pub struct Table {
+    pub local_name: Option<String>,
     pub name: String,
     pub kind: String,
     pub sql: String,
@@ -96,6 +97,7 @@ pub struct Grid {
 }
 #[derive(Clone, Debug)]
 pub struct Page {
+    pub original_text: Option<Vec<Vec<Option<String>>>>,
     pub table: Table,
     pub grid: Grid,
     pub keys: Vec<Vec<Cell>>,
@@ -137,6 +139,7 @@ pub enum Reply {
 #[derive(Debug)]
 pub enum Error {
     Cancelled,
+    Timeout,
     Limit,
     Input,
     ReadOnly,
@@ -389,6 +392,7 @@ fn table(connection: &Connection, name: &str) -> Result<Table, Error> {
         return Err(Error::Limit);
     }
     Ok(Table {
+        local_name: None,
         name: name.into(),
         kind,
         sql,
@@ -487,6 +491,7 @@ fn browse(
         grid.columns.remove(0);
     }
     Ok(Page {
+        original_text: None,
         table,
         grid,
         keys,
@@ -555,10 +560,10 @@ fn update(
     Ok(())
 }
 #[derive(Serialize, Deserialize)]
-struct Transfer {
-    format: String,
-    columns: Vec<String>,
-    rows: Vec<Vec<Cell>>,
+pub(super) struct Transfer {
+    pub format: String,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Cell>>,
 }
 fn export(
     connection: &Connection,
@@ -593,13 +598,11 @@ fn export(
     if grid.truncated {
         return Err(Error::Limit);
     }
-    let count = grid.rows.len();
-    let data = serde_json::to_vec_pretty(&Transfer {
-        format: "crabcraft.sqlite.rows.v1".into(),
-        columns,
-        rows: std::mem::take(&mut grid.rows),
-    })
-    .map_err(|_| Error::Input)?;
+    save_transfer(path,&Transfer {format:"crabcraft.sqlite.rows.v1".into(),columns,rows:std::mem::take(&mut grid.rows)},cancel)
+}
+pub(super) fn save_transfer(path:&Path,transfer:&Transfer,cancel:&AtomicBool)->Result<usize,Error>{
+    let count=transfer.rows.len();
+    let data=if path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("csv")){crate::database_csv::encode(transfer)?}else{serde_json::to_vec_pretty(transfer).map_err(|_|Error::Input)?};
     if data.len() > MAX_TRANSFER {
         return Err(Error::Limit);
     }
@@ -622,12 +625,7 @@ fn export(
     })?;
     Ok(count)
 }
-fn import(
-    connection: &mut Connection,
-    name: &str,
-    path: &Path,
-    cancel: &AtomicBool,
-) -> Result<usize, Error> {
+pub(super) fn load_transfer(path:&Path,cancel:&AtomicBool)->Result<Transfer,Error>{
     let metadata = std::fs::symlink_metadata(path).map_err(|_| Error::Path)?;
     if !metadata.is_file() || metadata.len() > MAX_TRANSFER as u64 {
         return Err(Error::Limit);
@@ -650,8 +648,17 @@ fn import(
         return Err(Error::Limit);
     }
     check(cancel)?;
-    let transfer: Transfer = serde_json::from_slice(&data).map_err(|_| Error::Input)?;
-    if transfer.format != "crabcraft.sqlite.rows.v1" || transfer.rows.len() > 5000 {
+    let transfer: Transfer = if path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("csv")){crate::database_csv::decode(&data)?}else{serde_json::from_slice(&data).map_err(|_|Error::Input)?};
+    Ok(transfer)
+}
+fn import(
+    connection: &mut Connection,
+    name: &str,
+    path: &Path,
+    cancel: &AtomicBool,
+) -> Result<usize, Error> {
+    let transfer=load_transfer(path,cancel)?;
+    if !matches!(transfer.format.as_str(),"crabcraft.sqlite.rows.v1"|"crabcraft.csv.rows.v1") || transfer.rows.len() > 5000 {
         return Err(Error::Input);
     }
     let current = table(connection, name)?;
@@ -945,6 +952,10 @@ mod tests {
             .is_err()
         );
         assert_eq!(page(&config, "destination").grid.rows.len(), 1);
+    }
+    #[test]
+    fn sqlite_csv_round_trip_preserves_schema_affinity_null_blob_and_quoted_unicode(){
+        let(temp,config)=fixture();sql(&config,"CREATE TABLE source(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");sql(&config,"CREATE TABLE target(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");sql(&config,"INSERT INTO source VALUES(1,'=formula, quote'||char(34)||'🦀'||char(10),1.25,X'00ff',NULL)");let path=temp.path().join("rows.csv");run(&config,Action::Export{table:"source".into(),path:path.clone()},Arc::new(AtomicBool::new(false))).unwrap();run(&config,Action::Import{table:"target".into(),path},Arc::new(AtomicBool::new(false))).unwrap();assert_eq!(page(&config,"source").grid.rows,page(&config,"target").grid.rows);
     }
     #[test]
     fn unsafe_sql_multiple_statements_and_long_queries_are_bounded_or_cancelled() {

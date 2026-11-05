@@ -28,7 +28,7 @@ tree-sitter-javascript = "0.25"
 tree-sitter-typescript = "0.23"
 crossbeam-channel = "0.5"
 egui = "0.36"
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu_no_default_features", "persistence"] }
+eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "wgpu_no_default_features", "persistence"] }
 egui-wgpu = { version = "0.36", default-features = false }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
 egui_kittest = { version = "0.36", features = ["wgpu", "snapshot"] }
