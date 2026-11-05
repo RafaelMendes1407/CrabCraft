@@ -1848,5 +1848,12 @@
     "Version requirement": "版本要求",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add 保留已启用的功能。请在 Cargo.toml 中移除功能条目。",
     "Development dependencies cannot be optional": "开发依赖不能设为可选"
+  },
+  "http_variables": {
+    "Undefined HTTP variable: {name}": "未定义的 HTTP 变量：{name}",
+    "Cyclic HTTP variable: {name}": "循环 HTTP 变量：{name}",
+    "HTTP variable expansion exceeds its size or nesting limit": "HTTP 变量展开超过大小或嵌套限制",
+    "An HTTP variable is missing its closing braces": "HTTP 变量缺少右花括号",
+    "Unresolved HTTP variable: {variable}": "无法解析的 HTTP 变量：{variable}"
   }
 }

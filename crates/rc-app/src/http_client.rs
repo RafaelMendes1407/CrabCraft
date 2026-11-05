@@ -6,8 +6,8 @@
 //! the body is cut at [`MAX_BODY_BYTES`], shown as text only when it is UTF-8, and JSON is
 //! re-indented without being rebuilt (key order and numbers stay as sent).
 //!
-//! Variables, environments, response scripts and bodies from files are F-04: a request that
-//! uses them is not sent, and the window says why.
+//! File variables are expanded with bounded recursion. Missing variables and file bodies
+//! prevent sending; response scripts, environment files and OAuth helpers remain unsupported.
 
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
@@ -34,6 +34,7 @@ pub enum HttpError {
     Unsupported(Vec<String>),
     /// The URL cannot be read, or is not `http`/`https`.
     BadUrl(String),
+    Variable(rc_syntax::http::vars::VariableError),
     BadMethod(String),
     BadHeader(String),
     TimedOut,
@@ -46,6 +47,12 @@ impl HttpError {
     pub fn text(&self) -> String {
         match self {
             HttpError::Unsupported(what) => format!("{}\n{}", tr("This request was not sent: it uses features that are not supported yet."), what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")),
+            HttpError::Variable(error) => match error {
+                rc_syntax::http::vars::VariableError::Undefined(name) => trf("Undefined HTTP variable: {name}", &[("name", name)]),
+                rc_syntax::http::vars::VariableError::Cycle(name) => trf("Cyclic HTTP variable: {name}", &[("name", name)]),
+                rc_syntax::http::vars::VariableError::Limit => tr("HTTP variable expansion exceeds its size or nesting limit").to_string(),
+                rc_syntax::http::vars::VariableError::Unclosed => tr("An HTTP variable is missing its closing braces").to_string(),
+            },
             HttpError::BadUrl(url) => trf("Not an http or https URL: {url}", &[("url", url)]),
             HttpError::BadMethod(m) => trf("Not a valid HTTP method: {method}", &[("method", m)]),
             HttpError::BadHeader(h) => trf("Not a valid header: {header}", &[("header", h)]),
@@ -59,7 +66,7 @@ impl HttpError {
 /// What the user is told about something not supported yet.
 pub fn unsupported_text(kind: &UnsupportedKind) -> String {
     match kind {
-        UnsupportedKind::Variable(name) => trf("Variables are not supported yet: {variable}", &[("variable", &format!("{{{{{name}}}}}"))]),
+        UnsupportedKind::Variable(name) => trf("Unresolved HTTP variable: {variable}", &[("variable", &format!("{{{{{name}}}}}"))]),
         UnsupportedKind::FileVariable(name) => trf("File variables are not supported yet: @{name}", &[("name", name)]),
         UnsupportedKind::BodyFile => tr("Bodies read from a file (< file) are not supported yet").to_string(),
         UnsupportedKind::Handler => tr("Response handler scripts are not supported yet and will not run").to_string(),
@@ -82,10 +89,19 @@ pub struct Prepared {
 /// Checks `req` and makes its URL absolute: `/path` uses the `Host` header, a URL without a
 /// scheme gets `http://`.
 pub fn prepare(req: &HttpRequest) -> Result<Prepared, HttpError> {
-    let blockers: Vec<String> = req.blockers().map(|u| unsupported_text(&u.kind)).collect();
+    let blockers: Vec<String> = req.blockers().filter(|u| !matches!(u.kind, UnsupportedKind::Variable(_))).map(|u| unsupported_text(&u.kind)).collect();
     if !blockers.is_empty() {
         return Err(HttpError::Unsupported(blockers));
     }
+    let mut resolver = rc_syntax::http::vars::Resolver::new(&req.variables);
+    let mut resolved = req.clone();
+    let expand = |resolver: &mut rc_syntax::http::vars::Resolver<'_>, text: &str| {
+        if text.contains("{{") { resolver.expand(text).map_err(HttpError::Variable) } else { Ok(text.to_string()) }
+    };
+    resolved.url = expand(&mut resolver, &req.url)?;
+    resolved.body = expand(&mut resolver, &req.body)?;
+    resolved.headers = req.headers.iter().map(|(k, v)| Ok((expand(&mut resolver, k)?, expand(&mut resolver, v)?))).collect::<Result<_, HttpError>>()?;
+    let req = &resolved;
     let mut url = req.url.trim().to_string();
     if url.starts_with('/') {
         let host = req.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("host")).map(|(_, v)| v.trim()).filter(|h| !h.is_empty());
@@ -345,7 +361,7 @@ impl HttpClient {
     pub fn start_with(&mut self, req: &HttpRequest, file: PathBuf, timeout: Duration, max: usize) {
         let id = self.next_id;
         self.next_id += 1;
-        let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending()).map(|u| unsupported_text(&u.kind)).collect();
+        let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_))).map(|u| unsupported_text(&u.kind)).collect();
         let outcome = match prepare(req) {
             Ok(prepared) => {
                 let cancel = Arc::new(AtomicBool::new(false));
@@ -433,12 +449,22 @@ mod tests {
         assert_eq!(prepare(&one("GET file:///etc/passwd\n")), Err(HttpError::BadUrl("file:///etc/passwd".into())));
         assert!(matches!(prepare(&one("GET http://x/\nBad Header: v\n")), Err(HttpError::BadHeader(_))));
         assert!(matches!(prepare(&one("GET http://x/\nX: a\u{7f}b\n")), Err(HttpError::BadHeader(_))));
-        let Err(HttpError::Unsupported(why)) = prepare(&one("GET http://{{host}}/\n")) else { panic!() };
-        assert_eq!(why.len(), 1);
-        assert!(why[0].contains("{{host}}"), "{why:?}");
-        assert!(HttpError::Unsupported(why).text().contains("not supported yet"));
+        assert!(matches!(prepare(&one("GET http://{{host}}/\n")), Err(HttpError::Variable(rc_syntax::http::vars::VariableError::Undefined(_)))));
         // A response handler does not stop the request, it is noted instead.
         assert!(prepare(&one("GET http://x/\n\n> {% client.log(1) %}\n")).is_ok());
+    }
+
+    #[test]
+    fn file_variables_expand_in_urls_headers_and_bodies_without_ambient_environment() {
+        let request = one("@host = example.test\n@base = http://{{host}}\n@token = local-token\n###\nPOST {{base}}/items\nAuthorization: Bearer {{ token }}\n\n{\"host\":\"{{host}}\"}\n");
+        let ready = prepare(&request).unwrap();
+        assert_eq!(ready.url, "http://example.test/items");
+        assert_eq!(ready.headers, [("Authorization".into(), "Bearer local-token".into())]);
+        assert!(ready.body.contains("example.test"));
+        assert!(rc_syntax::http::unsupported_in("@host = example.test\nGET http://{{host}}\n").is_empty());
+        assert!(matches!(prepare(&one("@a = {{b}}\n@b = {{a}}\nGET http://{{a}}\n")), Err(HttpError::Variable(rc_syntax::http::vars::VariableError::Cycle(_)))));
+        // Unsubstituted bodies keep the existing HTTP client's larger response/request limit.
+        assert!(prepare(&one(&format!("POST http://x/\n\n{}", "x".repeat(2*1024*1024)))).is_ok());
     }
 
     #[test]
@@ -569,12 +595,12 @@ mod tests {
     }
 
     #[test]
-    fn requests_with_variables_are_not_sent() {
+    fn requests_with_undefined_variables_are_not_sent() {
         let mut client = HttpClient::new(Waker::noop());
         client.start(&one("GET http://127.0.0.1:9/{{path}}\n\n> {% client.test() %}\n"), PathBuf::new());
         assert!(!client.running());
         let e = &client.history[0];
-        assert!(matches!(&e.outcome, Outcome::Failed(HttpError::Unsupported(w)) if w.len() == 1));
+        assert!(matches!(&e.outcome, Outcome::Failed(HttpError::Variable(rc_syntax::http::vars::VariableError::Undefined(name))) if name == "path"));
         assert_eq!(e.notes.len(), 1, "the handler is noted: {:?}", e.notes);
     }
 }

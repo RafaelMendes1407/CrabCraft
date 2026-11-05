@@ -57,7 +57,7 @@ impl HttpCommand {
         let request = requests.get(index).ok_or(Error::NoRequest)?;
         let prepared = http_client::prepare(request).map_err(Error::Http)?;
         let response = http_client::send(&prepared, http_client::TIMEOUT, http_client::MAX_BODY_BYTES, &AtomicBool::new(false)).map_err(Error::Http)?;
-        let warnings: Vec<_> = request.unsupported.iter().map(|item| http_client::unsupported_text(&item.kind)).collect();
+        let warnings: Vec<_> = request.unsupported.iter().filter(|item| !matches!(item.kind, rc_syntax::http::UnsupportedKind::Variable(_) | rc_syntax::http::UnsupportedKind::FileVariable(_))).map(|item| http_client::unsupported_text(&item.kind)).collect();
         let body = std::str::from_utf8(&response.body).ok();
         let json = serde_json::json!({
             "request": index + 1, "method": prepared.method, "url": prepared.url,
@@ -92,7 +92,7 @@ mod tests {
         assert!(matches!(HttpCommand { file: file.clone(), request: None }.execute(), Err(Error::SelectRequest)));
         assert!(matches!(HttpCommand { file: file.clone(), request: Some(3) }.execute(), Err(Error::NoRequest)));
         std::fs::write(&file, "GET http://{{host}}/\n").unwrap();
-        assert!(matches!(HttpCommand { file, request: None }.execute(), Err(Error::Http(HttpError::Unsupported(_)))));
+        assert!(matches!(HttpCommand { file, request: None }.execute(), Err(Error::Http(HttpError::Variable(_)))));
     }
 
     #[test]
@@ -115,7 +115,7 @@ mod tests {
         std::fs::write(project.path().join("src/main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(project.path().join("build.rs"), "compile_error!(\"HTTP CLI must never build this project\");").unwrap();
         let file = project.path().join("requests.http");
-        std::fs::write(&file, format!("GET http://{address}/unused\n###\nGET http://{address}/selected\n")).unwrap();
+        std::fs::write(&file, format!("@host = {address}\n@base = http://{{{{host}}}}\n###\nGET {{{{base}}}}/unused\n###\nGET {{{{base}}}}/selected\n")).unwrap();
         let (result, code) = HttpCommand { file, request: Some(2) }.execute().unwrap();
         thread.join().unwrap();
         assert_eq!(code, 1);

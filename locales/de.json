@@ -1848,5 +1848,12 @@
     "Version requirement": "Versionsanforderung",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add behält aktivierte Features bei. Feature-Einträge in Cargo.toml entfernen.",
     "Development dependencies cannot be optional": "Entwicklungsabhängigkeiten können nicht optional sein"
+  },
+  "http_variables": {
+    "Undefined HTTP variable: {name}": "Undefinierte HTTP-Variable: {name}",
+    "Cyclic HTTP variable: {name}": "Zyklische HTTP-Variable: {name}",
+    "HTTP variable expansion exceeds its size or nesting limit": "Die HTTP-Variablenerweiterung überschreitet das Größen- oder Verschachtelungslimit",
+    "An HTTP variable is missing its closing braces": "Bei einer HTTP-Variable fehlen die schließenden Klammern",
+    "Unresolved HTTP variable: {variable}": "Nicht aufgelöste HTTP-Variable: {variable}"
   }
 }

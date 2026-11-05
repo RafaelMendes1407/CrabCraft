@@ -3402,7 +3402,7 @@ fn http_file_requests_run_from_the_gutter() {
     h.run_steps(4);
     assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Http));
     assert!(!h.state().http.running());
-    h.get_by_label_contains("not supported yet");
+    h.get_by_label_contains("Undefined HTTP variable");
 
     // The first request: a local server answers.
     let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"]}"#);

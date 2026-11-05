@@ -1848,5 +1848,12 @@
     "Version requirement": "バージョン要件",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add は有効な機能を保持します。機能の削除は Cargo.toml で行ってください。",
     "Development dependencies cannot be optional": "開発用の依存関係は任意にできません"
+  },
+  "http_variables": {
+    "Undefined HTTP variable: {name}": "未定義の HTTP 変数: {name}",
+    "Cyclic HTTP variable: {name}": "循環している HTTP 変数: {name}",
+    "HTTP variable expansion exceeds its size or nesting limit": "HTTP 変数の展開がサイズまたはネストの上限を超えています",
+    "An HTTP variable is missing its closing braces": "HTTP 変数の閉じ括弧がありません",
+    "Unresolved HTTP variable: {variable}": "解決できない HTTP 変数: {variable}"
   }
 }

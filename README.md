@@ -110,7 +110,9 @@ response (status, headers, body, duration and warnings) to stdout without openin
 For a file with one request, `--request` is optional; multiple requests require an explicit
 selection. Exit status is 1 for HTTP errors, network errors or a truncated response. The
 request file and response body are limited to 8 MB; requests time out after 60 seconds.
-Variables and file bodies are unsupported and block sending, as in the graphical HTTP client.
+File variables such as `@host = localhost:8080` and `{{host}}` work in URLs, headers and
+bodies. Missing variables and file bodies block sending. Environment files, scripts and
+OAuth helpers remain unsupported.
 
 ## Build from source
 
