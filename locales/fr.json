@@ -2992,5 +2992,17 @@
     "{n} downloads": "{n} téléchargements",
     "1 project": "1 projet",
     "{n} projects": "{n} projets"
+  },
+  "main-menu": {
+    "Main Menu": "Menu principal",
+    "Extend Selection": "Étendre la sélection",
+    "Shrink Selection": "Réduire la sélection",
+    "Move Line Up": "Déplacer la ligne vers le haut",
+    "Move Line Down": "Déplacer la ligne vers le bas",
+    "Next Tab": "Onglet suivant",
+    "Previous Tab": "Onglet précédent",
+    "Save": "Enregistrer",
+    "Search file type": "Rechercher un type de fichier",
+    "Move to New Window": "Déplacer vers une nouvelle fenêtre"
   }
 }

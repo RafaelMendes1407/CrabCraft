@@ -3854,3 +3854,112 @@ fn settings_keep_the_same_width_when_switching_pages() {
     }
     assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "settings widths: {widths:?}");
 }
+
+#[test]
+fn central_menu_commands_and_project_templates_work_in_a_rust_project() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("menu-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"menu-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&root.join("src/main.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Edit")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Duplicate Line or Selection")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 2);
+    h.get_by_label(tr("Edit")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Undo")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 1);
+    h.get_by_label(tr("Tools")).click();
+    h.run_steps(2);
+    h.query_all_by_label(tr("ACP Agents")).find(|node| node.rect().width() > 100.0).unwrap().click();
+    h.run_steps(2);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Agents));
+    h.state_mut().dock.hide_all();
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Explorer);
+    let source = root.join("src").canonicalize().unwrap();
+    h.state_mut().explorer.selected = Some(format!("dir:{}", source.display()));
+    h.run_steps(3);
+    h.get_by_label(tr("New File…")).click();
+    h.run_steps(2);
+    h.state_mut().explorer.new_item_filter = "Rust".into();
+    h.run_steps(2);
+    assert!(h.query_by_label(tr("JSON File")).is_none());
+    h.get_by_label(tr("Rust File")).click();
+    h.run_steps(2);
+    if let Some(crate::ui::dialogs::Dialog::NewFile { dir, name, .. }) = &mut h.state_mut().dialog {
+        assert_eq!(dir, &source);
+        *name = "created_from_project_menu".into();
+    } else { panic!("project template did not open the creation dialog"); }
+    h.run_steps(2);
+    h.get_by_label(tr("Create")).click();
+    run_frames(&mut h, "the Rust file created from the project menu", |_| source.join("created_from_project_menu.rs").is_file());
+    assert!(source.join("created_from_project_menu.rs").is_file());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes menu, project identity and docking screenshots"]
+fn central_menus_and_docking_capture() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("project-colours");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"project-colours\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"Hello, CrabCraft!\");\n}\n").unwrap(); }
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.get_by_label(tr("Main Menu")).click(); h.run_steps(2);
+    h.get_by_label(tr("File")).click(); h.run_steps(3);
+    h.render().unwrap().save(out.join("central-menu-file.png")).unwrap();
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+    h.get_by_label(tr("New File…")).click(); h.run_steps(3);
+    h.render().unwrap().save(out.join("project-new-menu.png")).unwrap();
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+    let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
+    h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+    let to = egui::pos2(1050.0, 400.0);
+    for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+    h.run_steps(15);
+    h.render().unwrap().save(out.join("editor-docking-overlay.png")).unwrap();
+    assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
+}
+
+#[test]
+fn editor_docking_guides_create_the_requested_split() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("dock-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"dock-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {}\n").unwrap(); }
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    app.dock.hide_all();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
+    // The right guide in the central docking map, away from the editor's edge region.
+    drag(&mut h, from, egui::pos2(704.0, 424.0));
+    assert!(matches!(h.state().layout.main, crate::layout::Node::Split { vertical: true, .. }));
+    assert_eq!(h.state().layout.main.groups().len(), 2);
+    assert!(h.state().tab_drag.is_none());
+}

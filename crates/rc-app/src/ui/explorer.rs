@@ -52,6 +52,7 @@ pub struct ExplorerState {
     /// The project is in a Git repository (its files have a history to show).
     io:explorer_io::Io,
     pub git: bool,
+    pub new_item_filter: String,
     pub expanded: HashSet<String>,
     pub selected: Option<String>,
     pub dir_cache: HashMap<PathBuf, Arc<[FileNode]>>,
@@ -470,6 +471,8 @@ fn accessibility_ancestor(
 pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>, root: &Path, root_name: &str, active_file: Option<&Path>) -> Vec<ExplorerAction> {
     let p = rc_kit::pal(ui);
     let mut actions = Vec::new();
+    state.io.attach(ui.ctx());
+    let rows = state.rows(solution, root, root_name);
     // Header: title and actions (New UI tool window header).
     let header = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 36.0));
     ui.allocate_rect(header, Sense::hover());
@@ -494,8 +497,21 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
         }
     }
 
-    state.io.attach(ui.ctx());
-    let rows = state.rows(solution, root, root_name);
+    x -= 26.0;
+    let add_rect = Rect::from_min_size(pos2(x, header.center().y - 13.0), vec2(26.0, 26.0));
+    let mut add_ui = ui.new_child(egui::UiBuilder::new().max_rect(add_rect));
+    let add = theme::icon_button(&mut add_ui, ico::ADD, true, tr("New File…"));
+    let selected = state.selected.as_ref().and_then(|key| rows.iter().find(|row| &row.key == key));
+    let target = match selected.map(|row| &row.kind) {
+        Some(NodeKind::Dir(path)) => path.clone(),
+        Some(NodeKind::File(path) | NodeKind::Project(path)) => path.parent().unwrap_or(root).to_path_buf(),
+        _ => root.to_path_buf(),
+    };
+    let dotnet = solution.is_some() || state.known_dotnet(&target, root);
+    let popup = egui::Popup::menu(&add);
+    if !popup.is_open() { state.new_item_filter.clear(); }
+    popup.show(|ui| new_item_menu(ui, &target, dotnet, &mut state.new_item_filter, &mut actions));
+
     let refresh=ui.small_button(tr("Refresh")).clicked();
     if state.io.busy(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Loading project files…"));if ui.button(tr("Cancel")).clicked(){state.io.cancel();}});}
     for(key,error)in state.io.errors.iter().take(3){ui.small(rc_kit::i18n::trf("Explorer read failed for {path}: {error}",&[("path",&key.path().display()),("error",&explorer_error(*error))]));}
@@ -742,35 +758,11 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         actions.push(ExplorerAction::Open(p.clone()));
         ui.close();
     }
-    // Add › (Rider): types, controllers, Razor, tests, files and folders.
     ui.menu_button(tr("Add"), |ui| {
-        ui.set_min_width(220.0);
-        ui.set_max_width(280.0);
-        use crate::item_templates::ItemKind;
-        // C# types, controllers and Razor items only where a .NET project is: anywhere else
-        // (a Rust project, or a folder of several) the Rust menu, so nothing becomes a `.cs`.
-        let dotnet = !rust && dotnet;
-        for entry in if dotnet { ItemKind::MENU } else { ItemKind::RUST_MENU } {
-            match entry {
-                None => {
-                    ui.separator();
-                }
-                Some(kind) => {
-                    let label = format!("{}…", tr(kind.title()));
-                    if theme::menu_item(ui, Some(kind.icon()), &label, false).clicked() {
-                        actions.push(ExplorerAction::NewItem(target_dir.clone(), *kind));
-                        ui.close();
-                    }
-                }
-            }
-        }
-        if !dotnet {
-            ui.separator();
-            if theme::menu_item(ui, Some(ico::LIBRARY), &format!("{}…", tr("Cargo Crate")), false).clicked() {
-                actions.push(ExplorerAction::NewCrate(target_dir.clone()));
-                ui.close();
-            }
-        }
+        let id = ui.id().with("new_item_filter");
+        let mut filter = ui.ctx().data(|data| data.get_temp::<String>(id).unwrap_or_default());
+        new_item_menu(ui, &target_dir, !rust && dotnet, &mut filter, actions);
+        ui.ctx().data_mut(|data| data.insert_temp(id, filter));
     });
     if matches!(row.kind, NodeKind::Solution) {
         return;
@@ -835,6 +827,35 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
             }
         }
     }
+}
+
+/// Existing templates only: the same creation flow handles the header and context menu.
+fn new_item_menu(ui: &mut Ui, target: &Path, dotnet: bool, filter: &mut String, actions: &mut Vec<ExplorerAction>) {
+    use crate::item_templates::ItemKind;
+    ui.set_min_width(260.0);
+    ui.set_max_width(320.0);
+    ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Search file type")).desired_width(260.0));
+    ui.separator();
+    let query = filter.to_lowercase();
+    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+        for entry in if dotnet { ItemKind::MENU } else { ItemKind::RUST_MENU } {
+            if let Some(kind) = entry {
+                let title = tr(kind.title());
+                if !title.to_lowercase().contains(&query) { continue; }
+                if theme::menu_item(ui, Some(kind.icon()), title, false).clicked() {
+                    actions.push(ExplorerAction::NewItem(target.to_path_buf(), *kind));
+                    ui.close();
+                }
+            } else if query.is_empty() { ui.separator(); }
+        }
+        if !dotnet && tr("Cargo Crate").to_lowercase().contains(&query) {
+            ui.separator();
+            if theme::menu_item(ui, Some(ico::LIBRARY), tr("Cargo Crate"), false).clicked() {
+                actions.push(ExplorerAction::NewCrate(target.to_path_buf()));
+                ui.close();
+            }
+        }
+    });
 }
 
 #[cfg(test)]

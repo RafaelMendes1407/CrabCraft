@@ -2992,5 +2992,17 @@
     "{n} downloads": "{n} Downloads",
     "1 project": "1 Projekt",
     "{n} projects": "{n} Projekte"
+  },
+  "main-menu": {
+    "Main Menu": "Hauptmenü",
+    "Extend Selection": "Auswahl erweitern",
+    "Shrink Selection": "Auswahl verkleinern",
+    "Move Line Up": "Zeile nach oben verschieben",
+    "Move Line Down": "Zeile nach unten verschieben",
+    "Next Tab": "Nächster Tab",
+    "Previous Tab": "Vorheriger Tab",
+    "Save": "Speichern",
+    "Search file type": "Dateityp suchen",
+    "Move to New Window": "In neues Fenster verschieben"
   }
 }

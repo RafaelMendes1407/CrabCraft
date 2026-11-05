@@ -2992,5 +2992,17 @@
     "{n} downloads": "{n} ダウンロード",
     "1 project": "1 プロジェクト",
     "{n} projects": "{n} プロジェクト"
+  },
+  "main-menu": {
+    "Main Menu": "メインメニュー",
+    "Extend Selection": "選択範囲を拡張",
+    "Shrink Selection": "選択範囲を縮小",
+    "Move Line Up": "行を上に移動",
+    "Move Line Down": "行を下に移動",
+    "Next Tab": "次のタブ",
+    "Previous Tab": "前のタブ",
+    "Save": "保存",
+    "Search file type": "ファイルの種類を検索",
+    "Move to New Window": "新しいウィンドウに移動"
   }
 }

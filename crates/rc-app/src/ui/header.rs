@@ -66,8 +66,38 @@ fn gradient_rounded_rect(r: Rect, radius: f32, top: Color32, bottom: Color32) ->
     mesh
 }
 
+/// Gaussian colour wash behind the project identity, tessellated directly in egui.
+/// It fades to transparent across the title bar instead of blurring text or icons.
+fn project_glow(ui: &Ui, name: &str) {
+    let rect = ui.max_rect();
+    let hash = name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(byte as u32));
+    let color = rgb(BADGE_COLORS[hash as usize % BADGE_COLORS.len()].0);
+    let mut mesh = egui::Mesh::default();
+    let columns = 48;
+    let rows = 8;
+    let width = rect.width().min(720.0);
+    for y in 0..=rows {
+        for x in 0..=columns {
+            let point = pos2(rect.left() + width * x as f32 / columns as f32, rect.top() + rect.height() * y as f32 / rows as f32);
+            let dx = (point.x - rect.left() - 145.0) / 180.0;
+            let dy = (point.y - rect.top()) / 90.0;
+            let alpha = 0.22 * (-0.5 * (dx * dx + dy * dy)).exp();
+            mesh.colored_vertex(point, color.gamma_multiply(alpha));
+        }
+    }
+    for y in 0..rows {
+        for x in 0..columns {
+            let a = y * (columns + 1) + x;
+            mesh.add_triangle(a, a + 1, a + columns + 1);
+            mesh.add_triangle(a + 1, a + columns + 2, a + columns + 1);
+        }
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
+    if let Some(workspace) = &app.workspace { project_glow(ui, &workspace.ws.name()); }
     // The whole bar drags the window (behind the widgets).
     let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
@@ -84,6 +114,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let zoom = ui.ctx().zoom_factor().max(0.1);
                 ui.add_space(rc_kit::window_chrome::leading_space(cfg!(target_os = "macos"), fullscreen, zoom));
+                if theme::icon_button_sized(ui, ico::MENU, true, tr("Main Menu"), 30.0).clicked() {
+                    crate::ui::main_menu::toggle(ui.ctx());
+                }
                 project_widget(app, ui);
                 if app.workspace.is_some() {
                     // VCS widget: the current branch and the branches popup.
@@ -116,70 +149,6 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(6.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
-                    let more = theme::icon_button_sized(ui, ico::MORE_VERT, true, tr("More actions"), 30.0);
-                    egui::Popup::menu(&more).show(|ui| {
-                        ui.set_min_width(260.0);
-                        for (label, actions) in [
-                            (tr("Edit"), vec![(tr("Undo"), Action::Undo), (tr("Redo"), Action::Redo), (tr("Find"), Action::Find)]),
-                            (tr("Build"), vec![(tr("Build Project"), Action::Build)]),
-                            (tr("Run"), vec![(tr("Run"), Action::Run), (tr("Debug"), Action::Debug), (tr("Run Tests"), Action::RunTests), (tr("Stop"), Action::StopRun)]),
-                        ] {
-                            ui.menu_button(label, |ui| {
-                                for (label, action) in actions {
-                                    if theme::menu_item(ui, crate::search::action_icon(action), label, false).clicked() {
-                                        app.pending.push(action);
-                                        ui.close();
-                                    }
-                                }
-                            });
-                        }
-                        ui.menu_button(tr("Help"), |ui| {
-                            if theme::menu_item(ui, Some(ico::INFO), tr("About CrabCraft"), false).clicked() {
-                                app.dialog = Some(crate::ui::dialogs::Dialog::About);
-                                ui.close();
-                            }
-                        });
-                        ui.separator();
-                        if theme::menu_item(ui, Some(ico::RUN_ANYTHING), tr("Local AI assistant"), false).clicked() {
-                            app.local_ai.open = true;
-                            ui.close();
-                        }
-                        // The user's external tools, then the settings that list them.
-                        ui.menu_button(tr("External Tools"), |ui| {
-                            let names: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
-                            for name in names {
-                                if theme::menu_item(ui, Some(ico::RUN_ANYTHING), &name, false).clicked() {
-                                    app.run_external_tool(&name);
-                                    ui.close();
-                                }
-                            }
-                            if !app.settings.external_tools.is_empty() {
-                                ui.separator();
-                            }
-                            if theme::menu_item(ui, Some(ico::SETTINGS), tr("Configure External Tools…"), false).clicked() {
-                                app.open_settings(crate::ui::dialogs::SettingsPage::ExternalTools);
-                                ui.close();
-                            }
-                        });
-                        if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Project"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Rebuild);
-                            }
-                            ui.close();
-                        }
-                        if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Project"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Clean);
-                            }
-                            ui.close();
-                        }
-                        if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Fetch Dependencies"), false).clicked() {
-                            if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Restore);
-                            }
-                            ui.close();
-                        }
-                    });
                     if (app.runner.busy() || app.debugger.active()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
                         app.pending.push(Action::StopRun);
                     }

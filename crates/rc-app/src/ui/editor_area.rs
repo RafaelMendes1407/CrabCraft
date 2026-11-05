@@ -218,13 +218,23 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
     let Some(doc) = app.tab_drag.as_ref().map(|d| d.doc) else { return };
     let Some(pointer) = drag_pointer(app, ui.ctx()) else { return };
     let over_strip = strip.as_ref().is_some_and(|(s, _)| s.contains(pointer));
-    if !over_strip && !body.contains(pointer) {
-        return;
-    }
     let p = rc_kit::pal(ui);
     let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new(("tab_drop", g.id))));
     let from = app.layout.group_of(doc);
     let alone = from.and_then(|f| app.layout.group(f)).is_some_and(|f| f.tabs.len() == 1);
+    // Keep every editor visible under a neutral veil, with a map of valid destinations.
+    painter.rect_filled(body, 4.0, egui::Color32::from_rgba_unmultiplied(130, 138, 150, 48));
+    let can_split = !g.tabs.is_empty() && !(from == Some(g.id) && alone);
+    docking_guides(ui, &painter, body, pointer, can_split, from != Some(g.id));
+    if !over_strip && !body.contains(pointer) { return; }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    if let Some(document) = app.docs.list.iter().find(|document| document.editor.id == doc) {
+        let text = painter.layout_no_wrap(document.name(), theme::bold(12.0), p.text);
+        let card = Rect::from_min_size(pointer + vec2(18.0, 20.0), text.size() + vec2(28.0, 16.0));
+        painter.rect(card, 5.0, p.main_bg, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+        painter.galley(card.min + vec2(14.0, 8.0), text, p.text);
+    }
+
     let target = match strip {
         Some((strip, tabs)) if over_strip => {
             let index = tabs.iter().position(|r| pointer.x < r.center().x && pointer.y <= r.bottom() + 2.0).unwrap_or(tabs.len());
@@ -240,10 +250,7 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
             Some(Drop::Group { group: g.id, index: Some(index) })
         }
         _ => {
-            let fx = (pointer.x - body.left()) / body.width().max(1.0);
-            let fy = (pointer.y - body.top()) / body.height().max(1.0);
-            let edges = [(fx, Edge::Left), (1.0 - fx, Edge::Right), (fy, Edge::Top), (1.0 - fy, Edge::Bottom)];
-            let near = edges.into_iter().filter(|(d, _)| *d < 0.25).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, e)| e);
+            let near = docking_edge(body, pointer);
             let (zone, drop) = match near {
                 // An empty group (the main window's, every tab elsewhere) only takes tabs.
                 Some(edge) if !g.tabs.is_empty() && !(from == Some(g.id) && alone) => {
@@ -278,6 +285,48 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
     };
     if let Some(d) = &mut app.tab_drag {
         d.target = target;
+    }
+}
+
+fn docking_tiles(body: Rect) -> [(Option<Edge>, Rect); 5] {
+    let center = body.center();
+    let dx = (body.width() * 0.5 - 26.0).clamp(0.0, 64.0);
+    let dy = (body.height() * 0.5 - 26.0).clamp(0.0, 52.0);
+    [
+        (Some(Edge::Left), center - vec2(dx, 0.0)),
+        (Some(Edge::Right), center + vec2(dx, 0.0)),
+        (Some(Edge::Top), center - vec2(0.0, dy)),
+        (Some(Edge::Bottom), center + vec2(0.0, dy)),
+        (None, center),
+    ].map(|(edge, position)| (edge, Rect::from_center_size(position, vec2(40.0, 32.0))))
+}
+
+fn docking_edge(body: Rect, pointer: Pos2) -> Option<Edge> {
+    if let Some((edge, _)) = docking_tiles(body).into_iter().find(|(_, tile)| tile.contains(pointer)) { return edge; }
+    let fx = (pointer.x - body.left()) / body.width().max(1.0);
+    let fy = (pointer.y - body.top()) / body.height().max(1.0);
+    [(fx, Edge::Left), (1.0 - fx, Edge::Right), (fy, Edge::Top), (1.0 - fy, Edge::Bottom)]
+        .into_iter().filter(|(distance, _)| *distance < 0.25).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, edge)| edge)
+}
+
+/// A docking map is informational: the complete edge region remains the drop target.
+fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, can_split: bool, can_merge: bool) {
+    let p = rc_kit::pal(ui);
+    let selected = docking_edge(body, pointer);
+    for (edge, tile) in docking_tiles(body) {
+        if edge.is_some() && !can_split || edge.is_none() && !can_merge { continue; }
+        let active = body.contains(pointer) && selected == edge;
+        painter.rect(tile, 5.0, if active { p.selection } else { p.main_bg }, egui::Stroke::new(1.0, if active { p.accent } else { p.muted }), egui::StrokeKind::Inside);
+        let glyph = tile.shrink2(vec2(8.0, 7.0));
+        painter.rect_stroke(glyph, 1.0, egui::Stroke::new(1.0, p.text_muted), egui::StrokeKind::Inside);
+        let half = match edge {
+            Some(Edge::Left) => Rect::from_min_max(glyph.min, pos2(glyph.center().x, glyph.bottom())),
+            Some(Edge::Right) => Rect::from_min_max(pos2(glyph.center().x, glyph.top()), glyph.max),
+            Some(Edge::Top) => Rect::from_min_max(glyph.min, pos2(glyph.right(), glyph.center().y)),
+            Some(Edge::Bottom) => Rect::from_min_max(pos2(glyph.left(), glyph.center().y), glyph.max),
+            None => glyph,
+        };
+        painter.rect_filled(half.shrink(1.0), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
     }
 }
 
@@ -958,6 +1007,29 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, 
             ui.close();
         }
     });
+}
+
+/// Reuse tab commands from the central Window menu so save and layout behavior agree.
+pub fn window_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let mut commands = Vec::new();
+    let active = app.docs.active;
+    for (label, command) in [
+        (tr("Split Right"), active.map(|index| TabCommand::Split(index, true))),
+        (tr("Split Down"), active.map(|index| TabCommand::Split(index, false))),
+        (tr("Move to New Window"), active.map(TabCommand::Float)),
+        (tr("Close Other Tabs"), active.map(TabCommand::CloseOthers)),
+    ] {
+        if theme::menu_entry(ui, None, label, None, false, command.is_some()).clicked() {
+            if let Some(command) = command { commands.push(command); }
+            ui.close();
+        }
+    }
+    let group = active.and_then(|index| app.docs.list.get(index)).and_then(|doc| app.layout.group_of(doc.editor.id));
+    if theme::menu_entry(ui, None, tr("Unsplit All"), None, false, group.is_some()).clicked() {
+        if let Some(group) = group { commands.push(TabCommand::UnsplitAll(group)); }
+        ui.close();
+    }
+    run_tab_commands(app, ui.ctx(), commands);
 }
 
 /// Closes the documents `ids` (editor ids), skipping pinned ones when `keep_pinned`.

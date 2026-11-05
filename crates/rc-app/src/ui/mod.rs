@@ -12,6 +12,7 @@ pub mod markdown;
 pub mod new_project;
 pub mod profiler_window;
 pub mod header;
+pub mod main_menu;
 pub mod status;
 pub mod run_windows;
 pub mod search_popup;
@@ -35,6 +36,9 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     let bar = egui::Frame::NONE.fill(p.main_bg);
     let title_h = TITLE_H.max(32.0 / ctx.zoom_factor().max(0.1));
     egui::Panel::top("title_bar").exact_size(title_h).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| header::show(app, ui));
+    if main_menu::visible(&ctx) {
+        egui::Panel::top("main_menu_bar").resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| main_menu::show(app, ui));
+    }
     egui::Panel::bottom("status_bar").exact_size(STATUS_H).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| status::show(app, ui));
     // Without a workspace: the welcome screen, unless files are open on their own.
     if app.workspace.is_none() && app.docs.list.is_empty() {

@@ -2992,5 +2992,17 @@
     "{n} downloads": "{n} 次下载",
     "1 project": "1 个项目",
     "{n} projects": "{n} 个项目"
+  },
+  "main-menu": {
+    "Main Menu": "主菜单",
+    "Extend Selection": "扩展选择",
+    "Shrink Selection": "缩小选择",
+    "Move Line Up": "上移行",
+    "Move Line Down": "下移行",
+    "Next Tab": "下一个标签页",
+    "Previous Tab": "上一个标签页",
+    "Save": "保存",
+    "Search file type": "搜索文件类型",
+    "Move to New Window": "移动到新窗口"
   }
 }
