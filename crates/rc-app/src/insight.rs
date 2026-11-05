@@ -400,6 +400,9 @@ impl Insight {
             return;
         }
         self.autoimport_exclude = list.clone();
+        self.completion = None;
+        self.resolve = None;
+        self.raw_items.clear();
         if self.rust
             && let Some(s) = &mut self.session
         {
@@ -911,13 +914,18 @@ impl Insight {
         if let Some(req) = &mut self.completion
             && let Some(r) = req.pending.poll()
         {
-            let req = self.completion.take().expect("checked");
+            let Some(req) = self.completion.take() else { return };
             self.completion_anchor = req.anchor;
             self.last_completion_ms = Some(req.pending.started.elapsed().as_millis());
             let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == req.doc) else { return };
             let (items, default_range) = parse_completion(r.unwrap_or(Value::Null));
             let rope = d.editor.buffer.rope().clone();
             let mut sorted = items;
+            // didChangeConfiguration is asynchronous in rust-analyzer. Keep a stale server
+            // response from offering an import the user has just excluded.
+            if self.rust {
+                sorted.retain(|item| !excluded_autoimport(item, &self.autoimport_exclude));
+            }
             sorted.sort_by(|a, b| a.sort_text.as_deref().unwrap_or(&a.label).cmp(b.sort_text.as_deref().unwrap_or(&b.label)));
             // `data` is the index in `raw_items`, to find the server's item again on accept.
             let editor_items = sorted.iter().enumerate().map(|(i, it)| convert::completion_item(&rope, it, i, default_range.as_ref())).collect();
@@ -2409,9 +2417,34 @@ fn insert_usings(d: &mut Doc, namespaces: &[String]) {
     d.editor.apply_text_edits(changes);
 }
 
+/// rust-analyzer identifies an auto-import candidate in its structured label detail. Local
+/// symbols and other servers are preserved; only exact paths or module descendants match.
+fn excluded_autoimport(item: &lsp::CompletionItem, excluded: &[String]) -> bool {
+    let Some(detail) = item.label_details.as_ref().and_then(|details| details.detail.as_deref()) else { return false; };
+    let Some(path) = detail.trim().strip_prefix("(use ").and_then(|text| text.strip_suffix(')')) else { return false; };
+    let path = path.trim().trim_end_matches(';').trim_start_matches("::");
+    excluded.iter().map(|path| path.trim().trim_start_matches("::")).filter(|path| !path.is_empty())
+        .any(|excluded| path == excluded || path.strip_prefix(excluded).is_some_and(|rest| rest.starts_with("::")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn excluded_autoimports_filter_stale_replies_without_hiding_local_symbols() {
+        let item = |detail: &str| lsp::CompletionItem {
+            label: "Ordering".into(),
+            label_details: Some(lsp::CompletionItemLabelDetails { detail: Some(detail.into()), description: None }),
+            ..Default::default()
+        };
+        let paths = vec!["std::sync".into(), "".into()];
+        assert!(excluded_autoimport(&item("(use std::sync::atomic::Ordering)"), &paths));
+        assert!(!excluded_autoimport(&item("(use std::cmp::Ordering)"), &paths));
+        assert!(!excluded_autoimport(&item("(use std::synchronization::Ordering)"), &paths));
+        assert!(!excluded_autoimport(&item("Ordering"), &paths));
+        assert!(excluded_autoimport(&item("(use ::std::sync::Ordering)"), &vec!["std::sync::Ordering".into()]));
+    }
 
     #[test]
     fn call_paren_skips_nested_calls() {

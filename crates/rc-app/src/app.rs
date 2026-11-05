@@ -2964,7 +2964,11 @@ impl CrabCraftApp {
     pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
         let lang_changed = new.language != self.settings.language;
         let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
+        let imports_changed = new.autoimport_exclude != self.settings.autoimport_exclude;
         self.settings = new;
+        if imports_changed {
+            for doc in &mut self.docs.list { doc.editor.popups.completion = None; }
+        }
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
         self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
