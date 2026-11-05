@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 205 |
+| ✅ Pronto | 206 |
 | 🚧 Em andamento | 12 |
-| 🟢 Herdado | 1 |
+| 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 35 |
 | 🚫 Fora do escopo | 5 |
@@ -85,7 +85,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| E-01 | Editor rápido com arquivos grandes | 🟢 | M1 | |
+| E-01 | Editor rápido com arquivos grandes | ✅ | M1 | Verificação nativa em projeto Cargo real: arquivo Rust UTF-8 de 2 MiB com análise em background, navegação, edição e undo; 9 MiB navegável em modo somente leitura; arquivo acima de 128 MiB recusado sem abrir documento. Ambos os fontes passaram cargo check. Renderização limitada ao viewport; tempos locais documentados, sem comparação de paridade. I/O inicial ainda síncrono, acompanhado em E-12. Ver docs/large-files.md. |
 | E-02 | Realce de sintaxe Rust | ✅ | M1 | Consultas próprias sobre tree-sitter-rust; testado e visto no app |
 | E-03 | Realce de TOML | ✅ | M1 | Consultas próprias sobre tree-sitter-toml-ng; testado no parser real |
 | E-04 | Realce semântico (tipos inferidos, macros, `unsafe`) | ✅ | M1 | Tokens semânticos do rust-analyzer; testado |
