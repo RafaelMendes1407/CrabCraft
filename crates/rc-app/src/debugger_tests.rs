@@ -40,7 +40,7 @@ fn app(home: &Path) -> CrabCraftApp {
     unsafe { std::env::set_var("CRABCRAFT_HOME", home) };
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), netcoredbg_path: Some(netcoredbg), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
-    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.open_workspace_and_wait(&crate::screens::fixtures().join("Shop/Shop.sln"));
     app.trust_project_tools_for_test();
     app
 }
@@ -309,18 +309,18 @@ fn breakpoint_conditions_and_disabled_state_survive_the_session() {
     let calc = crate::screens::fixtures().join("Shop/src/Shop.Core/PriceCalculator.cs");
     let mut app = crate::screens::test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.open_workspace_and_wait(&crate::screens::fixtures().join("Shop/Shop.sln"));
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&calc);
     let d = app.docs.active_doc_mut().unwrap();
     d.editor.breakpoints.insert(20, BreakpointKind::Conditional);
     d.editor.breakpoints.insert(26, BreakpointKind::Disabled);
     app.debugger.conditions.insert((calc.clone(), 20), "subtotal > 0".into());
-    app.save_session();
+    app.save_session_and_wait();
 
     let mut app = crate::screens::test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.open_workspace_and_wait(&crate::screens::fixtures().join("Shop/Shop.sln"));
     app.trust_project_tools_for_test();
     let d = app.docs.list.iter().find(|d| d.path == calc).unwrap();
     assert_eq!(d.editor.breakpoints.get(&20), Some(&BreakpointKind::Conditional));

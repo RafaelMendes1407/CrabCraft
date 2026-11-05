@@ -338,7 +338,7 @@ mod native_tests {
         let original = format!("{SAMPLE}\nfn main() {{ assert_eq!(twice!(21), 42); }}\n");
         std::fs::write(&path, &original).unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path()); app.open_file_and_wait(&path);
+        app.open_workspace_and_wait(root.path()); app.open_file_and_wait(&path);
         let unsaved = original.replacen("($value) + ($value)", "($value) + ($value) + 1", 1);
         let doc = app.docs.active_doc_mut().unwrap();
         doc.editor.replace(0, doc.editor.buffer.len_chars(), &unsaved);

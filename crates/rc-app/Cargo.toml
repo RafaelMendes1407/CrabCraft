@@ -20,6 +20,8 @@ tempfile = "3"
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
+tokio-rustls = "0.26"
+rustls-native-certs = "0.8"
 # Dependency versions in Cargo.toml (C-02, C-04).
 semver = "1"
 # One-layer macro_rules expansion in a separate, bounded helper process.

@@ -9,7 +9,7 @@ Install compatible OpenSSH `ssh` and `sftp` clients on the IDE host. Enter the h
 port, user, private key and an independently verified known_hosts file. Host-key checking is
 mandatory. Unknown/changed keys fail; there is no accept-any-host button. Password prompts,
 interactive key passphrases, inherited SSH configuration/aliases, agents, jump hosts, proxies,
-forwarding and IPv6 literals are currently unsupported. FTP is visibly unsupported.
+forwarding and IPv6 literals are currently unsupported. Reviewed deployment also supports explicit FTPS; plaintext FTP and implicit FTPS are not currently supported. See [deployment](deployment.md).
 
 The worker makes private temporary copies of the key and known_hosts contents. OpenSSH runs
 with `-F none`, BatchMode/IdentitiesOnly/StrictHostKeyChecking enabled, IdentityAgent disabled,
@@ -18,14 +18,14 @@ shell interprets fields or batch commands. Remote paths must be absolute and can
 control characters, quotes, backslashes, glob syntax or parent traversal. Host/user values use
 an explicit restricted character set. No extension executable is selected from project files.
 
-## Review, edit and deploy an existing file
+## Review and edit an existing SSH text file
 
 Load remote file reads an existing UTF-8 text file into a read-only snapshot and a proposed
 editable buffer. Preview remote edit first downloads again and rejects a changed snapshot.
-Preview local deployment compares the selected regular local file with an existing remote
-file. Neither preview uploads data. Review the before/after panes and destination, then choose
-Confirm remote overwrite. Confirmation checks both the remote contents and (for deployment)
-the original local bytes again. A mismatch fails without overwriting the destination.
+Preview does not upload data. Review the before/after panes and destination, then choose
+Confirm remote overwrite. Confirmation checks the remote contents again. A mismatch fails
+without overwriting the destination. For local files, new destinations and binaries, use the
+separate **Reviewed file deployment** section: [SFTP/FTPS workflow and evidence](deployment.md).
 
 The transfer uploads to a unique adjacent temporary name and renames it over the destination.
 OpenSSH automatically uses the `posix-rename@openssh.com` extension when available; servers
@@ -37,9 +37,10 @@ Use this on files whose replacement semantics and permissions you have reviewed.
 SFTP provides no atomic content compare-and-swap or lock. Another writer can change a file
 between verification and rename. The UI states this limitation; stale checks are not a lock.
 Cancellation/error can leave the remote temporary file behind, and a completed rename may
-already have committed. There is no silent retry, automatic upload on save, new-file creation,
-directory synchronization, binary transfer, remote filesystem browser or remote Rust toolchain.
-Y-05 remains partial because FTP and broader deployment workflows are not implemented.
+already have committed. This text editor has no silent retry, automatic upload, new-file
+creation or binary conversion. The deployment section supports new and binary SFTP/explicit-FTPS
+files; neither workflow recursively synchronizes directories. The separate
+[remote workspace](remote-development.md) provides an explicit remote Rust toolchain.
 
 ## Explicit terminal
 
@@ -58,7 +59,7 @@ A worker monitors downloads and cancels the whole process group when the file ex
 budget. The disk limit has a polling/buffering overshoot; this is not an OS quota or sandbox.
 Cancel/project close/pane close discards stale generations and cancels pending transfers.
 Native previews show up to 16,384 characters. In-pane editing is limited to 64 KB; larger text
-files can be deployed from an explicitly selected local file after reviewing that full file.
+files can use the separate reviewed deployment workflow, with its own 32 MiB file limit.
 
 `cargo test -p rc-app remote_command_paths --offline -- --nocapture` checks batch-injection
 refusal and special-file refusal. The ignored integration tests require an explicitly started
@@ -74,8 +75,9 @@ private OpenSSH server at 127.0.0.1:55222, user rafael, with the exclusive key/k
   real upload, and types a command into the explicitly opened native SSH terminal to write a
   server-side verification marker.
 
-This does not claim RustRover parity, remote development, containers, or general SFTP-server
-compatibility beyond the tested OpenSSH server/client.
+This text-editing/terminal workflow does not claim RustRover parity or general SFTP-server
+compatibility beyond the tested OpenSSH server/client. Deployment and remote development
+have their own explicitly documented protocols, limits and evidence.
 
 ## Public references
 

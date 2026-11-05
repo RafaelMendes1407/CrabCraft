@@ -232,7 +232,7 @@ mod tests {
             )
             .unwrap();
             let mut app = crate::screens::test_app(home.path(), false);
-            app.open_workspace(root.path());
+            app.open_workspace_and_wait(root.path());
             app.open_file_and_wait(&rust_path);
             app.settings_backup.migration.source = source;
             app.settings_backup.migration.path = input.display().to_string();

@@ -124,7 +124,7 @@ mod tests {
             std::fs::write(path, format!("fn main() {{\n    let value: u32 = {value};\n    std::fs::write(\"{marker}\", value.to_string()).unwrap();\n}}\n")).unwrap();
         }
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(project.path());
+        app.open_workspace_and_wait(project.path());
         app.trust_project_tools_for_test();
         let mut harness = crate::screens::harness(app, egui::vec2(1450.0, 900.0));
         wait(&mut harness, |a| a.runner.cargo_workspace.is_some());
@@ -174,6 +174,7 @@ mod tests {
         assert!(harness.state().debug_sessions.parked.iter().all(|s| !s.debugger.active()));
         harness.get_by_label(tr("Close Debug Session")).click(); harness.run_steps(2);
         harness.state_mut().close_workspace();
+        harness.state_mut().save_all_and_wait();
         assert!(harness.state().debug_sessions.parked.is_empty());
     }
 }

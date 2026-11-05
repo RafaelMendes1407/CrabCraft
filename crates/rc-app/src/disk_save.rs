@@ -413,6 +413,7 @@ impl crate::app::CrabCraftApp {
                 .is_none_or(|w| self.settings.trusted_projects.contains(&w.ws.root))
     }
     pub fn cancel_disk_save(&mut self) {
+        self.workspace_open.cancel();
         self.file_edits.cancel(); self.file_edits.take_cancelled();
         self.disk_save.cancel();
         self.rustfmt_jobs = Default::default();

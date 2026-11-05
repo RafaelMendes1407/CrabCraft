@@ -30,7 +30,7 @@ fn source_editor_exposes_text_selection_unicode_readonly_and_bounded_large_conte
     let path = root.path().join("src/main.rs");
     std::fs::write(&path, source).unwrap();
     let mut app = crate::screens::test_app(home.path(), false);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.open_file_and_wait(&path);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 900.0));
     h.run_steps(2);
@@ -246,10 +246,16 @@ fn project_tree_supports_expansion_focus_and_open_without_project_execution() {
         .unwrap();
     }
     let mut app = crate::screens::test_app(home.path(), true);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     let mut h = crate::screens::harness(app, egui::vec2(1400.0, 1000.0));
     h.run_steps(3);
     let _tree = h.get_by_role_and_label(Role::Tree, rc_kit::i18n::tr("Project files"));
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while h.query_by_role_and_label(Role::TreeItem, "src").is_none() {
+        assert!(std::time::Instant::now() < until);
+        h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let src = h.get_by_role_and_label(Role::TreeItem, "src");
     assert_eq!(src.accesskit_node().data().is_expanded(), Some(false));
     let mut ancestor = src.parent();
@@ -380,7 +386,7 @@ fn source_geometry_uses_tabs_and_visual_fold_rows_and_selection_unfolds_source()
     let path = root.path().join("src/main.rs");
     std::fs::write(&path, source).unwrap();
     let mut app = crate::screens::test_app(home.path(), true);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.open_file_and_wait(&path);
     app.docs.active_doc_mut().unwrap().editor.indent.tab_width = 8;
     let mut h = crate::screens::harness(app, egui::vec2(1400.0, 1000.0));
@@ -489,7 +495,7 @@ fn terminal_exposes_bounded_unicode_rust_output_and_notices_are_live_regions() {
     )
     .unwrap();
     let mut app = crate::screens::test_app(home.path(), true);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.trust_project_tools_for_test();
     let output = std::process::Command::new("cargo")
         .args(["run", "--offline", "--quiet"])

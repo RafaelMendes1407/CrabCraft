@@ -211,7 +211,7 @@ fn main(){
         connection.execute_batch("CREATE TABLE people(id INTEGER PRIMARY KEY,name TEXT);INSERT INTO people VALUES(1,'Ada');").unwrap();
         drop(connection);
         let mut app = test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.settings.trusted_projects.push(root.clone());
         app.open_file_and_wait(&path);
         let at = source.find("peo WHERE").unwrap() + 3;

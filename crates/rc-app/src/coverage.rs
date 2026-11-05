@@ -445,7 +445,7 @@ mod tests {
         let report = root.path().join("report.info");
         std::fs::write(&report, "SF:src/lib.rs\nDA:1,1\nDA:2,0\nend_of_record\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.coverage.import(report, root.path().into());
         finish(&mut app.coverage);
         app.coverage.show = true;

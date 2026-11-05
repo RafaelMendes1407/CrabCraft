@@ -466,7 +466,7 @@ mod tests {
             rc_syntax::http::parse_requests(&format!("GET {endpoint}/\n\n> {{%\n{source}\n%}}\n"))
                 .remove(0);
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(project.path());
+        app.open_workspace_and_wait(project.path());
         app.http.start(&request, project.path().join("api.http"));
         app.toggle_tool(crate::toolwindow::ToolWindow::Http);
         app.dock

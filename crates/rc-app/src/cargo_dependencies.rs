@@ -274,6 +274,7 @@ mod tests {
     use crate::screens::{HOME_LOCK, harness, test_app};
     use egui_kittest::kittest::Queryable;
     use std::time::Instant;
+    #[track_caller]
     fn pump(h: &mut egui_kittest::Harness<'static, crate::app::CrabCraftApp>, done: impl Fn(&crate::app::CrabCraftApp) -> bool) {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(20) {
@@ -298,7 +299,7 @@ mod tests {
             std::fs::write(dir.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
         }
         let mut app = test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.trust_project_tools_for_test();
         app.dock.show(crate::toolwindow::ToolWindow::Cargo);
         app.dock.sizes.insert(crate::toolwindow::ToolWindow::Cargo, 500.0);
@@ -353,7 +354,7 @@ mod tests {
             std::fs::write(dir.join("build.rs"),"fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         }
         let manifest=root.join("app/Cargo.toml"); let before=std::fs::read(&manifest).unwrap(); let helper_before=std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap();
-        let mut app=test_app(home.path(),true); app.open_workspace(&root); app.trust_project_tools_for_test(); let mut h=harness(app,egui::vec2(1440.0,1100.0));
+        let mut app=test_app(home.path(),true); app.open_workspace_and_wait(&root); app.trust_project_tools_for_test(); let mut h=harness(app,egui::vec2(1440.0,1100.0));
         pump(&mut h,|app| app.runner.cargo_workspace.is_some()); h.state_mut().open_file_and_wait(&root.join("app/src/lib.rs")); h.state_mut().docs.active_doc_mut().unwrap().editor.selection=rc_text::Selection::point(0); h.run_steps(3);
         h.event(egui::Event::Paste("use serde::de::DeserializeOwned;\nfn decode<T: DeserializeOwned>() {}\n#[cfg(test)] mod tests { use helper_lib::value; #[test] fn local(){assert_eq!(value(),42);} }\n".into())); h.run_steps(2);
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==2);
@@ -364,11 +365,14 @@ mod tests {
         h.state_mut().cargo_dependencies.review(&proposal.manifest,&proposal.name,proposal.scope,None); h.state_mut().dialog=Some(crate::ui::dialogs::Dialog::CargoDependencies); h.run_steps(3); pump(&mut h,|app| !app.cargo_dependencies.loading);
         assert_eq!(h.state().cargo_dependencies.manifest.as_ref(),Some(&manifest)); assert_eq!(h.state().cargo_dependencies.scope,Scope::Normal); assert!(h.state().cargo_dependencies.search_cancel.is_none());
         let cargo=rc_cargo::Cargo::locate().unwrap(); h.state_mut().cargo_dependencies.start(&cargo,Ok(vec![]),false); assert!(h.state().cargo_dependencies.operation.is_none());
+        h.state_mut().save_all_and_wait();
         h.state_mut().settings.trusted_projects.push(root.clone()); h.state_mut().cargo_dependencies.offline=true; h.run_steps(2); h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(2);
         pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="serde"));
         assert!(!root.join("app/build-ran").exists()); assert!(!root.join("helper-lib/build-ran").exists());
         h.get_by_label(tr("Close")).click(); h.run_steps(2);
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==1 && app.missing_crates.report.proposals[0].name=="helper-lib");
+        assert_eq!(h.state().missing_crates.report.proposals[0].scope,Scope::Dev);
+        h.run_steps(5);
         h.get_by_label(tr("Review dependency…")).click(); h.run_steps(2); pump(&mut h,|app| !app.cargo_dependencies.loading);
         assert_eq!(h.state().cargo_dependencies.scope,Scope::Dev); assert_eq!(h.state().cargo_dependencies.path,root.join("helper-lib").to_string_lossy());
         h.run_steps(5);
@@ -396,7 +400,7 @@ mod tests {
         let source = project.path().join("src/main.rs");
         std::fs::write(&source, "fn main() { let mut buffer = itoa::Buffer::new(); assert_eq!(buffer.format(42), \"42\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(project.path()); app.trust_project_tools_for_test(); app.open_file_and_wait(&source);
+        app.open_workspace_and_wait(project.path()); app.trust_project_tools_for_test(); app.open_file_and_wait(&source);
         let mut h = crate::screens::harness(app, egui::vec2(1440.0, 1100.0));
         let wait = |h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, done: &dyn Fn(&crate::app::CrabCraftApp) -> bool| {
             let deadline = Instant::now() + Duration::from_secs(25);

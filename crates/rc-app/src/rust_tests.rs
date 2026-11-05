@@ -26,6 +26,7 @@ fn demo(root: &Path) {
 fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(180) {
+        app.poll_workspace_open();
         app.poll_cargo_workspace();
         app.poll_rustfmt();
         app.poll_disk_watch();
@@ -63,7 +64,7 @@ fn an_untrusted_project_runs_nothing_until_the_user_trusts_it() {
     let root = root.canonicalize().unwrap();
     write(&root.join("build.rs"), "fn main() { std::fs::write(\"BUILD_RAN\", \"\").unwrap(); }\n");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     for _ in 0..10 { app.poll_cargo_workspace(); }
     assert!(app.runner.cargo_workspace.is_none());
     assert_eq!(app.insight.status, InsightStatus::Untrusted);
@@ -86,7 +87,7 @@ fn rust_insight_build_run_and_tests_end_to_end() {
     demo(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let names: Vec<_> = app.runner.configs.iter().map(|c| c.name.clone()).collect();
@@ -160,7 +161,7 @@ fn rust_language_features() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -249,7 +250,7 @@ fn rust_navigation_and_hints() {
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
@@ -323,7 +324,7 @@ fn gutter_icons_run_tests_and_binaries() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -371,7 +372,7 @@ fn a_gutter_icon_runs_a_benchmark() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("benches/plain.rs"));
     pump(&mut app, "the benchmark's icon", |a| {
@@ -393,7 +394,7 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     write(&root.join("src/main.rs"), MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let build = |app: &mut CrabCraftApp| {
@@ -443,7 +444,7 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/lone.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -457,6 +458,7 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     assert!(!unlinked(&app, "src/main.rs") && !unlinked(&app, "src/lib.rs"));
     let i = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
     app.close_tab(i);
+    app.save_all_and_wait();
 
     // Closed parent: written to disk.
     app.declare_module(&root.join("src/lib.rs"), "lone", false);
@@ -486,7 +488,7 @@ fn run_anything_runs_commands_and_configurations() {
     demo(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let ctx = egui::Context::default();
@@ -512,7 +514,7 @@ fn optimize_imports_removes_the_unused_and_merges_the_rest() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -534,7 +536,7 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     let root = root.canonicalize().unwrap();
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     let line = MAIN.lines().position(|l| l.contains("println")).unwrap();
     let doc = app.docs.active_doc_mut().unwrap();
@@ -549,6 +551,7 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     // Closing the tab keeps it, and it comes back with the file.
     let i = app.docs.index_of(&main).unwrap();
     app.close_tab(i);
+    app.save_all_and_wait();
     assert!(app.docs.index_of(&main).is_none());
     assert_eq!(app.bookmark_list().len(), 1);
     app.open_file_and_wait(&main);
@@ -571,7 +574,7 @@ fn external_documentation_finds_the_page_of_an_item() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
@@ -598,7 +601,7 @@ fn a_macro_call_expands_recursively_into_a_read_only_tab() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
@@ -642,7 +645,7 @@ fn the_type_hierarchy_lists_implementations() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the indexing", |a| a.docs.active_doc().is_some_and(|d| a.insight.runnables.contains_key(&d.editor.id)));
@@ -671,7 +674,7 @@ fn the_action_popup_keeps_its_keys_from_the_editor() {
     write(&root.join("src/main.rs"), "fn main() {\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     app.focus_editor = true;
     let mut h = crate::screens::harness(app, egui::vec2(1200.0, 800.0));
@@ -720,7 +723,7 @@ fn logpoints_print_and_a_breakpoint_can_remove_itself() {
     let root = root.canonicalize().unwrap();
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&main);
@@ -776,7 +779,7 @@ fn integers_switch_to_hexadecimal_while_paused() {
     write(&root.join("src/main.rs"), MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -843,7 +846,7 @@ fn paused_before_doubling(dir: &Path) -> CrabCraftApp {
     write(&root.join("src/main.rs"), SET_VALUE_MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -980,7 +983,7 @@ fn paused_at(dir: &Path, main_rs: &str, line: usize) -> CrabCraftApp {
     write(&root.join("src/main.rs"), main_rs);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -1232,7 +1235,7 @@ fn step_into_walks_past_the_standard_library() {
     write(&root.join("src/main.rs"), MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -1356,7 +1359,7 @@ fn completion_imports_and_works_inside_derives_and_macros() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
@@ -1397,6 +1400,7 @@ fn a_changed_manifest_reloads_the_targets_and_opening_it_opens_the_project() {
 
     // Inside the open project it is a file to edit.
     app.open_path(&manifest);
+    pump(&mut app, "the opened manifest", |a| !a.disk_open.busy());
     assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(manifest.clone()));
 
     write(&root.join("src/extra.rs"), "fn main() {}\n");
@@ -1417,7 +1421,7 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     write(&root.join("src/main.rs"), "fn main() {}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
@@ -1481,7 +1485,7 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
     write(&root.join("src/main.rs"), "use demo::Greeter;\n\nfn main() {\n    let text: String = Greeter.hello().to_string();\n    println!(\"{text}\");\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
@@ -1554,7 +1558,7 @@ fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
     write(&root.join("src/main.rs"), "use demo::Greeter;\n\nfn main() {\n    let text: String = Greeter.hello().to_string();\n    println!(\"{text}\");\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
@@ -1620,7 +1624,7 @@ fn tests_run_with_nextest_when_the_setting_is_on() {
     settings.use_nextest = true;
     app.apply_settings(&egui::Context::default(), settings);
     assert!(app.runner.nextest);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
@@ -1648,7 +1652,7 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     demo(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     assert!(app.runner.cargo_workspace.is_none());
     app.open_file_and_wait(&root.join("src/lib.rs"));
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -1723,7 +1727,7 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     let generated = root.join("src/generated");
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -1750,6 +1754,7 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     assert_eq!(found, ["src/lib.rs"]);
     wait_symbols(&mut app, "only_in_generated", "rust-analyzer to drop the folder", |names| names.is_empty());
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).excluded, ["src/generated"]);
 
     // Included again: everything comes back.
@@ -1762,7 +1767,7 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     // Reopened: the exclusion list comes from the session.
     let mut app = new_app(dir.path());
     std::fs::write(rc_core::Session::file_for(&root), r#"{ "excluded": ["src\\generated", "../outside"] }"#).unwrap();
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     assert_eq!(app.explorer.excluded, ["src/generated"]);
     pump(&mut app, "the reopened file index", |a| indexed(a) == Some(false));
     app.insight.stop();
@@ -1800,7 +1805,7 @@ fn renaming_a_module_file_updates_its_declaration_and_paths() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let src = root.join("src");
     app.open_file_and_wait(&src.join("util.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -1852,7 +1857,7 @@ fn f2_in_the_explorer_renames_a_file_and_offers_its_text_mentions() {
     write(&root.join("README.md"), "Read notes.txt first.\n");
     let root = root.canonicalize().unwrap();
     let mut app = crate::screens::test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     h.get_by_label("notes.txt").click();
     h.run_steps(2);
@@ -1893,7 +1898,7 @@ fn search_everywhere_finds_classes_symbols_and_library_types() {
     demo(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
@@ -1970,7 +1975,7 @@ fn a_test_stops_on_a_breakpoint_from_its_gutter_icon() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -2025,7 +2030,7 @@ fn the_debugger_steps_and_evaluates_a_rust_program() {
     let root = root.canonicalize().unwrap();
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&main);
@@ -2108,7 +2113,7 @@ fn the_debugger_stops_a_panic_at_the_code_that_panicked() {
     write(&root.join("src/main.rs"), MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -2133,7 +2138,7 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
     write(&root.join("src/main.rs"), MAIN);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -2215,7 +2220,7 @@ fn the_debugger_attaches_to_a_running_program() {
     let pid = found.expect("the program in the list").pid;
 
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -2239,7 +2244,7 @@ fn a_rust_run_configuration_takes_arguments_and_environment() {
     write(&root.join("src/main.rs"), "fn main() {\n    let args: Vec<String> = std::env::args().skip(1).collect();\n    println!(\"[{}] {}\", args.join(\",\"), std::env::var(\"CRAB\").unwrap_or_default());\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.selected_config().unwrap().name.clone();
@@ -2263,7 +2268,7 @@ fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
     write(&root.join("src/lib.rs"), "#[test]\nfn sees_the_project_environment() {\n    assert_eq!(option_env!(\"CRAB_PROJECT\"), Some(\"from-project\"));\n    assert_eq!(std::env::var(\"CRAB_SHARED\").as_deref(), Ok(\"project\"));\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
 
@@ -2293,6 +2298,7 @@ fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
 
     // It is kept in the session of the workspace.
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).project_env, "CRAB_PROJECT=from-project\nCRAB_SHARED=project");
 }
 
@@ -2305,7 +2311,7 @@ fn rust_analyzer_runs_build_scripts_with_the_project_environment() {
     write(&root.join("build.rs"), "fn main() {\n    println!(\"cargo:rerun-if-env-changed=CRAB_PROJECT\");\n    std::fs::write(\"BUILD_ENV\", std::env::var(\"CRAB_PROJECT\").unwrap_or_default()).unwrap();\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     assert!(app.runner.cargo_workspace.is_none());
     // Setting it runs nothing while the project is not trusted.
     app.set_project_env("CRAB_PROJECT=first".to_string());
@@ -2331,7 +2337,7 @@ fn reformat_code_runs_rustfmt() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
@@ -2385,7 +2391,7 @@ fn refactorings_of_the_language_server() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
@@ -2411,7 +2417,7 @@ fn problems_of_a_closed_file_show_their_real_line() {
     let root = root.canonicalize().unwrap();
     let bad = root.join("examples/bad.rs");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::Build);
@@ -2437,7 +2443,7 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
     let mut app = new_app(dir.path());
 
     // Without a lock file nothing is resolved, and none is written.
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let stdlib = |a: &mut CrabCraftApp| a.explorer.libraries.iter().any(|l| l.name == "stdlib");
     pump(&mut app, "the standard library", stdlib);
@@ -2459,6 +2465,7 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
     assert!(!rows.iter().any(|r| r.label == "near"));
     app.explorer.expanded.insert("libraries".into());
     app.explorer.expanded.insert(format!("dir:{}", near.display()));
+    pump(&mut app, "the expanded library directory", |app| app.explorer.rows(None,&root,&name).iter().any(|row|row.label=="src"));
     let rows = app.explorer.rows(None, &root, &name);
     assert!(rows.iter().any(|r| r.label == "near" && r.secondary == "0.2.0"));
     assert!(rows.iter().any(|r| r.label == "src"));
@@ -2494,7 +2501,7 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
     git(&["commit", "-q", "-m", "First"]);
     let (lib, left) = (root.join("src/lib.rs"), root.join("src/left.rs"));
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
 
@@ -2570,7 +2577,7 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     // Not trusted: no language server runs, and rustfmt still does.
     let mut app = new_app(dir.path());
     app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), channel: "+stable".into(), env: "CRABCRAFT_RUSTFMT=1\n".into() };
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&main);
@@ -2602,7 +2609,8 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     // Settings that cannot work are reported before rustfmt runs.
     app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config 'tab_spaces=2".into(), ..Default::default() };
     app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
-    assert_eq!(app.notices.last().map(|n| n.text.clone()), Some(crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments)));
+    pump(&mut app, "the invalid rustfmt arguments", |a| a.notices.last().is_some_and(|notice| notice.error && notice.text.contains(&crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments))));
+    assert!(app.notices.last().is_some_and(|notice| notice.error && notice.text.contains(&crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments))));
     assert!(app.rustfmt_jobs.is_empty());
 
     // At commit: the included file is committed formatted with the same settings.
@@ -2612,8 +2620,11 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     std::fs::write(&lib, "pub fn a(){\nlet b=1;\n}\n").unwrap();
     let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
         let start = Instant::now();
-        while !done(app) {
+        while app.disk_save.continuation.is_some() || app.disk_save.saves.busy() || !app.rustfmt_jobs.is_empty() || !done(app) {
             assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}; error {:?}", app.vcs.error);
+            app.poll_file_edits();
+            app.poll_rustfmt();
+            app.poll_disk_save();
             app.vcs.update(&mut app.docs, true);
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -2649,7 +2660,7 @@ fn run_options_and_required_features_reach_the_target() {
     write(&root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nextra = []\nmore = []\n\n[[bin]]\nname = \"demo\"\npath = \"src/main.rs\"\nrequired-features = [\"extra\"]\n\n[workspace]\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let config = app.runner.configs.iter().find(|c| c.name == "demo").unwrap().clone();
@@ -2682,7 +2693,7 @@ fn navigation_reaches_the_standard_library_and_compiler_fixes_apply() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     pump(&mut app, "the libraries", |a| a.explorer.libraries.iter().any(|l| l.name == "stdlib"));
@@ -2737,7 +2748,7 @@ fn generate_offers_only_what_writes_code() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
@@ -2811,7 +2822,7 @@ fn the_call_hierarchy_is_a_tree_of_callers_and_callees() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let i = app.docs.active.unwrap();
@@ -2858,7 +2869,7 @@ fn a_new_project_opens_with_its_run_configuration() {
     let cargo = rc_cargo::Cargo::locate().expect("cargo is installed");
     let root = rc_core::Runtime::block_on(request.create(&cargo)).unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let config = app.runner.selected_config().unwrap();
@@ -2878,7 +2889,7 @@ fn a_new_crate_joins_the_open_workspace() {
     demo(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let packages = |a: &CrabCraftApp| a.runner.cargo_workspace.as_ref().map_or(0, |w| w.packages.len());
@@ -2905,7 +2916,7 @@ fn the_cargo_window_runs_targets_and_typed_commands() {
     write(&root.join("build.rs"), "fn main() {}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let ctx = egui::Context::default();
@@ -2980,7 +2991,7 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
     app.settings.format_on_save = true;
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let lint = |a: &mut CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.code.as_deref() == Some("len_zero")));
@@ -3016,7 +3027,7 @@ fn a_warning_is_suppressed_for_its_statement_or_the_file() {
     let main = root.join("src/main.rs").canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     // rustc's warning arrives with `cargo check` on save, named by its lint.
@@ -3081,7 +3092,7 @@ fn main() {
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
@@ -3130,7 +3141,7 @@ fn an_external_tool_runs_on_the_active_file() {
     std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"hi\");\n}\n").unwrap();
     let mut app = new_app(dir.path());
     app.settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/main.rs"));
     app.run_external_tool("Count lines");
@@ -3199,7 +3210,7 @@ fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
         ExternalTool { name: "Greet".into(), program: "sh".into(), args: "-c 'echo prepared $FileName$'".into(), working_dir: String::new() },
         ExternalTool { name: "Fail".into(), program: "false".into(), args: String::new(), working_dir: String::new() },
     ];
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -3235,7 +3246,7 @@ fn run_configurations_allow_instances_and_live_in_the_project() {
     // Runs until stopped.
     std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"up\");\n    std::thread::sleep(std::time::Duration::from_secs(60));\n}\n").unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.configs[0].name.clone();
@@ -3254,8 +3265,9 @@ fn run_configurations_allow_instances_and_live_in_the_project() {
 
     // Without the session's copy, the project's file still brings the configuration back.
     app.close_workspace();
+    app.save_all_and_wait();
     std::fs::remove_dir_all(rc_core::paths::sessions_dir()).unwrap();
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let loaded = app.runner.options.get(&name).cloned().unwrap();
     assert!(loaded.in_project && loaded.allow_parallel);
     assert_eq!(loaded.args, "--port 1");
@@ -3274,7 +3286,7 @@ fn test_runs_become_temporary_configurations() {
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"lib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
     std::fs::write(root.join("src/lib.rs"), "#[cfg(test)]\nmod tests {\n    #[test]\n    fn one() {}\n    #[test]\n    fn two() {}\n}\n").unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let manifest = app.runner.cargo_workspace.as_ref().unwrap().manifest.clone();
@@ -3304,6 +3316,7 @@ fn test_runs_become_temporary_configurations() {
     pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some() && a.runner.configs.iter().any(|c| c.name == "t5"));
     assert!(app.runner.configs.iter().any(|c| c.name == "t4" && matches!(c.kind, ConfigKind::TestSelection { .. })), "temporary ones survive a reload");
     app.save_session();
+    app.save_all_and_wait();
     let session = rc_core::session::Session::load(&root);
     assert_eq!(session.test_configs.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["t5"]);
 }
@@ -3324,7 +3337,7 @@ fn emulated_terminal_runs_see_a_tty_and_take_input() {
     )
     .unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.configs[0].name.clone();
@@ -3352,7 +3365,7 @@ fn a_rename_preview_applies_only_the_checked_changes() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -3399,7 +3412,7 @@ fn inspect_code_runs_clippy_over_the_whole_workspace() {
     write(&root.join("util/Cargo.toml"), "[package]\nname = \"util\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
     write(&root.join("util/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    x.len() * 2\n}\n");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::InspectCode);
@@ -3428,7 +3441,7 @@ fn a_compound_configuration_starts_several_cargo_binaries() {
     write(&root.join("src/bin/server.rs"), "fn main() {\n    println!(\"server up\");\n}\n");
     write(&root.join("src/bin/client.rs"), "fn main() {\n    println!(\"client up\");\n}\n");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.app_names().len() == 2);
     app.runner.save_compound(None, "Both".into(), app.runner.app_names());
@@ -3462,7 +3475,7 @@ fn an_attached_cargo_project_is_analysed() {
     let lib = root.join("tools/gen/src/lib.rs");
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&lib);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let mismatch = |a: &CrabCraftApp| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("mismatched types") || x.code.as_deref() == Some("E0308")));
@@ -3486,6 +3499,7 @@ fn an_attached_cargo_project_is_analysed() {
     let text = app.runner.runs[0].console.term.screen_lines().join("\n");
     assert!(text.contains("generated"), "{text}");
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::session::Session::load(&root).attached_projects, ["tools/gen/Cargo.toml"]);
     app.set_attached(&gen_manifest, false);
     assert!(app.explorer.attached.is_empty());
@@ -3503,7 +3517,7 @@ fn excluded_paths_are_not_offered_for_import() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let paths = |c: &rc_editor::Completion| c.items.iter().filter(|i| i.label.starts_with("Ordering")).map(|i| format!("{} {}", i.label, i.detail)).collect::<Vec<_>>();
@@ -3539,7 +3553,7 @@ fn pasted_code_gets_its_unambiguous_imports() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&root.join("src/main.rs"));
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
 
@@ -3588,7 +3602,7 @@ fn rust_scratches_are_analysed_and_run() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
     let scratch = rc_core::scratch::create(&rc_core::paths::scratches_dir(), rc_core::scratch::Kind::Rust).unwrap();
     std::fs::write(&scratch, "fn main() {\n    let x = 6u8;\n    let y = x * 7;\n    println!(\"{y}\");\n}\n").unwrap();
@@ -3626,7 +3640,7 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     let text = "fn main(){println!(\"a\");}\n\nfn other(){let x=1;let _y=x;}\n";
     write(&main, text);
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&main);
@@ -3651,7 +3665,7 @@ fn code_disabled_by_cfg_is_faded() {
     write(&root.join("src/lib.rs"), lib);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
@@ -3689,7 +3703,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_FEATURES\", format!(\"extra={}\", std::env::var(\"CARGO_FEATURE_EXTRA\").is_ok())).unwrap();\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/lib.rs"));
     pump(&mut app, "the cfg of the crate", |a| {
@@ -3720,6 +3734,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     app.open_file_and_wait(&root.join("src/lib.rs"));
     assert_eq!(faded(&mut app), 0, "extra is on");
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_features, vec!["demo/extra".to_string()]);
 
     // Trusted, rust-analyzer builds with the feature.
@@ -3758,7 +3773,7 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     write(&root.join("build.rs"), "fn main() {\n    std::fs::write(\"BUILD_TARGET\", std::env::var(\"TARGET\").unwrap()).unwrap();\n}\n");
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
@@ -3789,11 +3804,12 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     assert_eq!(app.analysis_triple(), Some(WINDOWS));
     pump(&mut app, "the cfg of Windows", |a| faded(a) == vec!["#[cfg(unix)]\npub fn on_unix() {}".to_string()]);
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_target, WINDOWS);
 
     // Opened again, the session brings the target back.
     let mut again = new_app(dir.path());
-    again.open_workspace(&root);
+    again.open_workspace_and_wait(&root);
     assert_eq!(again.cargo_target.as_deref(), Some(WINDOWS));
     drop(again);
 
@@ -3840,7 +3856,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     feature_crate(&root);
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let manifest = root.join("Cargo.toml");
@@ -3975,7 +3991,7 @@ fn a_rename_lists_its_conflicts_before_it_is_made() {
     let lib = root.join("src/lib.rs");
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready);
@@ -4042,7 +4058,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
@@ -4116,7 +4132,7 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     let root = root.canonicalize().unwrap();
     let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
 
@@ -4168,8 +4184,9 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     let before = listed(&app);
     assert_eq!(before.len(), 3);
     app.save_session();
+    app.save_all_and_wait();
     let mut again = new_app(dir.path());
-    again.open_workspace(&root);
+    again.open_workspace_and_wait(&root);
     assert_eq!(listed(&again), before);
 }
 
@@ -4192,7 +4209,7 @@ fn set_execution_point_skips_and_repeats_lines_with_gdb() {
     let root = root.canonicalize().unwrap();
     let main_rs = root.join("src/main.rs");
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&main_rs);
@@ -4279,7 +4296,7 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
     };
 
     let mut app = new_app(dir.path());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file_and_wait(&root.join("src/main.rs"));
@@ -4312,8 +4329,9 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
     app.debugger.stop();
     app.stop_auto_attach();
     app.save_session();
+    app.save_all_and_wait();
     let mut again = new_app(dir.path());
-    again.open_workspace(&root);
+    again.open_workspace_and_wait(&root);
     assert_eq!(again.auto_attach_text, "other, auto*");
     assert!(again.auto_attach.is_none(), "watching starts only when asked");
     drop((before, after, third));
@@ -4335,7 +4353,7 @@ fn the_highlighted_intention_is_previewed_before_it_is_applied() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
@@ -4436,7 +4454,7 @@ fn inspection_profiles_change_the_level_of_findings() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
@@ -4474,6 +4492,7 @@ fn inspection_profiles_change_the_level_of_findings() {
     assert_eq!(level(&app), Some(Severity::Info));
     app.set_project_inspections(true, app.inspections.project.clone());
     app.save_session();
+    app.save_all_and_wait();
     let saved = rc_core::Session::load(&root);
     assert!(saved.use_project_profile);
     assert_eq!(saved.inspection_profile.level("unused_variables"), Some(Level::Error));
@@ -4512,7 +4531,7 @@ fn a_fix_that_renames_a_module_file_renames_it() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     let module = root.join("src/MyMod.rs");
     app.open_file_and_wait(&module);
@@ -4556,7 +4575,7 @@ fn the_snake_case_fix_renames_a_function() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let main = root.join("src/main.rs");
     app.open_file_and_wait(&main);
     pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
@@ -4587,7 +4606,7 @@ fn native_trait_hierarchy_resolves_aliases_homonyms_transitive_and_unsaved_relat
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap();
     demo(&root); let file = root.join("src/main.rs"); write(&file,SOURCE);
-    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace(&root); app.open_file_and_wait(&file);
+    let mut app = new_app(home.path()); app.settings.trusted_projects.push(root.clone()); app.open_workspace_and_wait(&root); app.open_file_and_wait(&file);
     pump(&mut app,"trait fixture analysis",|a| a.insight.status==InsightStatus::Ready);
     pump(&mut app,"trait fixture indexing",|a| a.docs.active_doc().is_some_and(|doc| a.insight.runnables.contains_key(&doc.editor.id)));
     let ask = |app: &mut CrabCraftApp, position:usize| {
@@ -4637,7 +4656,7 @@ fn native_one_step_macro_expansion_uses_unsaved_definition_and_keeps_nested_call
     assert!(std::env::var_os("CRABCRAFT_MACRO_WORKER").is_some());
     let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);
     let file=root.join("src/main.rs");write(&file,SOURCE);
-    let mut app=new_app(home.path());app.open_workspace(&root);app.open_file_and_wait(&file);
+    let mut app=new_app(home.path());app.open_workspace_and_wait(&root);app.open_file_and_wait(&file);
     app.run_insight_action(Action::ExpandMacroStep,egui::Pos2::ZERO);
     assert!(!app.insight.macro_step_pending());assert!(app.insight.session.is_none());
     app.trust_project();pump(&mut app,"one-step macro analysis",|a|a.insight.status==InsightStatus::Ready);
@@ -4672,7 +4691,7 @@ fn signature_backend_updates_alias_calls_and_semantic_parameter_shorthand_withou
     const LIBRARY:&str="struct Counter {left:i32}\npub fn calculate(left:i32,right:i32,spare:i32)->i32{let spare=1;let record=Counter{left};record.left+right+spare-1}\n";
     const CALLER:&str="use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2,99),42);}\n";
     write(&lib,LIBRARY);write(&main,CALLER);write(&root.join("Cargo.lock"),"# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n");
-    let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file_and_wait(&main);app.open_file_and_wait(&lib);
+    let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace_and_wait(&root);app.open_file_and_wait(&main);app.open_file_and_wait(&lib);
     pump(&mut app,"signature backend analysis",|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|doc|a.insight.runnables.contains_key(&doc.editor.id)));
     let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:1,column:9};let (sender,receiver)=std::sync::mpsc::channel();
     std::thread::spawn(move ||{let context=backend::Context::new(client, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));sender.send(backend::prepare(capture,origin,&context)).unwrap();});
@@ -4701,7 +4720,7 @@ fn signature_backend_refuses_alias_function_values_used_parameters_effects_and_s
     ] {
         let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);let lib=root.join("src/lib.rs");let main=root.join("src/main.rs");
         write(&lib,"pub fn calculate(left:i32,right:i32)->i32{left+right}\n");write(&main,caller);write(&root.join("Cargo.lock"),"# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n");
-        let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file_and_wait(&lib);
+        let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace_and_wait(&root);app.open_file_and_wait(&lib);
         pump(&mut app,name,|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|d|a.insight.runnables.contains_key(&d.editor.id)));
         let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:0,column:9};let (tx,rx)=std::sync::mpsc::channel();let expected=expected.to_owned();
         let main_copy=main.clone();std::thread::spawn(move||{let ctx=backend::Context::new(client,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(expected=="cancel")));let result=(||{let prepared=std::sync::Arc::new(backend::prepare(capture,origin,&ctx)?);let mut input=prepared.function.input();if expected=="used"{input.parameters.pop();}else{input.parameters.swap(0,1);}if expected=="stale"{std::fs::write(main_copy,"fn main(){}\n").unwrap();}backend::preview(prepared,input,&ctx).map(|_|())})();tx.send(result).unwrap();});

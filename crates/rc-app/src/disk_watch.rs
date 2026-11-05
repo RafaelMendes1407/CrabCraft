@@ -124,7 +124,7 @@ mod tests {
         let path = root.path().join("src/main.rs");
         std::fs::write(&path, "fn main() { println!(\"old\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&path);
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 900.0));
         h.run_steps(2);

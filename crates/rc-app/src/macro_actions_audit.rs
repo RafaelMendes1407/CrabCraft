@@ -18,7 +18,7 @@ fn find_action_lists_macro_commands_and_opens_the_native_macro_tester() {
     )
     .unwrap();
     let mut app = crate::screens::test_app(home.path(), false);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.open_file_and_wait(&file);
     let items = crate::search::action_items();
     for action in [

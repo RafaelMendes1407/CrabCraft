@@ -1101,7 +1101,7 @@ pub(crate) mod tests {
         let home = tempfile::tempdir().unwrap();
         let root = fixture();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         app.insight
             .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);

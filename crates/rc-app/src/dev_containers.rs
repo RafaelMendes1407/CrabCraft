@@ -470,7 +470,7 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         fixture(&root);
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.dev_containers.program = cli(&root, false);
         app.dock
             .sizes

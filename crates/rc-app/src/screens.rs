@@ -97,7 +97,7 @@ fn screens() {
 
         // A solution with files open.
         let mut app = test_app(home.path(), dark);
-        app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+        app.open_workspace_and_wait(&fixtures().join("Shop/Shop.sln"));
         app.explorer.expanded.insert(format!("proj:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
         app.explorer.expanded.insert(format!("deps:{}", fixtures().join("Shop/src/Shop.Api/Shop.Api.csproj").display()));
         app.open_file_and_wait(&fixtures().join("Shop/src/Shop.Api/Program.cs"));
@@ -260,12 +260,13 @@ fn closed_projects_are_not_reopened_on_startup() {
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("Shop/Shop.sln");
     let mut app = test_app(home.path(), true);
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     app.close_project();
+    app.save_all_and_wait();
     assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     let mut settings = rc_core::Settings::load();
     assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     settings.reopen_last = false;
@@ -378,7 +379,7 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     let file_b = fixtures().join("TenProjects/src/Module07/Class1.cs");
 
     let mut app = test_app(home.path(), true);
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     let w = app.workspace.as_ref().unwrap();
     assert_eq!(w.solution.as_ref().unwrap().projects().len(), 10);
     app.open_file_and_wait(&file_a);
@@ -396,7 +397,7 @@ fn ten_project_solution_opens_and_its_session_is_restored() {
     app.close_workspace();
 
     let mut app = test_app(home.path(), true);
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     assert_eq!(app.docs.list.len(), 2);
     assert_eq!(app.docs.active, Some(0));
     assert_eq!(app.docs.list[0].path, file_a.canonicalize().unwrap());
@@ -433,7 +434,7 @@ fn tabs_drag_into_splits_and_floating_windows_and_the_layout_is_restored() {
     }
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.path().join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     for f in ["lib.rs", "main.rs", "util.rs"] {
         app.open_file_and_wait(&root.join("src").join(f));
     }
@@ -462,7 +463,7 @@ fn tabs_drag_into_splits_and_floating_windows_and_the_layout_is_restored() {
     // Reopening the project brings the groups and the window back.
     let mut app = h.into_state();
     app.close_workspace();
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let names = |app: &CrabCraftApp, g: &crate::layout::Group| g.tabs.iter().filter_map(|t| app.docs.list.iter().find(|d| d.editor.id == *t)).map(|d| d.name()).collect::<Vec<_>>();
     let main: Vec<Vec<String>> = app.layout.main.groups().into_iter().map(|g| names(&app, g)).collect();
     assert_eq!(main, vec![vec!["lib.rs".to_string()], vec!["main.rs".to_string()]]);
@@ -491,7 +492,7 @@ fn screens_tools() {
     let home = tempfile::tempdir().unwrap();
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&fixtures().join("Shop/Shop.sln"));
+    app.open_workspace_and_wait(&fixtures().join("Shop/Shop.sln"));
     let test_file = std::fs::read_dir(fixtures().join("Shop/tests/Shop.Core.XunitTests")).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "cs")).unwrap();
     app.open_file_and_wait(&test_file);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -574,7 +575,7 @@ fn screens_git() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root.join("Shop.sln"));
+    app.open_workspace_and_wait(&root.join("Shop.sln"));
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&calc);
     let doc = app.docs.active_doc_mut().unwrap();
@@ -633,7 +634,7 @@ fn screens_git_tags_and_stashes() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
@@ -701,7 +702,7 @@ fn screens_git_worktrees() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
@@ -754,7 +755,7 @@ fn screens_git_file_history() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
@@ -781,7 +782,7 @@ fn screens_insight() {
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap().join("Shop");
     assert!(std::process::Command::new("cp").args(["-R", fixtures().join("Shop").to_str().unwrap(), root.to_str().unwrap()]).status().unwrap().success());
-    app.open_workspace(&root.join("Shop.sln"));
+    app.open_workspace_and_wait(&root.join("Shop.sln"));
     let program = root.join("src/Shop.Cli/Program.cs");
     app.open_file_and_wait(&program);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -857,7 +858,7 @@ fn screens_readme() {
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
         app.settings.roslyn_path = Some(roslyn.clone());
-        app.open_workspace(&shop.join("Shop.sln"));
+        app.open_workspace_and_wait(&shop.join("Shop.sln"));
     app.trust_project_tools_for_test();
         app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
         app.open_file_and_wait(&shop.join("src/Shop.Core/Order.cs"));
@@ -902,7 +903,7 @@ fn screens_rust_icons() {
     for dark in [false, true] {
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         for d in ["src", "tests"] {
             app.explorer.expanded.insert(format!("dir:{}", root.join(d).display()));
         }
@@ -935,7 +936,7 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
     let root = root.canonicalize().unwrap();
     let main = root.join("src/main.rs");
     let mut app = test_app(home.path(), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1200.0, 800.0));
     let ctx = h.ctx.clone();
@@ -1004,7 +1005,7 @@ fn two_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp
     two_crates(&root);
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace and the file index", |a| {
@@ -1147,7 +1148,7 @@ fn many_files_harness(home: &Path, n: usize, tab: crate::search::SeTab) -> Harne
     }
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     let mut h = harness(app, vec2(1280.0, 900.0));
     run_frames(&mut h, "the file index", |a| a.files.index.as_ref().is_some_and(|i| i.is_ready() && i.snapshot().len() > n));
     press_search_everywhere(&mut h);
@@ -1245,7 +1246,7 @@ edition = \"2021\"
     std::fs::write(root.join("src/main.rs"), "fn main() {}
 ").unwrap();
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_workspace(&root.canonicalize().unwrap());
+    app.open_workspace_and_wait(&root.canonicalize().unwrap());
     app.pending.push(rc_editor::Action::FindInFiles);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
@@ -1279,7 +1280,7 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
         git(&["branch", &format!("feature/topic-{n:02}")]);
     }
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let size = vec2(900.0, 500.0);
     let mut h = harness(app, size);
@@ -1438,7 +1439,7 @@ fn the_project_code_style_applies_on_open_and_save() {
     write("README.md", "keep  \n");
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
 
     app.open_file_and_wait(&root.join("notes.txt"));
     let doc = app.docs.active_doc().unwrap();
@@ -1551,8 +1552,8 @@ fn light_edit_offers_the_files_cargo_project() {
     std::fs::write(&loose, "plain\n").unwrap();
 
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_path(&loose);
-    app.open_path(&ws.join("beta/src/lib.rs"));
+    app.open_file_and_wait(&loose);
+    app.open_file_and_wait(&ws.join("beta/src/lib.rs"));
     assert!(app.workspace.is_none());
     assert_eq!(app.docs.list[0].light_project, None);
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -1616,7 +1617,7 @@ fn before_launch_capture() {
         rc_core::external_tools::ExternalTool { name: "Generate schema".into(), program: "sh".into(), ..Default::default() },
         rc_core::external_tools::ExternalTool { name: "Lint SQL".into(), program: "sqlfluff".into(), ..Default::default() },
     ];
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the workspace", |a| !a.runner.configs.is_empty());
@@ -1925,7 +1926,7 @@ fn dependent_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCr
     assert!(cargo.std_command().args(["generate-lockfile", "--offline"]).current_dir(&root).status().unwrap().success());
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2));
@@ -1986,7 +1987,7 @@ fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>,
     std::fs::write(root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() {}\n").unwrap();
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2065,7 +2066,7 @@ fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     let mut app = test_app(&home.join("home"), dark);
     app.dep_versions.set_published("serde", rc_cargo::versions::parse_index("{\"vers\":\"1.0.229\",\"yanked\":false}\n{\"vers\":\"1.0.230\",\"yanked\":true}"));
     app.dep_versions.set_published("rand", rc_cargo::versions::parse_index("{\"vers\":\"0.7.3\",\"yanked\":false}"));
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1100.0, 520.0));
@@ -2308,7 +2309,7 @@ fn cfg_inactive_capture() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&repo);
+    app.open_workspace_and_wait(&repo);
     let file = repo.join("crates/rc-app/src/instance.rs");
     app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2335,7 +2336,7 @@ fn cargo_dep_versions_on_crabcraft_capture() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&repo);
+    app.open_workspace_and_wait(&repo);
     let file = repo.join("crates/rc-cargo/Cargo.toml");
     app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 600.0));
@@ -2374,7 +2375,7 @@ fn explains_a_rustc_error_code_from_the_build_problems_and_hover() {
     let main = root.join("src/main.rs");
     let mut app = test_app(home.path(), false);
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
@@ -2458,7 +2459,7 @@ fn explain_error_capture() {
     let root = root.canonicalize().unwrap();
     let main = root.join("src/main.rs");
     let mut app = test_app(home.path(), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1280.0, 800.0));
     {
@@ -2488,7 +2489,7 @@ fn context_info_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     let at = text.find("Action::ToggleHexValues => self.toggle_hex_values()").expect("the line the test puts the caret on");
     let line = text[..at].matches('\n').count();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     let col = text[..at].rsplit('\n').next().map_or(0, |l| l.chars().count());
     {
@@ -2571,7 +2572,7 @@ fn targets_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, 
     std::fs::write(root.join("src/lib.rs"), "#[cfg(windows)]\npub fn on_windows() {}\n\n#[cfg(unix)]\npub fn on_unix() {}\n").unwrap();
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/lib.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2599,6 +2600,7 @@ fn the_status_bar_picks_the_analysis_target() {
     assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
     assert!(h.state().triple_filter.is_empty());
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
     assert!(!root.join("target").exists(), "nothing was built");
 }
@@ -2632,7 +2634,7 @@ fn target_picker_capture() {
 fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static, CrabCraftApp>, PathBuf) {
     let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-editor/src/view.rs").canonicalize().unwrap();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
     let doc = h.state_mut().docs.active_doc_mut().unwrap();
@@ -2734,7 +2736,7 @@ fn feature_uses_capture() {
         crate::rust_tests::feature_crate(&root);
         let root = root.canonicalize().unwrap();
         let mut app = test_app(&dir.path().join("home"), dark);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.open_file_and_wait(&root.join("Cargo.toml"));
         app.docs.active_doc_mut().unwrap().editor.goto(8, 2);
         app.run_insight_action(rc_editor::Action::FindUsages, egui::Pos2::ZERO);
@@ -2781,7 +2783,7 @@ fn playground_harness(home: &Path, dir: &Path, dark: bool) -> Harness<'static, C
     std::fs::write(root.join("src/main.rs"), "fn main() {\n    let x = 1;\n    println!(\"{x}\");\n}\n\nfn unused() {}\n").unwrap();
     let root = root.canonicalize().unwrap();
     let mut app = test_app(home, dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("src/main.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2903,7 +2905,9 @@ fn copyright_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>
         assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
     }
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
+    app.trust_project_tools_for_test();
+    app.copyright.open(&root,app.copyright.profile.clone(),app.waker.clone());
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the author from Git", |a| !a.copyright.loading());
     (h, root)
@@ -2930,6 +2934,7 @@ fn copyright_headers_on_new_and_old_files() {
     assert!(h.state().dialog.is_none());
     assert!(h.state().copyright.profile.on_new_files);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).copyright.spdx, "MIT");
 
     // New › Rust File.
@@ -3026,7 +3031,7 @@ fn scopes_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, P
     git(&["commit", "-q", "-m", "Start"]);
     std::fs::write(root.join("src/lib.rs"), "// needle\npub fn hello() {}\npub fn changed() {}\n").unwrap();
     let mut app = test_app(&home.join("home"), dark);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "git's status", |a| a.vcs.status.is_some());
@@ -3078,6 +3083,7 @@ fn scopes_narrow_find_in_files_and_color_files() {
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }]);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     let saved = rc_core::Session::load(&root);
     assert_eq!(saved.scopes.len(), 1);
     assert_eq!(saved.file_colors.len(), 3);
@@ -3127,7 +3133,7 @@ fn scopes_narrow_find_in_files_and_color_files() {
     )
     .unwrap();
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     assert_eq!(app.explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**".into() }]);
     assert_eq!(app.explorer.scopes.colors, [FileColor { scope: "Sources".into(), color: "#123456".into() }]);
     assert_eq!(app.explorer.scopes.color_of(&root.join("src/net.rs")), rgb(0x12, 0x34, 0x56));
@@ -3142,7 +3148,7 @@ fn scopes_on_the_crabcraft_repository() {
     let dir = tempfile::tempdir().unwrap();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.set_scopes(crate::scopes::Draft {
         user: vec![NamedScope { name: "Search crate".into(), pattern: "crates/rc-search/**/*.rs".into() }],
         colors: vec![rc_core::session::FileColor { scope: crate::scopes::TESTS.into(), color: "#5fb865".into() }],
@@ -3229,7 +3235,7 @@ fn run_configurations_are_kept_in_folders() {
     }
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
@@ -3274,8 +3280,9 @@ fn run_configurations_are_kept_in_folders() {
     // Out of the folder; then the session keeps the rest.
     h.state_mut().runner.move_to_folder(&worker, None);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     let mut again = test_app(&dir.path().join("home"), true);
-    again.open_workspace(&root);
+    again.open_workspace_and_wait(&root);
     again.trust_project_tools_for_test();
     let start = std::time::Instant::now();
     while again.runner.app_names().len() < 3 && start.elapsed() < std::time::Duration::from_secs(60) {
@@ -3301,7 +3308,7 @@ fn run_config_folders_capture() {
         std::fs::write(root.join(format!("src/bin/{bin}.rs")), "fn main() {}\n").unwrap();
     }
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root.canonicalize().unwrap());
+    app.open_workspace_and_wait(&root.canonicalize().unwrap());
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
@@ -3333,7 +3340,7 @@ fn breakpoint_list_capture() {
     let root = root.canonicalize().unwrap();
     let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.docs.closed_breakpoints.entry(price_rs.clone()).or_default().insert(1, BreakpointKind::Normal);
     app.open_file_and_wait(&main_rs);
     for line in [3, 4, 5] {
@@ -3363,7 +3370,7 @@ fn auto_attach_capture() {
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
     std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
-    app.open_workspace(&root.canonicalize().unwrap());
+    app.open_workspace_and_wait(&root.canonicalize().unwrap());
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
@@ -3388,7 +3395,7 @@ fn http_harness(home: &Path, dir: &Path, base: &str, dark: bool) -> (Harness<'st
     std::fs::write(&file, text).unwrap();
     let file = file.canonicalize().unwrap();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(4);
     (h, file)
@@ -3601,7 +3608,7 @@ fn screens_git_merge_and_rebase() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
@@ -3655,7 +3662,7 @@ fn screens_merge_tool() {
 
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1440.0, 900.0));
     run_frames(&mut h, "conflict", |a| a.vcs.conflicts().len() == 1 && a.vcs.operation.state.is_some());
@@ -3713,7 +3720,7 @@ fn context_actions_open_at_the_active_editor_of_a_split() {
     let (main, other) = (root.join("src/main.rs"), root.join("src/other.rs"));
     let mut app = test_app(home.path(), true);
     app.settings.trusted_projects.push(root.clone());
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     app.open_file_and_wait(&other);
     app.open_file_and_wait(&main);
     let mut h = harness(app, vec2(1600.0, 900.0));
@@ -3811,7 +3818,7 @@ fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
     let text = "fn main() { println!(\"zoom\"); }\n";
     std::fs::write(&source, text).unwrap();
     let mut app = test_app(home.path(), false);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.open_file_and_wait(&source);
     let mut harness = harness(app, vec2(1280.0, 800.0));
     let ctx = harness.ctx.clone();

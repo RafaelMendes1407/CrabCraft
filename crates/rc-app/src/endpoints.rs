@@ -786,7 +786,7 @@ mod tests {
         let normal_path = root.path().join("src/normal.rs");
         std::fs::write(&normal_path, normal).unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         app.insight
             .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
@@ -1059,7 +1059,7 @@ mod tests {
             .unwrap();
         }
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         app.insight
             .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
@@ -1234,7 +1234,7 @@ mod tests {
         for file in ["Cargo.toml", "Cargo.lock", "src/lib.rs"] { std::fs::copy(fixture().join(file), root.join(file)).unwrap(); }
         std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         assert!(app.runner.cargo_workspace.is_none());
         // Explicit metadata trust, without a language-server build in this static scan test.
         app.trust_project_tools_for_test();
@@ -1279,7 +1279,7 @@ mod tests {
         let original = format!("### User\nGET http://{address}/api/us?keep=one HTTP/1.1\nX-Trace: untouched\n\n");
         let path = root.join("api.http"); std::fs::write(&path, &original).unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         assert!(app.runner.cargo_workspace.is_none());
         // Explicit metadata trust, without a language-server build in this static scan test.
         app.trust_project_tools_for_test();

@@ -140,7 +140,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); listener.set_nonblocking(true).unwrap();
         let path = project.path().join("http-client.env.json");
         std::fs::write(&path, serde_json::json!({"local":{"base":format!("http://{}", listener.local_addr().unwrap()),"token":"private-fixture"}}).to_string()).unwrap();
-        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace(project.path());
+        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace_and_wait(project.path());
         app.http.environment.path = path.to_string_lossy().into_owned(); app.http.environment.selected = "local".into();
         app.toggle_tool(crate::toolwindow::ToolWindow::Http);
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 850.0));

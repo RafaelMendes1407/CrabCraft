@@ -23,7 +23,7 @@ mod tests {
         // Emulate macOS key events in the headless UI on the test host. Native NSApp/window
         // integration is not exercised by this test and is not claimed as product parity.
         app.keymap = rc_editor::Keymap::new(crate::app::keymap_kind_for(KeymapChoice::RustRover,true));
-        app.open_workspace(project.path()); app.open_file_and_wait(&path);
+        app.open_workspace_and_wait(project.path()); app.open_file_and_wait(&path);
         let mut h = crate::screens::harness(app,egui::vec2(1280.0,800.0));
         let command_shift = egui::Modifiers::MAC_CMD | egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
         h.key_press_modifiers(command_shift,egui::Key::O); h.run_steps(3);
@@ -71,7 +71,7 @@ mod tests {
         app.settings.shortcuts.insert("FoldAll".into(), "ctrl+K ctrl+0".into());
         app.settings.shortcuts.insert("UnfoldAll".into(), "ctrl+K J".into());
         app.keymap = crate::app::build_keymap(&app.settings);
-        app.open_workspace(project.path()); app.open_file_and_wait(&source);
+        app.open_workspace_and_wait(project.path()); app.open_file_and_wait(&source);
         app.open_settings(crate::ui::dialogs::SettingsPage::Keymap);
         let mut first = true;
         let mut frame = eframe::Frame::_new_kittest();

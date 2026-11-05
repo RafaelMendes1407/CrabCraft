@@ -209,7 +209,7 @@ mod tests {
         session.write(format!(":dep repl_vars_fixture = {{ path = {path} }}\rlet answer = repl_vars_fixture::answer();\rlet greeting = String::from(\"hello\");\rprintln!(\"VARS_READY\");\r"));
         assert!(session.wait_until(Duration::from_secs(40), |state| (0..40).any(|row| state.row_text(row).ends_with("VARS_READY"))), "{:?}", session.screen_lines());
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         let id = app.terminals.push(session);
         app.repl_variables.register(id);

@@ -877,7 +877,7 @@ mod native_views {
         std::fs::write(&main, "fn main() {}\n").unwrap();
         std::fs::write(&lib, "pub struct Item;\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&main);
         app.show_macro_expansion("view", "inner!(21)");
         let path = app.docs.active_doc().unwrap().path.clone();
