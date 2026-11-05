@@ -1215,6 +1215,14 @@ pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let Some(d) = &mut app.vcs.diff else { return };
     let body = Rect::from_min_max(pos2(full.left(), head.bottom()), full.max);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
+    diff_editors(d, &mut child, &app.editor_config, &app.keymap);
+}
+
+/// Shared aligned, synchronized native diff panes.
+pub fn diff_editors(d: &mut crate::vcs::DiffView, ui: &mut Ui, config: &rc_editor::EditorConfig, keymap: &rc_editor::Keymap) {
+    let p = rc_kit::pal(ui);
+    let body = ui.max_rect();
     let mid = body.center().x;
     let left = Rect::from_min_max(body.min, pos2(mid - 0.5, body.bottom()));
     let right = Rect::from_min_max(pos2(mid + 0.5, body.top()), body.max);
@@ -1225,11 +1233,10 @@ pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let (lead, follow) = if lead_right { (&mut d.right, &mut d.left) } else { (&mut d.left, &mut d.right) };
     let off = lead.scroll_offset();
     follow.set_scroll_offset(off);
-    let config = app.editor_config.clone();
     for (rect, state) in [(left, &mut d.left), (right, &mut d.right)] {
         let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(rect));
         eu.set_clip_rect(rect.intersect(ui.clip_rect()));
-        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+        rc_editor::EditorView::new(state, config, keymap).show(&mut eu);
     }
     let _ = trf;
 }
@@ -1380,10 +1387,23 @@ pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
 /// take a side for each change, a toolbar for the selected change and the whole file, and
 /// Save and Mark Resolved.
 pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let Some(tool) = &mut app.vcs.merge_tool else { return };
+    match merge_editor(tool, ui, &app.editor_config, &app.keymap, tr("Save and Mark Resolved")) {
+        MergeAction::None => {},
+        MergeAction::Close => { app.vcs.merge_tool = None; app.focus_editor = true; },
+        MergeAction::Save => app.vcs.save_merge_tool(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeAction { None, Close, Save }
+
+/// Shared native merge editor; the caller decides whether saving stages a Git file or writes
+/// an explicitly requested standalone output.
+pub fn merge_editor(tool: &mut crate::merge_tool::MergeTool, ui: &mut Ui, editor_config: &rc_editor::EditorConfig, keymap: &rc_editor::Keymap, save_label: &str) -> MergeAction {
     use rc_vcs::{Pane, Take};
     let p = rc_kit::pal(ui);
     let full = ui.max_rect();
-    let Some(tool) = &mut app.vcs.merge_tool else { return };
     tool.sync();
     let busy = tool.saving;
     let conflicts = tool.model.conflicts_left();
@@ -1404,7 +1424,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     };
     hu.label(egui::RichText::new(status).size(12.5).color(color));
     hu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
+        if theme::icon_button(ui, ico::CLOSE_SMALL, !busy, tr("Close")).clicked() {
             close = true;
         }
         if let Some(e) = &tool.error {
@@ -1462,7 +1482,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             if theme::secondary_button(ui, tr("Cancel")).clicked() {
                 tool.confirm_save = false;
             }
-        } else if theme::primary_button(ui, tr("Save and Mark Resolved")).clicked() {
+        } else if theme::primary_button(ui, save_label).clicked() {
             if unresolved > 0 {
                 tool.confirm_save = true;
             } else {
@@ -1522,7 +1542,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             e.set_scroll_offset(vec2(x, line as f32 * row_h + frac));
         }
     }
-    let mut config = app.editor_config.clone();
+    let mut config = editor_config.clone();
     config.sticky_lines = 0;
     for (rect, i) in rects.iter().zip(0..3) {
         let state = match i {
@@ -1532,7 +1552,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         };
         let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(*rect));
         eu.set_clip_rect(rect.intersect(ui.clip_rect()));
-        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+        rc_editor::EditorView::new(state, &config, keymap).show(&mut eu);
     }
     // The arrows between the panes: take the left side (») or the right side («) of a change.
     let mut act: Option<(usize, Take)> = None;
@@ -1576,12 +1596,8 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     if let Some((ci, take)) = act {
         tool.take(ci, take);
     }
-    if close || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-        app.vcs.merge_tool = None;
-        app.focus_editor = true;
-        return;
+    if !busy && (close || ui.input(|i| i.key_pressed(egui::Key::Escape))) {
+        return MergeAction::Close;
     }
-    if save {
-        app.vcs.save_merge_tool();
-    }
+    if save { MergeAction::Save } else { MergeAction::None }
 }

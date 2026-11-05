@@ -2,6 +2,7 @@
 
 mod app;
 mod cli;
+mod compare_cli;
 mod repl;
 mod settings_backup;
 mod instance;
@@ -104,6 +105,10 @@ fn main() -> eframe::Result {
     let cwd = std::env::current_dir().unwrap_or_default();
     let open = match cli::parse(std::env::args_os().skip(1), &cwd) {
         Ok(cli::Command::Open(list)) => list,
+        Ok(cli::Command::Compare(request)) => {
+            let code = compare_cli::run(request, options)?;
+            std::process::exit(code);
+        }
         Ok(cli::Command::Http(request)) => {
             match request.run() {
                 Ok(code) => std::process::exit(code),

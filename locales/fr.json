@@ -1802,5 +1802,17 @@
     "Development build (otherwise release)": "Compilation de développement (sinon release)",
     "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "Nécessite wasm-pack, wasm-bindgen et la cible wasm32-unknown-unknown. Les outils ne sont jamais installés automatiquement ; wasm-opt est désactivé.",
     "Debugging wasm-pack configurations is not supported": "Le débogage des configurations wasm-pack n’est pas pris en charge"
+  },
+  "compare_cli": {
+    "Use: crabcraft diff LEFT RIGHT": "Usage : crabcraft diff GAUCHE DROITE",
+    "Use: crabcraft merge LEFT RIGHT BASE OUTPUT": "Usage : crabcraft merge GAUCHE DROITE BASE SORTIE",
+    "Open a native comparison window for two text files": "Ouvrir une fenêtre native pour comparer deux fichiers texte",
+    "Open a native three-way merge; write OUTPUT only when saved": "Ouvrir une fusion native à trois voies ; écrire SORTIE uniquement à l’enregistrement",
+    "Cannot access comparison file {path}: {error}": "Impossible d’accéder au fichier de comparaison {path} : {error}",
+    "Comparison requires a regular UTF-8 text file: {path}": "La comparaison nécessite un fichier texte UTF-8 ordinaire : {path}",
+    "Comparison file exceeds 4 MB or 100000 lines: {path}": "Le fichier dépasse 4 Mo ou 100000 lignes : {path}",
+    "The output file changed since the merge was opened. Reopen the merge before saving.": "Le fichier de sortie a changé depuis l’ouverture de la fusion. Rouvrez la fusion avant d’enregistrer.",
+    "Loading comparison…": "Chargement de la comparaison…",
+    "Save Result": "Enregistrer le résultat"
   }
 }

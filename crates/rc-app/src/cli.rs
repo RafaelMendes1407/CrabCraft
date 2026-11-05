@@ -27,6 +27,7 @@ pub enum Command {
     Open(Vec<OpenRequest>),
     Tool(ToolRequest),
     Http(crate::http_cli::HttpCommand),
+    Compare(crate::compare_cli::CompareRequest),
     Help,
     Version,
 }
@@ -41,6 +42,7 @@ pub enum CliError {
     UntrustedProject,
     InvalidManifest,
     HttpFile,
+    ComparisonPaths { merge: bool },
 }
 
 impl std::fmt::Display for CliError {
@@ -52,6 +54,8 @@ impl std::fmt::Display for CliError {
             Self::MissingFile => tr("--line and --column must come before a file").to_string(),
             Self::MultipleProjects => tr("Specify one Cargo.toml or project folder").to_string(),
             Self::UntrustedProject => tr("Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.").to_string(),
+            Self::ComparisonPaths { merge: false } => tr("Use: crabcraft diff LEFT RIGHT").to_string(),
+            Self::ComparisonPaths { merge: true } => tr("Use: crabcraft merge LEFT RIGHT BASE OUTPUT").to_string(),
             Self::HttpFile => tr("Specify one HTTP request file").to_string(),
             Self::InvalidManifest => tr("Specify an existing Cargo.toml or project folder").to_string(),
         };
@@ -64,6 +68,8 @@ impl std::error::Error for CliError {}
 /// `--help`, in the user's language.
 pub fn usage() -> String {
     let rows = [
+        ("diff LEFT RIGHT", tr("Open a native comparison window for two text files")),
+        ("merge LEFT RIGHT BASE OUTPUT", tr("Open a native three-way merge; write OUTPUT only when saved")),
         ("http FILE", tr("Send an HTTP request without a window; select with --request N; print JSON")),
         ("format [path]", tr("Format a Cargo workspace; --check reports changes without writing")),
         ("inspect [path]", tr("Run Clippy; requires --trust-project because project code may run")),
@@ -88,6 +94,10 @@ pub fn usage() -> String {
 /// Reads the arguments after the program name. `cwd` makes relative paths absolute.
 pub fn parse(args: impl IntoIterator<Item = OsString>, cwd: &Path) -> Result<Command, CliError> {
     let mut args = args.into_iter().peekable();
+    if args.peek().is_some_and(|arg| arg == "diff" || arg == "merge") {
+        let merge = args.next().is_some_and(|arg| arg == "merge");
+        return crate::compare_cli::parse(merge, args, cwd);
+    }
     if args.peek().is_some_and(|arg| arg == "http") {
         args.next();
         return crate::http_cli::parse(args, cwd);

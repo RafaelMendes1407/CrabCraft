@@ -1802,5 +1802,17 @@
     "Development build (otherwise release)": "开发构建（否则为发布构建）",
     "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "需要 wasm-pack、wasm-bindgen 和 wasm32-unknown-unknown 目标。不会自动安装工具；wasm-opt 已禁用。",
     "Debugging wasm-pack configurations is not supported": "不支持调试 wasm-pack 配置"
+  },
+  "compare_cli": {
+    "Use: crabcraft diff LEFT RIGHT": "用法：crabcraft diff 左文件 右文件",
+    "Use: crabcraft merge LEFT RIGHT BASE OUTPUT": "用法：crabcraft merge 左文件 右文件 基础文件 输出文件",
+    "Open a native comparison window for two text files": "打开本机窗口比较两个文本文件",
+    "Open a native three-way merge; write OUTPUT only when saved": "打开本机三方合并；仅在保存时写入输出文件",
+    "Cannot access comparison file {path}: {error}": "无法访问比较文件 {path}：{error}",
+    "Comparison requires a regular UTF-8 text file: {path}": "比较需要常规 UTF-8 文本文件：{path}",
+    "Comparison file exceeds 4 MB or 100000 lines: {path}": "比较文件超过 4 MB 或 100000 行：{path}",
+    "The output file changed since the merge was opened. Reopen the merge before saving.": "输出文件在合并打开后发生了更改。请重新打开合并后再保存。",
+    "Loading comparison…": "正在加载比较…",
+    "Save Result": "保存结果"
   }
 }

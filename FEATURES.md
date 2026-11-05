@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 176 |
+| ✅ Pronto | 177 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 46 |
+| ⬜ A fazer | 45 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -369,7 +369,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-09 | Plugins | ⬜ | M6 | |
 | G-10 | Migração a partir do VS Code e do RustRover | ⬜ | M6 | |
 | G-11 | CLI: abrir arquivos | ✅ | M3 | `crabcraft [--line N] [--column N] arquivo[:linha[:coluna]]…`, com `--help` e `--version` traduzidos; arquivos vão para a janela já aberta (socket do usuário em `$XDG_RUNTIME_DIR` ou na pasta de dados; no Windows porta local com token), pasta ou `Cargo.toml` abre outra janela. Visto na janela nativa: `crabcraft src/main.rs:4:20` pôs o cursor em 4:20 no CrabCraft aberto. Falta `--wait` |
-| G-12 | CLI: diff e merge | ⬜ | M6 | |
+| G-12 | CLI: diff e merge | ✅ | M6 | `crabcraft diff LEFT RIGHT` abre comparação nativa somente leitura; `crabcraft merge LEFT RIGHT BASE OUTPUT` abre a ferramenta de três painéis com aceitar lados, edição, desfazer e rolagem sincronizada. Janela independente, sem abrir workspace nem executar projeto; carga e gravação em segundo plano, fechar cancela carga. Salvar resultado grava só OUTPUT de forma atômica (recusa saída alterada desde a abertura; saída nova nunca sobrescreve arquivo concorrente), com confirmação para mudanças não resolvidas; fechar sem salvar mantém a saída. Códigos 0 sucesso, 1 erro/cancelamento e 2 argumentos inválidos. Limite por arquivo: UTF-8 regular, 4 MB e 100000 quebras de linha; saída simbólica recusada. Teste headless com arquivos Rust num projeto Cargo, aceitar direita e salvar; resultado compilado com rustc real. Regressão da ferramenta Git passou. Fora: diretórios e arquivos binários |
 | G-13 | CLI: formatar e inspecionar | ✅ | M6 | `crabcraft format [pasta ou Cargo.toml]` usa `cargo fmt --all`, com `--check`; `crabcraft inspect --trust-project [pasta ou Cargo.toml]` usa Clippy em todo workspace e targets, tratando avisos como falha. Ambos aceitam `--offline`, mostram saída ao vivo, retornam o código do Cargo e rodam sem janela. Inspeção exige confiança explícita a cada chamada. Teste `cli::tests::workspace_tools_format_and_inspect_a_real_rust_project`: projeto Rust real num caminho com espaços, formatação e verificação, lint com falha, e sentinela de `build.rs` comprovando que formatar e recusar inspeção sem confiança não executam o script. |
 | G-14 | Assistente de IA com modelos locais | ⬜ | M6 | ollama por padrão |
 | G-15 | Agentes de IA via ACP | ⬜ | M6 | |

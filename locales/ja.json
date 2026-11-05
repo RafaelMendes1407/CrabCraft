@@ -1802,5 +1802,17 @@
     "Development build (otherwise release)": "開発ビルド（それ以外はリリース）",
     "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "wasm-pack、wasm-bindgen、wasm32-unknown-unknown ターゲットが必要です。ツールは自動インストールされません。wasm-opt は無効です。",
     "Debugging wasm-pack configurations is not supported": "wasm-pack 構成のデバッグには対応していません"
+  },
+  "compare_cli": {
+    "Use: crabcraft diff LEFT RIGHT": "使用方法: crabcraft diff 左ファイル 右ファイル",
+    "Use: crabcraft merge LEFT RIGHT BASE OUTPUT": "使用方法: crabcraft merge 左ファイル 右ファイル 基底ファイル 出力ファイル",
+    "Open a native comparison window for two text files": "2つのテキストファイルをネイティブウィンドウで比較",
+    "Open a native three-way merge; write OUTPUT only when saved": "ネイティブの3方向マージを開く。出力ファイルへの書き込みは保存時のみ",
+    "Cannot access comparison file {path}: {error}": "比較ファイル {path} にアクセスできません: {error}",
+    "Comparison requires a regular UTF-8 text file: {path}": "比較には通常の UTF-8 テキストファイルが必要です: {path}",
+    "Comparison file exceeds 4 MB or 100000 lines: {path}": "比較ファイルが 4 MB または100000行を超えています: {path}",
+    "The output file changed since the merge was opened. Reopen the merge before saving.": "マージを開いた後に出力ファイルが変更されました。保存する前にマージを開き直してください。",
+    "Loading comparison…": "比較を読み込み中…",
+    "Save Result": "結果を保存"
   }
 }
