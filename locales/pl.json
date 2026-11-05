@@ -826,7 +826,9 @@
     "Go to Definition": "Przejdź do definicji"
   },
   "settings": {
-    "Reopen the last project on startup": "Otwieraj ostatni projekt przy uruchomieniu"
+    "Reopen the last project on startup": "Otwieraj ostatni projekt przy uruchomieniu",
+    "Filter actions": "Filtruj akcje",
+    "No action matches the filter": "Żadna akcja nie pasuje do filtra"
   },
   "split": {
     "Move to Main Window": "Przenieś do okna głównego",

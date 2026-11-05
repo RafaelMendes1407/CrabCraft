@@ -3718,3 +3718,28 @@ fn context_actions_open_at_the_active_editor_of_a_split() {
     h.state_mut().insight.stop();
 }
 
+/// Every Settings page has the same size, with a line between the menu and the page; the
+/// Keymap list fills the page.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/settings-page-*.png"]
+fn settings_pages_capture() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let mut sizes = Vec::new();
+    for (page, name) in [(SettingsPage::Keymap, "keymap"), (SettingsPage::Appearance, "appearance"), (SettingsPage::Editor, "editor"), (SettingsPage::Inspections, "inspections"), (SettingsPage::LiveTemplates, "live-templates")] {
+        h.state_mut().open_settings(page);
+        h.run_steps(4);
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("settings"))).unwrap_or(egui::Rect::NOTHING);
+        sizes.push((name, rect.size()));
+        h.render().unwrap().save(out.join(format!("settings-page-{name}.png"))).unwrap();
+        h.state_mut().dialog = None;
+        h.run_steps(2);
+    }
+    eprintln!("{sizes:?}");
+    assert!(sizes.windows(2).all(|w| (w[0].1 - w[1].1).length() < 1.0), "{sizes:?}");
+}

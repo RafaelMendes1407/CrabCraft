@@ -826,7 +826,9 @@
     "Go to Definition": "定義へ移動"
   },
   "settings": {
-    "Reopen the last project on startup": "起動時に前回のプロジェクトを開く"
+    "Reopen the last project on startup": "起動時に前回のプロジェクトを開く",
+    "Filter actions": "アクションを絞り込む",
+    "No action matches the filter": "フィルターに一致するアクションはありません"
   },
   "split": {
     "Move to Main Window": "メインウィンドウへ移動",
