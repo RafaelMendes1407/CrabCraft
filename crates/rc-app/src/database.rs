@@ -655,7 +655,7 @@ mod tests {
         connection.execute_batch("CREATE TABLE people(id INTEGER PRIMARY KEY,name TEXT); INSERT INTO people VALUES(1,'initial'); CREATE TABLE copy(id INTEGER PRIMARY KEY,name TEXT);").unwrap();
         drop(connection);
         let mut app = test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.dock.show(crate::toolwindow::ToolWindow::Database);
         app.dock
             .sizes
@@ -761,7 +761,7 @@ mod tests {
         std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"postgres_ui_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\ntokio-postgres=\"0.7.18\"\ntokio={version=\"1\",features=[\"rt\",\"macros\",\"net\"]}\n").unwrap();
         let program=format!(r#"#[tokio::main(flavor="current_thread")] async fn main(){{let mut cfg=tokio_postgres::Config::new();cfg.host_path("/tmp/crabcraft-postgres/socket").port(55432).user("crabcraft").dbname("postgres");let(client,connection)=cfg.connect(tokio_postgres::NoTls).await.unwrap();tokio::spawn(async move{{connection.await.unwrap();}});let row=client.query_one("SELECT name FROM {people} WHERE id=1",&[]).await.unwrap();assert_eq!(row.get::<_,String>(0),"changed PostgreSQL 🦀");let count=client.query_one("SELECT count(*) FROM {copy}",&[]).await.unwrap();assert_eq!(count.get::<_,i64>(0),1);}}"#);
         std::fs::write(root.join("src/main.rs"),program).unwrap();std::fs::write(root.join("build.rs"),"fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
-        let mut app=test_app(home.path(),true);app.open_workspace(&root);app.dock.show(crate::toolwindow::ToolWindow::Database);app.dock.sizes.insert(crate::toolwindow::ToolWindow::Database,700.0);app.database.backend=1;app.database.pg_host=config.host.clone();app.database.pg_port=config.port.to_string();app.database.pg_user=config.user.clone();app.database.pg_database=config.database.clone();let mut h=harness(app,egui::vec2(1500.0,1300.0));
+        let mut app=test_app(home.path(),true);app.open_workspace_and_wait(&root);app.dock.show(crate::toolwindow::ToolWindow::Database);app.dock.sizes.insert(crate::toolwindow::ToolWindow::Database,700.0);app.database.backend=1;app.database.pg_host=config.host.clone();app.database.pg_port=config.port.to_string();app.database.pg_user=config.user.clone();app.database.pg_database=config.database.clone();let mut h=harness(app,egui::vec2(1500.0,1300.0));
         h.get_by_label(tr("Connect")).click();h.run_steps(2);assert!(h.state().database.config.is_none());h.state_mut().settings.trusted_projects.push(root.clone());h.run_steps(2);h.get_by_label(tr("Connect")).click();h.run_steps(2);pump(&mut h,|db|db.config.is_some()&&db.tables.iter().any(|table|table.name==people));
         h.state_mut().database.selected=people.clone();h.run_steps(2);h.get_by_label(tr("Browse table")).click();h.run_steps(2);pump(&mut h,|db|db.page.is_some());h.get_by_label("name: initial PG").click();h.run_steps(2);assert!(h.state().database.edit.is_none());
         h.state_mut().database.sql=format!("DELETE FROM {people}");h.get_by_label(tr("Run SQL")).click();h.run_steps(2);pump(&mut h,|db|db.error.is_some());assert_eq!(h.state().database.page.as_ref().unwrap().grid.rows.len(),1);

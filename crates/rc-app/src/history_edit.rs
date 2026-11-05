@@ -209,7 +209,7 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         use std::time::{Duration,Instant};
         let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();fixture(&root);let exe=executable();
-        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace(&root);app.trust_project_tools_for_test();app.settings.save().unwrap();app.history_edit.helper_executable=Some(exe);app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git,900.0);app.dock.show(crate::toolwindow::ToolWindow::Git);
+        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace_and_wait(&root);app.trust_project_tools_for_test();app.settings.save().unwrap();app.history_edit.helper_executable=Some(exe);app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git,900.0);app.dock.show(crate::toolwindow::ToolWindow::Git);
         let mut h=crate::screens::harness(app,egui::vec2(1700.0,1200.0));let start=Instant::now();while h.state().vcs.status.is_none()&&start.elapsed()<Duration::from_secs(15){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}
         let old=git(&root,&["rev-parse","HEAD"]);h.get_by_label(tr("Edit History")).click();h.run_steps(2);h.get_by_label(tr("Load History Plan")).click();h.run_steps(2);while h.state().history_edit.cancel.is_some()&&start.elapsed()<Duration::from_secs(15){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}
         assert_eq!(h.state().history_edit.plan.as_ref().unwrap().rows.len(),3);assert_eq!(git(&root,&["rev-parse","HEAD"]),old);

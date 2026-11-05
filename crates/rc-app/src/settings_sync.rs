@@ -210,7 +210,7 @@ mod tests {
         std::fs::write(project.path().join("build.rs"), "fn main() { std::fs::write(\"executed\", \"bad\").unwrap(); }\n").unwrap();
         let server = server();
         server.store.lock().unwrap().body = Some(Backup::from_settings(&Settings { editor_font_size: 27.0, ..Default::default() }).unwrap().to_bytes().unwrap());
-        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace(project.path());
+        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace_and_wait(project.path());
         app.open_settings(crate::ui::dialogs::SettingsPage::Backup);
         let mut h = crate::screens::harness(app, egui::vec2(1440.0, 1100.0));
         h.get_by_label(tr("Preferences storage URL")).click(); h.run_steps(2);

@@ -47,7 +47,7 @@ mod tests {
         std::fs::write(root.path().join("Cargo.toml"), "[package]\nname='remote-ui'\nversion='0.1.0'\nedition='2024'\n[workspace]\n").unwrap();
         std::fs::write(root.path().join("src/main.rs"), "fn main() {}\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.dialog = Some(crate::ui::dialogs::Dialog::RemoteDebug(Dialog {
             host: "127.0.0.1".into(), port: "2345".into(), program: root.path().join("symbols").display().to_string(),
         }));

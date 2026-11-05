@@ -415,7 +415,7 @@ mod tests {
         assert!(std::process::Command::new("cargo").args(["generate-lockfile", "--offline"]).current_dir(root.path()).status().unwrap().success());
         let mut app = crate::screens::test_app(home.path(), false);
         app.settings.trusted_projects.push(root.path().canonicalize().unwrap());
-        app.open_workspace(root.path()); app.open_file_and_wait(&path);
+        app.open_workspace_and_wait(root.path()); app.open_file_and_wait(&path);
         let end = Instant::now() + Duration::from_secs(30);
         while app.insight.status != crate::insight::InsightStatus::Ready {
             app.poll_cargo_workspace(); let output = app.insight.update(&mut app.docs, true); app.handle_insight(output);
@@ -534,7 +534,7 @@ mod native_tests {
         let marker = text.find('|').unwrap(); let caret = text[..marker].chars().count(); let text = text.replace('|', "");
         let path = root.path().join("src/lib.rs"); std::fs::write(&path, &text).unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path()); app.open_file_and_wait(&path); app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
+        app.open_workspace_and_wait(root.path()); app.open_file_and_wait(&path); app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 900.0));
         complete(&mut h);
         assert_eq!(h.state().insight.status, crate::insight::InsightStatus::Untrusted);
@@ -575,7 +575,7 @@ mod native_tests {
         std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
         app.settings.rust_analyzer_path = Some(wrapper); app.settings.trusted_projects.push(root.path().canonicalize().unwrap());
-        app.open_workspace(root.path()); app.open_file_and_wait(&path); app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
+        app.open_workspace_and_wait(root.path()); app.open_file_and_wait(&path); app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 900.0));
         wait(&mut h, "project analysis", |app| app.insight.status == crate::insight::InsightStatus::Ready);
         fn pid(file: &Path) -> Option<i32> { std::fs::read_to_string(file).ok()?.parse().ok() }

@@ -354,7 +354,7 @@ mod tests {
         let text = "fn answer() -> i32 { 41 }\nfn main() { assert_eq!(answer(), 42); }\n";
         std::fs::write(&file, text).unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&file);
         app.local_ai.open = true;
         let mut h = crate::screens::harness(app, egui::vec2(1280., 900.));
@@ -511,7 +511,7 @@ mod tests {
         let original = "fn answer() -> i32 { 41 }\nfn main() { assert_eq!(answer(), 42); }\n";
         std::fs::write(&file, original).unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&file);
         app.trust_project_tools_for_test();
         app.local_ai.open = true;

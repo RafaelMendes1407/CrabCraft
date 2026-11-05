@@ -329,7 +329,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let path = project(root.path());
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&path);
         app.prepare_privileged_debug();
         assert!(app.privileged_debug.stop.is_none());
@@ -413,7 +413,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let path = project(root.path());
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         app.open_file_and_wait(&path);
         pump(&mut app, |a| a.runner.cargo_workspace.is_some());

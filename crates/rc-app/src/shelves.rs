@@ -291,7 +291,7 @@ mod tests {
         use std::time::{Duration, Instant};
         let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap(); fixture(&root);
-        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace(&root); app.trust_project_tools_for_test();
+        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace_and_wait(&root); app.trust_project_tools_for_test();
         let mut h = crate::screens::harness(app, egui::vec2(1650.0, 1200.0));
         let start = Instant::now();
         while (h.state().runner.cargo_workspace.is_none() || h.state().vcs.status.is_none()) && start.elapsed() < Duration::from_secs(15) { h.run_steps(2); std::thread::sleep(Duration::from_millis(10)); }

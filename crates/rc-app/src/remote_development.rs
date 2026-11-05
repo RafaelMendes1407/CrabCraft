@@ -1141,7 +1141,7 @@ mod tests {
         let first = transport::tests::fixture();
         let second = transport::tests::fixture();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(first.path());
+        app.open_workspace_and_wait(first.path());
         open(&mut app);
         let state = app.remote_development.as_mut().unwrap();
         state.root = "/remote/independent".into();
@@ -1160,7 +1160,7 @@ mod tests {
         let ticket = state.tabs[0].ticket();
         let dirty = state.tabs[0].text();
         // Simulate CLI/IPC project switching, which bypasses the modal action dispatcher.
-        app.open_workspace(second.path());
+        app.open_workspace_and_wait(second.path());
         let mut h = crate::screens::harness(app, egui::vec2(1600., 1100.));
         let deadline = Instant::now() + Duration::from_secs(10);
         while h

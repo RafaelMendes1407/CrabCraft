@@ -380,7 +380,7 @@ mod tests {
             Some("/tmp/crabcraft-web-tools/node_modules/.bin/typescript-language-server".into());
         app.settings.web_tsserver_path =
             Some("/tmp/crabcraft-web-tools/node_modules/typescript/lib/tsserver.js".into());
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         for file in ["index.html", "app.css", "app.js", "app.ts"] {
             app.open_file_and_wait(&root.join("static").join(file));
         }
@@ -666,7 +666,7 @@ mod edit_tests {
         let path = root.join("app.ts");
         std::fs::write(&path, "const name=1;\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.open_file_and_wait(&path);
         let uri = rc_lsp::path_to_uri(&path);
         let edit:rc_lsp::lsp_types::WorkspaceEdit=serde_json::from_value(json!({"changes":{uri.as_str():[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":10}},"newText":"renamed"}]}})).unwrap();

@@ -468,7 +468,7 @@ mod tests {
         std::fs::write(&from, source).unwrap();
         std::fs::write(&to, "").unwrap();
         let mut app = test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         for path in [&main, &from, &to] {
             app.open_file_and_wait(path);
         }

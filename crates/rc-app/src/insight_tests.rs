@@ -57,7 +57,7 @@ fn csharp_insight_end_to_end() {
     let root = dir.path().canonicalize().unwrap();
     let sln = demo_solution(&root);
     let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     pump(&mut app, "projects", |a| a.insight.status == InsightStatus::Ready);
 
     let program = root.join("App/Program.cs");
@@ -143,7 +143,7 @@ fn go_to_declaration_and_back() {
     let sln = demo_solution(&root);
     let (program, greeter) = (root.join("App/Program.cs"), root.join("Lib/Greeter.cs"));
     let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
-    app.open_workspace(&sln);
+    app.open_workspace_and_wait(&sln);
     app.open_file_and_wait(&program);
     // Clicked while the projects still load: it goes there once they have.
     pump(&mut app, "the server", |a| a.insight.ready());

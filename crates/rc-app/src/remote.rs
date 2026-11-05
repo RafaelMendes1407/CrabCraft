@@ -394,7 +394,7 @@ mod tests {
         let after = "fn main(){println!(\"remote edit 🦀\");}\n";
         std::fs::write(&file, first).unwrap();
         let mut app = test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.dock.show(crate::toolwindow::ToolWindow::Remote);
         app.dock
             .sizes

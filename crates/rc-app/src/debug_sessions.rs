@@ -124,7 +124,7 @@ mod tests {
             std::fs::write(path, format!("fn main() {{\n    let value: u32 = {value};\n    std::fs::write(\"{marker}\", value.to_string()).unwrap();\n}}\n")).unwrap();
         }
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(project.path());
+        app.open_workspace_and_wait(project.path());
         app.trust_project_tools_for_test();
         let mut harness = crate::screens::harness(app, egui::vec2(1450.0, 900.0));
         wait(&mut harness, |a| a.runner.cargo_workspace.is_some());

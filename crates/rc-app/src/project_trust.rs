@@ -42,7 +42,7 @@ fn untrusted_project_toolchain_child() {
     std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::write(root.join(".cargo/config.toml"), format!("[build]\nrustc-wrapper={}\n", serde_json::to_string(&wrapper.to_string_lossy()).unwrap())).unwrap();
     let mut app = crate::screens::test_app(home.path(), true);
-    app.open_workspace(&root);
+    app.open_workspace_and_wait(&root);
     assert_eq!(app.runner.require_trust(), Err(ProjectExecutionError::Untrusted));
     assert!(app.runner.cargo_tool().is_err());
     app.reload_cargo(); app.invalidate_caches(true); app.load_toolchain();
@@ -101,7 +101,7 @@ fn a_plain_git_folder_stays_restricted_until_the_native_trust_control_is_used() 
     std::fs::write(&monitor, "#!/bin/sh\nprintf invoked > git-ran\nexit 0\n").unwrap();
     std::fs::set_permissions(&monitor, std::fs::Permissions::from_mode(0o700)).unwrap();
     git(&["config", "core.fsmonitor", monitor.to_str().unwrap()]);
-    let mut app = crate::screens::test_app(home.path(), true); app.open_workspace(&root);
+    let mut app = crate::screens::test_app(home.path(), true); app.open_workspace_and_wait(&root);
     assert!(!app.vcs.trusted); assert!(app.vcs.repo.is_none());
     app.vcs.changelists.create("Review").unwrap(); app.vcs.message = "retained draft".into();
     app.vcs.refresh(); app.vcs.fetch(); app.vcs.push();

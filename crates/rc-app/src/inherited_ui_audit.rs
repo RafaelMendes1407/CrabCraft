@@ -42,7 +42,7 @@ fn workspace(home: &Path, dark: bool) -> (tempfile::TempDir, Harness<'static, Cr
     std::fs::write(root.path().join("src/helper.rs"), "pub fn value() -> i32 {\n    // café before a saved caret\n    42\n}\n").unwrap();
     std::fs::write(root.path().join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
     let mut app = crate::screens::test_app(home, dark);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     app.open_file_and_wait(&root.path().join("src/main.rs"));
     (root, crate::screens::harness(app, vec2(1280.0, 800.0)))
 }
@@ -134,7 +134,7 @@ fn native_dock_stripes_move_show_hide_and_restore_the_cargo_layout() {
     let size = harness.state().dock.size(ToolWindow::Tests);
     harness.state_mut().save_session();
     let mut app = crate::screens::test_app(home.path(), false);
-    app.open_workspace(root.path());
+    app.open_workspace_and_wait(root.path());
     let restored = crate::screens::harness(app, vec2(1280.0, 800.0));
     assert_eq!(restored.state().dock.side_of(ToolWindow::Tests), Side::Right);
     assert_eq!(restored.state().dock.right, Some(ToolWindow::Tests));

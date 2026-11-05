@@ -154,7 +154,7 @@ mod tests {
     fn closed_manifest_edit_precedes_real_cargo_without_running_during_reading(){
         let _home=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let root=fixture();
         std::fs::write(root.path().join("build.rs"),"fn main(){assert!(std::env::var_os(\"CARGO_FEATURE_STD\").is_some());std::fs::write(\"build-observed\",\"latest feature\").unwrap();}").unwrap();
-        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace(root.path());app.trust_project_tools_for_test();app.open_file_and_wait(&root.path().join("src/main.rs"));let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|app.runner.cargo_workspace.is_some());
+        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace_and_wait(root.path());app.trust_project_tools_for_test();app.open_file_and_wait(&root.path().join("src/main.rs"));let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|app.runner.cargo_workspace.is_some());
         let manifest=root.path().join("Cargo.toml");h.state_mut().apply_feature_fix(FeatureFix::Default{manifest:manifest.clone(),package:"editable_file_proof".into(),feature:"std".into()});
         assert!(h.state().docs.index_of(&manifest).is_none());assert!(!root.path().join("build-observed").exists());
         let ctx=h.ctx.clone();h.state_mut().run_ide_action(&ctx,rc_editor::Action::Build);
@@ -165,7 +165,7 @@ mod tests {
     fn closed_bom_crlf_compiler_edits_are_undoable_and_stale_open_edits_are_kept(){
         let _home=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let root=fixture();let main=root.path().join("src/main.rs");let text="\u{feff}fn main() {\r\n    // café\r\n    println!(\"{}\", 1);\r\n}\r\n";std::fs::write(&main,text).unwrap();
         let start=text.find("1").unwrap();let fix=rc_dotnet::diagnostics::Fix{label:"use 42".into(),source:rc_dotnet::diagnostics::source_hash(text.as_bytes()),edits:vec![(start,start+1,"42".into())]};
-        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace(root.path());app.open_file_and_wait(&root.path().join("Cargo.toml"));app.apply_build_fix(&main,&fix);let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|!app.file_edits.busy());
+        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace_and_wait(root.path());app.open_file_and_wait(&root.path().join("Cargo.toml"));app.apply_build_fix(&main,&fix);let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|!app.file_edits.busy());
         let doc=h.state().docs.active_doc().unwrap();assert_eq!(doc.path,main);assert!(doc.bom && doc.is_modified());assert_eq!(doc.editor.buffer.line_ending(),rc_text::LineEnding::CrLf);assert!(doc.editor.buffer.rope().to_string().contains(", 42)"));assert_eq!(std::fs::read_to_string(&main).unwrap(),text);
         h.state_mut().docs.active_doc_mut().unwrap().editor.undo();assert!(!h.state().docs.active_doc().unwrap().is_modified());
         h.state_mut().apply_build_fix(&main,&fix);h.state_mut().docs.active_doc_mut().unwrap().editor.replace(0,0,"// later edit\n");frames(&mut h,|app|!app.file_edits.busy());assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().starts_with("// later edit"));assert!(!h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains(", 42)"));assert_eq!(std::fs::read_to_string(main).unwrap(),text);
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn native_cancel_of_pending_edit_aborts_waiting_cargo_and_keeps_buffers(){
         let _home=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let root=fixture();std::fs::write(root.path().join("build.rs"),"fn main(){std::fs::write(\"build-observed\",\"unexpected\").unwrap();}").unwrap();
-        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace(root.path());app.trust_project_tools_for_test();app.open_file_and_wait(&root.path().join("src/main.rs"));let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|app.runner.cargo_workspace.is_some());
+        let mut app=crate::screens::test_app(home.path(),true);app.open_workspace_and_wait(root.path());app.trust_project_tools_for_test();app.open_file_and_wait(&root.path().join("src/main.rs"));let mut h=crate::screens::harness(app,egui::vec2(1280.0,850.0));frames(&mut h,|app|app.runner.cargo_workspace.is_some());
         h.state_mut().file_edits.gate=Some(Arc::new(AtomicBool::new(false)));let manifest=root.path().join("Cargo.toml");h.state_mut().apply_feature_fix(FeatureFix::Default{manifest:manifest.clone(),package:"editable_file_proof".into(),feature:"std".into()});let ctx=h.ctx.clone();h.state_mut().run_ide_action(&ctx,rc_editor::Action::Build);h.run_steps(3);
         h.get_by_label(tr("Cancel")).click();h.run_steps(3);assert!(!h.state().file_edits.busy());assert!(h.state().disk_save.continuation.is_none());assert!(h.state().runner.build.is_none());assert!(!root.path().join("build-observed").exists());assert!(h.state().docs.index_of(&manifest).is_none());assert_eq!(h.state().docs.list.len(),1);
     }

@@ -389,7 +389,7 @@ mod tests {
         let endpoint = std::env::var("CRABCRAFT_TEST_LANGUAGETOOL")
             .unwrap_or_else(|_| "http://127.0.0.1:8086".into());
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&path);
         app.proofreader.endpoint = endpoint.clone();
         assert!(matches!(

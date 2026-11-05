@@ -636,7 +636,7 @@ mod tests {
         rust_project(&root);
         let config = fake(&root, false);
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(&root);
+        app.open_workspace_and_wait(&root);
         app.containers.program = config.program;
         app.dock
             .sizes

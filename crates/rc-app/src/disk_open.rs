@@ -293,7 +293,7 @@ mod tests {
         )
         .unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&main);
         app.docs
             .active_doc_mut()

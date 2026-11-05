@@ -98,7 +98,7 @@ mod tests {
         std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"terminal_split_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
         std::fs::write(root.path().join("src/main.rs"), "fn main() { println!(\"SPLIT_SEARCH_OK\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
         app.dock.sizes.insert(crate::toolwindow::ToolWindow::Terminal, 420.0);
         app.open_terminal(None);

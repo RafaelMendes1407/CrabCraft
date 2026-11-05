@@ -146,7 +146,7 @@ mod tests {
         let mut app = crate::screens::test_app(home.path(), false);
         app.settings.keymap = rc_core::settings::KeymapChoice::RustRover;
         app.keymap = rc_editor::Keymap::new(rc_editor::KeymapKind::RustRover);
-        app.open_workspace(root.path()); app.open_file_and_wait(&path);
+        app.open_workspace_and_wait(root.path()); app.open_file_and_wait(&path);
         app.docs.active_doc_mut().unwrap().editor.selection = Selection::point(source[..source.find("vec!").unwrap()].chars().count());
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
         h.state_mut().focus_editor = true; h.run_steps(2);

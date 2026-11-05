@@ -264,7 +264,7 @@ mod tests {
         let root = fixture();
         let path = root.path().join("src/main.rs");
         let mut app = crate::screens::test_app(home.path(), false);
-        app.open_workspace(root.path());
+        app.open_workspace_and_wait(root.path());
         app.open_file_and_wait(&path);
         app.docs.list[0].editor.replace(0, 0, "// unsaved local change\n");
         let dirty_text = app.docs.list[0].editor.buffer.rope().to_string();
