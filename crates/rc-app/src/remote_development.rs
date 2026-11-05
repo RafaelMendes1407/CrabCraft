@@ -141,6 +141,10 @@ struct Completion {
 pub struct RemoteDevelopment {
     pub open: bool,
     pub wsl: bool,
+    pub container: bool,
+    pub docker_cli: String,
+    pub docker_socket: String,
+    pub container_id: String,
     pub distribution: String,
     distributions: Vec<String>,
     pub host: String,
@@ -181,6 +185,10 @@ impl RemoteDevelopment {
         Self {
             open: false,
             wsl: false,
+            container: false,
+            docker_cli: String::new(),
+            docker_socket: "unix:///var/run/docker.sock".into(),
+            container_id: String::new(),
             distribution: String::new(),
             distributions: Vec::new(),
             host: String::new(),
@@ -221,12 +229,7 @@ impl RemoteDevelopment {
         let settings = Settings {
             ssh: remote_transfer::Config {
                 host: self.host.clone(),
-                port: self
-                    .port
-                    .parse()
-                    .ok()
-                    .filter(|p| *p > 0)
-                    .ok_or(Error::Input)?,
+                port: if self.container {22} else {self.port.parse().ok().filter(|p|*p>0).ok_or(Error::Input)?},
                 user: self.user.clone(),
                 identity: PathBuf::from(&self.identity),
                 known_hosts: PathBuf::from(&self.known_hosts),
@@ -234,6 +237,7 @@ impl RemoteDevelopment {
             wsl: self.wsl.then(|| {
                 crate::wsl_workspace::Config::new(self.distribution.clone(), self.user.clone())
             }),
+            container: self.container.then(||crate::container_workspace::Config{cli:PathBuf::from(&self.docker_cli),socket:self.docker_socket.clone(),container:self.container_id.clone(),user:self.user.clone(),root:self.root.clone()}),
             root: self.root.clone(),
             cargo: self.cargo.clone(),
             analyzer: self.analyzer.clone(),
@@ -514,7 +518,9 @@ impl RemoteDevelopment {
                         session.client.notify_raw("textDocument/didOpen",json!({"textDocument":{"uri":rc_lsp::path_to_uri(Path::new(&tab.path)).as_str(),"languageId":if tab.path.ends_with(".rs"){"rust"}else{"toml"},"version":1,"text":tab.editor.buffer.rope().to_string()}}));
                     }
                     self.session = Some(session);
-                    self.status = if self.wsl {
+                    self.status = if self.container {
+                        tr("Container analyzer connected; indexing inside the container…")
+                    } else if self.wsl {
                         tr("WSL analyzer connected; indexing inside the distribution…")
                     } else {
                         tr("Remote analyzer connected; indexing on the SSH host…")
@@ -894,6 +900,7 @@ impl RemoteDevelopment {
         let busy = self.job.is_some();
         let mut edited = false;
         let distribution_before = self.distribution.clone();
+        let container_before=(self.container,self.docker_cli.clone(),self.docker_socket.clone(),self.container_id.clone());
         let before = (
             self.host.clone(),
             self.port.clone(),
@@ -905,17 +912,19 @@ impl RemoteDevelopment {
             self.analyzer.clone(),
         );
         egui::Modal::new(egui::Id::new("remote_development_workspace")).show(ctx,|ui|{ui.set_width((ctx.content_rect().width()-80.).clamp(500.,1500.));ui.set_max_height((ctx.content_rect().height()-80.).max(300.));
- ui.horizontal(|ui|{ui.heading(if self.wsl{tr("WSL Rust workspace")}else{tr("Remote Rust workspace")});if ui.button(if self.wsl{tr("Close WSL workspace")}else{tr("Close remote workspace")}).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
- ui.small(if self.wsl{tr("Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.")}else{tr("Explicit SSH session on a Linux host. Start may execute remote Cargo metadata, build scripts and procedural macros. Local projects are not used.")});
+ ui.horizontal(|ui|{ui.heading(if self.container{tr("Running container Rust workspace")}else if self.wsl{tr("WSL Rust workspace")}else{tr("Remote Rust workspace")});if ui.button(if self.wsl{tr("Close WSL workspace")}else{tr("Close remote workspace")}).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
+ ui.small(if self.container{tr("Explicit connection to an already-running Linux container. Start executes Cargo and rust-analyzer inside it. No container is created, started or pulled.")}else if self.wsl{tr("Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.")}else{tr("Explicit SSH session on a Linux host. Start may execute remote Cargo metadata, build scripts and procedural macros. Local projects are not used.")});
  if self.session.is_none(){ui.add_enabled_ui(!busy,|ui|{if self.wsl {ui.small(tr("WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed."));if !crate::wsl_workspace::available(){ui.colored_label(rc_kit::pal(ui).warn,tr("WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution."));}}
+ if !self.wsl {let old=self.container;ui.add_enabled(!self.tabs.iter().any(Tab::dirty),egui::Checkbox::new(&mut self.container,tr("Use an already-running Docker container")));if old!=self.container{self.trusted=false;self.buffer_settings=None;}}
  egui::Grid::new("remote_workspace_settings").num_columns(4).show(ui,|ui|{
- if self.wsl {field(ui,tr("WSL distribution"),&mut self.distribution,256);field(ui,tr("User"),&mut self.user,64);ui.end_row();if ui.add_enabled(crate::wsl_workspace::available(),egui::Button::new(tr("List installed WSL distributions"))).clicked(){self.list_distributions();}ui.end_row();let mut choice=None;for name in &self.distributions {if ui.selectable_label(self.distribution==*name,name).clicked(){choice=Some(name.clone());}}if let Some(name)=choice{self.distribution=name;}ui.end_row();}
+ if self.container {field(ui,tr("Docker CLI executable"),&mut self.docker_cli,4096);field(ui,tr("Local Docker socket URI"),&mut self.docker_socket,4096);ui.end_row();field(ui,tr("Running container ID"),&mut self.container_id,64);field(ui,tr("Container user or UID:GID"),&mut self.user,64);ui.end_row();ui.small(tr("Docker runtime validation is pending. Only local Unix sockets and existing Linux containers are supported."));ui.end_row();}
+ else if self.wsl {field(ui,tr("WSL distribution"),&mut self.distribution,256);field(ui,tr("User"),&mut self.user,64);ui.end_row();if ui.add_enabled(crate::wsl_workspace::available(),egui::Button::new(tr("List installed WSL distributions"))).clicked(){self.list_distributions();}ui.end_row();let mut choice=None;for name in &self.distributions {if ui.selectable_label(self.distribution==*name,name).clicked(){choice=Some(name.clone());}}if let Some(name)=choice{self.distribution=name;}ui.end_row();}
  else{field(ui,tr("Host"),&mut self.host,253);field(ui,tr("Port"),&mut self.port,5);ui.end_row();field(ui,tr("User"),&mut self.user,253);field(ui,tr("SSH private key"),&mut self.identity,8192);ui.end_row();field(ui,tr("Verified known_hosts file"),&mut self.known_hosts,8192);ui.end_row();}
  field(ui,if self.wsl{tr("Linux workspace root")}else{tr("Remote workspace root")},&mut self.root,4096);ui.end_row();field(ui,if self.wsl{tr("Linux Cargo executable")}else{tr("Remote Cargo executable")},&mut self.cargo,4096);field(ui,if self.wsl{tr("Linux rust-analyzer executable")}else{tr("Remote rust-analyzer executable")},&mut self.analyzer,4096);ui.end_row();});
- if before!=(self.host.clone(),self.port.clone(),self.user.clone(),self.identity.clone(),self.known_hosts.clone(),self.root.clone(),self.cargo.clone(),self.analyzer.clone())||distribution_before!=self.distribution{self.trusted=false;}
- ui.add_enabled(!self.wsl||crate::wsl_workspace::available(),egui::Checkbox::new(&mut self.trusted,if self.wsl{tr("I trust this WSL distribution and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")}));if ui.add_enabled(self.trusted&&(!self.wsl||crate::wsl_workspace::available()),egui::Button::new(if self.wsl{tr("Start WSL workspace")}else{tr("Start remote workspace")})).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(if self.wsl{format!("WSL: {} / {} {}",self.distribution,self.user,self.root)}else{format!("{}@{}:{} {}",self.user,self.host,self.port,self.root)});if ui.button(if self.wsl{tr("Disconnect WSL workspace")}else{tr("Disconnect remote workspace")} ).clicked(){self.disconnect();}});}
+ if before!=(self.host.clone(),self.port.clone(),self.user.clone(),self.identity.clone(),self.known_hosts.clone(),self.root.clone(),self.cargo.clone(),self.analyzer.clone())||distribution_before!=self.distribution||container_before!=(self.container,self.docker_cli.clone(),self.docker_socket.clone(),self.container_id.clone()){self.trusted=false;}
+ ui.add_enabled(!self.wsl||crate::wsl_workspace::available(),egui::Checkbox::new(&mut self.trusted,if self.container{tr("I trust this Docker daemon, container and workspace to execute project tools")}else if self.wsl{tr("I trust this WSL distribution and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")}));if ui.add_enabled(self.trusted&&(!self.wsl||crate::wsl_workspace::available()),egui::Button::new(if self.container{tr("Start container workspace")}else if self.wsl{tr("Start WSL workspace")}else{tr("Start remote workspace")})).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(if self.container{format!("{} / {} {}",self.container_id,self.user,self.root)}else if self.wsl{format!("WSL: {} / {} {}",self.distribution,self.user,self.root)}else{format!("{}@{}:{} {}",self.user,self.host,self.port,self.root)});if ui.button(if self.wsl{tr("Disconnect WSL workspace")}else{tr("Disconnect remote workspace")} ).clicked(){self.disconnect();}});}
  if busy||self.query.is_some(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Remote operation in progress…"));if ui.button(tr("Cancel remote operation")).clicked(){self.cancel();}});}
- if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error_text(error,self.wsl));}if !self.status.is_empty(){ui.label(&self.status);}
+ if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,if self.container{match error{Error::Input=>tr("Invalid container settings or Linux source path").into(),Error::Timeout=>tr("Container operation timed out").into(),Error::Io(e)|Error::Process(e)=>trf(tr("Container error: {error}"),&[("error",e)]),_=>error_text(error,false)}}else{error_text(error,self.wsl)});}if !self.status.is_empty(){ui.label(&self.status);}
  if connected{ui.horizontal(|ui|{field(ui,tr("Remote source path"),&mut self.path,4096);if ui.add_enabled(!busy,egui::Button::new(tr("Open remote source"))).clicked(){self.load(self.path.clone(),None,None);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo check"))).clicked(){self.run(Task::Check);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo build"))).clicked(){self.run(Task::Build);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo test"))).clicked(){self.run(Task::Test);}});
  ui.collapsing(tr("Remote source files"),|ui|{let sources=self.session.as_ref().map(|s|s.sources.clone()).unwrap_or_default();let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_source_files").max_height(90.).show_rows(ui,22.,sources.len(),|ui,rows|{for row in rows{if let Some(path)=sources.get(row){if ui.selectable_label(false,path).clicked(){selected=Some(path.clone());}}}});if let Some(path)=selected{self.path=path.clone();self.load(path,None,None);}});}
  ui.horizontal_wrapped(|ui|{for(index,tab)in self.tabs.iter().enumerate(){let relative=tab.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&tab.path);let label=format!("{relative}{}",if tab.dirty(){" *"}else{""});if ui.selectable_label(index==self.active,label).clicked(){self.active=index;}}});
@@ -924,7 +933,7 @@ impl RemoteDevelopment {
  }
  if !self.completions.is_empty(){let mut choice=None;egui::ScrollArea::vertical().id_salt("remote_completions").max_height(100.).show_rows(ui,22.,self.completions.len(),|ui,rows|{for index in rows{if let Some(item)=self.completions.get(index){if ui.button(&item.label).clicked(){choice=Some(index);}}}});if let Some(index)=choice{self.apply_completion(index);}}
  if !self.hover.is_empty(){egui::ScrollArea::vertical().id_salt("remote_hover").max_height(100.).show(ui,|ui|{ui.label(&self.hover);});}
- if let Some((_,preview))=&self.preview{ui.separator();ui.label(if self.wsl{tr("Review WSL overwrite")}else{tr("Review remote overwrite")});ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(if self.wsl{tr("Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.")}else{tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.")});if ui.button(if self.wsl{tr("Confirm WSL overwrite")}else{tr("Confirm remote overwrite")}).clicked(){self.apply_upload();}}
+ if let Some((_,preview))=&self.preview{ui.separator();ui.label(if self.wsl{tr("Review WSL overwrite")}else{tr("Review remote overwrite")});ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(if self.wsl||self.container{tr("Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.")}else{tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.")});if ui.button(if self.wsl{tr("Confirm WSL overwrite")}else{tr("Confirm remote overwrite")}).clicked(){self.apply_upload();}}
  if !self.diagnostics.is_empty(){ui.label(tr("Remote Cargo diagnostics"));let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_cargo_diagnostics").max_height(100.).show_rows(ui,22.,self.diagnostics.len(),|ui,rows|{for index in rows{if let Some(d)=self.diagnostics.get(index){let label=format!("{}:{}:{} {}",d.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&d.path),d.line+1,d.column+1,d.message);if ui.selectable_label(false,label).clicked(){selected=Some((d.path.clone(),d.line,d.column));}}}});if let Some((path,line,column))=selected{self.load(path,None,Some(Location::Cargo{line,column}));}}
  ui.collapsing(tr("Remote process output"),|ui|{egui::ScrollArea::vertical().id_salt("remote_output").max_height(120.).show_rows(ui,20.,self.output.len(),|ui,rows|{for index in rows{if let Some(line)=self.output.get(index){ui.monospace(line);}}});});
  if let Some(ticket)=self.reload.clone(){ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Discard edits and reload this remote source?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.reload=None;}if ui.button(tr("Discard edits and reload")).clicked(){if self.current(&ticket){self.reload_active();}else{self.error=Some(Error::Stale);self.reload=None;}}});}
@@ -980,7 +989,7 @@ pub fn open_wsl(app: &mut CrabCraftApp) {
 }
 fn open_mode(app: &mut CrabCraftApp, wsl: bool) {
     if let Some(state) = &mut app.remote_development {
-        if state.wsl != wsl {
+        if state.wsl != wsl || state.container {
             if state.tabs.iter().any(Tab::dirty) {
                 state.error = Some(Error::Stale);
                 state.open = true;
@@ -1278,12 +1287,16 @@ mod tests {
     #[test]
     #[ignore = "Requires explicit private SSH fixture and remote rust-analyzer/Cargo"]
     fn real_native_remote_start_definition_completion_review_upload_cargo_and_disconnect() {
+        native_workspace_evidence(false);
+    }
+    #[cfg(unix)]
+    #[test]
+    fn native_container_shim_uses_real_rust_analyzer_cargo_review_and_namespace(){native_workspace_evidence(true);}
+    fn native_workspace_evidence(container:bool){
         let _lock = crate::screens::HOME_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        let _ssh = crate::remote_transfer::tests::SSH_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _ssh = (!container).then(||crate::remote_transfer::tests::SSH_TEST_LOCK.lock().unwrap_or_else(|e|e.into_inner()));
         let home = tempfile::tempdir().unwrap();
         let dir = transport::tests::fixture();
         let main = dir.path().join("src/main.rs");
@@ -1307,6 +1320,11 @@ mod tests {
         state.root = s.root;
         state.cargo = s.cargo;
         state.analyzer = s.analyzer;
+        let (_docker_config,docker_log)=crate::container_workspace::tests::fixture(home.path(),dir.path());
+        if container{state.container=true;state.port="not an SSH port".into();state.docker_cli=_docker_config.cli.display().to_string();state.docker_socket=_docker_config.socket;state.container_id=_docker_config.container;state.user=_docker_config.user;}
+        assert!(!docker_log.exists());
+        let start_label=if container{tr("Start container workspace")}else{tr("Start remote workspace")};
+
         let mut h = crate::screens::harness(app, egui::vec2(1600., 1200.));
         let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>,
                     ready: &dyn Fn(&RemoteDevelopment) -> bool| {
@@ -1332,12 +1350,11 @@ mod tests {
             }
         };
         assert!(!dir.path().join("remote-ui-build-ran").exists());
-        h.get_by_label(tr(
-            "I trust this SSH host and remote workspace to execute project tools",
-        ))
+        h.get_by_label(start_label).click();h.run_steps(2);assert!(!docker_log.exists());assert!(h.state().remote_development.as_ref().unwrap().job.is_none());
+        h.get_by_label(if container{tr("I trust this Docker daemon, container and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")})
         .click();
         h.run_steps(2);
-        h.get_by_label(tr("Start remote workspace")).click();
+        h.get_by_label(start_label).click();
         h.run_steps(2);
         wait(&mut h, &|s| s.session.is_some() && s.indexed);
         eprintln!("remote UI connected");
@@ -1516,8 +1533,14 @@ mod tests {
                 .is_none()
         );
         assert!(h.state().docs.list.is_empty());
+        if container {
+            let state=h.state_mut().remote_development.as_mut().unwrap();let id=state.container_id.clone();
+            state.container_id="ffffffffffffffff".into();state.start();
+            assert!(matches!(state.error,Some(Error::Stale)));assert!(state.session.is_none()&&state.job.is_none());assert!(state.tabs[0].dirty());
+            state.container_id=id;state.error=None;
+        }
         h.run_steps(3);
-        h.get_by_label(tr("Start remote workspace")).click();
+        h.get_by_label(start_label).click();
         h.run_steps(2);
         wait(&mut h, &|s| s.session.is_some());
         assert!(h.state().remote_development.as_ref().unwrap().tabs[0].dirty());

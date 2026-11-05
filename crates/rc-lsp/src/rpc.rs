@@ -133,6 +133,10 @@ impl Client {
     /// Starts `program` and talks LSP over its stdin/stdout. Must be called inside the tokio
     /// runtime (`rc_core::Runtime::handle().enter()` or from a task).
     pub fn spawn(program: &Path, args: &[String], cwd: &Path, env: &[(String, String)], incoming: Outbox<Incoming>) -> std::io::Result<Client> {
+        Self::spawn_with_env_removals(program,args,cwd,env,&[],incoming)
+    }
+    /// Starts a transport without inheriting explicitly disallowed host configuration.
+    pub fn spawn_with_env_removals(program:&Path,args:&[String],cwd:&Path,env:&[(String,String)],remove:&[&str],incoming:Outbox<Incoming>)->std::io::Result<Client>{
         let mut cmd = Command::new(program);
         cmd.args(args)
             .current_dir(cwd)
@@ -140,6 +144,7 @@ impl Client {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
+        for name in remove {cmd.env_remove(name);}
         for (k, v) in env {
             cmd.env(k, v);
         }

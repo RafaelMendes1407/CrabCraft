@@ -117,6 +117,7 @@ async fn capture(
         return Err(Error::Cancelled);
     }
     let mut command = tokio::process::Command::new(spec.program);
+    crate::container_workspace::clean(&mut command);
     command
         .args(spec.args)
         .env_remove("WSLENV")
@@ -279,6 +280,12 @@ pub fn file(
     after: Option<&str>,
     cancel: CancelToken,
 ) -> Result<String, Error> {
+    file_with(root,path,action,before,after,cancel,|args|config.exec(args))
+}
+pub(crate) fn file_with(
+    root:&str,path:&str,action:&str,before:Option<&str>,after:Option<&str>,cancel:CancelToken,
+    execute:impl FnOnce(Vec<String>)->Result<Spec,Error>,
+)->Result<String,Error>{
     if !crate::remote_development_transport::absolute(root)
         || !crate::remote_development_transport::absolute(path)
         || !path.starts_with(&format!("{root}/"))
@@ -295,7 +302,7 @@ pub fn file(
     if input.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
-    let spec = config.exec(vec![
+    let spec = execute(vec![
         "/usr/bin/env".into(),
         "-u".into(),
         "BASH_ENV".into(),

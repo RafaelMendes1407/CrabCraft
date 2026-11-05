@@ -1,6 +1,6 @@
 # Native Dev Container CLI controls
 
-The Dev Containers toolwindow invokes the separately installed reference `devcontainer` CLI through native egui controls. This is an explicit CLI integration, **not a container-backed IDE session**: the editor, Rust language server, build/run configurations and debugger do not move into the container. That limitation is visible in the UI. Installation, automatic attach and remote IDE services are unsupported.
+The Dev Containers toolwindow invokes the separately installed reference `devcontainer` CLI through native egui controls. This panel is an explicit CLI integration, **not itself a container-backed IDE session**: the editor, Rust language server, build/run configurations and debugger do not move into the container. That limitation is visible in the UI. Installation, automatic attach and remote IDE services are unsupported.
 
 No CLI or lifecycle action starts when opening a project or restoring a layout. Program paths, optional local Docker endpoint, command text and output stay in memory. After project trust, Check reads the CLI version and Read Configuration requests the CLI's normal configuration output for the active workspace, including its JSONC support and default `.devcontainer/devcontainer.json` or `.devcontainer.json` lookup. Neither action claims to validate a container runtime. Read Configuration may query Docker to find an existing container; it is an explicit trusted action, not a passive parser on project opening.
 
@@ -16,7 +16,7 @@ Workers bound each output pipe to 4 MiB, use a 60-second read deadline or ten-mi
 
 `cargo test -p rc-app dev_containers::tests -- --nocapture` passes three default tests using a real Rust Cargo workspace and deterministic CLI. They cover typed argument handling, invalid executable/remote endpoint forms, backend trust/confirmation, cancellation and the native Up review/checkbox/execute flow. Before an explicit reviewed invocation, neither the fixture CLI, project build script nor configuration host hook runs.
 
-The ignored `official_cli_reads_real_rust_jsonc_without_running_lifecycle_hooks` test passed with the separately installed official CLI 0.90.0. It uses a deterministic empty Docker catalog to check real JSONC reading without running `initializeCommand` or `build.rs`. The result is recorded in `/tmp/crabcraft-devcontainers-real.log` for this implementation session. It proves CLI/configuration compatibility, not actual container creation. F-09 has a separate real-engine fixture. Until real Up and Exec are exercised with an available daemon, and IDE service integration is implemented, Y-09 remains partial. No authenticated registry, remote service or Docker Hub image pull is used in the default tests.
+The ignored `official_cli_reads_real_rust_jsonc_without_running_lifecycle_hooks` test passed with the separately installed official CLI 0.90.0. It uses a deterministic empty Docker catalog to check real JSONC reading without running `initializeCommand` or `build.rs`. The result is recorded in `/tmp/crabcraft-devcontainers-real.log` for this implementation session. It proves CLI/configuration compatibility, not actual container creation. F-09 has a separate real-engine fixture. Until real Up and Exec are exercised with an available daemon, and the new IDE session is validated against that runtime, Y-09 remains partial. No authenticated registry, remote service or Docker Hub image pull is used in the default tests.
 
 ## Public references
 
@@ -25,3 +25,7 @@ The ignored `official_cli_reads_real_rust_jsonc_without_running_lifecycle_hooks`
 - [Development Container specification](https://containers.dev/implementors/spec/)
 
 No third-party CLI, container image or proprietary asset is distributed with CrabCraft.
+
+## Connect IDE services to an existing container
+
+A separate native running-container workspace mode now supplies the remote editor, Linux URI namespace, rust-analyzer and Cargo check/build/test through explicit Docker exec. See [container workspace](container-workspace.md) for setup, bounded scope and Linux-shim evidence. It does not automatically attach after Up and has not yet been validated with a real Docker runtime, so Y-09 remains partial.

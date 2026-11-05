@@ -3012,5 +3012,21 @@
     "Project tree read cancelled": "已取消读取项目树",
     "Project tree changed while reading; refresh it": "读取时项目树已更改；请刷新",
     "Project tree worker queue is full; refresh to retry": "项目树工作队列已满；请刷新重试"
+  },
+  "container_workspace": {
+    "Container analyzer connected; indexing inside the container…": "分析器已连接，正在容器内建立索引…",
+    "Running container Rust workspace": "运行中容器的 Rust 工作区",
+    "Explicit connection to an already-running Linux container. Start executes Cargo and rust-analyzer inside it. No container is created, started or pulled.": "显式连接到已运行的 Linux 容器。启动将在其中执行 Cargo 和 rust-analyzer，不创建、启动或拉取容器。",
+    "Use an already-running Docker container": "使用已运行的 Docker 容器",
+    "Docker CLI executable": "Docker CLI 可执行文件",
+    "Local Docker socket URI": "本地 Docker 套接字 URI",
+    "Running container ID": "运行中容器的 ID",
+    "Container user or UID:GID": "容器用户或 UID:GID",
+    "Docker runtime validation is pending. Only local Unix sockets and existing Linux containers are supported.": "尚未完成真实 Docker 运行时验证。仅支持本地 Unix 套接字和现有 Linux 容器。",
+    "I trust this Docker daemon, container and workspace to execute project tools": "我信任此 Docker 守护进程、容器及工作区执行项目工具",
+    "Start container workspace": "启动容器工作区",
+    "Invalid container settings or Linux source path": "容器设置或 Linux 源文件路径无效",
+    "Container operation timed out": "容器操作超时",
+    "Container error: {error}": "容器错误：{error}"
   }
 }

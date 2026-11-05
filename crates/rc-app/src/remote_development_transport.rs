@@ -16,6 +16,7 @@ const OUTPUT: usize = 2 * 1024 * 1024;
 pub struct Settings {
     pub ssh: Config,
     pub wsl: Option<crate::wsl_workspace::Config>,
+    pub container: Option<crate::container_workspace::Config>,
     pub root: String,
     pub cargo: String,
     pub analyzer: String,
@@ -65,6 +66,8 @@ pub fn quote(value: &str) -> Result<String, Error> {
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), Error> {
+        if self.wsl.is_some() && self.container.is_some(){return Err(Error::Input);}
+        if let Some(container)=&self.container {container.validate()?;if container.root!=self.root{return Err(Error::Input);}}
         if let Some(wsl) = &self.wsl {
             wsl.validate()?;
         }
@@ -104,7 +107,7 @@ impl Settings {
             .and_then(Path::to_str)
             .ok_or(Error::Input)?;
         let path = format!("{parent}:/usr/bin:/bin");
-        let compiler = if self.wsl.is_some() {
+        let compiler = if self.wsl.is_some() || self.container.is_some() {
             format!(
                 "export RUSTC={} RUSTDOC={} && ",
                 quote(&format!("{parent}/rustc"))?,
@@ -126,6 +129,7 @@ fn execution(
     script: String,
 ) -> Result<(std::path::PathBuf, Vec<String>, Vec<(String, String)>), Error> {
     settings.validate()?;
+    if let Some(container)=&settings.container {let spec=container.script(script)?;return Ok((spec.program,spec.args,vec![]));}
     if let Some(wsl) = &settings.wsl {
         let spec = wsl.script(script)?;
         return Ok((
@@ -155,6 +159,7 @@ fn command(
 ) -> Result<tokio::process::Command, Error> {
     let (program, args, env) = execution(settings, dir, script)?;
     let mut command = tokio::process::Command::new(program);
+    crate::container_workspace::clean(&mut command);
     command
         .args(args)
         .envs(env)
@@ -271,7 +276,7 @@ pub fn start(settings: Settings, waker: Waker, cancel: CancelToken) -> Result<Se
         return Err(Error::Cancelled);
     }
     let mut noop = |_, _: &str| {};
-    if settings.wsl.is_some() {
+    if settings.wsl.is_some() || settings.container.is_some() {
         let parent = Path::new(&settings.cargo)
             .parent()
             .and_then(Path::to_str)
@@ -342,7 +347,7 @@ pub fn start(settings: Settings, waker: Waker, cancel: CancelToken) -> Result<Se
     let incoming = Inbox::new(waker);
     let client = {
         let _entered = Runtime::handle().enter();
-        Client::spawn(&program, &args, credentials.path(), &env, incoming.sender())?
+        Client::spawn_with_env_removals(&program, &args, credentials.path(), &env,crate::container_workspace::HOST_ENV, incoming.sender())?
     };
     let session = Session {
         settings,
@@ -402,15 +407,7 @@ pub fn cargo(
     on_line: &mut (dyn FnMut(Stream, &str) + Send),
 ) -> Result<i32, Error> {
     settings.validate()?;
-    let script = format!(
-        "{}exec /bin/bash -c {}",
-        settings.environment()?,
-        shell_quote(&format!(
-            "set -u; child=; guard=; cleanup() {{ trap - EXIT HUP INT TERM; if [ -n \"$child\" ]; then kill -TERM -- -\"$child\" 2>/dev/null || :; fi; if [ -n \"$guard\" ]; then kill -TERM -- -\"$guard\" 2>/dev/null || :; fi; }}; trap cleanup EXIT; trap 'exit 130' HUP INT TERM; setsid timeout --signal=TERM --kill-after=3s 120s {} {} --message-format=json --color=never & child=$!; setsid /bin/bash -c 'cat >/dev/null; kill -TERM -- -\"$1\" 2>/dev/null || :' bash \"$child\" <&0 & guard=$!; code=0; wait \"$child\" || code=$?; exit \"$code\"",
-            quote(&settings.cargo)?,
-            task.word()
-        ))
-    );
+    let script = cargo_script(&settings,task)?;
     let (code, _) = Runtime::block_on(collect(
         &settings,
         script,
@@ -420,6 +417,18 @@ pub fn cargo(
         true,
     ))?;
     Ok(code)
+}
+pub(crate) fn cargo_script(settings:&Settings,task:Task)->Result<String,Error>{
+    settings.validate()?;
+    Ok(format!(
+        "{}exec /bin/bash -c {}",
+        settings.environment()?,
+        shell_quote(&format!(
+            "set -u; child=; guard=; cleanup() {{ trap - EXIT HUP INT TERM; if [ -n \"$child\" ]; then kill -TERM -- -\"$child\" 2>/dev/null || :; fi; if [ -n \"$guard\" ]; then kill -TERM -- -\"$guard\" 2>/dev/null || :; fi; }}; trap cleanup EXIT; trap 'exit 130' HUP INT TERM; setsid timeout --signal=TERM --kill-after=3s 120s {} {} --message-format=json --color=never & child=$!; setsid /bin/bash -c 'cat >/dev/null; kill -TERM -- -\"$1\" 2>/dev/null || :' bash \"$child\" <&0 & guard=$!; code=0; wait \"$child\" || code=$?; exit \"$code\"",
+            quote(&settings.cargo)?,
+            task.word()
+        ))
+    ))
 }
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
@@ -434,6 +443,7 @@ pub struct Preview {
 }
 pub fn read(settings: &Settings, path: &str, cancel: CancelToken) -> Result<String, Error> {
     let path = settings.file(path)?;
+    if let Some(container)=&settings.container {return container.file(&path,"read",None,None,cancel);}
     if let Some(wsl) = &settings.wsl {
         return crate::wsl_workspace::file(wsl, &settings.root, &path, "read", None, None, cancel);
     }
@@ -455,6 +465,10 @@ pub fn preview(
     cancel: CancelToken,
 ) -> Result<Preview, Error> {
     let path = settings.file(path)?;
+    if let Some(container)=&settings.container {
+        container.file(&path,"preview",Some(&before),Some(&after),cancel)?;
+        return Ok(Preview{settings:settings.clone(),remote:path,before,after,ssh:None});
+    }
     if let Some(wsl) = &settings.wsl {
         crate::wsl_workspace::file(
             wsl,
@@ -497,6 +511,7 @@ pub fn apply(settings: &Settings, preview: Preview, cancel: CancelToken) -> Resu
     if preview.settings != *settings {
         return Err(Error::Input);
     }
+    if let Some(container)=&settings.container{return container.file(&preview.remote,"apply",Some(&preview.before),Some(&preview.after),cancel);}
     if let Some(wsl) = &settings.wsl {
         return crate::wsl_workspace::file(
             wsl,
@@ -587,6 +602,7 @@ pub(crate) mod tests {
         Settings {
             ssh: crate::remote_transfer::tests::config(),
             wsl: None,
+            container: None,
             root: root.display().to_string(),
             cargo: "/home/rafael/.cargo/bin/cargo".into(),
             analyzer: "/home/rafael/.cargo/bin/rust-analyzer".into(),

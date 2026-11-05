@@ -3012,5 +3012,21 @@
     "Project tree read cancelled": "Lecture de l’arborescence du projet annulée",
     "Project tree changed while reading; refresh it": "L’arborescence a changé pendant la lecture ; actualisez-la",
     "Project tree worker queue is full; refresh to retry": "La file de travail est pleine ; actualisez pour réessayer"
+  },
+  "container_workspace": {
+    "Container analyzer connected; indexing inside the container…": "Analyseur connecté ; indexation dans le conteneur…",
+    "Running container Rust workspace": "Espace Rust dans un conteneur actif",
+    "Explicit connection to an already-running Linux container. Start executes Cargo and rust-analyzer inside it. No container is created, started or pulled.": "Connexion explicite à un conteneur Linux déjà actif. Démarrer y exécute Cargo et rust-analyzer. Aucun conteneur n’est créé, lancé ou téléchargé.",
+    "Use an already-running Docker container": "Utiliser un conteneur Docker déjà actif",
+    "Docker CLI executable": "Exécutable de Docker CLI",
+    "Local Docker socket URI": "URI du socket Docker local",
+    "Running container ID": "Identifiant du conteneur actif",
+    "Container user or UID:GID": "Utilisateur du conteneur ou UID:GID",
+    "Docker runtime validation is pending. Only local Unix sockets and existing Linux containers are supported.": "La validation avec Docker réel reste à faire. Seuls les sockets Unix locaux et les conteneurs Linux existants sont pris en charge.",
+    "I trust this Docker daemon, container and workspace to execute project tools": "Je fais confiance à ce démon Docker, ce conteneur et cet espace pour exécuter les outils du projet",
+    "Start container workspace": "Démarrer l’espace du conteneur",
+    "Invalid container settings or Linux source path": "Paramètres du conteneur ou chemin source Linux invalides",
+    "Container operation timed out": "L’opération du conteneur a expiré",
+    "Container error: {error}": "Erreur du conteneur : {error}"
   }
 }
