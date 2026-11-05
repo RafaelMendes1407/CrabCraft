@@ -454,7 +454,7 @@ impl CrabCraftApp {
         self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
         self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
-        self.vcs.open(&ws.root);
+        self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
         self.vcs.changelists = session.changelists.clone().clean();
         self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
         let projects = match &ws.kind {
@@ -463,6 +463,7 @@ impl CrabCraftApp {
             rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner.project_root = Some(ws.root.clone());
         self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
         self.runner.project_env = session.project_env.clone();
         self.insight.set_env(self.runner.project_env_pairs());
@@ -481,8 +482,10 @@ impl CrabCraftApp {
             } else {
                 self.insight.wait_for_trust(&ws.root);
             }
-        } else {
+        } else if self.settings.trusted_projects.contains(&ws.root) {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        } else {
+            self.insight.wait_for_trust(&ws.root);
         }
         self.runner.compounds = session.compounds.clone();
         // The session file is the user's to edit: empty or overlong folder names are dropped.
@@ -505,9 +508,10 @@ impl CrabCraftApp {
         }
     }
 
-    /// Reads the Rust workspace in the background; `cargo metadata` compiles nothing, so this is
-    /// safe on a project that is not trusted.
+    /// Cargo metadata can execute project-selected tools and wrappers, even with --no-deps.
+    /// Defer all project tool invocations until the application trust decision.
     fn load_cargo_workspace(&mut self, manifest: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
@@ -574,6 +578,7 @@ impl CrabCraftApp {
     /// Reads the attached Cargo projects in the background (their binaries become run
     /// configurations).
     fn load_attached(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         let manifests = self.explorer.attached.clone();
         if manifests.is_empty() {
             self.attached_load = None;
@@ -596,6 +601,7 @@ impl CrabCraftApp {
     /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
     /// standard library is known.
     fn load_libraries(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
         let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
         let inbox = Inbox::new(self.waker.clone());
@@ -707,6 +713,7 @@ impl CrabCraftApp {
 
     /// Reads the versions of the toolchain in the background, once.
     pub fn load_toolchain(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         if let Some(inbox) = &self.toolchain_load {
             if let Some(info) = inbox.drain().into_iter().last() {
                 self.toolchain = Some(info);
@@ -1019,6 +1026,7 @@ impl CrabCraftApp {
     /// Asks rustc for the `cfg` of the chosen target (or the host) in the background; it
     /// compiles nothing.
     fn load_rustc_cfg(&mut self, dir: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let target = self.cargo_target.clone();
@@ -1034,6 +1042,7 @@ impl CrabCraftApp {
     /// Reads the host triple and the targets to offer (rustup's, the project's `[build] target`)
     /// in the background. Nothing of the project runs.
     fn load_triples(&mut self, root: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(rc_cargo::Cargo::locate().as_ref(), &root)));
@@ -1238,7 +1247,40 @@ impl CrabCraftApp {
             let _ = self.settings.save();
         }
         self.runner.trusted_project = Some(root.clone());
-        self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+        if !self.vcs.trusted {
+            // The deferred discovery must keep the session's changelists and draft.
+            let changelists = self.vcs.changelists.clone();
+            let message = self.vcs.message.clone();
+            self.vcs.open(&root, true);
+            self.vcs.changelists = changelists;
+            self.vcs.message = message;
+        }
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
+            self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            self.load_cargo_workspace(manifest);
+        } else {
+            let solution = self.workspace.as_ref().and_then(|w| w.solution.as_ref().map(|s| s.path.clone()));
+            let projects = self.solution_projects();
+            self.insight.start(&root, solution.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        }
+        self.toolchain = None;
+    }
+
+    /// Metadata/build fixtures opt in explicitly without launching a concurrent language
+    /// server. Trust-boundary tests use the production trust_project method instead.
+    #[cfg(test)]
+    pub(crate) fn trust_project_tools_for_test(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        if !self.settings.trusted_projects.contains(&root) { self.settings.trusted_projects.push(root.clone()); }
+        self.runner.trusted_project = Some(root.clone());
+        if !self.vcs.trusted {
+            let changelists = self.vcs.changelists.clone();
+            let message = self.vcs.message.clone();
+            self.vcs.open(&root, true);
+            self.vcs.changelists = changelists;
+            self.vcs.message = message;
+        }
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) { self.load_cargo_workspace(manifest); }
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -2503,6 +2545,7 @@ impl CrabCraftApp {
 
     /// A new terminal tab in `dir` (the workspace folder by default).
     pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         if self.terminal_starting.is_some() { return; }
         let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
         match crate::repl::Starting::new(rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
@@ -2668,6 +2711,7 @@ impl CrabCraftApp {
 
     /// Starts the selected configuration under the debugger.
     fn start_debugging(&mut self) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         self.debug_test = None;
         self.save_all_docs();
         match self.runner.selected_config().cloned() {
@@ -2745,6 +2789,7 @@ impl CrabCraftApp {
     }
 
     fn debug_rust_test(&mut self, config: crate::runner::RunConfig, target: rc_cargo::RunTarget) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         let cargo = match self.runner.cargo_tool() {
             Ok(cargo) => cargo,
             Err(e) => {

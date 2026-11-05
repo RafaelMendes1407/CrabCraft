@@ -162,3 +162,6 @@ fn main() -> eframe::Result {
     open_files::install();
     eframe::run_native("CrabCraft", options, Box::new(move |cc| Ok(Box::new(app::CrabCraftApp::new(cc, open)))))
 }
+
+#[cfg(test)]
+mod project_trust;

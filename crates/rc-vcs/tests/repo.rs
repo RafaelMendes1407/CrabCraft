@@ -356,7 +356,7 @@ async fn twin_repos() -> (TempRepo, TempRepo) {
     let dir = tempfile::tempdir().unwrap();
     git(dir.path(), &["clone", "-q", &a.repo.root().display().to_string(), "."]);
     common::configure(dir.path());
-    let repo = Repository::discover(dir.path()).await.unwrap();
+    let repo = Repository::discover(dir.path()).await.unwrap().with_trust(true);
     (a, TempRepo { dir, repo })
 }
 
@@ -798,7 +798,7 @@ async fn fetch_pull_push_with_progress() {
     let b_dir = tempfile::tempdir().unwrap();
     git(b_dir.path(), &["clone", "-q", &url, "."]);
     common::configure(b_dir.path());
-    let b = Repository::discover(b_dir.path()).await.unwrap();
+    let b = Repository::discover(b_dir.path()).await.unwrap().with_trust(true);
     std::fs::write(b.root().join("g.txt"), "g\n").unwrap();
     b.stage(&s(&["g.txt"])).await.unwrap();
     b.commit(&CommitOptions { message: "from b".into(), ..Default::default() }).await.unwrap();

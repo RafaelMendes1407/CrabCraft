@@ -1955,8 +1955,8 @@
     "Narrow the search before replacing truncated results": "Affinez la recherche avant de remplacer des résultats tronqués"
   },
   "keymap": {
-    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Ce profil de raccourcis cible Windows et Linux ; choisissez Rider ou VS Code pour macOS.",
-    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)",
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Ce profil de raccourcis cible Windows et Linux ; choisissez Rider ou VS Code pour macOS."
   },
   "disk_revert": {
     "Could not read the disk version: {error}": "Impossible de lire la version sur disque : {error}",
@@ -2030,5 +2030,15 @@
     "Axum route": "Route Axum",
     "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "Chemin Axum en cache. Remplissez les paramètres avant l’envoi ; actualisez Endpoints après modification du code.",
     "No cached Axum routes. Open Endpoints and refresh the scan.": "Aucune route Axum en cache. Ouvrez Endpoints et actualisez la recherche."
+  },
+  "git_read_safety": {
+    "Trust the project before running Git operations": "Faites confiance au projet avant d’exécuter des opérations Git",
+    "Git configuration cannot be read safely": "La configuration Git ne peut pas être lue en toute sécurité",
+    "Git output exceeded the safety limit": "La sortie de Git a dépassé la limite de sécurité"
+  },
+  "project_trust": {
+    "Restricted mode": "Mode restreint",
+    "Trust this project before running project tools or code": "Faites confiance à ce projet avant d’exécuter ses outils ou son code",
+    "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.": "Mode restreint : les outils du projet sont désactivés. La confiance autorise la configuration Cargo, les chaînes d’outils, les scripts de compilation et les macros procédurales."
   }
 }

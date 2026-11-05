@@ -245,6 +245,15 @@ pub enum RunnerOutput {
     BuildDiagnostics(Vec<rc_dotnet::Diagnostic>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectExecutionError { Untrusted }
+impl std::fmt::Display for ProjectExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(tr("Trust this project before running project tools or code"))
+    }
+}
+impl std::error::Error for ProjectExecutionError {}
+
 pub struct Runner {
     /// The external tools of the settings, for "before launch" tasks.
     pub external_tools: Vec<rc_core::external_tools::ExternalTool>,
@@ -267,6 +276,8 @@ pub struct Runner {
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Set from the application trust store, never from project session files.
     pub trusted_project: Option<PathBuf>,
+    /// Application-owned open root; never populated from project settings.
+    pub project_root: Option<PathBuf>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Saved test configurations (from the session).
@@ -289,7 +300,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, trusted_project: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, trusted_project: None, project_root: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -362,6 +373,7 @@ impl Runner {
     }
 
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
+        self.require_trust().map_err(|e| e.to_string())?;
         self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
     }
 
@@ -373,6 +385,7 @@ impl Runner {
     pub fn clear(&mut self) {
         self.cargo_workspace = None;
         self.trusted_project = None;
+        self.project_root = None;
         self.configs.clear();
         self.temporary.clear();
         self.attached.clear();
@@ -395,9 +408,18 @@ impl Runner {
         self.dotnet.clone().ok_or_else(|| tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").to_string())
     }
 
+    /// Every project subprocess, including metadata and wrappers, requires the application
+    /// trust store. Standalone user-invoked scratches have no project root.
+    pub fn require_trust(&self) -> Result<(), ProjectExecutionError> {
+        if self.project_root.as_ref().or_else(|| self.cargo_workspace.as_ref().map(|w| &w.root)).is_some_and(|root| self.trusted_project.as_ref() != Some(root)) {
+            Err(ProjectExecutionError::Untrusted)
+        } else { Ok(()) }
+    }
+
     // ------------------------------------------------------------------ build
 
     pub fn build(&mut self, target: &Path, action: BuildAction) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let title = match action {
@@ -424,12 +446,14 @@ impl Runner {
 
     /// Runs a Cargo command in the workspace, shown in the Build window.
     pub fn cargo_command(&mut self, args: Vec<String>) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
         self.cargo_command_in(&manifest, args)
     }
 
     /// Runs `cargo <args>` for `manifest`, which need not be loaded yet.
     pub fn cargo_command_in(&mut self, manifest: &Path, args: Vec<String>) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
             return vec![RunnerOutput::Notify(tr("Wait for the running build to finish").into(), false)];
         }
@@ -458,6 +482,7 @@ impl Runner {
 
     /// Starts the selected configuration (apps run in the Run window, tests in Tests).
     pub fn run_selected(&mut self) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let Some(cfg) = self.selected_config().cloned() else {
             return vec![RunnerOutput::Notify(tr("There is nothing to run: the workspace has no executable or test projects").into(), false)];
         };
@@ -773,6 +798,7 @@ impl Runner {
     }
 
     fn run_app(&mut self, cfg: RunConfig) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let dotnet = match self.dotnet() {
             Ok(d) => d,
             Err(e) => return vec![RunnerOutput::Notify(e, true)],
@@ -820,11 +846,13 @@ impl Runner {
 
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
     pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         self.run_process(RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } }, plan)
     }
 
     /// Builds a Rust scratch file with `rustc` into a temporary folder and runs it.
     pub fn run_scratch(&mut self, file: &Path) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let cargo = match self.cargo.clone().or_else(rc_cargo::Cargo::locate) {
             Some(c) => c.with_env(self.project_env_pairs()),
             None => return vec![RunnerOutput::Notify(tr("Cargo was not found. Install Rust with rustup.").into(), true)],
@@ -857,7 +885,7 @@ impl Runner {
     /// which toolchain `rustup update` sees.
     fn command_plan(&self, program: PathBuf, args: Vec<String>) -> rc_dotnet::LaunchPlan {
         let dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        rc_dotnet::LaunchPlan { program, args, env: self.project_env_pairs(), working_dir: dir, urls: Vec::new(), profile: None, browser_url: None }
+        rc_dotnet::LaunchPlan { program, args, env: Vec::new(), working_dir: dir, urls: Vec::new(), profile: None, browser_url: None }
     }
 
     fn run_process(&mut self, cfg: RunConfig, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
@@ -894,6 +922,7 @@ impl Runner {
     // ------------------------------------------------------------------ tests
 
     pub fn run_tests(&mut self, target: &Path, filter: Option<TestFilter>) -> Vec<RunnerOutput> {
+        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let manifest = self.cargo_workspace.as_ref().map(|w| w.manifest.clone());
         let target = manifest.as_deref().unwrap_or(target);
         if let Some(t) = &mut self.tests

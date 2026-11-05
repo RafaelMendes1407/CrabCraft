@@ -11,6 +11,12 @@ pub type Result<T, E = GitError> = std::result::Result<T, E>;
 pub enum GitError {
     #[error("Git executable not found")]
     GitNotFound,
+    #[error("Trust the project before running Git operations")]
+    TrustRequired,
+    #[error("Git configuration cannot be read safely")]
+    UnsafeReadConfig,
+    #[error("Git output exceeded the safety limit")]
+    OutputLimit,
     #[error("Git {found} is too old (CrabCraft needs {required} or newer)")]
     UnsupportedVersion { found: String, required: String },
     #[error("{0} is not inside a Git repository")]
@@ -99,6 +105,9 @@ impl GitError {
     pub fn user_message(&self) -> (&'static str, Vec<(&'static str, String)>) {
         use GitError::*;
         match self {
+            TrustRequired => ("Trust the project before running Git operations", vec![]),
+            OutputLimit => ("Git output exceeded the safety limit", vec![]),
+            UnsafeReadConfig => ("Git configuration cannot be read safely", vec![]),
             GitNotFound => ("Git executable not found", vec![]),
             UnsupportedVersion { found, required } => ("Git {found} is too old (CrabCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())]),
             NotARepository(p) => ("{path} is not inside a Git repository", vec![("path", p.display().to_string())]),

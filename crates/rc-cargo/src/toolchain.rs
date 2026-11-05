@@ -48,7 +48,7 @@ impl Cargo {
 
     /// `cargo 1.99.0 (...)`, as printed.
     pub fn version(&self) -> anyhow::Result<String> {
-        let out = self.std_command().arg("--version").output()?;
+        let out = neutral_output(&self.path, &["--version"]).ok_or_else(|| anyhow::anyhow!("cargo --version failed"))?;
         anyhow::ensure!(out.status.success(), "cargo --version failed");
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
@@ -67,12 +67,12 @@ pub struct ToolchainInfo {
 /// only pass a trusted one, since rustup may download what that file names.
 pub fn detect_toolchain(cargo: Option<&Cargo>, analyzer: Option<&Path>, project: Option<&Path>) -> ToolchainInfo {
     let output = |program: &Path, args: &[&str]| {
-        let mut cmd = std::process::Command::new(program);
-        cmd.args(args);
-        if let Some(dir) = project {
-            cmd.current_dir(dir);
-        }
-        let out = cmd.output().ok().filter(|o| o.status.success())?;
+        let out = if let Some(dir) = project {
+            std::process::Command::new(program).args(args).current_dir(dir).output().ok()?
+        } else {
+            neutral_output(program, args)?
+        };
+        if !out.status.success() { return None; }
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|s| !s.is_empty())
     };
     let Some(cargo) = cargo else { return ToolchainInfo::default() };
@@ -83,6 +83,26 @@ pub fn detect_toolchain(cargo: Option<&Cargo>, analyzer: Option<&Path>, project:
         rust_analyzer: analyzer.and_then(|a| output(a, &["--version"])),
         stdlib: output(&rustc, &["--print", "sysroot"]).and_then(|s| stdlib_sources(Path::new(&s))),
     }
+}
+
+/// Version discovery must not inherit a project selected by the IDE's launch directory.
+/// Rustup's `default` subcommand reads user configuration without invoking a toolchain.
+fn neutral_output(program: &Path, args: &[&str]) -> Option<std::process::Output> {
+    if !program.is_absolute() { return None; }
+    let dir = tempfile::tempdir().ok()?;
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args).current_dir(dir.path()).stdin(std::process::Stdio::null()).env("RUSTUP_AUTO_INSTALL", "0");
+    let rustup = program.with_file_name(exe("rustup"));
+    if rustup.is_file() {
+        let default = std::process::Command::new(rustup)
+            .arg("default").current_dir(dir.path()).env_remove("RUSTUP_TOOLCHAIN")
+            .env("RUSTUP_AUTO_INSTALL", "0").stdin(std::process::Stdio::null()).output().ok()?;
+        if !default.status.success() { return None; }
+        let stdout = String::from_utf8_lossy(&default.stdout);
+        let toolchain = stdout.split_whitespace().next()?;
+        cmd.env("RUSTUP_TOOLCHAIN", toolchain);
+    }
+    cmd.output().ok()
 }
 
 /// What `rustc --print cfg` prints for `target` (`None`: the host), run from `dir` so a
@@ -183,7 +203,7 @@ fn exe(name: &str) -> String {
 
 /// Where to look for `cargo`, in order.
 pub fn candidates(path_var: Option<std::ffi::OsString>, home: Option<PathBuf>) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = path_var.iter().flat_map(std::env::split_paths).map(|d| d.join(exe("cargo"))).collect();
+    let mut out: Vec<PathBuf> = path_var.iter().flat_map(std::env::split_paths).filter(|d| d.is_absolute()).map(|d| d.join(exe("cargo"))).collect();
     out.extend(home.map(|h| h.join(".cargo").join("bin").join(exe("cargo"))));
     out
 }
@@ -196,7 +216,7 @@ pub fn locate_rust_analyzer(configured: Option<&Path>) -> Option<PathBuf> {
     }
     let dirs = candidates(std::env::var_os("PATH"), home());
     dirs.into_iter().filter_map(|p| p.parent().map(|d| d.join(exe("rust-analyzer")))).filter(|p| p.is_file()).find(|p| {
-        std::process::Command::new(p).arg("--version").output().is_ok_and(|o| o.status.success())
+        neutral_output(p, &["--version"]).is_some_and(|o| o.status.success())
     })
 }
 
@@ -252,5 +272,28 @@ mod tests {
     #[test]
     fn nothing_to_search_gives_no_candidates() {
         assert!(candidates(None, None).is_empty());
+    }
+
+    #[test]
+    fn relative_path_entries_cannot_select_project_executables() {
+        let path = std::env::join_paths([Path::new("."), Path::new("tools"), Path::new("/usr/bin")]).unwrap();
+        assert_eq!(candidates(Some(path), None), vec![Path::new("/usr/bin").join(exe("cargo"))]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn neutral_probes_select_the_user_default_and_leave_the_launch_directory() {
+        use std::os::unix::fs::PermissionsExt;
+        let tools = tempfile::tempdir().unwrap();
+        let rustup = tools.path().join("rustup");
+        std::fs::write(&rustup, "#!/bin/sh\n[ \"$1\" = default ] || exit 1\n[ -z \"$RUSTUP_TOOLCHAIN\" ] || exit 2\nprintf 'safe-default (default)\\n'\n").unwrap();
+        std::fs::set_permissions(&rustup, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let cargo = tools.path().join("cargo");
+        std::fs::write(&cargo, "#!/bin/sh\n[ \"$RUSTUP_TOOLCHAIN\" = safe-default ] || exit 3\n[ \"$RUSTUP_AUTO_INSTALL\" = 0 ] || exit 4\nprintf '%s\\n' \"$PWD\"\n").unwrap();
+        std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let output = neutral_output(&cargo, &["--version"]).unwrap();
+        assert!(output.status.success());
+        let probe_dir = String::from_utf8(output.stdout).unwrap();
+        assert_ne!(Path::new(probe_dir.trim()), std::env::current_dir().unwrap());
     }
 }

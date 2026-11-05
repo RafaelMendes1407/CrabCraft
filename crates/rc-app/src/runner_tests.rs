@@ -32,6 +32,7 @@ fn shop_builds_runs_and_passes_its_tests() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     let names: Vec<String> = app.runner.configs.iter().map(|c| c.name.clone()).collect();
     assert!(names.iter().any(|n| n.starts_with("Shop.Cli")), "{names:?}");
     assert!(names.iter().any(|n| n.starts_with("Shop.Api")), "{names:?}");
@@ -78,6 +79,7 @@ fn a_compound_configuration_starts_several_applications() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     let apps = app.runner.app_names();
     assert!(apps.len() >= 2, "{apps:?}");
     app.runner.save_compound(None, "Both".into(), apps.clone());
@@ -93,6 +95,7 @@ fn a_compound_configuration_starts_several_applications() {
     app.save_session();
     let mut again = CrabCraftApp::with_settings(Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() }, Waker::noop(), None);
     again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    again.trust_project_tools_for_test();
     assert!(again.runner.configs.iter().any(|c| c.name == "Both" && matches!(c.kind, ConfigKind::Compound { .. })));
 }
 
@@ -109,6 +112,7 @@ fn edited_run_configurations_reach_the_process_and_the_session() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings.clone(), Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     let cli = app.runner.configs.iter().find(|c| c.name.starts_with("Shop.Cli")).unwrap().clone();
     let options = rc_core::session::RunOptions { args: "Grace --exit 3".into(), env: "# comment\nCRABCRAFT_TEST=yes\n".into(), ..Default::default() };
     app.runner.options.insert(cli.name.clone(), options.clone());
@@ -124,6 +128,7 @@ fn edited_run_configurations_reach_the_process_and_the_session() {
     app.save_session();
     let mut again = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     again.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    again.trust_project_tools_for_test();
     assert_eq!(again.runner.options.get(&cli.name), Some(&options));
 }
 
@@ -136,12 +141,14 @@ fn a_new_solution_starts_with_the_last_layout() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     app.dock.move_to(crate::toolwindow::ToolWindow::Explorer, crate::toolwindow::Side::Right);
     app.save_session();
     // Kept in the settings file too.
     let saved = Settings::load();
     assert_eq!(saved.tool_windows.get("explorer").and_then(|t| t.side.clone()).as_deref(), Some("right"));
     app.open_workspace(&crate::screens::fixtures().join("TenProjects/TenProjects.slnx"));
+    app.trust_project_tools_for_test();
     assert_eq!(app.dock.side_of(crate::toolwindow::ToolWindow::Explorer), crate::toolwindow::Side::Right);
     assert_eq!(app.dock.right, Some(crate::toolwindow::ToolWindow::Explorer));
 }

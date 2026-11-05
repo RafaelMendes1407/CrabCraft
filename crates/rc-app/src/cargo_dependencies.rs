@@ -299,6 +299,7 @@ mod tests {
         }
         let mut app = test_app(home.path(), true);
         app.open_workspace(&root);
+        app.trust_project_tools_for_test();
         app.dock.show(crate::toolwindow::ToolWindow::Cargo);
         app.dock.sizes.insert(crate::toolwindow::ToolWindow::Cargo, 500.0);
         let mut h = harness(app, egui::vec2(1440.0, 1100.0));
@@ -352,7 +353,7 @@ mod tests {
             std::fs::write(dir.join("build.rs"),"fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         }
         let manifest=root.join("app/Cargo.toml"); let before=std::fs::read(&manifest).unwrap(); let helper_before=std::fs::read(root.join("helper-lib/Cargo.toml")).unwrap();
-        let mut app=test_app(home.path(),true); app.open_workspace(&root); let mut h=harness(app,egui::vec2(1440.0,1100.0));
+        let mut app=test_app(home.path(),true); app.open_workspace(&root); app.trust_project_tools_for_test(); let mut h=harness(app,egui::vec2(1440.0,1100.0));
         pump(&mut h,|app| app.runner.cargo_workspace.is_some()); h.state_mut().open_file(&root.join("app/src/lib.rs")); h.state_mut().docs.active_doc_mut().unwrap().editor.selection=rc_text::Selection::point(0); h.run_steps(3);
         h.event(egui::Event::Paste("use serde::de::DeserializeOwned;\nfn decode<T: DeserializeOwned>() {}\n#[cfg(test)] mod tests { use helper_lib::value; #[test] fn local(){assert_eq!(value(),42);} }\n".into())); h.run_steps(2);
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==2);

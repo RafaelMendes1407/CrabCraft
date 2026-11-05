@@ -99,6 +99,7 @@ mod tests {
         std::fs::write(root.path().join("src/main.rs"), "fn main() { println!(\"SPLIT_SEARCH_OK\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
         app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
         app.dock.sizes.insert(crate::toolwindow::ToolWindow::Terminal, 420.0);
         app.open_terminal(None);
         let mut harness = crate::screens::harness(app, egui::vec2(1400.0, 900.0));

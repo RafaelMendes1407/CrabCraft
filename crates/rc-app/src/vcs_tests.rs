@@ -43,6 +43,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some());
     assert_eq!(app.vcs.branch_name().as_deref(), Some("main"));
 
@@ -107,6 +108,7 @@ fn open_app(root: &Path) -> CrabCraftApp {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(root);
+    app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some() && !a.vcs.log.is_empty());
     app
 }
@@ -483,6 +485,7 @@ fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
     app.vcs.add_worktree(other.clone(), rc_vcs::WorktreeCheckout::Detached("HEAD".into()));
     pump(&mut app, "detached worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == other));
     app.open_workspace(&other);
+    app.trust_project();
     pump(&mut app, "worktree opened", |a| a.vcs.repo.as_ref().is_some_and(|r| r.root() == other) && a.vcs.worktrees.len() == 2);
     let cur = app.vcs.current_worktree().unwrap();
     assert!(!cur.main && cur.detached);
@@ -534,6 +537,7 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "the signing settings", |a| a.vcs.signing.is_some() && a.vcs.log.len() == 1);
     assert!(app.vcs.sign, "commit.gpgsign turns it on");
 
@@ -621,6 +625,7 @@ fn the_log_is_filtered_and_shows_the_history_of_a_file() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "the log", |a| a.vcs.log.len() == 5 && !a.vcs.log_loading);
     assert!(!app.vcs.log_more);
     let subjects = |a: &CrabCraftApp| a.vcs.log.iter().map(|c| c.subject.clone()).collect::<Vec<_>>();

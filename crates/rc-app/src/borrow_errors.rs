@@ -512,6 +512,7 @@ mod tests {
         .unwrap();
         let mut app = test_app(home.path(), true);
         app.open_workspace(&root);
+        app.trust_project_tools_for_test();
         let mut h = harness(app, egui::vec2(1440.0, 1200.0));
         pump(&mut h, |app| app.runner.cargo_workspace.is_some());
         assert!(!root.join("build-ran").exists());

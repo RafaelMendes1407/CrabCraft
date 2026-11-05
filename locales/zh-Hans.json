@@ -1955,8 +1955,8 @@
     "Narrow the search before replacing truncated results": "请缩小搜索范围后再替换截断的结果"
   },
   "keymap": {
-    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "此快捷键配置适用于 Windows 和 Linux；macOS 请选用 Rider 或 VS Code。",
-    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)",
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "此快捷键配置适用于 Windows 和 Linux；macOS 请选用 Rider 或 VS Code。"
   },
   "disk_revert": {
     "Could not read the disk version: {error}": "无法读取磁盘版本：{error}",
@@ -2030,5 +2030,15 @@
     "Axum route": "Axum 路由",
     "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "缓存的 Axum 路径。发送前填写捕获参数；源代码更改后刷新端点。",
     "No cached Axum routes. Open Endpoints and refresh the scan.": "没有缓存的 Axum 路由。打开端点并刷新扫描。"
+  },
+  "git_read_safety": {
+    "Trust the project before running Git operations": "运行 Git 操作前请信任此项目",
+    "Git configuration cannot be read safely": "无法安全读取 Git 配置",
+    "Git output exceeded the safety limit": "Git 输出超出了安全限制"
+  },
+  "project_trust": {
+    "Restricted mode": "受限模式",
+    "Trust this project before running project tools or code": "运行项目工具或代码前请信任此项目",
+    "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.": "受限模式：项目工具已禁用。信任后允许执行 Cargo 配置、工具链、构建脚本和过程宏。"
   }
 }

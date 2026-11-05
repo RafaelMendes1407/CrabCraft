@@ -169,10 +169,11 @@ mod tests {
         h.state_mut().clone_project.destination = destination.to_string_lossy().into_owned();
         h.run_steps(2); h.get_by_label(tr("Clone")).click(); h.run_steps(2);
         let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(20) && h.state().runner.cargo_workspace.is_none() {
+        while start.elapsed() < Duration::from_secs(20) && h.state().workspace.is_none() {
             h.run_steps(2); std::thread::sleep(Duration::from_millis(20));
         }
-        assert!(h.state().runner.cargo_workspace.is_some(), "{:?}\n{}", h.state().clone_project.error, h.state().clone_project.output);
+        assert!(h.state().workspace.is_some(), "{:?}\n{}", h.state().clone_project.error, h.state().clone_project.output);
+        assert!(h.state().runner.cargo_workspace.is_none());
         assert!(h.state().workspace.as_ref().is_some_and(|w| w.ws.root == destination));
         assert!(!h.state().settings.trusted_projects.contains(&destination));
         assert!(h.state().runner.trusted_project.is_none());

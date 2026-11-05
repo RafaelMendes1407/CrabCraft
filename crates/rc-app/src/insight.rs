@@ -162,6 +162,8 @@ pub struct Insight {
     dotnet: PathBuf,
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
+    /// Only explicit start after the application trust check may launch subprocesses.
+    execution_allowed: bool,
     clippy: bool,
     /// Folders and files rust-analyzer leaves out (root-relative, `/`-separated).
     exclude: Vec<String>,
@@ -282,6 +284,7 @@ impl Insight {
             projects: Vec::new(),
             dotnet: PathBuf::from("dotnet"),
             rust: false,
+            execution_allowed: false,
             configured: None,
             env: Vec::new(),
             problems: BTreeMap::new(),
@@ -352,6 +355,7 @@ impl Insight {
     /// Starts C# support for a workspace (does nothing without C# projects).
     pub fn start(&mut self, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, dotnet: PathBuf, configured: Option<PathBuf>) {
         self.stop();
+        self.execution_allowed = true;
         self.rust = false;
         self.root = Some(root.to_path_buf());
         self.solution = solution.map(Path::to_path_buf);
@@ -368,6 +372,7 @@ impl Insight {
     /// Starts rust-analyzer for a trusted project.
     pub fn start_rust(&mut self, root: &Path, configured: Option<PathBuf>, clippy: bool) {
         self.stop();
+        self.execution_allowed = true;
         self.root = Some(root.to_path_buf());
         self.rust = true;
         self.clippy = clippy;
@@ -471,6 +476,7 @@ impl Insight {
     }
 
     fn launch(&mut self) {
+        if !self.execution_allowed { return; }
         let Some(root) = self.root.clone() else { return };
         if self.rust {
             let Some(program) = rc_cargo::toolchain::locate_rust_analyzer(self.configured.as_deref()) else {
@@ -521,6 +527,7 @@ impl Insight {
     }
 
     pub fn stop(&mut self) {
+        self.execution_allowed = false;
         if let Some(mut s) = self.session.take() {
             s.stop();
         }

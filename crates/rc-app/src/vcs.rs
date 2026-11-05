@@ -167,6 +167,8 @@ pub struct DiffView {
 }
 
 pub struct Vcs {
+    /// Set only by the application trust store; untrusted open starts no Git process.
+    pub trusted: bool,
     pub repo: Option<Repository>,
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
@@ -261,6 +263,7 @@ pub struct Vcs {
 impl Vcs {
     pub fn new(waker: Waker) -> Self {
         Vcs {
+            trusted: false,
             repo: None,
             status: None,
             branches: Vec::new(),
@@ -325,12 +328,14 @@ impl Vcs {
         }
     }
 
-    pub fn open(&mut self, root: &Path) {
+    pub fn open(&mut self, root: &Path, trusted: bool) {
         *self = Vcs::new(self.waker.clone());
+        self.trusted = trusted;
+        if !trusted { return; }
         let out = self.inbox.sender();
         let root = root.to_path_buf();
         Runtime::spawn(async move {
-            out.send(VcsEvent::Repo(Repository::discover(&root).await.ok()));
+            out.send(VcsEvent::Repo(Repository::discover(&root).await.ok().map(|repo| repo.with_trust(true))));
         });
     }
 
@@ -492,6 +497,7 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<Option<String>, rc_vcs::GitError>> + Send + 'static,
     {
+        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
         self.busy = Some(what);
         self.error = None;
         if report {
@@ -724,6 +730,7 @@ impl Vcs {
         F: FnOnce(rc_vcs::CancelToken, rc_vcs::ProgressSink) -> Fut,
         Fut: std::future::Future<Output = Result<String, rc_vcs::GitError>> + Send + 'static,
     {
+        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
         let cancel = rc_vcs::CancelToken::new();
         self.op_cancel = Some(cancel.clone());
         self.op_progress = None;

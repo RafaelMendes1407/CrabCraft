@@ -40,7 +40,7 @@ impl TempRepo {
         let dir = tempfile::tempdir().unwrap();
         git(dir.path(), &["init", "-q", "-b", "main"]);
         configure(dir.path());
-        let repo = Repository::discover(dir.path()).await.unwrap();
+        let repo = Repository::discover(dir.path()).await.unwrap().with_trust(true);
         TempRepo { dir, repo }
     }
 

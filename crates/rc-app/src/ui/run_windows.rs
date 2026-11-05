@@ -704,6 +704,7 @@ mod tests {
         std::fs::write(root.path().join("src/main.rs"), "fn main() { println!(\"CRABCRAFT_TERMINAL_OK\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
         app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
         app.open_terminal(None);
         assert!(app.terminal_starting.is_some());
         assert!(app.terminals.is_empty(), "PTY startup must finish off the UI thread");

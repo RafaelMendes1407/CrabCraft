@@ -94,7 +94,7 @@ pub struct ChangedFile {
 impl Repository {
     /// One page of history.
     pub async fn log(&self, opts: &LogOptions) -> Result<Vec<Commit>> {
-        let mut cmd = self.cmd().args(["log", "--decorate=full", "--no-color", FORMAT]).arg(format!("--skip={}", opts.skip)).arg(format!("--max-count={}", opts.max_count));
+        let mut cmd = self.cmd().args(["log", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--decorate=full", "--no-color", FORMAT]).arg(format!("--skip={}", opts.skip)).arg(format!("--max-count={}", opts.max_count));
         cmd = cmd.arg(match opts.order {
             LogOrder::Topo => "--topo-order",
             LogOrder::Date => "--date-order",

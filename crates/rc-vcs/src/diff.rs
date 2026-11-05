@@ -512,10 +512,9 @@ impl Repository {
         Ok(parse_diff(&out.stdout)?.into_iter().next())
     }
 
-    /// The content of `path` at `rev`, with checkout filters applied (line endings as in the
-    /// work tree). `None` when the path does not exist there (new file, unborn branch).
+    /// The raw repository blob of `path` at `rev`. Checkout/smudge filters are never run. `None` when the path does not exist there (new file, unborn branch).
     pub async fn show_file(&self, rev: &Revision, path: &str) -> Result<Option<FileContent>> {
-        match self.cmd().args(["cat-file", "--filters"]).arg(rev.object(path)).output().await {
+        match self.cmd().args(["cat-file", "blob"]).arg(rev.object(path)).output().await {
             Ok(out) => Ok(Some(FileContent::new(out.stdout))),
             Err(GitError::NotFound(_)) => Ok(None),
             Err(GitError::Failed { stderr, .. }) if stderr.contains("Not a valid object name") || stderr.contains("does not exist") || stderr.contains("but not at stage") => Ok(None),

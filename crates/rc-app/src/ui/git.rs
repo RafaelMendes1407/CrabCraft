@@ -70,6 +70,11 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Commit")) {
         app.toggle_tool(ToolWindow::Commit);
     }
+    if app.runner.require_trust().is_err() {
+        empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
+        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        return;
+    }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_COMMIT, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
         return;
@@ -272,6 +277,11 @@ pub fn create_patch(app: &mut CrabCraftApp, source: PatchSource, copy: bool) {
 pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Git")) {
         app.toggle_tool(ToolWindow::Git);
+    }
+    if app.runner.require_trust().is_err() {
+        empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
+        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        return;
     }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));

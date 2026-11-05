@@ -1955,8 +1955,8 @@
     "Narrow the search before replacing truncated results": "切り詰められた結果を置換する前に検索範囲を絞ってください"
   },
   "keymap": {
-    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "このショートカット設定は Windows と Linux 向けです。macOS では Rider または VS Code を選択してください。",
-    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)",
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "このショートカット設定は Windows と Linux 向けです。macOS では Rider または VS Code を選択してください。"
   },
   "disk_revert": {
     "Could not read the disk version: {error}": "ディスク上のバージョンを読み取れませんでした: {error}",
@@ -2030,5 +2030,15 @@
     "Axum route": "Axum ルート",
     "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "キャッシュした Axum パスです。送信前にパラメーターを入力し、ソース変更後にエンドポイントを更新してください。",
     "No cached Axum routes. Open Endpoints and refresh the scan.": "キャッシュした Axum ルートはありません。エンドポイントを開いてスキャンを更新してください。"
+  },
+  "git_read_safety": {
+    "Trust the project before running Git operations": "Git 操作を実行する前にプロジェクトを信頼してください",
+    "Git configuration cannot be read safely": "Git の設定を安全に読み取れません",
+    "Git output exceeded the safety limit": "Git の出力が安全上の制限を超えました"
+  },
+  "project_trust": {
+    "Restricted mode": "制限モード",
+    "Trust this project before running project tools or code": "プロジェクトのツールやコードを実行する前に、このプロジェクトを信頼してください",
+    "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.": "制限モードではプロジェクトのツールが無効です。信頼すると Cargo 設定、ツールチェーン、ビルドスクリプト、手続き型マクロの実行を許可します。"
   }
 }

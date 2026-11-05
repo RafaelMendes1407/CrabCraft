@@ -120,7 +120,7 @@ impl Repository {
     /// uncommitted and line numbers match the buffer; with `rev`, the file at that revision is
     /// blamed instead of the work tree.
     pub async fn blame(&self, path: &str, contents: Option<&str>, rev: Option<&str>, cancel: Option<&CancelToken>) -> Result<Blame> {
-        let mut cmd = self.cmd().args(["blame", "--porcelain"]).cancel(cancel);
+        let mut cmd = self.cmd().args(["blame", "--no-textconv", "--porcelain"]).cancel(cancel);
         if let Some(text) = contents {
             cmd = cmd.args(["--contents", "-"]).stdin(text.as_bytes().to_vec());
         }

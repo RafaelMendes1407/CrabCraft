@@ -3,7 +3,9 @@
 The native editor analyses Rust text locally after a 450 ms pause. A paste schedules the
 same analysis immediately and identifies references inside the pasted range. No Cargo
 command, registry lookup or manifest edit occurs automatically. This works without a
-running language server and before the project is trusted.
+running language server once the Cargo member model has loaded. Loading that model now
+requires project trust under P26; an untrusted opening does not invoke Cargo to discover
+members and therefore does not display member-dependent proposals.
 
 **Review dependency…** opens the existing Cargo Dependencies editor with the owning
 member, package name and dependency section filled in. A verified workspace library also
