@@ -60,6 +60,7 @@ pub struct ValueEdit {
 }
 
 pub struct Debugger {
+    pub privileged:bool,
     pub rust_backend: rc_core::settings::RustDebugger,
     pub gdb_path: Option<PathBuf>,
     pub lldb_dap_path: Option<PathBuf>,
@@ -121,6 +122,7 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(waker: Waker) -> Self {
         Debugger {
+            privileged:false,
             rust_backend: Default::default(), gdb_path: None, lldb_dap_path: None,
             session: None,
             console: None,
@@ -195,10 +197,10 @@ impl Debugger {
         for (path, lines) in docs.all_breakpoints() {
             for (&line, kind) in &lines {
                 let mut spec = BreakpointSpec::new(path.clone(), line as u32 + 1);
-                if let Some(c) = self.conditions.get(&(path.clone(), line)) {
+                if !self.privileged&&let Some(c) = self.conditions.get(&(path.clone(), line)) {
                     spec = spec.with_condition(c.clone());
                 }
-                if let Some(m) = self.logs.get(&(path.clone(), line)) {
+                if !self.privileged&&let Some(m) = self.logs.get(&(path.clone(), line)) {
                     spec = spec.with_log_message(m.clone());
                 }
                 spec.enabled = !self.muted && *kind != rc_editor::BreakpointKind::Disabled;
@@ -210,6 +212,7 @@ impl Debugger {
 
     /// Attaches GDB to a running process.
     pub fn attach_gdb(&mut self, pid: u32, name: &str, docs: &Docs) -> Vec<DebugOutput> {
+        self.privileged=false;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -234,6 +237,7 @@ impl Debugger {
 
     /// Starts debugging a Rust binary under GDB.
     pub fn start_remote(&mut self, target: rc_dap::remote::RemoteTarget, docs: &Docs) -> Vec<DebugOutput> {
+        self.privileged=false;
         let Some(adapter) = rc_dap::gdb::locate_configured(self.gdb_path.as_deref()) else {
             return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
         };
@@ -253,6 +257,7 @@ impl Debugger {
 
     /// Starts debugging a Rust binary with the selected native DAP adapter.
     pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
+        self.privileged=false;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -280,8 +285,17 @@ impl Debugger {
         vec![DebugOutput::ShowDebugWindow]
     }
 
+    /// An explicitly authorized adapter proxy. Its private watchdog owns elevated cleanup.
+    pub(crate) fn start_privileged(&mut self,adapter:rc_dap::AdapterCommand,launch:rc_dap::LaunchConfig,name:&str,docs:&Docs)->Vec<DebugOutput>{
+        self.stop();self.privileged=true;self.new_watch.clear();self.eval=None;self.hover=None;self.hover_result=None;self.edit=None;self.urls.clear();self.name=name.to_string();self.expanded.clear();self.parallel_stacks.reset();self.memory.reset();self.disassembly.reset();
+        let console=crate::runner::Console::new(&self.waker);console.note(&tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));self.console=Some(console);
+        self.session=Some(DebugSession::start(adapter,DebugTarget::Launch(launch),DebugOptions::default(),self.breakpoints(docs),self.waker.clone()));
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
     /// Starts debugging `config` (apps only); downloads netcoredbg first when needed.
     pub fn start(&mut self, config: RunConfig, request: Option<rc_dotnet::RunRequest>, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
+        self.privileged=false;
         let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {
             return vec![DebugOutput::Notify(tr("Choose an application run configuration to debug").into(), false)];
         };
@@ -321,6 +335,7 @@ impl Debugger {
     }
 
     pub fn stop(&mut self) {
+        self.privileged=false;
         if let Some(download) = self.download.take() { download.cancel(); }
         self.pending = None;
         self.downloading = None;
@@ -352,6 +367,7 @@ impl Debugger {
     /// Opens the inline field of Set Value on a row, with `value` (its value as shown, in
     /// hexadecimal when hex is on) to edit. Nothing happens when not paused.
     pub fn start_edit(&mut self, key: String, target: SetTarget, value: &str) {
+        if self.privileged{return;}
         if !self.stopped() {
             return;
         }
@@ -362,6 +378,7 @@ impl Debugger {
     /// Sends the value typed in the Set Value field; the answer closes it, or shows the
     /// debugger's error under it.
     pub fn apply_edit(&mut self) {
+        if self.privileged{return;}
         let (Some(edit), Some(s)) = (&mut self.edit, &mut self.session) else { return };
         let value = edit.text.trim();
         if value.is_empty() || edit.pending.is_some() {
@@ -440,7 +457,7 @@ impl Debugger {
                 .iter()
                 .map(|(&l, k)| {
                     let key = (path.clone(), l);
-                    (l as u32 + 1, self.conditions.get(&key).cloned(), self.logs.get(&key).cloned(), !self.muted && *k != rc_editor::BreakpointKind::Disabled)
+                    (l as u32 + 1, (!self.privileged).then(||self.conditions.get(&key).cloned()).flatten(), (!self.privileged).then(||self.logs.get(&key).cloned()).flatten(), !self.muted && *k != rc_editor::BreakpointKind::Disabled)
                 })
                 .chain(self.temp.iter().filter(|(p, _)| p == path).map(|(_, l)| (*l, None, None, true)))
                 .collect();
@@ -497,6 +514,7 @@ impl Debugger {
 
     /// Evaluates the expression under the mouse while stopped (hover values).
     pub fn hover(&mut self, doc: u64, pos: usize, screen: egui::Pos2, expression: String) {
+        if self.privileged{return;}
         if expression.is_empty() || !self.stopped() {
             return;
         }
@@ -507,6 +525,7 @@ impl Debugger {
     }
 
     pub fn evaluate(&mut self, expression: String) {
+        if self.privileged{return;}
         if let Some(s) = &mut self.session {
             let context = s.expression_context();
             let id = s.evaluate(&expression, context);
@@ -516,6 +535,7 @@ impl Debugger {
 
     /// Sends the console's line to the debugger as one of its commands.
     pub fn send_console_command(&mut self) {
+        if self.privileged{return;}
         let text = std::mem::take(&mut self.console_input);
         if text.trim().is_empty() {
             return;

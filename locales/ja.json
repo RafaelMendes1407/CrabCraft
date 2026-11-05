@@ -2898,5 +2898,33 @@
     "WSL operation timed out": "WSL 操作がタイムアウトしました",
     "WSL error: {error}": "WSL エラー: {error}",
     "WSL Rust workspace…": "WSL Rust ワークスペース…"
+  },
+  "privileged_debug": {
+    "Administrator debugging requires Linux, PolicyKit and system GDB with DAP": "管理者デバッグには Linux、PolicyKit、DAP 対応のシステム GDB が必要です",
+    "Review the frozen executable and approve administrator debugging first": "固定した実行ファイルを確認し、管理者デバッグを承認してください",
+    "Administrator debugging requires a regular project ELF and at most 32 separate arguments": "プロジェクト内の通常の ELF と、最大 32 個の個別引数が必要です",
+    "The reviewed debug executable changed; build and review it again": "確認した実行ファイルが変更されました。再ビルドして確認してください",
+    "Administrator debugging failed: {error}": "管理者デバッグに失敗しました：{error}",
+    "Unsupported administrator debug protocol request; the session was stopped": "未対応の管理者デバッグ要求のため、セッションを停止しました",
+    "Administrator debugging requires a root-owned, non-writable /usr/bin/gdb; user wrappers are unsupported": "root 所有で他者が書き込めない /usr/bin/gdb が必要です。ユーザーラッパーは未対応です",
+    "Administrator debug session cancelled": "管理者デバッグセッションをキャンセルしました",
+    "Administrator debug input, output or time limit exceeded": "管理者デバッグの入力、出力、または時間制限を超えました",
+    "Choose a Rust binary configuration before preparing administrator debugging": "管理者デバッグの準備前に Rust バイナリ構成を選択してください",
+    "Administrator debugging currently supports Cargo binary configurations only": "管理者デバッグは現在 Cargo バイナリ構成のみに対応しています",
+    "This run configuration has no Rust binary to debug": "この実行構成にはデバッグする Rust バイナリがありません",
+    "Administrator Debugging (Linux)": "管理者デバッグ (Linux)",
+    "Partial support: an authenticated administrator debug session has not been verified on this host": "部分対応：このホストでは認証済み管理者デバッグを検証していません",
+    "Build runs as your normal user. Only the reviewed frozen executable and system GDB request administrator privileges.": "ビルドは通常ユーザーで実行します。確認済みの固定実行ファイルとシステム GDB のみが管理者権限を要求します。",
+    "GDB init files, auto-loading, project environment, expressions, conditional breakpoints, logpoints and debugger-console commands are disabled.": "GDB 初期化ファイル、自動読み込み、プロジェクト環境、式、条件付きブレークポイント、ログポイント、コンソールコマンドは無効です。",
+    "The debugged program and debugger have full administrator permissions; shared libraries and external resources are not frozen.": "プログラムとデバッガーは完全な管理者権限を持ちます。共有ライブラリと外部リソースは固定されません。",
+    "Build and Review Administrator Debugging": "管理者デバッグをビルドして確認",
+    "Cancel Administrator Debug Preparation": "管理者デバッグの準備をキャンセル",
+    "I reviewed this executable, hash and arguments and authorize requesting administrator debugging": "実行ファイル、ハッシュ、引数を確認し、管理者デバッグの要求を承認します",
+    "Request Administrator Debugging": "管理者デバッグを要求",
+    "Stop Administrator Debugging": "管理者デバッグを停止",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides and automatic rerun are unsupported.": "ビルド済みのコンソールプログラムのみを起動します。対話入力、GUI、プロジェクト環境の上書き、自動再実行は未対応です。",
+    "Administrator Debug": "管理者デバッグ",
+    "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "管理者デバッグ：式、条件付きブレークポイント、コンソールコマンドは使用できません",
+    "Build and review again before requesting another administrator debug session": "次の管理者デバッグセッションを要求する前に、再ビルドして確認してください"
   }
 }

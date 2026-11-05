@@ -144,7 +144,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         let mut line = ui.new_child(egui::UiBuilder::new().max_rect(input));
         let field = line.add_enabled(
-            stopped,
+            stopped&&!app.debugger.privileged,
             egui::TextEdit::singleline(&mut app.debugger.console_input).desired_width(input.width()).hint_text(tr("Debugger command (Enter to send)")).font(egui::FontId::monospace(12.5)),
         );
         if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -501,10 +501,12 @@ struct VariablesAsked {
 
 /// The Watches and Variables list.
 fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
+    let privileged=dbg.privileged;
+    if privileged{ui.label(tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));}
     let p = rc_kit::pal(ui);
     // "Evaluate or add a watch" field (Enter adds a watch, as the + button).
     let mut add = false;
-    ui.horizontal(|ui| {
+    ui.add_enabled_ui(!privileged,|ui| { ui.horizontal(|ui| {
         ui.add_space(8.0);
         let te = ui.add(egui::TextEdit::singleline(&mut dbg.new_watch).hint_text(tr("Add a watch (Enter)")).font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 40.0));
         if te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -514,8 +516,8 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
         if theme::icon_button(ui, ico::ADD, !dbg.new_watch.trim().is_empty(), tr("Add Watch")).clicked() {
             add = true;
         }
-    });
-    if add && !dbg.new_watch.trim().is_empty() {
+    });});
+    if add && !privileged && !dbg.new_watch.trim().is_empty() {
         let e = std::mem::take(&mut dbg.new_watch);
         if let Some(s) = &mut dbg.session {
             s.add_watch(e.trim().to_string());
@@ -613,13 +615,13 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
                     if theme::menu_item(ui, Some(ico::REMOVE), tr("Remove Watch"), false).clicked() {
                         remove = Some(id);
                     }
-                } else if !row.scope && theme::menu_item(ui, Some(ico::ADD_TO_WATCH), tr("Add to Watches"), false).clicked() {
+                } else if !privileged && !row.scope && theme::menu_item(ui, Some(ico::ADD_TO_WATCH), tr("Add to Watches"), false).clicked() {
                     add_watch = Some(row.name.clone());
                 }
                 if !row.scope && theme::menu_item(ui, Some(ico::COPY), tr("Copy Value"), false).clicked() {
                     ui.ctx().copy_text(row.value.clone());
                 }
-                let can_show = stopped && !row.scope && (row.memory.is_some() || row.expression.is_some());
+                let can_show = stopped && !row.scope && (row.memory.is_some() || (!privileged && row.expression.is_some()));
                 if !row.scope && theme::menu_entry(ui, Some(ico::FILE_BINARY), tr("Show in Memory View"), None, false, can_show).clicked() && can_show {
                     show_memory = Some((row.memory.clone(), row.expression.clone().unwrap_or_default()));
                 }

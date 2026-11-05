@@ -2898,5 +2898,33 @@
     "WSL operation timed out": "WSL 操作超时",
     "WSL error: {error}": "WSL 错误：{error}",
     "WSL Rust workspace…": "WSL Rust 工作区…"
+  },
+  "privileged_debug": {
+    "Administrator debugging requires Linux, PolicyKit and system GDB with DAP": "管理员调试需要 Linux、PolicyKit 和支持 DAP 的系统 GDB",
+    "Review the frozen executable and approve administrator debugging first": "请先检查冻结的可执行文件并批准管理员调试",
+    "Administrator debugging requires a regular project ELF and at most 32 separate arguments": "管理员调试需要项目内的普通 ELF 文件及最多 32 个独立参数",
+    "The reviewed debug executable changed; build and review it again": "已检查的调试可执行文件发生变化；请重新构建并检查",
+    "Administrator debugging failed: {error}": "管理员调试失败：{error}",
+    "Unsupported administrator debug protocol request; the session was stopped": "不支持该管理员调试协议请求；会话已停止",
+    "Administrator debugging requires a root-owned, non-writable /usr/bin/gdb; user wrappers are unsupported": "需要 root 所有且其他用户不可写的 /usr/bin/gdb；不支持用户包装器",
+    "Administrator debug session cancelled": "管理员调试会话已取消",
+    "Administrator debug input, output or time limit exceeded": "超出管理员调试的输入、输出或时间限制",
+    "Choose a Rust binary configuration before preparing administrator debugging": "准备管理员调试前请选择 Rust 二进制配置",
+    "Administrator debugging currently supports Cargo binary configurations only": "管理员调试目前仅支持 Cargo 二进制配置",
+    "This run configuration has no Rust binary to debug": "此运行配置没有可供调试的 Rust 二进制文件",
+    "Administrator Debugging (Linux)": "管理员调试 (Linux)",
+    "Partial support: an authenticated administrator debug session has not been verified on this host": "部分支持：尚未在此主机验证通过身份验证的管理员调试会话",
+    "Build runs as your normal user. Only the reviewed frozen executable and system GDB request administrator privileges.": "构建以普通用户身份运行。仅已检查的冻结可执行文件及系统 GDB 请求管理员权限。",
+    "GDB init files, auto-loading, project environment, expressions, conditional breakpoints, logpoints and debugger-console commands are disabled.": "已禁用 GDB 初始化文件、自动加载、项目环境、表达式、条件断点、日志断点及调试控制台命令。",
+    "The debugged program and debugger have full administrator permissions; shared libraries and external resources are not frozen.": "被调试程序和调试器具有完整管理员权限；共享库和外部资源不会冻结。",
+    "Build and Review Administrator Debugging": "构建并检查管理员调试",
+    "Cancel Administrator Debug Preparation": "取消管理员调试准备",
+    "I reviewed this executable, hash and arguments and authorize requesting administrator debugging": "我已检查此可执行文件、哈希和参数，并授权请求管理员调试",
+    "Request Administrator Debugging": "请求管理员调试",
+    "Stop Administrator Debugging": "停止管理员调试",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides and automatic rerun are unsupported.": "仅启动预构建的控制台程序。不支持交互式输入、图形程序、项目环境覆盖和自动重跑。",
+    "Administrator Debug": "管理员调试",
+    "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "管理员调试：表达式、条件断点和调试控制台命令不可用",
+    "Build and review again before requesting another administrator debug session": "请求另一次管理员调试会话前，请重新构建并检查"
   }
 }

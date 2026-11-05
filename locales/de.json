@@ -2898,5 +2898,33 @@
     "WSL operation timed out": "Zeitüberschreitung beim WSL-Vorgang",
     "WSL error: {error}": "WSL-Fehler: {error}",
     "WSL Rust workspace…": "WSL-Rust-Arbeitsbereich…"
+  },
+  "privileged_debug": {
+    "Administrator debugging requires Linux, PolicyKit and system GDB with DAP": "Administrator-Debugging erfordert Linux, PolicyKit und System-GDB mit DAP",
+    "Review the frozen executable and approve administrator debugging first": "Zuerst das eingefrorene Programm prüfen und Administrator-Debugging bestätigen",
+    "Administrator debugging requires a regular project ELF and at most 32 separate arguments": "Eine reguläre Projekt-ELF-Datei und höchstens 32 getrennte Argumente sind erforderlich",
+    "The reviewed debug executable changed; build and review it again": "Das geprüfte Debug-Programm wurde geändert; erneut bauen und prüfen",
+    "Administrator debugging failed: {error}": "Administrator-Debugging fehlgeschlagen: {error}",
+    "Unsupported administrator debug protocol request; the session was stopped": "Nicht unterstützte Debug-Protokollanfrage; Administratorsitzung wurde beendet",
+    "Administrator debugging requires a root-owned, non-writable /usr/bin/gdb; user wrappers are unsupported": "/usr/bin/gdb muss root gehören und für andere schreibgeschützt sein; Benutzer-Wrapper werden nicht unterstützt",
+    "Administrator debug session cancelled": "Administrator-Debugsitzung abgebrochen",
+    "Administrator debug input, output or time limit exceeded": "Eingabe-, Ausgabe- oder Zeitlimit für Administrator-Debugging überschritten",
+    "Choose a Rust binary configuration before preparing administrator debugging": "Vorbereitung erfordert die Auswahl einer Rust-Binärkonfiguration",
+    "Administrator debugging currently supports Cargo binary configurations only": "Administrator-Debugging unterstützt derzeit nur Cargo-Binärkonfigurationen",
+    "This run configuration has no Rust binary to debug": "Diese Ausführungskonfiguration enthält kein Rust-Programm zum Debuggen",
+    "Administrator Debugging (Linux)": "Administrator-Debugging (Linux)",
+    "Partial support: an authenticated administrator debug session has not been verified on this host": "Teilweise Unterstützung: Eine authentifizierte Administratorsitzung wurde auf diesem Host nicht geprüft",
+    "Build runs as your normal user. Only the reviewed frozen executable and system GDB request administrator privileges.": "Der Build läuft als normaler Benutzer. Nur das geprüfte eingefrorene Programm und System-GDB fordern Administratorrechte an.",
+    "GDB init files, auto-loading, project environment, expressions, conditional breakpoints, logpoints and debugger-console commands are disabled.": "GDB-Init-Dateien, automatisches Laden, Projektumgebung, Ausdrücke, bedingte Haltepunkte, Logpoints und Konsolenbefehle sind deaktiviert.",
+    "The debugged program and debugger have full administrator permissions; shared libraries and external resources are not frozen.": "Programm und Debugger haben vollständige Administratorrechte; Bibliotheken und externe Ressourcen werden nicht eingefroren.",
+    "Build and Review Administrator Debugging": "Administrator-Debugging bauen und prüfen",
+    "Cancel Administrator Debug Preparation": "Vorbereitung des Administrator-Debuggings abbrechen",
+    "I reviewed this executable, hash and arguments and authorize requesting administrator debugging": "Ich habe Programm, Hash und Argumente geprüft und erlaube die Anforderung von Administrator-Debugging",
+    "Request Administrator Debugging": "Administrator-Debugging anfordern",
+    "Stop Administrator Debugging": "Administrator-Debugging stoppen",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides and automatic rerun are unsupported.": "Startet nur vorkompilierte Konsolenprogramme. Interaktive Eingabe, grafische Programme, Projektumgebung und automatische Wiederholung werden nicht unterstützt.",
+    "Administrator Debug": "Administrator-Debugging",
+    "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "Administrator-Debugging: Ausdrücke, bedingte Haltepunkte und Konsolenbefehle nicht verfügbar",
+    "Build and review again before requesting another administrator debug session": "Vor einer weiteren Administratorsitzung erneut bauen und prüfen"
   }
 }

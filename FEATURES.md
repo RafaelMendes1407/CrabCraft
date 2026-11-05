@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 243 |
-| 🚧 Em andamento | 9 |
+| 🚧 Em andamento | 10 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 1 |
+| ⬜ A fazer | 0 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -278,7 +278,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-20 | Parallel stacks | ✅ | M4 | Janela Debug › Pilhas paralelas: captura das threads pausadas, com pilhas idênticas agrupadas por função/arquivo/linha; escolher uma thread e um quadro muda o contexto de variáveis e a posição no código. Até 64 threads × 64 quadros, quatro pedidos DAP simultâneos e timeout de oito segundos; limites e falhas visíveis. Atualizar relê threads/pilhas; Cancelar, esconder a aba e retomar descartam os pedidos (cancel DAP só quando suportado); nova parada/sessão invalida os dados. Respeita allThreadsStopped: sem confirmação do adaptador, consulta apenas a thread pausada. Nomes, caminhos e erros limitados; agrupamento calculado ao receber respostas. Teste real com GDB 15.1 e programa Rust Cargo de três threads (alpha/beta/main), Cancelar/Atualizar nativos, seleção de quadro, limite e cancelamento de pedidos, limpeza ao retomar; regressão de depuração Rust existente e 44 testes rc-dap passaram. Fora: grafo de callers parcialmente compartilhados, tarefas async e sessões simultâneas Entrega verificada: `fd7a0f0`, [#80](https://github.com/RafaelMendes1407/CrabCraft/issues/80). |
 | D-21 | Escolher GDB ou LLDB | ✅ | M3 | Settings › Tools permite escolher GDB ou LLVM LLDB DAP e configurar caminhos absolutos; persistência local, erro explícito sem fallback silencioso. Launch e attach usam o backend escolhido após confiança. Teste nativo troca os dois sem executar projeto; GDB e LLVM 19 DAP reais comprovam breakpoint, variáveis Rust, step, stdout e saída. Capacidades avançadas continuam específicas de cada adaptador. Ver docs/rust-debuggers.md; Closes #81. |
 | D-22 | Renderizadores de tipos Rust (`Vec`, `HashMap`, `Rc`…) | ✅ | M2 | Pretty-printers do rustc via `rust-gdb`; testado |
-| D-23 | Depurar como root | ⬜ | M6 | |
+| D-23 | Depurar como root | 🚧 | M6 | Fluxo Linux nativo separado em Administrator Debug: saves/rustfmt antes de Cargo normal, ELF congelado/hash/prévia e trust + aprovação explícita antes de PolicyKit. Helper GDB DAP de sistema sem init/autoload/shell/env do projeto, protocolo stdio separado de watchdog Unix com peer UID; cancel/EOF encerram árvore via pidfds/subreaper, inclusive grupos distintos. Expressões/condições/logpoints/console/attach/restart não suportados visivelmente. Cinco provas default com Rust/Cargo/build.rs/UI reais; dois testes GDB opt-in verificam stack/EOF e cancelamento/reap sem elevar. Sessão root autenticada e agente PolicyKit reais continuam não verificados; não há alegação de sandbox/SDK elevado. Ver docs/administrator-debugging.md. Refs #82 |
 | D-24 | Pause, resume, restart e stop | ✅ | M2 | Testado com GDB real; botões vistos na janela |
 | D-25 | Mute breakpoints | ✅ | M2 | Testado com GDB real; botão visto na janela |
 | D-26 | Logpoints e remover ao atingir | ✅ | M3 | Mensagem com `{expressão}` e "Remover ao atingir" nas propriedades do breakpoint; salvos na sessão. Remover ao atingir vale só para breakpoints que param: logpoint não para, então a IDE não vê o acerto. |

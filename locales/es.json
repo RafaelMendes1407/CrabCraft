@@ -2898,5 +2898,33 @@
     "WSL operation timed out": "La operación WSL agotó el tiempo",
     "WSL error: {error}": "Error WSL: {error}",
     "WSL Rust workspace…": "Espacio de trabajo Rust WSL…"
+  },
+  "privileged_debug": {
+    "Administrator debugging requires Linux, PolicyKit and system GDB with DAP": "La depuración administrativa requiere Linux, PolicyKit y GDB del sistema con DAP",
+    "Review the frozen executable and approve administrator debugging first": "Revisa el ejecutable congelado y aprueba primero la depuración administrativa",
+    "Administrator debugging requires a regular project ELF and at most 32 separate arguments": "Se requiere un ELF regular del proyecto y como máximo 32 argumentos separados",
+    "The reviewed debug executable changed; build and review it again": "El ejecutable revisado cambió; compílalo y revísalo de nuevo",
+    "Administrator debugging failed: {error}": "Falló la depuración administrativa: {error}",
+    "Unsupported administrator debug protocol request; the session was stopped": "Solicitud de protocolo no compatible; se detuvo la sesión administrativa",
+    "Administrator debugging requires a root-owned, non-writable /usr/bin/gdb; user wrappers are unsupported": "Se requiere /usr/bin/gdb de root y sin escritura ajena; no se admiten envoltorios del usuario",
+    "Administrator debug session cancelled": "Sesión de depuración administrativa cancelada",
+    "Administrator debug input, output or time limit exceeded": "Se superó el límite de entrada, salida o tiempo de depuración administrativa",
+    "Choose a Rust binary configuration before preparing administrator debugging": "Elige una configuración de binario Rust antes de preparar la depuración administrativa",
+    "Administrator debugging currently supports Cargo binary configurations only": "La depuración administrativa solo admite configuraciones de binarios Cargo",
+    "This run configuration has no Rust binary to debug": "Esta configuración no tiene un binario Rust para depurar",
+    "Administrator Debugging (Linux)": "Depuración administrativa (Linux)",
+    "Partial support: an authenticated administrator debug session has not been verified on this host": "Soporte parcial: no se ha verificado una sesión administrativa autenticada en este equipo",
+    "Build runs as your normal user. Only the reviewed frozen executable and system GDB request administrator privileges.": "La compilación usa tu usuario normal. Solo el ejecutable congelado revisado y GDB del sistema solicitan privilegios administrativos.",
+    "GDB init files, auto-loading, project environment, expressions, conditional breakpoints, logpoints and debugger-console commands are disabled.": "Se desactivan los archivos de inicio de GDB, la carga automática, el entorno del proyecto, las expresiones, los puntos condicionales y de registro y los comandos de consola.",
+    "The debugged program and debugger have full administrator permissions; shared libraries and external resources are not frozen.": "El programa y el depurador tienen permisos administrativos completos; las bibliotecas compartidas y los recursos externos no están congelados.",
+    "Build and Review Administrator Debugging": "Compilar y revisar depuración administrativa",
+    "Cancel Administrator Debug Preparation": "Cancelar preparación de depuración administrativa",
+    "I reviewed this executable, hash and arguments and authorize requesting administrator debugging": "Revisé este ejecutable, hash y argumentos y autorizo solicitar depuración administrativa",
+    "Request Administrator Debugging": "Solicitar depuración administrativa",
+    "Stop Administrator Debugging": "Detener depuración administrativa",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides and automatic rerun are unsupported.": "Solo ejecuta un programa de consola precompilado. No se admiten entrada interactiva, programas gráficos, entorno del proyecto ni repetición automática.",
+    "Administrator Debug": "Depuración administrativa",
+    "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "Depuración administrativa: expresiones, puntos condicionales y comandos de consola no disponibles",
+    "Build and review again before requesting another administrator debug session": "Compila y revisa de nuevo antes de solicitar otra sesión administrativa"
   }
 }

@@ -82,6 +82,7 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     pub criticalup_provider: crate::criticalup_provider::Provider,
     pub privileged_run: crate::privileged_run::PrivilegedRun,
+    pub privileged_debug: crate::privileged_debug::PrivilegedDebug,
     pub dev_containers: crate::dev_containers::DevContainers,
     pub containers: crate::containers::Containers,
     pub plugins: crate::plugins::Plugins,
@@ -349,6 +350,7 @@ impl CrabCraftApp {
             cargo_input: String::new(),
             criticalup_provider: crate::criticalup_provider::Provider::new(waker.clone()),
             privileged_run: crate::privileged_run::PrivilegedRun::new(waker.clone()),
+            privileged_debug: crate::privileged_debug::PrivilegedDebug::new(waker.clone()),
             dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
             containers: crate::containers::Containers::new(waker.clone()),
             plugins: crate::plugins::Plugins::new(waker.clone()),
@@ -573,6 +575,7 @@ impl CrabCraftApp {
     pub(crate) fn cargo_choice(&self)->crate::criticalup_provider::Choice{self.criticalup_provider.choice()}
     pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
         self.cancel_disk_save();
+        if self.privileged_debug.running {self.debugger.stop();}self.privileged_debug.cancel();
         self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
         self.cargo_load=None;self.libraries_load=None;self.attached_load=None;self.rustc_cfg_load=None;self.triple_load=None;self.toolchain_load=None;self.explain_load=None;self.explanations.clear();
         self.runner.cargo_workspace=None;self.runner.configs.clear();self.runner.attached.clear();self.explorer.libraries.clear();self.toolchain=None;self.rustc_cfg=None;
@@ -1485,6 +1488,7 @@ impl CrabCraftApp {
         self.vcs.close();
         self.criticalup_provider = crate::criticalup_provider::Provider::new(self.waker.clone());
         self.privileged_run = crate::privileged_run::PrivilegedRun::new(self.waker.clone());
+        self.privileged_debug.cancel();
         self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
         self.containers = crate::containers::Containers::new(self.waker.clone());
         self.plugins = crate::plugins::Plugins::new(self.waker.clone());
@@ -2922,6 +2926,7 @@ impl CrabCraftApp {
 
     /// The debugger's Restart: what is being debugged, from the beginning.
     pub fn restart_debugging(&mut self) {
+        if self.privileged_debug.running {self.debugger.stop();self.privileged_debug.cancel();self.notify(tr("Build and review again before requesting another administrator debug session"),false);return;}
         self.debugger.stop();
         match self.debug_test.clone() {
             Some((config, target)) => self.debug_rust_test(config, target),
@@ -3343,6 +3348,9 @@ impl CrabCraftApp {
     fn poll_background(&mut self) {
         let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
         for change in self.criticalup_provider.poll(acp_trusted){self.change_cargo_provider(change);}
+        if !acp_trusted&&self.privileged_debug.running{self.debugger.stop();}
+        self.privileged_debug.poll(acp_trusted,self.workspace.as_ref().map(|w|w.ws.root.as_path()),&self.docs);
+        if self.privileged_debug.running&&!self.debugger.active(){self.privileged_debug.running=false;}
         self.privileged_run.poll(acp_trusted);
         self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
