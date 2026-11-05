@@ -1685,6 +1685,9 @@ impl CrabCraftApp {
                 return;
             }
         }
+        if action == Action::Complete && self.endpoints.complete_http(&mut self.docs.list[i]) {
+            return;
+        }
         // Cargo.toml is completed here: the Rust server does not complete TOML.
         if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
             let mut cx = crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online: self.settings.check_crates_io };

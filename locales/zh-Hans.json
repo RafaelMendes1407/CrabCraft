@@ -2025,5 +2025,10 @@
     "Open source range {n}": "打开源代码范围 {n}",
     "Checking compiler source…": "正在检查编译器源代码…",
     "Visualize {code} source ranges…": "可视化 {code} 的源代码范围…"
+  },
+  "endpoint_completion": {
+    "Axum route": "Axum 路由",
+    "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "缓存的 Axum 路径。发送前填写捕获参数；源代码更改后刷新端点。",
+    "No cached Axum routes. Open Endpoints and refresh the scan.": "没有缓存的 Axum 路由。打开端点并刷新扫描。"
   }
 }

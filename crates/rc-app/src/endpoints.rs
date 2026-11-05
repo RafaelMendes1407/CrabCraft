@@ -103,6 +103,77 @@ pub fn reqwest_call(base: &str, method: &str, path: &str, values: &BTreeMap<Stri
     Ok(format!("pub async fn call_endpoint() -> Result<String, reqwest::Error> {{\n    let response = reqwest::Client::new()\n        .request(reqwest::Method::{method}, {:?})\n        .timeout(std::time::Duration::from_secs(30))\n        .send().await?\n        .error_for_status()?;\n    response.text().await\n}}\n", url.as_str()))
 }
 
+/// URL path span of an actual request line. Parse only a bounded prefix from the start of
+/// the file so body text and response scripts cannot masquerade as request lines.
+struct HttpContext { method: String, anchor: usize, end: usize, prefix: String }
+fn http_context(doc: &crate::docs::Doc) -> Option<HttpContext> {
+    let editor = &doc.editor;
+    if editor.read_only || editor.selection.len() != 1 || !editor.selection.primary().is_empty() { return None; }
+    let rope = editor.buffer.rope(); let caret = editor.caret();
+    if caret > rope.len_chars() { return None; }
+    let line_index = rope.char_to_line(caret);
+    if line_index > 2000 { return None; }
+    let mut lines = Vec::new(); let mut bytes = 0usize;
+    for line in 0..=line_index {
+        let text = rope.line(line);
+        bytes = bytes.saturating_add(text.len_bytes());
+        if text.len_bytes() > 8192 || bytes > 64 * 1024 { return None; }
+        lines.push(text.to_string());
+    }
+    if rc_syntax::http::line_roles(lines.iter().map(String::as_str)).last() != Some(&rc_syntax::http::LineRole::Request) { return None; }
+    let line = lines.last()?.trim_end_matches(['\r', '\n']);
+    let first_start = line.find(|c: char| !c.is_whitespace())?;
+    let first_end = line.get(first_start..)?.find(char::is_whitespace).map_or(line.len(), |n| first_start + n);
+    let first = line.get(first_start..first_end)?;
+    let (method, url_start) = if METHODS.contains(&first) {
+        if first_end == line.len() { return None; }
+        (first.to_string(), line.get(first_end..)?.find(|c: char| !c.is_whitespace()).map_or(line.len(), |n| first_end + n))
+    } else { ("GET".to_string(), first_start) };
+    let url_end = line.get(url_start..)?.find(char::is_whitespace).map_or(line.len(), |n| url_start + n);
+    let url = line.get(url_start..url_end)?;
+    let path_start = if url.starts_with('/') || url.is_empty() { 0 }
+        else if let Some(scheme_end) = url.find("://") {
+            if !matches!(url.get(..scheme_end)?, "http" | "https") { return None; }
+            let authority = scheme_end + 3;
+            let end = url.get(authority..)?.find(['/', '?', '#']).map_or(url.len(), |n| authority + n);
+            if authority == end { return None; } end
+        } else { url.find(['/', '?', '#']).unwrap_or(url.len()) };
+    let path_end = url.get(path_start..)?.find(['?', '#']).map_or(url.len(), |n| path_start + n);
+    let column = caret.checked_sub(rope.line_to_char(line_index))?;
+    let caret_byte = line.char_indices().nth(column).map_or(line.len(), |(byte, _)| byte);
+    let start = url_start + path_start; let end = url_start + path_end;
+    if caret_byte < start || caret_byte > end { return None; }
+    let line_start = rope.line_to_char(line_index);
+    Some(HttpContext { method, anchor: line_start + line.get(..start)?.chars().count(), end: line_start + line.get(..end)?.chars().count(), prefix: line.get(start..caret_byte)?.to_string() })
+}
+fn snippet_literal(text: &str) -> String { text.replace('\\', "\\\\").replace('$', "\\$").replace('}', "\\}") }
+/// Segment-aware matching retains already typed captures and creates editable snippet stops
+/// for captures that are still missing. Static path text is escaped as data, never a snippet.
+fn completed_path(path: &str, prefix: &str) -> Option<(String, String)> {
+    if !path.starts_with('/') || path.len() > 4096 || path.contains(['?', '#', '\r', '\n']) { return None; }
+    let fixed = path.split(['{', ':', '*']).next().unwrap_or(path);
+    if !fixed.starts_with(prefix) && !prefix.starts_with(fixed) { return None; }
+    let parts: Vec<_> = path.split('/').collect(); let typed: Vec<_> = prefix.split('/').collect();
+    let mut labels = Vec::new(); let mut inserted = Vec::new(); let mut stop = 0usize; let mut wildcard_seen = false;
+    for (index, part) in parts.iter().enumerate() {
+        let capture = part.strip_prefix('{').and_then(|s| s.strip_suffix('}')).or_else(|| part.strip_prefix(':')).or_else(|| part.strip_prefix('*'));
+        if let Some(capture) = capture {
+            let wildcard = capture.starts_with('*') || part.starts_with('*'); let name = capture.trim_start_matches('*');
+            if name.is_empty() || name.len() > 64 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || stop >= 32 { return None; }
+            let value = if wildcard { typed.get(index..).map(|p| p.join("/")).unwrap_or_default() } else { typed.get(index).copied().unwrap_or("").to_string() };
+            if value.is_empty() {
+                stop += 1; labels.push(part.to_string()); inserted.push(format!("${{{stop}:{}}}", snippet_literal(name)));
+            } else { labels.push(value.clone()); inserted.push(snippet_literal(&value)); }
+            if wildcard { wildcard_seen = true; break; }
+        } else {
+            if part.contains(['{', '}']) || typed.get(index).is_some_and(|p| !part.starts_with(*p)) { return None; }
+            labels.push(part.to_string()); inserted.push(snippet_literal(part));
+        }
+    }
+    if typed.len() > parts.len() && !wildcard_seen { return None; }
+    Some((labels.join("/"), format!("{}$0", inserted.join("/"))))
+}
+
 pub struct Endpoints {
     snapshot: Snapshot,
     cancel: Option<Arc<AtomicBool>>,
@@ -153,6 +224,29 @@ impl Endpoints {
                 if !line.contains(&hint) && line.len() < 500 { if !line.is_empty() { line.push_str(" · "); } line.push_str(&hint); }
             }
         }
+    }
+    /// Handles only .http/.rest requests. This is a local provider: no scan, process,
+    /// registry request, server resolution or project execution is started here.
+    pub fn complete_http(&self, doc: &mut crate::docs::Doc) -> bool {
+        if doc.editor.lang() != rc_syntax::Lang::Http { return false; }
+        let Some(context) = http_context(doc) else { doc.editor.popups.completion = None; return true; };
+        let mut items = Vec::new(); let mut seen = HashSet::new();
+        for endpoint in &self.snapshot.routes {
+            let route = &endpoint.route;
+            if route.method != context.method && route.method != "ANY" && !(context.method == "HEAD" && route.method == "GET") { continue; }
+            let Some((label, insert)) = completed_path(&route.path, &context.prefix) else { continue; };
+            if !seen.insert(label.clone()) { continue; }
+            items.push(rc_editor::CompletionItem { label, detail: format!("{} · {} · {}", context.method, route.path, route.handler), type_text: tr("Axum route").to_string(), icon: rc_kit::ico::CONFIG_WEB,
+                insert, replace: Some((context.anchor, context.end)), deprecated: false, data: crate::manifest_completion::LOCAL_ITEM,
+                doc: Some(tr("Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.").to_string()) });
+            if items.len() >= 100 { break; }
+        }
+        let mut completion = rc_editor::Completion::new(context.anchor, items, false);
+        completion.extra_word_chars = "/-{}%.*~@!$&'()+,;=:";
+        completion.filter(""); completion.prefix = context.prefix;
+        if completion.items.is_empty() && self.snapshot.routes.is_empty() { completion.doc = Some(tr("No cached Axum routes. Open Endpoints and refresh the scan.").to_string()); }
+        doc.editor.popups.completion = Some(completion);
+        true
     }
     fn select(&mut self, index: usize) {
         self.selected = Some(index); self.values.clear();
@@ -228,6 +322,58 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
     fn fixture() -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/RustAxum").canonicalize().unwrap() }
+    fn http_doc(text: &str, extension: &str) -> (tempfile::TempDir, crate::docs::Docs, usize) {
+        let place = tempfile::tempdir().unwrap(); let path = place.path().join(format!("api.{extension}"));
+        let caret = text.find("<caret>").unwrap(); let position = text[..caret].chars().count();
+        std::fs::write(&path, text.replace("<caret>", "")).unwrap();
+        let mut docs = crate::docs::Docs::new(rc_syntax::ParserPool::new(Arc::new(|| {})));
+        let index = docs.open(&path).unwrap(); docs.list[index].editor.selection = rc_text::Selection::point(position);
+        (place, docs, index)
+    }
+    fn cached() -> Endpoints {
+        let mut state = Endpoints::new(Waker::noop()); let root = fixture();
+        state.snapshot = scan(vec![root.clone()], &root, &[], &AtomicBool::new(false)).unwrap(); state
+    }
+    #[test]
+    fn http_path_completion_is_method_aware_and_preserves_origin_query_and_other_text() {
+        let state = cached();
+        let (_place, mut docs, i) = http_doc("# préface\nGET https://example.test:8443/api/us<caret>?keep=$1&name=é HTTP/2\nX-Trace: unchanged\n\n", "http");
+        assert!(state.complete_http(&mut docs.list[i]));
+        let list = docs.list[i].editor.popups.completion.as_ref().unwrap();
+        assert_eq!(list.items.len(), 1); assert_eq!(list.items[0].label, "/api/users/{id}");
+        assert_eq!(list.items[0].data, crate::manifest_completion::LOCAL_ITEM);
+        rc_editor::accept_completion(&mut docs.list[i].editor, 0, false);
+        assert_eq!(docs.list[i].editor.buffer.rope().to_string(), "# préface\nGET https://example.test:8443/api/users/id?keep=$1&name=é HTTP/2\nX-Trace: unchanged\n\n");
+        assert!(docs.list[i].editor.snippet.is_some());
+        assert!(state.cancel.is_none()); assert!(!state.started);
+        for (request, expected) in [("POST /cr<caret> HTTP/1.1\n", Some("/create")), ("GET /cr<caret>\n", None), ("HEAD /admin/he<caret>\n", Some("/admin/health")), ("GET http://{{host}}/admin/he<caret>?x=1\n", Some("/admin/health"))] {
+            let (_place, mut docs, i) = http_doc(request, "rest"); state.complete_http(&mut docs.list[i]);
+            let completion = docs.list[i].editor.popups.completion.as_ref().unwrap();
+            assert_eq!(completion.items.first().map(|item| item.label.as_str()), expected, "{request}");
+        }
+        let (_place, mut docs, i) = http_doc("GET http://localhost:3000/api/users/42<caret>?x=1\n", "http");
+        state.complete_http(&mut docs.list[i]); rc_editor::accept_completion(&mut docs.list[i].editor, 0, true);
+        assert_eq!(docs.list[i].editor.buffer.rope().to_string(), "GET http://localhost:3000/api/users/42?x=1\n");
+    }
+    #[test]
+    fn http_completion_rejects_headers_body_comments_scripts_query_and_rust_strings() {
+        let state = cached();
+        for source in [
+            "GET /\nLocation: https://example.test/api/us<caret>\n", "GET /\n\nGET https://example.test/api/us<caret>\n",
+            "# GET https://example.test/api/us<caret>\n", "@url = https://example.test/api/us<caret>\n",
+            "GET /\n\n> {%\n### fake separator inside script\nGET https://example.test/api/us<caret>\n%}\n",
+            "GET https://example.test/path?search=/api/us<caret>\n", "GE<caret>T https://example.test/api/us\n",
+        ] {
+            let (_place, mut docs, i) = http_doc(source, "http"); assert!(state.complete_http(&mut docs.list[i]));
+            assert!(docs.list[i].editor.popups.completion.is_none(), "{source}");
+        }
+        let (_place, mut docs, i) = http_doc("fn f() { let s = \"https://example.test/api/us<caret>\"; }", "rs");
+        assert!(!state.complete_http(&mut docs.list[i]));
+        let text = format!("{}GET https://example.test/api/us<caret>\n", "# bounded context\n".repeat(2001));
+        let (_place, mut docs, i) = http_doc(&text, "http"); state.complete_http(&mut docs.list[i]); assert!(docs.list[i].editor.popups.completion.is_none());
+        assert_eq!(completed_path("/cost/$1", "/cost/"), Some(("/cost/$1".into(), "/cost/\\$1$0".into())));
+        assert_eq!(completed_path("/files/{*rest}", "/files/a/b"), Some(("/files/a/b".into(), "/files/a/b$0".into())));
+    }
     #[test]
     fn scans_saved_axum_sources_and_respects_exclusions_and_cancellation() {
         let fixture = fixture();
@@ -292,6 +438,54 @@ mod tests {
         assert!(doc.editor.end_hints.values().any(|hint| hint.contains("GET /api/users/{id}")));
         h.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// edited\n"); h.run_steps(3);
         assert!(h.state().docs.active_doc().unwrap().editor.end_hints.is_empty());
+        assert!(!root.join("build-ran").exists());
+    }
+    #[test]
+    #[ignore = "Requires cached RustAxum dependencies and a local HTTP server; exercises manual Ctrl+Space"]
+    fn native_http_path_completion_uses_cached_axum_routes_and_sends_the_inserted_url() {
+        use egui_kittest::kittest::Queryable;
+        use std::io::{Read, Write};
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap(); let root = project.path().canonicalize().unwrap();
+        std::fs::create_dir(root.join("src")).unwrap();
+        for file in ["Cargo.toml", "Cargo.lock", "src/lib.rs"] { std::fs::copy(fixture().join(file), root.join(file)).unwrap(); }
+        std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap(); listener.set_nonblocking(true).unwrap(); let address = listener.local_addr().unwrap();
+        let original = format!("### User\nGET http://{address}/api/us?keep=one HTTP/1.1\nX-Trace: untouched\n\n");
+        let path = root.join("api.http"); std::fs::write(&path, &original).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true); app.open_workspace(&root);
+        let mut h = crate::screens::harness(app, egui::vec2(1500.0, 1200.0));
+        let start = Instant::now();
+        while h.state().runner.cargo_workspace.is_none() && start.elapsed() < Duration::from_secs(20) { h.run_steps(2); std::thread::sleep(Duration::from_millis(20)); }
+        assert!(h.state().runner.cargo_workspace.is_some());
+        h.get_by_label(tr("Endpoints")).click(); h.run_steps(2);
+        while (h.state().endpoints.cancel.is_some() || !h.state().endpoints.started) && start.elapsed() < Duration::from_secs(20) { h.run_steps(2); std::thread::sleep(Duration::from_millis(20)); }
+        assert_eq!(h.state().endpoints.snapshot.routes.len(), 4);
+        h.state_mut().open_at(&root.join("src/lib.rs"), 0, 0); h.run_steps(3);
+        assert!(h.state().docs.active_doc().unwrap().editor.end_hints.values().any(|hint| hint.contains("GET /api/users/{id}")));
+        h.state_mut().open_file(&path); h.run_steps(3);
+        let caret = original[..original.find("?keep").unwrap()].chars().count();
+        h.state_mut().docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(caret);
+        let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key); h.run_steps(3);
+        let doc = h.state().docs.active_doc().unwrap();
+        assert_eq!(doc.editor.popups.completion.as_ref().unwrap().selected_item().unwrap().label, "/api/users/{id}");
+        h.key_press(egui::Key::Enter); h.run_steps(2);
+        h.event(egui::Event::Text("42".into())); h.run_steps(2); h.key_press(egui::Key::Tab); h.run_steps(2);
+        let text = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        assert_eq!(text, original.replace("/api/us?", "/api/users/42?"));
+        assert!(h.state().http.history.is_empty()); assert!(h.state().endpoints.cancel.is_none()); assert!(!root.join("build-ran").exists());
+        assert_eq!(listener.accept().unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+        listener.set_nonblocking(false).unwrap();
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap(); stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            let mut bytes = [0u8; 8192]; let n = stream.read(&mut bytes).unwrap(); let request = String::from_utf8_lossy(&bytes[..n]).to_string();
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nuser:42").unwrap(); request
+        });
+        h.state_mut().send_http_at(1);
+        while h.state().http.running() && start.elapsed() < Duration::from_secs(20) { h.run_steps(2); std::thread::sleep(Duration::from_millis(20)); }
+        let request = worker.join().unwrap(); assert!(request.starts_with("GET /api/users/42?keep=one HTTP/1.1")); assert!(request.to_lowercase().contains("x-trace: untouched"));
+        assert!(matches!(&h.state().http.history[0].outcome, crate::http_client::Outcome::Done { response, .. } if response.status == 200));
         assert!(!root.join("build-ran").exists());
     }
     #[test]

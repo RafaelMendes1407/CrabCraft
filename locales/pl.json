@@ -2025,5 +2025,10 @@
     "Open source range {n}": "Otwórz zakres źródła {n}",
     "Checking compiler source…": "Sprawdzanie źródła kompilatora…",
     "Visualize {code} source ranges…": "Pokaż zakresy źródła dla {code}…"
+  },
+  "endpoint_completion": {
+    "Axum route": "Trasa Axum",
+    "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "Ścieżka Axum z pamięci podręcznej. Uzupełnij parametry przed wysłaniem; odśwież endpointy po zmianie kodu.",
+    "No cached Axum routes. Open Endpoints and refresh the scan.": "Brak tras Axum w pamięci podręcznej. Otwórz Endpointy i odśwież wyszukiwanie."
   }
 }

@@ -2025,5 +2025,10 @@
     "Open source range {n}": "ソース範囲 {n} を開く",
     "Checking compiler source…": "コンパイラーのソースを確認中…",
     "Visualize {code} source ranges…": "{code} のソース範囲を可視化…"
+  },
+  "endpoint_completion": {
+    "Axum route": "Axum ルート",
+    "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "キャッシュした Axum パスです。送信前にパラメーターを入力し、ソース変更後にエンドポイントを更新してください。",
+    "No cached Axum routes. Open Endpoints and refresh the scan.": "キャッシュした Axum ルートはありません。エンドポイントを開いてスキャンを更新してください。"
   }
 }

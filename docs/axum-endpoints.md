@@ -20,7 +20,21 @@ accordingly. It does not promise a complete runtime route graph.
 
 **Route hints** shows methods and resolved static paths at the end of declaration lines in open
 Rust editors whose contents match the snapshot. Editing a file clears its hints; refresh to
-rebuild them. URL completion in request strings remains unimplemented (F-06 is partial).
+rebuild them.
+
+In `.http` and `.rest` request lines, Ctrl+Space completes URL paths from the cached
+Endpoints scan. Matching respects the request method (GET routes also accept HEAD), keeps
+an existing scheme, host, query, fragment and HTTP version, and preserves typed capture
+values. Missing capture values become editable snippet placeholders; fill them before
+sending. Completion itself never scans, sends a request or executes project code.
+Headers, bodies, scripts, comments and query positions do not offer route paths. Parsing
+is bounded to the first 2,001 lines / 64 KiB before the caret and 8 KiB per line; at most
+100 suggestions are shown. Refresh Endpoints after changing source routes.
+
+F-06 remains partial. [RustRover's public Axum help](https://www.jetbrains.com/help/rust/axum.html)
+describes automatic and manual path/query completion in Rust and non-Rust files. This
+implementation provides manual HTTP request path completion and static Rust hints; it
+does not complete query parameters or Rust URL strings and makes no parity claim.
 
 Select a result to generate a Reqwest call. Enter an HTTP(S) base URL, choose the method and
 fill captured `{name}`, `{*wildcard}` or older `:name`/`*wildcard` path parameters. Values are

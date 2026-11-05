@@ -2025,5 +2025,10 @@
     "Open source range {n}": "Abrir intervalo de código {n}",
     "Checking compiler source…": "Verificando código-fonte do compilador…",
     "Visualize {code} source ranges…": "Visualizar intervalos de código de {code}…"
+  },
+  "endpoint_completion": {
+    "Axum route": "Rota Axum",
+    "Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.": "Caminho Axum em cache. Preencha os parâmetros antes de enviar; atualize Endpoints após alterar o código.",
+    "No cached Axum routes. Open Endpoints and refresh the scan.": "Nenhuma rota Axum em cache. Abra Endpoints e atualize a busca."
   }
 }
