@@ -2086,5 +2086,15 @@
     "Patch preview (first 64 KiB)": "パッチのプレビュー（先頭 64 KiB）",
     "Shelve Checked…": "チェック済みをシェルフへ…",
     "Shelves": "シェルフ"
+  },
+  "remote_debug": {
+    "Connect to GDB Server": "GDB サーバーに接続",
+    "Connect to GDB Server…": "GDB サーバーに接続…",
+    "Connect to an existing gdbserver using a local binary with matching debug symbols. Stop detaches; it does not terminate the remote process.": "対応するデバッグシンボルを持つローカルバイナリで既存の gdbserver に接続します。停止すると切断され、リモートプロセスは終了しません。",
+    "Host": "ホスト",
+    "Port": "ポート",
+    "Local symbol binary": "シンボルを含むローカルバイナリ",
+    "Enter a valid host, TCP port and absolute local binary path.": "有効なホスト、TCP ポート、ローカルバイナリの絶対パスを入力してください。",
+    "Connect": "接続"
   }
 }

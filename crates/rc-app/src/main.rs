@@ -167,6 +167,8 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod project_trust;
 
+mod remote_debug;
+
 #[cfg(test)]
 mod large_file_audit;
 

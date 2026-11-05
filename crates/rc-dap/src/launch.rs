@@ -33,6 +33,8 @@ pub enum DebugTarget {
     Launch(LaunchConfig),
     /// Attach to a running .NET process.
     Attach { pid: u32 },
+    /// Attach to an already running gdbserver over TCP, using local symbols.
+    Remote(crate::remote::RemoteTarget),
     /// Build a Rust binary with Cargo and launch it.
     Cargo { cargo: rc_cargo::Cargo, target: rc_cargo::RunTarget },
 }
@@ -45,7 +47,7 @@ impl DebugTarget {
     }
 
     pub fn is_attach(&self) -> bool {
-        matches!(self, DebugTarget::Attach { .. })
+        matches!(self, DebugTarget::Attach { .. } | DebugTarget::Remote(_))
     }
 }
 

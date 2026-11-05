@@ -2086,5 +2086,15 @@
     "Patch preview (first 64 KiB)": "Vista previa del parche (primeros 64 KiB)",
     "Shelve Checked…": "Guardar marcados en estantería…",
     "Shelves": "Estanterías"
+  },
+  "remote_debug": {
+    "Connect to GDB Server": "Conectar al servidor GDB",
+    "Connect to GDB Server…": "Conectar al servidor GDB…",
+    "Connect to an existing gdbserver using a local binary with matching debug symbols. Stop detaches; it does not terminate the remote process.": "Conecta a un gdbserver existente con un binario local cuyos símbolos coincidan. Detener desconecta sin finalizar el proceso remoto.",
+    "Host": "Servidor",
+    "Port": "Puerto",
+    "Local symbol binary": "Binario local con símbolos",
+    "Enter a valid host, TCP port and absolute local binary path.": "Introduce un servidor, puerto TCP y ruta absoluta del binario local válidos.",
+    "Connect": "Conectar"
   }
 }

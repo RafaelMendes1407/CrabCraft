@@ -2086,5 +2086,15 @@
     "Patch preview (first 64 KiB)": "补丁预览（前 64 KiB）",
     "Shelve Checked…": "搁置已勾选文件…",
     "Shelves": "搁置"
+  },
+  "remote_debug": {
+    "Connect to GDB Server": "连接 GDB 服务器",
+    "Connect to GDB Server…": "连接 GDB 服务器…",
+    "Connect to an existing gdbserver using a local binary with matching debug symbols. Stop detaches; it does not terminate the remote process.": "使用带匹配调试符号的本地二进制文件连接现有 gdbserver。停止会断开连接，不会终止远程进程。",
+    "Host": "主机",
+    "Port": "端口",
+    "Local symbol binary": "本地符号二进制文件",
+    "Enter a valid host, TCP port and absolute local binary path.": "请输入有效主机、TCP 端口和本地二进制文件的绝对路径。",
+    "Connect": "连接"
   }
 }

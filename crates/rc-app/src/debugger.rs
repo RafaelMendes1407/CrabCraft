@@ -229,6 +229,25 @@ impl Debugger {
     }
 
     /// Starts debugging a Rust binary under GDB.
+    pub fn start_remote(&mut self, target: rc_dap::remote::RemoteTarget, docs: &Docs) -> Vec<DebugOutput> {
+        let Some(adapter) = rc_dap::gdb::locate_configured(self.gdb_path.as_deref()) else {
+            return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
+        };
+        if let Some(session) = &mut self.session { session.stop(); }
+        self.name = target.endpoint().into();
+        self.urls.clear();
+        self.expanded.clear();
+        self.parallel_stacks.reset();
+        self.memory.reset();
+        self.disassembly.reset();
+        self.console = Some(crate::runner::Console::new(&self.waker));
+        let mut session = DebugSession::start(adapter, DebugTarget::Remote(target), DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        session.set_hex(self.hex);
+        self.session = Some(session);
+        vec![DebugOutput::ShowDebugWindow]
+    }
+
+    /// Starts debugging a Rust binary with the selected native DAP adapter.
     pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
         if let Some(s) = &mut self.session {
             s.stop();

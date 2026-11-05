@@ -356,6 +356,7 @@ pub struct DebugSession {
     adapter: AdapterCommand,
     options: DebugOptions,
     attach_pid: Option<u32>,
+    remote_attach: bool,
     waker: Waker,
     dap: Inbox<Incoming>,
     prep_inbox: Inbox<Prep>,
@@ -419,6 +420,7 @@ impl DebugSession {
             exception_filters: options.exception_filters.clone(),
             options,
             attach_pid: None,
+            remote_attach: false,
             dap: Inbox::new(waker.clone()),
             prep_inbox: Inbox::new(waker.clone()),
             waker,
@@ -509,6 +511,11 @@ impl DebugSession {
                 s.debuggee_pid = Some(pid);
                 let a = if s.is_gdb() || s.adapter.origin == crate::netcoredbg::Origin::Lldb { gdb_attach_arguments(pid) } else { attach_arguments(pid, &s.options) };
                 s.spawn_adapter("attach", a);
+            }
+            DebugTarget::Remote(remote) => {
+                s.remote_attach = true;
+                if s.is_gdb() { s.spawn_adapter("attach", remote.arguments()); }
+                else { s.fail(Failure::PrepareFailed("remote TCP connections require the GDB adapter".into())); }
             }
         }
         s
@@ -714,7 +721,7 @@ impl DebugSession {
                     self.capabilities = serde_json::from_value(v).unwrap_or_default();
                     self.hs.initialize_done = true;
                     match &self.client {
-                        Some(c) if self.is_gdb() && self.attach_pid.is_none() => {
+                        Some(c) if self.is_gdb() && self.attach_pid.is_none() && !self.remote_attach => {
                             let p = c.request("evaluate", json!({ "expression": "$_gdb_major", "context": "repl" }));
                             self.in_flight.push((p, Purpose::GdbVersion));
                         }
@@ -1316,11 +1323,28 @@ impl DebugSession {
         }
         self.shutdown_started = true;
         let Some(client) = self.client.clone() else { return };
-        let launched = self.attach_pid.is_none();
+        let launched = self.attach_pid.is_none() && !self.remote_attach;
         let debuggee = if launched { self.debuggee_pid } else { None };
+        let detach_remote = self.remote_attach && self.is_gdb();
+        let pause_remote = self.state == SessionState::Running;
         let _guard = Runtime::handle().enter();
-        let disconnect = if client.has_exited() { None } else { Some(client.disconnect(launched)) };
         Runtime::spawn(async move {
+            if detach_remote && !client.has_exited() {
+                // Older GDB DAP disconnect(false) quits GDB without issuing detach, which
+                // may kill a target-remote inferior. Explicitly detach before disconnect.
+                if pause_remote {
+                    let _ = tokio::time::timeout(SHUTDOWN_GRACE, client.request::<Value>("pause", json!({"threadId": 0})).wait()).await;
+                }
+                let _ = tokio::time::timeout(SHUTDOWN_GRACE, async {
+                    loop {
+                        let result = client.request::<Value>("evaluate", json!({"expression": "detach", "context": "repl"})).wait().await;
+                        if result.is_ok() || client.has_exited() { break; }
+                        // The pause reply precedes GDB's asynchronous stopped event.
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                    }
+                }).await;
+            }
+            let disconnect = if client.has_exited() { None } else { Some(client.disconnect(launched)) };
             if let Some(d) = disconnect {
                 let _ = tokio::time::timeout(SHUTDOWN_GRACE, d.wait()).await;
                 let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
@@ -1344,9 +1368,9 @@ impl DebugSession {
             return;
         }
         self.invalidate();
+        self.shutdown();
         self.set_state(SessionState::Terminated);
         self.events.push(DebugEvent::Terminated);
-        self.shutdown();
     }
 
     pub fn continue_(&mut self) {

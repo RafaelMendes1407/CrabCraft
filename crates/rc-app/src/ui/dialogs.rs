@@ -24,6 +24,7 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    RemoteDebug(crate::remote_debug::Dialog),
     RevertDisk(crate::disk_revert::Ticket),
     CloneRepository,
     CargoDependencies,
@@ -179,6 +180,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
+        Dialog::RemoteDebug(draft) => if crate::remote_debug::show(app, ctx, draft) { Outcome::Close } else { Outcome::Keep },
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
         Dialog::WasmOptions { name, manifest, options } => wasm_options(app, ctx, name, manifest, options),
