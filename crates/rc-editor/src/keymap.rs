@@ -71,6 +71,8 @@ pub enum Action {
     RefactorThis,
     MoveItem,
     ChangeSignature,
+    RemoteDevelopment,
+    WslWorkspace,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -267,6 +269,8 @@ impl Action {
                 | TestDeclarativeMacro
                 | MoveItem
                 | ChangeSignature
+                | RemoteDevelopment
+                | WslWorkspace
                 | Profile
         )
     }

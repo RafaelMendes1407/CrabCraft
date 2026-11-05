@@ -15,12 +15,18 @@ const LARGE_FILE: u64 = 8 * 1024 * 1024;
 /// Files bigger than this do not open at all.
 const HUGE_FILE: u64 = 128 * 1024 * 1024;
 
+#[derive(Default)]
+pub struct PendingSave(pub Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
+impl Drop for PendingSave {fn drop(&mut self){if let Some(token)=&self.0{token.store(true,std::sync::atomic::Ordering::Release);}}}
+
 pub struct Doc {
     pub editor: EditorState,
     pub path: PathBuf,
     pub mtime: Option<SystemTime>,
     /// Invalidates pending disk snapshots after writes, reloads or watcher events.
     pub disk_epoch: u64,
+    /// A writer holding this document snapshot; reload/close cancels before atomic commit.
+    pub pending_save: PendingSave,
     pub bom: bool,
     pub pinned: bool,
     /// Opened with a single click and not edited yet: the next single-click open replaces it
@@ -52,6 +58,9 @@ pub enum MdView {
 }
 
 impl Doc {
+    pub fn cancel_pending_save(&mut self) {
+        if let Some(token)=self.pending_save.0.take(){token.store(true,std::sync::atomic::Ordering::Release);}
+    }
     pub fn name(&self) -> String {
         self.path.file_name().map_or_else(|| self.path.display().to_string(), |n| n.to_string_lossy().into_owned())
     }
@@ -154,6 +163,7 @@ pub fn style_fixes(editor: &EditorState, style: &rc_core::code_style::CodeStyle)
 pub enum TextReadError {
     Io(std::io::Error),
     NotRegular,
+    BatchLimit,
     TooLarge(u64),
     Binary,
     InvalidUtf8,
@@ -164,6 +174,7 @@ impl std::fmt::Display for TextReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
             Self::Io(error) => error.to_string(),
+            Self::BatchLimit => rc_kit::i18n::tr("Open at most 256 files and 512 MB at a time").to_string(),
             Self::NotRegular => rc_kit::i18n::tr("Only regular files can be opened in the editor").to_string(),
             Self::TooLarge(size) => trf("The file exceeds the editor's 128 MB limit ({size} MB)", &[("size", &(size / 1024 / 1024))]),
             Self::Binary => rc_kit::i18n::tr("This is a binary file and cannot be edited").to_string(),
@@ -295,7 +306,7 @@ impl Docs {
         };
         apply_style(&mut editor, &style);
         let light_project = if self.style_root.is_none() && !scratch { cargo_project_of(&path) } else { None };
-        self.list.push(Doc { editor, path: path.clone(), mtime, disk_epoch: 0, bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
+        self.list.push(Doc { editor, path: path.clone(), mtime, disk_epoch: 0, pending_save: Default::default(), bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -312,7 +323,7 @@ impl Docs {
         editor.breakpoints = self.closed_breakpoints.remove(&path).unwrap_or_default();
         apply_style(&mut editor, &style); editor.request_parse(&self.pool);
         let saved = editor.buffer.snapshot();
-        self.list.push(Doc { editor, path, mtime, disk_epoch: 0, bom, pinned: false, preview: false, conflict: false, md_view: None, scratch: false, generated: false, saved, style, light_project: None });
+        self.list.push(Doc { editor, path, mtime, disk_epoch: 0, pending_save: Default::default(), bom, pinned: false, preview: false, conflict: false, md_view: None, scratch: false, generated: false, saved, style, light_project: None });
         let index = self.list.len()-1; self.activate(index); index
     }
 
@@ -334,7 +345,7 @@ impl Docs {
         let id=self.next_id;self.next_id+=1;
         let mut editor=EditorState::new(id,Some(path.clone()),text); editor.read_only=true; editor.request_parse(&self.pool);
         let saved=editor.buffer.snapshot();
-        self.list.push(Doc{editor,path,mtime:None,disk_epoch:0,bom:false,pinned:false,preview:false,conflict:false,md_view:None,scratch:false,generated:true,saved,style:Default::default(),light_project:None});
+        self.list.push(Doc{editor,path,mtime:None,disk_epoch:0,pending_save:Default::default(),bom:false,pinned:false,preview:false,conflict:false,md_view:None,scratch:false,generated:true,saved,style:Default::default(),light_project:None});
         let index=self.list.len()-1;self.activate(index);index
     }
 
@@ -442,6 +453,7 @@ impl Docs {
         Some(doc)
     }
 
+    #[cfg(test)]
     pub fn save(&mut self, i: usize) -> Result<(), String> {
         let doc = &mut self.list[i];
         if doc.generated { return Ok(()); }
@@ -458,6 +470,7 @@ impl Docs {
         bytes.extend_from_slice(doc.editor.buffer.to_disk_string().as_bytes());
         rc_core::paths::write_atomic(&doc.path, &bytes).map_err(|e| trf("Could not save {file}: {error}", &[("file", &doc.name()), ("error", &e)]))?;
         doc.editor.buffer.mark_saved();
+        doc.cancel_pending_save();
         doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         doc.mtime = std::fs::metadata(&doc.path).and_then(|m| m.modified()).ok();
         doc.conflict = false;
@@ -483,6 +496,7 @@ impl Docs {
         let Some(doc) = self.list.get_mut(i) else { return };
         let previous = doc.saved.clone();
         doc.editor.reload(text);
+        doc.cancel_pending_save();
         doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         doc.bom = bom;
         doc.mtime = mtime;
@@ -495,6 +509,7 @@ impl Docs {
     }
 
     /// Saves every modified document; returns the errors.
+    #[cfg(test)]
     pub fn save_all(&mut self) -> Vec<String> {
         let modified: Vec<usize> = (0..self.list.len()).filter(|&i| self.list[i].is_modified()).collect();
         modified.into_iter().filter_map(|i| self.save(i).err()).collect()
@@ -504,6 +519,7 @@ impl Docs {
     pub fn on_disk_change(&mut self, path: &Path) {
         let Some(i) = self.index_of(path) else { return };
         let doc = &mut self.list[i];
+        doc.cancel_pending_save();
         doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
         if mtime.is_some() && mtime == doc.mtime {

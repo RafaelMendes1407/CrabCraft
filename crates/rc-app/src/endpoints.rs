@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 #[derive(Clone, Debug)]
-pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, search: String }
+pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, pub handler_file: Option<PathBuf>, pub query: Option<Vec<String>>, search: String }
 #[derive(Default)]
-pub struct Snapshot { pub routes: Vec<Endpoint>, hashes: BTreeMap<PathBuf, u64>, skipped: usize, unresolved: usize, limited: bool }
+pub struct Snapshot { pub routes: Vec<Endpoint>, hashes: BTreeMap<PathBuf, u64>, skipped: usize, unresolved: usize, limited: bool, semantic: bool }
 #[derive(Debug)]
 enum ScanError { Cancelled }
 fn hash(text: &str) -> u64 { text.bytes().fold(0xcbf29ce484222325u64, |value, byte| (value ^ byte as u64).wrapping_mul(0x100000001b3)) }
@@ -51,7 +51,7 @@ fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], cancel: &Ato
             let report = rc_syntax::axum::routes(&text);
             snapshot.unresolved = snapshot.unresolved.saturating_add(report.unresolved); snapshot.limited |= report.limited;
             if snapshot.routes.len().saturating_add(report.routes.len()) > 10_000 { snapshot.limited = true; }
-            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
+            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), handler_file: None, query: None, search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
             snapshot.routes.truncate(10_000);
         }
     }
@@ -106,45 +106,88 @@ pub fn reqwest_call(base: &str, method: &str, path: &str, values: &BTreeMap<Stri
 /// URL path span of an actual request line. Parse only a bounded prefix from the start of
 /// the file so body text and response scripts cannot masquerade as request lines.
 struct HttpContext { method: String, anchor: usize, end: usize, prefix: String }
-fn http_context(doc: &crate::docs::Doc) -> Option<HttpContext> {
+fn http_url(doc: &crate::docs::Doc) -> Option<(String, String, usize, usize)> {
     let editor = &doc.editor;
-    if editor.read_only || editor.selection.len() != 1 || !editor.selection.primary().is_empty() { return None; }
-    let rope = editor.buffer.rope(); let caret = editor.caret();
-    if caret > rope.len_chars() { return None; }
+    if editor.read_only || editor.selection.len() != 1 || !editor.selection.primary().is_empty()
+    {
+        return None;
+    }
+    let rope = editor.buffer.rope();
+    let caret = editor.caret();
+    if caret > rope.len_chars() {
+        return None;
+    }
     let line_index = rope.char_to_line(caret);
-    if line_index > 2000 { return None; }
-    let mut lines = Vec::new(); let mut bytes = 0usize;
+    if line_index > 2000 {
+        return None;
+    }
+    let mut lines = Vec::new();
+    let mut bytes = 0usize;
     for line in 0..=line_index {
         let text = rope.line(line);
         bytes = bytes.saturating_add(text.len_bytes());
-        if text.len_bytes() > 8192 || bytes > 64 * 1024 { return None; }
+        if text.len_bytes() > 8192 || bytes > 64 * 1024 {
+            return None;
+        }
         lines.push(text.to_string());
     }
-    if rc_syntax::http::line_roles(lines.iter().map(String::as_str)).last() != Some(&rc_syntax::http::LineRole::Request) { return None; }
+    if rc_syntax::http::line_roles(lines.iter().map(String::as_str)).last()
+        != Some(&rc_syntax::http::LineRole::Request)
+    {
+        return None;
+    }
     let line = lines.last()?.trim_end_matches(['\r', '\n']);
     let first_start = line.find(|c: char| !c.is_whitespace())?;
-    let first_end = line.get(first_start..)?.find(char::is_whitespace).map_or(line.len(), |n| first_start + n);
+    let first_end = line
+        .get(first_start..)?
+        .find(char::is_whitespace)
+        .map_or(line.len(), |n| first_start + n);
     let first = line.get(first_start..first_end)?;
     let (method, url_start) = if METHODS.contains(&first) {
-        if first_end == line.len() { return None; }
-        (first.to_string(), line.get(first_end..)?.find(|c: char| !c.is_whitespace()).map_or(line.len(), |n| first_end + n))
-    } else { ("GET".to_string(), first_start) };
-    let url_end = line.get(url_start..)?.find(char::is_whitespace).map_or(line.len(), |n| url_start + n);
+        if first_end == line.len() {
+            return None;
+        }
+        (
+            first.to_string(),
+            line.get(first_end..)?
+                .find(|c: char| !c.is_whitespace())
+                .map_or(line.len(), |n| first_end + n),
+        )
+    } else {
+        ("GET".to_string(), first_start)
+    };
+    let url_end = line
+        .get(url_start..)?
+        .find(char::is_whitespace)
+        .map_or(line.len(), |n| url_start + n);
     let url = line.get(url_start..url_end)?;
-    let path_start = if url.starts_with('/') || url.is_empty() { 0 }
-        else if let Some(scheme_end) = url.find("://") {
-            if !matches!(url.get(..scheme_end)?, "http" | "https") { return None; }
-            let authority = scheme_end + 3;
-            let end = url.get(authority..)?.find(['/', '?', '#']).map_or(url.len(), |n| authority + n);
-            if authority == end { return None; } end
-        } else { url.find(['/', '?', '#']).unwrap_or(url.len()) };
-    let path_end = url.get(path_start..)?.find(['?', '#']).map_or(url.len(), |n| path_start + n);
     let column = caret.checked_sub(rope.line_to_char(line_index))?;
-    let caret_byte = line.char_indices().nth(column).map_or(line.len(), |(byte, _)| byte);
-    let start = url_start + path_start; let end = url_start + path_end;
-    if caret_byte < start || caret_byte > end { return None; }
-    let line_start = rope.line_to_char(line_index);
-    Some(HttpContext { method, anchor: line_start + line.get(..start)?.chars().count(), end: line_start + line.get(..end)?.chars().count(), prefix: line.get(start..caret_byte)?.to_string() })
+    let caret_byte = line
+        .char_indices()
+        .nth(column)
+        .map_or(line.len(), |(byte, _)| byte);
+    if caret_byte < url_start || caret_byte > url_end {
+        return None;
+    }
+    Some((
+        method,
+        url.into(),
+        rope.line_to_char(line_index) + line[..url_start].chars().count(),
+        caret_byte - url_start,
+    ))
+}
+fn http_context(doc: &crate::docs::Doc) -> Option<HttpContext> {
+    let (method, url, base, caret) = http_url(doc)?;
+    let context = crate::endpoint_url::context(&url, caret)?;
+    let crate::endpoint_url::Kind::Path { prefix } = context.kind else {
+        return None;
+    };
+    Some(HttpContext {
+        method,
+        anchor: base + url[..context.range.start].chars().count(),
+        end: base + url[..context.range.end].chars().count(),
+        prefix,
+    })
 }
 fn snippet_literal(text: &str) -> String { text.replace('\\', "\\\\").replace('$', "\\$").replace('}', "\\}") }
 /// Segment-aware matching retains already typed captures and creates editable snippet stops
@@ -174,7 +217,14 @@ fn completed_path(path: &str, prefix: &str) -> Option<(String, String)> {
     Some((labels.join("/"), format!("{}$0", inserted.join("/"))))
 }
 
+struct SemanticJob { cancel: Arc<AtomicBool>, inbox: Inbox<Result<crate::axum_semantic::Report,crate::axum_semantic::Error>>, overlays: Vec<crate::axum_semantic::Overlay>, client: rc_lsp::Client, epoch: u64 }
+impl Drop for SemanticJob {fn drop(&mut self){self.cancel.store(true,Ordering::Release);}}
+struct AutoCompletion {id:u64,version:u64,caret:usize,requested:std::time::Instant}
 pub struct Endpoints {
+    auto_completion: Option<AutoCompletion>,
+    waker: Waker,
+    semantic_job: Option<SemanticJob>,
+    semantic_context: Option<(rc_lsp::Client,u64)>,
     snapshot: Snapshot,
     cancel: Option<Arc<AtomicBool>>,
     inbox: Inbox<Result<Snapshot, ScanError>>,
@@ -191,10 +241,209 @@ pub struct Endpoints {
     error: Option<String>,
 }
 impl Endpoints {
-    pub fn new(waker: Waker) -> Self { Self { snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
-    pub fn cancel(&mut self) { if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
+    pub fn new(waker: Waker) -> Self { Self { auto_completion:None,waker:waker.clone(), semantic_job:None, semantic_context:None, snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
+    pub fn cancel(&mut self) { self.semantic_job=None; if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
+    fn start_semantic(
+        &mut self,
+        roots: Vec<PathBuf>,
+        workspace: PathBuf,
+        excluded: Vec<String>,
+        docs: &mut crate::docs::Docs,
+        insight: &mut crate::insight::Insight,
+        epoch: u64,
+    ) {
+        if self.cancel.is_some() || self.semantic_job.is_some() {
+            return;
+        }
+        let Some(client) = insight
+            .session
+            .as_ref()
+            .filter(|session| session.is_initialized())
+            .map(|session| session.client.clone())
+        else {
+            return;
+        };
+        let mut overlays = Vec::new();
+        let mut bytes = 0;
+        for doc in docs.list.iter().filter(|doc| {
+            !doc.generated && !doc.scratch && doc.editor.lang() == rc_syntax::Lang::Rust
+        }) {
+            bytes += doc.editor.buffer.rope().len_bytes();
+            if overlays.len() >= 128
+                || doc.editor.buffer.rope().len_bytes() > 2 * 1024 * 1024
+                || bytes > 16 * 1024 * 1024
+            {
+                self.error = Some(
+                    tr("Semantic Axum scan exceeded its source or identity-request limit").into(),
+                );
+                return;
+            }
+            overlays.push(crate::axum_semantic::Overlay {
+                id: doc.editor.id,
+                version: doc.editor.buffer.version(),
+                path: doc.path.clone(),
+                rope: doc.editor.buffer.snapshot(),
+            });
+        }
+        for doc in &mut docs.list {
+            if doc.editor.lang() == rc_syntax::Lang::Rust {
+                insight.flush(doc);
+            }
+        }
+        self.started = true;
+        self.error = None;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let token = cancel.clone();
+        let query_client = client.clone();
+        let sources = overlays.clone();
+        let inbox = Inbox::new(self.waker.clone());
+        let sender = inbox.sender();
+        match std::thread::Builder::new()
+            .name("rc-axum-semantic".into())
+            .spawn(move || {
+                let budget = crate::axum_semantic::Budget {
+                    cancel: token,
+                    deadline: std::time::Instant::now() + std::time::Duration::from_secs(45),
+                };
+                sender.send(crate::axum_semantic::scan(
+                    roots,
+                    &workspace,
+                    &excluded,
+                    &sources,
+                    &query_client,
+                    &budget,
+                ));
+            }) {
+            Ok(_) => {
+                self.semantic_job = Some(SemanticJob {
+                    cancel,
+                    inbox,
+                    overlays,
+                    client,
+                    epoch,
+                })
+            }
+            Err(_) => {
+                self.error = Some(
+                    tr("Could not read sources or language-server definitions for the Axum scan")
+                        .into(),
+                )
+            }
+        }
+    }
+    pub fn poll_semantic(
+        &mut self,
+        docs: &mut crate::docs::Docs,
+        client: Option<&rc_lsp::Client>,
+        trusted: bool,
+        epoch: u64,
+    ) {
+        if self
+            .semantic_context
+            .as_ref()
+            .is_some_and(|(old, generation)| {
+                !trusted
+                    || *generation != epoch
+                    || client.is_none_or(|client| !client.same_connection(old))
+            })
+        {
+            self.semantic_context = None;
+            self.snapshot = Snapshot::default();
+            self.applied.clear();
+            self.visible = None;
+            for doc in &mut docs.list {
+                doc.editor.end_hints.clear();
+            }
+        }
+        let Some(job) = &self.semantic_job else {
+            return;
+        };
+        let eligible = docs
+            .list
+            .iter()
+            .filter(|doc| {
+                !doc.generated && !doc.scratch && doc.editor.lang() == rc_syntax::Lang::Rust
+            })
+            .count();
+        let current = trusted
+            && epoch == job.epoch
+            && client.is_some_and(|client| client.same_connection(&job.client))
+            && eligible == job.overlays.len()
+            && job.overlays.iter().all(|old| {
+                docs.list.iter().any(|doc| {
+                    doc.editor.id == old.id
+                        && doc.path == old.path
+                        && doc.editor.buffer.version() == old.version
+                })
+            });
+        if !current {
+            self.semantic_job = None;
+            self.error = Some(
+                tr("Axum sources, metadata, trust or language server changed; refresh the scan")
+                    .into(),
+            );
+            return;
+        }
+        let Some(result) = job.inbox.drain().into_iter().next() else {
+            return;
+        };
+        let job = self.semantic_job.take();
+        match result {
+            Ok(report) => {
+                self.snapshot = Snapshot {
+                    routes: report
+                        .routes
+                        .into_iter()
+                        .map(|route| Endpoint {
+                            file: route.file,
+                            search: format!(
+                                "{} {} {}",
+                                route.route.method, route.route.path, route.route.handler
+                            )
+                            .to_lowercase(),
+                            route: route.route,
+                            handler_file: route.handler_file,
+                            query:route.query,
+                        })
+                        .collect(),
+                    hashes: report.hashes,
+                    unresolved: report.unresolved,
+                    limited: report.limited,
+                    semantic: true,
+                    skipped: 0,
+                };
+                if let Some(job) = job {
+                    self.semantic_context = Some((job.client.clone(), job.epoch));
+                }
+                self.visible = None;
+                self.selected = None;
+                self.values.clear();
+                self.applied.clear();
+                for doc in &mut docs.list {
+                    if doc.editor.lang() == rc_syntax::Lang::Rust {
+                        doc.editor.end_hints.clear();
+                    }
+                }
+            }
+            Err(error) => self.error = Some(
+                tr(match error {
+                    crate::axum_semantic::Error::Cancelled => "Endpoint scan cancelled",
+                    crate::axum_semantic::Error::Timeout => "Semantic Axum scan timed out",
+                    crate::axum_semantic::Error::Limit => {
+                        "Semantic Axum scan exceeded its source or identity-request limit"
+                    }
+                    crate::axum_semantic::Error::Changed => {
+                        "Axum sources, metadata, trust or language server changed; refresh the scan"
+                    }
+                    _ => "Could not read sources or language-server definitions for the Axum scan",
+                })
+                .into(),
+            ),
+        }
+    }
     fn start(&mut self, roots: Vec<PathBuf>, workspace: PathBuf, excluded: Vec<String>) {
-        if self.cancel.is_some() { return; }
+        if self.cancel.is_some() || self.semantic_job.is_some() { return; }
+        self.semantic_context = None;
         self.started = true; self.error = None; let cancel = Arc::new(AtomicBool::new(false)); self.cancel = Some(cancel.clone()); let out = self.inbox.sender();
         std::thread::spawn(move || { out.send(scan(roots, &workspace, &excluded, &cancel)); });
     }
@@ -229,7 +478,10 @@ impl Endpoints {
     /// registry request, server resolution or project execution is started here.
     pub fn complete_http(&self, doc: &mut crate::docs::Doc) -> bool {
         if doc.editor.lang() != rc_syntax::Lang::Http { return false; }
-        let Some(context) = http_context(doc) else { doc.editor.popups.completion = None; return true; };
+        let Some(context) = http_context(doc) else {
+            if let Some((method,url,base,caret))=http_url(doc) {if let Some(context)=crate::endpoint_url::context(&url,caret){let anchor=base+url[..context.range.start].chars().count();let end=base+url[..context.range.end].chars().count();if self.complete_query(doc,Some(&method),context.kind,anchor,end){return true;}}}
+            doc.editor.popups.completion=None;return true;
+        };
         let mut items = Vec::new(); let mut seen = HashSet::new();
         for endpoint in &self.snapshot.routes {
             let route = &endpoint.route;
@@ -247,6 +499,183 @@ impl Endpoints {
         if completion.items.is_empty() && self.snapshot.routes.is_empty() { completion.doc = Some(tr("No cached Axum routes. Open Endpoints and refresh the scan.").to_string()); }
         doc.editor.popups.completion = Some(completion);
         true
+    }
+    fn complete_query(
+        &self,
+        doc: &mut crate::docs::Doc,
+        method: Option<&str>,
+        kind: crate::endpoint_url::Kind,
+        anchor: usize,
+        end: usize,
+    ) -> bool {
+        let crate::endpoint_url::Kind::Query {
+            path,
+            prefix,
+            used,
+            has_equal,
+        } = kind
+        else {
+            return false;
+        };
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        for endpoint in &self.snapshot.routes {
+            let route = &endpoint.route;
+            if method.is_some_and(|method| {
+                route.method != method
+                    && route.method != "ANY"
+                    && !(method == "HEAD" && route.method == "GET")
+            }) || !crate::endpoint_url::matches(&route.path, &path)
+            {
+                continue;
+            }
+            for name in endpoint.query.iter().flatten() {
+                if !name.starts_with(&prefix) || used.contains(name) || !seen.insert(name.clone()) {
+                    continue;
+                }
+                let insert = if has_equal {
+                    format!("{}$0", snippet_literal(name))
+                } else {
+                    format!(
+                        "{}=${{1:{}}}$0",
+                        snippet_literal(name),
+                        snippet_literal(name)
+                    )
+                };
+                items.push(rc_editor::CompletionItem{label:name.clone(),detail:format!("{} · {} · {}",route.method,route.path,route.handler),type_text:tr("Axum query parameter").into(),icon:rc_kit::ico::CONFIG_WEB,insert,replace:Some((anchor,end)),deprecated:false,data:crate::manifest_completion::LOCAL_ITEM,doc:Some(tr("Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.").into())});
+                if items.len() >= 100 {
+                    break;
+                }
+            }
+            if items.len() >= 100 {
+                break;
+            }
+        }
+        let mut completion = rc_editor::Completion::new(anchor, items, false);
+        completion.filter("");
+        completion.prefix = prefix;
+        doc.editor.popups.completion = Some(completion);
+        true
+    }
+    pub fn complete_rust(&self, doc: &mut crate::docs::Doc) -> bool {
+        if doc.editor.lang() != rc_syntax::Lang::Rust
+            || !doc.editor.syntax.is_current()
+            || doc.editor.read_only
+            || doc.editor.selection.len() != 1
+            || !doc.editor.selection.primary().is_empty()
+        {
+            return false;
+        }
+        let rope = doc.editor.buffer.rope();
+        let byte = rope.char_to_byte(doc.editor.caret());
+        let Some(tree) = doc.editor.syntax.tree() else {
+            return false;
+        };
+        let Some(literal) = crate::endpoint_url::literal(rope, tree, byte) else {
+            return false;
+        };
+        let Some(caret) = literal.offset(byte) else {
+            return false;
+        };
+        let Some(context) = crate::endpoint_url::context(&literal.value, caret) else {
+            doc.editor.popups.completion = None;
+            return true;
+        };
+        let Some(range) = literal.source_range(context.range) else {
+            return false;
+        };
+        let anchor = rope.byte_to_char(range.start);
+        let end = rope.byte_to_char(range.end);
+        if matches!(context.kind, crate::endpoint_url::Kind::Query { .. }) {
+            return self.complete_query(doc, None, context.kind, anchor, end);
+        }
+        let crate::endpoint_url::Kind::Path { prefix } = context.kind else {
+            return false;
+        };
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        for endpoint in &self.snapshot.routes {
+            let route = &endpoint.route;
+            let Some((label, insert)) = completed_path(&route.path, &prefix) else {
+                continue;
+            };
+            if label.contains(['"', '\\', '\n', '\r']) || !seen.insert(label.clone()) {
+                continue;
+            }
+            items.push(rc_editor::CompletionItem{label,detail:format!("{} · {} · {}",route.method,route.path,route.handler),type_text:tr("Axum route").into(),icon:rc_kit::ico::CONFIG_WEB,insert,replace:Some((anchor,end)),deprecated:false,data:crate::manifest_completion::LOCAL_ITEM,doc:Some(tr("Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.").into())});
+            if items.len() >= 100 {
+                break;
+            }
+        }
+        let mut completion = rc_editor::Completion::new(anchor, items, false);
+        completion.extra_word_chars = "/-{}%.*~@!$&'()+,;=:";
+        completion.filter("");
+        completion.prefix = prefix;
+        doc.editor.popups.completion = Some(completion);
+        true
+    }
+    pub fn on_editor_events(&mut self, doc: &crate::docs::Doc, events: &[rc_editor::EditorEvent]) {
+        let typed = events.iter().find_map(|event| {
+            if let rc_editor::EditorEvent::Typed(ch) = event {
+                Some(*ch)
+            } else {
+                None
+            }
+        });
+        let local = doc.editor.popups.completion.as_ref().is_some_and(|list| {
+            list.items.iter().any(|item| {
+                item.type_text == tr("Axum route") || item.type_text == tr("Axum query parameter")
+            })
+        });
+        if !doc.editor.read_only
+            && matches!(
+                doc.editor.lang(),
+                rc_syntax::Lang::Rust | rc_syntax::Lang::Http
+            )
+            && typed.is_some_and(|ch| {
+                matches!(ch, '/' | '?' | '&')
+                    || ((local
+                        || self
+                            .auto_completion
+                            .as_ref()
+                            .is_some_and(|pending| pending.id == doc.editor.id))
+                        && (ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')))
+            })
+        {
+            self.auto_completion = Some(AutoCompletion {
+                id: doc.editor.id,
+                version: doc.editor.buffer.version(),
+                caret: doc.editor.caret(),
+                requested: std::time::Instant::now(),
+            });
+        } else if events.iter().any(|event| {
+            matches!(
+                event,
+                rc_editor::EditorEvent::Changed | rc_editor::EditorEvent::CaretMoved
+            )
+        }) {
+            self.auto_completion = None;
+        }
+    }
+    pub fn poll_completion(&mut self, docs: &mut crate::docs::Docs) -> bool {
+        let Some(ticket) = self.auto_completion.take() else {
+            return false;
+        };
+        if ticket.requested.elapsed() > std::time::Duration::from_secs(2) {
+            return false;
+        }
+        let Some(doc) = docs.active_doc_mut().filter(|doc| {
+            doc.editor.id == ticket.id
+                && doc.editor.buffer.version() == ticket.version
+                && doc.editor.caret() == ticket.caret
+        }) else {
+            return false;
+        };
+        if doc.editor.lang() == rc_syntax::Lang::Rust && !doc.editor.syntax.is_current() {
+            self.auto_completion = Some(ticket);
+            return false;
+        }
+        self.complete_rust(doc) || self.complete_http(doc)
     }
     fn select(&mut self, index: usize) {
         self.selected = Some(index); self.values.clear();
@@ -266,14 +695,16 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
     let state = &mut app.endpoints;
     state.poll(&mut app.docs);
     let mut refresh = !state.started;
+    let trusted=app.settings.trusted_projects.contains(&workspace);let semantic_ready=trusted&&app.insight.ready();let mut semantic=false;
     ui.horizontal_wrapped(|ui| {
-        if ui.add_enabled(state.cancel.is_none(), egui::Button::new(tr("Refresh Endpoints"))).clicked() { refresh = true; }
-        if state.cancel.is_some() { ui.spinner(); if ui.button(tr("Cancel Scan")).clicked() { state.cancel(); } }
+        if ui.add_enabled(state.cancel.is_none()&&state.semantic_job.is_none(), egui::Button::new(tr("Refresh Endpoints"))).clicked() { refresh = true; }
+        semantic=ui.add_enabled(state.cancel.is_none()&&state.semantic_job.is_none()&&semantic_ready,egui::Button::new(tr("Refresh Semantic Endpoints"))).on_hover_text(tr("Uses the existing trusted rust-analyzer; no Cargo command or macro expansion request is started")).clicked();
+        if state.cancel.is_some()||state.semantic_job.is_some() { ui.spinner(); if ui.button(tr("Cancel Scan")).clicked() { state.cancel(); } }
         ui.add(egui::TextEdit::singleline(&mut state.filter).hint_text(tr("Filter method, path or handler")).char_limit(200));
         if ui.checkbox(&mut state.show_hints, tr("Route hints")).changed() { state.applied.clear(); for doc in &mut app.docs.list { if doc.path.extension().is_some_and(|e| e == "rs") { doc.editor.end_hints.clear(); } } }
     });
-    if refresh { state.start(packages, workspace.clone(), app.explorer.excluded.clone()); }
-    ui.small(tr("Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported."));
+    if semantic{state.start_semantic(packages.clone(),workspace.clone(),app.explorer.excluded.clone(),&mut app.docs,&mut app.insight,app.cfg_epoch);}else if refresh { state.start(packages, workspace.clone(), app.explorer.excluded.clone()); }
+    if state.snapshot.semantic{ui.small(tr("RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved."));}else{ui.small(tr("Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported."));}
     ui.small(trf("Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.", &[("n", &state.snapshot.routes.len()), ("skipped", &state.snapshot.skipped), ("unresolved", &state.snapshot.unresolved)]));
     if state.snapshot.limited { ui.colored_label(rc_kit::pal(ui).error, tr("Endpoint scan reached its safety limits; results are incomplete")); }
     if let Some(error) = &state.error { ui.colored_label(rc_kit::pal(ui).error, error); }
@@ -298,9 +729,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
         ui.separator();
         ui.horizontal(|ui| {
             if ui.button(tr("Go to Route")).clicked() { navigate = Some((endpoint.file.clone(), endpoint.route.line, endpoint.route.column)); }
-            if ui.button(tr("Go to Handler")).clicked() { navigate = Some((endpoint.file.clone(), endpoint.route.handler_line, endpoint.route.handler_column)); }
+            if ui.button(tr("Go to Handler")).clicked() { navigate = Some((endpoint.handler_file.clone().unwrap_or_else(||endpoint.file.clone()), endpoint.route.handler_line, endpoint.route.handler_column)); }
             ui.label(tr("Generate Reqwest Call"));
         });
+        if state.snapshot.semantic {match &endpoint.query {Some(names) if !names.is_empty()=>{ui.small(trf("Verified query fields: {fields}",&[("fields",&names.join(", "))]));},Some(_)=>{ui.small(tr("This handler has no statically verified Query fields"));},None=>{ui.small(tr("Query completion is unsupported for this handler's extractor or deserializer"));}}}
         egui::ScrollArea::vertical().id_salt("reqwest_endpoint_preview").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Base URL")); ui.add(egui::TextEdit::singleline(&mut state.base).char_limit(4096).desired_width(300.0));
@@ -333,6 +765,394 @@ mod tests {
     fn cached() -> Endpoints {
         let mut state = Endpoints::new(Waker::noop()); let root = fixture();
         state.snapshot = scan(vec![root.clone()], &root, &[], &AtomicBool::new(false)).unwrap(); state
+    }
+    #[test]
+    #[ignore = "Uses real Axum/Serde and rust-analyzer; native path/query completion and automatic Rust triggers"]
+    fn native_semantic_queries_and_rust_strings_complete_without_sending_or_saving() {
+        use egui_kittest::kittest::Queryable;
+        use std::time::{Duration, Instant};
+        let _home = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = crate::axum_semantic::tests::fixture();
+        let http = "GET http://localhost/v1/users/42?pa=5&keep=1 HTTP/1.1\n";
+        let request = root.path().join("api.http");
+        std::fs::write(&request, http).unwrap();
+        let rust = "pub fn url()->&'static str {r##\"http://localhost/v1/us\"##}\n";
+        let client = root.path().join("src/client.rs");
+        std::fs::write(&client, rust).unwrap();
+        let normal = r#"pub fn normal()->&'static str { "http:\x2f\x2flocalhost/v1/us?q=old" }"#;
+        let normal_path = root.path().join("src/normal.rs");
+        std::fs::write(&normal_path, normal).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
+        app.insight
+            .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
+        app.insight.start_rust(root.path(), None, false);
+        app.open_file_and_wait(&root.path().join("src/main.rs"));
+        let mut h = crate::screens::harness(app, egui::vec2(1600.0, 1200.0));
+        macro_rules! wait {
+            ($condition:expr) => {{
+                let until = Instant::now() + Duration::from_secs(60);
+                loop {
+                    h.run_steps(2);
+                    if $condition {
+                        break;
+                    }
+                    assert!(
+                        Instant::now() < until,
+                        "native Axum wait timed out: {:?}",
+                        h.state().endpoints.error
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }};
+        }
+        wait!(h.state().insight.ready() && h.state().runner.cargo_workspace.is_some());
+        h.get_by_label(tr("Endpoints")).click();
+        wait!(h.state().endpoints.started && h.state().endpoints.cancel.is_none());
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        wait!(h.state().endpoints.semantic_job.is_none());
+        assert!(
+            h.state().endpoints.snapshot.semantic,
+            "{:?}",
+            h.state().endpoints.error
+        );
+        assert!(h.state().endpoints.snapshot.routes.iter().any(|row| {
+            row.route.method == "GET"
+                && row
+                    .query
+                    .as_ref()
+                    .is_some_and(|names| names == &["q", "page_size"])
+        }));
+        h.state_mut().open_file_and_wait(&request);
+        h.run_steps(3);
+        let at = http.find("=5").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "page_size"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            http.replace("?pa=", "?page_size=")
+        );
+        let text = h
+            .state()
+            .docs
+            .active_doc()
+            .unwrap()
+            .editor
+            .buffer
+            .rope()
+            .to_string();
+        let at = text.find(" HTTP/").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        h.state_mut().focus_editor = true;
+        h.run_steps(2);
+        h.event(egui::Event::Text("&".into()));
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .is_some_and(|list| list.items.iter().any(|item| item.label == "q"))
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("hello".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            http.replace("?pa=5&keep=1", "?page_size=5&keep=1&q=hello")
+        );
+        h.state_mut().open_file_and_wait(&client);
+        h.run_steps(3);
+        let at = rust.find("\"##").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .syntax
+                .is_current()
+        );
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "/v1/users/{id}"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("42".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        h.event(egui::Event::Text("?".into()));
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .is_some_and(|list| list.items.iter().any(|item| item.label == "q"))
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("hello".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            rust.replace("/v1/us", "/v1/users/42?q=hello")
+        );
+        assert_eq!(std::fs::read_to_string(&client).unwrap(), rust);
+        assert_eq!(std::fs::read_to_string(&request).unwrap(), http);
+        assert!(h.state().http.history.is_empty());
+        h.state_mut().open_file_and_wait(&normal_path);
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .syntax
+                .is_current()
+        );
+        let at = normal.find("?q").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "/v1/users/{id}"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("42".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            normal.replace("/v1/us?", "/v1/users/42?")
+        );
+        assert_eq!(std::fs::read_to_string(&normal_path).unwrap(), normal);
+    }
+    #[test]
+    #[ignore = "Uses cached Axum dependencies and real rust-analyzer in the native UI"]
+    fn native_semantic_scan_resolves_initially_closed_modules_and_cancels_stale_work() {
+        use egui_kittest::kittest::Queryable;
+        use std::time::{Duration, Instant};
+        let _home = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = crate::axum_semantic::tests::fixture();
+        for index in 0..20 {
+            std::fs::write(
+                root.path().join(format!("src/slow_{index}.rs")),
+                "// padding\n".repeat(20_000),
+            )
+            .unwrap();
+        }
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
+        app.insight
+            .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
+        app.insight.start_rust(root.path(), None, false);
+        app.open_file_and_wait(&root.path().join("src/main.rs"));
+        let mut h = crate::screens::harness(app, egui::vec2(1600.0, 1200.0));
+        let until = Instant::now() + Duration::from_secs(60);
+        loop {
+            h.run_steps(2);
+            if h.state().insight.ready() && h.state().runner.cargo_workspace.is_some() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.get_by_label(tr("Endpoints")).click();
+        loop {
+            h.run_steps(2);
+            if h.state().endpoints.started && h.state().endpoints.cancel.is_none() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !h.state()
+                .docs
+                .list
+                .iter()
+                .any(|doc| doc.path.ends_with("api.rs") || doc.path.ends_with("handlers.rs"))
+        );
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        loop {
+            h.run_steps(2);
+            if h.state().endpoints.semantic_job.is_none() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.state().endpoints.snapshot.semantic,
+            "{:?}",
+            h.state().endpoints.error
+        );
+        let index = h
+            .state()
+            .endpoints
+            .snapshot
+            .routes
+            .iter()
+            .position(|row| row.route.path == "/v1/users/{id}" && row.route.method == "GET")
+            .unwrap_or_else(|| panic!("{:?}", h.state().endpoints.snapshot.routes));
+        h.state_mut().endpoints.selected = Some(index);
+        h.run_steps(2);
+        h.get_by_label(tr("Go to Handler")).click();
+        loop {
+            h.run_steps(2);
+            if !h.state().disk_open.busy() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.state()
+                .docs
+                .active_doc()
+                .is_some_and(|doc| doc.path.ends_with("handlers.rs"))
+        );
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        assert!(
+            h.state().endpoints.semantic_job.is_some(),
+            "scan not pending: {:?}, status {:?}",
+            h.state().endpoints.error,
+            h.state().insight.status
+        );
+        h.get_by_label(tr("Cancel Scan")).click();
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        {let doc=h.state_mut().docs.active_doc_mut().unwrap();let text=format!("// edited while resolving\n{}",doc.editor.buffer.rope());doc.editor.buffer.replace_all(&text,&rc_text::Selection::point(0));}
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        assert_eq!(h.state().endpoints.error.as_deref(),Some(tr("Axum sources, metadata, trust or language server changed; refresh the scan")));
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();h.run_steps(2);
+        h.state_mut().cfg_epoch = h.state().cfg_epoch.wrapping_add(1);
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        assert!(!h.state().endpoints.snapshot.semantic);
     }
     #[test]
     fn http_path_completion_is_method_aware_and_preserves_origin_query_and_other_text() {
@@ -435,6 +1255,7 @@ mod tests {
         for _ in 0..3 { h.run_steps(1); for command in &h.output().platform_output.commands { if let egui::OutputCommand::CopyText(text) = command { copied.push(text.clone()); } } }
         assert!(copied.iter().any(|code| code.contains("/api/users/42") && code.contains("reqwest::Method::GET")));
         h.get_by_label(tr("Go to Handler")).click(); h.run_steps(4);
+        while h.state().disk_open.busy()&&start.elapsed()<Duration::from_secs(20){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}assert!(!h.state().disk_open.busy());
         let doc = h.state().docs.active_doc().unwrap();
         assert!(doc.path.ends_with("src/lib.rs"));
         let source = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
@@ -470,6 +1291,7 @@ mod tests {
         while (h.state().endpoints.cancel.is_some() || !h.state().endpoints.started) && start.elapsed() < Duration::from_secs(20) { h.run_steps(2); std::thread::sleep(Duration::from_millis(20)); }
         assert_eq!(h.state().endpoints.snapshot.routes.len(), 4);
         h.state_mut().open_at(&root.join("src/lib.rs"), 0, 0); h.run_steps(3);
+        while h.state().disk_open.busy()&&start.elapsed()<Duration::from_secs(20){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}assert!(!h.state().disk_open.busy());
         assert!(h.state().docs.active_doc().unwrap().editor.end_hints.values().any(|hint| hint.contains("GET /api/users/{id}")));
         h.state_mut().open_file_and_wait(&path); h.run_steps(3);
         let caret = original[..original.find("?keep").unwrap()].chars().count();

@@ -200,8 +200,14 @@ fn handshake_order_stops_caches_watches_and_exit() {
     let before = commands(&log).len();
     s.remove_breakpoint(&calc(), 9);
     pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::BreakpointsChanged(p) if p == &calc()));
-    pump_until_state(&mut s, &mut ev, |_| requests(&log).len() > before);
-    let last = requests(&log).pop().unwrap();
+    // Watch evaluations may finish alongside the breakpoint reply; identify the update
+    // itself rather than assuming that it is the last request written by the adapter.
+    let cleared = |request: &Value| request["command"] == "setBreakpoints"
+        && request["arguments"]["source"]["path"] == "/w/Calc.cs"
+        && request["arguments"]["breakpoints"] == json!([]);
+    pump_until_state(&mut s, &mut ev, |_| requests(&log).iter().skip(before).any(cleared));
+    let recorded = requests(&log);
+    let last = recorded.iter().skip(before).find(|request| cleared(request)).unwrap();
     assert_eq!(last["command"], "setBreakpoints");
     assert_eq!(last["arguments"]["source"]["path"], "/w/Calc.cs");
     assert_eq!(last["arguments"]["breakpoints"], json!([]));

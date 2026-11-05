@@ -17,6 +17,7 @@ struct Job {
 
 /// A finished job.
 pub enum Done {
+    Skipped {index:usize,save:bool},
     /// The document at `index` is formatted; `save` when it must be written again.
     Applied { index: usize, save: bool },
     Failed { name: String, error: String, save: bool },
@@ -53,7 +54,7 @@ impl Jobs {
             match result {
                 Err(error) => done.push(Done::Failed { name: d.name(), error, save: job.save }),
                 // Typed into meanwhile: the text no longer matches.
-                Ok(_) if d.editor.buffer.version() != job.version => {}
+                Ok(_) if d.editor.buffer.version() != job.version => done.push(Done::Skipped {index,save:job.save}),
                 Ok(text) => {
                     let old = d.editor.buffer.rope().to_string();
                     let new = text.replace("\r\n", "\n");

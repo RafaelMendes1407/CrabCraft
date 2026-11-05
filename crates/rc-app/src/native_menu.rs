@@ -497,6 +497,8 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::RefactorThis, || tr("Refactor This…")),
             &act(Action::MoveItem, || tr("Move public Rust item…")),
             &act(Action::ChangeSignature, || tr("Change Rust Function Signature")),
+            &act(Action::RemoteDevelopment, || tr("Remote Rust workspace…")),
+            &act(Action::WslWorkspace, || tr("WSL Rust workspace…")),
             &act(Action::Reformat, || tr("Reformat Code")),
             &act(Action::ShareInPlayground, || tr("Share in Playground…")),
             &act(Action::UpdateCopyright, || tr("Update Copyright")),

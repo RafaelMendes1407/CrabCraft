@@ -183,6 +183,12 @@ impl Buffer {
         self.saved_undo_depth = Some(self.undo.len());
     }
 
+    /// A background save may have persisted an older snapshot. Never mark later edits clean.
+    pub fn mark_saved_snapshot(&mut self, version: u64) {
+        self.saved_version = version;
+        self.saved_undo_depth = (self.version == version).then_some(self.undo.len());
+    }
+
     pub fn saved_version(&self) -> u64 {
         self.saved_version
     }

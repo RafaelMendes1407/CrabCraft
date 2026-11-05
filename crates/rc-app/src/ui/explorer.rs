@@ -416,6 +416,48 @@ fn framework_label(tfm: &str) -> String {
     }
 }
 
+fn accessibility_ancestor(
+    ui: &mut Ui,
+    rows: &[Row],
+    parents: &[Option<usize>],
+    index: usize,
+    tree: Id,
+    visible: &std::ops::Range<usize>,
+    created: &mut HashSet<usize>,
+    depth: usize,
+) -> Id {
+    if depth >= 64 {
+        return tree;
+    }
+    let id = tree.with(&rows[index].key);
+    if visible.contains(&index) || created.contains(&index) {
+        return id;
+    }
+    let parent = parents[index]
+        .map(|parent| {
+            accessibility_ancestor(ui, rows, parents, parent, tree, visible, created, depth + 1)
+        })
+        .unwrap_or(tree);
+    let rect = Rect::from_min_size(ui.max_rect().min, egui::Vec2::ZERO);
+    let ancestor = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt(("explorer_accessible_ancestor", &rows[index].key))
+            .accessibility_parent(parent)
+            .max_rect(rect),
+    );
+    ancestor.interact(rect, id, Sense::hover());
+    ui.ctx().accesskit_node_builder(id, |node| {
+        node.set_role(egui::accesskit::Role::TreeItem);
+        node.set_label(rows[index].label.as_str());
+        node.set_level(rows[index].depth.saturating_add(1));
+        if rows[index].expandable {
+            node.set_expanded(true);
+        }
+    });
+    created.insert(index);
+    id
+}
+
 /// Draws the explorer inside its island; returns the user's requests.
 pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>, root: &Path, root_name: &str, active_file: Option<&Path>) -> Vec<ExplorerAction> {
     let p = rc_kit::pal(ui);
@@ -456,13 +498,26 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
     // node for the focused id).
     ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive()).widget_info(|| egui::WidgetInfo::new(egui::WidgetType::Other));
 
-    let scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
+    let accessibility=ui.ctx().accesskit_node_builder(tree_id,|node|{node.set_role(egui::accesskit::Role::Tree);node.set_label(tr("Project files"));node.set_description(tr("Accessible project hierarchy is limited to visible items and 64 ancestor levels"));node.add_action(egui::accesskit::Action::Focus);}).is_some();
+    ui.scope_builder(egui::UiBuilder::new().accessibility_parent(tree_id),|ui| {
+    let mut scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
+    if state.reveal {if let Some(index)=selected_index {let offset=egui::scroll_area::State::load(ui.ctx(),ui.make_persistent_id(egui::IdSalt::new("explorer_scroll"))).map_or(0.0,|state|state.offset.y);let height=ui.available_height().max(ROW_H);let top=index as f32*ROW_H;if top<offset||top+ROW_H>offset+height{scroll=scroll.vertical_scroll_offset((top-(height-ROW_H)/2.0).max(0.0));}}}
     scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
+        let mut accessible_ancestors=HashSet::new();
+        let mut parents=Vec::new();if accessibility {let mut ancestors:Vec<usize>=Vec::new();for(index,row)in rows.iter().take(range.end).enumerate(){while ancestors.last().is_some_and(|ancestor|rows[*ancestor].depth>=row.depth){ancestors.pop();}parents.push(ancestors.last().copied());ancestors.push(index);}}
+        let visible_rows=range.clone();
         for i in range {
             let row = &rows[i];
             let width = ui.available_width().max(200.0);
-            let (rect, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
+            let (rect, _) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::hover());
+            let resp=if accessibility {let parent=parents[i].map(|parent|accessibility_ancestor(ui,&rows,&parents,parent,tree_id,&visible_rows,&mut accessible_ancestors,0)).unwrap_or(tree_id);let row_ui=ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_row",&row.key)).accessibility_parent(parent).max_rect(rect));row_ui.interact(rect,tree_id.with(&row.key),Sense::click())}else{ui.interact(rect,tree_id.with(&row.key),Sense::click())};
+            let accessibility_actions:Vec<_>=ui.input(|input|input.events.iter().filter_map(|event|match event{egui::Event::AccessKitActionRequest(request) if request.target_tree==egui::accesskit::TreeId::ROOT&&request.target_node==resp.id.accesskit_id()=>Some(request.action),_=>None}).collect());
+            let accessibility_click=accessibility_actions.contains(&egui::accesskit::Action::Click);
+            if accessibility_actions.iter().any(|action|matches!(action,egui::accesskit::Action::Focus|egui::accesskit::Action::Click|egui::accesskit::Action::Expand|egui::accesskit::Action::Collapse)){select_row=Some(i);state.reveal=true;ui.memory_mut(|memory|memory.request_focus(tree_id));}
+            if accessibility_click{open_row=Some(i);}
+            if row.expandable {let expanded=state.expanded.contains(&row.key);if accessibility_actions.iter().any(|action|matches!(action,egui::accesskit::Action::Expand) && !expanded ||matches!(action,egui::accesskit::Action::Collapse)&&expanded){toggle_row=Some(i);}}
+
             let selected = selected_index == Some(i);
             // File colours: a light tint behind the files of a coloured scope.
             if let NodeKind::File(path) = &row.kind
@@ -482,7 +537,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                 let chevron = if state.expanded.contains(&row.key) { ico::CHEVRON_DOWN } else { ico::CHEVRON_RIGHT };
                 let cr = Rect::from_center_size(pos2(x0 + 8.0, cy), vec2(16.0, 16.0));
                 icons::paint(ui.painter(), cr, chevron, &p, true);
-                if resp.clicked() && ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0) {
+                if resp.clicked() && !accessibility_click && ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0) {
                     toggle_row = Some(i);
                 }
             }
@@ -507,6 +562,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                 state.reveal = false;
             }
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &row.label));
+            ui.ctx().accesskit_node_builder(resp.id,|node|{node.set_role(egui::accesskit::Role::TreeItem);node.set_label(row.label.as_str());node.set_level(row.depth.saturating_add(1));node.set_selected(selected);node.add_action(egui::accesskit::Action::Focus);node.add_action(egui::accesskit::Action::Click);if row.expandable{let expanded=state.expanded.contains(&row.key);node.set_expanded(expanded);node.add_action(if expanded{egui::accesskit::Action::Collapse}else{egui::accesskit::Action::Expand});}});
+            if selected {ui.ctx().accesskit_node_builder(tree_id,|node|node.set_active_descendant(resp.id.accesskit_id()));}
+
             if resp.clicked() || resp.secondary_clicked() {
                 select_row = Some(i);
                 ui.memory_mut(|m| m.request_focus(tree_id));
@@ -514,7 +572,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             if resp.double_clicked() {
                 open_row = Some(i);
             } else if resp.clicked()
-                && state.single_click
+                && state.single_click && !accessibility_click
                 && let NodeKind::File(p) = &row.kind
             {
                 actions.push(ExplorerAction::Preview(p.clone()));
@@ -539,6 +597,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
                 ui.memory_mut(|m| m.request_focus(tree_id));
             }
         }
+    });
     });
     let _ = context;
 

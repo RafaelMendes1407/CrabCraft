@@ -93,8 +93,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(0) => app.pending.push(rc_editor::Action::Build),
         Some(1) => {
             if let Some(t) = target {
-                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
-                handle_outputs(app, outs);
+                app.build_project_after_save(&t, rc_dotnet::BuildAction::Rebuild);
             }
         }
         Some(2) => app.runner.cancel_build(),
@@ -266,18 +265,14 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
             if let Some(crate::runner::ConfigKind::External { tool }) = kind {
                 app.run_external_tool(&tool);
             } else if let Some(crate::runner::ConfigKind::Scratch { file }) = kind {
-                app.save_all_docs();
-                let outs = app.runner.run_scratch(&file);
-                handle_outputs(app, outs);
+                app.run_scratch_after_save(&file);
             } else if let Some(crate::runner::ConfigKind::Command { program, args }) = kind {
-                let outs = app.runner.run_command(program, args);
-                handle_outputs(app, outs);
+                app.run_command_after_save(program,args);
             } else if let Some(cfg) = app.runner.runs.get(active).map(|r| r.config.clone())
                 && let Some(i) = app.runner.configs.iter().position(|c| *c == cfg)
             {
                 app.runner.selected = i;
-                let outs = app.runner.run_selected();
-                handle_outputs(app, outs);
+                let context=ui.ctx().clone();app.run_ide_action(&context,rc_editor::Action::Run);
             }
         }
         Some(1) => {
@@ -374,12 +369,10 @@ pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.run_ide_action(&ctx, rc_editor::Action::RunTests);
         }
         Some(1) => {
-            let outs = app.runner.rerun_tests();
-            handle_outputs(app, outs);
+            app.rerun_tests_after_save(false);
         }
         Some(2) => {
-            let outs = app.runner.rerun_failed();
-            handle_outputs(app, outs);
+            app.rerun_tests_after_save(true);
         }
         Some(3) => {
             if let Some(t) = &mut app.runner.tests

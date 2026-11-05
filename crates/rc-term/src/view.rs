@@ -2,6 +2,8 @@
 //! same style are one section of the row's galley) and turns keyboard, mouse and IME input
 //! into bytes for the process.
 
+#[path = "accessibility.rs"]
+mod accessibility;
 use crate::colors::{TermColors, dim};
 use crate::keys::{self, KeyMode, MouseButton, MouseEncoding};
 use crate::links::{self, Link};
@@ -170,6 +172,7 @@ impl<'a> TerminalView<'a> {
         let cell_px = ((m.cell_w * m.ppp).round() as u16, (m.row_h * m.ppp).round() as u16);
         session.resize(m.cols as u16, m.rows as u16, cell_px.0, cell_px.1);
 
+        accessibility::focus(ui,&response,input_enabled);
         let focused = response.has_focus() && input_enabled;
         if focused {
             ui.memory_mut(|mem| mem.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true }));
@@ -214,6 +217,7 @@ impl<'a> TerminalView<'a> {
         paint_grid(ui, &painter, &st, config, &colors, &m, focused, blink_on, hovered_link.as_ref());
         paint_scrollbar(ui, &mut st, &m, rect, id, &mut vs);
 
+        accessibility::update(ui,&response,session,&st,&m,input_enabled);
         // IME: candidate window at the cursor, preedit text drawn over it.
         let cursor = st.term.grid().cursor.point;
         let cursor_row = cursor.line.0 + st.term.grid().display_offset() as i32;

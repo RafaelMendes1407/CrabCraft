@@ -293,10 +293,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
         if b.button(tr("Load from Disk")).clicked() { app.request_disk_revert(active); }
         if b.button(tr("Keep Mine")).clicked() {
-            app.docs.list[active].conflict = false;
-            if let Err(e) = app.docs.save(active) {
-                app.notify(e, true);
-            }
+            app.keep_mine_after_save(active);
         }
         editor_rect.min.y = banner.bottom();
     }
@@ -338,9 +335,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
         if b.button(tr("Run")).on_hover_text(tr("Build it with rustc and run it")).clicked() {
             let path = app.docs.list[active].path.clone();
-            app.save_all_docs();
-            let outs = app.runner.run_scratch(&path);
-            crate::ui::run_windows::handle_outputs(app, outs);
+            app.run_scratch_after_save(&path);
         }
         editor_rect.min.y = banner.bottom();
     }
@@ -454,6 +449,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     } else {
         if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&server_events);}else{app.insight.on_editor_events(doc, &server_events);}
     }
+    app.endpoints.on_editor_events(doc,&out.events);
     let mut run_test_line = None;
     let mut run_binary_line = None;
     let mut explain = None;
@@ -1096,11 +1092,7 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
     let _ = ui.allocate_rect(rect, Sense::hover());
     // Files dropped on the window open in tabs.
     let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
-    for path in dropped {
-        if path.is_file() {
-            app.open_file_sync(&path);
-        }
-    }
+    app.open_paths(dropped);
 }
 
 /// Floating editor windows: each an OS window with its own groups of tabs. Closing one brings

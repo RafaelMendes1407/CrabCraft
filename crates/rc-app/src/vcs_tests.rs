@@ -60,7 +60,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     assert!(!marks.contains_key(&0) && !marks.contains_key(&4), "{marks:?}");
 
     // Save → the status lists the change; the diff view aligns HEAD and the working tree.
-    app.save_all_docs();
+    app.save_all_and_wait();
     app.vcs.refresh();
     pump(&mut app, "changed status", |a| a.vcs.changes().iter().any(|c| c.path == "Program.cs"));
     app.vcs.open_diff("Program.cs");
@@ -860,7 +860,7 @@ fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() 
     let at = doc.editor.buffer.pos_at(1, 4);
     doc.editor.replace(at, at + 1, "2");
     pump(&mut app, "Rust gutter mark", |a| a.docs.active_doc().unwrap().editor.line_changes.get(&1) == Some(&rc_editor::LineChange::Modified));
-    app.save_all_docs();
+    app.save_all_and_wait();
     app.vcs.refresh();
     pump(&mut app, "Rust changed file", |a| a.vcs.changes().iter().any(|c| c.path == "lib.rs"));
     app.vcs.open_diff("lib.rs");

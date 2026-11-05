@@ -14,7 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 const MAX_BINARY: usize = 64 * 1024 * 1024;
 const MAX_SPEC: usize = 64 * 1024;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-enum Error {
+pub(crate) enum Error {
     Platform,
     Trust,
     Confirm,
@@ -74,7 +74,7 @@ impl Plan {
         )
     }
 }
-fn digest(bytes: &[u8]) -> String {
+pub(crate) fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 fn check(stop: &rc_dotnet::CancelToken) -> Result<(), Error> {
@@ -84,7 +84,7 @@ fn check(stop: &rc_dotnet::CancelToken) -> Result<(), Error> {
         Ok(())
     }
 }
-fn read_program(path: &Path, stop: &rc_dotnet::CancelToken) -> Result<Vec<u8>, Error> {
+pub(crate) fn read_program(path: &Path, stop: &rc_dotnet::CancelToken) -> Result<Vec<u8>, Error> {
     check(stop)?;
     if !std::fs::symlink_metadata(path)
         .map_err(|_| Error::Io)?
@@ -481,7 +481,7 @@ impl PrivilegedRun {
     }
     fn show(&mut self, ui: &mut egui::Ui, root: Option<PathBuf>, trusted: bool) {
         egui::ScrollArea::vertical().id_salt("privileged_run").show(ui,|ui|{
-ui.colored_label(rc_kit::pal(ui).warn,tr("Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing."));ui.label(tr("Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open."));ui.label(tr("This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported."));ui.label(tr("The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root."));if !cfg!(target_os="linux"){ui.colored_label(rc_kit::pal(ui).warn,Error::Platform.message());}if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust this project before running project tools or code"));}
+ui.colored_label(rc_kit::pal(ui).warn,tr("Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing."));ui.label(tr("Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open."));ui.label(tr("This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides and automatic rerun are unsupported."));ui.label(tr("The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root."));if !cfg!(target_os="linux"){ui.colored_label(rc_kit::pal(ui).warn,Error::Platform.message());}if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust this project before running project tools or code"));}
 ui.add_enabled_ui(self.stop.is_none(),|ui|{ui.label(tr("Compiled executable inside this project"));let changed=ui.add(egui::TextEdit::singleline(&mut self.program).char_limit(4096)).changed();ui.label(tr("Administrator program arguments (one per line; no shell)"));let changed=ui.add(egui::TextEdit::multiline(&mut self.args).char_limit(MAX_SPEC).desired_rows(4)).changed()||changed;if changed{self.plan=None;self.confirm=false;}});
 if ui.add_enabled(cfg!(target_os="linux")&&root.is_some()&&self.stop.is_none()&&!self.program.is_empty(),egui::Button::new(tr("Inspect Compiled Program"))).clicked(){if let Some(root)=root.clone(){self.inspect(root);}}
 if let Some(plan)=&self.plan{let mut preview=plan.preview();ui.add(egui::TextEdit::multiline(&mut preview).interactive(false).font(egui::TextStyle::Monospace));ui.checkbox(&mut self.confirm,tr("I reviewed this exact program and authorize requesting administrator privileges"));if ui.add_enabled(cfg!(target_os="linux")&&trusted&&self.confirm&&self.stop.is_none(),egui::Button::new(tr("Request Administrator Execution"))).clicked(){if let Some(root)=&root{self.start(root,trusted);}}}
@@ -503,7 +503,13 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     let trusted = root
         .as_ref()
         .is_some_and(|r| app.settings.trusted_projects.contains(r));
-    app.privileged_run.show(ui, root, trusted);
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut app.privileged_debug.show_debug,false,tr("Administrator Run"));
+        ui.selectable_value(&mut app.privileged_debug.show_debug,true,tr("Administrator Debug"));
+    });
+    if app.privileged_debug.show_debug {
+        egui::ScrollArea::vertical().id_salt("privileged_debug").show(ui,|ui|crate::privileged_debug::show(app,ui));
+    } else {app.privileged_run.show(ui, root, trusted);}
 }
 
 #[cfg(test)]

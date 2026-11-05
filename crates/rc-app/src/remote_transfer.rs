@@ -107,7 +107,7 @@ fn utf8(bytes: Vec<u8>) -> Result<String, Error> {
         .filter(|text| !text.contains('\0'))
         .ok_or(Error::Input)
 }
-fn args(config: &Config, dir: &Path) -> Result<Vec<String>, Error> {
+pub(crate) fn args(config: &Config, dir: &Path) -> Result<Vec<String>, Error> {
     if !valid_word(&config.host) || !valid_word(&config.user) || config.port == 0 {
         return Err(Error::Input);
     }

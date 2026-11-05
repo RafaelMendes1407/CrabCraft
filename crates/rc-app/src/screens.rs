@@ -581,7 +581,7 @@ fn screens_git() {
     let t = doc.editor.buffer.rope().to_string();
     let at = doc.editor.buffer.rope().byte_to_char(t.find("{").unwrap() + 1);
     doc.editor.replace(at, at, "\n    private const decimal FreeShippingFrom = 50m;");
-    app.save_all_docs();
+    app.save_all_and_wait();
     app.dock.show(crate::toolwindow::ToolWindow::Commit);
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.vcs.message = "Add coupons".into();

@@ -8,10 +8,16 @@ mod database_csv;
 mod database;
 mod remote;
 mod remote_transfer;
+mod remote_development_transport;
+mod remote_development;
+mod wsl_workspace;
 mod database_postgres;
 mod sql_injection;
 mod cli;
 mod endpoints;
+mod axum_semantic;
+mod axum_queries;
+mod endpoint_url;
 mod clone_project;
 mod compare_cli;
 mod cargo_dependencies;
@@ -50,7 +56,9 @@ mod http_cli;
 mod disassembly_view;
 mod disk_revert;
 mod disk_open;
+mod file_edit;
 mod disk_watch;
+mod disk_save;
 mod insight;
 mod web_languages;
 mod move_items_core;
@@ -140,6 +148,7 @@ fn i18n_from_settings() {
 fn main() -> eframe::Result {
     if let Some(code) = macro_step_engine::internal() { std::process::exit(code); }
     if let Some(code) = privileged_run::internal() { std::process::exit(code); }
+    if let Some(code) = privileged_debug_backend::internal() { std::process::exit(code); }
     if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();
@@ -228,4 +237,6 @@ mod proofreader_core;
 mod containers;
 mod dev_containers;
 mod privileged_run;
+mod privileged_debug_backend;
+mod privileged_debug;
 mod criticalup_provider;
