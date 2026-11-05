@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 199 |
+| ✅ Pronto | 200 |
 | 🚧 Em andamento | 12 |
-| 🟢 Herdado | 6 |
+| 🟢 Herdado | 5 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 36 |
 | 🚫 Fora do escopo | 5 |
@@ -362,7 +362,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
 | G-03 | Keymaps | 🚧 | M1 | Perfis Rider, Visual Studio e VS Code mantidos. Novo RustRover (Windows/Linux), comparado com documentação pública: Ctrl+P para parâmetros, Ctrl+Shift+R para substituir em arquivos, run/debug/steps/breakpoints e atalhos de navegação/edição; 26 vínculos e colisões testados. Teste nativo num projeto Cargo seleciona o perfil, persiste e usa busca de ações/arquivos sem iniciar código; fonte Rust compilada. Não é comparação do produto instalado nem alegação de paridade. Falta: perfil RustRover macOS (opção Windows/Linux visivelmente desabilitada lá), Complete Current Statement e acordes de duas etapas. Fontes e limites em docs/rust-keymap.md. |
 | G-04 | Configurar atalhos | ✅ | M3 | Configurações › Keymap › Atalhos: cada ação do Find Action com seu atalho; Gravar atalho captura a próxima tecla com modificadores (Esc cancela), Remover deixa sem atalho e Restaurar volta ao do keymap; o atalho tomado sai da outra ação; guardado nas configurações e aplicado sem reiniciar. Teste headless. Falta: ações de edição fora do Find Action |
-| G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | Traduções mantidas em sete locales além do inglês; teste de unicidade e placeholders corrigido: Profile de inspeções usa contexto próprio, distinto da ação de profiler. Auditoria de toda a interface em projetos Rust ainda pendente. |
+| G-05 | Interface em vários idiomas (inclui pt-BR) | ✅ | M1 | Inglês + es/fr/pt-BR/de/pl/zh-Hans/ja; testes de unicidade, placeholders e cobertura das chamadas de tradução. Teste nativo em processo isolado por idioma abre projeto Cargo real, verifica Configurações/Sobre, glyphs, idioma persistido e fonte Rust compilável sem iniciar análise/código automaticamente. Noto Sans CJK SC 2.004 incorporada (OFL 1.1, origem e SHA-256 em assets/fonts/README.md), sem depender de fonte CJK instalada no sistema; famílias proporcional/mono/negrito/itálico verificadas. Licenças completas das fontes incorporadas e acessíveis em Sobre. Corrigida colisão Profile de inspeções/profiler com contexto próprio. Testes editor_rust_audit::interface_languages_render_native_settings_for_a_rust_project e theme::tests::embedded_fonts_cover_every_interface_language. |
 | G-06 | Backup e sincronização de configurações | 🚧 | M6 | Configurações › Backup de preferências exporta/importa JSON versionado (até 1 MB), com prévia das categorias, aplicação no rascunho e confirmação em OK. Diálogos e disco numa thread; cancelável; gravação atômica. Inclui aparência, editor, modelos, atalhos e níveis de inspeção; confiança, caminhos, histórico, programas e ambiente permanecem locais. Campos fora da lista permitida, números fora dos limites e versões desconhecidas são recusados. Testes de ida/volta, entradas hostis e UI num workspace Cargo real comprovam prévia antes de aplicar e preservação da confiança. Falta: sincronização entre máquinas/nuvem. Leitura recusa arquivos especiais e verifica o descritor aberto; no Unix, a abertura não bloqueia em FIFOs mesmo com troca do caminho. |
 | G-07 | Find Action (Ctrl+Shift+A) | ✅ | M3 | Ctrl+Shift+A abre a busca na aba Ações; visto na janela nativa |
 | G-08 | Acessibilidade e leitores de tela | ⬜ | M6 | |

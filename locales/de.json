@@ -2007,5 +2007,8 @@
     "Pasted code may need {crate} in {package} [{scope}]": "Eingefügter Code benötigt möglicherweise {crate} in {package} [{scope}]",
     "Code may need {crate} in {package} [{scope}]": "Code benötigt möglicherweise {crate} in {package} [{scope}]",
     "Review dependency…": "Abhängigkeit prüfen…"
+  },
+  "about": {
+    "Font licenses": "Schriftlizenzen"
   }
 }

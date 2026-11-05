@@ -2007,5 +2007,8 @@
     "Pasted code may need {crate} in {package} [{scope}]": "貼り付けたコードには {package} [{scope}] の {crate} が必要な場合があります",
     "Code may need {crate} in {package} [{scope}]": "コードには {package} [{scope}] の {crate} が必要な場合があります",
     "Review dependency…": "依存関係を確認…"
+  },
+  "about": {
+    "Font licenses": "フォントライセンス"
   }
 }

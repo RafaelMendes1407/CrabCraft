@@ -2007,5 +2007,8 @@
     "Pasted code may need {crate} in {package} [{scope}]": "粘贴的代码可能需要在 {package} [{scope}] 中添加 {crate}",
     "Code may need {crate} in {package} [{scope}]": "代码可能需要在 {package} [{scope}] 中添加 {crate}",
     "Review dependency…": "检查依赖…"
+  },
+  "about": {
+    "Font licenses": "字体许可"
   }
 }

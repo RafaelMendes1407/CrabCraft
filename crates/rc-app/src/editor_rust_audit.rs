@@ -286,3 +286,51 @@ fn rust_reference_keymap_is_selected_and_routes_native_actions_in_a_cargo_projec
     assert!(h.state().insight.session.is_none());
     compile(&path);
 }
+
+#[test]
+fn interface_languages_render_native_settings_for_a_rust_project() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::{Lang, tr};
+    // Language is process-global. Separate processes make this test deterministic alongside
+    // other tests that legitimately expect English diagnostics and action labels.
+    let code = match std::env::var("CRABCRAFT_LANGUAGE_AUDIT") {
+        Ok(code) => code,
+        Err(_) => {
+            for code in ["es", "fr", "pt-BR", "de", "pl", "zh-Hans", "ja"] {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "editor_rust_audit::interface_languages_render_native_settings_for_a_rust_project", "--nocapture"])
+                    .env("CRABCRAFT_LANGUAGE_AUDIT", code).output().unwrap();
+                assert!(output.status.success(), "{code}: {}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            }
+            return;
+        }
+    };
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (dir, path) = project("fn main() { println!(\"Ferris\"); }\n");
+    let home = tempfile::tempdir().unwrap();
+    let mut app = crate::screens::test_app(home.path(), true);
+    let mut settings = app.settings.clone();
+    settings.language = Some(code.clone());
+    app.apply_settings(&egui::Context::default(), settings);
+    assert_eq!(rc_kit::i18n::lang(), Lang::from_locale(&code));
+    app.open_workspace(dir.path());
+    app.open_file(&path);
+    app.open_settings(crate::ui::dialogs::SettingsPage::Appearance);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    for label in ["Settings", "Appearance", "Theme", "Language", "OK", "Cancel"] {
+        assert!(h.query_all_by_label(tr(label)).count() > 0, "missing {code} label {label}");
+        assert!(h.ctx.fonts_mut(|fonts| fonts.has_glyphs(&egui::FontId::proportional(13.0), tr(label))), "{code} glyphs: {label}");
+    }
+    assert_ne!(tr("Settings"), "Settings");
+    h.get_by_label(tr("OK")).click();
+    h.run_steps(3);
+    assert_eq!(rc_core::Settings::load().language.as_deref(), Some(code.as_str()));
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::About);
+    h.run_steps(3);
+    h.get_by_label(tr("Font licenses")).click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label_contains("SIL OPEN FONT LICENSE Version 1.1").count() > 0);
+    assert!(h.state().insight.session.is_none());
+    assert_eq!(h.state().docs.active_doc().unwrap().path, path);
+    compile(&path);
+}

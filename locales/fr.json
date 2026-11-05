@@ -2007,5 +2007,8 @@
     "Pasted code may need {crate} in {package} [{scope}]": "Le code collé peut nécessiter {crate} dans {package} [{scope}]",
     "Code may need {crate} in {package} [{scope}]": "Le code peut nécessiter {crate} dans {package} [{scope}]",
     "Review dependency…": "Vérifier la dépendance…"
+  },
+  "about": {
+    "Font licenses": "Licences des polices"
   }
 }
