@@ -237,10 +237,16 @@ mod tests {
 
     #[test]
     fn path_comes_before_the_cargo_home() {
-        let list = candidates(Some(std::env::join_paths(["/a", "/b"]).unwrap()), Some("/home/u".into()));
-        assert_eq!(list[0], Path::new("/a").join(exe("cargo")));
-        assert_eq!(list[1], Path::new("/b").join(exe("cargo")));
-        assert_eq!(list[2], Path::new("/home/u/.cargo/bin").join(exe("cargo")));
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a");
+        let b = dir.path().join("b");
+        let home = dir.path().join("home");
+        let list = candidates(Some(std::env::join_paths([&a, &b]).unwrap()), Some(home.clone()));
+        assert_eq!(list, vec![
+            a.join(exe("cargo")),
+            b.join(exe("cargo")),
+            home.join(".cargo").join("bin").join(exe("cargo")),
+        ]);
     }
 
     #[test]
@@ -276,8 +282,14 @@ mod tests {
 
     #[test]
     fn relative_path_entries_cannot_select_project_executables() {
-        let path = std::env::join_paths([Path::new("."), Path::new("tools"), Path::new("/usr/bin")]).unwrap();
-        assert_eq!(candidates(Some(path), None), vec![Path::new("/usr/bin").join(exe("cargo"))]);
+        let dir = tempfile::tempdir().unwrap();
+        let absolute = dir.path().join("bin");
+        let mut entries = vec![PathBuf::from("."), PathBuf::from("tools")];
+        #[cfg(windows)]
+        entries.extend([PathBuf::from(r"\tools"), PathBuf::from("C:tools")]);
+        entries.push(absolute.clone());
+        let path = std::env::join_paths(entries).unwrap();
+        assert_eq!(candidates(Some(path), None), vec![absolute.join(exe("cargo"))]);
     }
 
     #[cfg(unix)]
