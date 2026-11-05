@@ -542,6 +542,7 @@ fn screens_tools() {
     {
         let app = h.state_mut();
         app.find_bar = None;
+        app.trust_project_tools_for_test();
         app.open_terminal(None);
     }
     run_frames(&mut h, "terminal", |a| a.terminals.active().is_some_and(|t| t.session.screen_lines().iter().any(|l| !l.trim().is_empty())));
@@ -574,6 +575,7 @@ fn screens_git() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root.join("Shop.sln"));
+    app.trust_project_tools_for_test();
     app.open_file(&calc);
     let doc = app.docs.active_doc_mut().unwrap();
     let t = doc.editor.buffer.rope().to_string();
@@ -632,6 +634,7 @@ fn screens_git_tags_and_stashes() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -665,7 +668,7 @@ fn screens_git_tags_and_stashes() {
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DropStash { stash });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-drop-stash-dark.png")).unwrap();
-    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false });
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false, paths: Vec::new() });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-stash-changes-dark.png")).unwrap();
 }
@@ -699,6 +702,7 @@ fn screens_git_worktrees() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -751,6 +755,7 @@ fn screens_git_file_history() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -853,6 +858,7 @@ fn screens_readme() {
         let mut app = test_app(home.path(), dark);
         app.settings.roslyn_path = Some(roslyn.clone());
         app.open_workspace(&shop.join("Shop.sln"));
+    app.trust_project_tools_for_test();
         app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
         app.open_file(&shop.join("src/Shop.Core/Order.cs"));
         app.open_file(&calc);
@@ -999,6 +1005,7 @@ fn two_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace and the file index", |a| {
         a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2) && a.files.index.as_ref().is_some_and(|i| i.snapshot().len() >= 6)
@@ -1273,6 +1280,7 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     }
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let size = vec2(900.0, 500.0);
     let mut h = harness(app, size);
     run_frames(&mut h, "the branches", |a| a.vcs.branch_name().as_deref() == Some("trunk") && a.vcs.branches.len() >= 61);
@@ -1608,6 +1616,7 @@ fn before_launch_capture() {
         rc_core::external_tools::ExternalTool { name: "Lint SQL".into(), program: "sqlfluff".into(), ..Default::default() },
     ];
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the workspace", |a| !a.runner.configs.is_empty());
     let name = h.state().runner.configs[0].name.clone();
@@ -1916,6 +1925,7 @@ fn dependent_crates_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCr
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.as_ref().is_some_and(|w| w.packages.len() == 2));
     h.state_mut().toggle_tool(crate::toolwindow::ToolWindow::Cargo);
@@ -1976,6 +1986,7 @@ fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>,
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
@@ -2054,6 +2065,7 @@ fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     app.dep_versions.set_published("serde", rc_cargo::versions::parse_index("{\"vers\":\"1.0.229\",\"yanked\":false}\n{\"vers\":\"1.0.230\",\"yanked\":true}"));
     app.dep_versions.set_published("rand", rc_cargo::versions::parse_index("{\"vers\":\"0.7.3\",\"yanked\":false}"));
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1100.0, 520.0));
     run_frames(&mut h, "the Cargo workspace and the lock", |a| a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty()));
@@ -2558,6 +2570,7 @@ fn targets_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, 
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/lib.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the target list", |a| !a.triple_choices.is_empty() && a.runner.cargo_workspace.is_some());
@@ -2767,6 +2780,7 @@ fn playground_harness(home: &Path, dir: &Path, dark: bool) -> Harness<'static, C
     let root = root.canonicalize().unwrap();
     let mut app = test_app(home, dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/main.rs"));
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the Cargo workspace", |a| a.runner.cargo_workspace.is_some());
@@ -3011,6 +3025,7 @@ fn scopes_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, P
     std::fs::write(root.join("src/lib.rs"), "// needle\npub fn hello() {}\npub fn changed() {}\n").unwrap();
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "git's status", |a| a.vcs.status.is_some());
     (h, root)
@@ -3213,6 +3228,7 @@ fn run_configurations_are_kept_in_folders() {
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
     let name = |h: &Harness<'static, CrabCraftApp>, bin: &str| h.state().runner.app_names().into_iter().find(|n| n.contains(bin)).unwrap();
@@ -3258,6 +3274,7 @@ fn run_configurations_are_kept_in_folders() {
     h.state_mut().save_session();
     let mut again = test_app(&dir.path().join("home"), true);
     again.open_workspace(&root);
+    again.trust_project_tools_for_test();
     let start = std::time::Instant::now();
     while again.runner.app_names().len() < 3 && start.elapsed() < std::time::Duration::from_secs(60) {
         again.poll_cargo_workspace();
@@ -3283,6 +3300,7 @@ fn run_config_folders_capture() {
     }
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&root.canonicalize().unwrap());
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the binaries", |a| a.runner.app_names().len() == 3);
     for n in h.state().runner.app_names().into_iter().filter(|n| !n.contains("cli")) {
@@ -3344,6 +3362,7 @@ fn auto_attach_capture() {
     std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
     let mut app = test_app(&dir.path().join("home"), true);
     app.open_workspace(&root.canonicalize().unwrap());
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1280.0, 720.0));
     run_frames(&mut h, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     h.state_mut().auto_attach_text = "shop-server*, *-worker".into();
@@ -3402,7 +3421,7 @@ fn http_file_requests_run_from_the_gutter() {
     h.run_steps(4);
     assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Http));
     assert!(!h.state().http.running());
-    h.get_by_label_contains("not supported yet");
+    h.get_by_label_contains("Undefined HTTP variable");
 
     // The first request: a local server answers.
     let server = fake_playground(listener, r#"{"id":42,"name":"Ferris","tags":["crab","rust"]}"#);
@@ -3581,6 +3600,7 @@ fn screens_git_merge_and_rebase() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
     app.dock.sizes.insert(crate::toolwindow::ToolWindow::Git, 420.0);
     let mut h = harness(app, vec2(1440.0, 900.0));
@@ -3634,6 +3654,7 @@ fn screens_merge_tool() {
     let mut app = test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1440.0, 900.0));
     run_frames(&mut h, "conflict", |a| a.vcs.conflicts().len() == 1 && a.vcs.operation.state.is_some());
     h.state_mut().vcs.open_merge_tool("src/lib.rs");
@@ -3742,4 +3763,75 @@ fn settings_pages_capture() {
     }
     eprintln!("{sizes:?}");
     assert!(sizes.windows(2).all(|w| (w[0].1 - w[1].1).length() < 1.0), "{sizes:?}");
+}
+
+
+#[test]
+fn portable_preferences_are_previewed_and_applied_in_a_rust_workspace() {
+    use crate::ui::dialogs::{Dialog, SettingsPage};
+    use rc_core::settings_transfer::Backup;
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let (mut h, root) = two_crates_harness(home.path(), true);
+    let original = h.state().settings.clone();
+    let mut source = original.clone();
+    source.editor_font_size = 19.0;
+    source.trusted_projects.push(root.clone());
+    let path = home.path().join("preferences.json");
+    Backup::from_settings(&source).unwrap().write(&path).unwrap();
+    h.state_mut().settings_backup.preview = Some(Backup::read(&path).unwrap());
+    h.state_mut().open_settings(SettingsPage::Backup);
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, original.editor_font_size);
+    h.get_by_label(rc_kit::i18n::tr("Apply imported preferences")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, original.editor_font_size);
+    if let Some(Dialog::Settings { draft, .. }) = &h.state().dialog {
+        assert_eq!(draft.editor_font_size, 19.0);
+        assert_eq!(draft.trusted_projects, original.trusted_projects);
+    } else { panic!("settings closed before confirmation"); }
+    h.get_by_label(rc_kit::i18n::tr("OK")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().settings.editor_font_size, 19.0);
+    assert_eq!(h.state().settings.trusted_projects, original.trusted_projects);
+    assert!(h.state().runner.cargo_workspace.is_some());
+}
+
+#[test]
+fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("src")).unwrap();
+    std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"zoom_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    let source = root.path().join("src/main.rs");
+    let text = "fn main() { println!(\"zoom\"); }\n";
+    std::fs::write(&source, text).unwrap();
+    let mut app = test_app(home.path(), false);
+    app.open_workspace(root.path());
+    app.open_file(&source);
+    let mut harness = harness(app, vec2(1280.0, 800.0));
+    let ctx = harness.ctx.clone();
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomIn);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.1).abs() < f32::EPSILON);
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomOut);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
+    let mut settings = harness.state().settings.clone();
+    settings.editor_font_size = 21.0;
+    settings.ui_zoom = 1.4;
+    harness.state_mut().apply_settings(&ctx, settings);
+    harness.run_steps(2);
+    assert_eq!(harness.state().editor_config.font.size, 21.0);
+    assert!((harness.ctx.zoom_factor() - 1.4).abs() < f32::EPSILON);
+    let saved = Settings::load();
+    assert_eq!(saved.editor_font_size, 21.0);
+    assert_eq!(saved.ui_zoom, 1.4);
+    harness.state_mut().run_ide_action(&ctx, rc_editor::Action::ZoomReset);
+    harness.run_steps(2);
+    assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
+    assert_eq!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), text);
+    assert_eq!(std::fs::read_to_string(source).unwrap(), text);
 }

@@ -34,6 +34,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
+        ToolWindow::Endpoints => crate::endpoints::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -365,7 +366,7 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let mut rerun = false;
     let mut replace_all = false;
-    ui.horizontal(|ui| {
+    ui.add_enabled_ui(!f.replacements.running(), |ui| { ui.horizontal(|ui| {
         ui.add_space(10.0);
         let te = ui.add(egui::TextEdit::singleline(&mut f.query).hint_text(tr("Text to find")).desired_width(280.0));
         if std::mem::take(&mut f.focus) {
@@ -395,13 +396,36 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
         if ui.add(egui::Button::selectable(f.show_replace, tr("Replace"))).clicked() {
             f.show_replace = !f.show_replace;
         }
-    });
+    }); });
     if f.show_replace {
         ui.horizontal(|ui| {
             ui.add_space(10.0);
-            ui.add(egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
-            replace_all = ui.add_enabled(f.match_count() > 0 && f.summary.is_some(), egui::Button::new(tr("Replace All"))).clicked();
+            ui.add_enabled(!f.replacements.running(), egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
+            replace_all = ui.add_enabled(!f.replacements.running() && f.match_count() > 0 && f.summary.as_ref().is_some_and(|summary| !summary.truncated && !summary.cancelled), egui::Button::new(tr("Replace All"))).clicked();
+            if f.summary.as_ref().is_some_and(|summary| summary.truncated) { ui.label(tr("Narrow the search before replacing truncated results")); }
         });
+    }
+    let report = &f.replacements.report;
+    if report.total > 0 {
+        ui.horizontal(|ui| {
+            ui.add_space(12.0);
+            ui.label(rc_kit::i18n::trf("Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})", &[("matches", &report.matches), ("files", &report.files), ("skipped", &report.skipped), ("done", &report.processed), ("total", &report.total)]));
+            if f.replacements.running() {
+                ui.spinner();
+                if ui.add_enabled(!f.replacements.cancelling(), egui::Button::new(tr("Cancel"))).clicked() { f.replacements.cancel(); }
+            }
+            if report.cancelled { ui.label(tr("Replacement cancelled; completed changes are kept")); }
+        });
+        if !report.errors.is_empty() {
+            egui::CollapsingHeader::new(tr("Replacement errors (first 100)")).id_salt("replace_errors").default_open(true).show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("replace_error_list").max_height(120.0).show(ui, |ui| {
+                for (path, error) in &report.errors {
+                    let path: String = path.to_string_lossy().chars().take(512).map(|ch| if ch.is_control() { '�' } else { ch }).collect();
+                    ui.colored_label(p.error, format!("{path}: {error}"));
+                }
+                });
+            });
+        }
     }
     let status = match (&f.error, &f.summary) {
         (Some(e), _) => e.clone(),
@@ -464,23 +488,15 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
     if rerun {
         f.search();
     }
-    if replace_all {
-        if let Ok(q) = rc_search::Query::new(f.options()) {
-            let mut files = 0;
-            for file in &f.results {
-                if let Some(i) = app.docs.index_of(&file.path) {
-                    // Open files change through their editor (undoable).
-                    let doc = &mut app.docs.list[i];
-                    let edits = rc_search::compute_edits(&doc.editor.buffer.rope().to_string(), &q, &f.replace);
-                    doc.editor.apply_text_edits(edits.into_iter().map(|e| rc_text::Change::new(e.range.start, e.range.end, e.text)).collect());
-                    files += 1;
-                } else if rc_search::replace_in_file(&file.path, &q, &f.replace).is_ok() {
-                    files += 1;
+    if replace_all && !rerun {
+        match &f.only {
+            Err(error) => f.error = Some(error.clone()),
+            Ok(only) => {
+                if let Err(error) = f.replacements.start(&root, &f.results, &app.docs, f.options(), f.replace.clone(), f.mask.clone(), f.excluded.clone(), only.clone()) {
+                    f.error = Some(tr(error).to_string());
                 }
             }
-            app.notify(rc_kit::i18n::trf("Replaced in {n} files", &[("n", &files)]), false);
         }
-        f.search();
     }
     let _ = root;
     app.find_in_files = Some(f);
@@ -519,6 +535,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
+        ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),
     }
 }
 

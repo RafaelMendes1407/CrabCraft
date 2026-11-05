@@ -167,6 +167,11 @@ impl<'a> EditorView<'a> {
             }
         }
         let (vbar, hbar) = paint_scrollbars(ui, state, config, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
+        if state.selection != before_sel && !out.events.iter().any(|event| matches!(event, EditorEvent::CaretMoved)) {
+            out.events.push(EditorEvent::CaretMoved);
+            state.blink_epoch = ui.input(|input| input.time);
+            state.popups.hover = None;
+        }
         if let Some(r) = vbar.or(hbar) {
             let _ = r;
         }
@@ -839,16 +844,24 @@ fn paint_scrollbars(
             state.scroll.y = (state.scroll.y + dy / (track.height() - thumb_h) * max_scroll).clamp(0.0, max_scroll);
         } else if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
-            && !thumb.contains(p)
         {
-            let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
-            state.scroll.y = t * max_scroll;
+            if !jump_to_problem_mark(state, m, text_rect, &marks, p.y) && !thumb.contains(p) {
+                let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
+                state.scroll.y = t * max_scroll;
+            }
         }
         let active = resp.hovered() || resp.dragged();
         let alpha = if active { 0.5 } else { 0.28 };
         let thumb = if active { thumb.expand2(vec2(1.5, 0.0)).translate(vec2(-1.5, 0.0)) } else { thumb };
         painter.rect_filled(thumb, 4.0, pal.text.gamma_multiply(alpha));
         vresp = Some(resp);
+    } else if !marks.is_empty() {
+        // A short or fully folded document still has a clickable error stripe.
+        let response = ui.interact(track, Id::new(("editor_vbar", state.id)), Sense::click());
+        if response.clicked() && let Some(pointer) = response.interact_pointer_pos() {
+            jump_to_problem_mark(state, m, text_rect, &marks, pointer.y);
+        }
+        vresp = Some(response);
     }
     // Lens: the code at the hovered height of the scrollbar (not while dragging the thumb).
     state.scrollbar_track = track;
@@ -879,6 +892,17 @@ fn paint_scrollbars(
         hresp = Some(resp);
     }
     (vresp, hresp)
+}
+
+/// Problem marks use source rows; the thumb also includes end padding. Navigating to the
+/// reported line prevents overshooting errors near EOF and unfolds a hidden diagnostic.
+fn jump_to_problem_mark(state: &mut EditorState, metrics: &Metrics, text_rect: Rect, marks: &[(f32, usize)], y: f32) -> bool {
+    let nearest = marks.iter().min_by(|a, b| (a.0 - y).abs().total_cmp(&(b.0 - y).abs())).filter(|mark| (mark.0 - y).abs() <= 3.0);
+    let Some((_, line)) = nearest else { return false; };
+    state.goto(*line, 0);
+    scroll_caret_into_view(state, metrics, text_rect);
+    state.scroll_to_caret = false;
+    true
 }
 
 // =====================================================================================
@@ -1237,11 +1261,18 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     let rope = state.buffer.rope().clone();
     let mut chars = text.chars();
     if let (Some(ch), None) = (chars.next(), chars.next()) {
+        // Rust uses apostrophes for lifetimes and labels as well as character literals.
+        // Inserting a second quote before the next character is known corrupts `&'a`.
+        // Keep explicit selection wrapping and type-over of an existing closing quote.
+        let literal_apostrophe = state.lang() == rc_syntax::Lang::Rust && ch == '\''
+            && state.selection.ranges().iter().all(|range| range.is_empty())
+            && !state.selection.ranges().iter().all(|range| rope.get_char(range.head) == Some('\''));
+        let auto_pair = config.auto_pair && !literal_apostrophe;
         // Typing `}` on a blank line re-indents it to its block (electric brace).
         let edited = if ch == '}' && state.selection.len() == 1 && state.selection.primary().is_empty() {
-            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, config.auto_pair))
+            electric_close_brace(&rope, state).unwrap_or_else(|| commands::type_char(&rope, &state.selection, ch, auto_pair))
         } else {
-            commands::type_char(&rope, &state.selection, ch, config.auto_pair)
+            commands::type_char(&rope, &state.selection, ch, auto_pair)
         };
         state.apply(edited, EditKind::Insert);
         markup_assist(state, ch);
@@ -1268,10 +1299,10 @@ fn markup_assist(state: &mut EditorState, ch: char) {
     use rc_syntax::Lang;
     use rc_text::markup;
     let lang = state.syntax.lang;
-    if !matches!(lang, Lang::Razor | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+    if !matches!(lang, Lang::Razor | Lang::Html | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return;
     }
-    let html = lang == Lang::Razor;
+    let html = matches!(lang, Lang::Razor | Lang::Html);
     let caret = state.caret();
     let rope = state.buffer.rope().clone();
     let mut remove = 0;

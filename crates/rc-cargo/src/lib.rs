@@ -9,10 +9,13 @@
 //! (`build.rs`, proc macros) and only start from an explicit user action.
 
 pub mod crates_io;
+pub mod dependencies;
+pub mod dependency_names;
 pub mod explain;
 pub mod feature_fix;
 pub mod feature_nav;
 pub mod format;
+pub mod generate;
 pub mod inspect;
 pub mod manifest_complete;
 pub mod messages;
@@ -21,6 +24,7 @@ pub mod modules;
 pub mod new_project;
 pub mod ops;
 pub mod playground;
+pub mod rustup_install;
 pub mod test_output;
 pub mod toolchain;
 pub mod tree;

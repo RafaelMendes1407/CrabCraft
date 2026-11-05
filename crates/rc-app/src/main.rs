@@ -2,17 +2,29 @@
 
 mod app;
 mod cli;
+mod endpoints;
+mod clone_project;
+mod compare_cli;
+mod cargo_dependencies;
+mod missing_crates;
+mod borrow_errors;
+mod repl;
+mod settings_backup;
 mod instance;
 mod auto_attach;
 mod breakpoint_list;
 mod convert;
 mod copyright;
+mod coverage;
 mod debugger;
+mod parallel_stacks;
 mod dep_versions;
 mod feature_fix;
 mod feature_nav;
 mod http_client;
+mod http_cli;
 mod disassembly_view;
+mod disk_revert;
 mod insight;
 mod inspection_profile;
 mod intention_preview;
@@ -31,7 +43,9 @@ mod refactor_preview;
 mod run_anything;
 mod runner;
 mod rustfmt;
+mod rustup_installer;
 mod search;
+mod replace_files;
 mod scopes;
 mod sync_log;
 mod vcs;
@@ -47,13 +61,18 @@ mod insight_tests;
 mod rust_tests;
 #[cfg(test)]
 mod screens;
+#[cfg(test)]
+mod editor_rust_audit;
 mod docs;
 mod file_ops;
 mod file_rename;
 mod native_menu;
 mod open_files;
 mod toolwindow;
+mod terminal_tools;
 mod ui;
+#[cfg(test)]
+mod inherited_ui_audit;
 
 /// Opened from Finder, the app gets a bare PATH (/usr/bin:/bin:…) without what Terminal adds
 /// from /etc/paths and /etc/paths.d, such as /usr/local/share/dotnet: the tools it starts
@@ -101,6 +120,25 @@ fn main() -> eframe::Result {
     let cwd = std::env::current_dir().unwrap_or_default();
     let open = match cli::parse(std::env::args_os().skip(1), &cwd) {
         Ok(cli::Command::Open(list)) => list,
+        Ok(cli::Command::Compare(request)) => {
+            let code = compare_cli::run(request, options)?;
+            std::process::exit(code);
+        }
+        Ok(cli::Command::Http(request)) => {
+            match request.run() {
+                Ok(code) => std::process::exit(code),
+                Err(error) => { eprintln!("crabcraft: {error}"); std::process::exit(1); }
+            }
+        }
+        Ok(cli::Command::Tool(request)) => {
+            match request.run() {
+                Ok(code) => std::process::exit(code),
+                Err(error) => {
+                    eprintln!("crabcraft: {}: {error}", rc_kit::i18n::tr("Could not start Cargo"));
+                    std::process::exit(1);
+                }
+            }
+        }
         Ok(cli::Command::Help) => {
             println!("{}", cli::usage());
             return Ok(());
@@ -124,3 +162,6 @@ fn main() -> eframe::Result {
     open_files::install();
     eframe::run_native("CrabCraft", options, Box::new(move |cc| Ok(Box::new(app::CrabCraftApp::new(cc, open)))))
 }
+
+#[cfg(test)]
+mod project_trust;

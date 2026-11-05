@@ -41,6 +41,7 @@ fn app(home: &Path) -> CrabCraftApp {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), netcoredbg_path: Some(netcoredbg), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     app
 }
 
@@ -309,6 +310,7 @@ fn breakpoint_conditions_and_disabled_state_survive_the_session() {
     let mut app = crate::screens::test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     app.open_file(&calc);
     let d = app.docs.active_doc_mut().unwrap();
     d.editor.breakpoints.insert(20, BreakpointKind::Conditional);
@@ -319,6 +321,7 @@ fn breakpoint_conditions_and_disabled_state_survive_the_session() {
     let mut app = crate::screens::test_app(home.path(), true);
     app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace(&crate::screens::fixtures().join("Shop/Shop.sln"));
+    app.trust_project_tools_for_test();
     let d = app.docs.list.iter().find(|d| d.path == calc).unwrap();
     assert_eq!(d.editor.breakpoints.get(&20), Some(&BreakpointKind::Conditional));
     assert_eq!(d.editor.breakpoints.get(&26), Some(&BreakpointKind::Disabled));

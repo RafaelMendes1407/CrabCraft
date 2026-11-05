@@ -604,3 +604,22 @@ fn gdb_jumps_only_where_it_was_checked() {
     assert_eq!(goto_error("crabcraft-goto: no code".into()), GotoError::NoCode);
     assert_eq!(goto_error("boom".into()), GotoError::Adapter("boom".into()));
 }
+
+#[test]
+fn parallel_stack_responses_are_bounded_and_stale_generations_are_discarded() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, _) = fake(dir.path(), "normal");
+    let mut session = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
+    session.state = SessionState::Stopped(StopInfo { thread_id: 1, reason: StopReason::Pause, description: None, text: None, frame_id: None, breakpoints: Vec::new() });
+    let frames: Vec<_> = (0..100).map(|id| json!({"id": id, "name": "é".repeat(4000), "line": 10, "moduleId": "x".repeat(3000), "source": {"path": "x".repeat(10000)}})).collect();
+    let response = json!({"stackFrames": frames, "totalFrames": 100});
+    let generation = session.generation;
+    session.on_response(Ok(response.clone()), Purpose::ParallelStack { id: 1, generation: generation + 1, thread_id: 1, limit: 64 });
+    assert!(!session.events.iter().any(|event| matches!(event, DebugEvent::ParallelStackLoaded { .. })));
+    session.on_response(Ok(response), Purpose::ParallelStack { id: 2, generation, thread_id: 1, limit: 64 });
+    let stack = session.events.iter().find_map(|event| if let DebugEvent::ParallelStackLoaded { result: Ok(stack), .. } = event { Some(stack) } else { None }).unwrap();
+    assert_eq!(stack.frames.len(), 64);
+    assert!(stack.truncated);
+    assert!(stack.frames.iter().all(|frame| frame.name.len() <= 2048 && frame.module_id.is_none() && frame.source.is_none()));
+    session.stop();
+}

@@ -182,6 +182,12 @@ fn debugger_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
 fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     use crate::insight::InsightStatus as S;
     let p = rc_kit::pal(ui);
+    if app.runner.require_trust().is_err() {
+        ui.label(tr("Restricted mode"));
+        if theme::flat_button(ui, Some(ico::WARNING), tr("Trust this project"), FontId::proportional(12.5), false, true)
+            .on_hover_text(tr("Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.")).clicked() { app.trust_project(); }
+        return;
+    }
     match app.insight.status.clone() {
         S::Idle => {}
         S::Ready => {
@@ -219,14 +225,7 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             ui.label(egui::RichText::new(text).size(12.5).color(p.text_muted));
             ui.add_space(8.0);
         }
-        S::Untrusted => {
-            if theme::flat_button(ui, Some(ico::WARNING), tr("Trust this project"), FontId::proportional(12.5), false, true)
-                .on_hover_text(tr("Code analysis runs the project's build scripts and procedural macros"))
-                .clicked()
-            {
-                app.trust_project();
-            }
-        }
+        S::Untrusted => {}
         S::RustAnalyzerMissing => {
             theme::flat_button(ui, Some(ico::WARNING), tr("rust-analyzer not found"), FontId::proportional(12.5), false, true).on_hover_text(tr("Install it with: rustup component add rust-analyzer"));
         }

@@ -43,6 +43,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some());
     assert_eq!(app.vcs.branch_name().as_deref(), Some("main"));
 
@@ -107,6 +108,7 @@ fn open_app(root: &Path) -> CrabCraftApp {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(root);
+    app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some() && !a.vcs.log.is_empty());
     app
 }
@@ -236,6 +238,86 @@ fn stashes_are_made_shown_applied_popped_and_dropped_from_the_git_window() {
     // Nothing to stash is reported, not a crash.
     app.vcs.stash_push("empty", false, false);
     pump(&mut app, "nothing to stash", |a| a.vcs.busy.is_none() && a.vcs.error.is_some());
+}
+
+#[test]
+fn selected_files_are_stashed_and_restored_on_a_new_branch_from_the_app() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn selected() {}\n").unwrap();
+    std::fs::write(root.join("keep.rs"), "// unselected\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "dirty", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    app.vcs.stash_push_paths("selected", false, false, vec!["lib.rs".into()]);
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "selected stash", |a| a.vcs.busy.is_none() && a.vcs.stashes.len() == 1);
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn a() {}\n");
+    assert_eq!(std::fs::read_to_string(root.join("keep.rs")).unwrap(), "// unselected\n");
+    let stash = app.vcs.stashes[0].clone();
+    app.vcs.stash_branch(&stash, "restore-selected");
+    pump(&mut app, "branch restore", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("restore-selected"));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn selected() {}\n");
+    assert_eq!(app.vcs.stashes[0].hash, stash.hash);
+}
+
+#[test]
+fn changelists_limit_commits_and_keep_per_list_messages_in_the_project_session() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"changelist_fixture\"\nversion = \"0.1.0\"\n[lib]\npath = \"lib.rs\"\n").unwrap();
+    git(&root, &["add", "Cargo.toml"]);
+    git(&root, &["commit", "-qm", "Add Cargo manifest"]);
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn assigned() {}\n").unwrap();
+    std::fs::write(root.join("other.rs"), "pub fn unrelated() {}\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "two changes", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    app.vcs.changelists.create("Library fix").unwrap();
+    app.vcs.changelists.move_file("lib.rs", "Library fix").unwrap();
+    assert_eq!(app.vcs.included(), vec!["other.rs"]);
+    app.vcs.message = "Default draft".into();
+    app.vcs.changelists.select("Library fix", &mut app.vcs.message).unwrap();
+    assert_eq!(app.vcs.included(), vec!["lib.rs"]);
+    app.vcs.message = "Commit assigned library".into();
+    app.session().save(&root).unwrap();
+    let saved = rc_core::Session::load(&root).changelists.clean();
+    assert_eq!(saved.active, "Library fix");
+    assert_eq!(saved.list_of("lib.rs"), "Library fix");
+    assert_eq!(saved.lists.get("Library fix").map(String::as_str), Some("Commit assigned library"));
+    assert_eq!(saved.lists.get("").map(String::as_str), Some("Default draft"));
+    app.vcs.commit(false, None);
+    pump(&mut app, "assigned commit", |a| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 1));
+    assert_eq!(git_out(&root, &["show", "--format=", "--name-only", "HEAD"]).trim(), "lib.rs");
+    assert!(root.join("other.rs").exists());
+    assert_eq!(app.vcs.changelists.list_of("lib.rs"), "");
+    app.vcs.changelists.select("", &mut app.vcs.message).unwrap();
+    assert_eq!(app.vcs.message, "Default draft");
+    assert_eq!(app.vcs.included(), vec!["other.rs"]);
+    // Exercise the native controls as well as the Git selection behavior.
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    app.dock.show(crate::toolwindow::ToolWindow::Commit);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Commit, 540.0);
+    app.vcs.changelist_name = "UI list".into();
+    let mut h = crate::screens::harness(app, egui::vec2(1440.0, 900.0));
+    h.get_by_label(tr("Manage Changelists")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("New Changelist")).click();
+    h.run_steps(2);
+    assert!(h.state().vcs.changelists.lists.contains_key("UI list"));
+    h.get_by(|node| node.value().as_deref() == Some(tr("Default Changelist"))).click();
+    h.run_steps(2);
+    h.get_by_label("UI list (0)").click();
+    h.run_steps(2);
+    assert_eq!(h.state().vcs.changelists.active, "UI list");
+    assert!(h.state().vcs.included().is_empty());
 }
 
 #[test]
@@ -403,6 +485,7 @@ fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
     app.vcs.add_worktree(other.clone(), rc_vcs::WorktreeCheckout::Detached("HEAD".into()));
     pump(&mut app, "detached worktree", |a| a.vcs.busy.is_none() && a.vcs.worktrees.iter().any(|w| w.path == other));
     app.open_workspace(&other);
+    app.trust_project();
     pump(&mut app, "worktree opened", |a| a.vcs.repo.as_ref().is_some_and(|r| r.root() == other) && a.vcs.worktrees.len() == 2);
     let cur = app.vcs.current_worktree().unwrap();
     assert!(!cur.main && cur.detached);
@@ -454,6 +537,7 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "the signing settings", |a| a.vcs.signing.is_some() && a.vcs.log.len() == 1);
     assert!(app.vcs.sign, "commit.gpgsign turns it on");
 
@@ -541,6 +625,7 @@ fn the_log_is_filtered_and_shows_the_history_of_a_file() {
     let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
     let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
     app.open_workspace(&root);
+    app.trust_project();
     pump(&mut app, "the log", |a| a.vcs.log.len() == 5 && !a.vcs.log_loading);
     assert!(!app.vcs.log_more);
     let subjects = |a: &CrabCraftApp| a.vcs.log.iter().map(|c| c.subject.clone()).collect::<Vec<_>>();
@@ -755,4 +840,75 @@ fn the_merge_tool_resolves_a_conflicted_file() {
     app.vcs.continue_operation();
     pump(&mut app, "merged", |a| a.vcs.busy.is_none() && a.vcs.operation.state.is_none() && a.vcs.log.first().is_some_and(|c| c.is_merge()));
     assert_eq!(git_out(&root, &["show", "HEAD:lib.rs"]), expected);
+}
+
+
+#[test]
+fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, remote, root) = repo_with_remote();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"git_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[lib]\npath=\"lib.rs\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("lib.rs"), "pub fn answer() -> u32 {\n    1\n}\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "Rust project"]);
+    let mut app = open_app(&root);
+    app.open_file(&root.join("lib.rs"));
+    let doc = app.docs.active_doc_mut().unwrap();
+    let at = doc.editor.buffer.pos_at(1, 4);
+    doc.editor.replace(at, at + 1, "2");
+    pump(&mut app, "Rust gutter mark", |a| a.docs.active_doc().unwrap().editor.line_changes.get(&1) == Some(&rc_editor::LineChange::Modified));
+    app.save_all_docs();
+    app.vcs.refresh();
+    pump(&mut app, "Rust changed file", |a| a.vcs.changes().iter().any(|c| c.path == "lib.rs"));
+    app.vcs.open_diff("lib.rs");
+    pump(&mut app, "Rust diff", |a| a.vcs.diff.is_some());
+    let diff = app.vcs.diff.as_ref().unwrap();
+    assert_eq!(diff.left.lang(), rc_syntax::Lang::Rust);
+    assert_eq!(diff.right.lang(), rc_syntax::Lang::Rust);
+    assert!(!diff.right.line_backgrounds.is_empty());
+    app.vcs.message = "Rust answer edit".into();
+    app.vcs.commit(false, None);
+    pump(&mut app, "Rust commit", |a| a.vcs.busy.is_none() && a.vcs.log.iter().any(|c| c.subject == "Rust answer edit"));
+    app.vcs.new_branch("feature/rust");
+    pump(&mut app, "Rust branch", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("feature/rust"));
+    let text = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    app.vcs.toggle_blame(&root.join("lib.rs"), text, &mut app.docs);
+    pump(&mut app, "Rust blame", |a| a.docs.active_doc().unwrap().editor.annotations.is_some());
+    assert!(app.docs.active_doc().unwrap().editor.annotations.as_ref().unwrap().iter().all(|line| line.contains("Test")));
+    app.vcs.push();
+    assert!(app.vcs.sequence_running(), "push must expose cancellation");
+    pump(&mut app, "Rust push", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(git_out(remote.path(), &["rev-parse", "refs/heads/feature/rust"]).trim(), git_out(&root, &["rev-parse", "HEAD"]).trim());
+    let peer = tempfile::tempdir().unwrap();
+    git(peer.path(), &["clone", "-q", "--branch", "feature/rust", &format!("file://{}", remote.path().display()), "."]);
+    git(peer.path(), &["config", "user.name", "Peer"]);
+    git(peer.path(), &["config", "user.email", "peer@example.com"]);
+    git(peer.path(), &["config", "commit.gpgsign", "false"]);
+    std::fs::write(peer.path().join("lib.rs"), "pub fn answer() -> u32 {\n    3\n}\n").unwrap();
+    git(peer.path(), &["commit", "-qam", "Remote Rust edit"]);
+    git(peer.path(), &["push", "-q"]);
+    let before = git_out(&root, &["rev-parse", "HEAD"]);
+    app.vcs.fetch();
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "Rust fetch", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(git_out(&root, &["rev-parse", "HEAD"]), before, "fetch must preserve the current checkout");
+    app.vcs.pull();
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "Rust pull", |a| a.vcs.busy.is_none());
+    assert!(app.vcs.error.is_none(), "{:?}", app.vcs.error);
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn answer() -> u32 {\n    3\n}\n");
+    // Network entry points keep the same cancellation contract as merge operations.
+    for action in [crate::vcs::Vcs::fetch, crate::vcs::Vcs::pull, crate::vcs::Vcs::push] {
+        action(&mut app.vcs);
+        app.vcs.cancel_operation();
+        pump(&mut app, "cancelled Git remote operation", |a| a.vcs.busy.is_none());
+        assert_eq!(app.vcs.error.as_deref(), Some(rc_kit::i18n::tr("Cancelled")));
+    }
+    let checked = std::process::Command::new("cargo").args(["test", "--offline"]).current_dir(&root).output().unwrap();
+    assert!(checked.status.success(), "{}", String::from_utf8_lossy(&checked.stderr));
 }

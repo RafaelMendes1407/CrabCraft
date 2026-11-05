@@ -50,6 +50,12 @@ pub struct RunOptions {
     pub channel: String,
     /// Rust: Cargo profile; empty: `dev`.
     pub cargo_profile: String,
+    /// wasm-pack JS output target; empty means bundler.
+    pub wasm_target: String,
+    /// wasm-pack development build instead of release.
+    pub wasm_dev: bool,
+    /// wasm-pack output directory; empty means pkg.
+    pub wasm_out_dir: String,
     /// Rust: features, separated by commas or spaces.
     pub features: String,
     /// Rust: `RUST_BACKTRACE`; empty: `short`.
@@ -68,7 +74,7 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
+        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), wasm_target: String::new(), wasm_dev: false, wasm_out_dir: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
     }
 }
 
@@ -119,6 +125,8 @@ pub struct EditorWindow {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Session {
+    /// Whole-file local changelists. Session data is validated before use.
+    pub changelists: crate::changelists::Changelists,
     pub files: Vec<OpenFile>,
     pub active: Option<usize>,
     /// The editor groups of the main window (none: every file in one group).

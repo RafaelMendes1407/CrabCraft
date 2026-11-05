@@ -70,6 +70,8 @@ pub struct LineMatch {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileMatches {
     pub path: PathBuf,
+    /// Search-time metadata for guarded replacements.
+    pub stamp: crate::replace::FileStamp,
     /// Root-relative, `/`-separated.
     pub rel: String,
     pub lines: Vec<LineMatch>,
@@ -243,12 +245,15 @@ fn run_search(root: &Path, opts: &FindOptions, query: &Query, cancel: &AtomicBoo
             if !opts.mask.matches(&rel) || opts.only.as_ref().is_some_and(|o| !o.matches(&rel)) || e.metadata().map_or(true, |m| m.len() > opts.max_file_size) {
                 return WalkState::Continue;
             }
+            let Ok(metadata) = std::fs::symlink_metadata(e.path()) else { return WalkState::Continue };
+            let stamp = crate::replace::FileStamp::from_metadata(&metadata);
             c.files_searched.fetch_add(1, Ordering::Relaxed);
             let mut sink = FileSink { query, lines: Vec::new(), before: Vec::new(), binary: false, max: opts.max_results, counters: c, cancel };
             let _ = searcher.search_path(matcher, e.path(), &mut sink);
-            if !sink.binary && !sink.lines.is_empty() && !cancel.load(Ordering::Relaxed) {
+            if !sink.binary && !sink.lines.is_empty() && !cancel.load(Ordering::Relaxed)
+                && std::fs::symlink_metadata(e.path()).ok().is_some_and(|metadata| metadata.is_file() && crate::replace::FileStamp::from_metadata(&metadata) == stamp) {
                 c.files_matched.fetch_add(1, Ordering::Relaxed);
-                out.send(FindEvent::File { search: id, file: FileMatches { path: e.path().to_path_buf(), rel, lines: sink.lines } });
+                out.send(FindEvent::File { search: id, file: FileMatches { path: e.path().to_path_buf(), stamp, rel, lines: sink.lines } });
             }
             WalkState::Continue
         })

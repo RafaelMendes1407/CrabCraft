@@ -26,6 +26,7 @@ pub enum ToolWindow {
     Http,
     /// Flame graph and call tree of a perf recording (A-01).
     Profiler,
+    Endpoints,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,7 +62,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 17] = [
+    pub const ALL: [ToolWindow; 18] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -78,6 +79,7 @@ impl ToolWindow {
         ToolWindow::Cargo,
         ToolWindow::Http,
         ToolWindow::Profiler,
+        ToolWindow::Endpoints,
         ToolWindow::Notifications,
     ];
 
@@ -100,6 +102,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => "hierarchy",
             ToolWindow::Http => "http",
             ToolWindow::Profiler => "profiler",
+            ToolWindow::Endpoints => "endpoints",
         }
     }
 
@@ -122,6 +125,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => tr("Hierarchy"),
             ToolWindow::Http => tr("HTTP Client"),
             ToolWindow::Profiler => tr("Profiler"),
+            ToolWindow::Endpoints => tr("Endpoints"),
         }
     }
 
@@ -144,6 +148,7 @@ impl ToolWindow {
             ToolWindow::Hierarchy => ico::HIERARCHY,
             ToolWindow::Http => ico::CONFIG_WEB,
             ToolWindow::Profiler => ico::THREADS,
+            ToolWindow::Endpoints => ico::CONFIG_WEB,
         }
     }
 
@@ -157,6 +162,7 @@ impl ToolWindow {
 
     /// Whether the button sits on the lower part of the left stripe (bottom tool windows).
     pub fn default_size(self, side: Side) -> f32 {
+        if self == ToolWindow::Endpoints && side == Side::Bottom { return 420.0; }
         match side {
             Side::Left => 300.0,
             Side::Right => 320.0,

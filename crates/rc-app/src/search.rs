@@ -405,6 +405,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Git"), ToggleGitWindow),
         (tr("Commit…"), Commit),
         (tr("Show Local History"), ShowLocalHistory),
+        (tr("Revert from Disk…"), RevertFromDisk),
         (tr("Hide All Tool Windows"), HideToolWindows),
         (tr("Save All"), SaveAll),
         (tr("Zoom In"), ZoomIn),
@@ -487,6 +488,7 @@ pub struct FindInFiles {
     pub summary: Option<FindSummary>,
     pub error: Option<String>,
     pub focus: bool,
+    pub replacements: crate::replace_files::ReplaceFiles,
     finder: Option<Finder>,
     inbox: Inbox<FindEvent>,
     root: PathBuf,
@@ -494,7 +496,7 @@ pub struct FindInFiles {
 
 impl FindInFiles {
     pub fn new(root: &Path, waker: Waker, query: String) -> Self {
-        let inbox = Inbox::new(waker);
+        let inbox = Inbox::new(waker.clone());
         let finder = Some(Finder::new(root, inbox.sender()));
         FindInFiles {
             query,
@@ -511,6 +513,7 @@ impl FindInFiles {
             summary: None,
             error: None,
             focus: true,
+            replacements: crate::replace_files::ReplaceFiles::new(waker),
             finder,
             inbox,
             root: root.to_path_buf(),
@@ -527,6 +530,8 @@ impl FindInFiles {
 
     /// Starts (or restarts) the search with the current fields.
     pub fn search(&mut self) {
+        // A new query/scope supersedes any replacement still using the old result set.
+        if self.replacements.running() { self.replacements.cancel(); }
         self.results.clear();
         self.summary = None;
         self.error = None;
@@ -625,6 +630,7 @@ pub fn action_icon(action: Action) -> Option<rc_kit::Ico> {
         ToggleGitWindow => ico::TW_VCS,
         Commit => ico::COMMIT,
         ShowLocalHistory => ico::HISTORY,
+        RevertFromDisk => ico::RERUN,
         HideToolWindows => ico::HIDE,
         SaveAll | Save => ico::SAVE,
         CloseTab => ico::CLOSE,

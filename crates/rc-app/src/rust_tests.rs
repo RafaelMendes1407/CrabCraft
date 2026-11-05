@@ -60,7 +60,8 @@ fn an_untrusted_project_runs_nothing_until_the_user_trusts_it() {
     write(&root.join("build.rs"), "fn main() { std::fs::write(\"BUILD_RAN\", \"\").unwrap(); }\n");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
-    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    for _ in 0..10 { app.poll_cargo_workspace(); }
+    assert!(app.runner.cargo_workspace.is_none());
     assert_eq!(app.insight.status, InsightStatus::Untrusted);
     assert!(app.insight.session.is_none());
     assert!(!root.join("BUILD_RAN").exists());
@@ -82,6 +83,7 @@ fn rust_insight_build_run_and_tests_end_to_end() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let names: Vec<_> = app.runner.configs.iter().map(|c| c.name.clone()).collect();
     assert_eq!(names, ["demo", "All Tests"]);
@@ -388,6 +390,7 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let build = |app: &mut CrabCraftApp| {
         app.run_ide_action(&egui::Context::default(), rc_editor::Action::Build);
@@ -477,6 +480,7 @@ fn run_anything_runs_commands_and_configurations() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let ctx = egui::Context::default();
 
@@ -710,6 +714,7 @@ fn logpoints_print_and_a_breakpoint_can_remove_itself() {
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&main);
     let ctx = egui::Context::default();
@@ -765,6 +770,7 @@ fn integers_switch_to_hexadecimal_while_paused() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
@@ -831,6 +837,7 @@ fn paused_before_doubling(dir: &Path) -> CrabCraftApp {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(3, BreakpointKind::Normal);
@@ -967,6 +974,7 @@ fn paused_at(dir: &Path, main_rs: &str, line: usize) -> CrabCraftApp {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(line, BreakpointKind::Normal);
@@ -1218,6 +1226,7 @@ fn step_into_walks_past_the_standard_library() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
@@ -1373,6 +1382,8 @@ fn a_changed_manifest_reloads_the_targets_and_opening_it_opens_the_project() {
     let mut app = new_app(dir.path());
     let manifest = root.join("Cargo.toml");
     app.open_path(&manifest);
+    assert!(app.runner.cargo_workspace.is_none());
+    app.trust_project_tools_for_test();
     assert_eq!(app.workspace.as_ref().map(|w| w.ws.root.clone()), Some(root.clone()));
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     assert!(!app.runner.configs.iter().any(|c| c.name == "extra"));
@@ -1400,6 +1411,7 @@ fn a_failed_test_leads_to_its_code_and_runs_again_alone() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
     pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
@@ -1462,6 +1474,7 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
     let main = root.join("src/main.rs");
@@ -1534,6 +1547,7 @@ fn go_to_declaration_from_the_context_menu_goes_to_the_clicked_name() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
     let main = root.join("src/main.rs");
@@ -1599,6 +1613,7 @@ fn tests_run_with_nextest_when_the_setting_is_on() {
     app.apply_settings(&egui::Context::default(), settings);
     assert!(app.runner.nextest);
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
     pump(&mut app, "the tests", |a| a.runner.tests.as_ref().is_some_and(|t| !t.running));
@@ -1626,14 +1641,16 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
-    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    assert!(app.runner.cargo_workspace.is_none());
     app.open_file(&root.join("src/lib.rs"));
     app.open_file(&root.join("src/main.rs"));
 
-    // Untrusted: the server stays off (cargo clean runs no project code).
+    // Untrusted: neither Cargo metadata, cargo clean nor the language server may run.
     app.invalidate_caches(true);
     assert_eq!(app.insight.status, InsightStatus::Untrusted);
     assert!(app.insight.session.is_none());
+    assert!(app.runner.cargo_workspace.is_none());
+    assert!(app.runner.build.is_none());
 
     app.trust_project();
     pump(&mut app, "the server", |a| a.insight.status == InsightStatus::Ready);
@@ -1868,6 +1885,7 @@ fn search_everywhere_finds_classes_symbols_and_library_types() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.trust_project();
     app.open_file(&root.join("src/main.rs"));
@@ -1999,6 +2017,7 @@ fn the_debugger_steps_and_evaluates_a_rust_program() {
     let main = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&main);
     let ctx = egui::Context::default();
@@ -2081,6 +2100,7 @@ fn the_debugger_stops_a_panic_at_the_code_that_panicked() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::Debug);
@@ -2105,6 +2125,7 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     let ctx = egui::Context::default();
@@ -2186,6 +2207,7 @@ fn the_debugger_attaches_to_a_running_program() {
 
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);
@@ -2209,6 +2231,7 @@ fn a_rust_run_configuration_takes_arguments_and_environment() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.selected_config().unwrap().name.clone();
     app.edit_run_config(Some(name.clone()));
@@ -2232,6 +2255,7 @@ fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
 
     // The action opens the dialog with the current variables.
@@ -2273,7 +2297,7 @@ fn rust_analyzer_runs_build_scripts_with_the_project_environment() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
-    pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
+    assert!(app.runner.cargo_workspace.is_none());
     // Setting it runs nothing while the project is not trusted.
     app.set_project_env("CRAB_PROJECT=first".to_string());
     assert!(app.insight.session.is_none());
@@ -2379,6 +2403,7 @@ fn problems_of_a_closed_file_show_their_real_line() {
     let bad = root.join("examples/bad.rs");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::Build);
     pump(&mut app, "the build", |a| a.runner.build.as_ref().is_some_and(|b| b.result.is_some()));
@@ -2404,6 +2429,7 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
 
     // Without a lock file nothing is resolved, and none is written.
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     let stdlib = |a: &mut CrabCraftApp| a.explorer.libraries.iter().any(|l| l.name == "stdlib");
     pump(&mut app, "the standard library", stdlib);
     assert_eq!(app.explorer.libraries.len(), 1, "{:?}", app.explorer.libraries);
@@ -2460,6 +2486,7 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
     let (lib, left) = (root.join("src/lib.rs"), root.join("src/left.rs"));
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
 
     let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
@@ -2535,6 +2562,7 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     let mut app = new_app(dir.path());
     app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config tab_spaces=3".into(), channel: "+stable".into(), env: "CRABCRAFT_RUSTFMT=1\n".into() };
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&main);
     let text = |a: &CrabCraftApp| a.docs.active_doc().map(|d| d.editor.buffer.rope().to_string()).unwrap_or_default();
@@ -2613,6 +2641,7 @@ fn run_options_and_required_features_reach_the_target() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let config = app.runner.configs.iter().find(|c| c.name == "demo").unwrap().clone();
 
@@ -2821,6 +2850,7 @@ fn a_new_project_opens_with_its_run_configuration() {
     let root = rc_core::Runtime::block_on(request.create(&cargo)).unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let config = app.runner.selected_config().unwrap();
     assert_eq!(config.name, "fresh");
@@ -2840,6 +2870,7 @@ fn a_new_crate_joins_the_open_workspace() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let packages = |a: &CrabCraftApp| a.runner.cargo_workspace.as_ref().map_or(0, |w| w.packages.len());
     assert_eq!(packages(&app), 1);
@@ -2866,6 +2897,7 @@ fn the_cargo_window_runs_targets_and_typed_commands() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let ctx = egui::Context::default();
     let target = |a: &CrabCraftApp, kind| -> Target { a.runner.cargo_workspace.as_ref().unwrap().packages[0].targets.iter().find(|t| t.kind == kind).unwrap().clone() };
@@ -3090,6 +3122,7 @@ fn an_external_tool_runs_on_the_active_file() {
     let mut app = new_app(dir.path());
     app.settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/main.rs"));
     app.run_external_tool("Count lines");
     pump(&mut app, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
@@ -3158,6 +3191,7 @@ fn before_launch_tools_run_first_and_a_failure_stops_the_run() {
         ExternalTool { name: "Fail".into(), program: "false".into(), args: String::new(), working_dir: String::new() },
     ];
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     let name = app.runner.configs[0].name.clone();
@@ -3193,6 +3227,7 @@ fn run_configurations_allow_instances_and_live_in_the_project() {
     std::fs::write(root.join("src/main.rs"), "fn main() {\n    println!(\"up\");\n    std::thread::sleep(std::time::Duration::from_secs(60));\n}\n").unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.configs[0].name.clone();
     let options = rc_core::session::RunOptions { allow_parallel: true, in_project: true, args: "--port 1".into(), ..Default::default() };
@@ -3231,6 +3266,7 @@ fn test_runs_become_temporary_configurations() {
     std::fs::write(root.join("src/lib.rs"), "#[cfg(test)]\nmod tests {\n    #[test]\n    fn one() {}\n    #[test]\n    fn two() {}\n}\n").unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let manifest = app.runner.cargo_workspace.as_ref().unwrap().manifest.clone();
     let filter = |n: &str| rc_dotnet::TestFilter::Tests(vec![n.to_string()]);
@@ -3280,6 +3316,7 @@ fn emulated_terminal_runs_see_a_tty_and_take_input() {
     .unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     let name = app.runner.configs[0].name.clone();
     app.runner.options.insert(name, rc_core::session::RunOptions { emulate_terminal: true, ..Default::default() });
@@ -3354,6 +3391,7 @@ fn inspect_code_runs_clippy_over_the_whole_workspace() {
     write(&root.join("util/src/lib.rs"), "pub fn twice(x: &Vec<i32>) -> usize {\n    x.len() * 2\n}\n");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.run_ide_action(&egui::Context::default(), rc_editor::Action::InspectCode);
     assert!(app.inspection.as_ref().is_some_and(|i| i.running));
@@ -3382,6 +3420,7 @@ fn a_compound_configuration_starts_several_cargo_binaries() {
     write(&root.join("src/bin/client.rs"), "fn main() {\n    println!(\"client up\");\n}\n");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.app_names().len() == 2);
     app.runner.save_compound(None, "Both".into(), app.runner.app_names());
     assert!(matches!(app.runner.selected_config().map(|c| &c.kind), Some(ConfigKind::Compound { .. })));
@@ -3579,6 +3618,7 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     write(&main, text);
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the workspace", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&main);
     let i = app.docs.active.unwrap();
@@ -3603,6 +3643,7 @@ fn code_disabled_by_cfg_is_faded() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
         a.update_cfg_sets();
@@ -3620,7 +3661,7 @@ fn code_disabled_by_cfg_is_faded() {
     let doc = app.docs.active_doc_mut().unwrap();
     doc.editor.replace(0, 0, "// note\n");
     assert!(faded(&mut app)[0].starts_with("#[cfg(feature = \"extra\")]"));
-    // Untrusted: no language server ran.
+    // Trusted project tools; this fixture deliberately did not start a language server.
     assert!(app.insight.session.is_none());
 }
 
@@ -3640,6 +3681,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/lib.rs"));
     pump(&mut app, "the cfg of the crate", |a| {
         a.update_cfg_sets();
@@ -3708,6 +3750,7 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     app.open_file(&root.join("src/lib.rs"));
     let faded = |a: &mut CrabCraftApp| -> Vec<String> {
         a.update_cfg_sets();
@@ -3789,6 +3832,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     let root = root.canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     let manifest = root.join("Cargo.toml");
     let caret_on = |app: &mut CrabCraftApp, line: usize, col: usize| app.docs.active_doc_mut().unwrap().editor.goto(line, col);
@@ -3895,7 +3939,10 @@ fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
     h.run_steps(2);
     h.get_by_label("Create").click();
     let project = location.join("project1");
-    wait(&mut h, "the new project", &|h| h.state().new_project.is_none() && h.state().runner.cargo_workspace.is_some());
+    wait(&mut h, "the new project", &|h| h.state().new_project.is_none() && h.state().workspace.is_some());
+    assert!(h.state().runner.cargo_workspace.is_none());
+    h.state_mut().trust_project_tools_for_test();
+    wait(&mut h, "the explicitly trusted project model", &|h| h.state().runner.cargo_workspace.is_some());
     let manifest = std::fs::read_to_string(project.join("Cargo.toml")).unwrap();
     assert!(manifest.contains("proc-macro = true") && manifest.contains("syn = "), "{manifest}");
     assert!(project.join("tests/describe.rs").is_file());
@@ -4059,6 +4106,7 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
 
     // A breakpoint in price.rs, which is then closed: it stays.
@@ -4133,6 +4181,7 @@ fn set_execution_point_skips_and_repeats_lines_with_gdb() {
     let main_rs = root.join("src/main.rs");
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&main_rs);
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(5, BreakpointKind::Normal);
@@ -4219,6 +4268,7 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
 
     let mut app = new_app(dir.path());
     app.open_workspace(&root);
+    app.trust_project_tools_for_test();
     pump(&mut app, "the Cargo project", |a| a.runner.cargo_workspace.is_some());
     app.open_file(&root.join("src/main.rs"));
     app.docs.active_doc_mut().unwrap().editor.breakpoints.insert(8, BreakpointKind::Normal);

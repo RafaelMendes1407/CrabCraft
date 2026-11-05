@@ -38,6 +38,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         empty_state(ui, ToolWindow::Cargo.icon(), tr("No Cargo project"), tr("Open a folder with a Cargo.toml to see its members and targets."));
         return;
     };
+    if ui.button(tr("Manage Cargo Dependencies…")).clicked() {
+        app.dialog = Some(crate::ui::dialogs::Dialog::CargoDependencies);
+    }
     ui.horizontal(|ui| {
         ui.add_space(12.0);
         let width = ui.available_width() - 12.0;

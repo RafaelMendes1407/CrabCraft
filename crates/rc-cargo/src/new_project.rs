@@ -377,6 +377,18 @@ mod tests {
         assert!(text.contains("describes_named_fields ... ok") && text.contains("enums_are_rejected ... ok"), "{text}");
     }
 
+    /// Strict validation for P-08, unlike the optional target probe in the native test.
+    #[test]
+    #[ignore = "Requires wasm32-unknown-unknown and cached wasm-bindgen dependencies"]
+    fn webassembly_template_checks_on_the_real_wasm_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let cargo = Cargo::locate().expect("cargo is installed");
+        assert!(WasmTools::detect(&cargo).target, "install wasm32-unknown-unknown first");
+        let req = NewProject { template: Template::WebAssembly, name: "web_verified".into(), location: dir.path().to_path_buf(), git: false };
+        let path = rc_core::Runtime::block_on(req.create(&cargo)).unwrap();
+        cargo_in(&cargo, &path, &["check", "--target", WASM_TARGET]).expect("wasm-bindgen dependencies must be cached");
+    }
+
     #[test]
     fn creates_a_webassembly_library_that_builds() {
         let dir = tempfile::tempdir().unwrap();

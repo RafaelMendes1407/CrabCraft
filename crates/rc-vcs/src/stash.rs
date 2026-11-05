@@ -37,7 +37,13 @@ impl Repository {
 
     /// Saves local changes into a new stash ([`crate::GitError::NothingToStash`] when clean).
     pub async fn stash_push(&self, opts: &StashOptions) -> Result<()> {
-        let mut cmd = self.cmd().args(["stash", "push"]);
+        self.stash_push_cancellable(opts, None).await
+    }
+
+    pub async fn stash_push_cancellable(&self, opts: &StashOptions, cancel: Option<&crate::CancelToken>) -> Result<()> {
+        let mut cmd = self.cmd().cancel(cancel);
+        if !opts.paths.is_empty() { cmd = cmd.arg("--literal-pathspecs"); }
+        let mut cmd = cmd.args(["stash", "push"]);
         if let Some(m) = &opts.message {
             cmd = cmd.arg("--message").arg(m);
         }
@@ -53,6 +59,15 @@ impl Repository {
             return Err(crate::GitError::NothingToStash);
         }
         Ok(())
+    }
+
+    /// Creates and switches to a branch at the stash's original base, restoring its index.
+    /// Uses the immutable hash so a concurrent stash-list change cannot apply another stash.
+    /// The stash is kept, including after a successful restore.
+    pub async fn stash_branch(&self, stash: &Stash, name: &str, cancel: Option<&crate::CancelToken>) -> Result<String> {
+        self.check_branch_name(name).await?;
+        self.check_stash(stash.index, &stash.hash).await?;
+        self.cmd().args(["stash", "branch", name, &stash.hash]).cancel(cancel).text().await
     }
 
     /// Applies a stash and drops it; conflicts keep it and fail with `Conflicts`.

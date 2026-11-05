@@ -405,6 +405,30 @@ mod tests {
     }
 
     #[test]
+    fn web_assets_in_a_rust_project_parse_and_highlight() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/RustWeb");
+        let assets = [
+            ("static/index.html", Lang::Html, "main", Hl::Tag),
+            ("static/app.css", Lang::Css, "color", Hl::Property),
+            ("static/app.js", Lang::JavaScript, "const", Hl::Keyword),
+            ("static/app.ts", Lang::TypeScript, "interface", Hl::Keyword),
+            ("static/view.tsx", Lang::Tsx, "string", Hl::Class),
+        ];
+        for (file, lang, token, role) in assets {
+            let path = root.join(file);
+            assert_eq!(Lang::from_path(&path), lang);
+            let src = std::fs::read_to_string(path).unwrap();
+            let rope = Rope::from_str(&src);
+            let tree = crate::parse_now(lang, &rope, None).unwrap();
+            assert!(!tree.root_node().has_error(), "{file}: {}", tree.root_node().to_sexp());
+            assert!(lang.query().is_some(), "invalid query for {lang:?}");
+            let roles = roles_of(lang, &src);
+            assert!(roles.iter().any(|(text, hl)| text == token && *hl == role), "{file}: {roles:?}");
+            assert!(!crate::folding_ranges(lang, &tree, &rope).is_empty(), "no folds for {file}");
+        }
+    }
+
+    #[test]
     fn rust_roles() {
         let src = "use std::fmt;\n/// Doc\n#[derive(Debug)]\npub struct Point<'a, T> { x: &'a T }\nenum Kind { One }\ntrait Shape { fn area(&self) -> f64; }\nconst MAX: u32 = 1;\nfn main() {\n    let mut p = make(1.5);\n    println!(\"hi\\n\");\n    p.area();\n    // done\n}\n";
         let roles = roles_of(Lang::Rust, src);

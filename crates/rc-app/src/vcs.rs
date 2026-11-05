@@ -167,6 +167,8 @@ pub struct DiffView {
 }
 
 pub struct Vcs {
+    /// Set only by the application trust store; untrusted open starts no Git process.
+    pub trusted: bool,
     pub repo: Option<Repository>,
     pub status: Option<Status>,
     pub branches: Vec<Branch>,
@@ -193,6 +195,8 @@ pub struct Vcs {
     pub message: String,
     pub amend: bool,
     pub excluded: BTreeSet<String>,
+    pub changelists: rc_core::changelists::Changelists,
+    pub changelist_name: String,
     pub busy: Option<&'static str>,
     pub error: Option<String>,
     pub tab: GitTab,
@@ -259,6 +263,7 @@ pub struct Vcs {
 impl Vcs {
     pub fn new(waker: Waker) -> Self {
         Vcs {
+            trusted: false,
             repo: None,
             status: None,
             branches: Vec::new(),
@@ -278,6 +283,8 @@ impl Vcs {
             message: String::new(),
             amend: false,
             excluded: BTreeSet::new(),
+            changelists: Default::default(),
+            changelist_name: String::new(),
             busy: None,
             error: None,
             tab: GitTab::Log,
@@ -321,12 +328,14 @@ impl Vcs {
         }
     }
 
-    pub fn open(&mut self, root: &Path) {
+    pub fn open(&mut self, root: &Path, trusted: bool) {
         *self = Vcs::new(self.waker.clone());
+        self.trusted = trusted;
+        if !trusted { return; }
         let out = self.inbox.sender();
         let root = root.to_path_buf();
         Runtime::spawn(async move {
-            out.send(VcsEvent::Repo(Repository::discover(&root).await.ok()));
+            out.send(VcsEvent::Repo(Repository::discover(&root).await.ok().map(|repo| repo.with_trust(true))));
         });
     }
 
@@ -488,6 +497,7 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<Option<String>, rc_vcs::GitError>> + Send + 'static,
     {
+        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
         self.busy = Some(what);
         self.error = None;
         if report {
@@ -602,7 +612,7 @@ impl Vcs {
         self.status.as_ref().map(|s| s.conflicts().map(|e| e.path.clone()).collect()).unwrap_or_default()
     }
 
-    /// A merge, rebase or cherry-pick (or a step of one) is running.
+    /// A cancellable Git operation is running.
     pub fn sequence_running(&self) -> bool {
         self.op_cancel.is_some()
     }
@@ -713,13 +723,14 @@ impl Vcs {
         });
     }
 
-    /// Runs a merge, rebase or cherry-pick step: cancellable, its progress shown, and what git
+    /// Runs a cancellable Git operation, showing its progress and keeping what git
     /// printed (or why it stopped) kept in [`Vcs::op_output`].
     fn sequence<F, Fut>(&mut self, what: &'static str, f: F)
     where
         F: FnOnce(rc_vcs::CancelToken, rc_vcs::ProgressSink) -> Fut,
         Fut: std::future::Future<Output = Result<String, rc_vcs::GitError>> + Send + 'static,
     {
+        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
         let cancel = rc_vcs::CancelToken::new();
         self.op_cancel = Some(cancel.clone());
         self.op_progress = None;
@@ -758,10 +769,31 @@ impl Vcs {
 
     /// Stashes the work tree's changes (`--include-untracked`, `--keep-index` on request).
     pub fn stash_push(&mut self, message: &str, include_untracked: bool, keep_index: bool) {
+        self.stash_push_paths(message, include_untracked, keep_index, Vec::new());
+    }
+
+    pub fn stash_push_paths(&mut self, message: &str, include_untracked: bool, keep_index: bool, mut paths: Vec<String>) {
         let Some(repo) = self.repo.clone() else { return };
         let message = Some(message.trim().to_string()).filter(|m| !m.is_empty());
-        let opts = StashOptions { message, include_untracked, keep_index, paths: Vec::new() };
-        self.op("stash", async move { repo.stash_push(&opts).await });
+        // A rename is one row in Commit but two paths in Git's index.
+        if let Some(status) = &self.status {
+            let old: Vec<String> = status.entries.iter().filter(|entry| paths.contains(&entry.path))
+                .filter_map(|entry| entry.orig_path.clone()).collect();
+            paths.extend(old);
+            paths.sort();
+            paths.dedup();
+        }
+        let opts = StashOptions { message, include_untracked, keep_index, paths };
+        self.sequence("stash", move |cancel, _| async move {
+            repo.stash_push_cancellable(&opts, Some(&cancel)).await?;
+            Ok(String::new())
+        });
+    }
+
+    pub fn stash_branch(&mut self, stash: &Stash, name: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (stash, name) = (stash.clone(), name.to_string());
+        self.sequence("stash_branch", move |cancel, _| async move { repo.stash_branch(&stash, &name, Some(&cancel)).await });
     }
 
     /// Applies a stash to the work tree; `pop` also drops it when it applied cleanly.
@@ -969,7 +1001,7 @@ impl Vcs {
 
     /// The changes that go into the next commit, relative to the repository.
     pub fn included(&self) -> Vec<String> {
-        self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect()
+        self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p) && self.changelists.in_active(p)).collect()
     }
 
     /// The folder of the repository.
@@ -1008,20 +1040,27 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         let upstream = self.status.as_ref().and_then(|s| s.branch.upstream.clone());
         let branch = self.status.as_ref().and_then(|s| s.branch.head.clone());
-        self.op("push", async move {
+        self.sequence("push", move |cancel, progress| async move {
             let opts = if upstream.is_none() { PushOptions { refspec: branch, set_upstream: true, ..Default::default() } } else { PushOptions::default() };
-            repo.push(&opts, None, None).await
+            repo.push(&opts, Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
         });
     }
 
     pub fn pull(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        self.op("pull", async move { repo.pull(&PullOptions::default(), None, None).await });
+        self.sequence("pull", move |cancel, progress| async move {
+            repo.pull(&PullOptions::default(), Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
+        });
     }
 
     pub fn fetch(&mut self) {
         let Some(repo) = self.repo.clone() else { return };
-        self.op("fetch", async move { repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, None, None).await });
+        self.sequence("fetch", move |cancel, progress| async move {
+            repo.fetch(&rc_vcs::FetchOptions { prune: true, ..Default::default() }, Some(progress), Some(&cancel)).await?;
+            Ok(String::new())
+        });
     }
 
     pub fn checkout(&mut self, branch: &Branch) {
@@ -1118,6 +1157,15 @@ impl Vcs {
                     // Files that left the change list lose their exclusion.
                     let paths: BTreeSet<String> = s.entries.iter().map(|e| e.path.clone()).collect();
                     self.excluded.retain(|p| paths.contains(p));
+                    // Keep assignments when Git reports a rename as one changed row.
+                    for entry in &s.entries {
+                        if let Some(old) = &entry.orig_path
+                            && let Some(list) = self.changelists.assignments.remove(old)
+                        {
+                            self.changelists.assignments.entry(entry.path.clone()).or_insert(list);
+                        }
+                    }
+                    self.changelists.retain_changed(&paths);
                     self.status = Some(s);
                     self.status_version += 1;
                 }
@@ -1464,6 +1512,7 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "stash_apply" => tr("Stash applied"),
         "stash_pop" => tr("Stash applied and dropped"),
         "stash_drop" => tr("Stash dropped"),
+        "stash_branch" => tr("Branch created; stash kept"),
         "patch_save" => tr("Patch saved"),
         "patch_copy" => tr("Patch copied to the clipboard"),
         "patch_apply" => tr("Patch applied"),

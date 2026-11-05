@@ -20,9 +20,13 @@ pub enum SettingsPage {
     Copyright,
     Scopes,
     Inspections,
+    Backup,
 }
 
 pub enum Dialog {
+    RevertDisk(crate::disk_revert::Ticket),
+    CloneRepository,
+    CargoDependencies,
     /// Picks a running process for the debugger.
     Attach { filter: String, processes: Vec<rc_core::processes::Process> },
     Settings { draft: Box<Settings>, page: SettingsPage },
@@ -62,7 +66,7 @@ pub enum Dialog {
     /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
     PushTags { name: Option<String>, remote: String },
     /// Stash the work tree's changes with an optional message.
-    StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    StashChanges { message: String, include_untracked: bool, keep_index: bool, paths: Vec<String> },
     /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
     /// requested (the loaded patch and its preview live in `app.vcs.patch`).
     ApplyPatch { path: String, paste: bool },
@@ -71,6 +75,7 @@ pub enum Dialog {
     ConfigFolder { config: String, rename: Option<String>, folder: String },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
+    StashBranch { stash: rc_vcs::Stash, name: String },
     /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
     /// The path follows the branch until the user edits it.
     AddWorktree { path: String, new_branch: bool, name: String, existing: String, path_edited: bool },
@@ -97,6 +102,7 @@ pub enum Dialog {
     /// Every breakpoint and its group (D-27): the selected one and the group name being typed.
     Breakpoints { selected: Option<(PathBuf, usize)>, group: String },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
+    WasmOptions { name: String, manifest: PathBuf, options: rc_core::session::RunOptions },
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
@@ -129,8 +135,10 @@ enum Outcome {
 pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut dialog) = app.dialog.take() else { return };
     let outcome = match &mut dialog {
+        Dialog::RevertDisk(ticket) => revert_disk(app, ctx, ticket),
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
+        Dialog::CloneRepository => if crate::clone_project::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
         Dialog::Bookmarks { list, selected } => bookmarks(app, ctx, list, selected),
         Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),
@@ -153,7 +161,9 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::DeleteTag { name } => delete_tag(app, ctx, name),
         Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
-        Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::StashChanges { message, include_untracked, keep_index, paths } => stash_changes(app, ctx, message, include_untracked, keep_index, paths),
+        Dialog::StashBranch { stash, name } => stash_branch(app, ctx, stash, name),
+        Dialog::CargoDependencies => if crate::cargo_dependencies::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
         Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),
@@ -171,6 +181,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
+        Dialog::WasmOptions { name, manifest, options } => wasm_options(app, ctx, name, manifest, options),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
@@ -208,7 +219,7 @@ fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
 }
 
 /// The pages of Settings, in the order of its menu.
-fn settings_pages() -> [(SettingsPage, &'static str); 9] {
+fn settings_pages() -> [(SettingsPage, &'static str); 10] {
     [
         (SettingsPage::Appearance, tr("Appearance")),
         (SettingsPage::Editor, tr("Editor")),
@@ -219,6 +230,7 @@ fn settings_pages() -> [(SettingsPage, &'static str); 9] {
         (SettingsPage::Copyright, tr("Copyright")),
         (SettingsPage::Scopes, tr("Scopes")),
         (SettingsPage::Inspections, tr("Inspections")),
+        (SettingsPage::Backup, tr("Preferences backup")),
     ]
 }
 
@@ -263,6 +275,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 ui.add_space(10.0);
                 // Pages that lay out their own lists, sized to the page.
                 match page {
+                    SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
                     SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
                     SettingsPage::Copyright => {
                         egui::ScrollArea::vertical().id_salt("copyright_page").auto_shrink([false, false]).show(ui, |ui| copyright_page(ui, app, p.text_muted, p.error));
@@ -394,7 +407,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
+                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections | SettingsPage::Backup => {}
                 });
                 });
             });
@@ -402,6 +415,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         buttons(ui, tr("OK"), true)
     });
     if ok {
+        app.settings_backup.cancel();
         app.apply_settings(ctx, draft.clone());
         if let Some(profile) = app.copyright.draft.take() {
             app.set_copyright_profile(profile);
@@ -415,6 +429,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
         return Outcome::Close;
     }
     if cancel || esc {
+        app.settings_backup.cancel();
         app.copyright.draft = None;
         app.explorer.scopes.draft = None;
         app.inspections.draft = None;
@@ -434,7 +449,7 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
     let (mut use_project, mut project) = app.inspections.draft.take().unwrap_or_else(|| (app.inspections.use_project, app.inspections.project.clone()));
     if project_open {
         ui.horizontal(|ui| {
-            ui.label(tr("Profile"));
+            ui.label(rc_kit::i18n::tr_ctx("inspections", "Profile"));
             let name = |p: bool| if p { tr("Project (saved with this project)") } else { tr("Default (every project)") };
             egui::ComboBox::from_id_salt("inspection_profile").selected_text(name(use_project)).width(260.0).show_ui(ui, |ui| {
                 ui.selectable_value(&mut use_project, false, name(false));
@@ -669,12 +684,15 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
         ui.label(tr("Keymap"));
         let name = |k: KeymapChoice| match k {
             KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
+            KeymapChoice::RustRover => tr("RustRover (Windows/Linux)"),
             KeymapChoice::VisualStudio => "Visual Studio",
             KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
         };
         egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
-            for k in [KeymapChoice::Rider, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
-                ui.selectable_value(&mut draft.keymap, k, name(k));
+            for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
+                ui.add_enabled_ui(k != KeymapChoice::RustRover || !cfg!(target_os = "macos"), |ui| {
+                    ui.selectable_value(&mut draft.keymap, k, name(k));
+                }).response.on_disabled_hover_text(tr("This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS."));
             }
         });
     });
@@ -894,6 +912,9 @@ fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
         }
     }
     ui.end_row();
+    ui.label("rustup");
+    ui.vertical(|ui| app.rustup_installer.ui(ui));
+    ui.end_row();
     if !has_rustup {
         return;
     }
@@ -965,6 +986,11 @@ fn about(ctx: &Context) -> Outcome {
             ui.label(egui::RichText::new(tr("A lightweight IDE for Rust")).color(rc_kit::pal(ui).muted));
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tr("Icons: IntelliJ Platform (Apache 2.0)")).size(11.5).color(rc_kit::pal(ui).muted));
+            ui.collapsing(tr("Font licenses"), |ui| {
+                egui::ScrollArea::vertical().id_salt("font_licenses").max_height(200.0).show(ui, |ui| {
+                    ui.label(rc_kit::theme::FONT_LICENSES);
+                });
+            });
             ui.add_space(12.0);
             theme::primary_button(ui, tr("Close")).clicked()
         })
@@ -1113,6 +1139,46 @@ fn project_env(app: &mut CrabCraftApp, ctx: &Context, text: &mut String) -> Outc
     });
     if ok && parsed.is_ok() {
         app.set_project_env(text.trim().to_string());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn wasm_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, manifest: &std::path::Path, options: &mut rc_core::session::RunOptions) -> Outcome {
+    let valid = crate::runner::wasm_pack::plan(manifest, options, Vec::new());
+    let ((ok, cancel), esc) = modal(ctx, "wasm_options", 560.0, |ui| {
+        title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
+        ui.label(manifest.display().to_string());
+        ui.label(tr("Builds WebAssembly and JavaScript bindings; does not start a browser or publish a package."));
+        egui::Grid::new("wasm_options_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+            ui.label(tr("JavaScript target"));
+            let shown = if options.wasm_target.is_empty() { "bundler" } else { options.wasm_target.as_str() };
+            egui::ComboBox::from_id_salt("wasm_target").selected_text(shown).show_ui(ui, |ui| {
+                for target in crate::runner::wasm_pack::TARGETS {
+                    ui.selectable_value(&mut options.wasm_target, target.to_string(), *target);
+                }
+            });
+            ui.end_row();
+            ui.label(tr("Output directory"));
+            ui.add(egui::TextEdit::singleline(&mut options.wasm_out_dir).hint_text("pkg").desired_width(350.0));
+            ui.end_row();
+            ui.label(tr("Features"));
+            ui.add(egui::TextEdit::singleline(&mut options.features).hint_text("serde,logging").desired_width(350.0));
+            ui.end_row();
+            ui.label(tr("Environment variables"));
+            ui.add(egui::TextEdit::multiline(&mut options.env).hint_text("CARGO_NET_OFFLINE=true").desired_width(350.0).desired_rows(3));
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut options.wasm_dev, tr("Development build (otherwise release)"));
+            ui.end_row();
+        });
+        ui.label(tr("Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled."));
+        if let Err(error) = &valid { ui.colored_label(rc_kit::pal(ui).error, error.to_string()); }
+        buttons(ui, tr("OK"), valid.is_ok())
+    });
+    if ok {
+        app.runner.options.insert(name.to_string(), options.clone());
+        app.session_dirty = true;
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
@@ -2010,6 +2076,19 @@ fn clip(s: &str) -> String {
     if s.chars().count() > 60 { format!("{}…", s.chars().take(59).collect::<String>()) } else { s.to_string() }
 }
 
+fn revert_disk(app: &mut CrabCraftApp, ctx: &Context, ticket: &crate::disk_revert::Ticket) -> Outcome {
+    let valid = ticket.index(&app.docs).is_some();
+    let ((ok, cancel), esc) = modal(ctx, "revert_disk", 520.0, |ui| {
+        title(ui, tr("Revert from Disk"));
+        ui.label(trf("Discard the unsaved changes to {file} and load its current disk version?", &[("file", &ticket.path.display())]));
+        ui.label(tr("Undo can restore the discarded text. Disk contents are not changed."));
+        if !valid { ui.colored_label(rc_kit::pal(ui).error, crate::disk_revert::Error::Stale.to_string()); }
+        buttons(ui, tr("Discard and Reload"), valid)
+    });
+    if ok { app.start_disk_revert(ticket.clone()); return Outcome::Close; }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
 fn confirm_delete(app: &mut CrabCraftApp, ctx: &Context, path: &mut PathBuf) -> Outcome {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let ((ok, cancel), esc) = modal(ctx, "delete", 420.0, |ui| {
@@ -2132,12 +2211,14 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         .filter(|p| filter.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&filter.to_lowercase())))
         .cloned()
         .collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_files", 480.0, |ui| {
         title(ui, tr("Recent Files"));
         let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
         resp.request_focus();
+        if resp.changed() { *selected = 0; }
         if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
             *selected = (*selected + 1).min(items.len().saturating_sub(1));
         }
@@ -2151,7 +2232,9 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         if items.is_empty() {
             ui.label(egui::RichText::new(tr("No recent files")).color(p.muted));
         }
-        for (i, path) in items.iter().enumerate().take(20) {
+        let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
+        egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
+        for (i, path) in items.iter().enumerate() {
             let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
             if i == *selected {
@@ -2163,10 +2246,13 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
             ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
             let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
             ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, dir, FontId::proportional(11.5), p.muted);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == *selected, path.display().to_string()));
+            if move_selection && i == *selected { resp.scroll_to_me(Some(egui::Align::Center)); }
             if resp.clicked() {
                 open = Some(path.clone());
             }
         }
+        });
     });
     if let Some(path) = open {
         app.open_file(&path);
@@ -2518,54 +2604,49 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
 }
 
 fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
-    let items: Vec<(PathBuf, usize, String)> = app
-        .nav_back
-        .iter()
-        .rev()
-        .take(30)
-        .map(|(path, pos)| {
-            let line_text = match app.docs.index_of(path) {
-                Some(i) => {
-                    let e = &app.docs.list[i].editor;
-                    let (l, _) = e.buffer.line_col((*pos).min(e.buffer.len_chars()));
-                    (l, e.buffer.line_text(l))
-                }
-                None => (0, String::new()),
-            };
-            (path.clone(), line_text.0, line_text.1)
-        })
-        .collect();
+    // Character positions remain meaningful when a file was closed; do not invent line 1
+    // or discard the column merely because its preview buffer is no longer open.
+    let items: Vec<(PathBuf, usize, Option<(usize, usize)>, String)> = app.nav_back.iter().rev().take(30).map(|(path, position)| {
+        let preview = app.docs.index_of(path).map(|index| {
+            let editor = &app.docs.list[index].editor;
+            let location = editor.buffer.line_col((*position).min(editor.buffer.len_chars()));
+            (location, editor.buffer.line_text(location.0))
+        });
+        let (location, text) = match preview { Some((location, text)) => (Some(location), text), None => (None, path.display().to_string()) };
+        (path.clone(), *position, location, text)
+    }).collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_locations", 620.0, |ui| {
         title(ui, tr("Recent Locations"));
-        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
-            *selected = (*selected + 1).min(items.len().saturating_sub(1));
-        }
-        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
-            *selected = selected.saturating_sub(1);
-        }
-        if ui.input(|i| i.key_pressed(Key::Enter)) {
-            open = items.get(*selected).cloned();
-        }
-        for (i, (path, line, text)) in items.iter().enumerate() {
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
-            if i == *selected {
-                ui.painter().rect_filled(r, 6.0, p.selection);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(r, 6.0, p.row_hover);
+        if ui.input(|input| input.key_pressed(Key::ArrowDown)) { *selected = (*selected + 1).min(items.len().saturating_sub(1)); }
+        if ui.input(|input| input.key_pressed(Key::ArrowUp)) { *selected = selected.saturating_sub(1); }
+        if ui.input(|input| input.key_pressed(Key::Enter)) { open = items.get(*selected).map(|(path, position, _, _)| (path.clone(), *position)); }
+        let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
+        egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
+            for (index, (path, position, location, text)) in items.iter().enumerate() {
+                let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
+                if index == *selected { ui.painter().rect_filled(rect, 6.0, p.selection); }
+                else if response.hovered() { ui.painter().rect_filled(rect, 6.0, p.row_hover); }
+                let name = path.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                let caption = location.map_or_else(|| name.clone(), |(line, column)| format!("{name}:{}:{}", line + 1, column + 1));
+                icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+                ui.painter().text(rect.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, &caption, theme::bold(12.5), p.text);
+                ui.painter().text(rect.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
+                response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, index == *selected, format!("{} · {caption}", path.display())));
+                if move_selection && index == *selected { response.scroll_to_me(Some(egui::Align::Center)); }
+                if response.clicked() { open = Some((path.clone(), *position)); }
             }
-            let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
-            ui.painter().text(r.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, format!("{name}:{}", line + 1), theme::bold(12.5), p.text);
-            ui.painter().text(r.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
-            if resp.clicked() {
-                open = Some((path.clone(), *line, text.clone()));
-            }
-        }
+        });
     });
-    if let Some((path, line, _)) = open {
-        app.open_at(&path, line, 0);
+    if let Some((path, position)) = open {
+        app.open_file(&path);
+        if let Some(doc) = app.docs.active_doc_mut().filter(|doc| doc.path == path) {
+            let position = position.min(doc.editor.buffer.len_chars());
+            doc.editor.set_selection(rc_text::Selection::point(position));
+            doc.editor.request_scroll_to_caret();
+        }
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
@@ -2701,9 +2782,15 @@ fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool) -> Outcome {
+fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool, paths: &[String]) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "stash_changes", 420.0, |ui| {
         title(ui, tr("Stash Changes"));
+        if !paths.is_empty() {
+            ui.label(trf("Only the {n} checked files will be stashed.", &[("n", &paths.len())]));
+            egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+                for path in paths { ui.label(path); }
+            });
+        }
         let resp = ui.add(egui::TextEdit::singleline(message).hint_text(tr("Message (optional)")).desired_width(f32::INFINITY));
         if message.is_empty() && !ui.memory(|m| m.focused().is_some()) {
             resp.request_focus();
@@ -2714,7 +2801,11 @@ fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, in
         buttons(ui, tr("Stash"), true)
     });
     if ok {
-        app.vcs.stash_push(message, *include_untracked, *keep_index);
+        if paths.is_empty() {
+            app.vcs.stash_push(message, *include_untracked, *keep_index);
+        } else {
+            app.vcs.stash_push_paths(message, *include_untracked, *keep_index, paths.to_vec());
+        }
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
@@ -2865,6 +2956,23 @@ fn apply_patch(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, paste: 
         return Outcome::Close;
     }
     Outcome::Keep
+}
+
+fn stash_branch(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash, name: &mut String) -> Outcome {
+    let valid = plausible_branch_name(name.trim()) && app.vcs.busy.is_none();
+    let ((ok, cancel), esc) = modal(ctx, "stash_branch", 460.0, |ui| {
+        title(ui, tr("Create Branch from Stash"));
+        ui.label(&stash.message);
+        ui.label(tr("Switches to a new branch at the stash's original commit and restores its changes. The stash is kept."));
+        let response = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+        if name.is_empty() && !ui.memory(|m| m.focused().is_some()) { response.request_focus(); }
+        buttons(ui, tr("Create"), valid)
+    });
+    if ok && valid {
+        app.vcs.stash_branch(stash, name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {

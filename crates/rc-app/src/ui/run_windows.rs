@@ -51,7 +51,10 @@ pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEve
 pub fn handle_outputs(app: &mut CrabCraftApp, outputs: Vec<RunnerOutput>) {
     for o in outputs {
         match o {
-            RunnerOutput::ShowTool(tw) => app.dock.show(tw),
+            RunnerOutput::ShowTool(tw) => {
+                if tw == ToolWindow::Tests { app.coverage.show = false; }
+                app.dock.show(tw);
+            },
             RunnerOutput::Notify(m, err) => app.notify(m, err),
             RunnerOutput::BuildDiagnostics(list) => app.set_build_problems(list),
         }
@@ -142,6 +145,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let mut open = None;
     let mut apply = None;
     let mut explain = None;
+    let mut borrow = None;
     if !diags.is_empty() {
         let h = (diags.len() as f32 * 24.0 + 4.0).min(ui.available_height() * 0.45);
         egui::ScrollArea::vertical().id_salt("build_diags").max_height(h).auto_shrink([false, true]).show(ui, |ui| {
@@ -173,12 +177,17 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 {
                     open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
                 }
+                if d.borrow.is_some() {
+                    if ui.small_button(trf("Visualize {code} source ranges…", &[("code", &d.code)])).clicked() { borrow = Some(d.clone()); }
+                }
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", d.code, d.message)));
                 crate::ui::toolwindows::explain_menu(&resp, &d.code, &mut explain);
             }
         });
         ui.separator();
     }
+    if let Some(diagnostic) = borrow { app.borrow_errors.select(diagnostic); }
+    app.borrow_errors.show(ui, &mut app.docs);
     let cwd = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let events = console(ui, &app.runner.build.as_ref().expect("checked").console.term);
     if let Some((f, l, c)) = open {
@@ -328,6 +337,15 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
 // ---------------------------------------------------------------------------------- Tests
 
 pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        ui.selectable_value(&mut app.coverage.show, false, tr("Test Results"));
+        ui.selectable_value(&mut app.coverage.show, true, tr("Coverage"));
+    });
+    if app.coverage.show {
+        crate::coverage::show(app, ui);
+        return;
+    }
     let running = app.runner.tests.as_ref().is_some_and(|t| t.running);
     let has = app.runner.tests.is_some();
     let show_passed = app.runner.tests.as_ref().is_none_or(|t| t.show_passed);
@@ -558,12 +576,50 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
-    let actions = [(ico::ADD, tr("New Terminal Tab"), true)];
+    let ready = app.terminal_starting.is_none();
+    let has = !app.terminals.is_empty();
+    let actions = [
+        (ico::ADD, tr("New Terminal Tab"), ready),
+        (ico::SPLIT_RIGHT, tr("Split Terminal Right"), ready && has),
+        (ico::SPLIT_DOWN, tr("Split Terminal Down"), ready && has),
+        (ico::SEARCH, tr("Find in Terminal"), has),
+        (ico::CLOSE, tr("Close Terminal Split"), app.terminals.active().is_some_and(|tab| app.terminal_tools.split.is_some_and(|split| split.contains(tab.id())))),
+    ];
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
+        Some(1) => app.split_terminal(false),
+        Some(2) => app.split_terminal(true),
+        Some(3) => app.terminal_tools.search.toggle(),
+        Some(4) => app.terminal_tools.split = None,
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
     }
+    let mut cancel_startup = false;
+    if app.terminal_starting.is_some() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Starting terminal…"));
+            cancel_startup = ui.button(tr("Cancel")).clicked();
+        });
+    }
+    if cancel_startup {
+        app.terminal_starting = None;
+        app.terminal_tools.split_after_start = None;
+        if app.terminals.is_empty() { app.toggle_tool(ToolWindow::Terminal); }
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        if app.repl_starting.is_some() {
+            ui.spinner();
+            ui.label(tr("Starting Rust REPL…"));
+            if ui.button(tr("Cancel")).clicked() { app.repl_starting = None; }
+        } else if ui.add_enabled(app.can_open_rust_repl(), egui::Button::new(tr("Rust REPL")))
+            .on_hover_text(tr("Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables."))
+            .clicked() {
+            app.open_rust_repl();
+        }
+    });
     let titles = app.terminals.titles();
     let active = app.terminals.active_index();
     let mut close = None;
@@ -583,23 +639,106 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if let Some(id) = close {
         app.terminals.close(id);
+        if app.terminal_tools.split.is_some_and(|split| split.contains(id)) { app.terminal_tools.split = None; }
         return;
     }
-    let cwd = app.terminals.active().and_then(|t| t.session.cwd().map(|p| p.to_path_buf()));
+    let Some(active) = app.terminals.active().map(|tab| tab.id()) else { return; };
+    if let Some(session) = app.terminals.get(active).map(|tab| &tab.session) {
+        app.terminal_tools.search.show(ui, session, app.waker.clone());
+    }
     let focus = std::mem::take(&mut app.focus_terminal);
-    let Some(tab) = app.terminals.active() else { return };
+    let split = app.terminal_tools.split.filter(|split| split.contains(active));
+    if let Some(mut split) = split.filter(|split| app.terminals.get(split.first).is_some() && app.terminals.get(split.second).is_some()) {
+        let rect = ui.available_rect_before_wrap();
+        let ratio = split.ratio.clamp(0.2, 0.8);
+        let middle = if split.stacked { rect.top() + rect.height() * ratio } else { rect.left() + rect.width() * ratio };
+        let (first, second, divider) = if split.stacked {
+            (Rect::from_min_max(rect.min, pos2(rect.right(), middle - 3.0)), Rect::from_min_max(pos2(rect.left(), middle + 3.0), rect.max), Rect::from_min_max(pos2(rect.left(), middle - 3.0), pos2(rect.right(), middle + 3.0)))
+        } else {
+            (Rect::from_min_max(rect.min, pos2(middle - 3.0, rect.bottom())), Rect::from_min_max(pos2(middle + 3.0, rect.top()), rect.max), Rect::from_min_max(pos2(middle - 3.0, rect.top()), pos2(middle + 3.0, rect.bottom())))
+        };
+        ui.allocate_rect(rect, Sense::hover());
+        let response = ui.interact(divider, ui.id().with("terminal_divider"), Sense::drag()).on_hover_cursor(if split.stacked { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
+        if response.dragged() && let Some(pointer) = response.interact_pointer_pos() {
+            split.ratio = if split.stacked { (pointer.y - rect.top()) / rect.height().max(1.0) } else { (pointer.x - rect.left()) / rect.width().max(1.0) }.clamp(0.2, 0.8);
+            app.terminal_tools.split = Some(split);
+        }
+        ui.painter().rect_filled(divider, 0.0, rc_kit::pal(ui).island_border);
+        for (id, rect) in [(split.first, first), (split.second, second)] {
+            let mut pane = ui.new_child(egui::UiBuilder::new().id_salt(("terminal_pane", id)).max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
+            pane.set_clip_rect(rect.intersect(ui.clip_rect()));
+            terminal_pane(app, &mut pane, id, focus && id == active);
+        }
+    } else {
+        terminal_pane(app, ui, active, focus);
+    }
+}
+
+fn terminal_pane(app: &mut CrabCraftApp, ui: &mut Ui, id: u64, focus: bool) {
+    let Some(tab) = app.terminals.get(id) else { return; };
+    let cwd = tab.session.cwd().map(std::path::Path::to_path_buf);
     let config = rc_term::TermConfig::default();
-    let out = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
-    for e in out.events {
-        if let rc_term::ViewEvent::LinkClicked(link) = e {
-            open_link(app, link, cwd.clone());
+    let output = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
+    for event in output.events {
+        match event {
+            rc_term::ViewEvent::LinkClicked(link) => open_link(app, link, cwd.clone()),
+            rc_term::ViewEvent::Focused => app.terminals.activate(id),
         }
     }
+
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn native_terminal_runs_a_real_cargo_project_and_keeps_tabs_independent() {
+        use egui_kittest::kittest::Queryable;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = tempfile::Builder::new().prefix("crabcraft terminal ").tempdir().unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"terminal_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("src/main.rs"), "fn main() { println!(\"CRABCRAFT_TERMINAL_OK\"); }\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), false);
+        app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
+        app.open_terminal(None);
+        assert!(app.terminal_starting.is_some());
+        assert!(app.terminals.is_empty(), "PTY startup must finish off the UI thread");
+        let mut harness = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        let wait_tabs = |harness: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, count: usize| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while harness.state().terminals.len() != count {
+                harness.run_steps(1);
+                assert!(std::time::Instant::now() < deadline, "terminal startup did not finish");
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        wait_tabs(&mut harness, 1);
+        let first = harness.state().terminals.active().unwrap().id();
+        let session = &harness.state().terminals.active().unwrap().session;
+        assert_eq!(session.cwd().unwrap(), root.path().canonicalize().unwrap());
+        session.write(b"cargo run --offline --quiet\r".to_vec());
+        assert!(session.wait_for_text("CRABCRAFT_TERMINAL_OK", std::time::Duration::from_secs(30)), "{:?}", session.screen_lines());
+        harness.state_mut().terminals.rename(first, Some("Cargo shell".into()));
+        harness.get_by_label(tr("New Terminal Tab")).click();
+        harness.run_steps(2);
+        wait_tabs(&mut harness, 2);
+        let second = harness.state().terminals.active().unwrap().id();
+        harness.state_mut().terminals.rename(second, Some("Other shell".into()));
+        harness.run_steps(2);
+        harness.get_by_label("Cargo shell").click(); harness.run_steps(2);
+        assert_eq!(harness.state().terminals.active().unwrap().id(), first);
+        harness.get_by_label("Other shell").click(); harness.run_steps(2);
+        assert_eq!(harness.state().terminals.active().unwrap().id(), second);
+        assert!(!harness.state().terminals.active().unwrap().session.screen_lines().iter().any(|line| line.contains("CRABCRAFT_TERMINAL_OK")));
+        assert!(harness.state_mut().terminals.close(second));
+        assert_eq!(harness.state().terminals.active().unwrap().id(), first);
+        assert!(harness.state().terminals.active().unwrap().session.is_running());
+    }
 
     #[test]
     fn test_names_and_the_filter() {

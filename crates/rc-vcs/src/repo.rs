@@ -22,6 +22,7 @@ pub struct Repository {
     git: Arc<Git>,
     root: PathBuf,
     git_dir: PathBuf,
+    trusted: bool,
 }
 
 impl Repository {
@@ -48,8 +49,11 @@ impl Repository {
             // A bare repository or the inside of `.git` has no work tree.
             return Err(GitError::NotARepository(path.to_path_buf()));
         };
-        Ok(Repository { git, root: PathBuf::from(root), git_dir: PathBuf::from(git_dir) })
+        Ok(Repository { git, root: PathBuf::from(root), git_dir: PathBuf::from(git_dir), trusted: false })
     }
+
+    /// Permit configured helpers and mutations only after explicit project trust.
+    pub fn with_trust(mut self, trusted: bool) -> Self { self.trusted = trusted; self }
 
     /// The work tree root (as git reports it, symlinks resolved).
     pub fn root(&self) -> &Path {
@@ -67,7 +71,7 @@ impl Repository {
 
     /// A git command run in the work tree root.
     pub fn cmd(&self) -> GitCommand<'_> {
-        self.git.command(&self.root)
+        self.git.command(&self.root).trusted(self.trusted)
     }
 
     /// Absolute path of a repository-relative path (`/`-separated).

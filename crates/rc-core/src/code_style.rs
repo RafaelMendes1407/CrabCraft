@@ -104,7 +104,15 @@ fn read(path: &Path) -> Option<String> {
     if !meta.is_file() || meta.len() > MAX_FILE {
         return None;
     }
-    std::fs::read_to_string(path).ok()
+    // A style file can be replaced after metadata: never block on a special file or
+    // read an unbounded replacement while preparing a compiler source snapshot.
+    use std::io::Read;
+    let mut options = std::fs::OpenOptions::new(); options.read(true);
+    #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    let file = options.open(path).ok()?;
+    if !file.metadata().ok()?.is_file() { return None; }
+    let mut text = String::new(); file.take(MAX_FILE + 1).read_to_string(&mut text).ok()?;
+    (text.len() as u64 <= MAX_FILE).then_some(text)
 }
 
 fn size(value: &str) -> Option<usize> {

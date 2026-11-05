@@ -61,6 +61,7 @@ pub struct CrabCraftApp {
     pub editor_config: EditorConfig,
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
+    pub disk_revert: Option<crate::disk_revert::Job>,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -74,6 +75,11 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub endpoints: crate::endpoints::Endpoints,
+    pub clone_project: crate::clone_project::CloneProject,
+    pub borrow_errors: crate::borrow_errors::BorrowErrors,
+    pub missing_crates: crate::missing_crates::MissingCrates,
+    pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
     /// Dependency trees of the Cargo window, by `(manifest, package)`.
@@ -120,6 +126,7 @@ pub struct CrabCraftApp {
     pub http: crate::http_client::HttpClient,
     /// perf recordings of run configurations (A-01).
     pub profiler: crate::profiler::Profiler,
+    pub coverage: crate::coverage::Coverage,
     /// The text version each `.http` editor got its run icons and diagnostics for.
     http_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
@@ -137,6 +144,10 @@ pub struct CrabCraftApp {
     pub find_bar: Option<crate::search::FindBar>,
     pub find_in_files: Option<crate::search::FindInFiles>,
     pub terminals: rc_term::Terminals,
+    pub settings_backup: crate::settings_backup::State,
+    pub repl_starting: Option<crate::repl::Starting>,
+    pub terminal_starting: Option<crate::repl::Starting>,
+    pub terminal_tools: crate::terminal_tools::Tools,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -175,6 +186,7 @@ pub struct CrabCraftApp {
     pub(crate) explain_load: Option<(String, Inbox<ExplainAnswer>)>,
     /// The Run tab of a rustup command: when it ends, the toolchain is read again.
     rustup_run: Option<String>,
+    pub rustup_installer: crate::rustup_installer::RustupInstaller,
     /// The last Inspect Code run.
     pub inspection: Option<Inspection>,
     /// The Problems window shows the inspection instead of the open files' problems.
@@ -265,6 +277,7 @@ impl CrabCraftApp {
         let editor_config = editor_config(&settings);
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
+            disk_revert: None,
             keymap,
             editor_config,
             workspace: None,
@@ -300,6 +313,11 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            endpoints: crate::endpoints::Endpoints::new(waker.clone()),
+            clone_project: crate::clone_project::CloneProject::new(waker.clone()),
+            borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
+            missing_crates: crate::missing_crates::MissingCrates::new(waker.clone()),
+            cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
             attached_load: None,
             libraries_load: None,
@@ -311,6 +329,7 @@ impl CrabCraftApp {
             explanations: Default::default(),
             explain_load: None,
             rustup_run: None,
+            rustup_installer: crate::rustup_installer::RustupInstaller::new(waker.clone()),
             toolchain_load: None,
             cargo_folded: Default::default(),
             cargo_trees: Default::default(),
@@ -336,6 +355,7 @@ impl CrabCraftApp {
             playground: crate::playground::Playground::new(waker.clone()),
             http: crate::http_client::HttpClient::new(waker.clone()),
             profiler: crate::profiler::Profiler::new(waker.clone()),
+            coverage: crate::coverage::Coverage::new(waker.clone()),
             http_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
@@ -347,6 +367,10 @@ impl CrabCraftApp {
             find_bar: None,
             find_in_files: None,
             terminals: rc_term::Terminals::new(),
+            settings_backup: Default::default(),
+            repl_starting: None,
+            terminal_starting: None,
+            terminal_tools: Default::default(),
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -405,6 +429,9 @@ impl CrabCraftApp {
         };
         self.close_workspace();
         self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
+        self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
+        self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
+        self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         let (solution, solution_error) = match ws.solution() {
             Some(sln) => match Solution::load(sln) {
                 Ok(s) => (Some(s), None),
@@ -427,13 +454,17 @@ impl CrabCraftApp {
         self.explorer.attached = session.attached_projects.iter().map(|r| ws.root.join(r)).filter(|p| p.is_file()).collect();
         self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
-        self.vcs.open(&ws.root);
+        self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
+        self.vcs.changelists = session.changelists.clone().clean();
+        self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
             rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
             rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner.project_root = Some(ws.root.clone());
+        self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
         self.runner.project_env = session.project_env.clone();
         self.insight.set_env(self.runner.project_env_pairs());
         self.cargo_features = clean_features(&session.cargo_features);
@@ -451,8 +482,10 @@ impl CrabCraftApp {
             } else {
                 self.insight.wait_for_trust(&ws.root);
             }
-        } else {
+        } else if self.settings.trusted_projects.contains(&ws.root) {
             self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        } else {
+            self.insight.wait_for_trust(&ws.root);
         }
         self.runner.compounds = session.compounds.clone();
         // The session file is the user's to edit: empty or overlong folder names are dropped.
@@ -475,9 +508,10 @@ impl CrabCraftApp {
         }
     }
 
-    /// Reads the Rust workspace in the background; `cargo metadata` compiles nothing, so this is
-    /// safe on a project that is not trusted.
+    /// Cargo metadata can execute project-selected tools and wrappers, even with --no-deps.
+    /// Defer all project tool invocations until the application trust decision.
     fn load_cargo_workspace(&mut self, manifest: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
@@ -544,6 +578,7 @@ impl CrabCraftApp {
     /// Reads the attached Cargo projects in the background (their binaries become run
     /// configurations).
     fn load_attached(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         let manifests = self.explorer.attached.clone();
         if manifests.is_empty() {
             self.attached_load = None;
@@ -566,6 +601,7 @@ impl CrabCraftApp {
     /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
     /// standard library is known.
     fn load_libraries(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
         let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
         let inbox = Inbox::new(self.waker.clone());
@@ -677,6 +713,7 @@ impl CrabCraftApp {
 
     /// Reads the versions of the toolchain in the background, once.
     pub fn load_toolchain(&mut self) {
+        if self.runner.require_trust().is_err() { return; }
         if let Some(inbox) = &self.toolchain_load {
             if let Some(info) = inbox.drain().into_iter().last() {
                 self.toolchain = Some(info);
@@ -733,6 +770,16 @@ impl CrabCraftApp {
 
     /// Picks up `rustup check` results and the end of rustup commands.
     pub(crate) fn poll_toolchain_updates(&mut self) {
+        self.rustup_installer.poll();
+        if let Some(cargo) = self.rustup_installer.take_cargo() {
+            self.toolchain = None;
+            self.toolchain_load = None;
+            self.toolchain_updates = None;
+            self.runner.set_cargo_tool(cargo);
+            if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf) {
+                self.load_cargo_workspace(manifest);
+            }
+        }
         if let Some(result) = self.toolchain_updates_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
             self.toolchain_updates = Some(result);
             self.toolchain_updates_load = None;
@@ -979,6 +1026,7 @@ impl CrabCraftApp {
     /// Asks rustc for the `cfg` of the chosen target (or the host) in the background; it
     /// compiles nothing.
     fn load_rustc_cfg(&mut self, dir: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let target = self.cargo_target.clone();
@@ -994,6 +1042,7 @@ impl CrabCraftApp {
     /// Reads the host triple and the targets to offer (rustup's, the project's `[build] target`)
     /// in the background. Nothing of the project runs.
     fn load_triples(&mut self, root: PathBuf) {
+        if self.runner.require_trust().is_err() { return; }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(rc_cargo::Cargo::locate().as_ref(), &root)));
@@ -1197,7 +1246,41 @@ impl CrabCraftApp {
             self.settings.trusted_projects.push(root.clone());
             let _ = self.settings.save();
         }
-        self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+        self.runner.trusted_project = Some(root.clone());
+        if !self.vcs.trusted {
+            // The deferred discovery must keep the session's changelists and draft.
+            let changelists = self.vcs.changelists.clone();
+            let message = self.vcs.message.clone();
+            self.vcs.open(&root, true);
+            self.vcs.changelists = changelists;
+            self.vcs.message = message;
+        }
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
+            self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            self.load_cargo_workspace(manifest);
+        } else {
+            let solution = self.workspace.as_ref().and_then(|w| w.solution.as_ref().map(|s| s.path.clone()));
+            let projects = self.solution_projects();
+            self.insight.start(&root, solution.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
+        }
+        self.toolchain = None;
+    }
+
+    /// Metadata/build fixtures opt in explicitly without launching a concurrent language
+    /// server. Trust-boundary tests use the production trust_project method instead.
+    #[cfg(test)]
+    pub(crate) fn trust_project_tools_for_test(&mut self) {
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
+        if !self.settings.trusted_projects.contains(&root) { self.settings.trusted_projects.push(root.clone()); }
+        self.runner.trusted_project = Some(root.clone());
+        if !self.vcs.trusted {
+            let changelists = self.vcs.changelists.clone();
+            let message = self.vcs.message.clone();
+            self.vcs.open(&root, true);
+            self.vcs.changelists = changelists;
+            self.vcs.message = message;
+        }
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) { self.load_cargo_workspace(manifest); }
     }
 
     /// Every project of the workspace (its solution's, or the ones found in the folder).
@@ -1252,6 +1335,10 @@ impl CrabCraftApp {
             None => self.runner.selected_config().cloned(),
         };
         match cfg {
+            Some(RunConfig { name, kind: ConfigKind::WasmPack { manifest } }) => {
+                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
+                self.dialog = Some(Dialog::WasmOptions { name, manifest, options });
+            }
             Some(RunConfig { name, kind: ConfigKind::Cargo { .. } }) => {
                 let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
@@ -1302,9 +1389,18 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
+        self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
+        self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
+        self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
+        self.disk_revert = None;
+        self.repl_starting = None;
+        self.terminal_starting = None;
+        self.terminal_tools = Default::default();
+        self.coverage = crate::coverage::Coverage::new(self.waker.clone());
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
@@ -1476,6 +1572,11 @@ impl CrabCraftApp {
             auto_attach: self.auto_attach_text.clone(),
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
+            changelists: {
+                let mut lists = self.vcs.changelists.clone();
+                lists.lists.insert(lists.active.clone(), self.vcs.message.clone());
+                lists
+            },
             excluded: self.explorer.excluded.clone(),
             attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
@@ -1519,6 +1620,36 @@ impl CrabCraftApp {
         let inbox = rc_core::Inbox::new(self.waker.clone());
         h.list(&doc.path, inbox.sender());
         self.dialog = Some(Dialog::LocalHistory(Box::new(crate::ui::dialogs::LocalHistoryView::new(doc.path.clone(), inbox))));
+    }
+
+    pub fn request_disk_revert(&mut self, index: usize) {
+        let Some(doc) = self.docs.list.get(index) else { return; };
+        if doc.generated { self.notify(tr("Generated documents cannot be reverted from disk"), false); return; }
+        let ticket = crate::disk_revert::Ticket::capture(doc);
+        let dirty = doc.is_modified();
+        self.disk_revert = None;
+        if dirty { self.dialog = Some(Dialog::RevertDisk(ticket)); }
+        else { self.start_disk_revert(ticket); }
+    }
+
+    pub fn start_disk_revert(&mut self, ticket: crate::disk_revert::Ticket) {
+        if ticket.index(&self.docs).is_none() {
+            self.notify(crate::disk_revert::Error::Stale.to_string(), true);
+            return;
+        }
+        match crate::disk_revert::Job::start(ticket, self.waker.clone()) {
+            Ok(job) => self.disk_revert = Some(job),
+            Err(error) => self.notify(error.to_string(), true),
+        }
+    }
+
+    fn poll_disk_revert(&mut self) {
+        let Some(result) = self.disk_revert.as_ref().and_then(crate::disk_revert::Job::poll) else { return; };
+        let Some(job) = self.disk_revert.take() else { return; };
+        match result.and_then(|snapshot| crate::disk_revert::apply(&mut self.docs, &job.ticket, snapshot)) {
+            Ok(_) => { self.session_dirty = true; }
+            Err(error) => self.notify(error.to_string(), true),
+        }
     }
 
     pub fn save_all_docs(&mut self) {
@@ -1595,6 +1726,9 @@ impl CrabCraftApp {
             if self.rustfmt_document(i, false) {
                 return;
             }
+        }
+        if action == Action::Complete && self.endpoints.complete_http(&mut self.docs.list[i]) {
+            return;
         }
         // Cargo.toml is completed here: the Rust server does not complete TOML.
         if action == Action::Complete && crate::manifest_completion::is_manifest(&self.docs.list[i]) {
@@ -2033,6 +2167,9 @@ impl CrabCraftApp {
             self.runner.external_tools = self.settings.external_tools.clone();
         }
         match action {
+            Action::RevertFromDisk => {
+                if let Some(index) = self.docs.active { self.request_disk_revert(index); }
+            }
             Action::SaveAll | Action::Save => {
                 self.save_all_docs();
                 self.save_session();
@@ -2408,13 +2545,77 @@ impl CrabCraftApp {
 
     /// A new terminal tab in `dir` (the workspace folder by default).
     pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        if self.terminal_starting.is_some() { return; }
         let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
-        match self.terminals.open(&rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
-            Ok(_) => {
+        match crate::repl::Starting::new(rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
+            Ok(starting) => {
+                self.terminal_starting = Some(starting);
+                self.dock.show(ToolWindow::Terminal);
+            }
+            Err(error) => self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true),
+        }
+    }
+
+    pub fn split_terminal(&mut self, stacked: bool) {
+        if self.terminal_starting.is_some() { return; }
+        let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else { return; };
+        self.terminal_tools.split_after_start = Some((id, stacked));
+        self.open_terminal(cwd);
+        if self.terminal_starting.is_none() { self.terminal_tools.split_after_start = None; }
+    }
+
+    fn poll_terminal_startup(&mut self) {
+        let Some(result) = self.terminal_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        self.terminal_starting = None;
+        match result {
+            Ok(session) => {
+                let second = self.terminals.push(session);
+                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take() {
+                    if self.terminals.get(first).is_some() {
+                        self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
+                    }
+                }
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }
-            Err(e) => self.notify(trf("Could not start the terminal: {error}", &[("error", &e)]), true),
+            Err(error) => {
+                self.terminal_tools.split_after_start = None;
+                self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true);
+            }
+        }
+    }
+
+    /// Evcxr may compile code and load Cargo configuration from the current project.
+    pub fn can_open_rust_repl(&self) -> bool {
+        self.workspace.as_ref().is_some_and(|w| {
+            matches!(w.ws.kind, rc_core::WorkspaceKind::Cargo(_))
+                && self.settings.trusted_projects.contains(&w.ws.root)
+        })
+    }
+
+    pub fn open_rust_repl(&mut self) {
+        if !self.can_open_rust_repl() || self.repl_starting.is_some() { return; }
+        let cwd = self.workspace.as_ref().map(|w| w.ws.root.clone());
+        let mut spec = rc_term::SpawnSpec::rust_repl(cwd);
+        spec.env.extend(self.runner.project_env_pairs());
+        match crate::repl::Starting::new(spec, self.waker.clone()) {
+            Ok(starting) => self.repl_starting = Some(starting),
+            Err(error) => self.notify(trf("Could not start the Rust REPL: {error}", &[("error", &error)]), true),
+        }
+    }
+
+    fn poll_repl(&mut self) {
+        let Some(result) = self.repl_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        self.repl_starting = None;
+        match result {
+            Ok(session) => {
+                let id = self.terminals.push(session);
+                self.terminals.rename(id, Some(tr("Rust REPL").to_string()));
+                self.dock.show(ToolWindow::Terminal);
+                self.focus_terminal = true;
+            }
+            Err(error) => self.notify(trf("Could not start the Rust REPL: {error}", &[("error", &error)]), true),
         }
     }
 
@@ -2510,9 +2711,13 @@ impl CrabCraftApp {
 
     /// Starts the selected configuration under the debugger.
     fn start_debugging(&mut self) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         self.debug_test = None;
         self.save_all_docs();
         match self.runner.selected_config().cloned() {
+            Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::WasmPack { .. }, .. }) => {
+                self.notify(tr("Debugging wasm-pack configurations is not supported"), false);
+            }
             Some(config) if matches!(config.kind, crate::runner::ConfigKind::Cargo { .. }) => match self.runner.cargo_debug_target(&config) {
                 Some(Ok((cargo, target))) => {
                     let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);
@@ -2531,6 +2736,22 @@ impl CrabCraftApp {
                 self.handle_debug(outs);
             }
             None => self.notify(tr("There is no run configuration to debug"), false),
+        }
+    }
+
+    pub fn start_coverage(&mut self) {
+        self.coverage.show = true;
+        self.dock.show(ToolWindow::Tests);
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return; };
+        if !self.settings.trusted_projects.contains(&root) {
+            self.coverage.error = Some(tr("Trust this Cargo project before measuring coverage").to_string());
+            return;
+        }
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().filter(|workspace| workspace.root == root).map(|workspace| workspace.manifest.clone()) else { return; };
+        self.save_all_docs();
+        match self.runner.cargo_tool() {
+            Ok(cargo) => self.coverage.start(root, manifest, cargo.path().to_path_buf(), self.runner.project_env_pairs()),
+            Err(error) => self.coverage.error = Some(error),
         }
     }
 
@@ -2568,6 +2789,7 @@ impl CrabCraftApp {
     }
 
     fn debug_rust_test(&mut self, config: crate::runner::RunConfig, target: rc_cargo::RunTarget) {
+        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         let cargo = match self.runner.cargo_tool() {
             Ok(cargo) => cargo,
             Err(e) => {
@@ -2633,6 +2855,7 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
             self.focus_editor = true;
@@ -2837,7 +3060,11 @@ impl CrabCraftApp {
     pub fn apply_settings(&mut self, ctx: &Context, new: Settings) {
         let lang_changed = new.language != self.settings.language;
         let keymap_changed = new.keymap != self.settings.keymap || new.shortcuts != self.settings.shortcuts;
+        let imports_changed = new.autoimport_exclude != self.settings.autoimport_exclude;
         self.settings = new;
+        if imports_changed {
+            for doc in &mut self.docs.list { doc.editor.popups.completion = None; }
+        }
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
         self.insight.set_autoimport_exclude(clean_paths(&self.settings.autoimport_exclude));
@@ -2920,6 +3147,7 @@ impl CrabCraftApp {
         self.explorer.excluded = list.clone();
         self.files.open(&root, self.waker.clone(), list.clone());
         if let Some(f) = &mut self.find_in_files {
+            f.replacements.cancel();
             f.excluded = list.clone();
         }
         self.insight.set_exclude(list);
@@ -2966,6 +3194,15 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        self.endpoints.poll(&mut self.docs);
+        if let Some(mut find) = self.find_in_files.take() {
+            find.poll();
+            if find.replacements.poll(&mut self.docs) {
+                self.session_dirty = true;
+                find.search();
+            }
+            self.find_in_files = Some(find);
+        }
         self.poll_cargo_workspace();
         self.poll_dep_trees();
         self.update_cfg_sets();
@@ -3235,6 +3472,9 @@ impl eframe::App for CrabCraftApp {
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         self.poll_auto_attach();
+        self.poll_repl();
+        self.poll_disk_revert();
+        self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);
@@ -3250,11 +3490,14 @@ impl eframe::App for CrabCraftApp {
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
+        if self.borrow_errors.poll(&mut self.docs) { self.focus_editor = true; self.session_dirty = true; }
+        self.missing_crates.update(&self.docs, &self.runner, self.cfg_epoch, &ctx);
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);
         self.http.poll();
         self.profiler.poll();
+        self.coverage.poll();
         self.update_http_file();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {
@@ -3306,6 +3549,7 @@ pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> V
 
 pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
     match choice {
+        KeymapChoice::RustRover => KeymapKind::RustRover,
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
         KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
         KeymapChoice::VsCode => KeymapKind::VsCode,

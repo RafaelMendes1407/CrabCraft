@@ -1,0 +1,11 @@
+Starting terminal…	Iniciando terminal…	Démarrage du terminal…	Iniciando terminal…	Terminal wird gestartet…	Uruchamianie terminala…	正在启动终端…	ターミナルを起動中…
+Split Terminal Right	Dividir terminal a la derecha	Diviser le terminal à droite	Dividir terminal à direita	Terminal rechts teilen	Podziel terminal w prawo	向右拆分终端	ターミナルを右に分割
+Split Terminal Down	Dividir terminal hacia abajo	Diviser le terminal en dessous	Dividir terminal abaixo	Terminal nach unten teilen	Podziel terminal w dół	向下拆分终端	ターミナルを下に分割
+Find in Terminal	Buscar en el terminal	Rechercher dans le terminal	Buscar no terminal	Im Terminal suchen	Znajdź w terminalu	在终端中查找	ターミナル内を検索
+Close Terminal Split	Cerrar división del terminal	Fermer la division du terminal	Fechar divisão do terminal	Terminalteilung schließen	Zamknij podział terminala	关闭终端拆分	ターミナルの分割を閉じる
+Terminal search	Búsqueda en el terminal	Recherche dans le terminal	Busca no terminal	Terminalsuche	Wyszukiwanie w terminalu	终端搜索	ターミナル検索
+Terminal output changed; refresh the search	La salida del terminal cambió; actualiza la búsqueda	La sortie du terminal a changé ; actualisez la recherche	A saída do terminal mudou; atualize a busca	Die Terminalausgabe hat sich geändert; Suche aktualisieren	Wyjście terminala uległo zmianie; odśwież wyszukiwanie	终端输出已更改；请刷新搜索	ターミナル出力が変わりました。検索を更新してください
+{current} of {total} terminal matches	{current} de {total} coincidencias en el terminal	{current} sur {total} correspondances dans le terminal	{current} de {total} ocorrências no terminal	{current} von {total} Terminaltreffern	{current} z {total} dopasowań w terminalu	终端匹配项 {current}/{total}	ターミナルの一致 {current}/{total}
+Search limited to recent output and 5,000 matches	Búsqueda limitada a la salida reciente y 5000 coincidencias	Recherche limitée à la sortie récente et à 5 000 correspondances	Busca limitada à saída recente e 5.000 ocorrências	Suche auf die letzte Ausgabe und 5.000 Treffer begrenzt	Wyszukiwanie ograniczone do ostatniego wyjścia i 5000 dopasowań	搜索仅限近期输出和 5,000 个匹配项	検索対象は最近の出力と 5,000 件の一致に制限されます
+Previous	Anterior	Précédent	Anterior	Zurück	Poprzedni	上一个	前へ
+Next	Siguiente	Suivant	Próximo	Weiter	Następny	下一个	次へ

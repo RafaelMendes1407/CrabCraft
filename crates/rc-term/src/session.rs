@@ -60,6 +60,12 @@ impl SpawnSpec {
         }
     }
 
+    /// The Evcxr Rust REPL, using terminal input and `:dep` commands.
+    /// Calling this only prepares a command; callers must start it after an explicit action.
+    pub fn rust_repl(cwd: Option<PathBuf>) -> Self {
+        Self::command("evcxr", ["--disable-readline"], cwd).env("RUSTUP_AUTO_INSTALL", "0")
+    }
+
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.push((key.into(), value.into()));
         self
@@ -537,6 +543,25 @@ impl TermSession {
         let mut sel = Selection::new(kind.ty(), Point::new(Line(start.0), Column(start.1)), Side::Left);
         sel.update(Point::new(Line(end.0), Column(end.1)), Side::Right);
         st.term.selection = Some(sel);
+    }
+
+    pub fn search(&self, query: String, waker: Waker) -> std::io::Result<crate::search::Search> {
+        crate::search::Search::start(self.state.clone(), query, waker)
+    }
+
+    /// Reveals a match only while it still refers to the same output and dimensions.
+    pub fn reveal_search_match(&self, hit: crate::search::Match, generation: u64) -> bool {
+        let mut state = self.lock();
+        let grid = state.term.grid();
+        if state.generation != generation || hit.line < grid.topmost_line().0 || hit.line > grid.bottommost_line().0
+            || hit.start_column > hit.end_column || hit.end_column >= grid.columns() { return false; }
+        let start = Point::new(Line(hit.line), Column(hit.start_column));
+        let end = Point::new(Line(hit.line), Column(hit.end_column));
+        let mut selection = Selection::new(SelectionType::Simple, start, Side::Left);
+        selection.update(end, Side::Right);
+        state.term.scroll_to_point(start);
+        state.term.selection = Some(selection);
+        true
     }
 
     /// Selects everything, scrollback included.

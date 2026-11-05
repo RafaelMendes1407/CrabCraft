@@ -29,7 +29,21 @@ pub struct Diagnostic {
     pub project: Option<PathBuf>,
     /// The compiler's suggestion, when it can be applied.
     pub fix: Option<Fix>,
+    /// Bounded labeled rustc source ranges for borrow/lifetime diagnostics.
+    pub borrow: Option<BorrowDiagnostic>,
 }
+
+/// Compiler-provided ranges, not inferred lifetime/NLL intervals.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BorrowDiagnostic { pub root: PathBuf, pub spans: Vec<BorrowSpan>, pub notes: Vec<String>, pub limited: bool }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BorrowSpan {
+    pub file: PathBuf, pub start: usize, pub end: usize,
+    pub line: u32, pub column: u32, pub end_line: u32, pub end_column: u32,
+    pub primary: bool, pub label: String, pub text: Vec<BorrowLine>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BorrowLine { pub line: u32, pub text: String, pub start: u32, pub end: u32 }
 
 /// Edits proposed by the compiler for the file of a diagnostic.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -134,6 +148,7 @@ fn finish(origin: String, severity: Severity, code: String, rest: &str) -> Diagn
         message: message.to_string(),
         project,
         fix: None,
+        borrow: None,
     };
     let (path, pos) = split_position(&origin);
     if let Some([l, c, el, ec]) = pos {

@@ -28,6 +28,8 @@ pub struct Target {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Package {
+    /// Has a cdylib target (a candidate for wasm-pack, not a compatibility guarantee).
+    pub cdylib: bool,
     pub name: String,
     pub manifest: PathBuf,
     pub edition: String,
@@ -301,7 +303,10 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
             .and_then(Value::as_object)
             .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect())).collect())
             .unwrap_or_default();
-        packages.push(Package { name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets, features });
+        let cdylib = p.get("targets").and_then(Value::as_array).into_iter().flatten().any(|t| {
+            t.get("crate_types").and_then(Value::as_array).into_iter().flatten().any(|kind| kind.as_str() == Some("cdylib"))
+        });
+        packages.push(Package { cdylib, name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets, features });
     }
     Ok(CargoWorkspace { manifest: root.join("Cargo.toml"), root, target_dir, packages })
 }
@@ -358,7 +363,7 @@ mod tests {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.into_iter().map(str::to_string).collect()))
             .collect();
-        let p = Package { name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
+        let p = Package { cdylib: false, name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
         assert_eq!(p.enabled_features(&[]), vec!["alloc", "default", "std"]);
         assert_eq!(p.enabled_features(&["extra".to_string(), "libc".to_string()]), vec!["alloc", "default", "extra", "libc", "std"]);
         let none = Package { features: Default::default(), ..p };
@@ -375,7 +380,7 @@ mod tests {
     #[test]
     fn chosen_features_are_per_package_and_checked() {
         let features = ["extra", "std"].into_iter().map(|k| (k.to_string(), Vec::new())).collect();
-        let p = Package { name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
+        let p = Package { cdylib: false, name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
         let chosen = ["p/extra", "q/extra", "p/gone", "extra"].map(String::from);
         assert_eq!(p.chosen_features(&chosen), vec!["extra"]);
         assert!(valid_feature_entry("my-crate/serde+json"));

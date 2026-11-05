@@ -6,11 +6,13 @@
 //! a request line (`METHOD URL [HTTP/version]`, or just a URL for GET), optional query lines
 //! that continue the URL, headers up to the first blank line and then the body.
 //!
-//! Variables (`{{name}}`, `@name = value`), bodies read from files (`< file`), response
-//! handler scripts (`> {% %}`) and saving the response (`>> file`) are not supported yet: they
-//! are reported as [`Unsupported`] instead of being sent as they are.
+//! File-wide variables (`{{name}}`, `@name = value`) are expanded by the client through
+//! [`vars::Resolver`]. Unresolved references, file bodies, response scripts and response
+//! redirects are reported as [`Unsupported`]. No environment or script is evaluated.
 
 use crate::highlight::{Hl, Span};
+#[path = "http_vars.rs"]
+pub mod vars;
 
 /// The most lines looked back for the start of the request a line belongs to.
 pub(crate) const MAX_LOOK_BACK: usize = 2_000;
@@ -22,7 +24,7 @@ pub enum LineRole {
     Separator,
     /// `# …` or `// …` before the request line or among the headers.
     Comment,
-    /// `@name = value` (a file variable: not supported yet).
+    /// `@name = value` (a file-wide variable declaration).
     FileVariable,
     /// `METHOD URL [HTTP/x]`.
     Request,
@@ -88,6 +90,8 @@ pub struct HttpRequest {
     pub headers: Vec<(String, String)>,
     pub body: String,
     pub unsupported: Vec<Unsupported>,
+    /// File-wide declarations before request lines; shared across all request blocks.
+    pub variables: std::sync::Arc<std::collections::BTreeMap<String, String>>,
 }
 
 impl HttpRequest {
@@ -101,7 +105,11 @@ impl HttpRequest {
 
     /// The constructs that keep the request from being sent.
     pub fn blockers(&self) -> impl Iterator<Item = &Unsupported> {
-        self.unsupported.iter().filter(|u| u.kind.blocks_sending())
+        let mut resolver = vars::Resolver::new(&self.variables);
+        self.unsupported.iter().filter(move |u| match &u.kind {
+            UnsupportedKind::Variable(name) => resolver.variable(name).is_err(),
+            kind => kind.blocks_sending(),
+        })
     }
 }
 
@@ -211,13 +219,27 @@ pub fn parse_requests(text: &str) -> Vec<HttpRequest> {
 /// Everything of the file that is not supported yet, also outside requests (a file variable
 /// above the first one).
 pub fn unsupported_in(text: &str) -> Vec<Unsupported> {
-    parse_blocks(text).into_iter().flat_map(|(req, _)| req.unsupported).collect()
+    parse_blocks(text).into_iter().flat_map(|(req, _)| {
+        let mut resolver = vars::Resolver::new(&req.variables);
+        req.unsupported.into_iter().filter(|item| match &item.kind {
+            UnsupportedKind::FileVariable(_) => false,
+            UnsupportedKind::Variable(name) => resolver.variable(name).is_err(),
+            _ => true,
+        }).collect::<Vec<_>>()
+    }).collect()
 }
 
 /// Each block between separators, and whether it has a request line.
 fn parse_blocks(text: &str) -> Vec<(HttpRequest, bool)> {
     let lines: Vec<&str> = text.split('\n').collect();
     let roles = line_roles(lines.iter().copied());
+    let variables: std::sync::Arc<std::collections::BTreeMap<String, String>> = std::sync::Arc::new(lines.iter().zip(&roles)
+        .filter(|(_, role)| **role == LineRole::FileVariable)
+        .filter_map(|(line, _)| {
+            let name = file_variable(line)?;
+            let (_, value) = line.split_once('=')?;
+            Some((name.to_string(), value.trim().to_string()))
+        }).collect());
     // Char offset of each line's start.
     let mut starts = Vec::with_capacity(lines.len());
     let mut at = 0;
@@ -241,7 +263,9 @@ fn parse_blocks(text: &str) -> Vec<(HttpRequest, bool)> {
         while i < lines.len() && roles[i] != LineRole::Separator {
             i += 1;
         }
-        out.push(parse_block(&lines[begin..i], &roles[begin..i], &starts[begin..i], begin, name));
+        let (mut request, found) = parse_block(&lines[begin..i], &roles[begin..i], &starts[begin..i], begin, name);
+        request.variables = variables.clone();
+        out.push((request, found));
     }
     out
 }
@@ -509,11 +533,11 @@ mod tests {
         let host = &reqs[0].unsupported[1];
         let chars: Vec<char> = text.chars().collect();
         assert_eq!(chars[host.start..host.end].iter().collect::<String>(), "{{host}}");
-        assert_eq!(reqs[0].blockers().count(), 3);
+        assert_eq!(reqs[0].blockers().count(), 2);
         // A file variable above the first separator is a block of its own, with no request.
         let all: Vec<_> = unsupported_in(text).into_iter().map(|u| u.kind).collect();
-        assert_eq!(all[0], UnsupportedKind::FileVariable("host".into()));
-        assert_eq!(all.len(), 7);
+        assert_eq!(all[0], UnsupportedKind::Directive("no-redirect".into()));
+        assert_eq!(all.len(), 5);
         let reqs = parse_requests("@host = localhost\nGET http://{{host}}/\n");
         assert_eq!(reqs[0].unsupported[0].kind, UnsupportedKind::FileVariable("host".into()));
         let reqs = parse_requests("WEBSOCKET ws://localhost/chat\n");

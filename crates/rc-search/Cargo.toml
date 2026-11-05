@@ -15,7 +15,11 @@ grep-searcher = "0.1.17"
 grep-matcher = "0.1.9"
 regex = "1.13"
 regex-syntax = "0.8"
+regex-automata = "0.4"
 tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 criterion = "0.8"

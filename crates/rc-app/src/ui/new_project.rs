@@ -19,6 +19,10 @@ const TEMPLATES: [(Template, &str, &str, Ico); 4] = [
 
 pub struct NewProjectDialog {
     template: usize,
+    repository: String,
+    template_branch: String,
+    trust_template: bool,
+    cancel: Option<rc_dotnet::CancelToken>,
     name: String,
     location: String,
     git: bool,
@@ -56,6 +60,10 @@ impl NewProjectDialog {
     fn with(template: usize, name: String, location: String, git: bool, member: bool, waker: Waker) -> Self {
         NewProjectDialog {
             template,
+            repository: String::new(),
+            template_branch: String::new(),
+            trust_template: false,
+            cancel: None,
             name,
             location,
             git,
@@ -76,8 +84,34 @@ impl NewProjectDialog {
         NewProjectDialog::with(1, name, location.display().to_string(), false, true, waker)
     }
 
+    fn generated(&self) -> bool { self.template == TEMPLATES.len() }
+
+    fn generate_request(&self) -> rc_cargo::generate::GenerateProject {
+        rc_cargo::generate::GenerateProject {
+            repository: self.repository.trim().to_string(), branch: self.template_branch.trim().to_string(),
+            name: self.name.trim().to_string(), location: PathBuf::from(self.location.trim()), git: self.git, trusted: self.trust_template,
+        }
+    }
+
     fn request(&self) -> NewProject {
-        NewProject { template: TEMPLATES[self.template].0, name: self.name.trim().to_string(), location: PathBuf::from(self.location.trim()), git: self.git }
+        NewProject { template: TEMPLATES[self.template.min(TEMPLATES.len() - 1)].0, name: self.name.trim().to_string(), location: PathBuf::from(self.location.trim()), git: self.git }
+    }
+}
+
+impl Drop for NewProjectDialog {
+    fn drop(&mut self) {
+        if let Some(cancel) = self.cancel.take() { cancel.cancel(); }
+    }
+}
+
+fn generate_error(error: rc_cargo::generate::GenerateError) -> String {
+    use rc_cargo::generate::GenerateError;
+    match error {
+        GenerateError::Invalid(message) => tr(message).to_string(),
+        GenerateError::Io(error) => trf("Could not start cargo-generate: {error}", &[("error", &error)]),
+        GenerateError::Failed { code, output } => trf("Template generation failed ({code}): {output}", &[("code", &code.map(|c| c.to_string()).unwrap_or_else(|| "?".into())), ("output", &output)]),
+        GenerateError::Cancelled => tr("Template generation cancelled").to_string(),
+        GenerateError::MissingManifest(path) => trf("The template did not create a Cargo.toml in {path}", &[("path", &path.display())]),
     }
 }
 
@@ -86,6 +120,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     let mut open = true;
     for result in d.inbox.drain() {
         d.busy = false;
+        d.cancel = None;
         match result {
             Ok(dir) => {
                 if d.member {
@@ -107,7 +142,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     if let Some(tools) = d.wasm_inbox.drain().pop() {
         d.wasm_tools = Some(tools);
     }
-    if TEMPLATES[d.template].0 == Template::WebAssembly && !d.wasm_asked {
+    if !d.generated() && TEMPLATES[d.template].0 == Template::WebAssembly && !d.wasm_asked {
         d.wasm_asked = true;
         if let Some(cargo) = rc_cargo::Cargo::locate() {
             let out = d.wasm_inbox.sender();
@@ -119,11 +154,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     }
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let req = d.request();
-    let problem = req.problem().map(tr);
+    let generated_request = d.generate_request();
+    let problem = if d.generated() { generated_request.problem() } else { req.problem() }.map(tr);
     let mut create = false;
     let resp = egui::Modal::new(Id::new("new_project")).show(ctx, |ui| {
         ui.set_width(700.0);
-        ui.set_height(330.0);
+        ui.set_height(if d.generated() { 490.0 } else { 330.0 });
         ui.label(egui::RichText::new(tr(if d.member { "New Crate" } else { "New Project" })).font(theme::bold(15.0)));
         ui.add_space(10.0);
         let avail = ui.available_rect_before_wrap();
@@ -132,7 +168,9 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         ui.painter().rect_filled(left, 8.0, p.main_bg);
         let mut lu = ui.new_child(egui::UiBuilder::new().max_rect(left.shrink(4.0)));
         lu.spacing_mut().item_spacing.y = 2.0;
-        for (i, (_, name, _, icon)) in TEMPLATES.iter().enumerate() {
+        let mut choices = TEMPLATES.to_vec();
+        if !d.member { choices.push((Template::Binary, "Git Template", "Generate a Rust project from a Git repository with cargo-generate", ico::CONFIG_APP)); }
+        for (i, (_, name, _, icon)) in choices.iter().enumerate() {
             let (r, resp) = lu.allocate_exact_size(vec2(lu.available_width(), 30.0), Sense::click());
             if i == d.template {
                 lu.painter().rect_filled(r, 6.0, p.selection);
@@ -141,13 +179,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
             }
             icons::paint(lu.painter(), Rect::from_center_size(pos2(r.left() + 16.0, r.center().y), vec2(16.0, 16.0)), *icon, &p, true);
             lu.painter().text(pos2(r.left() + 32.0, r.center().y), Align2::LEFT_CENTER, tr(name), FontId::proportional(13.0), p.text);
-            if resp.clicked() {
+            if resp.clicked() && !d.busy {
                 d.template = i;
             }
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == d.template, tr(name)));
         }
         let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
-        let (_, name, description, _) = &TEMPLATES[d.template];
+        let (_, name, description, _) = &choices[d.template];
         ru.label(egui::RichText::new(tr(name)).font(theme::bold(14.0)));
         ru.label(egui::RichText::new(tr(description)).size(12.5).color(p.muted));
         ru.add_space(12.0);
@@ -169,17 +207,31 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
                 }
             });
             ui.end_row();
+            if d.generated() {
+                ui.label(tr("Template repository"));
+                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.repository).desired_width(w)).changed() { d.trust_template = false; }
+                ui.end_row();
+                ui.label(tr("Template branch (optional)"));
+                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.template_branch).desired_width(w)).changed() { d.trust_template = false; }
+                ui.end_row();
+            }
             if !d.member {
                 ui.label("");
                 ui.checkbox(&mut d.git, tr("Create Git repository"));
                 ui.end_row();
             }
         });
+        if d.generated() {
+            ru.add_space(6.0);
+            ru.label(egui::RichText::new(tr("Requires cargo-generate 0.26 or newer. Install with: cargo install --locked cargo-generate")).size(12.0).color(p.muted));
+            ru.label(egui::RichText::new(tr("Templates may run hook scripts. Review the repository before trusting it. Shell commands and Git submodules are disabled; custom placeholders must have defaults.")).size(12.0).color(p.warn));
+            ru.add_enabled_ui(!d.busy, |ui| { ui.checkbox(&mut d.trust_template, tr("I trust this template repository")); });
+        }
         ru.add_space(14.0);
         if d.member && !rc_cargo::modules::in_workspace(std::path::Path::new(d.location.trim())) {
             ru.label(egui::RichText::new(tr("No [workspace] here: the crate will not join the project")).size(12.0).color(p.warn));
         }
-        if TEMPLATES[d.template].0 == Template::WebAssembly {
+        if !d.generated() && TEMPLATES[d.template].0 == Template::WebAssembly {
             match d.wasm_tools {
                 None => {
                     ru.label(egui::RichText::new(tr("Looking for the WebAssembly tools…")).size(12.0).color(p.muted));
@@ -220,7 +272,22 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     if resp.should_close() && !d.busy {
         open = false;
     }
-    if create {
+    if create && d.generated() {
+        let generated_request = d.generate_request();
+        d.error = None;
+        d.busy = true;
+        let out = d.inbox.sender();
+        let cancel = rc_dotnet::CancelToken::new();
+        d.cancel = Some(cancel.clone());
+        Runtime::spawn(async move {
+            // Tool detection and all Git/template work happen off the UI thread.
+            let result = match rc_cargo::toolchain::find_tool("cargo-generate") {
+                Some(program) => generated_request.create(&program, &cancel).await.map_err(generate_error),
+                None => Err(tr("cargo-generate was not found. Install it with: cargo install --locked cargo-generate").to_string()),
+            };
+            out.send(result);
+        });
+    } else if create {
         let Some(cargo) = rc_cargo::Cargo::locate() else {
             d.error = Some(tr("Cargo was not found. Install Rust with rustup.").into());
             return open;
@@ -233,4 +300,36 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         });
     }
     open
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn git_template_dialog_requires_explicit_trust() {
+        let _guard = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.new_project_dialog(None);
+        let mut harness = crate::screens::harness(app, vec2(1100.0, 850.0));
+        harness.get_by_label("Git Template").click();
+        harness.run_steps(3);
+        harness.get_by_label("I trust this template repository");
+        harness.get_by_label("Template repository");
+        let dialog = harness.state_mut().new_project.as_mut().unwrap();
+        assert!(dialog.generated());
+        dialog.repository = "https://example.invalid/template".into();
+        dialog.location = home.path().display().to_string();
+        assert_eq!(dialog.generate_request().problem(), Some("Trust the template before generating a project"));
+        harness.get_by_label("I trust this template repository").click();
+        harness.run_steps(3);
+        assert!(harness.state().new_project.as_ref().unwrap().trust_template);
+        assert!(harness.state().new_project.as_ref().unwrap().generate_request().problem().is_none());
+        harness.get_by_label("Cancel").click();
+        harness.run_steps(3);
+        assert!(harness.state().new_project.is_none());
+        assert!(harness.state().workspace.is_none());
+    }
 }

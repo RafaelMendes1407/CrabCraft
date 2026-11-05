@@ -38,6 +38,7 @@ enum TabCommand {
     Blame(usize),
     Diff(usize),
     LocalHistory(usize),
+    RevertDisk(usize),
     GitHistory(usize),
     Split(usize, bool),
     Float(usize),
@@ -276,26 +277,34 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let editor_rect = rect;
     // Conflict banner: the file changed on disk while it had unsaved edits.
     let mut editor_rect = editor_rect;
+    if app.disk_revert.as_ref().is_some_and(|job| job.ticket.id == app.docs.list[active].editor.id) {
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
+        let mut progress = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        progress.spinner();
+        progress.label(tr("Reading disk version…"));
+        if progress.button(tr("Cancel")).clicked() { app.disk_revert = None; }
+        editor_rect.min.y = banner.bottom();
+    }
     if app.docs.list[active].conflict {
         let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
         ui.painter().rect_filled(banner, 0.0, rc_kit::theme::blend(p.island_bg, p.warn.gamma_multiply(0.18)));
         let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
         icons::image(&mut b, ico::WARNING, 16.0);
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
-        if b.button(tr("Load from Disk")).clicked() {
-            let path = app.docs.list[active].path.clone();
-            if let Ok((text, bom, mtime)) = crate::docs::read_text(&path) {
-                // The unsaved edits it discards stay in the local history.
-                app.docs.remember(active);
-                app.docs.reloaded(active, &text, bom, mtime);
-            }
-        }
+        if b.button(tr("Load from Disk")).clicked() { app.request_disk_revert(active); }
         if b.button(tr("Keep Mine")).clicked() {
             app.docs.list[active].conflict = false;
             if let Err(e) = app.docs.save(active) {
                 app.notify(e, true);
             }
         }
+        editor_rect.min.y = banner.bottom();
+    }
+    if app.docs.active == Some(active) && (!app.missing_crates.report.proposals.is_empty() || !app.missing_crates.report.notices.is_empty()) {
+        let height = ((app.missing_crates.report.proposals.len() + app.missing_crates.report.notices.len()) as f32 * 30.0).min(120.0);
+        let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), height));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::top_down(egui::Align::LEFT)));
+        egui::ScrollArea::vertical().id_salt(("missing_crates",active)).max_height(height - 8.0).show(&mut child, |ui| crate::missing_crates::banner(app, ui));
         editor_rect.min.y = banner.bottom();
     }
     // LightEdit: a file opened without its project; offer to open the whole project.
@@ -388,6 +397,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         });
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    if out.events.contains(&EditorEvent::Pasted) {
+        let doc = &app.docs.list[active];
+        app.missing_crates.pasted(doc.editor.id, doc.editor.buffer.version(), doc.editor.last_paste);
+    }
     let touched = preview_clicked || out.response.clicked() || out.response.secondary_clicked() || out.events.contains(&EditorEvent::Focused);
     // Shown first, so the frame of the click that opens it does not count as a click outside.
     gutter_menu(app, ui);
@@ -912,6 +925,10 @@ fn tab_menu(app: &mut CrabCraftApp, resp: &egui::Response, i: usize, g: &Group, 
                 ui.close();
             }
         }
+        if theme::menu_entry(ui, Some(ico::RERUN), tr("Revert from Disk…"), None, false, !app.docs.list[i].generated).clicked() {
+            commands.push(TabCommand::RevertDisk(i));
+            ui.close();
+        }
         if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Local History"), false).clicked() {
             commands.push(TabCommand::LocalHistory(i));
             ui.close();
@@ -967,6 +984,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
             | TabCommand::Locate(i)
             | TabCommand::Blame(i)
             | TabCommand::Diff(i)
+            | TabCommand::RevertDisk(i)
             | TabCommand::LocalHistory(i)
             | TabCommand::GitHistory(i)
             | TabCommand::Rename(i)
@@ -1030,6 +1048,7 @@ fn run_tab_commands(app: &mut CrabCraftApp, ctx: &egui::Context, commands: Vec<T
                 }
             }
             TabCommand::LocalHistory(i) => app.show_local_history(i),
+            TabCommand::RevertDisk(i) => app.request_disk_revert(i),
             TabCommand::GitHistory(i) => {
                 let path = app.docs.list[i].path.clone();
                 app.show_git_history(&path);

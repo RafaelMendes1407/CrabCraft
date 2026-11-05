@@ -372,13 +372,23 @@ fn system_fonts() -> &'static [(String, Arc<FontData>)] {
     })
 }
 
-/// Inter (UI) and JetBrains Mono (editor and grid). egui's default fonts remain as
-/// fallback for symbols and emoji, and system fonts for CJK, Hangul, Thai…
+/// Original license data for bundled fonts, displayed verbatim in About and embedded in
+/// every binary. Legal asset text is not translated; the surrounding UI is localized.
+pub const FONT_LICENSES: &str = concat!(
+    "SIL Open Font License 1.1\n\n",
+    "Noto Sans CJK SC © 2014–2021 Adobe (http://www.adobe.com/).\n",
+    "Inter © 2016 The Inter Project Authors (https://github.com/rsms/inter).\n",
+    "JetBrains Mono © 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono).\n\n",
+    include_str!("../../../assets/fonts/NotoSansCJK-LICENSE.txt")
+);
+
+/// Inter/JB Mono plus bundled Noto CJK; optional OS fallbacks cover additional scripts.
 pub fn install_fonts(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     let add = |fonts: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
         fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
     };
+    add(&mut fonts, "NotoSansCJK", include_bytes!("../../../assets/fonts/NotoSansCJKsc-Regular.otf"));
     add(&mut fonts, "Inter", include_bytes!("../../../assets/fonts/Inter-Regular.otf"));
     add(&mut fonts, "Inter-SemiBold", include_bytes!("../../../assets/fonts/Inter-SemiBold.otf"));
     add(&mut fonts, "JBMono", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"));
@@ -387,6 +397,9 @@ pub fn install_fonts(ctx: &egui::Context) {
 
     let mut fallback_prop = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
     let mut fallback_mono = fonts.families.get(&FontFamily::Monospace).cloned().unwrap_or_default();
+    // UI translations must remain readable even without OS-installed CJK fonts.
+    fallback_prop.push("NotoSansCJK".to_string());
+    fallback_mono.push("NotoSansCJK".to_string());
     for (name, data) in system_fonts() {
         fonts.font_data.insert(name.clone(), data.clone());
         fallback_prop.push(name.clone());
@@ -838,6 +851,20 @@ pub fn tab_ex(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closabl
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_fonts_cover_every_interface_language() {
+        let ctx = egui::Context::default();
+        install_fonts(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
+        for family in [FontFamily::Proportional, FontFamily::Monospace, FontFamily::Name(FONT_BOLD.into()), FontFamily::Name(FONT_MONO_BOLD.into()), FontFamily::Name(FONT_MONO_ITALIC.into())] {
+            let font = FontId::new(13.0, family);
+            for text in ["Configurações Código", "Español Français Deutsch", "Zażółć gęślą jaźń", "简体中文设置", "日本語の設定"] {
+                assert!(ctx.fonts_mut(|fonts| fonts.has_glyphs(&font, text)), "missing glyphs for {text} in {font:?}");
+            }
+        }
+    }
 
     /// Issue #4: CJK, Hangul and Thai in the grid and the UI used to show as boxes.
     #[test]

@@ -27,9 +27,53 @@ fn state_color(state: FileState, untracked: bool, dark: bool) -> Color32 {
     }
 }
 
+fn changelist_label(name: &str) -> &str {
+    if name.is_empty() { tr("Default Changelist") } else { name }
+}
+
+fn changelists_bar(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let mut selected = app.vcs.changelists.active.clone();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(tr("Changelist:"));
+        egui::ComboBox::from_id_salt("active_changelist").selected_text(changelist_label(&selected)).show_ui(ui, |ui| {
+            for name in app.vcs.changelists.lists.keys() {
+                let count = app.vcs.changes().iter().filter(|c| app.vcs.changelists.list_of(&c.path) == name).count();
+                ui.selectable_value(&mut selected, name.clone(), format!("{} ({count})", changelist_label(name)));
+            }
+        });
+        ui.menu_button(tr("Manage Changelists"), |ui| {
+            ui.add(egui::TextEdit::singleline(&mut app.vcs.changelist_name).hint_text(tr("Changelist name")).char_limit(100));
+            let name = app.vcs.changelist_name.trim().to_string();
+            let mutable = !app.vcs.changelists.active.is_empty();
+            let result = if ui.add_enabled(!name.is_empty(), egui::Button::new(tr("New Changelist"))).clicked() {
+                app.vcs.changelists.create(&name)
+            } else if ui.add_enabled(mutable && !name.is_empty(), egui::Button::new(tr("Rename Changelist"))).clicked() {
+                app.vcs.changelists.rename_active(&name)
+            } else if ui.add_enabled(mutable, egui::Button::new(tr("Delete Changelist"))).on_hover_text(tr("Moves its files to the default changelist without changing their contents.")).clicked() {
+                app.vcs.changelists.delete_active(&mut app.vcs.message)
+            } else { return };
+            match result {
+                Ok(()) => { app.session_dirty = true; app.vcs.changelist_name.clear(); ui.close(); }
+                Err(error) => app.vcs.error = Some(match error {
+                    rc_core::changelists::ChangelistError::AlreadyExists => tr("A changelist with this name already exists"),
+                    _ => tr("Choose a unique changelist name of up to 100 characters"),
+                }.to_string()),
+            }
+        });
+    });
+    if selected != app.vcs.changelists.active && app.vcs.changelists.select(&selected, &mut app.vcs.message).is_ok() {
+        app.session_dirty = true;
+    }
+}
+
 pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Commit")) {
         app.toggle_tool(ToolWindow::Commit);
+    }
+    if app.runner.require_trust().is_err() {
+        empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
+        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        return;
     }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_COMMIT, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
@@ -37,7 +81,8 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     operation_banner(app, ui);
     let p = rc_kit::pal(ui);
-    let changes = app.vcs.changes();
+    changelists_bar(app, ui);
+    let changes: Vec<_> = app.vcs.changes().into_iter().filter(|c| app.vcs.changelists.in_active(&c.path)).collect();
     let root = app.vcs.repo.as_ref().map(|r| r.root().to_path_buf()).unwrap_or_default();
     let mut patch_action: Option<(PatchSource, bool)> = None;
     // Toolbar.
@@ -56,6 +101,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.vcs.open_diff(&c.path);
         }
         let busy = app.vcs.busy.is_some();
+        if ui.add_enabled_ui(!included.is_empty() && !busy, |ui| theme::secondary_button(ui, tr("Stash Checked…"))).inner.clicked() {
+            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: included.clone() });
+        }
         if theme::icon_button(ui, ico::EXPORT, !included.is_empty() && !busy, tr("Create Patch from the checked files…")).clicked() {
             patch_action = Some((PatchSource::Changes(included.clone()), false));
         }
@@ -119,6 +167,17 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                 }
                 resp.context_menu(|ui| {
+                    ui.menu_button(tr("Move to Changelist"), |ui| {
+                        let lists: Vec<String> = app.vcs.changelists.lists.keys().cloned().collect();
+                        for name in lists {
+                            let label = changelist_label(&name);
+                            if ui.selectable_label(app.vcs.changelists.list_of(&c.path) == name, label).clicked() {
+                                let _ = app.vcs.changelists.move_file(&c.path, &name);
+                                app.session_dirty = true;
+                                ui.close();
+                            }
+                        }
+                    });
                     if c.state == FileState::Unmerged && theme::menu_item(ui, Some(ico::DIFF), tr("Merge…"), false).clicked() {
                         app.vcs.open_merge_tool(&c.path);
                         ui.close();
@@ -152,7 +211,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     // Message and buttons.
     ui.add_space(4.0);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap().shrink2(vec2(10.0, 4.0))));
-    child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY));
+    if child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY)).changed() {
+        app.session_dirty = true;
+    }
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
         let tip = match app.vcs.signing.as_ref().and_then(|c| c.key.as_deref()) {
@@ -216,6 +277,11 @@ pub fn create_patch(app: &mut CrabCraftApp, source: PatchSource, copy: bool) {
 pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Git")) {
         app.toggle_tool(ToolWindow::Git);
+    }
+    if app.runner.require_trust().is_err() {
+        empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
+        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        return;
     }
     if app.vcs.repo.is_none() {
         empty_state(ui, ico::TW_VCS, tr("No Git repository"), tr("The workspace is not inside a Git repository."));
@@ -843,7 +909,7 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.add_space(8.0);
         let stash = ui.add_enabled_ui(!busy && dirty, |ui| theme::secondary_button(ui, tr("Stash Changes…"))).inner;
         if stash.clicked() {
-            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false });
+            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: Vec::new() });
         }
         if !dirty {
             stash.on_disabled_hover_text(tr("No local changes to stash"));
@@ -905,6 +971,10 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                         action = Some(StashAction::Pop(st.clone()));
                         ui.close();
                     }
+                    if theme::menu_item(ui, None, tr("Create Branch…"), false).clicked() {
+                        action = Some(StashAction::Branch(st.clone()));
+                        ui.close();
+                    }
                     if theme::menu_item(ui, Some(ico::DELETE), tr("Drop…"), false).clicked() {
                         action = Some(StashAction::Drop(st.clone()));
                         ui.close();
@@ -929,6 +999,9 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                     if theme::secondary_button(ui, tr("Pop")).on_hover_text(tr("Apply the changes and drop the stash")).clicked() {
                         action = Some(StashAction::Pop(st.clone()));
+                    }
+                    if theme::secondary_button(ui, tr("Create Branch…")).clicked() {
+                        action = Some(StashAction::Branch(st.clone()));
                     }
                     if theme::secondary_button(ui, tr("Drop…")).clicked() {
                         action = Some(StashAction::Drop(st.clone()));
@@ -971,6 +1044,7 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     match action {
         Some(StashAction::Apply(st)) => app.vcs.stash_apply(&st, false),
         Some(StashAction::Pop(st)) => app.vcs.stash_apply(&st, true),
+        Some(StashAction::Branch(stash)) => app.dialog = Some(Dialog::StashBranch { stash, name: String::new() }),
         Some(StashAction::Drop(stash)) => app.dialog = Some(Dialog::DropStash { stash }),
         None => {}
     }
@@ -980,6 +1054,7 @@ enum StashAction {
     Apply(rc_vcs::Stash),
     Pop(rc_vcs::Stash),
     Drop(rc_vcs::Stash),
+    Branch(rc_vcs::Stash),
 }
 
 /// `On main: message` → `message`; `WIP on main: abc123 subject` stays as it is.
@@ -1150,6 +1225,14 @@ pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let Some(d) = &mut app.vcs.diff else { return };
     let body = Rect::from_min_max(pos2(full.left(), head.bottom()), full.max);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(body));
+    diff_editors(d, &mut child, &app.editor_config, &app.keymap);
+}
+
+/// Shared aligned, synchronized native diff panes.
+pub fn diff_editors(d: &mut crate::vcs::DiffView, ui: &mut Ui, config: &rc_editor::EditorConfig, keymap: &rc_editor::Keymap) {
+    let p = rc_kit::pal(ui);
+    let body = ui.max_rect();
     let mid = body.center().x;
     let left = Rect::from_min_max(body.min, pos2(mid - 0.5, body.bottom()));
     let right = Rect::from_min_max(pos2(mid + 0.5, body.top()), body.max);
@@ -1160,11 +1243,10 @@ pub fn diff_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let (lead, follow) = if lead_right { (&mut d.right, &mut d.left) } else { (&mut d.left, &mut d.right) };
     let off = lead.scroll_offset();
     follow.set_scroll_offset(off);
-    let config = app.editor_config.clone();
     for (rect, state) in [(left, &mut d.left), (right, &mut d.right)] {
         let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(rect));
         eu.set_clip_rect(rect.intersect(ui.clip_rect()));
-        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+        rc_editor::EditorView::new(state, config, keymap).show(&mut eu);
     }
     let _ = trf;
 }
@@ -1315,10 +1397,23 @@ pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
 /// take a side for each change, a toolbar for the selected change and the whole file, and
 /// Save and Mark Resolved.
 pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let Some(tool) = &mut app.vcs.merge_tool else { return };
+    match merge_editor(tool, ui, &app.editor_config, &app.keymap, tr("Save and Mark Resolved")) {
+        MergeAction::None => {},
+        MergeAction::Close => { app.vcs.merge_tool = None; app.focus_editor = true; },
+        MergeAction::Save => app.vcs.save_merge_tool(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeAction { None, Close, Save }
+
+/// Shared native merge editor; the caller decides whether saving stages a Git file or writes
+/// an explicitly requested standalone output.
+pub fn merge_editor(tool: &mut crate::merge_tool::MergeTool, ui: &mut Ui, editor_config: &rc_editor::EditorConfig, keymap: &rc_editor::Keymap, save_label: &str) -> MergeAction {
     use rc_vcs::{Pane, Take};
     let p = rc_kit::pal(ui);
     let full = ui.max_rect();
-    let Some(tool) = &mut app.vcs.merge_tool else { return };
     tool.sync();
     let busy = tool.saving;
     let conflicts = tool.model.conflicts_left();
@@ -1339,7 +1434,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     };
     hu.label(egui::RichText::new(status).size(12.5).color(color));
     hu.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if theme::icon_button(ui, ico::CLOSE_SMALL, true, tr("Close")).clicked() {
+        if theme::icon_button(ui, ico::CLOSE_SMALL, !busy, tr("Close")).clicked() {
             close = true;
         }
         if let Some(e) = &tool.error {
@@ -1397,7 +1492,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             if theme::secondary_button(ui, tr("Cancel")).clicked() {
                 tool.confirm_save = false;
             }
-        } else if theme::primary_button(ui, tr("Save and Mark Resolved")).clicked() {
+        } else if theme::primary_button(ui, save_label).clicked() {
             if unresolved > 0 {
                 tool.confirm_save = true;
             } else {
@@ -1457,7 +1552,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             e.set_scroll_offset(vec2(x, line as f32 * row_h + frac));
         }
     }
-    let mut config = app.editor_config.clone();
+    let mut config = editor_config.clone();
     config.sticky_lines = 0;
     for (rect, i) in rects.iter().zip(0..3) {
         let state = match i {
@@ -1467,7 +1562,7 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         };
         let mut eu = ui.new_child(egui::UiBuilder::new().max_rect(*rect));
         eu.set_clip_rect(rect.intersect(ui.clip_rect()));
-        rc_editor::EditorView::new(state, &config, &app.keymap).show(&mut eu);
+        rc_editor::EditorView::new(state, &config, keymap).show(&mut eu);
     }
     // The arrows between the panes: take the left side (») or the right side («) of a change.
     let mut act: Option<(usize, Take)> = None;
@@ -1511,12 +1606,8 @@ pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     if let Some((ci, take)) = act {
         tool.take(ci, take);
     }
-    if close || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-        app.vcs.merge_tool = None;
-        app.focus_editor = true;
-        return;
+    if !busy && (close || ui.input(|i| i.key_pressed(egui::Key::Escape))) {
+        return MergeAction::Close;
     }
-    if save {
-        app.vcs.save_merge_tool();
-    }
+    if save { MergeAction::Save } else { MergeAction::None }
 }

@@ -161,7 +161,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     if (app.runner.busy() || app.debugger.active()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
                         app.pending.push(Action::StopRun);
                     }
-                    if theme::icon_button_sized(ui, ico::DEBUG, true, &format!("{}{}", tr("Debug"), shortcut(Action::Debug)), 30.0).clicked() {
+                    let wasm_pack = app.runner.selected_config().is_some_and(|c| matches!(c.kind, crate::runner::ConfigKind::WasmPack { .. }));
+                    let debug_tip = if wasm_pack { tr("Debugging wasm-pack configurations is not supported").to_string() } else { format!("{}{}", tr("Debug"), shortcut(Action::Debug)) };
+                    if theme::icon_button_sized(ui, ico::DEBUG, !wasm_pack, &debug_tip, 30.0).clicked() {
                         app.pending.push(Action::Debug);
                     }
                     if theme::icon_button_sized(ui, ico::RUN, true, &format!("{}{}", tr("Run"), shortcut(Action::Run)), 30.0).clicked() {
@@ -240,7 +242,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 ui.close();
                             }
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
