@@ -8,6 +8,10 @@ use rc_core::settings::{KeymapChoice, ThemeChoice};
 use rc_kit::i18n::{Lang, tr, trf};
 use rc_kit::{icons, theme};
 use std::path::PathBuf;
+#[path = "settings_browse.rs"]
+mod settings_browse;
+pub use settings_browse::SettingsBrowse;
+use settings_browse::ToolPath;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SettingsPage {
@@ -30,7 +34,7 @@ pub enum Dialog {
     CargoDependencies,
     /// Picks a running process for the debugger.
     Attach { filter: String, processes: Vec<rc_core::processes::Process> },
-    Settings { draft: Box<Settings>, page: SettingsPage },
+    Settings { draft: Box<Settings>, page: SettingsPage, browse: SettingsBrowse },
     About,
     GotoLine { text: String, focus: bool },
     Bookmarks { list: Vec<crate::insight::Target>, selected: usize },
@@ -119,7 +123,7 @@ pub enum Dialog {
 
 impl Dialog {
     pub fn settings(s: &Settings) -> Dialog {
-        Dialog::Settings { draft: Box::new(s.clone()), page: SettingsPage::Appearance }
+        Dialog::Settings { draft: Box::new(s.clone()), page: SettingsPage::Appearance, browse: Default::default() }
     }
 
     /// The Merge dialog with `rev` picked and git's default options.
@@ -137,7 +141,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let Some(mut dialog) = app.dialog.take() else { return };
     let outcome = match &mut dialog {
         Dialog::RevertDisk(ticket) => revert_disk(app, ctx, ticket),
-        Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
+        Dialog::Settings { draft, page, browse } => settings(app, ctx, draft, page, browse),
         Dialog::About => about(ctx),
         Dialog::CloneRepository => if crate::clone_project::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
@@ -240,38 +244,57 @@ fn settings_pages() -> [(SettingsPage, &'static str); 10] {
 const SETTINGS_NAV_W: f32 = 200.0;
 const SETTINGS_PAGE_W: f32 = 640.0;
 
-fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &mut SettingsPage) -> Outcome {
+#[derive(Clone, Copy, Debug)]
+struct SettingsLayout { width: f32, nav: f32, page: f32, height: f32, compact: bool }
+impl SettingsLayout {
+    fn for_viewport(viewport: egui::Vec2) -> Self {
+        let width = (viewport.x - 32.0).max(1.0).min(SETTINGS_NAV_W + 29.0 + SETTINGS_PAGE_W);
+        let compact = width < 620.0;
+        let nav = if compact { 0.0 } else { (width * 0.24).min(SETTINGS_NAV_W) };
+        let page = if compact { width } else { (width - nav - 29.0).max(1.0) };
+        let chrome = if compact { 156.0 } else { 120.0 };
+        let height = (viewport.y * 0.7).min(620.0).min((viewport.y - chrome).max(1.0));
+        Self { width, nav, page, height, compact }
+    }
+}
+
+fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &mut SettingsPage, browse: &mut SettingsBrowse) -> Outcome {
+    browse.poll(draft);
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
-    // One size for every page, from the window's height.
-    let page_h = (ctx.content_rect().height() * 0.7).clamp(360.0, 620.0);
-    let ((ok, cancel), esc) = modal(ctx, "settings", SETTINGS_NAV_W + 1.0 + 28.0 + SETTINGS_PAGE_W, |ui| {
+    // Layout depends only on the viewport, never on the selected page or its content.
+    let layout = SettingsLayout::for_viewport(ctx.content_rect().size());
+    let page_h = layout.height;
+    let ((ok, cancel), esc) = modal(ctx, "settings", layout.width, |ui| {
         title(ui, tr("Settings"));
-        ui.horizontal_top(|ui| {
-            ui.vertical(|ui| {
-                ui.set_width(SETTINGS_NAV_W);
-                ui.set_height(page_h);
-                for (pg, label) in settings_pages() {
-                    let (r, resp) = ui.allocate_exact_size(vec2(SETTINGS_NAV_W, 28.0), egui::Sense::click());
-                    if *page == pg {
-                        ui.painter().rect_filled(r, 6.0, p.selection);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, 6.0, p.row_hover);
-                    }
-                    ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
-                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, *page == pg, label));
-                    if resp.clicked() {
-                        *page = pg;
-                    }
-                }
+        if layout.compact {
+            egui::ComboBox::from_id_salt("settings_category").selected_text(settings_pages().into_iter().find(|(candidate, _)| candidate == page).map_or("", |(_, label)| label)).width(layout.width - 8.0).show_ui(ui, |ui| {
+                for (candidate, label) in settings_pages() { ui.selectable_value(page, candidate, label); }
             });
-            // The line between the menu and the page.
-            ui.add_space(12.0);
-            let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
-            ui.painter().rect_filled(line, 0.0, p.control_border);
-            ui.add_space(15.0);
+            ui.add_space(8.0);
+        }
+        ui.horizontal_top(|ui| {
+            if !layout.compact {
+                egui::ScrollArea::vertical().id_salt("settings_navigation").max_height(page_h).min_scrolled_height(page_h).auto_shrink([false, false]).max_width(layout.nav).show(ui, |ui| ui.vertical(|ui| {
+                    ui.set_width(layout.nav);
+                    ui.set_height(page_h);
+                    for (pg, label) in settings_pages() {
+                        let (r, resp) = ui.allocate_exact_size(vec2(layout.nav, 28.0), egui::Sense::click());
+                        if *page == pg { ui.painter().rect_filled(r, 6.0, p.selection); }
+                        else if resp.hovered() { ui.painter().rect_filled(r, 6.0, p.row_hover); }
+                        if resp.has_focus() { ui.painter().rect_stroke(r.shrink(1.0), 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside); }
+                        ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, *page == pg, label));
+                        if resp.clicked() { *page = pg; }
+                    }
+                }));
+                ui.add_space(12.0);
+                let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
+                ui.painter().rect_filled(line, 0.0, p.control_border);
+                ui.add_space(15.0);
+            }
             // Reserve the floating scrollbar's full width as well as its allocated gutter.
-            let content_width = SETTINGS_PAGE_W - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0;
-            egui::ScrollArea::new([*page != SettingsPage::Tools, true]).max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded).auto_shrink([false, false]).max_width(SETTINGS_PAGE_W).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            let content_width = (layout.page - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0).max(40.0);
+            egui::ScrollArea::new([*page != SettingsPage::Tools, true]).max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded).auto_shrink([false, false]).max_width(layout.page).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_width(content_width);
                 ui.set_height(page_h);
                 let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
@@ -279,7 +302,7 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                 ui.add_space(10.0);
                 // Pages that lay out their own lists, sized to the page.
                 match page {
-                    SettingsPage::Tools => return tools_page(ui, app, draft),
+                    SettingsPage::Tools => return tools_page(ui, app, draft, browse),
                     SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
                     SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
                     SettingsPage::Copyright => {
@@ -867,31 +890,31 @@ fn external_tools_rows(ui: &mut Ui, tools: &mut Vec<rc_core::external_tools::Ext
 }
 
 /// Labels above controls keep long tool names and executable paths within the page.
-fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings) {
+fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse: &mut SettingsBrowse) {
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
     let p = rc_kit::pal(ui);
     app.load_toolchain();
     toolchain_rows(ui, app);
     ui.separator();
-    ui.label(tr("Rust debugger"));
+    let debugger_label = ui.label(tr("Rust debugger"));
     egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
         rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
     }).show_ui(ui, |ui| {
         ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
         ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
-    });
+    }).response.labelled_by(debugger_label.id);
     ui.add_space(8.0);
-    for (label, value) in [
-        (tr("rust-analyzer path"), &mut draft.rust_analyzer_path),
-        (tr("HTML language server"), &mut draft.web_html_server),
-        (tr("CSS language server"), &mut draft.web_css_server),
-        (tr("JavaScript/TypeScript language server"), &mut draft.web_typescript_server),
-        (tr("Global tsserver.js path"), &mut draft.web_tsserver_path),
-        (tr("GDB executable"), &mut draft.gdb_path),
-        (tr("LLDB DAP executable"), &mut draft.lldb_dap_path),
-        (tr(".NET CLI"), &mut draft.dotnet_path),
-        (tr("Roslyn language server"), &mut draft.roslyn_path),
-        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path),
+    for (label, value, target) in [
+        (tr("rust-analyzer path"), &mut draft.rust_analyzer_path, ToolPath::Analyzer),
+        (tr("HTML language server"), &mut draft.web_html_server, ToolPath::Html),
+        (tr("CSS language server"), &mut draft.web_css_server, ToolPath::Css),
+        (tr("JavaScript/TypeScript language server"), &mut draft.web_typescript_server, ToolPath::Typescript),
+        (tr("Global tsserver.js path"), &mut draft.web_tsserver_path, ToolPath::Tsserver),
+        (tr("GDB executable"), &mut draft.gdb_path, ToolPath::Gdb),
+        (tr("LLDB DAP executable"), &mut draft.lldb_dap_path, ToolPath::Lldb),
+        (tr(".NET CLI"), &mut draft.dotnet_path, ToolPath::Dotnet),
+        (tr("Roslyn language server"), &mut draft.roslyn_path, ToolPath::Roslyn),
+        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, ToolPath::Netcoredbg),
     ] {
         let label_response = ui.label(label);
         let browse_width = ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), p.text)).size().x + 24.0;
@@ -899,31 +922,36 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings) {
         ui.horizontal(|ui| {
             let mut text = value.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
             let web=label==tr("HTML language server")||label==tr("CSS language server")||label==tr("JavaScript/TypeScript language server")||label==tr("Global tsserver.js path");
-            let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(field_width)).labelled_by(label_response.id);
+            let resp = ui.add_enabled(!browse.busy(), egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(field_width)).labelled_by(label_response.id);
             if resp.changed() {
                 *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
             }
-            if ui.button(tr("Browse…")).clicked()
-                && let Some(p) = rfd::FileDialog::new().pick_file()
-            {
-                *value = Some(p);
+            if ui.add_enabled(!browse.busy(), egui::Button::new(tr("Browse…"))).clicked() {
+                browse.start(target, value.clone(), app.waker.clone());
             }
         });
         ui.add_space(8.0);
+    }
+    if browse.busy() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Open File…"));
+            if ui.button(tr("Cancel")).clicked() { browse.cancel(); }
+        });
     }
     rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
 }
 
 /// How rustfmt runs for Reformat Code, on save and at commit.
 fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui::Color32, muted: egui::Color32) {
-    ui.label(tr("rustfmt arguments"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width((ui.available_width() - 8.0).max(80.0)));
+    let arguments_label = ui.label(tr("rustfmt arguments"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(arguments_label.id);
     ui.add_space(8.0);
-    ui.label(tr("rustfmt channel"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width((ui.available_width() - 8.0).max(80.0)));
+    let channel_label = ui.label(tr("rustfmt channel"));
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(channel_label.id);
     ui.add_space(8.0);
-    ui.label(tr("rustfmt environment"));
-    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width((ui.available_width() - 8.0).max(80.0)));
+    let environment_label = ui.label(tr("rustfmt environment"));
+    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(environment_label.id);
     ui.add_space(8.0);
     match rc_cargo::Rustfmt::check(rustfmt) {
         Ok(()) => ui.label(egui::RichText::new(tr("Used by Reformat Code, on save and at commit. The channel runs through rustup.")).color(muted)),
@@ -934,6 +962,12 @@ fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui
 
 /// The versions in use, read from the tools themselves, with rustup's installs and updates.
 fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
+    if let Err(error) = app.runner.require_trust() {
+        ui.label(tr("Toolchain"));
+        ui.label(error.to_string());
+        ui.end_row();
+        return;
+    }
     let Some(info) = app.toolchain.clone() else {
         ui.label(tr("Toolchain"));
         ui.spinner();
@@ -967,7 +1001,7 @@ fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
         Some(path) => {
             let text = path.display().to_string();
             ui.scope(|ui| {
-                ui.set_max_width(420.0);
+                ui.set_max_width(ui.available_width().min(420.0));
                 ui.add(egui::Label::new(&text).truncate()).on_hover_text(&text);
             });
         }
@@ -3699,4 +3733,43 @@ mod tests {
         assert!(s.starts_with("namespace Shop.Core.Models;"), "{s}");
         assert!(s.contains("public class Order"));
     }
+}
+
+#[cfg(test)]
+mod responsive_settings_tests {
+    use super::*;
+    #[test]
+    fn settings_layout_stays_inside_small_and_zoomed_viewports() {
+        for viewport in [vec2(1280.0, 800.0), vec2(800.0, 500.0), vec2(800.0, 300.0), vec2(640.0, 400.0), vec2(480.0, 320.0)] {
+            let layout = SettingsLayout::for_viewport(viewport);
+            assert!(layout.width + 14.0 <= viewport.x);
+            assert!(layout.height + if layout.compact { 124.0 } else { 88.0 } <= viewport.y);
+            assert!(layout.page > 0.0 && layout.height > 0.0);
+        }
+        assert!(SettingsLayout::for_viewport(vec2(640.0, 400.0)).compact);
+        assert!(!SettingsLayout::for_viewport(vec2(1280.0, 800.0)).compact);
+    }
+    #[test]
+    fn settings_controls_remain_reachable_at_small_logical_sizes() {
+        use egui_kittest::kittest::Queryable;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        for size in [vec2(1280.0, 800.0), vec2(800.0, 500.0), vec2(800.0, 300.0), vec2(640.0, 400.0), vec2(480.0, 320.0)] {
+            let mut harness = crate::screens::harness(crate::screens::test_app(home.path(), true), size);
+            let mut widths = Vec::new();
+            for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Tools] {
+                harness.state_mut().open_settings(page);
+                harness.run_steps(5);
+                let modal = harness.ctx.memory(|memory| memory.area_rect(Id::new("settings"))).unwrap();
+                let ok = harness.get_by_label(tr("OK")).rect();
+                let cancel = harness.get_by_label(tr("Cancel")).rect();
+                let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+                assert!(viewport.contains_rect(modal), "modal outside {size:?}: {modal:?}");
+                assert!(viewport.contains_rect(ok) && viewport.contains_rect(cancel), "buttons outside {size:?}: {ok:?}, {cancel:?}");
+                widths.push(modal.width());
+            }
+            assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "page widths differ at {size:?}: {widths:?}");
+        }
+    }
+
 }

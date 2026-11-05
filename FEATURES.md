@@ -10,7 +10,7 @@ halo suave no projeto e transição no destino de arraste de abas. O teste
 `settings_keep_the_same_width_when_switching_pages` verifica a largura entre todas as categorias
 e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limita ambas as
 dimensões para impedir o crescimento vertical contínuo do modal.
-Validação visual interativa pendente; sem alteração dos status de prontidão.
+Verificação por testes de interface e capturas GPU conferidas; sem alteração dos status de prontidão.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável
@@ -30,6 +30,17 @@ teste de estabilidade das categorias e captura `settings-tools-stacked.png`.
 O seletor de templates recebe o foco ao abrir, filtra também a pesquisa com espaços nas
 bordas, permite escolher o primeiro resultado com Enter e informa quando não há resultados.
 Os testes `template_picker_tests` exercitam digitação imediata, Enter e busca vazia de resultados.
+
+Configurações responsivas: largura baseada no viewport e estável entre categorias; seleção
+de categoria compacta em janelas estreitas e navegação rolável quando a altura é pequena.
+Os botões OK/Cancelar permanecem acessíveis em tamanhos lógicos de 480×320 a 1280×800,
+incluindo 800×300. Procurar em Ferramentas é assíncrono e cancelável; a seleção pertence
+ao rascunho aberto e é descartada ao fechá-lo. Projetos sem confiança mostram a razão
+da detecção estar desabilitada em vez de um carregamento contínuo. Testes:
+`responsive_settings_tests`, `settings_browse`,
+`untrusted_project_tool_settings_explain_why_detection_is_disabled`. A captura
+`completed_interface_theme_and_size_capture` verifica temas claro/escuro e janelas compactas
+em um projeto Cargo real; imagens em `target/snapshots/completed-*.png` (não distribuídas).
 
 ## Legenda
 

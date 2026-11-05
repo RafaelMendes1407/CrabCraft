@@ -3046,7 +3046,7 @@ impl CrabCraftApp {
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
         self.copyright.draft = None;
         self.explorer.scopes.draft = None;
-        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
+        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page, browse: Default::default() });
     }
 
     /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the

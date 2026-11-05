@@ -272,7 +272,7 @@ fn the_rustfmt_settings_show_what_is_wrong_with_them() {
     let mut app = test_app(home.path(), true);
     let mut draft = app.settings.clone();
     draft.rustfmt.env = "RUST_LOG=debug\nnot a pair".into();
-    app.dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools });
+    app.dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools, browse: Default::default() });
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
     for label in ["rustfmt arguments", "rustfmt channel", "rustfmt environment"] {
@@ -1812,7 +1812,7 @@ fn inspection_profiles_capture() {
         settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
         settings.inspection_profile.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
         settings.inspection_profile.set("clippy::needless_return", Some(Level::Error));
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections, browse: Default::default() });
         h.run_steps(4);
         let suffix = if dark { "dark" } else { "light" };
         h.render().unwrap().save(out.join(format!("inspection-profiles-{suffix}.png"))).unwrap();
@@ -3999,4 +3999,71 @@ fn tools_settings_layout_capture() {
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
     std::fs::create_dir_all(&out).unwrap();
     h.render().unwrap().save(out.join("settings-tools-stacked.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; captures completed menus, settings and docking in both themes"]
+fn completed_interface_theme_and_size_capture() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let files = tempfile::tempdir().unwrap();
+    let root = files.path().join("interface-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"interface-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"CrabCraft\");\n}\n").unwrap(); }
+    for (dark, size, label) in [(true, vec2(1280.0, 800.0), "dark"), (false, vec2(1280.0, 800.0), "light"), (true, vec2(640.0, 400.0), "compact-dark"), (false, vec2(640.0, 400.0), "compact-light")] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace_and_wait(&root);
+        app.trust_project_tools_for_test();
+        for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+        let mut h = harness(app, size);
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+        run_frames(&mut h, "installed toolchain versions", |app| app.toolchain.is_some());
+        h.run_steps(5);
+        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(modal), "{label}: {modal:?}");
+        h.render().unwrap().save(out.join(format!("completed-settings-{label}.png"))).unwrap();
+        h.state_mut().dialog = None;
+        h.run_steps(3);
+        h.get_by_label(tr("Main Menu")).click(); h.run_steps(3);
+        h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("completed-menu-{label}.png"))).unwrap();
+        if size.x > 1000.0 {
+            h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+            let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 120.0).unwrap().rect().center();
+            h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
+            h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+            let to = egui::pos2(size.x - 160.0, size.y * 0.5);
+            for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+            h.run_steps(15);
+            assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
+            h.render().unwrap().save(out.join(format!("completed-docking-{label}.png"))).unwrap();
+            h.input_mut().events.push(egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }); h.run_steps(3);
+            assert_eq!(h.state().layout.main.groups().len(), 2);
+        }
+    }
+}
+
+#[test]
+fn untrusted_project_tool_settings_explain_why_detection_is_disabled() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("untrusted-tools");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"untrusted-tools\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    h.run_steps(5);
+    assert!(h.query_by_label(tr("Trust this project before running project tools or code")).is_some());
+    assert!(h.state().toolchain.is_none());
+    assert!(h.state().settings.trusted_projects.is_empty());
 }
