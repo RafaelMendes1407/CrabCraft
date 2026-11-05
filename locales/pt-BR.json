@@ -869,7 +869,17 @@
     "Paste": "Colar",
     "Process finished with exit code {code}": "Processo concluído com código de saída {code}",
     "Select All": "Selecionar tudo",
-    "Starting terminal…": "Iniciando terminal…"
+    "Starting terminal…": "Iniciando terminal…",
+    "Split Terminal Right": "Dividir terminal à direita",
+    "Split Terminal Down": "Dividir terminal abaixo",
+    "Find in Terminal": "Buscar no terminal",
+    "Close Terminal Split": "Fechar divisão do terminal",
+    "Terminal search": "Busca no terminal",
+    "Terminal output changed; refresh the search": "A saída do terminal mudou; atualize a busca",
+    "{current} of {total} terminal matches": "{current} de {total} ocorrências no terminal",
+    "Search limited to recent output and 5,000 matches": "Busca limitada à saída recente e 5.000 ocorrências",
+    "Previous": "Anterior",
+    "Next": "Próximo"
   },
   "tests": {
     "Run All Tests": "Executar todos os testes"

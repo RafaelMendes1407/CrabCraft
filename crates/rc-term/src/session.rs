@@ -545,6 +545,25 @@ impl TermSession {
         st.term.selection = Some(sel);
     }
 
+    pub fn search(&self, query: String, waker: Waker) -> std::io::Result<crate::search::Search> {
+        crate::search::Search::start(self.state.clone(), query, waker)
+    }
+
+    /// Reveals a match only while it still refers to the same output and dimensions.
+    pub fn reveal_search_match(&self, hit: crate::search::Match, generation: u64) -> bool {
+        let mut state = self.lock();
+        let grid = state.term.grid();
+        if state.generation != generation || hit.line < grid.topmost_line().0 || hit.line > grid.bottommost_line().0
+            || hit.start_column > hit.end_column || hit.end_column >= grid.columns() { return false; }
+        let start = Point::new(Line(hit.line), Column(hit.start_column));
+        let end = Point::new(Line(hit.line), Column(hit.end_column));
+        let mut selection = Selection::new(SelectionType::Simple, start, Side::Left);
+        selection.update(end, Side::Right);
+        state.term.scroll_to_point(start);
+        state.term.selection = Some(selection);
+        true
+    }
+
     /// Selects everything, scrollback included.
     pub fn select_all(&self) {
         let mut st = self.lock();

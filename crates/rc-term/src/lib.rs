@@ -17,6 +17,7 @@ pub mod colors;
 pub mod keys;
 pub mod links;
 pub mod session;
+pub mod search;
 pub mod tabs;
 pub mod view;
 

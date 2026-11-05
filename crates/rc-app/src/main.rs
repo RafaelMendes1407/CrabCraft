@@ -63,6 +63,7 @@ mod file_rename;
 mod native_menu;
 mod open_files;
 mod toolwindow;
+mod terminal_tools;
 mod ui;
 
 /// Opened from Finder, the app gets a bare PATH (/usr/bin:/bin:…) without what Terminal adds

@@ -570,9 +570,21 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
-    let actions = [(ico::ADD, tr("New Terminal Tab"), app.terminal_starting.is_none())];
+    let ready = app.terminal_starting.is_none();
+    let has = !app.terminals.is_empty();
+    let actions = [
+        (ico::ADD, tr("New Terminal Tab"), ready),
+        (ico::SPLIT_RIGHT, tr("Split Terminal Right"), ready && has),
+        (ico::SPLIT_DOWN, tr("Split Terminal Down"), ready && has),
+        (ico::SEARCH, tr("Find in Terminal"), has),
+        (ico::CLOSE, tr("Close Terminal Split"), app.terminals.active().is_some_and(|tab| app.terminal_tools.split.is_some_and(|split| split.contains(tab.id())))),
+    ];
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
+        Some(1) => app.split_terminal(false),
+        Some(2) => app.split_terminal(true),
+        Some(3) => app.terminal_tools.search.toggle(),
+        Some(4) => app.terminal_tools.split = None,
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
     }
@@ -586,6 +598,7 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if cancel_startup {
         app.terminal_starting = None;
+        app.terminal_tools.split_after_start = None;
         app.toggle_tool(ToolWindow::Terminal);
         return;
     }
@@ -620,18 +633,53 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if let Some(id) = close {
         app.terminals.close(id);
+        if app.terminal_tools.split.is_some_and(|split| split.contains(id)) { app.terminal_tools.split = None; }
         return;
     }
-    let cwd = app.terminals.active().and_then(|t| t.session.cwd().map(|p| p.to_path_buf()));
+    let Some(active) = app.terminals.active().map(|tab| tab.id()) else { return; };
+    if let Some(session) = app.terminals.get(active).map(|tab| &tab.session) {
+        app.terminal_tools.search.show(ui, session, app.waker.clone());
+    }
     let focus = std::mem::take(&mut app.focus_terminal);
-    let Some(tab) = app.terminals.active() else { return };
+    let split = app.terminal_tools.split.filter(|split| split.contains(active));
+    if let Some(mut split) = split.filter(|split| app.terminals.get(split.first).is_some() && app.terminals.get(split.second).is_some()) {
+        let rect = ui.available_rect_before_wrap();
+        let ratio = split.ratio.clamp(0.2, 0.8);
+        let middle = if split.stacked { rect.top() + rect.height() * ratio } else { rect.left() + rect.width() * ratio };
+        let (first, second, divider) = if split.stacked {
+            (Rect::from_min_max(rect.min, pos2(rect.right(), middle - 3.0)), Rect::from_min_max(pos2(rect.left(), middle + 3.0), rect.max), Rect::from_min_max(pos2(rect.left(), middle - 3.0), pos2(rect.right(), middle + 3.0)))
+        } else {
+            (Rect::from_min_max(rect.min, pos2(middle - 3.0, rect.bottom())), Rect::from_min_max(pos2(middle + 3.0, rect.top()), rect.max), Rect::from_min_max(pos2(middle - 3.0, rect.top()), pos2(middle + 3.0, rect.bottom())))
+        };
+        ui.allocate_rect(rect, Sense::hover());
+        let response = ui.interact(divider, ui.id().with("terminal_divider"), Sense::drag()).on_hover_cursor(if split.stacked { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
+        if response.dragged() && let Some(pointer) = response.interact_pointer_pos() {
+            split.ratio = if split.stacked { (pointer.y - rect.top()) / rect.height().max(1.0) } else { (pointer.x - rect.left()) / rect.width().max(1.0) }.clamp(0.2, 0.8);
+            app.terminal_tools.split = Some(split);
+        }
+        ui.painter().rect_filled(divider, 0.0, rc_kit::pal(ui).island_border);
+        for (id, rect) in [(split.first, first), (split.second, second)] {
+            let mut pane = ui.new_child(egui::UiBuilder::new().id_salt(("terminal_pane", id)).max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
+            pane.set_clip_rect(rect.intersect(ui.clip_rect()));
+            terminal_pane(app, &mut pane, id, focus && id == active);
+        }
+    } else {
+        terminal_pane(app, ui, active, focus);
+    }
+}
+
+fn terminal_pane(app: &mut CrabCraftApp, ui: &mut Ui, id: u64, focus: bool) {
+    let Some(tab) = app.terminals.get(id) else { return; };
+    let cwd = tab.session.cwd().map(std::path::Path::to_path_buf);
     let config = rc_term::TermConfig::default();
-    let out = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
-    for e in out.events {
-        if let rc_term::ViewEvent::LinkClicked(link) = e {
-            open_link(app, link, cwd.clone());
+    let output = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
+    for event in output.events {
+        match event {
+            rc_term::ViewEvent::LinkClicked(link) => open_link(app, link, cwd.clone()),
+            rc_term::ViewEvent::Focused => app.terminals.activate(id),
         }
     }
+
 }
 
 #[cfg(test)]

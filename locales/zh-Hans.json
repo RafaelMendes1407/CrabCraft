@@ -869,7 +869,17 @@
     "Paste": "粘贴",
     "Process finished with exit code {code}": "进程已结束，退出代码为 {code}",
     "Select All": "全选",
-    "Starting terminal…": "正在启动终端…"
+    "Starting terminal…": "正在启动终端…",
+    "Split Terminal Right": "向右拆分终端",
+    "Split Terminal Down": "向下拆分终端",
+    "Find in Terminal": "在终端中查找",
+    "Close Terminal Split": "关闭终端拆分",
+    "Terminal search": "终端搜索",
+    "Terminal output changed; refresh the search": "终端输出已更改；请刷新搜索",
+    "{current} of {total} terminal matches": "终端匹配项 {current}/{total}",
+    "Search limited to recent output and 5,000 matches": "搜索仅限近期输出和 5,000 个匹配项",
+    "Previous": "上一个",
+    "Next": "下一个"
   },
   "tests": {
     "Run All Tests": "运行所有测试"

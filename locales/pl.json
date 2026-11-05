@@ -869,7 +869,17 @@
     "Paste": "Wklej",
     "Process finished with exit code {code}": "Proces zakończony z kodem wyjścia {code}",
     "Select All": "Zaznacz wszystko",
-    "Starting terminal…": "Uruchamianie terminala…"
+    "Starting terminal…": "Uruchamianie terminala…",
+    "Split Terminal Right": "Podziel terminal w prawo",
+    "Split Terminal Down": "Podziel terminal w dół",
+    "Find in Terminal": "Znajdź w terminalu",
+    "Close Terminal Split": "Zamknij podział terminala",
+    "Terminal search": "Wyszukiwanie w terminalu",
+    "Terminal output changed; refresh the search": "Wyjście terminala uległo zmianie; odśwież wyszukiwanie",
+    "{current} of {total} terminal matches": "{current} z {total} dopasowań w terminalu",
+    "Search limited to recent output and 5,000 matches": "Wyszukiwanie ograniczone do ostatniego wyjścia i 5000 dopasowań",
+    "Previous": "Poprzedni",
+    "Next": "Następny"
   },
   "tests": {
     "Run All Tests": "Uruchom wszystkie testy"

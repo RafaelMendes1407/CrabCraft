@@ -18,3 +18,30 @@ Verification in a real Cargo workspace with spaces in its folder name runs
 also creates, switches and closes independent tabs. The real PTY tests cover resize,
 terminal environment, process exit/termination, colours, selection, wide characters and
 bracketed paste. This evidence does not assert feature parity with another IDE.
+
+## Splits and search
+
+Split Terminal Right and Split Terminal Down start another independent shell asynchronously
+in the current pane's starting directory. Two native panes share a draggable divider.
+Clicking a pane gives it keyboard focus; its tab becomes active. Close Terminal Split
+returns to a single pane while preserving both shells as tabs. Closing either pane's tab
+terminates that shell and removes the split. One pair is shown at a time; creating another
+split replaces the visible pair without killing the older sessions. Splits are not nested
+or restored across restarts.
+
+Find in Terminal searches the active pane's scrollback for a case-sensitive literal string
+(up to 256 characters). It includes Unicode wide/combining cells. Previous/Next cycle
+through matches and reveal/select them for copying. Search runs on a cancellable worker,
+locking one terminal row at a time so painting and input can continue. Editing the query,
+closing search, changing project or dropping the search handle cancels its worker.
+
+Search examines at most the most recent two million terminal cells and returns at most
+5,000 matches, with a visible limit message. It searches rendered rows, not patterns spanning
+wrapped rows or newline boundaries. Output or size changes invalidate saved coordinates;
+Refresh searches the new snapshot instead of selecting stale positions. Regex and
+case-insensitive search do not have controls.
+
+A native headless test opens a real Cargo workspace, runs its Rust program, creates both
+split orientations, verifies PTY dimensions and finds/selects the program's output. Backend
+tests cover scrollback matches, Unicode cell coordinates, literal regex metacharacters,
+stale output rejection and the match limit.

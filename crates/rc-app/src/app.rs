@@ -142,6 +142,7 @@ pub struct CrabCraftApp {
     pub settings_backup: crate::settings_backup::State,
     pub repl_starting: Option<crate::repl::Starting>,
     pub terminal_starting: Option<crate::repl::Starting>,
+    pub terminal_tools: crate::terminal_tools::Tools,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -359,6 +360,7 @@ impl CrabCraftApp {
             settings_backup: Default::default(),
             repl_starting: None,
             terminal_starting: None,
+            terminal_tools: Default::default(),
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -1339,6 +1341,7 @@ impl CrabCraftApp {
         self.find_bar = None;
         self.repl_starting = None;
         self.terminal_starting = None;
+        self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
@@ -2459,16 +2462,32 @@ impl CrabCraftApp {
         }
     }
 
+    pub fn split_terminal(&mut self, stacked: bool) {
+        if self.terminal_starting.is_some() { return; }
+        let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else { return; };
+        self.terminal_tools.split_after_start = Some((id, stacked));
+        self.open_terminal(cwd);
+        if self.terminal_starting.is_none() { self.terminal_tools.split_after_start = None; }
+    }
+
     fn poll_terminal_startup(&mut self) {
         let Some(result) = self.terminal_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
         self.terminal_starting = None;
         match result {
             Ok(session) => {
-                self.terminals.push(session);
+                let second = self.terminals.push(session);
+                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take() {
+                    if self.terminals.get(first).is_some() {
+                        self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
+                    }
+                }
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }
-            Err(error) => self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true),
+            Err(error) => {
+                self.terminal_tools.split_after_start = None;
+                self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true);
+            }
         }
     }
 
