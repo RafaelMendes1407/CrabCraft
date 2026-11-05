@@ -2737,5 +2737,38 @@
   "disk_open": {
     "Opening file": "正在打开文件",
     "File opening cancelled": "已取消打开文件"
+  },
+  "signature_change": {
+    "Change Rust Function Signature": "更改 Rust 函数签名",
+    "Change an ordinary free Rust function and its workspace callers. Function values, generated contexts and unsafe argument reordering are refused. Nothing is saved automatically.": "更改普通 Rust 自由函数及其工作区调用。拒绝函数值、生成上下文和不安全的参数重排。不会自动保存。",
+    "External callers are not updated.": "不会更新外部调用。",
+    "Parameter {n} name": "参数 {n} 名称",
+    "Parameter {n} type": "参数 {n} 类型",
+    "New parameter {n} caller argument": "新参数 {n} 的调用实参",
+    "Move parameter {n} up": "上移参数 {n}",
+    "Move parameter {n} down": "下移参数 {n}",
+    "Remove parameter {n}": "删除参数 {n}",
+    "Add parameter": "添加参数",
+    "Return type": "返回类型",
+    "Reset signature": "重置签名",
+    "Preview signature changes": "预览签名更改",
+    "Resolving and checking signature changes…": "正在解析并检查签名更改…",
+    "Cancel signature operation": "取消签名操作",
+    "{files} files will be edited without saving": "将编辑 {files} 个文件但不保存",
+    "Apply signature changes": "应用签名更改",
+    "Reload function at caret": "重新加载光标处函数",
+    "Undo signature change": "撤销签名更改",
+    "The workspace snapshot could not be read. Check the files and try again.": "无法读取工作区快照。请检查文件后重试。",
+    "The signature change exceeds its source, reference, edit or time limits.": "签名更改超出了源码、引用、编辑或时间限制。",
+    "Source or analysis changed. Reload the signature; your edits were kept.": "源码或分析已更改。请重新加载签名；您的编辑已保留。",
+    "The removed parameter is used in the function body.": "函数体中使用了被删除的参数。",
+    "Parameter names must be distinct and must not capture existing body names.": "参数名称必须唯一，且不能捕获函数体中的现有名称。",
+    "This function is used as a value or in an unsupported call context. Its signature was not changed.": "此函数用作值或处于不支持的调用上下文中。其签名未更改。",
+    "rust-analyzer could not resolve every required definition or edit. Try again after indexing.": "rust-analyzer 无法解析所有必需的定义或编辑。请在索引完成后重试。",
+    "Signature change cancelled.": "已取消签名更改。",
+    "There are no signature changes to apply.": "没有可应用的签名更改。",
+    "Enter valid Rust parameter names, types and literal caller arguments.": "请输入有效的 Rust 参数名称、类型和字面量调用实参。",
+    "Only ordinary free functions with analyzable Rust usages are supported. Methods, generated code, unknown contexts and unsafe argument changes are refused.": "仅支持具有可分析 Rust 用法的普通自由函数。拒绝方法、生成代码、未知上下文和不安全的参数更改。",
+    "Trust this project before changing Rust signatures.": "更改 Rust 签名前请先信任此项目。"
   }
 }

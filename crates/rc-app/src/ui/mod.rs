@@ -43,6 +43,7 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         dialogs::show(app, &ctx);
         crate::macro_tester::show(app, &ctx);
         crate::move_items::show(app, &ctx);
+        crate::signature_change::show(app, &ctx);
         crate::macro_step::show_progress(app, &ctx);
         crate::local_ai::show(app, &ctx);
         if let Some(mut d) = app.new_project.take()
@@ -83,6 +84,7 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     dialogs::show(app, &ctx);
     crate::macro_tester::show(app, &ctx);
     crate::move_items::show(app, &ctx);
+    crate::signature_change::show(app, &ctx);
     crate::macro_step::show_progress(app, &ctx);
     crate::local_ai::show(app, &ctx);
     search_popup::show(app, &ctx);

@@ -2737,5 +2737,38 @@
   "disk_open": {
     "Opening file": "Ouverture du fichier",
     "File opening cancelled": "Ouverture du fichier annulée"
+  },
+  "signature_change": {
+    "Change Rust Function Signature": "Modifier la signature Rust",
+    "Change an ordinary free Rust function and its workspace callers. Function values, generated contexts and unsafe argument reordering are refused. Nothing is saved automatically.": "Modifie une fonction Rust libre et ses appels dans l’espace de travail. Les valeurs de fonction, contextes générés et réordonnancements dangereux sont refusés. Aucune sauvegarde automatique.",
+    "External callers are not updated.": "Les appels externes ne sont pas modifiés.",
+    "Parameter {n} name": "Nom du paramètre {n}",
+    "Parameter {n} type": "Type du paramètre {n}",
+    "New parameter {n} caller argument": "Argument d’appel du nouveau paramètre {n}",
+    "Move parameter {n} up": "Monter le paramètre {n}",
+    "Move parameter {n} down": "Descendre le paramètre {n}",
+    "Remove parameter {n}": "Supprimer le paramètre {n}",
+    "Add parameter": "Ajouter un paramètre",
+    "Return type": "Type de retour",
+    "Reset signature": "Réinitialiser la signature",
+    "Preview signature changes": "Aperçu des modifications de signature",
+    "Resolving and checking signature changes…": "Résolution et vérification des modifications…",
+    "Cancel signature operation": "Annuler l’opération de signature",
+    "{files} files will be edited without saving": "{files} fichiers seront modifiés sans sauvegarde",
+    "Apply signature changes": "Appliquer les modifications de signature",
+    "Reload function at caret": "Recharger la fonction au curseur",
+    "Undo signature change": "Annuler la modification de signature",
+    "The workspace snapshot could not be read. Check the files and try again.": "Impossible de lire l’instantané de l’espace de travail. Vérifiez les fichiers et réessayez.",
+    "The signature change exceeds its source, reference, edit or time limits.": "La modification dépasse les limites de source, références, éditions ou durée.",
+    "Source or analysis changed. Reload the signature; your edits were kept.": "La source ou l’analyse a changé. Rechargez la signature ; vos éditions sont conservées.",
+    "The removed parameter is used in the function body.": "Le paramètre supprimé est utilisé dans le corps de la fonction.",
+    "Parameter names must be distinct and must not capture existing body names.": "Les noms des paramètres doivent être distincts et ne pas capturer les noms du corps.",
+    "This function is used as a value or in an unsupported call context. Its signature was not changed.": "Cette fonction est utilisée comme valeur ou dans un contexte non pris en charge. Sa signature est inchangée.",
+    "rust-analyzer could not resolve every required definition or edit. Try again after indexing.": "rust-analyzer n’a pas pu résoudre toutes les définitions ou éditions nécessaires. Réessayez après l’indexation.",
+    "Signature change cancelled.": "Modification de signature annulée.",
+    "There are no signature changes to apply.": "Aucune modification de signature à appliquer.",
+    "Enter valid Rust parameter names, types and literal caller arguments.": "Saisissez des noms de paramètres, types et arguments littéraux Rust valides.",
+    "Only ordinary free functions with analyzable Rust usages are supported. Methods, generated code, unknown contexts and unsafe argument changes are refused.": "Seules les fonctions libres aux usages Rust analysables sont prises en charge. Méthodes, code généré, contextes inconnus et changements dangereux sont refusés.",
+    "Trust this project before changing Rust signatures.": "Approuvez ce projet avant de modifier les signatures Rust."
   }
 }

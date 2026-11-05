@@ -2737,5 +2737,38 @@
   "disk_open": {
     "Opening file": "Abriendo archivo",
     "File opening cancelled": "Apertura de archivo cancelada"
+  },
+  "signature_change": {
+    "Change Rust Function Signature": "Cambiar firma de función Rust",
+    "Change an ordinary free Rust function and its workspace callers. Function values, generated contexts and unsafe argument reordering are refused. Nothing is saved automatically.": "Cambia una función libre Rust y sus llamadas del espacio de trabajo. Se rechazan valores de función, contextos generados y reordenamientos inseguros. No se guarda automáticamente.",
+    "External callers are not updated.": "Las llamadas externas no se actualizan.",
+    "Parameter {n} name": "Nombre del parámetro {n}",
+    "Parameter {n} type": "Tipo del parámetro {n}",
+    "New parameter {n} caller argument": "Argumento de llamada del nuevo parámetro {n}",
+    "Move parameter {n} up": "Subir parámetro {n}",
+    "Move parameter {n} down": "Bajar parámetro {n}",
+    "Remove parameter {n}": "Eliminar parámetro {n}",
+    "Add parameter": "Añadir parámetro",
+    "Return type": "Tipo de retorno",
+    "Reset signature": "Restablecer firma",
+    "Preview signature changes": "Vista previa de cambios de firma",
+    "Resolving and checking signature changes…": "Resolviendo y comprobando cambios de firma…",
+    "Cancel signature operation": "Cancelar operación de firma",
+    "{files} files will be edited without saving": "Se editarán {files} archivos sin guardar",
+    "Apply signature changes": "Aplicar cambios de firma",
+    "Reload function at caret": "Recargar función en el cursor",
+    "Undo signature change": "Deshacer cambio de firma",
+    "The workspace snapshot could not be read. Check the files and try again.": "No se pudo leer la instantánea del espacio de trabajo. Comprueba los archivos e inténtalo de nuevo.",
+    "The signature change exceeds its source, reference, edit or time limits.": "El cambio de firma supera los límites de código, referencias, ediciones o tiempo.",
+    "Source or analysis changed. Reload the signature; your edits were kept.": "El código o el análisis cambió. Recarga la firma; tus ediciones se conservaron.",
+    "The removed parameter is used in the function body.": "El parámetro eliminado se usa en el cuerpo de la función.",
+    "Parameter names must be distinct and must not capture existing body names.": "Los nombres de parámetros deben ser distintos y no capturar nombres existentes del cuerpo.",
+    "This function is used as a value or in an unsupported call context. Its signature was not changed.": "Esta función se usa como valor o en un contexto no compatible. Su firma no se cambió.",
+    "rust-analyzer could not resolve every required definition or edit. Try again after indexing.": "rust-analyzer no pudo resolver todas las definiciones o ediciones necesarias. Reinténtalo después de indexar.",
+    "Signature change cancelled.": "Cambio de firma cancelado.",
+    "There are no signature changes to apply.": "No hay cambios de firma que aplicar.",
+    "Enter valid Rust parameter names, types and literal caller arguments.": "Introduce nombres de parámetros, tipos y argumentos literales Rust válidos.",
+    "Only ordinary free functions with analyzable Rust usages are supported. Methods, generated code, unknown contexts and unsafe argument changes are refused.": "Solo se admiten funciones libres con usos Rust analizables. Se rechazan métodos, código generado, contextos desconocidos y cambios inseguros.",
+    "Trust this project before changing Rust signatures.": "Confía en este proyecto antes de cambiar firmas Rust."
   }
 }

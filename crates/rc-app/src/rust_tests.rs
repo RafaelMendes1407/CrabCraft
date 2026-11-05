@@ -4652,3 +4652,52 @@ fn native_one_step_macro_expansion_uses_unsaved_definition_and_keeps_nested_call
     let out=app.insight.update(&mut app.docs,true);app.handle_insight(out);assert!(!app.insight.macro_step_pending());assert!(!app.docs.active_doc().unwrap().generated);
     app.insight.stop();
 }
+
+fn signature_capture(app:&CrabCraftApp)->crate::signature_backend::Capture {
+    let session=app.insight.session.as_ref().unwrap();let workspace=app.runner.cargo_workspace.as_ref().unwrap();
+    crate::signature_backend::Capture{root:workspace.root.clone(),members:workspace.packages.iter().filter_map(|package|package.manifest.parent().map(Path::to_path_buf)).collect(),client:session.client.clone(),overlays:app.docs.list.iter().filter(|doc|doc.editor.lang()==rc_syntax::Lang::Rust&&!doc.generated&&!doc.scratch&&!doc.editor.read_only).map(|doc|crate::signature_backend::Overlay{ticket:crate::disk_revert::Ticket::capture(doc),rope:doc.editor.buffer.snapshot(),saved:doc.saved.clone(),bom:doc.bom,ending:doc.editor.buffer.line_ending(),modified:doc.mtime,server_version:session.docs.version(&doc.path)}).collect()}
+}
+#[test]
+fn signature_backend_updates_alias_calls_and_semantic_parameter_shorthand_without_saving() {
+    use crate::{signature_backend as backend,signature_model as model};
+    let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);
+    let lib=root.join("src/lib.rs");let main=root.join("src/main.rs");
+    const LIBRARY:&str="struct Counter {left:i32}\npub fn calculate(left:i32,right:i32,spare:i32)->i32{let spare=1;let record=Counter{left};record.left+right+spare-1}\n";
+    const CALLER:&str="use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2,99),42);}\n";
+    write(&lib,LIBRARY);write(&main,CALLER);write(&root.join("Cargo.lock"),"version=4\n[[package]]\nname=\"demo\"\nversion=\"0.1.0\"\n");
+    let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file(&main);app.open_file(&lib);
+    pump(&mut app,"signature backend analysis",|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|doc|a.insight.runnables.contains_key(&doc.editor.id)));
+    let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:1,column:9};let (sender,receiver)=std::sync::mpsc::channel();
+    std::thread::spawn(move ||{let context=backend::Context::new(client, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));sender.send(backend::prepare(capture,origin,&context)).unwrap();});
+    let mut result=None;pump(&mut app,"signature graph",|_|{result=receiver.try_recv().ok();result.is_some()});let prepared=std::sync::Arc::new(result.unwrap().unwrap());assert_eq!(prepared.calls.len(),1);
+    let mut input=prepared.function.input();input.parameters.pop();input.parameters.swap(0,1);input.parameters[0].name="rhs".into();input.parameters[1].name="lhs".into();input.parameters.push(model::Parameter{original:None,name:"bonus".into(),ty:"i32".into(),argument:"0".into()});
+    let client=prepared.project.capture.client.clone();let prepared_copy=prepared.clone();let (sender,receiver)=std::sync::mpsc::channel();std::thread::spawn(move ||{let context=backend::Context::new(client,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));sender.send(backend::preview(prepared_copy,input,&context)).unwrap();});
+    let mut result=None;pump(&mut app,"signature changes",|_|{result=receiver.try_recv().ok();result.is_some()});let plan=result.unwrap().unwrap();assert_eq!(plan.files.len(),2);
+    let library=plan.files.iter().find(|file|file.path==lib).unwrap();let caller=plan.files.iter().find(|file|file.path==main).unwrap();assert!(library.after.contains("left: lhs"),"{}",library.after);assert!(caller.after.contains("alias(2,40,0)"),"{}",caller.after);
+    assert_eq!(std::fs::read_to_string(&lib).unwrap(),LIBRARY);assert_eq!(std::fs::read_to_string(&main).unwrap(),CALLER);
+    let proof=tempfile::tempdir().unwrap();write(&proof.path().join("lib.rs"),&library.after);write(&proof.path().join("main.rs"),&caller.after);
+    let library_artifact=proof.path().join("libdemo.rlib");let output=std::process::Command::new("rustc").args(["--crate-name","demo","--crate-type","rlib","--edition=2021"]).arg(proof.path().join("lib.rs")).arg("-o").arg(&library_artifact).output().unwrap();assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+    let binary=proof.path().join("proof");let output=std::process::Command::new("rustc").args(["--edition=2021","--extern"]).arg(format!("demo={}",library_artifact.display())).arg(proof.path().join("main.rs")).arg("-o").arg(&binary).output().unwrap();assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));assert!(std::process::Command::new(binary).status().unwrap().success());
+    app.insight.stop();
+}
+
+#[test]
+fn signature_backend_refuses_alias_function_values_used_parameters_effects_and_stale_disk() {
+    use crate::signature_backend as backend;
+    let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    for (name,caller,expected) in [
+        ("callback","use demo::calculate as alias;\nfn main(){let callback:fn(i32,i32)->i32=alias;assert_eq!(callback(40,2),42);}\n","value"),
+        ("used","use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2),42);}\n","used"),
+        ("effect","use demo::calculate as alias;\nfn produce()->i32{40}\nfn main(){assert_eq!(alias(produce(),2),42);}\n","effect"),
+        ("stale","use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2),42);}\n","stale"),
+        ("cancel","use demo::calculate as alias;\nfn main(){assert_eq!(alias(40,2),42);}\n","cancel"),
+    ] {
+        let home=tempfile::tempdir().unwrap();let project=tempfile::tempdir().unwrap();let root=project.path().canonicalize().unwrap();demo(&root);let lib=root.join("src/lib.rs");let main=root.join("src/main.rs");
+        write(&lib,"pub fn calculate(left:i32,right:i32)->i32{left+right}\n");write(&main,caller);write(&root.join("Cargo.lock"),"version=4\n[[package]]\nname=\"demo\"\nversion=\"0.1.0\"\n");
+        let mut app=new_app(home.path());app.settings.trusted_projects.push(root.clone());app.open_workspace(&root);app.open_file(&lib);
+        pump(&mut app,name,|a|a.runner.cargo_workspace.is_some()&&a.insight.status==InsightStatus::Ready&&a.docs.active_doc().is_some_and(|d|a.insight.runnables.contains_key(&d.editor.id)));
+        let capture=signature_capture(&app);let client=capture.client.clone();let origin=backend::Key{path:lib.clone(),line:0,column:9};let (tx,rx)=std::sync::mpsc::channel();let expected=expected.to_owned();
+        let main_copy=main.clone();std::thread::spawn(move||{let ctx=backend::Context::new(client,std::sync::Arc::new(std::sync::atomic::AtomicBool::new(expected=="cancel")));let result=(||{let prepared=std::sync::Arc::new(backend::prepare(capture,origin,&ctx)?);let mut input=prepared.function.input();if expected=="used"{input.parameters.pop();}else{input.parameters.swap(0,1);}if expected=="stale"{std::fs::write(main_copy,"fn main(){}\n").unwrap();}backend::preview(prepared,input,&ctx).map(|_|())})();tx.send(result).unwrap();});
+        let mut result=None;pump(&mut app,name,|_|{result=rx.try_recv().ok();result.is_some()});let error=result.unwrap().unwrap_err();match name {"callback"=>assert!(matches!(error,backend::Error::FunctionValue),"{error:?}"),"used"=>assert!(matches!(error,backend::Error::UsedParameter),"{error:?}"),"effect"=>assert!(matches!(error,backend::Error::Model(crate::signature_model::Error::Unsupported)),"{error:?}"),"cancel"=>assert!(matches!(error,backend::Error::Cancelled),"{error:?}"),_=>assert!(matches!(error,backend::Error::Stale),"{error:?}")};assert_eq!(std::fs::read_to_string(&lib).unwrap(),"pub fn calculate(left:i32,right:i32)->i32{left+right}\n");app.insight.stop();
+    }
+}

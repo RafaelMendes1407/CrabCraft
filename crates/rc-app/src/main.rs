@@ -23,6 +23,9 @@ mod macro_tester;
 #[cfg(test)]
 mod macro_actions_audit;
 mod macro_step_engine;
+mod signature_model;
+mod signature_backend;
+mod signature_change;
 mod macro_step;
 mod local_ai;
 mod local_ai_client;

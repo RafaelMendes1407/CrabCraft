@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 240 |
+| ✅ Pronto | 241 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 5 |
+| ⬜ A fazer | 4 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -184,7 +184,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-04 | Lista de conflitos da refatoração | ✅ | M3 | Antes de aplicar (ou pré-visualizar) um Renomear em Rust, as edições do rust-analyzer são verificadas numa thread: nome já usado num arquivo tocado (fora de comentários e strings), palavra-chave ou identificador inválido, arquivo fora do projeto, em `target/`, em dependência/toolchain (`.cargo/registry`, `.rustup`), somente leitura ou com texto que não bate mais com a edição, e erro do rust-analyzer. A caixa lista cada conflito (arquivo:linha clicável que abre o local) com Continuar mesmo assim / Cancelar; sem conflitos o rename segue direto. Testado com rust-analyzer real; captura conferida. Falta: conflitos das demais refatorações (ações de código) e checagem de escopo exata (o choque de nome é por arquivo) |
 | R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
-| R-07 | Mudar assinatura | ⬜ | M4 | |
+| R-07 | Mudar assinatura | ✅ | M4 | [#47](https://github.com/RafaelMendes1407/CrabCraft/issues/47): janela nativa Code/Find Action altera parâmetros/retorno de funções livres com preview, verificação cancelável, buffers não salvos e Undo guardado. Identidade RA + varredura limitada cobre aliases; rename semântico preserva shorthand, remoção verifica uso real. Cargo+RA reais, rustc/exec e UI provaram reorder/rename/add/remove/type/return, BOM/CRLF e stale. Recusa métodos/traits/function values/macros desconhecidas e argumentos com efeitos; callers externos não atualizados. Escopo e limites em `docs/change-signature.md`. |
 | R-08 | Mover itens entre módulos | ✅ | M4 | Movimentação conservadora nativa de funções pub/pub(crate), structs com campos públicos, enums, const e aliases primitivos entre módulos irmãos existentes; re-export mantém caminhos/callers/aliases e visibilidade. AST+identidade RA, prévia congelada de dois buffers, preflight de disco/namespace, cancelamento e undo sem autosave; Cargo+RA+UI reais verificam seis movimentos, impl, enum payload e navegação ao novo local. Dependências/generics/privados/macros/attrs/globs/graphs complexos são recusados explicitamente; [escopo](docs/moving-items.md). |
 | R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |

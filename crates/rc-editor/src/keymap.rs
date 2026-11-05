@@ -70,6 +70,7 @@ pub enum Action {
     Generate,
     RefactorThis,
     MoveItem,
+    ChangeSignature,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -265,6 +266,7 @@ impl Action {
                 | ShareInPlayground
                 | TestDeclarativeMacro
                 | MoveItem
+                | ChangeSignature
                 | Profile
         )
     }
