@@ -665,7 +665,7 @@ fn screens_git_tags_and_stashes() {
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DropStash { stash });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-drop-stash-dark.png")).unwrap();
-    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false });
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false, paths: Vec::new() });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-stash-changes-dark.png")).unwrap();
 }

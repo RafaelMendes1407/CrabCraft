@@ -894,7 +894,13 @@
     "The commit is now empty; skip it or abort": "O commit agora está vazio; pule-o ou cancele",
     "No merge, rebase or cherry-pick is in progress": "Nenhum merge, rebase ou cherry-pick em andamento",
     "The branches have no common history": "Os branches não têm histórico em comum",
-    "The branch cannot be fast-forwarded": "O branch não pode ser avançado (fast-forward)"
+    "The branch cannot be fast-forwarded": "O branch não pode ser avançado (fast-forward)",
+    "Stash Checked…": "Guardar marcados…",
+    "Only the {n} checked files will be stashed.": "Apenas os {n} arquivos marcados serão guardados.",
+    "Create Branch…": "Criar branch…",
+    "Create Branch from Stash": "Criar branch a partir do stash",
+    "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "Muda para um novo branch no commit original do stash e restaura as alterações. O stash é mantido.",
+    "Branch created; stash kept": "Branch criado; stash mantido"
   },
   "search-results": {
     "… more": "… mais"

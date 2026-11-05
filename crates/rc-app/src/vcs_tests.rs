@@ -239,6 +239,30 @@ fn stashes_are_made_shown_applied_popped_and_dropped_from_the_git_window() {
 }
 
 #[test]
+fn selected_files_are_stashed_and_restored_on_a_new_branch_from_the_app() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn selected() {}\n").unwrap();
+    std::fs::write(root.join("keep.rs"), "// unselected\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "dirty", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    app.vcs.stash_push_paths("selected", false, false, vec!["lib.rs".into()]);
+    assert!(app.vcs.sequence_running());
+    pump(&mut app, "selected stash", |a| a.vcs.busy.is_none() && a.vcs.stashes.len() == 1);
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn a() {}\n");
+    assert_eq!(std::fs::read_to_string(root.join("keep.rs")).unwrap(), "// unselected\n");
+    let stash = app.vcs.stashes[0].clone();
+    app.vcs.stash_branch(&stash, "restore-selected");
+    pump(&mut app, "branch restore", |a| a.vcs.busy.is_none() && a.vcs.branch_name().as_deref() == Some("restore-selected"));
+    assert_eq!(std::fs::read_to_string(root.join("lib.rs")).unwrap(), "pub fn selected() {}\n");
+    assert_eq!(app.vcs.stashes[0].hash, stash.hash);
+}
+
+#[test]
 fn patches_are_created_and_applied_between_repositories_from_the_app() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();

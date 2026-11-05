@@ -311,6 +311,44 @@ async fn stash_push_list_apply_pop_drop() {
     assert!(t.repo.stashes().await.unwrap().is_empty());
 }
 
+#[tokio::test]
+async fn stash_selected_literal_paths_and_restore_on_original_base_branch() {
+    let t = TempRepo::new().await;
+    t.commit_files(&[("Cargo.toml", "[package]\nname = \"stash_fixture\"\nversion = \"0.1.0\"\n"), ("src/lib.rs", "pub fn original() {}\n"), ("other.rs", "// original\n"), ("a[1].rs", "// original\n"), ("a1.rs", "// original\n")], "init");
+    let base = t.repo.resolve("HEAD").await.unwrap();
+    t.write("src/lib.rs", "pub fn changed() {}\n");
+    t.write("other.rs", "// keep local\n");
+    t.write("a[1].rs", "// selected literal\n");
+    t.write("a1.rs", "// keep local too\n");
+    t.write("new file.rs", "// untracked selected\n");
+    let opts = StashOptions { include_untracked: true, paths: s(&["src/lib.rs", "a[1].rs", "new file.rs"]), ..Default::default() };
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    assert!(matches!(t.repo.stash_push_cancellable(&opts, Some(&cancel)).await, Err(GitError::Cancelled)));
+    assert_eq!(t.read("src/lib.rs"), "pub fn changed() {}\n");
+    t.repo.stash_push_cancellable(&opts, None).await.unwrap();
+    assert_eq!(t.read("src/lib.rs"), "pub fn original() {}\n");
+    assert_eq!(t.read("a[1].rs"), "// original\n");
+    assert_eq!(t.read("other.rs"), "// keep local\n");
+    assert_eq!(t.read("a1.rs"), "// keep local too\n");
+    assert!(!t.path("new file.rs").exists());
+    let stash = t.repo.stashes().await.unwrap()[0].clone();
+    t.git(&["add", "."]);
+    t.git(&["commit", "-qm", "advance main"]);
+    assert!(matches!(t.repo.stash_branch(&stash, "--bad", None).await, Err(GitError::InvalidBranchName(_))));
+    assert!(matches!(t.repo.stash_branch(&stash, "cancelled", Some(&cancel)).await, Err(GitError::Cancelled)));
+    t.repo.stash_branch(&stash, "restored", None).await.unwrap();
+    assert_eq!(t.repo.resolve("HEAD").await.unwrap(), base);
+    assert_eq!(t.read("src/lib.rs"), "pub fn changed() {}\n");
+    assert_eq!(t.read("a[1].rs"), "// selected literal\n");
+    assert_eq!(t.read("other.rs"), "// original\n");
+    assert_eq!(t.read("new file.rs"), "// untracked selected\n");
+    assert_eq!(t.repo.stashes().await.unwrap()[0].hash, stash.hash);
+    let mut stale = stash.clone();
+    stale.index += 1;
+    assert!(matches!(t.repo.stash_branch(&stale, "stale", None).await, Err(GitError::StashChanged)));
+}
+
 /// Two repositories with the same first commit (`b` is a clone of `a`).
 async fn twin_repos() -> (TempRepo, TempRepo) {
     let a = TempRepo::new().await;

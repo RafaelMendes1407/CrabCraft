@@ -62,7 +62,7 @@ pub enum Dialog {
     /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
     PushTags { name: Option<String>, remote: String },
     /// Stash the work tree's changes with an optional message.
-    StashChanges { message: String, include_untracked: bool, keep_index: bool },
+    StashChanges { message: String, include_untracked: bool, keep_index: bool, paths: Vec<String> },
     /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
     /// requested (the loaded patch and its preview live in `app.vcs.patch`).
     ApplyPatch { path: String, paste: bool },
@@ -71,6 +71,7 @@ pub enum Dialog {
     ConfigFolder { config: String, rename: Option<String>, folder: String },
     /// Confirm dropping a stash.
     DropStash { stash: rc_vcs::Stash },
+    StashBranch { stash: rc_vcs::Stash, name: String },
     /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
     /// The path follows the branch until the user edits it.
     AddWorktree { path: String, new_branch: bool, name: String, existing: String, path_edited: bool },
@@ -153,7 +154,8 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::DeleteTag { name } => delete_tag(app, ctx, name),
         Dialog::CheckoutTag { name } => checkout_tag(app, ctx, name),
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
-        Dialog::StashChanges { message, include_untracked, keep_index } => stash_changes(app, ctx, message, include_untracked, keep_index),
+        Dialog::StashChanges { message, include_untracked, keep_index, paths } => stash_changes(app, ctx, message, include_untracked, keep_index, paths),
+        Dialog::StashBranch { stash, name } => stash_branch(app, ctx, stash, name),
         Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),
@@ -2701,9 +2703,15 @@ fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool) -> Outcome {
+fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool, paths: &[String]) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "stash_changes", 420.0, |ui| {
         title(ui, tr("Stash Changes"));
+        if !paths.is_empty() {
+            ui.label(trf("Only the {n} checked files will be stashed.", &[("n", &paths.len())]));
+            egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+                for path in paths { ui.label(path); }
+            });
+        }
         let resp = ui.add(egui::TextEdit::singleline(message).hint_text(tr("Message (optional)")).desired_width(f32::INFINITY));
         if message.is_empty() && !ui.memory(|m| m.focused().is_some()) {
             resp.request_focus();
@@ -2714,7 +2722,11 @@ fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, in
         buttons(ui, tr("Stash"), true)
     });
     if ok {
-        app.vcs.stash_push(message, *include_untracked, *keep_index);
+        if paths.is_empty() {
+            app.vcs.stash_push(message, *include_untracked, *keep_index);
+        } else {
+            app.vcs.stash_push_paths(message, *include_untracked, *keep_index, paths.to_vec());
+        }
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
@@ -2865,6 +2877,23 @@ fn apply_patch(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, paste: 
         return Outcome::Close;
     }
     Outcome::Keep
+}
+
+fn stash_branch(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash, name: &mut String) -> Outcome {
+    let valid = plausible_branch_name(name.trim()) && app.vcs.busy.is_none();
+    let ((ok, cancel), esc) = modal(ctx, "stash_branch", 460.0, |ui| {
+        title(ui, tr("Create Branch from Stash"));
+        ui.label(&stash.message);
+        ui.label(tr("Switches to a new branch at the stash's original commit and restores its changes. The stash is kept."));
+        let response = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+        if name.is_empty() && !ui.memory(|m| m.focused().is_some()) { response.request_focus(); }
+        buttons(ui, tr("Create"), valid)
+    });
+    if ok && valid {
+        app.vcs.stash_branch(stash, name.trim());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
 fn drop_stash(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash) -> Outcome {

@@ -56,6 +56,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.vcs.open_diff(&c.path);
         }
         let busy = app.vcs.busy.is_some();
+        if ui.add_enabled_ui(!included.is_empty() && !busy, |ui| theme::secondary_button(ui, tr("Stash Checked…"))).inner.clicked() {
+            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: included.clone() });
+        }
         if theme::icon_button(ui, ico::EXPORT, !included.is_empty() && !busy, tr("Create Patch from the checked files…")).clicked() {
             patch_action = Some((PatchSource::Changes(included.clone()), false));
         }
@@ -843,7 +846,7 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         ui.add_space(8.0);
         let stash = ui.add_enabled_ui(!busy && dirty, |ui| theme::secondary_button(ui, tr("Stash Changes…"))).inner;
         if stash.clicked() {
-            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false });
+            app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: Vec::new() });
         }
         if !dirty {
             stash.on_disabled_hover_text(tr("No local changes to stash"));
@@ -905,6 +908,10 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                         action = Some(StashAction::Pop(st.clone()));
                         ui.close();
                     }
+                    if theme::menu_item(ui, None, tr("Create Branch…"), false).clicked() {
+                        action = Some(StashAction::Branch(st.clone()));
+                        ui.close();
+                    }
                     if theme::menu_item(ui, Some(ico::DELETE), tr("Drop…"), false).clicked() {
                         action = Some(StashAction::Drop(st.clone()));
                         ui.close();
@@ -929,6 +936,9 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                     if theme::secondary_button(ui, tr("Pop")).on_hover_text(tr("Apply the changes and drop the stash")).clicked() {
                         action = Some(StashAction::Pop(st.clone()));
+                    }
+                    if theme::secondary_button(ui, tr("Create Branch…")).clicked() {
+                        action = Some(StashAction::Branch(st.clone()));
                     }
                     if theme::secondary_button(ui, tr("Drop…")).clicked() {
                         action = Some(StashAction::Drop(st.clone()));
@@ -971,6 +981,7 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     match action {
         Some(StashAction::Apply(st)) => app.vcs.stash_apply(&st, false),
         Some(StashAction::Pop(st)) => app.vcs.stash_apply(&st, true),
+        Some(StashAction::Branch(stash)) => app.dialog = Some(Dialog::StashBranch { stash, name: String::new() }),
         Some(StashAction::Drop(stash)) => app.dialog = Some(Dialog::DropStash { stash }),
         None => {}
     }
@@ -980,6 +991,7 @@ enum StashAction {
     Apply(rc_vcs::Stash),
     Pop(rc_vcs::Stash),
     Drop(rc_vcs::Stash),
+    Branch(rc_vcs::Stash),
 }
 
 /// `On main: message` → `message`; `WIP on main: abc123 subject` stays as it is.

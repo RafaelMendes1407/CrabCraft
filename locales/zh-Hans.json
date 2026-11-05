@@ -894,7 +894,13 @@
     "The commit is now empty; skip it or abort": "该提交现在为空；请跳过或中止",
     "No merge, rebase or cherry-pick is in progress": "没有正在进行的合并、变基或拣选",
     "The branches have no common history": "这些分支没有共同的历史",
-    "The branch cannot be fast-forwarded": "无法快进该分支"
+    "The branch cannot be fast-forwarded": "无法快进该分支",
+    "Stash Checked…": "暂存勾选文件…",
+    "Only the {n} checked files will be stashed.": "仅暂存勾选的 {n} 个文件。",
+    "Create Branch…": "创建分支…",
+    "Create Branch from Stash": "从暂存创建分支",
+    "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "切换到暂存原始提交处的新分支并恢复更改。保留暂存。",
+    "Branch created; stash kept": "已创建分支；保留暂存"
   },
   "search-results": {
     "… more": "… 更多"

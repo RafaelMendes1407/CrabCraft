@@ -894,7 +894,13 @@
     "The commit is now empty; skip it or abort": "コミットが空になりました。スキップするか中止してください",
     "No merge, rebase or cherry-pick is in progress": "進行中のマージ、リベース、チェリーピックはありません",
     "The branches have no common history": "ブランチに共通の履歴がありません",
-    "The branch cannot be fast-forwarded": "ブランチを早送りできません"
+    "The branch cannot be fast-forwarded": "ブランチを早送りできません",
+    "Stash Checked…": "選択したファイルをスタッシュ…",
+    "Only the {n} checked files will be stashed.": "選択した {n} 個のファイルのみスタッシュします。",
+    "Create Branch…": "ブランチを作成…",
+    "Create Branch from Stash": "スタッシュからブランチを作成",
+    "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "スタッシュの元のコミットに新しいブランチを作成して切り替え、変更を復元します。スタッシュは保持されます。",
+    "Branch created; stash kept": "ブランチを作成し、スタッシュを保持しました"
   },
   "search-results": {
     "… more": "… さらに表示"

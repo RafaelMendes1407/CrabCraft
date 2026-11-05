@@ -758,10 +758,31 @@ impl Vcs {
 
     /// Stashes the work tree's changes (`--include-untracked`, `--keep-index` on request).
     pub fn stash_push(&mut self, message: &str, include_untracked: bool, keep_index: bool) {
+        self.stash_push_paths(message, include_untracked, keep_index, Vec::new());
+    }
+
+    pub fn stash_push_paths(&mut self, message: &str, include_untracked: bool, keep_index: bool, mut paths: Vec<String>) {
         let Some(repo) = self.repo.clone() else { return };
         let message = Some(message.trim().to_string()).filter(|m| !m.is_empty());
-        let opts = StashOptions { message, include_untracked, keep_index, paths: Vec::new() };
-        self.op("stash", async move { repo.stash_push(&opts).await });
+        // A rename is one row in Commit but two paths in Git's index.
+        if let Some(status) = &self.status {
+            let old: Vec<String> = status.entries.iter().filter(|entry| paths.contains(&entry.path))
+                .filter_map(|entry| entry.orig_path.clone()).collect();
+            paths.extend(old);
+            paths.sort();
+            paths.dedup();
+        }
+        let opts = StashOptions { message, include_untracked, keep_index, paths };
+        self.sequence("stash", move |cancel, _| async move {
+            repo.stash_push_cancellable(&opts, Some(&cancel)).await?;
+            Ok(String::new())
+        });
+    }
+
+    pub fn stash_branch(&mut self, stash: &Stash, name: &str) {
+        let Some(repo) = self.repo.clone() else { return };
+        let (stash, name) = (stash.clone(), name.to_string());
+        self.sequence("stash_branch", move |cancel, _| async move { repo.stash_branch(&stash, &name, Some(&cancel)).await });
     }
 
     /// Applies a stash to the work tree; `pop` also drops it when it applied cleanly.
@@ -1464,6 +1485,7 @@ fn done_notice(what: &str) -> Option<&'static str> {
         "stash_apply" => tr("Stash applied"),
         "stash_pop" => tr("Stash applied and dropped"),
         "stash_drop" => tr("Stash dropped"),
+        "stash_branch" => tr("Branch created; stash kept"),
         "patch_save" => tr("Patch saved"),
         "patch_copy" => tr("Patch copied to the clipboard"),
         "patch_apply" => tr("Patch applied"),
