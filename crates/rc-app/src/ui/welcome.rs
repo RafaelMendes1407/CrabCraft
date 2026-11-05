@@ -22,8 +22,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         y += 40.0;
 
         // Primary actions.
-        let buttons = [(tr("New Project…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Cargo.toml…"), ico::SOLUTION, 1)];
-        let bw = (col_w - 24.0) / 3.0;
+        let buttons = [(tr("New Project…"), ico::ADD, 2), (tr("Open…"), ico::OPEN, 0), (tr("Open Cargo.toml…"), ico::SOLUTION, 1), (tr("Clone Repository…"), ico::DOWNLOAD, 3)];
+        let bw = (col_w - 36.0) / 4.0;
         for (i, (label, icon, kind)) in buttons.into_iter().enumerate() {
             let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 72.0));
             let resp = ui.interact(r, ui.id().with(("welcome", i)), Sense::click());
@@ -42,6 +42,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 match kind {
                     0 => app.pick_and_open(),
                     1 => app.pick_solution(),
+                    3 => app.dialog = Some(crate::ui::dialogs::Dialog::CloneRepository),
                     _ => app.new_project_dialog(None),
                 }
             }

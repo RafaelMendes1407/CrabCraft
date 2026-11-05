@@ -24,6 +24,7 @@ pub enum SettingsPage {
 }
 
 pub enum Dialog {
+    CloneRepository,
     CargoDependencies,
     /// Picks a running process for the debugger.
     Attach { filter: String, processes: Vec<rc_core::processes::Process> },
@@ -135,6 +136,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     let outcome = match &mut dialog {
         Dialog::Settings { draft, page } => settings(app, ctx, draft, page),
         Dialog::About => about(ctx),
+        Dialog::CloneRepository => if crate::clone_project::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
         Dialog::Bookmarks { list, selected } => bookmarks(app, ctx, list, selected),
         Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),

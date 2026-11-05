@@ -1922,5 +1922,20 @@
     "The rustup installer exceeds the download size limit": "rustup 安装程序超出下载大小限制",
     "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "安装程序的校验和缺失、无效或不匹配。未执行任何程序。",
     "Could not prepare the rustup installer: {error}": "无法准备 rustup 安装程序：{error}"
+  },
+  "clone_project": {
+    "Clone Repository…": "克隆仓库…",
+    "Clone Git Repository": "克隆 Git 仓库",
+    "Clone": "克隆",
+    "Cancel Clone": "取消克隆",
+    "Repository URL or local path": "仓库 URL 或本地路径",
+    "Destination folder (must not exist)": "目标文件夹（必须不存在）",
+    "Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled.": "克隆时不启用子模块、钩子和全局检出过滤器。项目以不受信任状态打开；构建脚本和过程宏保持禁用。",
+    "Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt.": "不支持交互式身份验证和自定义 Git 远程助手。请使用 SSH 代理或无需交互提示即可访问的仓库。",
+    "Enter a Git repository URL or local repository path": "请输入 Git 仓库 URL 或本地仓库路径",
+    "Choose a destination folder whose parent exists and which does not already exist": "请选择现有父文件夹中尚不存在的目标文件夹",
+    "Could not access the clone destination: {error}": "无法访问克隆目标：{error}",
+    "Git clone failed: {output}": "Git 克隆失败：{output}",
+    "Clone cancelled; its incomplete destination folder may remain.": "克隆已取消；不完整的目标文件夹可能仍然存在。"
   }
 }

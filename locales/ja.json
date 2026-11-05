@@ -1922,5 +1922,20 @@
     "The rustup installer exceeds the download size limit": "rustup インストーラーがダウンロードサイズの上限を超えています",
     "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "インストーラーのチェックサムがないか、無効か、一致しません。何も実行していません。",
     "Could not prepare the rustup installer: {error}": "rustup インストーラーを準備できませんでした: {error}"
+  },
+  "clone_project": {
+    "Clone Repository…": "リポジトリをクローン…",
+    "Clone Git Repository": "Git リポジトリをクローン",
+    "Clone": "クローン",
+    "Cancel Clone": "クローンをキャンセル",
+    "Repository URL or local path": "リポジトリの URL またはローカルパス",
+    "Destination folder (must not exist)": "保存先フォルダー（未作成であること）",
+    "Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled.": "サブモジュール、フック、グローバルのチェックアウトフィルターを使わずにクローンします。プロジェクトは未信頼で開き、ビルドスクリプトと手続きマクロは無効のままです。",
+    "Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt.": "対話式認証とカスタムのリモートヘルパーには対応していません。SSH エージェントか、対話なしでアクセスできるリポジトリを使用してください。",
+    "Enter a Git repository URL or local repository path": "Git リポジトリの URL またはローカルパスを入力してください",
+    "Choose a destination folder whose parent exists and which does not already exist": "既存の親フォルダー内で、まだ存在しない保存先を指定してください",
+    "Could not access the clone destination: {error}": "クローン先にアクセスできませんでした: {error}",
+    "Git clone failed: {output}": "Git のクローンに失敗しました: {output}",
+    "Clone cancelled; its incomplete destination folder may remain.": "クローンをキャンセルしました。未完了の保存先フォルダーが残る場合があります。"
   }
 }

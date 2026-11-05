@@ -1922,5 +1922,20 @@
     "The rustup installer exceeds the download size limit": "L’installateur rustup dépasse la limite de téléchargement",
     "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "La somme de contrôle de l’installateur est absente, invalide ou incorrecte. Rien n’a été exécuté.",
     "Could not prepare the rustup installer: {error}": "Impossible de préparer l’installateur rustup : {error}"
+  },
+  "clone_project": {
+    "Clone Repository…": "Cloner un dépôt…",
+    "Clone Git Repository": "Cloner un dépôt Git",
+    "Clone": "Cloner",
+    "Cancel Clone": "Annuler le clonage",
+    "Repository URL or local path": "URL du dépôt ou chemin local",
+    "Destination folder (must not exist)": "Dossier de destination (ne doit pas exister)",
+    "Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled.": "Clone sans sous-modules, hooks ni filtres de checkout globaux. Le projet s’ouvre sans confiance ; scripts de compilation et macros procédurales restent désactivés.",
+    "Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt.": "L’authentification interactive et les assistants distants personnalisés ne sont pas pris en charge. Utilisez un agent SSH ou un dépôt accessible sans interaction.",
+    "Enter a Git repository URL or local repository path": "Saisissez l’URL d’un dépôt Git ou un chemin local",
+    "Choose a destination folder whose parent exists and which does not already exist": "Choisissez un dossier inexistant dans un dossier parent existant",
+    "Could not access the clone destination: {error}": "Impossible d’accéder à la destination du clonage : {error}",
+    "Git clone failed: {output}": "Échec de git clone : {output}",
+    "Clone cancelled; its incomplete destination folder may remain.": "Clonage annulé ; le dossier de destination incomplet peut rester présent."
   }
 }

@@ -1922,5 +1922,20 @@
     "The rustup installer exceeds the download size limit": "O instalador do rustup excede o limite de download",
     "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "A soma do instalador está ausente, é inválida ou não confere. Nada foi executado.",
     "Could not prepare the rustup installer: {error}": "Não foi possível preparar o instalador do rustup: {error}"
+  },
+  "clone_project": {
+    "Clone Repository…": "Clonar repositório…",
+    "Clone Git Repository": "Clonar repositório Git",
+    "Clone": "Clonar",
+    "Cancel Clone": "Cancelar clonagem",
+    "Repository URL or local path": "URL do repositório ou caminho local",
+    "Destination folder (must not exist)": "Pasta de destino (não deve existir)",
+    "Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled.": "Clona sem submódulos, hooks ou filtros globais de checkout. O projeto abre sem confiança; scripts de compilação e macros procedurais continuam desativados.",
+    "Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt.": "Autenticação interativa e helpers remotos personalizados não são suportados. Use agente SSH ou um repositório acessível sem perguntas interativas.",
+    "Enter a Git repository URL or local repository path": "Informe uma URL de repositório Git ou caminho local",
+    "Choose a destination folder whose parent exists and which does not already exist": "Escolha uma pasta inexistente dentro de uma pasta existente",
+    "Could not access the clone destination: {error}": "Não foi possível acessar o destino da clonagem: {error}",
+    "Git clone failed: {output}": "Git clone falhou: {output}",
+    "Clone cancelled; its incomplete destination folder may remain.": "Clonagem cancelada; a pasta de destino incompleta pode permanecer."
   }
 }

@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 192 |
+| ✅ Pronto | 193 |
 | 🚧 Em andamento | 9 |
-| 🟢 Herdado | 11 |
+| 🟢 Herdado | 10 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -78,7 +78,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-25 | Invalidar caches | ✅ | M3 | Arquivo > Invalidar caches: relê os arquivos abertos, refaz o índice de arquivos, o status do Git, o modelo do Cargo e o rust-analyzer sem fechar abas; cargo clean opcional. Testado com Cargo e rust-analyzer reais |
 | P-26 | Segurança: projeto confiável antes de rodar build scripts | ✅ | M1 | rust-analyzer só inicia após confiar; teste prova que `build.rs` não roda antes |
 | P-27 | Estilo de código compartilhado no projeto | ✅ | M3 | `.editorconfig` (seções com globs, `root`, indentação, `tab_width`, `max_line_length`, `trim_trailing_whitespace`, `insert_final_newline`, `end_of_line` em arquivo novo) e, para `.rs`, `rustfmt.toml`/`.rustfmt.toml` (`hard_tabs`, `tab_spaces`, `max_width`, `newline_style`), lidos só dentro do projeto; o rustfmt prevalece em Rust. Indentação e margem direita ao abrir, limpeza ao salvar (menos na linha do cursor); a barra de status diz de onde veio. Visto na janela nativa com `hard_tabs` e `max_width = 60` |
-| P-28 | Clonar projeto de Git na tela inicial | 🟢 | M1 | Confirmar a cobertura herdada |
+| P-28 | Clonar projeto de Git na tela inicial | ✅ | M1 | Clonar repositório… na tela inicial abre diálogo nativo com URL/caminho local e pasta de destino nova. Git roda em segundo plano com progresso limitado, erros e Cancelar (grupo de processos); pasta existente, mesmo vazia ou symlink, é recusada sem sobrescrever. Sem submódulos, hooks, filtros de checkout globais ou helpers remotos personalizados; SSH usa agente/batch, autenticação interativa não suportada. Sucesso abre o projeto Cargo sem confiança, removendo confiança antiga do mesmo caminho. Testado por controles nativos com Git local e crate Rust reais: build.rs não roda ao clonar/abrir, o código clonado passa cargo test depois de invocação explícita; recusa de destino existente/helper externo, cancelamento HTTP e filtros/hooks globais efetivamente suprimidos. Erro/cancelamento pode deixar pasta incompleta. Autenticação em host público e captura não exercitadas. Ver docs/cloning-projects.md |
 | P-29 | Abrir projeto por `Cargo.toml` ou pasta | ✅ | M1 | Abrir pasta ou Cargo.toml testado; dentro do projeto o Cargo.toml abre para edição |
 
 ## 2. Editor

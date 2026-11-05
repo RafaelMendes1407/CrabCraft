@@ -1922,5 +1922,20 @@
     "The rustup installer exceeds the download size limit": "Das rustup-Installationsprogramm überschreitet das Downloadlimit",
     "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "Die Prüfsumme fehlt, ist ungültig oder stimmt nicht überein. Nichts wurde ausgeführt.",
     "Could not prepare the rustup installer: {error}": "rustup-Installationsprogramm konnte nicht vorbereitet werden: {error}"
+  },
+  "clone_project": {
+    "Clone Repository…": "Repository klonen…",
+    "Clone Git Repository": "Git-Repository klonen",
+    "Clone": "Klonen",
+    "Cancel Clone": "Klonen abbrechen",
+    "Repository URL or local path": "Repository-URL oder lokaler Pfad",
+    "Destination folder (must not exist)": "Zielordner (darf nicht existieren)",
+    "Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled.": "Klont ohne Submodule, Hooks oder globale Checkout-Filter. Das Projekt wird ohne Vertrauen geöffnet; Build-Skripte und prozedurale Makros bleiben deaktiviert.",
+    "Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt.": "Interaktive Anmeldung und benutzerdefinierte Remote-Helfer werden nicht unterstützt. SSH-Agent oder ein ohne Rückfrage zugängliches Repository verwenden.",
+    "Enter a Git repository URL or local repository path": "Git-Repository-URL oder lokalen Repository-Pfad eingeben",
+    "Choose a destination folder whose parent exists and which does not already exist": "Einen neuen Zielordner in einem vorhandenen übergeordneten Ordner wählen",
+    "Could not access the clone destination: {error}": "Auf das Klonziel konnte nicht zugegriffen werden: {error}",
+    "Git clone failed: {output}": "Git-Klonen fehlgeschlagen: {output}",
+    "Clone cancelled; its incomplete destination folder may remain.": "Klonen abgebrochen; der unvollständige Zielordner kann bestehen bleiben."
   }
 }

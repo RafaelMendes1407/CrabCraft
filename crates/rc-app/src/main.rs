@@ -2,6 +2,7 @@
 
 mod app;
 mod cli;
+mod clone_project;
 mod compare_cli;
 mod cargo_dependencies;
 mod repl;

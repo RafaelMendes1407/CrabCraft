@@ -74,6 +74,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub clone_project: crate::clone_project::CloneProject,
     pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
     pub cargo_folded: std::collections::BTreeSet<String>,
@@ -307,6 +308,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
             attached_load: None,
