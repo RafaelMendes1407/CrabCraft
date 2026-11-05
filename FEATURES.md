@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 213 |
-| 🚧 Em andamento | 11 |
+| 🚧 Em andamento | 14 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 29 |
+| ⬜ A fazer | 26 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -343,10 +343,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| Y-01 | Conexão a bancos e explorador de esquemas | ⬜ | M6 | Começar por SQLite e Postgres |
-| Y-02 | Console SQL e editor de dados | ⬜ | M6 | |
+| Y-01 | Conexão a bancos e explorador de esquemas | 🚧 | M6 | SQLite nativo verificado: conexão/criação explícitas com confiança, leitura padrão, tabelas/views/colunas/PK/índices/triggers e esquema SQL. Worker cancelável, limites e SQLite defensivo; projeto Rust e banco reais. PostgreSQL ainda indisponível; [escopo](docs/database.md). |
+| Y-02 | Console SQL e editor de dados | 🚧 | M6 | SQLite: console de uma instrução, páginas de 500 linhas e edição tipada parametrizada por rowid/PK com versão de esquema/snapshot e recusa de alterações externas; leitura padrão, escrita explícita, cancelamento real e teste nativo + consumidor Rust. Sem PostgreSQL/transações manuais; [limites](docs/database.md). |
 | Y-03 | SQL injetado em strings | ⬜ | M6 | |
-| Y-04 | Exportar e importar dados | ⬜ | M6 | |
+| Y-04 | Exportar e importar dados | 🚧 | M6 | SQLite: JSON tipado versionado preserva NULL/inteiros/reais/Unicode/BLOB, exportação sem sobrescrever, importação parametrizada e atômica com rollback por erro/cancelamento; teste nativo e Rust real. Sem PostgreSQL/CSV nesta etapa; [escopo](docs/database.md). |
 | Y-05 | Implantação por SFTP/FTP | ⬜ | M6 | |
 | Y-06 | Comparar e editar arquivos remotos | ⬜ | M6 | |
 | Y-07 | Configurações SSH e terminal SSH | ⬜ | M6 | |

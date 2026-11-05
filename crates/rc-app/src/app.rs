@@ -77,6 +77,7 @@ pub struct CrabCraftApp {
     /// What is typed in the Cargo window.
     pub cargo_input: String,
     pub shelves: crate::shelves::Shelves,
+    pub database: crate::database::Database,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -322,6 +323,7 @@ impl CrabCraftApp {
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
             shelves: crate::shelves::Shelves::new(waker.clone()),
+            database: crate::database::Database::new(waker.clone()),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -1403,6 +1405,7 @@ impl CrabCraftApp {
         self.files.close();
         self.vcs.close();
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
+        self.database = crate::database::Database::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
@@ -2873,6 +2876,7 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Database { self.database.cancel(); }
         if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
@@ -3518,6 +3522,8 @@ impl eframe::App for CrabCraftApp {
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
         self.poll_playground(&ctx);
+        let database_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        self.database.poll(database_trusted);
         self.http.poll();
         self.profiler.poll();
         self.coverage.poll();

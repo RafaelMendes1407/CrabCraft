@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod database_core;
+mod database;
 mod cli;
 mod endpoints;
 mod clone_project;
