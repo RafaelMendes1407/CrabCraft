@@ -2866,5 +2866,12 @@
     "Reload remote source": "重新加载远程源码",
     "Discard edits and reload this remote source?": "丢弃编辑并重新加载此远程源码？",
     "Discard edits and reload": "丢弃编辑并重新加载"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Axum 查询参数",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "来自经 RA 验证的 Serde Deserialize 结构体的缓存 Query 字段。源码更改后请刷新语义端点。",
+    "Verified query fields: {fields}": "已验证的查询字段：{fields}",
+    "This handler has no statically verified Query fields": "此处理函数没有静态验证的 Query 字段",
+    "Query completion is unsupported for this handler's extractor or deserializer": "不支持此处理函数的提取器或反序列化器的查询补全"
   }
 }

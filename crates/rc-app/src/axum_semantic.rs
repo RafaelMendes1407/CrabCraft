@@ -91,6 +91,7 @@ pub struct Route {
     pub file: PathBuf,
     pub route: rc_syntax::axum::Route,
     pub handler_file: Option<PathBuf>,
+    pub query: Option<Vec<String>>,
 }
 pub struct Report {
     pub routes: Vec<Route>,
@@ -676,7 +677,7 @@ impl Graph<'_> {
                             self.unresolved += 1;
                         }
                         for (method, handler) in methods {
-                            let handler_expr = &self.program.expressions[handler];
+                            let handler_expr = self.program.expressions[handler].clone();
                             let handler_key = match &handler_expr.kind {
                                 ExprKind::Reference(key) => Some(key.clone()),
                                 _ => None,
@@ -694,6 +695,7 @@ impl Graph<'_> {
                                 .as_ref()
                                 .map(|key| self.location(key))
                                 .unwrap_or_else(|| self.location(&handler_expr.key));
+                            let query = self.query(target.as_ref())?;
                             routes.push(Route {
                                 file: origin.file.clone(),
                                 route: rc_syntax::axum::Route {
@@ -706,6 +708,7 @@ impl Graph<'_> {
                                     handler_column: handler_at.1,
                                 },
                                 handler_file: target.map(|target| target.file),
+                                query,
                             });
                         }
                     }
@@ -746,6 +749,88 @@ impl Graph<'_> {
             }
             _ => Ok(None),
         }
+    }
+    fn query(&mut self, target: Option<&Key>) -> Result<Option<Vec<String>>, Error> {
+        let Some(target) = target else {
+            return Ok(None);
+        };
+        let Some(source) = self.program.sources.get(&target.file) else {
+            return Ok(None);
+        };
+        let at = source
+            .rope
+            .char_to_byte(crate::convert::char_of(&source.rope, target.position));
+        let Some(parameters) = crate::axum_queries::parameters(&source.rope, at) else {
+            return Ok(None);
+        };
+        let mut names = Vec::new();
+        for parameter in parameters {
+            let origin = Key {
+                file: source.path.clone(),
+                position: crate::convert::lsp_position(
+                    &source.rope,
+                    source.rope.byte_to_char(parameter.extractor),
+                ),
+            };
+            let Some(extractor) = self.resolver.definition(&origin)? else {
+                continue;
+            };
+            if extractor.package.as_deref() != Some("axum") || extractor.name != "Query" {
+                continue;
+            }
+            let Some(schema_at) = parameter.schema else {
+                return Ok(None);
+            };
+            let origin = Key {
+                file: source.path.clone(),
+                position: crate::convert::lsp_position(
+                    &source.rope,
+                    source.rope.byte_to_char(schema_at),
+                ),
+            };
+            let Some(schema) = self.resolver.definition(&origin)? else {
+                return Ok(None);
+            };
+            let Some(schema_source) = self.program.sources.get(&schema.key.file) else {
+                return Ok(None);
+            };
+            let at = schema_source.rope.char_to_byte(crate::convert::char_of(
+                &schema_source.rope,
+                schema.key.position,
+            ));
+            let Some(shape) = crate::axum_queries::schema(&schema_source.rope, at) else {
+                return Ok(None);
+            };
+            let mut confirmed = false;
+            for derive in shape.derives {
+                let origin = Key {
+                    file: schema_source.path.clone(),
+                    position: crate::convert::lsp_position(
+                        &schema_source.rope,
+                        schema_source.rope.byte_to_char(derive),
+                    ),
+                };
+                if let Some(symbol) = self.resolver.definition(&origin)? {
+                    if symbol.package.as_deref() == Some("serde_derive")
+                        && matches!(symbol.name.as_str(), "Deserialize" | "derive_deserialize")
+                    {
+                        confirmed = true;
+                    }
+                }
+            }
+            if !confirmed {
+                return Ok(None);
+            }
+            for name in shape.names {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            if names.len() > 128 {
+                return Err(Error::Limit);
+            }
+        }
+        Ok(Some(names))
     }
     fn location(&self, key: &Key) -> (usize, usize) {
         let Some(source) = self.program.sources.get(&key.file) else {
@@ -966,6 +1051,10 @@ pub(crate) mod tests {
         std::fs::write(root.path().join("src/main.rs"),"mod api;mod handlers;use axum::Router as HttpRouter;pub fn app()->HttpRouter{HttpRouter::new().nest(\"/v1\",api::routes()).merge(api::admin())}fn main(){let _=app();}\n").unwrap();
         std::fs::write(root.path().join("src/api.rs"),"use axum::{Router,routing::{get as fetch,post}};use crate::handlers;pub fn routes()->Router{Router::new().route(\"/users/{id}\",fetch(handlers::show).post(handlers::create))}pub fn admin()->Router{Router::new().route(\"/health\",fetch(handlers::health))}\n").unwrap();
         std::fs::write(root.path().join("src/handlers.rs"),"use axum::extract::{Path,Query};#[derive(serde::Deserialize)]pub struct Search{pub q:Option<String>,#[serde(rename=\"page_size\")]pub page:Option<usize>}pub async fn show(Path(id):Path<String>,Query(search):Query<Search>)->String{let _=search;id}pub async fn create()->&'static str{\"created\"}pub async fn health()->&'static str{\"ok\"}\n").unwrap();
+        let main = root.path().join("src/main.rs");
+        let mut code = std::fs::read_to_string(&main).unwrap();
+        code.push_str("struct Router;impl Router{fn new()->Self{Self}fn route(self,_path:&str,_handler:fn())->Self{self}}fn unrelated(){}fn fake_router(){let _=Router::new().route(\"/not-axum\",unrelated);}");
+        std::fs::write(main, code).unwrap();
         let output = std::process::Command::new("cargo")
             .args(["generate-lockfile", "--offline"])
             .current_dir(root.path())
@@ -977,6 +1066,31 @@ pub(crate) mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         root
+    }
+    #[test]
+    #[ignore = "Compiles a real Axum/Serde project using cached dependencies"]
+    fn compiled_axum_query_uses_inferred_serde_wire_names() {
+        let root = fixture();
+        let path = root.path().join("src/handlers.rs");
+        let mut source = std::fs::read_to_string(&path).unwrap();
+        source.push_str(r#"
+#[test] fn query_fields_match_wire_names(){let query=axum::extract::Query::<Search>::try_from_uri(&"http://localhost/users/42?q=hello&page_size=3".parse().unwrap()).unwrap();assert_eq!(query.q.as_deref(),Some("hello"));assert_eq!(query.page,Some(3));}
+"#);
+        std::fs::write(path, source).unwrap();
+        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/RustAxum/target");
+        let output = std::process::Command::new("cargo")
+            .args(["test", "--offline", "query_fields_match_wire_names"])
+            .env("CARGO_TARGET_DIR", target)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     #[test]
     #[ignore = "Requires cached Axum dependencies and a real rust-analyzer"]
@@ -1042,6 +1156,20 @@ pub(crate) mod tests {
                 route.route.method, route.route.path, route.route.handler, route.handler_file
             );
         }
+        assert!(
+            !report
+                .routes
+                .iter()
+                .any(|route| route.route.path == "/not-axum")
+        );
+        assert!(report.routes.iter().any(|route| {
+            route.route.path == "/v1/users/{id}"
+                && route.route.method == "GET"
+                && route
+                    .query
+                    .as_ref()
+                    .is_some_and(|keys| keys == &["q", "page_size"])
+        }));
         assert!(report.routes.iter().any(|route| {
             route.route.path == "/v1/users/{id}"
                 && route.route.method == "GET"

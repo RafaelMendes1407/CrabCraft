@@ -2866,5 +2866,12 @@
     "Reload remote source": "リモートソースを再読み込み",
     "Discard edits and reload this remote source?": "編集を破棄してこのリモートソースを再読み込みしますか？",
     "Discard edits and reload": "編集を破棄して再読み込み"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Axum クエリパラメーター",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "RA で検証した Serde Deserialize 構造体のキャッシュ済み Query フィールドです。ソース変更後は意味解析エンドポイントを更新してください。",
+    "Verified query fields: {fields}": "検証済みクエリフィールド: {fields}",
+    "This handler has no statically verified Query fields": "このハンドラーに静的検証済みの Query フィールドはありません",
+    "Query completion is unsupported for this handler's extractor or deserializer": "このハンドラーのエクストラクターまたはデシリアライザーではクエリ補完をサポートしていません"
   }
 }

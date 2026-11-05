@@ -15,6 +15,8 @@ mod sql_injection;
 mod cli;
 mod endpoints;
 mod axum_semantic;
+mod axum_queries;
+mod endpoint_url;
 mod clone_project;
 mod compare_cli;
 mod cargo_dependencies;

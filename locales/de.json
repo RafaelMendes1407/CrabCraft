@@ -2866,5 +2866,12 @@
     "Reload remote source": "Remote-Quelltext neu laden",
     "Discard edits and reload this remote source?": "Änderungen verwerfen und diesen Remote-Quelltext neu laden?",
     "Discard edits and reload": "Änderungen verwerfen und neu laden"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Axum-Abfrageparameter",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "Zwischengespeicherte RA-geprüfte Query-Felder einer Serde-Deserialize-Struktur. Semantische Endpunkte nach Quelltextänderungen aktualisieren.",
+    "Verified query fields: {fields}": "Geprüfte Abfragefelder: {fields}",
+    "This handler has no statically verified Query fields": "Dieser Handler hat keine statisch geprüften Query-Felder",
+    "Query completion is unsupported for this handler's extractor or deserializer": "Abfragevervollständigung wird für den Extraktor oder Deserialisierer dieses Handlers nicht unterstützt"
   }
 }

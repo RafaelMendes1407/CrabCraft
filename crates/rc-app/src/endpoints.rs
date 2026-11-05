@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 #[derive(Clone, Debug)]
-pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, pub handler_file: Option<PathBuf>, search: String }
+pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, pub handler_file: Option<PathBuf>, pub query: Option<Vec<String>>, search: String }
 #[derive(Default)]
 pub struct Snapshot { pub routes: Vec<Endpoint>, hashes: BTreeMap<PathBuf, u64>, skipped: usize, unresolved: usize, limited: bool, semantic: bool }
 #[derive(Debug)]
@@ -51,7 +51,7 @@ fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], cancel: &Ato
             let report = rc_syntax::axum::routes(&text);
             snapshot.unresolved = snapshot.unresolved.saturating_add(report.unresolved); snapshot.limited |= report.limited;
             if snapshot.routes.len().saturating_add(report.routes.len()) > 10_000 { snapshot.limited = true; }
-            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), handler_file: None, search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
+            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), handler_file: None, query: None, search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
             snapshot.routes.truncate(10_000);
         }
     }
@@ -106,45 +106,88 @@ pub fn reqwest_call(base: &str, method: &str, path: &str, values: &BTreeMap<Stri
 /// URL path span of an actual request line. Parse only a bounded prefix from the start of
 /// the file so body text and response scripts cannot masquerade as request lines.
 struct HttpContext { method: String, anchor: usize, end: usize, prefix: String }
-fn http_context(doc: &crate::docs::Doc) -> Option<HttpContext> {
+fn http_url(doc: &crate::docs::Doc) -> Option<(String, String, usize, usize)> {
     let editor = &doc.editor;
-    if editor.read_only || editor.selection.len() != 1 || !editor.selection.primary().is_empty() { return None; }
-    let rope = editor.buffer.rope(); let caret = editor.caret();
-    if caret > rope.len_chars() { return None; }
+    if editor.read_only || editor.selection.len() != 1 || !editor.selection.primary().is_empty()
+    {
+        return None;
+    }
+    let rope = editor.buffer.rope();
+    let caret = editor.caret();
+    if caret > rope.len_chars() {
+        return None;
+    }
     let line_index = rope.char_to_line(caret);
-    if line_index > 2000 { return None; }
-    let mut lines = Vec::new(); let mut bytes = 0usize;
+    if line_index > 2000 {
+        return None;
+    }
+    let mut lines = Vec::new();
+    let mut bytes = 0usize;
     for line in 0..=line_index {
         let text = rope.line(line);
         bytes = bytes.saturating_add(text.len_bytes());
-        if text.len_bytes() > 8192 || bytes > 64 * 1024 { return None; }
+        if text.len_bytes() > 8192 || bytes > 64 * 1024 {
+            return None;
+        }
         lines.push(text.to_string());
     }
-    if rc_syntax::http::line_roles(lines.iter().map(String::as_str)).last() != Some(&rc_syntax::http::LineRole::Request) { return None; }
+    if rc_syntax::http::line_roles(lines.iter().map(String::as_str)).last()
+        != Some(&rc_syntax::http::LineRole::Request)
+    {
+        return None;
+    }
     let line = lines.last()?.trim_end_matches(['\r', '\n']);
     let first_start = line.find(|c: char| !c.is_whitespace())?;
-    let first_end = line.get(first_start..)?.find(char::is_whitespace).map_or(line.len(), |n| first_start + n);
+    let first_end = line
+        .get(first_start..)?
+        .find(char::is_whitespace)
+        .map_or(line.len(), |n| first_start + n);
     let first = line.get(first_start..first_end)?;
     let (method, url_start) = if METHODS.contains(&first) {
-        if first_end == line.len() { return None; }
-        (first.to_string(), line.get(first_end..)?.find(|c: char| !c.is_whitespace()).map_or(line.len(), |n| first_end + n))
-    } else { ("GET".to_string(), first_start) };
-    let url_end = line.get(url_start..)?.find(char::is_whitespace).map_or(line.len(), |n| url_start + n);
+        if first_end == line.len() {
+            return None;
+        }
+        (
+            first.to_string(),
+            line.get(first_end..)?
+                .find(|c: char| !c.is_whitespace())
+                .map_or(line.len(), |n| first_end + n),
+        )
+    } else {
+        ("GET".to_string(), first_start)
+    };
+    let url_end = line
+        .get(url_start..)?
+        .find(char::is_whitespace)
+        .map_or(line.len(), |n| url_start + n);
     let url = line.get(url_start..url_end)?;
-    let path_start = if url.starts_with('/') || url.is_empty() { 0 }
-        else if let Some(scheme_end) = url.find("://") {
-            if !matches!(url.get(..scheme_end)?, "http" | "https") { return None; }
-            let authority = scheme_end + 3;
-            let end = url.get(authority..)?.find(['/', '?', '#']).map_or(url.len(), |n| authority + n);
-            if authority == end { return None; } end
-        } else { url.find(['/', '?', '#']).unwrap_or(url.len()) };
-    let path_end = url.get(path_start..)?.find(['?', '#']).map_or(url.len(), |n| path_start + n);
     let column = caret.checked_sub(rope.line_to_char(line_index))?;
-    let caret_byte = line.char_indices().nth(column).map_or(line.len(), |(byte, _)| byte);
-    let start = url_start + path_start; let end = url_start + path_end;
-    if caret_byte < start || caret_byte > end { return None; }
-    let line_start = rope.line_to_char(line_index);
-    Some(HttpContext { method, anchor: line_start + line.get(..start)?.chars().count(), end: line_start + line.get(..end)?.chars().count(), prefix: line.get(start..caret_byte)?.to_string() })
+    let caret_byte = line
+        .char_indices()
+        .nth(column)
+        .map_or(line.len(), |(byte, _)| byte);
+    if caret_byte < url_start || caret_byte > url_end {
+        return None;
+    }
+    Some((
+        method,
+        url.into(),
+        rope.line_to_char(line_index) + line[..url_start].chars().count(),
+        caret_byte - url_start,
+    ))
+}
+fn http_context(doc: &crate::docs::Doc) -> Option<HttpContext> {
+    let (method, url, base, caret) = http_url(doc)?;
+    let context = crate::endpoint_url::context(&url, caret)?;
+    let crate::endpoint_url::Kind::Path { prefix } = context.kind else {
+        return None;
+    };
+    Some(HttpContext {
+        method,
+        anchor: base + url[..context.range.start].chars().count(),
+        end: base + url[..context.range.end].chars().count(),
+        prefix,
+    })
 }
 fn snippet_literal(text: &str) -> String { text.replace('\\', "\\\\").replace('$', "\\$").replace('}', "\\}") }
 /// Segment-aware matching retains already typed captures and creates editable snippet stops
@@ -176,7 +219,9 @@ fn completed_path(path: &str, prefix: &str) -> Option<(String, String)> {
 
 struct SemanticJob { cancel: Arc<AtomicBool>, inbox: Inbox<Result<crate::axum_semantic::Report,crate::axum_semantic::Error>>, overlays: Vec<crate::axum_semantic::Overlay>, client: rc_lsp::Client, epoch: u64 }
 impl Drop for SemanticJob {fn drop(&mut self){self.cancel.store(true,Ordering::Release);}}
+struct AutoCompletion {id:u64,version:u64,caret:usize,requested:std::time::Instant}
 pub struct Endpoints {
+    auto_completion: Option<AutoCompletion>,
     waker: Waker,
     semantic_job: Option<SemanticJob>,
     semantic_context: Option<(rc_lsp::Client,u64)>,
@@ -196,7 +241,7 @@ pub struct Endpoints {
     error: Option<String>,
 }
 impl Endpoints {
-    pub fn new(waker: Waker) -> Self { Self { waker:waker.clone(), semantic_job:None, semantic_context:None, snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
+    pub fn new(waker: Waker) -> Self { Self { auto_completion:None,waker:waker.clone(), semantic_job:None, semantic_context:None, snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
     pub fn cancel(&mut self) { self.semantic_job=None; if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
     fn start_semantic(
         &mut self,
@@ -358,6 +403,7 @@ impl Endpoints {
                             .to_lowercase(),
                             route: route.route,
                             handler_file: route.handler_file,
+                            query:route.query,
                         })
                         .collect(),
                     hashes: report.hashes,
@@ -432,7 +478,10 @@ impl Endpoints {
     /// registry request, server resolution or project execution is started here.
     pub fn complete_http(&self, doc: &mut crate::docs::Doc) -> bool {
         if doc.editor.lang() != rc_syntax::Lang::Http { return false; }
-        let Some(context) = http_context(doc) else { doc.editor.popups.completion = None; return true; };
+        let Some(context) = http_context(doc) else {
+            if let Some((method,url,base,caret))=http_url(doc) {if let Some(context)=crate::endpoint_url::context(&url,caret){let anchor=base+url[..context.range.start].chars().count();let end=base+url[..context.range.end].chars().count();if self.complete_query(doc,Some(&method),context.kind,anchor,end){return true;}}}
+            doc.editor.popups.completion=None;return true;
+        };
         let mut items = Vec::new(); let mut seen = HashSet::new();
         for endpoint in &self.snapshot.routes {
             let route = &endpoint.route;
@@ -450,6 +499,183 @@ impl Endpoints {
         if completion.items.is_empty() && self.snapshot.routes.is_empty() { completion.doc = Some(tr("No cached Axum routes. Open Endpoints and refresh the scan.").to_string()); }
         doc.editor.popups.completion = Some(completion);
         true
+    }
+    fn complete_query(
+        &self,
+        doc: &mut crate::docs::Doc,
+        method: Option<&str>,
+        kind: crate::endpoint_url::Kind,
+        anchor: usize,
+        end: usize,
+    ) -> bool {
+        let crate::endpoint_url::Kind::Query {
+            path,
+            prefix,
+            used,
+            has_equal,
+        } = kind
+        else {
+            return false;
+        };
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        for endpoint in &self.snapshot.routes {
+            let route = &endpoint.route;
+            if method.is_some_and(|method| {
+                route.method != method
+                    && route.method != "ANY"
+                    && !(method == "HEAD" && route.method == "GET")
+            }) || !crate::endpoint_url::matches(&route.path, &path)
+            {
+                continue;
+            }
+            for name in endpoint.query.iter().flatten() {
+                if !name.starts_with(&prefix) || used.contains(name) || !seen.insert(name.clone()) {
+                    continue;
+                }
+                let insert = if has_equal {
+                    format!("{}$0", snippet_literal(name))
+                } else {
+                    format!(
+                        "{}=${{1:{}}}$0",
+                        snippet_literal(name),
+                        snippet_literal(name)
+                    )
+                };
+                items.push(rc_editor::CompletionItem{label:name.clone(),detail:format!("{} · {} · {}",route.method,route.path,route.handler),type_text:tr("Axum query parameter").into(),icon:rc_kit::ico::CONFIG_WEB,insert,replace:Some((anchor,end)),deprecated:false,data:crate::manifest_completion::LOCAL_ITEM,doc:Some(tr("Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.").into())});
+                if items.len() >= 100 {
+                    break;
+                }
+            }
+            if items.len() >= 100 {
+                break;
+            }
+        }
+        let mut completion = rc_editor::Completion::new(anchor, items, false);
+        completion.filter("");
+        completion.prefix = prefix;
+        doc.editor.popups.completion = Some(completion);
+        true
+    }
+    pub fn complete_rust(&self, doc: &mut crate::docs::Doc) -> bool {
+        if doc.editor.lang() != rc_syntax::Lang::Rust
+            || !doc.editor.syntax.is_current()
+            || doc.editor.read_only
+            || doc.editor.selection.len() != 1
+            || !doc.editor.selection.primary().is_empty()
+        {
+            return false;
+        }
+        let rope = doc.editor.buffer.rope();
+        let byte = rope.char_to_byte(doc.editor.caret());
+        let Some(tree) = doc.editor.syntax.tree() else {
+            return false;
+        };
+        let Some(literal) = crate::endpoint_url::literal(rope, tree, byte) else {
+            return false;
+        };
+        let Some(caret) = literal.offset(byte) else {
+            return false;
+        };
+        let Some(context) = crate::endpoint_url::context(&literal.value, caret) else {
+            doc.editor.popups.completion = None;
+            return true;
+        };
+        let Some(range) = literal.source_range(context.range) else {
+            return false;
+        };
+        let anchor = rope.byte_to_char(range.start);
+        let end = rope.byte_to_char(range.end);
+        if matches!(context.kind, crate::endpoint_url::Kind::Query { .. }) {
+            return self.complete_query(doc, None, context.kind, anchor, end);
+        }
+        let crate::endpoint_url::Kind::Path { prefix } = context.kind else {
+            return false;
+        };
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        for endpoint in &self.snapshot.routes {
+            let route = &endpoint.route;
+            let Some((label, insert)) = completed_path(&route.path, &prefix) else {
+                continue;
+            };
+            if label.contains(['"', '\\', '\n', '\r']) || !seen.insert(label.clone()) {
+                continue;
+            }
+            items.push(rc_editor::CompletionItem{label,detail:format!("{} · {} · {}",route.method,route.path,route.handler),type_text:tr("Axum route").into(),icon:rc_kit::ico::CONFIG_WEB,insert,replace:Some((anchor,end)),deprecated:false,data:crate::manifest_completion::LOCAL_ITEM,doc:Some(tr("Cached Axum path. Fill capture placeholders before sending; refresh Endpoints after source changes.").into())});
+            if items.len() >= 100 {
+                break;
+            }
+        }
+        let mut completion = rc_editor::Completion::new(anchor, items, false);
+        completion.extra_word_chars = "/-{}%.*~@!$&'()+,;=:";
+        completion.filter("");
+        completion.prefix = prefix;
+        doc.editor.popups.completion = Some(completion);
+        true
+    }
+    pub fn on_editor_events(&mut self, doc: &crate::docs::Doc, events: &[rc_editor::EditorEvent]) {
+        let typed = events.iter().find_map(|event| {
+            if let rc_editor::EditorEvent::Typed(ch) = event {
+                Some(*ch)
+            } else {
+                None
+            }
+        });
+        let local = doc.editor.popups.completion.as_ref().is_some_and(|list| {
+            list.items.iter().any(|item| {
+                item.type_text == tr("Axum route") || item.type_text == tr("Axum query parameter")
+            })
+        });
+        if !doc.editor.read_only
+            && matches!(
+                doc.editor.lang(),
+                rc_syntax::Lang::Rust | rc_syntax::Lang::Http
+            )
+            && typed.is_some_and(|ch| {
+                matches!(ch, '/' | '?' | '&')
+                    || ((local
+                        || self
+                            .auto_completion
+                            .as_ref()
+                            .is_some_and(|pending| pending.id == doc.editor.id))
+                        && (ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')))
+            })
+        {
+            self.auto_completion = Some(AutoCompletion {
+                id: doc.editor.id,
+                version: doc.editor.buffer.version(),
+                caret: doc.editor.caret(),
+                requested: std::time::Instant::now(),
+            });
+        } else if events.iter().any(|event| {
+            matches!(
+                event,
+                rc_editor::EditorEvent::Changed | rc_editor::EditorEvent::CaretMoved
+            )
+        }) {
+            self.auto_completion = None;
+        }
+    }
+    pub fn poll_completion(&mut self, docs: &mut crate::docs::Docs) -> bool {
+        let Some(ticket) = self.auto_completion.take() else {
+            return false;
+        };
+        if ticket.requested.elapsed() > std::time::Duration::from_secs(2) {
+            return false;
+        }
+        let Some(doc) = docs.active_doc_mut().filter(|doc| {
+            doc.editor.id == ticket.id
+                && doc.editor.buffer.version() == ticket.version
+                && doc.editor.caret() == ticket.caret
+        }) else {
+            return false;
+        };
+        if doc.editor.lang() == rc_syntax::Lang::Rust && !doc.editor.syntax.is_current() {
+            self.auto_completion = Some(ticket);
+            return false;
+        }
+        self.complete_rust(doc) || self.complete_http(doc)
     }
     fn select(&mut self, index: usize) {
         self.selected = Some(index); self.values.clear();
@@ -506,6 +732,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
             if ui.button(tr("Go to Handler")).clicked() { navigate = Some((endpoint.handler_file.clone().unwrap_or_else(||endpoint.file.clone()), endpoint.route.handler_line, endpoint.route.handler_column)); }
             ui.label(tr("Generate Reqwest Call"));
         });
+        if state.snapshot.semantic {match &endpoint.query {Some(names) if !names.is_empty()=>{ui.small(trf("Verified query fields: {fields}",&[("fields",&names.join(", "))]));},Some(_)=>{ui.small(tr("This handler has no statically verified Query fields"));},None=>{ui.small(tr("Query completion is unsupported for this handler's extractor or deserializer"));}}}
         egui::ScrollArea::vertical().id_salt("reqwest_endpoint_preview").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Base URL")); ui.add(egui::TextEdit::singleline(&mut state.base).char_limit(4096).desired_width(300.0));
@@ -538,6 +765,281 @@ mod tests {
     fn cached() -> Endpoints {
         let mut state = Endpoints::new(Waker::noop()); let root = fixture();
         state.snapshot = scan(vec![root.clone()], &root, &[], &AtomicBool::new(false)).unwrap(); state
+    }
+    #[test]
+    #[ignore = "Uses real Axum/Serde and rust-analyzer; native path/query completion and automatic Rust triggers"]
+    fn native_semantic_queries_and_rust_strings_complete_without_sending_or_saving() {
+        use egui_kittest::kittest::Queryable;
+        use std::time::{Duration, Instant};
+        let _home = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = crate::axum_semantic::tests::fixture();
+        let http = "GET http://localhost/v1/users/42?pa=5&keep=1 HTTP/1.1\n";
+        let request = root.path().join("api.http");
+        std::fs::write(&request, http).unwrap();
+        let rust = "pub fn url()->&'static str {r##\"http://localhost/v1/us\"##}\n";
+        let client = root.path().join("src/client.rs");
+        std::fs::write(&client, rust).unwrap();
+        let normal = r#"pub fn normal()->&'static str { "http:\x2f\x2flocalhost/v1/us?q=old" }"#;
+        let normal_path = root.path().join("src/normal.rs");
+        std::fs::write(&normal_path, normal).unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
+        app.insight
+            .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
+        app.insight.start_rust(root.path(), None, false);
+        app.open_file_and_wait(&root.path().join("src/main.rs"));
+        let mut h = crate::screens::harness(app, egui::vec2(1600.0, 1200.0));
+        macro_rules! wait {
+            ($condition:expr) => {{
+                let until = Instant::now() + Duration::from_secs(60);
+                loop {
+                    h.run_steps(2);
+                    if $condition {
+                        break;
+                    }
+                    assert!(
+                        Instant::now() < until,
+                        "native Axum wait timed out: {:?}",
+                        h.state().endpoints.error
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }};
+        }
+        wait!(h.state().insight.ready() && h.state().runner.cargo_workspace.is_some());
+        h.get_by_label(tr("Endpoints")).click();
+        wait!(h.state().endpoints.started && h.state().endpoints.cancel.is_none());
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        wait!(h.state().endpoints.semantic_job.is_none());
+        assert!(
+            h.state().endpoints.snapshot.semantic,
+            "{:?}",
+            h.state().endpoints.error
+        );
+        assert!(h.state().endpoints.snapshot.routes.iter().any(|row| {
+            row.route.method == "GET"
+                && row
+                    .query
+                    .as_ref()
+                    .is_some_and(|names| names == &["q", "page_size"])
+        }));
+        h.state_mut().open_file_and_wait(&request);
+        h.run_steps(3);
+        let at = http.find("=5").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        let chord = h.state().keymap.chord(rc_editor::Action::Complete).unwrap();
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "page_size"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            http.replace("?pa=", "?page_size=")
+        );
+        let text = h
+            .state()
+            .docs
+            .active_doc()
+            .unwrap()
+            .editor
+            .buffer
+            .rope()
+            .to_string();
+        let at = text.find(" HTTP/").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        h.state_mut().focus_editor = true;
+        h.run_steps(2);
+        h.event(egui::Event::Text("&".into()));
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .is_some_and(|list| list.items.iter().any(|item| item.label == "q"))
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("hello".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            http.replace("?pa=5&keep=1", "?page_size=5&keep=1&q=hello")
+        );
+        h.state_mut().open_file_and_wait(&client);
+        h.run_steps(3);
+        let at = rust.find("\"##").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .syntax
+                .is_current()
+        );
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "/v1/users/{id}"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("42".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        h.event(egui::Event::Text("?".into()));
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .is_some_and(|list| list.items.iter().any(|item| item.label == "q"))
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("hello".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            rust.replace("/v1/us", "/v1/users/42?q=hello")
+        );
+        assert_eq!(std::fs::read_to_string(&client).unwrap(), rust);
+        assert_eq!(std::fs::read_to_string(&request).unwrap(), http);
+        assert!(h.state().http.history.is_empty());
+        h.state_mut().open_file_and_wait(&normal_path);
+        wait!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .syntax
+                .is_current()
+        );
+        let at = normal.find("?q").unwrap();
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .selection = rc_text::Selection::point(at);
+        h.key_press_modifiers(chord.mods, chord.key);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .popups
+                .completion
+                .as_ref()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label,
+            "/v1/users/{id}"
+        );
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        h.event(egui::Event::Text("42".into()));
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            normal.replace("/v1/us?", "/v1/users/42?")
+        );
+        assert_eq!(std::fs::read_to_string(&normal_path).unwrap(), normal);
     }
     #[test]
     #[ignore = "Uses cached Axum dependencies and real rust-analyzer in the native UI"]
@@ -753,6 +1255,7 @@ mod tests {
         for _ in 0..3 { h.run_steps(1); for command in &h.output().platform_output.commands { if let egui::OutputCommand::CopyText(text) = command { copied.push(text.clone()); } } }
         assert!(copied.iter().any(|code| code.contains("/api/users/42") && code.contains("reqwest::Method::GET")));
         h.get_by_label(tr("Go to Handler")).click(); h.run_steps(4);
+        while h.state().disk_open.busy()&&start.elapsed()<Duration::from_secs(20){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}assert!(!h.state().disk_open.busy());
         let doc = h.state().docs.active_doc().unwrap();
         assert!(doc.path.ends_with("src/lib.rs"));
         let source = std::fs::read_to_string(root.join("src/lib.rs")).unwrap();
@@ -788,6 +1291,7 @@ mod tests {
         while (h.state().endpoints.cancel.is_some() || !h.state().endpoints.started) && start.elapsed() < Duration::from_secs(20) { h.run_steps(2); std::thread::sleep(Duration::from_millis(20)); }
         assert_eq!(h.state().endpoints.snapshot.routes.len(), 4);
         h.state_mut().open_at(&root.join("src/lib.rs"), 0, 0); h.run_steps(3);
+        while h.state().disk_open.busy()&&start.elapsed()<Duration::from_secs(20){h.run_steps(2);std::thread::sleep(Duration::from_millis(10));}assert!(!h.state().disk_open.busy());
         assert!(h.state().docs.active_doc().unwrap().editor.end_hints.values().any(|hint| hint.contains("GET /api/users/{id}")));
         h.state_mut().open_file_and_wait(&path); h.run_steps(3);
         let caret = original[..original.find("?keep").unwrap()].chars().count();

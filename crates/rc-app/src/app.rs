@@ -1843,7 +1843,8 @@ impl CrabCraftApp {
             self.insight.cancel_local_completion_requests();
             return;
         }
-        if action == Action::Complete && self.endpoints.complete_http(&mut self.docs.list[i]) {
+        if action == Action::Complete && (self.endpoints.complete_rust(&mut self.docs.list[i]) || self.endpoints.complete_http(&mut self.docs.list[i])) {
+            self.insight.cancel_local_completion_requests();
             return;
         }
         // Cargo.toml is completed here: the Rust server does not complete TOML.
@@ -3357,6 +3358,7 @@ impl CrabCraftApp {
         if self.shelves.poll() { self.vcs.refresh(); }
         self.endpoints.poll_semantic(&mut self.docs,self.insight.session.as_ref().map(|session|&session.client),acp_trusted,self.cfg_epoch);
         self.endpoints.poll(&mut self.docs);
+        if self.endpoints.poll_completion(&mut self.docs){self.insight.cancel_local_completion_requests();}
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();
             if find.replacements.poll(&mut self.docs) {

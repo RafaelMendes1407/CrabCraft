@@ -449,6 +449,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     } else {
         if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&server_events);}else{app.insight.on_editor_events(doc, &server_events);}
     }
+    app.endpoints.on_editor_events(doc,&out.events);
     let mut run_test_line = None;
     let mut run_binary_line = None;
     let mut explain = None;

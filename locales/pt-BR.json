@@ -2866,5 +2866,12 @@
     "Reload remote source": "Recarregar código remoto",
     "Discard edits and reload this remote source?": "Descartar edições e recarregar este código remoto?",
     "Discard edits and reload": "Descartar edições e recarregar"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Parâmetro de consulta Axum",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "Campos Query em cache de uma estrutura Serde Deserialize verificada pelo RA. Atualize os endpoints semânticos após alterar as fontes.",
+    "Verified query fields: {fields}": "Campos de consulta verificados: {fields}",
+    "This handler has no statically verified Query fields": "Este handler não possui campos Query verificados estaticamente",
+    "Query completion is unsupported for this handler's extractor or deserializer": "A conclusão de consultas não é suportada para o extrator ou desserializador deste handler"
   }
 }

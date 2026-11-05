@@ -2866,5 +2866,12 @@
     "Reload remote source": "Recharger la source distante",
     "Discard edits and reload this remote source?": "Abandonner les modifications et recharger cette source distante ?",
     "Discard edits and reload": "Abandonner les modifications et recharger"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Paramètre de requête Axum",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "Champs Query en cache d’une structure Serde Deserialize vérifiée par RA. Actualisez les endpoints sémantiques après modification des sources.",
+    "Verified query fields: {fields}": "Champs de requête vérifiés : {fields}",
+    "This handler has no statically verified Query fields": "Ce gestionnaire n’a aucun champ Query vérifié statiquement",
+    "Query completion is unsupported for this handler's extractor or deserializer": "La complétion de requête n’est pas prise en charge pour l’extracteur ou le désérialiseur de ce gestionnaire"
   }
 }

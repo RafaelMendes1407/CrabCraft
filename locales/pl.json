@@ -2866,5 +2866,12 @@
     "Reload remote source": "Wczytaj zdalne źródło ponownie",
     "Discard edits and reload this remote source?": "Odrzucić zmiany i ponownie wczytać to zdalne źródło?",
     "Discard edits and reload": "Odrzuć zmiany i wczytaj ponownie"
+  },
+  "axum_query_completion": {
+    "Axum query parameter": "Parametr zapytania Axum",
+    "Cached RA-verified Query fields from a Serde Deserialize struct. Refresh Semantic Endpoints after source changes.": "Buforowane pola Query ze struktury Serde Deserialize zweryfikowane przez RA. Odśwież endpointy semantyczne po zmianie źródeł.",
+    "Verified query fields: {fields}": "Zweryfikowane pola zapytania: {fields}",
+    "This handler has no statically verified Query fields": "Ten handler nie ma statycznie zweryfikowanych pól Query",
+    "Query completion is unsupported for this handler's extractor or deserializer": "Uzupełnianie zapytań nie obsługuje ekstraktora lub deserializatora tego handlera"
   }
 }
