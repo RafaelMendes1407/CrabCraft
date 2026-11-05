@@ -3051,6 +3051,7 @@ impl CrabCraftApp {
         self.explorer.excluded = list.clone();
         self.files.open(&root, self.waker.clone(), list.clone());
         if let Some(f) = &mut self.find_in_files {
+            f.replacements.cancel();
             f.excluded = list.clone();
         }
         self.insight.set_exclude(list);
@@ -3097,6 +3098,14 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        if let Some(mut find) = self.find_in_files.take() {
+            find.poll();
+            if find.replacements.poll(&mut self.docs) {
+                self.session_dirty = true;
+                find.search();
+            }
+            self.find_in_files = Some(find);
+        }
         self.poll_cargo_workspace();
         self.poll_dep_trees();
         self.update_cfg_sets();

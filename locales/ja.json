@@ -1937,5 +1937,21 @@
     "Could not access the clone destination: {error}": "クローン先にアクセスできませんでした: {error}",
     "Git clone failed: {output}": "Git のクローンに失敗しました: {output}",
     "Clone cancelled; its incomplete destination folder may remain.": "クローンをキャンセルしました。未完了の保存先フォルダーが残る場合があります。"
+  },
+  "replace_files": {
+    "A replacement is already running": "置換は既に実行中です",
+    "Replacement exceeded its file, edit or output limit": "置換がファイル数、編集数、出力サイズの上限を超えました",
+    "Cannot replace files: {error}": "ファイルを置換できません: {error}",
+    "File is no longer in the selected scope; skipped": "ファイルが選択範囲外になりました。スキップしました",
+    "The document is read-only; skipped": "読み取り専用の文書です。スキップしました",
+    "The document was closed or reopened; skipped": "文書が閉じられたか開き直されました。スキップしました",
+    "The open document changed; skipped": "開いている文書が変更されました。スキップしました",
+    "File is not valid UTF-8": "有効な UTF-8 ファイルではありません",
+    "File changed after the search; skipped": "検索後にファイルが変更されました。スキップしました",
+    "Only regular files can be replaced": "通常のファイルのみ置換できます",
+    "Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})": "{files} ファイルの {matches} 件を置換、{skipped} 件をスキップ ({done}/{total})",
+    "Replacement cancelled; completed changes are kept": "置換をキャンセルしました。完了した変更は保持されます",
+    "Replacement errors (first 100)": "置換エラー（最初の100件）",
+    "Narrow the search before replacing truncated results": "切り詰められた結果を置換する前に検索範囲を絞ってください"
   }
 }

@@ -1937,5 +1937,21 @@
     "Could not access the clone destination: {error}": "Nie można uzyskać dostępu do miejsca klonowania: {error}",
     "Git clone failed: {output}": "Klonowanie Git nie powiodło się: {output}",
     "Clone cancelled; its incomplete destination folder may remain.": "Anulowano klonowanie; niepełny folder docelowy może pozostać."
+  },
+  "replace_files": {
+    "A replacement is already running": "Zamiana już trwa",
+    "Replacement exceeded its file, edit or output limit": "Zamiana przekroczyła limit plików, edycji lub wyniku",
+    "Cannot replace files: {error}": "Nie można zamienić plików: {error}",
+    "File is no longer in the selected scope; skipped": "Plik nie należy już do wybranego zakresu; pominięto",
+    "The document is read-only; skipped": "Dokument jest tylko do odczytu; pominięto",
+    "The document was closed or reopened; skipped": "Dokument zamknięto lub otwarto ponownie; pominięto",
+    "The open document changed; skipped": "Otwarty dokument zmienił się; pominięto",
+    "File is not valid UTF-8": "Plik nie zawiera poprawnego UTF-8",
+    "File changed after the search; skipped": "Plik zmienił się po wyszukiwaniu; pominięto",
+    "Only regular files can be replaced": "Można zamieniać tylko zwykłe pliki",
+    "Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})": "Zamieniono {matches} trafień w {files} plikach; pominięto {skipped} ({done}/{total})",
+    "Replacement cancelled; completed changes are kept": "Anulowano zamianę; ukończone zmiany zostają zachowane",
+    "Replacement errors (first 100)": "Błędy zamiany (pierwsze 100)",
+    "Narrow the search before replacing truncated results": "Zawęź wyszukiwanie przed zamianą uciętych wyników"
   }
 }

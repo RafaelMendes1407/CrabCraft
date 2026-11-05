@@ -41,6 +41,7 @@ mod runner;
 mod rustfmt;
 mod rustup_installer;
 mod search;
+mod replace_files;
 mod scopes;
 mod sync_log;
 mod vcs;

@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 195 |
+| ✅ Pronto | 196 |
 | 🚧 Em andamento | 9 |
-| 🟢 Herdado | 8 |
+| 🟢 Herdado | 7 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -160,7 +160,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | N-03 | Ir para definição | ✅ | M1 | Ctrl+clique (⌘ no macOS) e Ctrl+B levam à definição: método, tipo e item da stdlib (aberto somente leitura), testado com cliques reais e rust-analyzer real |
 | N-04 | Ir para implementações | ✅ | M1 | Implementações de trait testadas com rust-analyzer real |
 | N-05 | Encontrar usos | ✅ | M1 | Usos testados com rust-analyzer real |
-| N-06 | Find in Files e Replace in Files | 🟢 | M1 | |
+| N-06 | Find in Files e Replace in Files | ✅ | M1 | Busca com regex, case/whole-word, máscaras e escopos; Replace All calcula edições e grava arquivos fechados em job de segundo plano cancelável, com progresso e erros por arquivo (primeiros 100). Buffers abertos usam snapshot atual e só recebem edição desfazível se id/versão/caminho ainda correspondem; não são salvos automaticamente. Arquivos fechados exigem stamp da busca e bytes originais ainda iguais antes de gravação atômica, preservando BOM/CRLF/permissões; mudanças detectadas, somente leitura, links e arquivos especiais são recusados. Até 5000 arquivos, 8 MB por arquivo/saída, 100000 edições (10000 por buffer) e 64 MB de saída; resultados truncados exigem restringir a busca. Cancelar mantém alterações concluídas. Teste nativo em workspace Cargo Rust real (caminho com espaços): arquivo aberto não salvo + módulo fechado, grupos regex, desfazer/refazer e cargo check; build.rs não roda antes da compilação explícita. Testes de versões alteradas, cancelamento, reabertura e limites; 38 testes core e 16 de workspace passaram. Busca lê o disco; matches novos só em buffers fora dos resultados não entram. Ver docs/find-replace.md |
 | N-07 | Arquivos e locais recentes | 🟢 | M1 | |
 | N-08 | Estrutura do arquivo | ✅ | M1 | documentSymbol testado com rust-analyzer real |
 | N-09 | Hierarquia de chamadas | ✅ | M3 | Janela Hierarquia com árvore: Ctrl+Alt+H abre quem chama, botão troca para o que é chamado, cada nível carrega ao abrir; visto na janela nativa |

@@ -1937,5 +1937,21 @@
     "Could not access the clone destination: {error}": "无法访问克隆目标：{error}",
     "Git clone failed: {output}": "Git 克隆失败：{output}",
     "Clone cancelled; its incomplete destination folder may remain.": "克隆已取消；不完整的目标文件夹可能仍然存在。"
+  },
+  "replace_files": {
+    "A replacement is already running": "替换已在运行",
+    "Replacement exceeded its file, edit or output limit": "替换超过文件、编辑或输出限制",
+    "Cannot replace files: {error}": "无法替换文件：{error}",
+    "File is no longer in the selected scope; skipped": "文件已不在所选范围内；已跳过",
+    "The document is read-only; skipped": "文档为只读；已跳过",
+    "The document was closed or reopened; skipped": "文档已关闭或重新打开；已跳过",
+    "The open document changed; skipped": "打开的文档已更改；已跳过",
+    "File is not valid UTF-8": "文件不是有效的 UTF-8",
+    "File changed after the search; skipped": "文件在搜索后已更改；已跳过",
+    "Only regular files can be replaced": "只能替换常规文件",
+    "Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})": "已替换 {files} 个文件中的 {matches} 处匹配；跳过 {skipped} 个（{done}/{total}）",
+    "Replacement cancelled; completed changes are kept": "替换已取消；已完成的更改会保留",
+    "Replacement errors (first 100)": "替换错误（前 100 个）",
+    "Narrow the search before replacing truncated results": "请缩小搜索范围后再替换截断的结果"
   }
 }
