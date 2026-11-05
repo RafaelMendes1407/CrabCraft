@@ -1890,5 +1890,26 @@
     "No stack frames": "Aucune trame de pile",
     "{count} threads: {function}": "{count} threads : {function}",
     "Only the first 64 frames are shown": "Seules les 64 premières trames sont affichées"
+  },
+  "rustup_installer": {
+    "Install rustup…": "Installer rustup…",
+    "Download and install rustup": "Télécharger et installer rustup",
+    "Cancel installation": "Annuler l’installation",
+    "Downloading and verifying rustup-init…": "Téléchargement et vérification de rustup-init…",
+    "Installing rustup…": "Installation de rustup…",
+    "rustup installation finished": "Installation de rustup terminée",
+    "rustup installation failed; inspect the output": "Échec de l’installation de rustup ; consultez la sortie",
+    "rustup installation finished. Shell PATH was not changed; restart your shell or configure PATH if needed.": "Installation de rustup terminée. PATH n’a pas été modifié ; redémarrez le shell ou configurez PATH si nécessaire.",
+    "Downloads the official installer and its SHA-256 checksum over HTTPS. The checksum must match before execution.": "Télécharge l’installateur officiel et sa somme SHA-256 par HTTPS. La somme doit correspondre avant l’exécution.",
+    "Automatic rustup installation is unsupported on this platform.": "L’installation automatique de rustup n’est pas prise en charge sur cette plateforme.",
+    "Installation directories:": "Dossiers d’installation :",
+    "Install minimal stable Rust with rust-src and rust-analyzer": "Installer Rust stable minimal avec rust-src et rust-analyzer",
+    "Installs tools in the displayed directories and may replace existing rustup proxies or update the default stable toolchain. Shell PATH is not changed. Cancellation keeps changes already made.": "Installe les outils dans les dossiers affichés et peut remplacer les proxys rustup ou mettre à jour stable. PATH n’est pas modifié. L’annulation conserve les modifications déjà effectuées.",
+    "I confirm this rustup installation and its displayed changes": "Je confirme cette installation de rustup et les modifications affichées",
+    "Could not determine the rustup installation directories": "Impossible de déterminer les dossiers d’installation de rustup",
+    "Could not download the official rustup installer: {error}": "Impossible de télécharger l’installateur officiel de rustup : {error}",
+    "The rustup installer exceeds the download size limit": "L’installateur rustup dépasse la limite de téléchargement",
+    "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "La somme de contrôle de l’installateur est absente, invalide ou incorrecte. Rien n’a été exécuté.",
+    "Could not prepare the rustup installer: {error}": "Impossible de préparer l’installateur rustup : {error}"
   }
 }

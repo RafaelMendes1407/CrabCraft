@@ -1890,5 +1890,26 @@
     "No stack frames": "Brak ramek stosu",
     "{count} threads: {function}": "Wątki ({count}): {function}",
     "Only the first 64 frames are shown": "Pokazano tylko pierwsze 64 ramki"
+  },
+  "rustup_installer": {
+    "Install rustup…": "Zainstaluj rustup…",
+    "Download and install rustup": "Pobierz i zainstaluj rustup",
+    "Cancel installation": "Anuluj instalację",
+    "Downloading and verifying rustup-init…": "Pobieranie i weryfikacja rustup-init…",
+    "Installing rustup…": "Instalowanie rustup…",
+    "rustup installation finished": "Instalacja rustup zakończona",
+    "rustup installation failed; inspect the output": "Instalacja rustup nie powiodła się; sprawdź wyjście",
+    "rustup installation finished. Shell PATH was not changed; restart your shell or configure PATH if needed.": "Instalacja rustup zakończona. PATH nie zmieniono; w razie potrzeby uruchom powłokę ponownie lub skonfiguruj PATH.",
+    "Downloads the official installer and its SHA-256 checksum over HTTPS. The checksum must match before execution.": "Pobiera oficjalny instalator i sumę SHA-256 przez HTTPS. Suma musi się zgadzać przed wykonaniem.",
+    "Automatic rustup installation is unsupported on this platform.": "Automatyczna instalacja rustup nie jest obsługiwana na tej platformie.",
+    "Installation directories:": "Katalogi instalacji:",
+    "Install minimal stable Rust with rust-src and rust-analyzer": "Zainstaluj minimalny Rust stable z rust-src i rust-analyzer",
+    "Installs tools in the displayed directories and may replace existing rustup proxies or update the default stable toolchain. Shell PATH is not changed. Cancellation keeps changes already made.": "Instaluje narzędzia w podanych katalogach i może zastąpić proxy rustup lub zaktualizować domyślny stable. Nie zmienia PATH. Anulowanie zachowuje już wprowadzone zmiany.",
+    "I confirm this rustup installation and its displayed changes": "Potwierdzam instalację rustup i wyświetlone zmiany",
+    "Could not determine the rustup installation directories": "Nie można ustalić katalogów instalacji rustup",
+    "Could not download the official rustup installer: {error}": "Nie można pobrać oficjalnego instalatora rustup: {error}",
+    "The rustup installer exceeds the download size limit": "Instalator rustup przekracza limit pobierania",
+    "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "Suma kontrolna instalatora jest brakująca, nieprawidłowa lub niezgodna. Niczego nie wykonano.",
+    "Could not prepare the rustup installer: {error}": "Nie można przygotować instalatora rustup: {error}"
   }
 }

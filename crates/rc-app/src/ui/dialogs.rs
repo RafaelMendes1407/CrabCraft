@@ -905,6 +905,9 @@ fn toolchain_rows(ui: &mut Ui, app: &mut CrabCraftApp) {
         }
     }
     ui.end_row();
+    ui.label("rustup");
+    ui.vertical(|ui| app.rustup_installer.ui(ui));
+    ui.end_row();
     if !has_rustup {
         return;
     }

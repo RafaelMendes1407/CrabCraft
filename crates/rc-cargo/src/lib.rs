@@ -23,6 +23,7 @@ pub mod modules;
 pub mod new_project;
 pub mod ops;
 pub mod playground;
+pub mod rustup_install;
 pub mod test_output;
 pub mod toolchain;
 pub mod tree;

@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 186 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 187 |
+| 🚧 Em andamento | 8 |
 | 🟢 Herdado | 17 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
@@ -52,7 +52,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | P-01 | Detectar toolchain (rustc, cargo, stdlib) e versão | ✅ | M1 | Configurações > Ferramentas mostra versões reais e a stdlib, ou como instalá-la; vista na janela nativa |
-| P-02 | Instalar rustup e stdlib pela IDE | 🚧 | M3 | Feito: com rustup, botões Instalar para `rust-src` e `rust-analyzer` em Configurações › Ferramentas (`rustup component add` na janela Run, testado com rustup real). Falta: instalar o próprio rustup pela IDE, com confirmação |
+| P-02 | Instalar rustup e stdlib pela IDE | ✅ | M3 | Configurações › Ferramentas: instalar componentes rust-src e rust-analyzer com rustup e instalar o próprio rustup. O painel mostra URL oficial, destinos e comando; exige confirmação explícita, desfeita ao mudar opções. Download HTTPS do rustup-init oficial e SHA-256 obrigatório, com limites/timeout/cancelamento; executa em pasta privada, sem ambiente ou código do projeto, com --no-modify-path. Opção de stable mínimo com rust-src/rust-analyzer ou apenas rustup; saída e Cancelar no painel. Reconsulta ferramentas e modelo Cargo ao terminar. Testes reais no Linux: instalador oficial em homes temporários pelos controles nativos; proxies instalados rodam cargo test num crate Rust real usando toolchain existente; confirmação, checksum alterado e cancelamento antes do download testados. Download de uma segunda stable não exercitado; Windows/macOS não exercitados. Captura não conferida. Ver docs/rustup-installation.md |
 | P-03 | Avisar e aplicar atualização da toolchain | ✅ | M3 | Configurações › Ferramentas › Atualizações: Procurar atualizações roda `rustup check` em segundo plano só quando pedido (usa a rede) e lista cada toolchain e o rustup; Atualizar roda `rustup update` na janela Run (Rerun e Stop) e as versões são relidas ao terminar. Testado com rustup real (1.29.2 → 1.29.3 listado); captura conferida |
 | P-04 | Toolchain WSL | ⬜ | M6 | |
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |

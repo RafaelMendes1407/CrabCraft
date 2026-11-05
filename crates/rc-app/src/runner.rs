@@ -355,6 +355,8 @@ impl Runner {
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
+    pub fn set_cargo_tool(&mut self, cargo: Option<rc_cargo::Cargo>) { self.cargo = cargo; }
+
     pub fn cargo_tool(&self) -> Result<rc_cargo::Cargo, String> {
         self.cargo()
     }

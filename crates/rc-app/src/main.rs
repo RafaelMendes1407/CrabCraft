@@ -38,6 +38,7 @@ mod refactor_preview;
 mod run_anything;
 mod runner;
 mod rustfmt;
+mod rustup_installer;
 mod search;
 mod scopes;
 mod sync_log;

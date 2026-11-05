@@ -179,6 +179,7 @@ pub struct CrabCraftApp {
     pub(crate) explain_load: Option<(String, Inbox<ExplainAnswer>)>,
     /// The Run tab of a rustup command: when it ends, the toolchain is read again.
     rustup_run: Option<String>,
+    pub rustup_installer: crate::rustup_installer::RustupInstaller,
     /// The last Inspect Code run.
     pub inspection: Option<Inspection>,
     /// The Problems window shows the inspection instead of the open files' problems.
@@ -316,6 +317,7 @@ impl CrabCraftApp {
             explanations: Default::default(),
             explain_load: None,
             rustup_run: None,
+            rustup_installer: crate::rustup_installer::RustupInstaller::new(waker.clone()),
             toolchain_load: None,
             cargo_folded: Default::default(),
             cargo_trees: Default::default(),
@@ -745,6 +747,16 @@ impl CrabCraftApp {
 
     /// Picks up `rustup check` results and the end of rustup commands.
     pub(crate) fn poll_toolchain_updates(&mut self) {
+        self.rustup_installer.poll();
+        if let Some(cargo) = self.rustup_installer.take_cargo() {
+            self.toolchain = None;
+            self.toolchain_load = None;
+            self.toolchain_updates = None;
+            self.runner.set_cargo_tool(cargo);
+            if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf) {
+                self.load_cargo_workspace(manifest);
+            }
+        }
         if let Some(result) = self.toolchain_updates_load.as_ref().and_then(|i| i.drain().into_iter().last()) {
             self.toolchain_updates = Some(result);
             self.toolchain_updates_load = None;

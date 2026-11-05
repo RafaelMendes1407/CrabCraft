@@ -1890,5 +1890,26 @@
     "No stack frames": "无堆栈帧",
     "{count} threads: {function}": "{count} 个线程：{function}",
     "Only the first 64 frames are shown": "仅显示前 64 个堆栈帧"
+  },
+  "rustup_installer": {
+    "Install rustup…": "安装 rustup…",
+    "Download and install rustup": "下载并安装 rustup",
+    "Cancel installation": "取消安装",
+    "Downloading and verifying rustup-init…": "正在下载并验证 rustup-init…",
+    "Installing rustup…": "正在安装 rustup…",
+    "rustup installation finished": "rustup 安装完成",
+    "rustup installation failed; inspect the output": "rustup 安装失败；请检查输出",
+    "rustup installation finished. Shell PATH was not changed; restart your shell or configure PATH if needed.": "rustup 安装完成。未修改 shell PATH；请按需重启 shell 或配置 PATH。",
+    "Downloads the official installer and its SHA-256 checksum over HTTPS. The checksum must match before execution.": "通过 HTTPS 下载官方安装程序及其 SHA-256 校验和。执行前校验和必须匹配。",
+    "Automatic rustup installation is unsupported on this platform.": "此平台不支持自动安装 rustup。",
+    "Installation directories:": "安装目录：",
+    "Install minimal stable Rust with rust-src and rust-analyzer": "安装含 rust-src 和 rust-analyzer 的最小 stable Rust",
+    "Installs tools in the displayed directories and may replace existing rustup proxies or update the default stable toolchain. Shell PATH is not changed. Cancellation keeps changes already made.": "在显示的目录中安装工具，可能替换现有 rustup 代理或更新默认 stable 工具链。不修改 shell PATH。取消会保留已完成的更改。",
+    "I confirm this rustup installation and its displayed changes": "我确认此次 rustup 安装及显示的更改",
+    "Could not determine the rustup installation directories": "无法确定 rustup 安装目录",
+    "Could not download the official rustup installer: {error}": "无法下载官方 rustup 安装程序：{error}",
+    "The rustup installer exceeds the download size limit": "rustup 安装程序超出下载大小限制",
+    "The rustup installer checksum is missing, invalid or does not match. Nothing was executed.": "安装程序的校验和缺失、无效或不匹配。未执行任何程序。",
+    "Could not prepare the rustup installer: {error}": "无法准备 rustup 安装程序：{error}"
   }
 }
