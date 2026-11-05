@@ -1855,5 +1855,26 @@
     "HTTP variable expansion exceeds its size or nesting limit": "La expansión de variables HTTP supera el límite de tamaño o anidamiento",
     "An HTTP variable is missing its closing braces": "Faltan las llaves de cierre de una variable HTTP",
     "Unresolved HTTP variable: {variable}": "Variable HTTP sin resolver: {variable}"
+  },
+  "coverage": {
+    "Coverage report exceeds the size, file or line limit": "El informe de cobertura supera el límite de tamaño, archivos o líneas",
+    "Invalid LCOV record at line {line}": "Registro LCOV no válido en la línea {line}",
+    "No covered source files were found inside this project": "No se encontraron archivos fuente con cobertura dentro del proyecto",
+    "Coverage cancelled": "Cobertura cancelada",
+    "Coverage command failed ({code}); see the console": "El comando de cobertura falló ({code}); consulta la consola",
+    "Coverage run": "Ejecución de cobertura",
+    "Run with Coverage": "Ejecutar con cobertura",
+    "Import LCOV…": "Importar LCOV…",
+    "Coverage": "Cobertura",
+    "Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically.": "Solo cobertura de líneas. Instala cargo-llvm-cov y llvm-tools-preview antes de ejecutar; nunca se instalan automáticamente.",
+    "Collecting coverage…": "Recopilando cobertura…",
+    "No coverage suites": "Sin suites de cobertura",
+    "Remove Suite": "Eliminar suite",
+    "Skipped {count} missing or external source records": "Se omitieron {count} registros de fuentes ausentes o externas",
+    "Line {line}: {hits} hits": "Línea {line}: {hits} ejecuciones",
+    "{covered}/{total} lines ({percent}%)": "{covered}/{total} líneas ({percent}%)",
+    "Trust this Cargo project before measuring coverage": "Confía en este proyecto Cargo antes de medir la cobertura",
+    "Test Results": "Resultados de pruebas",
+    "Coverage report must be a regular file": "El informe de cobertura debe ser un archivo normal"
   }
 }

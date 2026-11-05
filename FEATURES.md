@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 178 |
+| ✅ Pronto | 180 |
 | 🚧 Em andamento | 9 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 44 |
+| ⬜ A fazer | 42 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -245,8 +245,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | T-05 | Ir do erro do teste para o código | ✅ | M2 | Do resultado para a linha do panic, testado com cargo real |
 | T-06 | Doctests | ✅ | M2 | Doctests contam na execução; testado com Cargo real |
 | T-07 | Runner nextest | ✅ | M3 | Opção em Configurações > Editor; resultados, falha com a linha do panic e rodar de novo os que falharam, testado com cargo-nextest 0.9.150 real. Sem doctests (o nextest não os roda) |
-| T-08 | Cobertura de código | ⬜ | M4 | `cargo llvm-cov` |
-| T-09 | Suítes de cobertura e importação de arquivos | ⬜ | M4 | |
+| T-08 | Cobertura de código | ✅ | M4 | Aba Cobertura na janela Tests: Executar com cobertura chama `cargo llvm-cov --workspace --all-targets --lcov` somente em projeto confiável, em segundo plano, com console e Stop que encerra a árvore de processos. Ferramentas nunca instaladas automaticamente; relatório temporário fora das fontes. Arquivos, linhas cobertas/não cobertas, contagens e percentuais; clique abre a linha Rust. Testado com cargo-llvm-cov 0.9.1 e LLVM reais: função exercitada, linha não exercitada e cancelamento de build.rs; teste headless navega à linha não coberta. Apenas cobertura de linhas; sem gutter, branches ou funções. Ver docs/coverage.md |
+| T-09 | Suítes de cobertura e importação de arquivos | ✅ | M4 | Importar LCOV em segundo plano, sem executar o projeto: até 32 MiB, 10 mil arquivos e 500 mil registros de linhas; erros tipados, contagens derivadas de DA, registros repetidos somados sem overflow, caminhos canônicos restritos ao projeto (fontes ausentes/externas ignoradas). Até 20 suítes distintas na sessão, seletor e remoção; sem persistência, comparação ou combinação de suítes, nem formatos além de LCOV. Testes num projeto Cargo real: duas importações independentes sem executar build.rs, parser malformado/limites/symlink externo, FIFO recusado sem bloqueio (com cancelamento) e navegação headless para Rust |
 | T-10 | Depurar um teste | ✅ | M2 | Pelo menu do ícone, parou no breakpoint com GDB real, visto na janela |
 | T-11 | Benchmarks pela margem | ✅ | M3 | Ícone na margem roda `cargo bench`, verificado com `harness = false`; benchmarks não são depurados |
 | T-12 | Filtrar e ordenar resultados de teste | ✅ | M2 | Filtro por nome e falhas primeiro, vistos na janela |

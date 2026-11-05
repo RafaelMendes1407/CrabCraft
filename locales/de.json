@@ -1855,5 +1855,26 @@
     "HTTP variable expansion exceeds its size or nesting limit": "Die HTTP-Variablenerweiterung überschreitet das Größen- oder Verschachtelungslimit",
     "An HTTP variable is missing its closing braces": "Bei einer HTTP-Variable fehlen die schließenden Klammern",
     "Unresolved HTTP variable: {variable}": "Nicht aufgelöste HTTP-Variable: {variable}"
+  },
+  "coverage": {
+    "Coverage report exceeds the size, file or line limit": "Der Abdeckungsbericht überschreitet das Größen-, Datei- oder Zeilenlimit",
+    "Invalid LCOV record at line {line}": "Ungültiger LCOV-Eintrag in Zeile {line}",
+    "No covered source files were found inside this project": "Keine Quelldateien mit Abdeckungsdaten in diesem Projekt gefunden",
+    "Coverage cancelled": "Abdeckung abgebrochen",
+    "Coverage command failed ({code}); see the console": "Abdeckungsbefehl fehlgeschlagen ({code}); siehe Konsole",
+    "Coverage run": "Abdeckungslauf",
+    "Run with Coverage": "Mit Abdeckung ausführen",
+    "Import LCOV…": "LCOV importieren…",
+    "Coverage": "Abdeckung",
+    "Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically.": "Nur Zeilenabdeckung. Installieren Sie cargo-llvm-cov und llvm-tools-preview vor der Ausführung; Werkzeuge werden nie automatisch installiert.",
+    "Collecting coverage…": "Abdeckung wird erfasst…",
+    "No coverage suites": "Keine Abdeckungssuiten",
+    "Remove Suite": "Suite entfernen",
+    "Skipped {count} missing or external source records": "{count} fehlende oder externe Quelleinträge übersprungen",
+    "Line {line}: {hits} hits": "Zeile {line}: {hits} Treffer",
+    "{covered}/{total} lines ({percent}%)": "{covered}/{total} Zeilen ({percent} %)",
+    "Trust this Cargo project before measuring coverage": "Diesem Cargo-Projekt vor der Abdeckungsmessung vertrauen",
+    "Test Results": "Testergebnisse",
+    "Coverage report must be a regular file": "Der Abdeckungsbericht muss eine reguläre Datei sein"
   }
 }

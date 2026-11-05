@@ -121,6 +121,7 @@ pub struct CrabCraftApp {
     pub http: crate::http_client::HttpClient,
     /// perf recordings of run configurations (A-01).
     pub profiler: crate::profiler::Profiler,
+    pub coverage: crate::coverage::Coverage,
     /// The text version each `.http` editor got its run icons and diagnostics for.
     http_given: std::collections::HashMap<u64, u64>,
     /// Rows unfolded in the Cargo window's dependency trees (they start folded).
@@ -340,6 +341,7 @@ impl CrabCraftApp {
             playground: crate::playground::Playground::new(waker.clone()),
             http: crate::http_client::HttpClient::new(waker.clone()),
             profiler: crate::profiler::Profiler::new(waker.clone()),
+            coverage: crate::coverage::Coverage::new(waker.clone()),
             http_given: Default::default(),
             cargo_open: Default::default(),
             layout: Default::default(),
@@ -1322,6 +1324,7 @@ impl CrabCraftApp {
         self.search_everywhere = None;
         self.find_bar = None;
         self.repl_starting = None;
+        self.coverage = crate::coverage::Coverage::new(self.waker.clone());
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
@@ -2592,6 +2595,22 @@ impl CrabCraftApp {
         }
     }
 
+    pub fn start_coverage(&mut self) {
+        self.coverage.show = true;
+        self.dock.show(ToolWindow::Tests);
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return; };
+        if !self.settings.trusted_projects.contains(&root) {
+            self.coverage.error = Some(tr("Trust this Cargo project before measuring coverage").to_string());
+            return;
+        }
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().filter(|workspace| workspace.root == root).map(|workspace| workspace.manifest.clone()) else { return; };
+        self.save_all_docs();
+        match self.runner.cargo_tool() {
+            Ok(cargo) => self.coverage.start(root, manifest, cargo.path().to_path_buf(), self.runner.project_env_pairs()),
+            Err(error) => self.coverage.error = Some(error),
+        }
+    }
+
     /// Profile (A-01): builds the selected Rust binary and records it with perf.
     pub fn start_profiling(&mut self) {
         self.dock.show(ToolWindow::Profiler);
@@ -3314,6 +3333,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_playground(&ctx);
         self.http.poll();
         self.profiler.poll();
+        self.coverage.poll();
         self.update_http_file();
         let dark = self.dark(&ctx);
         for n in self.vcs.update(&mut self.docs, dark) {

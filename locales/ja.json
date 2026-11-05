@@ -1855,5 +1855,26 @@
     "HTTP variable expansion exceeds its size or nesting limit": "HTTP 変数の展開がサイズまたはネストの上限を超えています",
     "An HTTP variable is missing its closing braces": "HTTP 変数の閉じ括弧がありません",
     "Unresolved HTTP variable: {variable}": "解決できない HTTP 変数: {variable}"
+  },
+  "coverage": {
+    "Coverage report exceeds the size, file or line limit": "カバレッジレポートがサイズ、ファイル数、行数の上限を超えています",
+    "Invalid LCOV record at line {line}": "{line} 行目の LCOV レコードが無効です",
+    "No covered source files were found inside this project": "このプロジェクト内にカバレッジデータのあるソースファイルがありません",
+    "Coverage cancelled": "カバレッジをキャンセルしました",
+    "Coverage command failed ({code}); see the console": "カバレッジコマンドが失敗しました（{code}）。コンソールを確認してください",
+    "Coverage run": "カバレッジ実行",
+    "Run with Coverage": "カバレッジ付きで実行",
+    "Import LCOV…": "LCOV をインポート…",
+    "Coverage": "カバレッジ",
+    "Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically.": "行カバレッジのみ対応。実行前に cargo-llvm-cov と llvm-tools-preview をインストールしてください。ツールは自動インストールされません。",
+    "Collecting coverage…": "カバレッジを収集中…",
+    "No coverage suites": "カバレッジスイートがありません",
+    "Remove Suite": "スイートを削除",
+    "Skipped {count} missing or external source records": "存在しない、または外部のソースレコード {count} 件をスキップしました",
+    "Line {line}: {hits} hits": "{line} 行目: 実行 {hits} 回",
+    "{covered}/{total} lines ({percent}%)": "{covered}/{total} 行（{percent}%）",
+    "Trust this Cargo project before measuring coverage": "カバレッジを測定する前にこの Cargo プロジェクトを信頼してください",
+    "Test Results": "テスト結果",
+    "Coverage report must be a regular file": "カバレッジレポートは通常のファイルである必要があります"
   }
 }

@@ -1855,5 +1855,26 @@
     "HTTP variable expansion exceeds its size or nesting limit": "L’expansion des variables HTTP dépasse la limite de taille ou d’imbrication",
     "An HTTP variable is missing its closing braces": "Il manque les accolades fermantes d’une variable HTTP",
     "Unresolved HTTP variable: {variable}": "Variable HTTP non résolue : {variable}"
+  },
+  "coverage": {
+    "Coverage report exceeds the size, file or line limit": "Le rapport de couverture dépasse la limite de taille, de fichiers ou de lignes",
+    "Invalid LCOV record at line {line}": "Enregistrement LCOV invalide à la ligne {line}",
+    "No covered source files were found inside this project": "Aucun fichier source couvert trouvé dans ce projet",
+    "Coverage cancelled": "Couverture annulée",
+    "Coverage command failed ({code}); see the console": "La commande de couverture a échoué ({code}) ; consultez la console",
+    "Coverage run": "Exécution de couverture",
+    "Run with Coverage": "Exécuter avec couverture",
+    "Import LCOV…": "Importer LCOV…",
+    "Coverage": "Couverture",
+    "Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically.": "Couverture des lignes uniquement. Installez cargo-llvm-cov et llvm-tools-preview avant l’exécution ; les outils ne sont jamais installés automatiquement.",
+    "Collecting coverage…": "Collecte de la couverture…",
+    "No coverage suites": "Aucune suite de couverture",
+    "Remove Suite": "Supprimer la suite",
+    "Skipped {count} missing or external source records": "{count} enregistrements de sources absentes ou externes ignorés",
+    "Line {line}: {hits} hits": "Ligne {line} : {hits} exécutions",
+    "{covered}/{total} lines ({percent}%)": "{covered}/{total} lignes ({percent} %)",
+    "Trust this Cargo project before measuring coverage": "Faites confiance à ce projet Cargo avant de mesurer la couverture",
+    "Test Results": "Résultats des tests",
+    "Coverage report must be a regular file": "Le rapport de couverture doit être un fichier ordinaire"
   }
 }

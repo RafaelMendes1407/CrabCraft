@@ -1855,5 +1855,26 @@
     "HTTP variable expansion exceeds its size or nesting limit": "HTTP 变量展开超过大小或嵌套限制",
     "An HTTP variable is missing its closing braces": "HTTP 变量缺少右花括号",
     "Unresolved HTTP variable: {variable}": "无法解析的 HTTP 变量：{variable}"
+  },
+  "coverage": {
+    "Coverage report exceeds the size, file or line limit": "覆盖率报告超出大小、文件数或行数限制",
+    "Invalid LCOV record at line {line}": "第 {line} 行的 LCOV 记录无效",
+    "No covered source files were found inside this project": "此项目中未找到带覆盖率数据的源文件",
+    "Coverage cancelled": "覆盖率收集已取消",
+    "Coverage command failed ({code}); see the console": "覆盖率命令失败（{code}）；请查看控制台",
+    "Coverage run": "覆盖率运行",
+    "Run with Coverage": "运行并收集覆盖率",
+    "Import LCOV…": "导入 LCOV…",
+    "Coverage": "覆盖率",
+    "Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically.": "仅统计行覆盖率。运行前请安装 cargo-llvm-cov 和 llvm-tools-preview；不会自动安装工具。",
+    "Collecting coverage…": "正在收集覆盖率…",
+    "No coverage suites": "没有覆盖率套件",
+    "Remove Suite": "移除套件",
+    "Skipped {count} missing or external source records": "已跳过 {count} 条缺失或外部源文件记录",
+    "Line {line}: {hits} hits": "第 {line} 行：执行 {hits} 次",
+    "{covered}/{total} lines ({percent}%)": "{covered}/{total} 行（{percent}%）",
+    "Trust this Cargo project before measuring coverage": "测量覆盖率前请先信任此 Cargo 项目",
+    "Test Results": "测试结果",
+    "Coverage report must be a regular file": "覆盖率报告必须是普通文件"
   }
 }

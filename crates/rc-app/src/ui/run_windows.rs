@@ -51,7 +51,10 @@ pub fn console(ui: &mut Ui, term: &rc_term::TermSession) -> Vec<rc_term::ViewEve
 pub fn handle_outputs(app: &mut CrabCraftApp, outputs: Vec<RunnerOutput>) {
     for o in outputs {
         match o {
-            RunnerOutput::ShowTool(tw) => app.dock.show(tw),
+            RunnerOutput::ShowTool(tw) => {
+                if tw == ToolWindow::Tests { app.coverage.show = false; }
+                app.dock.show(tw);
+            },
             RunnerOutput::Notify(m, err) => app.notify(m, err),
             RunnerOutput::BuildDiagnostics(list) => app.set_build_problems(list),
         }
@@ -328,6 +331,15 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
 // ---------------------------------------------------------------------------------- Tests
 
 pub fn tests(app: &mut CrabCraftApp, ui: &mut Ui) {
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        ui.selectable_value(&mut app.coverage.show, false, tr("Test Results"));
+        ui.selectable_value(&mut app.coverage.show, true, tr("Coverage"));
+    });
+    if app.coverage.show {
+        crate::coverage::show(app, ui);
+        return;
+    }
     let running = app.runner.tests.as_ref().is_some_and(|t| t.running);
     let has = app.runner.tests.is_some();
     let show_passed = app.runner.tests.as_ref().is_none_or(|t| t.show_passed);

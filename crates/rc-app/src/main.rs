@@ -11,6 +11,7 @@ mod auto_attach;
 mod breakpoint_list;
 mod convert;
 mod copyright;
+mod coverage;
 mod debugger;
 mod dep_versions;
 mod feature_fix;
