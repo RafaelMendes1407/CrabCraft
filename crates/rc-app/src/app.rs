@@ -78,6 +78,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub privileged_run: crate::privileged_run::PrivilegedRun,
     pub dev_containers: crate::dev_containers::DevContainers,
     pub containers: crate::containers::Containers,
     pub plugins: crate::plugins::Plugins,
@@ -337,6 +338,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            privileged_run: crate::privileged_run::PrivilegedRun::new(waker.clone()),
             dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
             containers: crate::containers::Containers::new(waker.clone()),
             plugins: crate::plugins::Plugins::new(waker.clone()),
@@ -1438,6 +1440,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.privileged_run = crate::privileged_run::PrivilegedRun::new(self.waker.clone());
         self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
         self.containers = crate::containers::Containers::new(self.waker.clone());
         self.plugins = crate::plugins::Plugins::new(self.waker.clone());
@@ -3282,6 +3285,7 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        self.privileged_run.poll(acp_trusted);
         self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
         self.plugins.poll(acp_trusted);

@@ -2607,5 +2607,30 @@
     "Dev Container output preview is limited to 16,384 characters": "Dev-Container-Vorschau ist auf 16.384 Zeichen begrenzt",
     "Dev Containers": "Entwicklungscontainer",
     "Use the reference CLI only after explicitly trusting its configuration": "Referenz-CLI nur nach explizitem Vertrauen in die Konfiguration verwenden"
+  },
+  "privileged_run": {
+    "Privileged execution is supported only on Linux with PolicyKit": "Privilegierte Ausführung wird nur unter Linux mit PolicyKit unterstützt",
+    "Inspect and confirm the exact compiled program before requesting administrator authorization": "Exaktes kompiliertes Programm vor der Administratoranfrage prüfen und bestätigen",
+    "Choose a regular compiled executable inside this project and at most 32 separate arguments (64 KB total)": "Reguläres kompiliertes Projektprogramm und höchstens 32 einzelne Argumente wählen (insgesamt 64 KB)",
+    "Could not inspect or launch the privileged program": "Privilegiertes Programm konnte nicht geprüft oder gestartet werden",
+    "The compiled executable changed after review; inspect it again": "Kompiliertes Programm seit Prüfung geändert; erneut prüfen",
+    "The privileged helper did not receive administrator privileges": "Hilfsprozess erhielt keine Administratorrechte",
+    "Administrator authorization was denied, dismissed or unavailable; no password is collected by the IDE": "Administratorautorisierung abgelehnt, geschlossen oder nicht verfügbar; die IDE erfasst kein Passwort",
+    "Privileged program cancelled": "Privilegiertes Programm abgebrochen",
+    "Privileged operation input, output or time limit exceeded": "Eingabe-, Ausgabe- oder Zeitlimit des privilegierten Vorgangs überschritten",
+    "Privileged program exited with code {code}": "Privilegiertes Programm mit Code {code} beendet",
+    "Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing.": "Diese Ausführung gibt dem Programm volle Systemrechte. Zuerst als normaler Benutzer bauen, dann Programm und Argumente vor Autorisierung prüfen.",
+    "Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open.": "Nur der PolicyKit-Agent fragt Anmeldedaten ab. CrabCraft speichert keine Passwörter, ändert keine Richtlinien und erhöht keine Rechte beim Projektöffnen.",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported.": "Nur vorkompilierte Konsolenprogramme. Interaktive Eingabe, GUI, Projektumgebung, automatischer Neustart und Root-Debugging nicht unterstützt.",
+    "The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root.": "Der OS-Dialog autorisiert CrabCrafts Supervisor für das geprüfte Programm. Eine private geprüfte Kopie nutzt das Projektverzeichnis; erzeugte Dateien können Root gehören.",
+    "Compiled executable inside this project": "Kompiliertes Programm innerhalb dieses Projekts",
+    "Administrator program arguments (one per line; no shell)": "Programmargumente (eines pro Zeile; keine Shell)",
+    "Inspect Compiled Program": "Kompiliertes Programm prüfen",
+    "I reviewed this exact program and authorize requesting administrator privileges": "Ich habe genau dieses Programm geprüft und genehmige die Administratoranfrage",
+    "Request Administrator Execution": "Administratorausführung anfordern",
+    "Cancel Administrator Operation": "Administratorvorgang abbrechen",
+    "Administrator program output preview is limited to 16,384 characters": "Ausgabevorschau ist auf 16.384 Zeichen begrenzt",
+    "Administrator Run": "Administratorausführung",
+    "Inspect a compiled program before requesting OS administrator authorization": "Programm vor der OS-Administratoranfrage prüfen"
   }
 }

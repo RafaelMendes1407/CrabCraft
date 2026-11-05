@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 237 |
-| 🚧 Em andamento | 8 |
+| 🚧 Em andamento | 9 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 8 |
+| ⬜ A fazer | 7 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -220,7 +220,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-07 | Configuração Cargo: comando, canal, env, cwd, stdin | ✅ | M3 | Editar configuração: perfil, toolchain, features, ambiente, pasta e arquivo de entrada, testados no toolchain real, exceto a troca de toolchain (só os argumentos); outros comandos pela janela Cargo |
 | B-08 | Features automáticas (`required-features`) | ✅ | M3 | `required-features` lidas do metadata e aplicadas sozinhas; teste real |
 | B-09 | Emular terminal na saída | ✅ | M3 | Opção da configuração Cargo Emular terminal no console de saída: compila (e roda as tarefas antes de executar) e inicia o programa num pseudoterminal na aba Run, com cores, `isatty` verdadeiro e entrada pelo teclado; Stop e o código de saída funcionam. Testado com Cargo real (`is_terminal`, leitura de linha, saída 3). Falta: depurar com terminal emulado |
-| B-10 | Executar como root | ⬜ | M6 | |
+| B-10 | Executar como root | 🚧 | M6 | Janela nativa Administrator Run (Linux): artefato ELF pré-compilado do projeto, Inspect SHA-256 em worker, args separados limitados, preview e checkbox; trust/confirm/snapshot checados no backend, nada eleva ao abrir. /usr/bin/pkexec --disable-internal-agent usa apenas agente OS, sem senha na IDE nem alteração de políticas. Supervisor UID0 revalida/copia binário privado e recebe Cancel/EOF em pipe separado do stdinNull do programa; mata seus próprios filhos privilegiados (kill do usuário sozinho seria insuficiente). Limites/timeout/status tipados, saída de falha preservada; arquivo alterado/symlink/script/fora do projeto recusado. Quatro testes com Rust compilado real validam watchdog como usuário comum, guardas e UI até antes de autorizar; NÃO houve pedido de credencial nem execução como root real. Falta autorização OS e integração com RunConfig/PTY; GUI/env/rerun/debug-root visivelmente não suportados. Ver docs/administrator-run.md; Refs #62 |
 | B-11 | Múltiplas instâncias e configuração no projeto | ✅ | M3 | Na configuração de execução: Permitir várias instâncias (rodar de novo abre outra aba numerada, `server (2)`, sem parar a anterior) e Guardar como arquivo do projeto (`.crabcraft/runConfigurations/*.json`, versionável; ao abrir o projeto o arquivo prevalece sobre a sessão; arquivos quebrados ou grandes são ignorados). Testado com Cargo real |
 | B-12 | Configurações compostas | ✅ | M3 | Configuração composta (seletor › Adicionar configuração composta…) aceita binários Cargo: Run inicia todos, cada um na sua aba da janela Run (o Cargo compila um de cada vez); editar e excluir pelo seletor; guardada na sessão e mantida ao recarregar o Cargo. Testado com dois binários reais |
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |

@@ -131,6 +131,7 @@ fn i18n_from_settings() {
 
 fn main() -> eframe::Result {
     if let Some(code) = macro_step_engine::internal() { std::process::exit(code); }
+    if let Some(code) = privileged_run::internal() { std::process::exit(code); }
     if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();
@@ -216,3 +217,4 @@ mod acp;
 mod plugins;
 mod containers;
 mod dev_containers;
+mod privileged_run;

@@ -33,6 +33,7 @@ pub enum ToolWindow {
     Plugins,
     Containers,
     DevContainers,
+    PrivilegedRun,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,7 +69,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 24] = [
+    pub const ALL: [ToolWindow; 25] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -92,6 +93,7 @@ impl ToolWindow {
         ToolWindow::Plugins,
         ToolWindow::Containers,
         ToolWindow::DevContainers,
+        ToolWindow::PrivilegedRun,
         ToolWindow::Notifications,
     ];
 
@@ -121,6 +123,7 @@ impl ToolWindow {
             ToolWindow::Plugins => "local_plugins",
             ToolWindow::Containers => "docker",
             ToolWindow::DevContainers => "dev_containers",
+            ToolWindow::PrivilegedRun => "privileged_run",
         }
     }
 
@@ -150,6 +153,7 @@ impl ToolWindow {
             ToolWindow::Plugins => tr("Local Plugins"),
             ToolWindow::Containers => tr("Docker"),
             ToolWindow::DevContainers => tr("Dev Containers"),
+            ToolWindow::PrivilegedRun => tr("Administrator Run"),
         }
     }
 
@@ -179,13 +183,14 @@ impl ToolWindow {
             ToolWindow::Plugins => ico::RUN_ANYTHING,
             ToolWindow::Containers => ico::RUN_ANYTHING,
             ToolWindow::DevContainers => ico::RUN_ANYTHING,
+            ToolWindow::PrivilegedRun => ico::RUN_ANYTHING,
         }
     }
 
     pub fn side(self) -> Side {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
-            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers => Side::Right,
+            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers | ToolWindow::PrivilegedRun => Side::Right,
             _ => Side::Bottom,
         }
     }

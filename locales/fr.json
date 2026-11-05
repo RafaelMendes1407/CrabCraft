@@ -2607,5 +2607,30 @@
     "Dev Container output preview is limited to 16,384 characters": "L’aperçu Dev Container est limité à 16 384 caractères",
     "Dev Containers": "Conteneurs de développement",
     "Use the reference CLI only after explicitly trusting its configuration": "Utilisez la CLI de référence après avoir approuvé sa configuration"
+  },
+  "privileged_run": {
+    "Privileged execution is supported only on Linux with PolicyKit": "L’exécution privilégiée nécessite Linux et PolicyKit",
+    "Inspect and confirm the exact compiled program before requesting administrator authorization": "Inspectez et confirmez le programme compilé exact avant de demander l’autorisation",
+    "Choose a regular compiled executable inside this project and at most 32 separate arguments (64 KB total)": "Choisissez un exécutable compilé ordinaire du projet et au plus 32 arguments séparés (64 Ko au total)",
+    "Could not inspect or launch the privileged program": "Impossible d’inspecter ou lancer le programme privilégié",
+    "The compiled executable changed after review; inspect it again": "L’exécutable compilé a changé ; inspectez-le à nouveau",
+    "The privileged helper did not receive administrator privileges": "L’auxiliaire n’a pas reçu les privilèges administrateur",
+    "Administrator authorization was denied, dismissed or unavailable; no password is collected by the IDE": "Autorisation refusée, annulée ou indisponible ; l’IDE ne collecte aucun mot de passe",
+    "Privileged program cancelled": "Programme privilégié annulé",
+    "Privileged operation input, output or time limit exceeded": "Limite d’entrée, sortie ou durée de l’opération privilégiée dépassée",
+    "Privileged program exited with code {code}": "Le programme privilégié s’est terminé avec le code {code}",
+    "Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing.": "Cette exécution donne au programme tous les privilèges système. Compilez-le comme utilisateur normal et vérifiez l’exécutable et les arguments avant d’autoriser.",
+    "Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open.": "Seul l’agent PolicyKit demande les identifiants. CrabCraft ne demande ni ne stocke de mot de passe, ne change aucune politique et n’élève pas à l’ouverture.",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported.": "Seuls les exécutables console précompilés sont lancés. Entrée interactive, interface graphique, environnement du projet, relance automatique et débogage root non pris en charge.",
+    "The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root.": "Le dialogue autorise le superviseur CrabCraft pour le programme vérifié. Une copie privée vérifiée utilise le dossier du projet ; les fichiers créés peuvent appartenir à root.",
+    "Compiled executable inside this project": "Exécutable compilé dans ce projet",
+    "Administrator program arguments (one per line; no shell)": "Arguments du programme (un par ligne ; sans shell)",
+    "Inspect Compiled Program": "Inspecter le programme compilé",
+    "I reviewed this exact program and authorize requesting administrator privileges": "J’ai vérifié ce programme exact et autorise la demande de privilèges administrateur",
+    "Request Administrator Execution": "Demander l’exécution administrateur",
+    "Cancel Administrator Operation": "Annuler l’opération administrateur",
+    "Administrator program output preview is limited to 16,384 characters": "L’aperçu est limité à 16 384 caractères",
+    "Administrator Run": "Exécution administrateur",
+    "Inspect a compiled program before requesting OS administrator authorization": "Inspectez le programme avant de demander l’autorisation système"
   }
 }

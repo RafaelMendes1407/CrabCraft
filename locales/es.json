@@ -2607,5 +2607,30 @@
     "Dev Container output preview is limited to 16,384 characters": "La vista previa Dev Container se limita a 16.384 caracteres",
     "Dev Containers": "Contenedores de desarrollo",
     "Use the reference CLI only after explicitly trusting its configuration": "Usa la CLI de referencia solo tras confiar en su configuración"
+  },
+  "privileged_run": {
+    "Privileged execution is supported only on Linux with PolicyKit": "La ejecución privilegiada solo es compatible con Linux y PolicyKit",
+    "Inspect and confirm the exact compiled program before requesting administrator authorization": "Inspecciona y confirma el programa compilado exacto antes de pedir autorización",
+    "Choose a regular compiled executable inside this project and at most 32 separate arguments (64 KB total)": "Elige un ejecutable compilado normal del proyecto y hasta 32 argumentos separados (64 KB total)",
+    "Could not inspect or launch the privileged program": "No se pudo inspeccionar o iniciar el programa privilegiado",
+    "The compiled executable changed after review; inspect it again": "El ejecutable compilado cambió; inspecciónalo de nuevo",
+    "The privileged helper did not receive administrator privileges": "El auxiliar no recibió privilegios de administrador",
+    "Administrator authorization was denied, dismissed or unavailable; no password is collected by the IDE": "La autorización fue denegada, cancelada o no disponible; el IDE no recoge contraseñas",
+    "Privileged program cancelled": "Programa privilegiado cancelado",
+    "Privileged operation input, output or time limit exceeded": "Se superó el límite de entrada, salida o tiempo",
+    "Privileged program exited with code {code}": "El programa privilegiado terminó con código {code}",
+    "Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing.": "Esta ejecución da al programa todos los privilegios del sistema. Compílalo como usuario normal y revisa el ejecutable y argumentos antes de autorizar.",
+    "Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open.": "Solo PolicyKit solicita credenciales. CrabCraft no pide ni guarda contraseñas, no cambia políticas ni eleva al abrir proyectos.",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported.": "Solo ejecuta binarios de consola precompilados. Entrada interactiva, GUI, entorno del proyecto, reejecución automática y depuración root no compatibles.",
+    "The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root.": "El diálogo autoriza al supervisor de CrabCraft para el programa revisado. Una copia privada verificada usa el directorio del proyecto; los archivos creados pueden pertenecer a root.",
+    "Compiled executable inside this project": "Ejecutable compilado dentro del proyecto",
+    "Administrator program arguments (one per line; no shell)": "Argumentos del programa (uno por línea; sin shell)",
+    "Inspect Compiled Program": "Inspeccionar programa compilado",
+    "I reviewed this exact program and authorize requesting administrator privileges": "Revisé este programa exacto y autorizo solicitar privilegios de administrador",
+    "Request Administrator Execution": "Solicitar ejecución como administrador",
+    "Cancel Administrator Operation": "Cancelar operación de administrador",
+    "Administrator program output preview is limited to 16,384 characters": "La vista previa se limita a 16.384 caracteres",
+    "Administrator Run": "Ejecutar como administrador",
+    "Inspect a compiled program before requesting OS administrator authorization": "Inspecciona el programa antes de pedir autorización del sistema"
   }
 }

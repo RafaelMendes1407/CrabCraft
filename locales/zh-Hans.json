@@ -2607,5 +2607,30 @@
     "Dev Container output preview is limited to 16,384 characters": "Dev Container 输出预览限于 16,384 个字符",
     "Dev Containers": "开发容器",
     "Use the reference CLI only after explicitly trusting its configuration": "仅在显式信任配置后使用参考 CLI"
+  },
+  "privileged_run": {
+    "Privileged execution is supported only on Linux with PolicyKit": "特权执行仅支持 Linux 和 PolicyKit",
+    "Inspect and confirm the exact compiled program before requesting administrator authorization": "请求管理员授权前请检查并确认确切的编译程序",
+    "Choose a regular compiled executable inside this project and at most 32 separate arguments (64 KB total)": "请选择项目内普通编译可执行文件以及至多 32 个独立参数（总计 64 KB）",
+    "Could not inspect or launch the privileged program": "无法检查或启动特权程序",
+    "The compiled executable changed after review; inspect it again": "编译的可执行文件已更改；请重新检查",
+    "The privileged helper did not receive administrator privileges": "特权辅助程序未获得管理员权限",
+    "Administrator authorization was denied, dismissed or unavailable; no password is collected by the IDE": "管理员授权被拒绝、取消或不可用；IDE 不收集密码",
+    "Privileged program cancelled": "已取消特权程序",
+    "Privileged operation input, output or time limit exceeded": "超出特权操作的输入、输出或时间限制",
+    "Privileged program exited with code {code}": "特权程序退出，代码为 {code}",
+    "Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing.": "管理员执行将授予程序完整系统权限。请先以普通用户编译，并在授权前检查确切程序及参数。",
+    "Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open.": "仅操作系统 PolicyKit 代理请求凭据。CrabCraft 不索取或保存管理员密码，不更改授权策略，也不在打开项目时提权。",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported.": "仅启动预编译控制台程序。不支持交互输入、GUI 程序、项目环境覆盖、自动重跑或 root 调试。",
+    "The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root.": "系统对话框授权 CrabCraft 监督程序运行已检查程序。私有验证副本以项目为工作目录运行，所创建文件可能属于 root。",
+    "Compiled executable inside this project": "项目内的编译可执行文件",
+    "Administrator program arguments (one per line; no shell)": "管理员程序参数（每行一个；不使用 shell）",
+    "Inspect Compiled Program": "检查编译程序",
+    "I reviewed this exact program and authorize requesting administrator privileges": "我已检查此确切程序并授权请求管理员权限",
+    "Request Administrator Execution": "请求管理员执行",
+    "Cancel Administrator Operation": "取消管理员操作",
+    "Administrator program output preview is limited to 16,384 characters": "管理员程序输出预览限于 16,384 个字符",
+    "Administrator Run": "管理员运行",
+    "Inspect a compiled program before requesting OS administrator authorization": "请求系统管理员授权前请检查程序"
   }
 }

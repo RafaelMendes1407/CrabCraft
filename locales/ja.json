@@ -2607,5 +2607,30 @@
     "Dev Container output preview is limited to 16,384 characters": "Dev Container 出力プレビューは 16,384 文字までです",
     "Dev Containers": "開発コンテナー",
     "Use the reference CLI only after explicitly trusting its configuration": "設定を明示的に信頼してから参照 CLI を利用してください"
+  },
+  "privileged_run": {
+    "Privileged execution is supported only on Linux with PolicyKit": "特権実行は Linux と PolicyKit のみ対応です",
+    "Inspect and confirm the exact compiled program before requesting administrator authorization": "管理者認証を要求する前に対象のコンパイル済みプログラムを確認してください",
+    "Choose a regular compiled executable inside this project and at most 32 separate arguments (64 KB total)": "プロジェクト内の通常のコンパイル済み実行ファイルと最大 32 引数（計 64 KB）を指定してください",
+    "Could not inspect or launch the privileged program": "特権プログラムの確認または起動に失敗しました",
+    "The compiled executable changed after review; inspect it again": "確認後に実行ファイルが変更されました。再確認してください",
+    "The privileged helper did not receive administrator privileges": "補助プロセスに管理者権限が付与されませんでした",
+    "Administrator authorization was denied, dismissed or unavailable; no password is collected by the IDE": "管理者認証が拒否、取消、または利用不可です。IDE はパスワードを取得しません",
+    "Privileged program cancelled": "特権プログラムをキャンセルしました",
+    "Privileged operation input, output or time limit exceeded": "特権操作の入力、出力、時間の上限を超えました",
+    "Privileged program exited with code {code}": "特権プログラムはコード {code} で終了しました",
+    "Administrator execution gives this program full system privileges. Build it as your normal user first and inspect the exact executable and arguments before authorizing.": "管理者実行はプログラムに完全なシステム権限を与えます。通常ユーザーとしてビルドし、認証前に実行ファイルと引数を確認してください。",
+    "Only the operating-system PolicyKit agent requests credentials. CrabCraft never asks for or stores an administrator password, changes authorization policy, or elevates on project open.": "資格情報は OS の PolicyKit エージェントのみが要求します。CrabCraft はパスワードの要求・保存、認証ポリシー変更、プロジェクトを開く際の権限昇格を行いません。",
+    "This launches a prebuilt console executable only. Interactive stdin, GUI programs, project environment overrides, automatic rerun and root debugging are unsupported.": "ビルド済みコンソール実行ファイル専用です。対話入力、GUI、プロジェクト環境設定、自動再実行、root デバッグは未対応です。",
+    "The OS dialog authorizes CrabCraft's supervisor for the reviewed program. A private verified copy runs with the project as working directory; files it creates may be owned by root.": "OS ダイアログは確認済みプログラム用の CrabCraft 監視プロセスを認証します。検証済みの専用コピーをプロジェクト内で実行し、作成ファイルは root 所有になり得ます。",
+    "Compiled executable inside this project": "プロジェクト内のコンパイル済み実行ファイル",
+    "Administrator program arguments (one per line; no shell)": "管理者プログラム引数（1 行に 1 つ、シェルなし）",
+    "Inspect Compiled Program": "コンパイル済みプログラムを確認",
+    "I reviewed this exact program and authorize requesting administrator privileges": "このプログラムを確認し管理者権限の要求を承認します",
+    "Request Administrator Execution": "管理者実行を要求",
+    "Cancel Administrator Operation": "管理者操作をキャンセル",
+    "Administrator program output preview is limited to 16,384 characters": "管理者プログラムの出力プレビューは 16,384 文字までです",
+    "Administrator Run": "管理者実行",
+    "Inspect a compiled program before requesting OS administrator authorization": "OS 管理者認証の要求前にプログラムを確認してください"
   }
 }
