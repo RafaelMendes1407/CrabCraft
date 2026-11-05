@@ -5,6 +5,7 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 #[derive(Default)]
 pub struct State {
+    sync: crate::settings_sync::Sync,
     job: Option<Job>,
     pub preview: Option<Backup>,
     message: Option<String>,
@@ -19,7 +20,7 @@ impl Drop for Job {
     fn drop(&mut self) { self.cancelled.store(true, Ordering::Release); }
 }
 impl State {
-    pub fn cancel(&mut self) { self.job = None; self.preview = None; }
+    pub fn cancel(&mut self) { self.job = None; self.preview = None; self.sync.clear(); }
 
     fn start(&mut self, export: Option<Backup>, waker: Waker) {
         let inbox = Inbox::new(waker);
@@ -59,23 +60,24 @@ impl State {
         }
         ui.label(tr("Export appearance, editor preferences, templates, shortcuts and inspection levels to a JSON file. Import loads a preview; use Apply imported preferences, then OK to save."));
         ui.add_space(8.0);
-        ui.label(tr("Trust decisions, project paths, history, tool programs and environment variables stay on this computer. Cloud synchronization is not supported."));
+        ui.label(tr("Trust decisions, project paths, history, tool programs and environment variables stay on this computer."));
         ui.add_space(12.0);
         ui.horizontal(|ui| {
-            if ui.add_enabled(self.job.is_none(), egui::Button::new(tr("Export preferences"))).clicked() {
+            if ui.add_enabled(self.job.is_none() && !self.sync.busy(), egui::Button::new(tr("Export preferences"))).clicked() {
                 match Backup::from_settings(draft) {
                     Ok(backup) => self.start(Some(backup), waker.clone()),
                     Err(error) => self.message = Some(error_text(&error)),
                 }
             }
-            if ui.add_enabled(self.job.is_none(), egui::Button::new(tr("Import preferences"))).clicked() {
-                self.start(None, waker);
+            if ui.add_enabled(self.job.is_none() && !self.sync.busy(), egui::Button::new(tr("Import preferences"))).clicked() {
+                self.start(None, waker.clone());
             }
             if self.job.is_some() && ui.button(tr("Cancel")).clicked() { self.cancel(); }
         });
         if self.job.is_some() { ui.spinner(); }
         if self.exported { ui.label(tr("Preferences exported.")); }
         if let Some(message) = &self.message { ui.colored_label(rc_kit::pal(ui).error, message); }
+        if let Some(backup) = self.sync.ui(ui, draft, waker, self.job.is_none()) { self.preview = Some(backup); }
         if let Some(preview) = &self.preview {
             ui.add_space(12.0);
             ui.label(tr("Preferences to replace:"));

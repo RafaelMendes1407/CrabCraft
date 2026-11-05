@@ -2172,5 +2172,25 @@
   },
   "crate_lookup": {
     "Look up crate…": "Buscar crate…"
+  },
+  "settings_sync": {
+    "Preferences synchronization": "Sincronização de preferências",
+    "Preferences storage URL": "URL de armazenamento de preferências",
+    "Bearer token (optional)": "Token Bearer (opcional)",
+    "Download remote preferences": "Baixar preferências remotas",
+    "Upload portable preferences": "Enviar preferências portáteis",
+    "Cancel synchronization": "Cancelar sincronização",
+    "Portable preferences uploaded.": "Preferências portáteis enviadas.",
+    "No remote preferences exist. Upload can create them.": "Não há preferências remotas. O envio pode criá-las.",
+    "Remote preferences downloaded. Review the preview before applying.": "Preferências remotas baixadas. Revise a prévia antes de aplicar.",
+    "Remote preferences changed. Download and review them before uploading again.": "As preferências remotas mudaram. Baixe e revise antes de enviar novamente.",
+    "Download first. The server must provide a strong ETag and honor conditional writes.": "Baixe primeiro. O servidor deve fornecer ETag forte e respeitar gravações condicionais.",
+    "The synchronization token is invalid.": "O token de sincronização é inválido.",
+    "The preferences server could not be reached. Check the connection and authentication.": "Não foi possível acessar o servidor de preferências. Verifique a conexão e a autenticação.",
+    "The preferences server returned HTTP {status}": "O servidor de preferências retornou HTTP {status}",
+    "The remote preferences contain invalid or unsupported settings.": "As preferências remotas contêm configurações inválidas ou não suportadas.",
+    "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "Use URL HTTPS, ou HTTP em loopback, sem credenciais embutidas ou fragmentos.",
+    "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "Use URL HTTPS privada com GET, PUT e ETags fortes. Só preferências portáteis são enviadas com Enviar; Baixar sempre abre uma prévia. URL e token ficam na memória até fechar este diálogo.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "Decisões de confiança, caminhos de projetos, histórico, ferramentas e variáveis de ambiente ficam neste computador."
   }
 }

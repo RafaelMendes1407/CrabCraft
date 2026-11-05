@@ -2172,5 +2172,25 @@
   },
   "crate_lookup": {
     "Look up crate…": "クレートを検索…"
+  },
+  "settings_sync": {
+    "Preferences synchronization": "設定の同期",
+    "Preferences storage URL": "設定の保存先 URL",
+    "Bearer token (optional)": "Bearer トークン（任意）",
+    "Download remote preferences": "リモート設定をダウンロード",
+    "Upload portable preferences": "移植可能な設定をアップロード",
+    "Cancel synchronization": "同期をキャンセル",
+    "Portable preferences uploaded.": "移植可能な設定をアップロードしました。",
+    "No remote preferences exist. Upload can create them.": "リモート設定は存在しません。アップロードすると作成できます。",
+    "Remote preferences downloaded. Review the preview before applying.": "リモート設定をダウンロードしました。適用前にプレビューを確認してください。",
+    "Remote preferences changed. Download and review them before uploading again.": "リモート設定が変更されました。再アップロード前にダウンロードして確認してください。",
+    "Download first. The server must provide a strong ETag and honor conditional writes.": "先にダウンロードしてください。サーバーは強い ETag と条件付き書き込みに対応する必要があります。",
+    "The synchronization token is invalid.": "同期トークンが無効です。",
+    "The preferences server could not be reached. Check the connection and authentication.": "設定サーバーに接続できません。接続と認証を確認してください。",
+    "The preferences server returned HTTP {status}": "設定サーバーが HTTP {status} を返しました",
+    "The remote preferences contain invalid or unsupported settings.": "リモート設定に無効または未対応の項目が含まれています。",
+    "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "認証情報やフラグメントを含まない HTTPS URL、またはループバックの HTTP URL を使用してください。",
+    "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "GET、PUT、強い ETag に対応する非公開の HTTPS 保存先を使用します。アップロードで移植可能な設定のみ送信し、ダウンロードは必ずプレビューを開きます。URL とトークンはダイアログを閉じるまでメモリに保持されます。",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "信頼設定、プロジェクトのパス、履歴、ツール、環境変数はこのコンピューターに保持されます。"
   }
 }

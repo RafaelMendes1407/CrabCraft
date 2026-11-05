@@ -2172,5 +2172,25 @@
   },
   "crate_lookup": {
     "Look up crate…": "Wyszukaj crate…"
+  },
+  "settings_sync": {
+    "Preferences synchronization": "Synchronizacja preferencji",
+    "Preferences storage URL": "Adres przechowywania preferencji",
+    "Bearer token (optional)": "Token Bearer (opcjonalny)",
+    "Download remote preferences": "Pobierz zdalne preferencje",
+    "Upload portable preferences": "Wyślij przenośne preferencje",
+    "Cancel synchronization": "Anuluj synchronizację",
+    "Portable preferences uploaded.": "Wysłano przenośne preferencje.",
+    "No remote preferences exist. Upload can create them.": "Brak zdalnych preferencji. Wysłanie może je utworzyć.",
+    "Remote preferences downloaded. Review the preview before applying.": "Pobrano zdalne preferencje. Sprawdź podgląd przed zastosowaniem.",
+    "Remote preferences changed. Download and review them before uploading again.": "Zdalne preferencje zmieniły się. Pobierz je i sprawdź przed ponownym wysłaniem.",
+    "Download first. The server must provide a strong ETag and honor conditional writes.": "Najpierw pobierz. Serwer musi udostępniać silny ETag i respektować zapis warunkowy.",
+    "The synchronization token is invalid.": "Token synchronizacji jest nieprawidłowy.",
+    "The preferences server could not be reached. Check the connection and authentication.": "Nie można połączyć się z serwerem preferencji. Sprawdź połączenie i uwierzytelnianie.",
+    "The preferences server returned HTTP {status}": "Serwer preferencji zwrócił HTTP {status}",
+    "The remote preferences contain invalid or unsupported settings.": "Zdalne preferencje zawierają nieprawidłowe lub nieobsługiwane ustawienia.",
+    "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "Użyj adresu HTTPS lub HTTP na interfejsie lokalnym, bez osadzonych danych logowania i fragmentów.",
+    "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "Użyj prywatnego adresu HTTPS obsługującego GET, PUT i silne ETag. Wysyłane są tylko przenośne preferencje; pobranie zawsze otwiera podgląd. Adres i token pozostają w pamięci do zamknięcia okna.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "Decyzje o zaufaniu, ścieżki projektów, historia, narzędzia i zmienne środowiskowe pozostają na tym komputerze."
   }
 }

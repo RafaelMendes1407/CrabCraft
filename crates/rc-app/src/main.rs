@@ -172,6 +172,7 @@ mod project_trust;
 
 mod remote_debug;
 mod debug_sessions;
+mod settings_sync;
 
 #[cfg(test)]
 mod large_file_audit;

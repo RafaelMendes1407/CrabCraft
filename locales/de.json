@@ -2172,5 +2172,25 @@
   },
   "crate_lookup": {
     "Look up crate…": "Crate suchen…"
+  },
+  "settings_sync": {
+    "Preferences synchronization": "Synchronisierung der Einstellungen",
+    "Preferences storage URL": "Speicher-URL für Einstellungen",
+    "Bearer token (optional)": "Bearer-Token (optional)",
+    "Download remote preferences": "Entfernte Einstellungen herunterladen",
+    "Upload portable preferences": "Übertragbare Einstellungen hochladen",
+    "Cancel synchronization": "Synchronisierung abbrechen",
+    "Portable preferences uploaded.": "Übertragbare Einstellungen hochgeladen.",
+    "No remote preferences exist. Upload can create them.": "Keine entfernten Einstellungen vorhanden. Hochladen kann sie erstellen.",
+    "Remote preferences downloaded. Review the preview before applying.": "Entfernte Einstellungen heruntergeladen. Prüfen Sie die Vorschau vor dem Anwenden.",
+    "Remote preferences changed. Download and review them before uploading again.": "Entfernte Einstellungen wurden geändert. Laden und prüfen Sie sie vor erneutem Hochladen.",
+    "Download first. The server must provide a strong ETag and honor conditional writes.": "Zuerst herunterladen. Der Server muss einen starken ETag liefern und bedingte Schreibzugriffe beachten.",
+    "The synchronization token is invalid.": "Das Synchronisierungstoken ist ungültig.",
+    "The preferences server could not be reached. Check the connection and authentication.": "Der Einstellungsserver ist nicht erreichbar. Prüfen Sie Verbindung und Authentifizierung.",
+    "The preferences server returned HTTP {status}": "Der Einstellungsserver meldete HTTP {status}",
+    "The remote preferences contain invalid or unsupported settings.": "Die entfernten Einstellungen enthalten ungültige oder nicht unterstützte Werte.",
+    "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "Verwenden Sie eine HTTPS-URL oder HTTP über Loopback, ohne eingebettete Zugangsdaten oder Fragment.",
+    "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "Verwenden Sie eine private HTTPS-Speicher-URL mit GET, PUT und starken ETags. Nur übertragbare Einstellungen werden hochgeladen; Herunterladen öffnet stets eine Vorschau. URL und Token bleiben bis zum Schließen im Speicher.",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "Vertrauensentscheidungen, Projektpfade, Verlauf, Programme und Umgebungsvariablen bleiben auf diesem Computer."
   }
 }

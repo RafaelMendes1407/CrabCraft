@@ -2172,5 +2172,25 @@
   },
   "crate_lookup": {
     "Look up crate…": "查找 crate…"
+  },
+  "settings_sync": {
+    "Preferences synchronization": "偏好设置同步",
+    "Preferences storage URL": "偏好设置存储 URL",
+    "Bearer token (optional)": "Bearer 令牌（可选）",
+    "Download remote preferences": "下载远程偏好设置",
+    "Upload portable preferences": "上传可移植偏好设置",
+    "Cancel synchronization": "取消同步",
+    "Portable preferences uploaded.": "可移植偏好设置已上传。",
+    "No remote preferences exist. Upload can create them.": "远程偏好设置不存在，上传可创建它们。",
+    "Remote preferences downloaded. Review the preview before applying.": "远程偏好设置已下载。应用前请查看预览。",
+    "Remote preferences changed. Download and review them before uploading again.": "远程偏好设置已更改。再次上传前请下载并检查。",
+    "Download first. The server must provide a strong ETag and honor conditional writes.": "请先下载。服务器必须提供强 ETag 并支持条件写入。",
+    "The synchronization token is invalid.": "同步令牌无效。",
+    "The preferences server could not be reached. Check the connection and authentication.": "无法访问偏好设置服务器。请检查连接和身份验证。",
+    "The preferences server returned HTTP {status}": "偏好设置服务器返回 HTTP {status}",
+    "The remote preferences contain invalid or unsupported settings.": "远程偏好设置包含无效或不支持的设置。",
+    "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "使用 HTTPS URL 或回环地址的 HTTP URL，不得嵌入凭据或片段。",
+    "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "使用支持 GET、PUT 和强 ETag 的私有 HTTPS 存储 URL。仅在上传时发送可移植偏好设置；下载始终打开预览。URL 和令牌仅在对话框关闭前保留于内存。",
+    "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "信任决定、项目路径、历史记录、工具程序和环境变量保留在此计算机上。"
   }
 }
