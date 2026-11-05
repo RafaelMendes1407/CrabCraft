@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.1
+
+### Fixed and improved
+- **Settings:** stable modal dimensions when switching categories, a compact category selector
+  for small windows, vertically arranged tool paths, and background file selection with
+  cancellation and stale-result protection. Untrusted projects explain why tool detection is disabled.
+- **Central menus:** a native dropdown with twelve categories, shortcut hints, tool windows and
+  recent projects. Execution and debugger commands respect their context; long menus scroll
+  without shrinking as they reposition.
+- **Project templates:** searchable existing Rust/file templates, automatic search focus,
+  selection with Enter, and an explicit empty-results message.
+- **Editor layout:** gray docking feedback, animated placement previews and a dragged-file card;
+  proportional guides remain usable in narrow splits, and Escape cancels across floating windows.
+- **Project identity:** a soft project-color wash in the native title bar and more spacing in
+  text-heavy tool panels.
+- **Rust focus:** removed the inherited NuGet manager and client.
+
+### Validation and scope
+- Verified with native egui interface tests, real Cargo-project workflows, and GPU captures
+  in light/dark themes and compact windows. The existing platform and integration limitations
+  remain documented in [FEATURES.md](https://github.com/RafaelMendes1407/CrabCraft/blob/v0.4.1/FEATURES.md).
+- Opening a project still does not execute its code; project tools require explicit trust.
+
 ## 0.4.0
 
 ### New and improved
