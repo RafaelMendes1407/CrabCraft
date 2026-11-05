@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 216 |
+| ✅ Pronto | 217 |
 | 🚧 Em andamento | 12 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 25 |
+| ⬜ A fazer | 24 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -316,7 +316,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | V-13 | Patches | ✅ | M5 | Criar patch dos arquivos marcados na janela Commit (ou de um arquivo, pelo menu de contexto) e de um ou vários commits do Log (Ctrl/Shift+clique), salvo em arquivo ou copiado; Aplicar patch (janela Git) de arquivo ou da área de transferência, com a lista de arquivos, se aplica sem conflito (`git apply --check`), opção `--3way` e a saída do Git. Patch de e-mail vira commits (`git am`, avisa que os hooks rodam); diff vai para a árvore de trabalho. Limite de 32 MB. Testado entre dois repositórios reais. |
 | V-14 | Assinatura GPG | ✅ | M5 | Janela Commit: "Assinar com GPG" começa como diz `commit.gpgsign` e assina com `-S` (a chave de `user.signingkey` aparece na dica); desmarcado usa `--no-gpg-sign`. O Log mostra a assinatura verificada pelo git (boa, não confiável, expirada, revogada, inválida, chave ausente). Falha do programa de assinatura vira erro claro e nada é commitado. Testado com chave GPG real. |
 | V-15 | Editar histórico | ✅ | M5 | Git › Editar histórico: plano nativo dos últimos 1–20 commits lineares de branch local, em ordem antiga→nova; manter, alterar mensagem, descartar, fixup e mover antes/depois. Carregar é leitura; reescrever exige revisão/confirmação explícita e confiança, árvore/índice/buffers limpos, ausência de operação, HEAD/branch ainda iguais e commits fora de refs remotas conhecidas. Merge, raiz, HEAD destacado e descartar tudo recusados. Cria ref de recuperação antes do rebase interativo; helper privado nativo gera comandos fixos, mensagens são dados. Trabalho em segundo plano, saída/Cancelar; conflitos usam continuar/pular/abortar existentes, planos privados sobrevivem reinício. Cancela filhos de hooks/editores também; sem force push e assinaturas originais não preservadas. Testes em projeto Rust real com helper binário: reordenar/reword/fixup/drop, mensagem com texto de shell sem execução, backup do HEAD e cargo test; teste nativo comprova carregar, recusar sem confirmação e reescrever após ação explícita. Guardas dirty/publicado/raiz/inválido/desatualizado testadas; Linux, sem captura. Ver docs/history-editing.md; Closes #99 |
-| V-16 | Integração com issue trackers | ⬜ | M5 | |
+| V-16 | Integração com issue trackers | ✅ | M5 | Git › Issues: consulta nativa GitHub/GitLab por GET explícito, API HTTPS e namespace/projeto; aberto/fechado/todos e páginas manuais de 100 registros (até 100 páginas), sem requests ao abrir/restaurar projeto. Token mascarado só em memória, limpo ao mudar API/projeto; sem redirects, logs de credenciais ou persistência do token. Lista/detalhes em texto, links reconstruídos seguros, copiar referência qualificada, anexar ao rascunho de commit e abrir diálogo nativo de branch da issue com confirmação. Config sem segredo na sessão; confiança exigida pela janela Git. Background, Cancelar, timeout e limites de payload/títulos/corpo; PRs filtrados do GitHub. Teste nativo em projeto Rust/Git real comprova ausência de rede implícita, leitura/mock, referência e branch real; cargo test passa; GET público GitHub real passou. Fixtures GitLab e testes de token/cancel/redirect/limites passaram; GitLab ao vivo não exercitado. Fora: escrever/fechar issues, OAuth/credential store, IDs numéricos GitLab; sem captura. Ver docs/issue-trackers.md; Closes #100 |
 | V-17 | GitHub: conta, PRs, revisão, fork, gists, Actions | ⬜ | M5 | Via `gh` |
 | V-18 | GitLab: conta, MRs, revisão, snippets, CI/CD | ⬜ | M5 | Via `glab` |
 

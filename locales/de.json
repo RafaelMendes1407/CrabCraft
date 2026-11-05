@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "GitHub oder GitLab, eine gültige HTTPS-API und einen Namespace/Projekt-Pfad wählen",
+    "The tracker token contains invalid header characters": "Der Tracker-Token enthält ungültige Header-Zeichen",
+    "Could not reach the issue tracker; check its address and connection": "Issue-Tracker nicht erreichbar; Adresse und Verbindung prüfen",
+    "Issue tracker returned HTTP {status}": "Issue-Tracker meldete HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "Die Tracker-Antwort überschreitet die Sicherheitsgrenzen",
+    "Issue tracker returned an unsupported response": "Der Issue-Tracker lieferte eine nicht unterstützte Antwort",
+    "Issue lookup cancelled": "Issue-Abfrage abgebrochen",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "Schreibgeschützte Issue-Abfrage. Anfragen nur durch Abrufen, Zurück oder Weiter. Tokens bleiben im Speicher und werden nie gespeichert.",
+    "Issue tracker": "Issue-Tracker",
+    "API base URL": "API-Basis-URL",
+    "Namespace/project": "Namespace/Projekt",
+    "Token (memory only)": "Token (nur im Speicher)",
+    "Closed": "Geschlossen",
+    "Fetch Issues": "Issues abrufen",
+    "Page": "Seite",
+    "Open Issue": "Issue öffnen",
+    "Copy Issue Reference": "Issue-Referenz kopieren",
+    "Use in Commit Message": "In Commit-Nachricht verwenden",
+    "Create Issue Branch…": "Issue-Branch erstellen…",
+    "Issues": "Issues"
   }
 }

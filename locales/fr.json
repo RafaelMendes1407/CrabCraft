@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "Choisissez GitHub ou GitLab, une API HTTPS valide et un chemin espace/projet",
+    "The tracker token contains invalid header characters": "Le jeton contient des caractères d’en-tête invalides",
+    "Could not reach the issue tracker; check its address and connection": "Impossible de joindre le suivi des tickets ; vérifiez l’adresse et la connexion",
+    "Issue tracker returned HTTP {status}": "Le suivi des tickets a renvoyé HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "La réponse dépasse les limites de sécurité",
+    "Issue tracker returned an unsupported response": "Le suivi des tickets a renvoyé une réponse non prise en charge",
+    "Issue lookup cancelled": "Recherche de tickets annulée",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "Consultation en lecture seule. Requêtes uniquement après Charger, Précédent ou Suivant. Les jetons restent en mémoire et ne sont jamais enregistrés.",
+    "Issue tracker": "Suivi des tickets",
+    "API base URL": "URL de base de l’API",
+    "Namespace/project": "Espace/projet",
+    "Token (memory only)": "Jeton (mémoire uniquement)",
+    "Closed": "Fermés",
+    "Fetch Issues": "Charger les tickets",
+    "Page": "Page",
+    "Open Issue": "Ouvrir le ticket",
+    "Copy Issue Reference": "Copier la référence du ticket",
+    "Use in Commit Message": "Utiliser dans le message de commit",
+    "Create Issue Branch…": "Créer une branche pour le ticket…",
+    "Issues": "Tickets"
   }
 }

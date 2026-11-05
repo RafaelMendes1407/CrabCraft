@@ -306,6 +306,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         if theme::tab(ui, app.vcs.tab == GitTab::Shelves, Some(ico::HISTORY), tr("Shelves"), false).0.clicked() { app.vcs.tab = GitTab::Shelves; }
         if theme::tab(ui, app.vcs.tab == GitTab::HistoryEdit, Some(ico::HISTORY), tr("Edit History"), false).0.clicked() { app.vcs.tab = GitTab::HistoryEdit; }
+        if theme::tab(ui, app.vcs.tab == GitTab::Issues, Some(ico::HISTORY), tr("Issues"), false).0.clicked() { app.vcs.tab = GitTab::Issues; }
         let worktrees = trf("Worktrees ({n})", &[("n", &app.vcs.worktrees.len())]);
         if theme::tab(ui, app.vcs.tab == GitTab::Worktrees, Some(ico::FOLDER), &worktrees, false).0.clicked() {
             app.vcs.tab = GitTab::Worktrees;
@@ -333,6 +334,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         GitTab::Tags => tags_view(app, ui),
         GitTab::Stashes => stashes_view(app, ui),
         GitTab::Worktrees => worktrees_view(app, ui),
+        GitTab::Issues => { let (action,changed)=app.issue_tracker.show(ui);if changed{app.session_dirty=true;}match action{Some(crate::issue_tracker::UiAction::Commit(text))=>{if !app.vcs.message.is_empty(){app.vcs.message.push('\n');}app.vcs.message.push_str(&text);app.dock.show(ToolWindow::Commit);},Some(crate::issue_tracker::UiAction::Branch(name))=>app.dialog=Some(Dialog::NewBranch{name}),None=>{}} },
         GitTab::HistoryEdit => { if let Some(repo) = app.vcs.repo.clone() { let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.history_edit.show(ui, repo, app.vcs.busy.is_some(), unsaved); } },
         GitTab::Shelves => { if let Some(repo) = app.vcs.repo.clone() { let checked = app.vcs.included(); let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.shelves.show(ui, repo, checked, app.vcs.busy.is_some(), unsaved); } },
     }

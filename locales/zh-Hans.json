@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "请选择 GitHub 或 GitLab、有效的 HTTPS API 地址和命名空间/项目路径",
+    "The tracker token contains invalid header characters": "令牌包含无效的请求头字符",
+    "Could not reach the issue tracker; check its address and connection": "无法连接问题跟踪器；请检查地址和连接",
+    "Issue tracker returned HTTP {status}": "问题跟踪器返回 HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "问题跟踪器响应超出安全限制",
+    "Issue tracker returned an unsupported response": "问题跟踪器返回不支持的响应",
+    "Issue lookup cancelled": "问题查询已取消",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "只读问题查询。仅点击获取、上一页或下一页时发送请求。令牌仅保存在内存中，不会写入磁盘。",
+    "Issue tracker": "问题跟踪器",
+    "API base URL": "API 基础 URL",
+    "Namespace/project": "命名空间/项目",
+    "Token (memory only)": "令牌（仅内存）",
+    "Closed": "已关闭",
+    "Fetch Issues": "获取问题",
+    "Page": "页",
+    "Open Issue": "打开问题",
+    "Copy Issue Reference": "复制问题引用",
+    "Use in Commit Message": "用于提交消息",
+    "Create Issue Branch…": "创建问题分支…",
+    "Issues": "问题"
   }
 }

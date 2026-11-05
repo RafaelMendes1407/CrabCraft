@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "Wybierz GitHub lub GitLab, poprawny adres API HTTPS i ścieżkę przestrzeń/projekt",
+    "The tracker token contains invalid header characters": "Token zawiera niedozwolone znaki nagłówka",
+    "Could not reach the issue tracker; check its address and connection": "Nie można połączyć z systemem zgłoszeń; sprawdź adres i połączenie",
+    "Issue tracker returned HTTP {status}": "System zgłoszeń zwrócił HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "Odpowiedź przekroczyła limity bezpieczeństwa",
+    "Issue tracker returned an unsupported response": "System zgłoszeń zwrócił nieobsługiwaną odpowiedź",
+    "Issue lookup cancelled": "Anulowano wyszukiwanie zgłoszeń",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "Odczyt zgłoszeń. Żądania tylko po kliknięciu Pobierz, Poprzednia lub Następna. Tokeny pozostają w pamięci i nie są zapisywane.",
+    "Issue tracker": "System zgłoszeń",
+    "API base URL": "Bazowy adres API",
+    "Namespace/project": "Przestrzeń/projekt",
+    "Token (memory only)": "Token (tylko w pamięci)",
+    "Closed": "Zamknięte",
+    "Fetch Issues": "Pobierz zgłoszenia",
+    "Page": "Strona",
+    "Open Issue": "Otwórz zgłoszenie",
+    "Copy Issue Reference": "Kopiuj odnośnik zgłoszenia",
+    "Use in Commit Message": "Użyj w opisie commita",
+    "Create Issue Branch…": "Utwórz gałąź zgłoszenia…",
+    "Issues": "Zgłoszenia"
   }
 }

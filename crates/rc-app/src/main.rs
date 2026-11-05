@@ -187,3 +187,5 @@ mod key_sequence_audit;
 mod shelves;
 
 mod history_edit;
+
+mod issue_tracker;

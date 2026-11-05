@@ -142,6 +142,7 @@ pub enum GitTab {
     Stashes,
     Shelves,
     HistoryEdit,
+    Issues,
     Worktrees,
 }
 

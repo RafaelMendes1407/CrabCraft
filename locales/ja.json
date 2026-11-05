@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "GitHub または GitLab、有効な HTTPS API、名前空間/プロジェクトを指定してください",
+    "The tracker token contains invalid header characters": "トークンに無効なヘッダー文字が含まれています",
+    "Could not reach the issue tracker; check its address and connection": "課題トラッカーに接続できません。アドレスと接続を確認してください",
+    "Issue tracker returned HTTP {status}": "課題トラッカーが HTTP {status} を返しました",
+    "Issue tracker response exceeded its safety limits": "課題トラッカーの応答が安全制限を超えました",
+    "Issue tracker returned an unsupported response": "課題トラッカーが未対応の応答を返しました",
+    "Issue lookup cancelled": "課題検索を中止しました",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "読み取り専用の課題検索です。取得、前へ、次へを押した時だけ通信します。トークンはメモリ内のみで、保存しません。",
+    "Issue tracker": "課題トラッカー",
+    "API base URL": "API ベース URL",
+    "Namespace/project": "名前空間/プロジェクト",
+    "Token (memory only)": "トークン（メモリのみ）",
+    "Closed": "クローズ済み",
+    "Fetch Issues": "課題を取得",
+    "Page": "ページ",
+    "Open Issue": "課題を開く",
+    "Copy Issue Reference": "課題の参照をコピー",
+    "Use in Commit Message": "コミットメッセージに使用",
+    "Create Issue Branch…": "課題ブランチを作成…",
+    "Issues": "課題"
   }
 }

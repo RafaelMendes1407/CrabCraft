@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "Escolha GitHub ou GitLab, uma API HTTPS válida e um caminho namespace/projeto",
+    "The tracker token contains invalid header characters": "O token contém caracteres inválidos para cabeçalhos",
+    "Could not reach the issue tracker; check its address and connection": "Não foi possível acessar o rastreador; verifique endereço e conexão",
+    "Issue tracker returned HTTP {status}": "O rastreador retornou HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "A resposta do rastreador excede os limites de segurança",
+    "Issue tracker returned an unsupported response": "O rastreador retornou uma resposta não suportada",
+    "Issue lookup cancelled": "Busca de issues cancelada",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "Consulta somente leitura. Requisições apenas ao clicar Buscar, Anterior ou Próxima. Tokens ficam na memória e nunca são salvos.",
+    "Issue tracker": "Rastreador de issues",
+    "API base URL": "URL base da API",
+    "Namespace/project": "Namespace/projeto",
+    "Token (memory only)": "Token (somente memória)",
+    "Closed": "Fechadas",
+    "Fetch Issues": "Buscar issues",
+    "Page": "Página",
+    "Open Issue": "Abrir issue",
+    "Copy Issue Reference": "Copiar referência da issue",
+    "Use in Commit Message": "Usar na mensagem do commit",
+    "Create Issue Branch…": "Criar branch da issue…",
+    "Issues": "Issues"
   }
 }

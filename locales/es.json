@@ -2224,5 +2224,27 @@
   },
   "mac_keymap": {
     "RustRover (macOS)": "RustRover (macOS)"
+  },
+  "issue_tracker": {
+    "Choose GitHub or GitLab, a valid HTTPS API base and a namespace/project path": "Elige GitHub o GitLab, una API HTTPS válida y una ruta espacio/proyecto",
+    "The tracker token contains invalid header characters": "El token contiene caracteres no válidos para cabeceras",
+    "Could not reach the issue tracker; check its address and connection": "No se pudo conectar al gestor de incidencias; revisa dirección y conexión",
+    "Issue tracker returned HTTP {status}": "El gestor devolvió HTTP {status}",
+    "Issue tracker response exceeded its safety limits": "La respuesta del gestor supera los límites de seguridad",
+    "Issue tracker returned an unsupported response": "El gestor devolvió una respuesta no compatible",
+    "Issue lookup cancelled": "Búsqueda de incidencias cancelada",
+    "Read-only issue lookup. Requests run only after Fetch, Previous or Next. Tokens stay in memory and are never saved.": "Consulta de solo lectura. Solo se solicita al pulsar Buscar, Anterior o Siguiente. Los tokens quedan en memoria y no se guardan.",
+    "Issue tracker": "Gestor de incidencias",
+    "API base URL": "URL base de la API",
+    "Namespace/project": "Espacio/proyecto",
+    "Token (memory only)": "Token (solo memoria)",
+    "Closed": "Cerradas",
+    "Fetch Issues": "Buscar incidencias",
+    "Page": "Página",
+    "Open Issue": "Abrir incidencia",
+    "Copy Issue Reference": "Copiar referencia",
+    "Use in Commit Message": "Usar en el mensaje del commit",
+    "Create Issue Branch…": "Crear rama de incidencia…",
+    "Issues": "Incidencias"
   }
 }
