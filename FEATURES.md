@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 211 |
+| ✅ Pronto | 212 |
 | 🚧 Em andamento | 11 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 31 |
+| ⬜ A fazer | 30 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -337,7 +337,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | F-11 | LinkedIn Connected Apps | 🚫 | - | Sem valor para o foco em Rust |
 | F-12 | Ferramentas externas | ✅ | M3 | Configurações › Ferramentas externas: nome, programa, argumentos (com aspas) e pasta, com macros `$FilePath$`, `$FileDir$`, `$FileName$`, `$FileNameWithoutExtension$`, `$FileRelativePath$`, `$ProjectFileDir$`, `$LineNumber$`, `$ColumnNumber$`, `$SelectedText$`; roda por Mais ações › Ferramentas externas ou Find Action, numa aba da janela Run com Rerun e Stop; macro sem valor avisa antes de rodar. Testado com `wc` real num caminho com espaço; capturas conferidas |
 | F-13 | Terminal: abas, divisão e busca | ✅ | M1 | Abas independentes (F-01), Dividir à direita/abaixo com dois painéis PTY nativos e separador arrastável; Fechar divisão preserva ambos como abas; cancelar a abertura mantém painéis existentes visíveis. Busca literal sensível a maiúsculas no scrollback do painel ativo, com seleção, anterior/próximo, worker cancelável por linha e recusa de coordenadas após mudar saída/dimensões; até 256 caracteres, 2 milhões de células recentes e 5 mil ocorrências, com aviso de limite. Teste headless num projeto Cargo real cria ambas as orientações, confere dimensões e encontra/seleciona a saída Rust; backend verifica Unicode, histórico, limites e posições obsoletas. Apenas uma dupla visível, sem divisões aninhadas/persistência, regex ou busca entre linhas visuais. Ver docs/terminal.md |
-| F-14 | Terminal: completar comandos | ⬜ | M6 | |
+| F-14 | Terminal: completar comandos | ✅ | M6 | Tab/Shift+Tab chegam à shell interativa sem perder foco, usando seu motor de completação de comandos/caminhos; Enter continua necessário para executar. Teste do widget nativo com Bash real completa binário Cargo no PATH sem executá-lo, executa apenas com Enter e completa src/main.rs. Argumentos/subcomandos dependem da configuração da shell; não instala scripts nem adiciona motor a shells sem completação. Ver docs/terminal-completion.md; Closes #112. |
 
 ## 13. Banco de dados, implantação e remoto
 

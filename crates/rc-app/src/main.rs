@@ -173,4 +173,7 @@ mod debug_sessions;
 #[cfg(test)]
 mod large_file_audit;
 
+#[cfg(test)]
+mod terminal_completion_audit;
+
 mod shelves;
