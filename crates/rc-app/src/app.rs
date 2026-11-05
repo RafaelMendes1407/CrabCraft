@@ -2489,6 +2489,7 @@ impl CrabCraftApp {
             Action::TestDeclarativeMacro => crate::macro_tester::open(self),
             Action::ChangeSignature => crate::signature_change::open(self),
             Action::RemoteDevelopment => crate::remote_development::open(self),
+            Action::WslWorkspace => crate::remote_development::open_wsl(self),
             Action::MoveItem => crate::move_items::open(self),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),

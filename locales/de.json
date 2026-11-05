@@ -2873,5 +2873,30 @@
     "Verified query fields: {fields}": "Geprüfte Abfragefelder: {fields}",
     "This handler has no statically verified Query fields": "Dieser Handler hat keine statisch geprüften Query-Felder",
     "Query completion is unsupported for this handler's extractor or deserializer": "Abfragevervollständigung wird für den Extraktor oder Deserialisierer dieses Handlers nicht unterstützt"
+  },
+  "wsl_workspace": {
+    "WSL analyzer connected; indexing inside the distribution…": "WSL-Analyse verbunden; Indizierung in der Distribution…",
+    "WSL write completed. Cargo still requires an explicit action.": "WSL-Schreibvorgang abgeschlossen. Cargo erfordert weiterhin eine ausdrückliche Aktion.",
+    "WSL Rust workspace": "WSL-Rust-Arbeitsbereich",
+    "Close WSL workspace": "WSL-Arbeitsbereich schließen",
+    "Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.": "Ausdrückliche Windows-zu-WSL-Sitzung. Der Start kann Linux-Cargo-Metadaten, Build-Skripte und prozedurale Makros ausführen. Windows-Dateien dienen nicht als Aliase.",
+    "WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed.": "WSL wurde noch nicht auf einem echten Windows/WSL-Host geprüft. Nur vorhandene Distributionen; keine Installation.",
+    "WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution.": "WSL-Arbeitsbereiche sind auf dieser Plattform nicht verfügbar. Verwenden Sie Windows mit vorhandener WSL-Distribution.",
+    "WSL distribution": "WSL-Distribution",
+    "List installed WSL distributions": "Installierte WSL-Distributionen auflisten",
+    "Linux workspace root": "Linux-Arbeitsbereichswurzel",
+    "Linux Cargo executable": "Linux-Cargo-Programm",
+    "Linux rust-analyzer executable": "Linux-rust-analyzer-Programm",
+    "I trust this WSL distribution and workspace to execute project tools": "Ich vertraue dieser WSL-Distribution und diesem Arbeitsbereich zum Ausführen von Projektwerkzeugen",
+    "Start WSL workspace": "WSL-Arbeitsbereich starten",
+    "Disconnect WSL workspace": "WSL-Arbeitsbereich trennen",
+    "Preview WSL write": "WSL-Schreibvorgang prüfen",
+    "Review WSL overwrite": "WSL-Überschreiben prüfen",
+    "Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.": "Linux-Inhalte werden vor dem Überschreiben erneut geprüft. Gleichzeitige Schreibzugriffe können die letzte Prüfung überholen; beim Abbruch kann bereits geschrieben worden sein.",
+    "Confirm WSL overwrite": "WSL-Überschreiben bestätigen",
+    "Invalid WSL distribution, tools or Linux source path": "Ungültige WSL-Distribution, Werkzeuge oder Linux-Quelltextpfad",
+    "WSL operation timed out": "Zeitüberschreitung beim WSL-Vorgang",
+    "WSL error: {error}": "WSL-Fehler: {error}",
+    "WSL Rust workspace…": "WSL-Rust-Arbeitsbereich…"
   }
 }

@@ -88,6 +88,7 @@ fn caret(rope: &rc_text::Rope, location: Location, closed_bom: bool) -> Option<u
 }
 enum Reply {
     Started(Session),
+    Distributions(Vec<String>),
     Read {
         path: String,
         text: String,
@@ -96,7 +97,7 @@ enum Reply {
     },
     Preview {
         ticket: Ticket,
-        preview: remote_transfer::Preview,
+        preview: transport::Preview,
     },
     Uploaded {
         ticket: Ticket,
@@ -114,6 +115,7 @@ enum Reply {
 }
 struct Job {
     cancel: CancelToken,
+    requires_trust: bool,
 }
 impl Drop for Job {
     fn drop(&mut self) {
@@ -138,6 +140,9 @@ struct Completion {
 }
 pub struct RemoteDevelopment {
     pub open: bool,
+    pub wsl: bool,
+    pub distribution: String,
+    distributions: Vec<String>,
     pub host: String,
     pub port: String,
     pub user: String,
@@ -158,7 +163,7 @@ pub struct RemoteDevelopment {
     query: Option<Query>,
     completions: Vec<Completion>,
     hover: String,
-    preview: Option<(Ticket, remote_transfer::Preview)>,
+    preview: Option<(Ticket, transport::Preview)>,
     error: Option<Error>,
     status: String,
     output: Vec<String>,
@@ -175,6 +180,9 @@ impl RemoteDevelopment {
     pub fn new(waker: Waker) -> Self {
         Self {
             open: false,
+            wsl: false,
+            distribution: String::new(),
+            distributions: Vec::new(),
             host: String::new(),
             port: "22".into(),
             user: String::new(),
@@ -223,6 +231,9 @@ impl RemoteDevelopment {
                 identity: PathBuf::from(&self.identity),
                 known_hosts: PathBuf::from(&self.known_hosts),
             },
+            wsl: self.wsl.then(|| {
+                crate::wsl_workspace::Config::new(self.distribution.clone(), self.user.clone())
+            }),
             root: self.root.clone(),
             cargo: self.cargo.clone(),
             analyzer: self.analyzer.clone(),
@@ -248,7 +259,12 @@ impl RemoteDevelopment {
             .name("rc-remote-workspace".into())
             .spawn(move || sender.send((generation, work(token))))
         {
-            Ok(_) => self.job = Some(Job { cancel }),
+            Ok(_) => {
+                self.job = Some(Job {
+                    cancel,
+                    requires_trust: true,
+                })
+            }
             Err(e) => self.error = Some(e.into()),
         }
     }
@@ -265,7 +281,21 @@ impl RemoteDevelopment {
         self.indexed = false;
         self.status = tr("Remote workspace disconnected. Buffers remain in memory.").into();
     }
+    fn list_distributions(&mut self) {
+        if !crate::wsl_workspace::available() {
+            self.error = Some(Error::Unsupported);
+            return;
+        }
+        self.spawn(|cancel| crate::wsl_workspace::distributions(cancel).map(Reply::Distributions));
+        if let Some(job) = &mut self.job {
+            job.requires_trust = false;
+        }
+    }
     fn start(&mut self) {
+        if self.wsl && !crate::wsl_workspace::available() {
+            self.error = Some(Error::Unsupported);
+            return;
+        }
         if !self.trusted {
             self.error = Some(Error::Unsupported);
             return;
@@ -457,7 +487,9 @@ impl RemoteDevelopment {
         tab.editor.set_diagnostics(Vec::new());
     }
     fn poll(&mut self) {
-        if !self.trusted && (self.session.is_some() || self.job.is_some()) {
+        if !self.trusted
+            && (self.session.is_some() || self.job.as_ref().is_some_and(|job| job.requires_trust))
+        {
             self.disconnect();
         }
         for result in self.pool.poll() {
@@ -473,6 +505,7 @@ impl RemoteDevelopment {
                 self.job = None;
             }
             match result {
+                Ok(Reply::Distributions(list)) => self.distributions = list,
                 Ok(Reply::Started(session)) => {
                     self.buffer_settings = Some(session.settings.clone());
                     for tab in &mut self.tabs {
@@ -481,7 +514,12 @@ impl RemoteDevelopment {
                         session.client.notify_raw("textDocument/didOpen",json!({"textDocument":{"uri":rc_lsp::path_to_uri(Path::new(&tab.path)).as_str(),"languageId":if tab.path.ends_with(".rs"){"rust"}else{"toml"},"version":1,"text":tab.editor.buffer.rope().to_string()}}));
                     }
                     self.session = Some(session);
-                    self.status = tr("Remote analyzer connected; indexing on the SSH host…").into();
+                    self.status = if self.wsl {
+                        tr("WSL analyzer connected; indexing inside the distribution…")
+                    } else {
+                        tr("Remote analyzer connected; indexing on the SSH host…")
+                    }
+                    .into();
                 }
                 Ok(Reply::Read {
                     path,
@@ -569,9 +607,12 @@ impl RemoteDevelopment {
                             session.client.notify_raw("textDocument/didSave",json!({"textDocument":{"uri":rc_lsp::path_to_uri(Path::new(&tab.path)).as_str()}}));
                         }
                     }
-                    self.status =
+                    self.status = if self.wsl {
+                        tr("WSL write completed. Cargo still requires an explicit action.")
+                    } else {
                         tr("Remote upload completed. Cargo still requires an explicit action.")
-                            .into();
+                    }
+                    .into();
                 }
                 Ok(Reply::CargoLine(line)) => {
                     if let Some(session) = &self.session {
@@ -852,6 +893,7 @@ impl RemoteDevelopment {
         let connected = self.session.is_some();
         let busy = self.job.is_some();
         let mut edited = false;
+        let distribution_before = self.distribution.clone();
         let before = (
             self.host.clone(),
             self.port.clone(),
@@ -863,20 +905,26 @@ impl RemoteDevelopment {
             self.analyzer.clone(),
         );
         egui::Modal::new(egui::Id::new("remote_development_workspace")).show(ctx,|ui|{ui.set_width((ctx.content_rect().width()-80.).clamp(500.,1500.));ui.set_max_height((ctx.content_rect().height()-80.).max(300.));
- ui.horizontal(|ui|{ui.heading(tr("Remote Rust workspace"));if ui.button(tr("Close remote workspace")).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
- ui.small(tr("Explicit SSH session on a Linux host. Start may execute remote Cargo metadata, build scripts and procedural macros. Local projects are not used."));
- if self.session.is_none(){ui.add_enabled_ui(!busy,|ui|{egui::Grid::new("remote_workspace_settings").num_columns(4).show(ui,|ui|{field(ui,tr("Host"),&mut self.host,253);field(ui,tr("Port"),&mut self.port,5);ui.end_row();field(ui,tr("User"),&mut self.user,253);field(ui,tr("Remote workspace root"),&mut self.root,4096);ui.end_row();field(ui,tr("SSH private key"),&mut self.identity,8192);field(ui,tr("Verified known_hosts file"),&mut self.known_hosts,8192);ui.end_row();field(ui,tr("Remote Cargo executable"),&mut self.cargo,4096);field(ui,tr("Remote rust-analyzer executable"),&mut self.analyzer,4096);ui.end_row();});if before!=(self.host.clone(),self.port.clone(),self.user.clone(),self.identity.clone(),self.known_hosts.clone(),self.root.clone(),self.cargo.clone(),self.analyzer.clone()){self.trusted=false;}ui.checkbox(&mut self.trusted,tr("I trust this SSH host and remote workspace to execute project tools"));if ui.add_enabled(self.trusted,egui::Button::new(tr("Start remote workspace"))).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(format!("{}@{}:{} {}",self.user,self.host,self.port,self.root));if ui.button(tr("Disconnect remote workspace")).clicked(){self.disconnect();}});}
+ ui.horizontal(|ui|{ui.heading(if self.wsl{tr("WSL Rust workspace")}else{tr("Remote Rust workspace")});if ui.button(if self.wsl{tr("Close WSL workspace")}else{tr("Close remote workspace")}).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
+ ui.small(if self.wsl{tr("Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.")}else{tr("Explicit SSH session on a Linux host. Start may execute remote Cargo metadata, build scripts and procedural macros. Local projects are not used.")});
+ if self.session.is_none(){ui.add_enabled_ui(!busy,|ui|{if self.wsl {ui.small(tr("WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed."));if !crate::wsl_workspace::available(){ui.colored_label(rc_kit::pal(ui).warn,tr("WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution."));}}
+ egui::Grid::new("remote_workspace_settings").num_columns(4).show(ui,|ui|{
+ if self.wsl {field(ui,tr("WSL distribution"),&mut self.distribution,256);field(ui,tr("User"),&mut self.user,64);ui.end_row();if ui.add_enabled(crate::wsl_workspace::available(),egui::Button::new(tr("List installed WSL distributions"))).clicked(){self.list_distributions();}ui.end_row();let mut choice=None;for name in &self.distributions {if ui.selectable_label(self.distribution==*name,name).clicked(){choice=Some(name.clone());}}if let Some(name)=choice{self.distribution=name;}ui.end_row();}
+ else{field(ui,tr("Host"),&mut self.host,253);field(ui,tr("Port"),&mut self.port,5);ui.end_row();field(ui,tr("User"),&mut self.user,253);field(ui,tr("SSH private key"),&mut self.identity,8192);ui.end_row();field(ui,tr("Verified known_hosts file"),&mut self.known_hosts,8192);ui.end_row();}
+ field(ui,if self.wsl{tr("Linux workspace root")}else{tr("Remote workspace root")},&mut self.root,4096);ui.end_row();field(ui,if self.wsl{tr("Linux Cargo executable")}else{tr("Remote Cargo executable")},&mut self.cargo,4096);field(ui,if self.wsl{tr("Linux rust-analyzer executable")}else{tr("Remote rust-analyzer executable")},&mut self.analyzer,4096);ui.end_row();});
+ if before!=(self.host.clone(),self.port.clone(),self.user.clone(),self.identity.clone(),self.known_hosts.clone(),self.root.clone(),self.cargo.clone(),self.analyzer.clone())||distribution_before!=self.distribution{self.trusted=false;}
+ ui.add_enabled(!self.wsl||crate::wsl_workspace::available(),egui::Checkbox::new(&mut self.trusted,if self.wsl{tr("I trust this WSL distribution and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")}));if ui.add_enabled(self.trusted&&(!self.wsl||crate::wsl_workspace::available()),egui::Button::new(if self.wsl{tr("Start WSL workspace")}else{tr("Start remote workspace")})).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(if self.wsl{format!("WSL: {} / {} {}",self.distribution,self.user,self.root)}else{format!("{}@{}:{} {}",self.user,self.host,self.port,self.root)});if ui.button(if self.wsl{tr("Disconnect WSL workspace")}else{tr("Disconnect remote workspace")} ).clicked(){self.disconnect();}});}
  if busy||self.query.is_some(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Remote operation in progress…"));if ui.button(tr("Cancel remote operation")).clicked(){self.cancel();}});}
- if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error_text(error));}if !self.status.is_empty(){ui.label(&self.status);}
+ if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error_text(error,self.wsl));}if !self.status.is_empty(){ui.label(&self.status);}
  if connected{ui.horizontal(|ui|{field(ui,tr("Remote source path"),&mut self.path,4096);if ui.add_enabled(!busy,egui::Button::new(tr("Open remote source"))).clicked(){self.load(self.path.clone(),None,None);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo check"))).clicked(){self.run(Task::Check);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo build"))).clicked(){self.run(Task::Build);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo test"))).clicked(){self.run(Task::Test);}});
  ui.collapsing(tr("Remote source files"),|ui|{let sources=self.session.as_ref().map(|s|s.sources.clone()).unwrap_or_default();let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_source_files").max_height(90.).show_rows(ui,22.,sources.len(),|ui,rows|{for row in rows{if let Some(path)=sources.get(row){if ui.selectable_label(false,path).clicked(){selected=Some(path.clone());}}}});if let Some(path)=selected{self.path=path.clone();self.load(path,None,None);}});}
  ui.horizontal_wrapped(|ui|{for(index,tab)in self.tabs.iter().enumerate(){let relative=tab.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&tab.path);let label=format!("{relative}{}",if tab.dirty(){" *"}else{""});if ui.selectable_label(index==self.active,label).clicked(){self.active=index;}}});
- if !self.tabs.is_empty(){ui.horizontal(|ui|{if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Preview remote upload"))).clicked(){self.preview_upload();}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Go to remote definition"))).clicked(){self.request(QueryKind::Definition);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Complete remote symbol"))).clicked(){self.request(QueryKind::Completion);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Remote symbol documentation"))).clicked(){self.request(QueryKind::Hover);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Reload remote source"))).clicked(){if let Some(tab)=self.tabs.get(self.active){if tab.dirty(){self.reload=Some(tab.ticket());}else{self.reload_active();}}}});
+ if !self.tabs.is_empty(){ui.horizontal(|ui|{if ui.add_enabled(connected&&!busy,egui::Button::new(if self.wsl{tr("Preview WSL write")}else{tr("Preview remote upload")})).clicked(){self.preview_upload();}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Go to remote definition"))).clicked(){self.request(QueryKind::Definition);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Complete remote symbol"))).clicked(){self.request(QueryKind::Completion);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Remote symbol documentation"))).clicked(){self.request(QueryKind::Hover);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Reload remote source"))).clicked(){if let Some(tab)=self.tabs.get(self.active){if tab.dirty(){self.reload=Some(tab.ticket());}else{self.reload_active();}}}});
  if let Some(tab)=self.tabs.get_mut(self.active){tab.editor.read_only=!connected||tab.baseline.len()>64*1024;if tab.editor.read_only{ui.small(tr("Remote source is read-only while disconnected or above the 64 KiB editing limit."));}let version=tab.editor.buffer.version();let height=(ctx.content_rect().height()*0.33).clamp(140.,400.);let(size,rect)=ui.allocate_space(egui::vec2(ui.available_width(),height));let _=size;let mut editor_ui=ui.new_child(egui::UiBuilder::new().max_rect(rect));editor_ui.set_clip_rect(rect.intersect(ui.clip_rect()));let out=EditorView::new(&mut tab.editor,&app.editor_config,&app.keymap).show(&mut editor_ui);if tab.editor.buffer.version()!=version{tab.last_edit=Instant::now();tab.editor.set_diagnostics(Vec::new());tab.editor.request_parse(&self.pool);self.preview=None;self.completions.clear();self.hover.clear();self.diagnostics.clear();edited=true;}for action in out.actions{self.action(action);}}
  }
  if !self.completions.is_empty(){let mut choice=None;egui::ScrollArea::vertical().id_salt("remote_completions").max_height(100.).show_rows(ui,22.,self.completions.len(),|ui,rows|{for index in rows{if let Some(item)=self.completions.get(index){if ui.button(&item.label).clicked(){choice=Some(index);}}}});if let Some(index)=choice{self.apply_completion(index);}}
  if !self.hover.is_empty(){egui::ScrollArea::vertical().id_salt("remote_hover").max_height(100.).show(ui,|ui|{ui.label(&self.hover);});}
- if let Some((_,preview))=&self.preview{ui.separator();ui.label(tr("Review remote overwrite"));ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload."));if ui.button(tr("Confirm remote overwrite")).clicked(){self.apply_upload();}}
+ if let Some((_,preview))=&self.preview{ui.separator();ui.label(if self.wsl{tr("Review WSL overwrite")}else{tr("Review remote overwrite")});ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(if self.wsl{tr("Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.")}else{tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.")});if ui.button(if self.wsl{tr("Confirm WSL overwrite")}else{tr("Confirm remote overwrite")}).clicked(){self.apply_upload();}}
  if !self.diagnostics.is_empty(){ui.label(tr("Remote Cargo diagnostics"));let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_cargo_diagnostics").max_height(100.).show_rows(ui,22.,self.diagnostics.len(),|ui,rows|{for index in rows{if let Some(d)=self.diagnostics.get(index){let label=format!("{}:{}:{} {}",d.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&d.path),d.line+1,d.column+1,d.message);if ui.selectable_label(false,label).clicked(){selected=Some((d.path.clone(),d.line,d.column));}}}});if let Some((path,line,column))=selected{self.load(path,None,Some(Location::Cargo{line,column}));}}
  ui.collapsing(tr("Remote process output"),|ui|{egui::ScrollArea::vertical().id_salt("remote_output").max_height(120.).show_rows(ui,20.,self.output.len(),|ui,rows|{for index in rows{if let Some(line)=self.output.get(index){ui.monospace(line);}}});});
  if let Some(ticket)=self.reload.clone(){ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Discard edits and reload this remote source?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.reload=None;}if ui.button(tr("Discard edits and reload")).clicked(){if self.current(&ticket){self.reload_active();}else{self.error=Some(Error::Stale);self.reload=None;}}});}
@@ -920,17 +968,38 @@ fn field(ui: &mut egui::Ui, label: &str, value: &mut String, limit: usize) {
     )
     .labelled_by(label.id);
 }
-fn error_text(error: &Error) -> String {
-    match error{Error::Input=>tr("Invalid SSH settings or unsupported remote text/path").into(),Error::Limit=>tr("Remote operation exceeded its transfer or output limit").into(),Error::Cancelled=>tr("Cancelled").into(),Error::Timeout=>tr("SSH operation timed out").into(),Error::Stale=>tr("Remote buffers or sources changed. Review uploads again; save all remote buffers before running Cargo.").into(),Error::Unsupported=>tr("This action is unsupported in the remote workspace. Use its explicit source, upload, Cargo and analysis controls.").into(),Error::Analysis=>tr("Remote rust-analyzer stopped or could not answer this request.").into(),Error::Io(e)|Error::Process(e)=>trf("SSH error: {error}",&[("error",e)])}
+fn error_text(error: &Error, wsl: bool) -> String {
+    match error{Error::Input=>if wsl{tr("Invalid WSL distribution, tools or Linux source path")}else{tr("Invalid SSH settings or unsupported remote text/path")}.into(),Error::Timeout=>if wsl{tr("WSL operation timed out")}else{tr("SSH operation timed out")}.into(),Error::Io(e)|Error::Process(e)=>trf(if wsl{tr("WSL error: {error}")}else{tr("SSH error: {error}")},&[("error",e)]),Error::Limit=>tr("Remote operation exceeded its transfer or output limit").into(),Error::Cancelled=>tr("Cancelled").into(),Error::Stale=>tr("Remote buffers or sources changed. Review uploads again; save all remote buffers before running Cargo.").into(),Error::Unsupported=>tr("This action is unsupported in the remote workspace. Use its explicit source, upload, Cargo and analysis controls.").into(),Error::Analysis=>tr("Remote rust-analyzer stopped or could not answer this request.").into()}
 }
+
 pub fn open(app: &mut CrabCraftApp) {
+    open_mode(app, false);
+}
+pub fn open_wsl(app: &mut CrabCraftApp) {
+    open_mode(app, true);
+}
+fn open_mode(app: &mut CrabCraftApp, wsl: bool) {
+    if let Some(state) = &mut app.remote_development {
+        if state.wsl != wsl {
+            if state.tabs.iter().any(Tab::dirty) {
+                state.error = Some(Error::Stale);
+                state.open = true;
+                return;
+            }
+            state.disconnect();
+            app.remote_development = None;
+        }
+    }
     if app.remote_development.is_none() {
         let mut state = RemoteDevelopment::new(app.waker.clone());
-        state.host = app.remote.host.clone();
-        state.port = app.remote.port.clone();
-        state.user = app.remote.user.clone();
-        state.identity = app.remote.identity.clone();
-        state.known_hosts = app.remote.known_hosts.clone();
+        state.wsl = wsl;
+        if !wsl {
+            state.host = app.remote.host.clone();
+            state.port = app.remote.port.clone();
+            state.user = app.remote.user.clone();
+            state.identity = app.remote.identity.clone();
+            state.known_hosts = app.remote.known_hosts.clone();
+        }
         app.remote_development = Some(state);
     }
     if let Some(state) = &mut app.remote_development {
@@ -941,7 +1010,7 @@ pub fn route(app: &mut CrabCraftApp, action: Action) -> bool {
     let Some(state) = app.remote_development.as_mut().filter(|s| s.open) else {
         return false;
     };
-    if matches!(action, Action::RemoteDevelopment) {
+    if matches!(action, Action::RemoteDevelopment | Action::WslWorkspace) {
         return false;
     }
     state.action(action);
@@ -962,6 +1031,66 @@ pub fn show(app: &mut CrabCraftApp, ctx: &egui::Context) {
 mod tests {
     use super::*;
     use egui_kittest::kittest::Queryable;
+    #[cfg(not(windows))]
+    #[test]
+    fn wsl_mode_is_visibly_unavailable_without_execution_and_keeps_namespace_buffers() {
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let project = transport::tests::fixture();
+        let mut app = crate::screens::test_app(home.path(), false);
+        let local = project.path().join("src/main.rs");
+        let original = std::fs::read_to_string(&local).unwrap();
+        let index = app.docs.insert_compiler_source(
+            local.clone(),
+            &original,
+            false,
+            None,
+            Default::default(),
+        );
+        app.docs.list[index]
+            .editor
+            .replace(0, 0, "// dirty local buffer\n");
+        app.run_ide_action(&egui::Context::default(), Action::WslWorkspace);
+        let mut h = crate::screens::harness(app, egui::vec2(1600., 1100.));
+        h.get_by_label(tr("WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution."));
+        h.get_by_label(tr("Start WSL workspace")).click();
+        h.get_by_label(tr("List installed WSL distributions"))
+            .click();
+        h.run_steps(3);
+        let state = h.state().remote_development.as_ref().unwrap();
+        assert!(state.wsl && state.session.is_none() && state.job.is_none());
+        assert!(state.distributions.is_empty());
+        assert!(h.state().docs.list[0].is_modified());
+        assert_eq!(std::fs::read_to_string(&local).unwrap(), original);
+        assert!(!project.path().join("target").exists());
+        let state = h.state_mut().remote_development.as_mut().unwrap();
+        state.trusted = true;
+        state.start();
+        assert!(matches!(state.error, Some(Error::Unsupported)));
+        assert!(state.job.is_none());
+        let path = "/home/developer/project/src/main.rs".to_owned();
+        let baseline = "fn main(){}\n".to_owned();
+        let mut editor = EditorState::new(state.next_id, Some(PathBuf::from(&path)), &baseline);
+        editor.replace(0, 0, "// unsaved WSL buffer\n");
+        state.tabs.push(Tab {
+            path,
+            editor,
+            baseline,
+            synced: 0,
+            lsp_version: 1,
+            last_edit: Instant::now(),
+        });
+        let ticket = state.tabs[0].ticket();
+        h.state_mut()
+            .run_ide_action(&egui::Context::default(), Action::RemoteDevelopment);
+        let state = h.state().remote_development.as_ref().unwrap();
+        assert!(state.wsl && state.current(&ticket) && state.tabs[0].dirty());
+        assert!(matches!(state.error, Some(Error::Stale)));
+        assert!(state.session.is_none() && state.job.is_none());
+        assert!(h.state().docs.list[0].is_modified());
+    }
     #[test]
     fn remote_navigation_keeps_utf16_and_cargo_columns_distinct() {
         let rope = rc_text::Rope::from_str("🦀 answer\n");
@@ -1004,13 +1133,85 @@ mod tests {
         );
     }
     #[test]
-    fn local_workspace_switch_and_close_keep_dirty_independent_remote_buffers(){
-        let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|e|e.into_inner());let home=tempfile::tempdir().unwrap();let first=transport::tests::fixture();let second=transport::tests::fixture();let mut app=crate::screens::test_app(home.path(),false);app.open_workspace(first.path());open(&mut app);
-        let state=app.remote_development.as_mut().unwrap();state.root="/remote/independent".into();let path="/remote/independent/src/main.rs".to_owned();let baseline="fn main(){let answer=41;}\n".to_owned();let mut editor=EditorState::new(state.next_id,Some(PathBuf::from(&path)),&baseline);editor.replace(0,0,"// unsaved remote edit\n");state.tabs.push(Tab{path,editor,baseline,synced:0,lsp_version:1,last_edit:Instant::now()});let ticket=state.tabs[0].ticket();let dirty=state.tabs[0].text();
+    fn local_workspace_switch_and_close_keep_dirty_independent_remote_buffers() {
+        let _lock = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let first = transport::tests::fixture();
+        let second = transport::tests::fixture();
+        let mut app = crate::screens::test_app(home.path(), false);
+        app.open_workspace(first.path());
+        open(&mut app);
+        let state = app.remote_development.as_mut().unwrap();
+        state.root = "/remote/independent".into();
+        let path = "/remote/independent/src/main.rs".to_owned();
+        let baseline = "fn main(){let answer=41;}\n".to_owned();
+        let mut editor = EditorState::new(state.next_id, Some(PathBuf::from(&path)), &baseline);
+        editor.replace(0, 0, "// unsaved remote edit\n");
+        state.tabs.push(Tab {
+            path,
+            editor,
+            baseline,
+            synced: 0,
+            lsp_version: 1,
+            last_edit: Instant::now(),
+        });
+        let ticket = state.tabs[0].ticket();
+        let dirty = state.tabs[0].text();
         // Simulate CLI/IPC project switching, which bypasses the modal action dispatcher.
         app.open_workspace(second.path());
-        let mut h=crate::screens::harness(app,egui::vec2(1600.,1100.));let deadline=Instant::now()+Duration::from_secs(10);while h.state().workspace.as_ref().is_none_or(|w|w.ws.root!=second.path()){assert!(Instant::now()<deadline);h.run_steps(1);std::thread::sleep(Duration::from_millis(5));}assert!(h.state().remote_development.as_ref().is_some_and(|state|state.current(&ticket)&&state.tabs[0].dirty()&&state.tabs[0].text()==dirty&&state.session.is_none()));h.run_steps(3);assert!(h.state().remote_development.as_ref().unwrap().tabs[0].editor.read_only);assert_eq!(h.state().remote_development.as_ref().unwrap().tabs[0].text(),dirty);assert!(h.state().docs.list.is_empty());assert!(h.state().insight.session.is_none());
-        h.state_mut().close_workspace();let deadline=Instant::now()+Duration::from_secs(10);while h.state().workspace.is_some(){assert!(Instant::now()<deadline);h.run_steps(1);std::thread::sleep(Duration::from_millis(5));}h.run_steps(3);let state=h.state().remote_development.as_ref().unwrap();assert!(state.current(&ticket));assert_eq!(state.tabs[0].text(),dirty);assert_eq!(state.tabs[0].baseline,"fn main(){let answer=41;}\n");assert!(state.tabs[0].dirty());assert!(state.session.is_none()&&state.job.is_none());assert!(h.state().workspace.is_none());assert!(h.state().docs.list.is_empty());assert!(!first.path().join("target").exists());assert!(!second.path().join("target").exists());
+        let mut h = crate::screens::harness(app, egui::vec2(1600., 1100.));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while h
+            .state()
+            .workspace
+            .as_ref()
+            .is_none_or(|w| w.ws.root != second.path())
+        {
+            assert!(Instant::now() < deadline);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            h.state()
+                .remote_development
+                .as_ref()
+                .is_some_and(|state| state.current(&ticket)
+                    && state.tabs[0].dirty()
+                    && state.tabs[0].text() == dirty
+                    && state.session.is_none())
+        );
+        h.run_steps(3);
+        assert!(
+            h.state().remote_development.as_ref().unwrap().tabs[0]
+                .editor
+                .read_only
+        );
+        assert_eq!(
+            h.state().remote_development.as_ref().unwrap().tabs[0].text(),
+            dirty
+        );
+        assert!(h.state().docs.list.is_empty());
+        assert!(h.state().insight.session.is_none());
+        h.state_mut().close_workspace();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while h.state().workspace.is_some() {
+            assert!(Instant::now() < deadline);
+            h.run_steps(1);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        h.run_steps(3);
+        let state = h.state().remote_development.as_ref().unwrap();
+        assert!(state.current(&ticket));
+        assert_eq!(state.tabs[0].text(), dirty);
+        assert_eq!(state.tabs[0].baseline, "fn main(){let answer=41;}\n");
+        assert!(state.tabs[0].dirty());
+        assert!(state.session.is_none() && state.job.is_none());
+        assert!(h.state().workspace.is_none());
+        assert!(h.state().docs.list.is_empty());
+        assert!(!first.path().join("target").exists());
+        assert!(!second.path().join("target").exists());
     }
     #[test]
     fn remote_mode_requires_explicit_trust_and_routes_save_away_from_local_buffers() {

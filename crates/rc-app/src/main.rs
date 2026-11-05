@@ -10,6 +10,7 @@ mod remote;
 mod remote_transfer;
 mod remote_development_transport;
 mod remote_development;
+mod wsl_workspace;
 mod database_postgres;
 mod sql_injection;
 mod cli;

@@ -72,6 +72,7 @@ pub enum Action {
     MoveItem,
     ChangeSignature,
     RemoteDevelopment,
+    WslWorkspace,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -269,6 +270,7 @@ impl Action {
                 | MoveItem
                 | ChangeSignature
                 | RemoteDevelopment
+                | WslWorkspace
                 | Profile
         )
     }

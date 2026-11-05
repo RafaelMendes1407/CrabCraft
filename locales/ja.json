@@ -2873,5 +2873,30 @@
     "Verified query fields: {fields}": "検証済みクエリフィールド: {fields}",
     "This handler has no statically verified Query fields": "このハンドラーに静的検証済みの Query フィールドはありません",
     "Query completion is unsupported for this handler's extractor or deserializer": "このハンドラーのエクストラクターまたはデシリアライザーではクエリ補完をサポートしていません"
+  },
+  "wsl_workspace": {
+    "WSL analyzer connected; indexing inside the distribution…": "WSL 解析器に接続しました。ディストリビューション内でインデックス作成中…",
+    "WSL write completed. Cargo still requires an explicit action.": "WSL への書き込みが完了しました。Cargo には明示的な操作が必要です。",
+    "WSL Rust workspace": "WSL Rust ワークスペース",
+    "Close WSL workspace": "WSL ワークスペースを閉じる",
+    "Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.": "明示的な Windows から WSL へのセッションです。開始時に Linux の Cargo メタデータ、ビルドスクリプト、手続きマクロが実行される場合があります。Windows ファイルを別名として扱いません。",
+    "WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed.": "実際の Windows/WSL ホストでは未検証です。既存のディストリビューションのみ使用し、インストールは行いません。",
+    "WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution.": "このプラットフォームでは WSL ワークスペースを使用できません。既存の WSL ディストリビューションがある Windows を使用してください。",
+    "WSL distribution": "WSL ディストリビューション",
+    "List installed WSL distributions": "インストール済み WSL ディストリビューションを一覧表示",
+    "Linux workspace root": "Linux ワークスペースのルート",
+    "Linux Cargo executable": "Linux Cargo 実行ファイル",
+    "Linux rust-analyzer executable": "Linux rust-analyzer 実行ファイル",
+    "I trust this WSL distribution and workspace to execute project tools": "この WSL ディストリビューションとワークスペースによるプロジェクトツールの実行を信頼します",
+    "Start WSL workspace": "WSL ワークスペースを開始",
+    "Disconnect WSL workspace": "WSL ワークスペースを切断",
+    "Preview WSL write": "WSL の書き込みをプレビュー",
+    "Review WSL overwrite": "WSL の上書きを確認",
+    "Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.": "上書き前に Linux の内容を再確認します。同時書き込みが最終確認と競合する可能性があり、キャンセル時に書き込みが完了している場合があります。",
+    "Confirm WSL overwrite": "WSL の上書きを確定",
+    "Invalid WSL distribution, tools or Linux source path": "WSL ディストリビューション、ツール、Linux ソースパスが無効です",
+    "WSL operation timed out": "WSL 操作がタイムアウトしました",
+    "WSL error: {error}": "WSL エラー: {error}",
+    "WSL Rust workspace…": "WSL Rust ワークスペース…"
   }
 }

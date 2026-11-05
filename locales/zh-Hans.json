@@ -2873,5 +2873,30 @@
     "Verified query fields: {fields}": "已验证的查询字段：{fields}",
     "This handler has no statically verified Query fields": "此处理函数没有静态验证的 Query 字段",
     "Query completion is unsupported for this handler's extractor or deserializer": "不支持此处理函数的提取器或反序列化器的查询补全"
+  },
+  "wsl_workspace": {
+    "WSL analyzer connected; indexing inside the distribution…": "WSL 分析器已连接；正在发行版内索引…",
+    "WSL write completed. Cargo still requires an explicit action.": "WSL 写入已完成。Cargo 仍需要显式操作。",
+    "WSL Rust workspace": "WSL Rust 工作区",
+    "Close WSL workspace": "关闭 WSL 工作区",
+    "Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.": "显式 Windows 到 WSL 会话。启动可能执行 Linux Cargo 元数据、构建脚本和过程宏。不将 Windows 文件用作别名。",
+    "WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed.": "尚未在真实 Windows/WSL 主机上验证 WSL。仅使用现有发行版；不执行安装。",
+    "WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution.": "此平台无法使用 WSL 工作区。请使用装有现有 WSL 发行版的 Windows。",
+    "WSL distribution": "WSL 发行版",
+    "List installed WSL distributions": "列出现有 WSL 发行版",
+    "Linux workspace root": "Linux 工作区根目录",
+    "Linux Cargo executable": "Linux Cargo 可执行文件",
+    "Linux rust-analyzer executable": "Linux rust-analyzer 可执行文件",
+    "I trust this WSL distribution and workspace to execute project tools": "我信任此 WSL 发行版和工作区执行项目工具",
+    "Start WSL workspace": "启动 WSL 工作区",
+    "Disconnect WSL workspace": "断开 WSL 工作区",
+    "Preview WSL write": "预览 WSL 写入",
+    "Review WSL overwrite": "审核 WSL 覆盖",
+    "Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.": "覆盖前会再次检查 Linux 内容。并发写入仍可能绕过最终检查；取消时写入可能已经完成。",
+    "Confirm WSL overwrite": "确认 WSL 覆盖",
+    "Invalid WSL distribution, tools or Linux source path": "WSL 发行版、工具或 Linux 源码路径无效",
+    "WSL operation timed out": "WSL 操作超时",
+    "WSL error: {error}": "WSL 错误：{error}",
+    "WSL Rust workspace…": "WSL Rust 工作区…"
   }
 }

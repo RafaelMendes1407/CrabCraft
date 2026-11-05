@@ -1,4 +1,4 @@
-//! Trusted remote Linux development transport. Only explicit session actions invoke SSH.
+//! Trusted Linux workspace transports. Only explicit session actions launch SSH or WSL.
 use crate::remote_transfer::{self, Config};
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::process::{CancelToken, Stream};
@@ -15,6 +15,7 @@ const OUTPUT: usize = 2 * 1024 * 1024;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     pub ssh: Config,
+    pub wsl: Option<crate::wsl_workspace::Config>,
     pub root: String,
     pub cargo: String,
     pub analyzer: String,
@@ -64,6 +65,9 @@ pub fn quote(value: &str) -> Result<String, Error> {
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), Error> {
+        if let Some(wsl) = &self.wsl {
+            wsl.validate()?;
+        }
         for p in [&self.root, &self.cargo, &self.analyzer] {
             quote(p)?;
         }
@@ -100,19 +104,36 @@ impl Settings {
             .and_then(Path::to_str)
             .ok_or(Error::Input)?;
         let path = format!("{parent}:/usr/bin:/bin");
+        let compiler = if self.wsl.is_some() {
+            format!(
+                "export RUSTC={} RUSTDOC={} && ",
+                quote(&format!("{parent}/rustc"))?,
+                quote(&format!("{parent}/rustdoc"))?
+            )
+        } else {
+            String::new()
+        };
         Ok(format!(
-            "cd -- {} && export PATH={} && ",
+            "cd -- {} && export PATH={} && {compiler}",
             quote(&self.root)?,
             quote(&path)?
         ))
     }
 }
-fn command(
+fn execution(
     settings: &Settings,
     dir: &Path,
     script: String,
-) -> Result<tokio::process::Command, Error> {
+) -> Result<(std::path::PathBuf, Vec<String>, Vec<(String, String)>), Error> {
     settings.validate()?;
+    if let Some(wsl) = &settings.wsl {
+        let spec = wsl.script(script)?;
+        return Ok((
+            spec.program,
+            spec.args,
+            vec![("WSLENV".into(), String::new())],
+        ));
+    }
     let mut args = remote_transfer::args(&settings.ssh, dir)?;
     args.extend([
         "-p".into(),
@@ -121,14 +142,27 @@ fn command(
         format!("{}@{}", settings.ssh.user, settings.ssh.host),
         script,
     ]);
-    let mut cmd = tokio::process::Command::new("ssh");
-    cmd.args(args)
-        .current_dir(dir)
-        .env_remove("SSH_ASKPASS")
-        .env("SSH_ASKPASS_REQUIRE", "never");
-    Ok(cmd)
+    Ok((
+        "ssh".into(),
+        args,
+        vec![("SSH_ASKPASS_REQUIRE".into(), "never".into())],
+    ))
 }
-/// Holds copied credentials until the server exits; dropping the session closes its SSH process.
+fn command(
+    settings: &Settings,
+    dir: &Path,
+    script: String,
+) -> Result<tokio::process::Command, Error> {
+    let (program, args, env) = execution(settings, dir, script)?;
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(args)
+        .envs(env)
+        .current_dir(dir)
+        .env_remove("SSH_ASKPASS");
+    Ok(command)
+}
+/// Holds SSH credential snapshots when used; dropping the session stops its transport process.
 pub struct Session {
     pub settings: Settings,
     pub client: Client,
@@ -165,6 +199,8 @@ async fn collect(
         .kill_on_drop(true);
     #[cfg(unix)]
     cmd.process_group(0);
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000);
     let mut child = cmd.spawn()?;
     let pid = child
         .id()
@@ -235,6 +271,37 @@ pub fn start(settings: Settings, waker: Waker, cancel: CancelToken) -> Result<Se
         return Err(Error::Cancelled);
     }
     let mut noop = |_, _: &str| {};
+    if settings.wsl.is_some() {
+        let parent = Path::new(&settings.cargo)
+            .parent()
+            .and_then(Path::to_str)
+            .ok_or(Error::Input)?;
+        let script = format!(
+            "{}{} --version && {} --version && {} --version && /usr/bin/python3 -I --version",
+            settings.environment()?,
+            quote(&settings.cargo)?,
+            quote(&format!("{parent}/rustc"))?,
+            quote(&settings.analyzer)?
+        );
+        let (code, output) = Runtime::block_on(collect(
+            &settings,
+            script,
+            &cancel,
+            Duration::from_secs(15),
+            &mut noop,
+            false,
+        ))?;
+        let lines: Vec<_> = output.lines().collect();
+        if code != 0
+            || lines.len() != 4
+            || !lines[0].starts_with("cargo ")
+            || !lines[1].starts_with("rustc ")
+            || !lines[2].starts_with("rust-analyzer ")
+            || !lines[3].starts_with("Python 3.")
+        {
+            return Err(Error::Process(output));
+        }
+    }
     let script = format!(
         "{}test -f Cargo.toml && test -x {} && test -x {} && find . -type d \\( -name target -o -name .git -o -name node_modules \\) -prune -o -type f \\( -name '*.rs' -o -name Cargo.toml \\) -print",
         settings.environment()?,
@@ -266,28 +333,16 @@ pub fn start(settings: Settings, waker: Waker, cancel: CancelToken) -> Result<Se
         return Err(Error::Cancelled);
     }
     let credentials = tempfile::tempdir()?;
-    let mut args = remote_transfer::args(&settings.ssh, credentials.path())?;
-    args.extend([
-        "-p".into(),
-        settings.ssh.port.to_string(),
-        "-T".into(),
-        format!("{}@{}", settings.ssh.user, settings.ssh.host),
-        format!(
-            "{}exec /bin/bash -c {}",
-            settings.environment()?,
-            shell_quote(&analyzer_script(&settings)?)
-        ),
-    ]);
+    let script = format!(
+        "{}exec /bin/bash -c {}",
+        settings.environment()?,
+        shell_quote(&analyzer_script(&settings)?)
+    );
+    let (program, args, env) = execution(&settings, credentials.path(), script)?;
     let incoming = Inbox::new(waker);
     let client = {
         let _entered = Runtime::handle().enter();
-        Client::spawn(
-            Path::new("ssh"),
-            &args,
-            credentials.path(),
-            &[],
-            incoming.sender(),
-        )?
+        Client::spawn(&program, &args, credentials.path(), &env, incoming.sender())?
     };
     let session = Session {
         settings,
@@ -351,7 +406,7 @@ pub fn cargo(
         "{}exec /bin/bash -c {}",
         settings.environment()?,
         shell_quote(&format!(
-            "set -u; child=; guard=; cleanup() {{ trap - EXIT HUP INT TERM; if [ -n \"$child\" ]; then kill -TERM -- -\"$child\" 2>/dev/null || :; fi; if [ -n \"$guard\" ]; then kill \"$guard\" 2>/dev/null || :; fi; }}; trap cleanup EXIT; trap 'exit 130' HUP INT TERM; setsid timeout --signal=TERM --kill-after=3s 120s {} {} --message-format=json --color=never & child=$!; (cat <&0 >/dev/null; kill -TERM -- -\"$child\" 2>/dev/null || :) <&0 & guard=$!; code=0; wait \"$child\" || code=$?; exit \"$code\"",
+            "set -u; child=; guard=; cleanup() {{ trap - EXIT HUP INT TERM; if [ -n \"$child\" ]; then kill -TERM -- -\"$child\" 2>/dev/null || :; fi; if [ -n \"$guard\" ]; then kill -TERM -- -\"$guard\" 2>/dev/null || :; fi; }}; trap cleanup EXIT; trap 'exit 130' HUP INT TERM; setsid timeout --signal=TERM --kill-after=3s 120s {} {} --message-format=json --color=never & child=$!; setsid /bin/bash -c 'cat >/dev/null; kill -TERM -- -\"$1\" 2>/dev/null || :' bash \"$child\" <&0 & guard=$!; code=0; wait \"$child\" || code=$?; exit \"$code\"",
             quote(&settings.cargo)?,
             task.word()
         ))
@@ -369,8 +424,19 @@ pub fn cargo(
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
+#[derive(Clone)]
+pub struct Preview {
+    pub settings: Settings,
+    pub remote: String,
+    pub before: String,
+    pub after: String,
+    ssh: Option<remote_transfer::Preview>,
+}
 pub fn read(settings: &Settings, path: &str, cancel: CancelToken) -> Result<String, Error> {
     let path = settings.file(path)?;
+    if let Some(wsl) = &settings.wsl {
+        return crate::wsl_workspace::file(wsl, &settings.root, &path, "read", None, None, cancel);
+    }
     match remote_transfer::run(
         settings.ssh.clone(),
         remote_transfer::Action::Read(path),
@@ -387,8 +453,26 @@ pub fn preview(
     before: String,
     after: String,
     cancel: CancelToken,
-) -> Result<remote_transfer::Preview, Error> {
+) -> Result<Preview, Error> {
     let path = settings.file(path)?;
+    if let Some(wsl) = &settings.wsl {
+        crate::wsl_workspace::file(
+            wsl,
+            &settings.root,
+            &path,
+            "preview",
+            Some(&before),
+            Some(&after),
+            cancel,
+        )?;
+        return Ok(Preview {
+            settings: settings.clone(),
+            remote: path,
+            before,
+            after,
+            ssh: None,
+        });
+    }
     match remote_transfer::run(
         settings.ssh.clone(),
         remote_transfer::Action::PreviewEdit {
@@ -398,16 +482,33 @@ pub fn preview(
         },
         cancel,
     )? {
-        remote_transfer::Reply::Preview(p) => Ok(p),
+        remote_transfer::Reply::Preview(p) => Ok(Preview {
+            settings: settings.clone(),
+            remote: p.remote.clone(),
+            before: p.before.clone(),
+            after: p.after.clone(),
+            ssh: Some(p),
+        }),
         _ => Err(Error::Input),
     }
 }
-pub fn apply(
-    settings: &Settings,
-    preview: remote_transfer::Preview,
-    cancel: CancelToken,
-) -> Result<String, Error> {
+pub fn apply(settings: &Settings, preview: Preview, cancel: CancelToken) -> Result<String, Error> {
     settings.file(&preview.remote)?;
+    if preview.settings != *settings {
+        return Err(Error::Input);
+    }
+    if let Some(wsl) = &settings.wsl {
+        return crate::wsl_workspace::file(
+            wsl,
+            &settings.root,
+            &preview.remote,
+            "apply",
+            Some(&preview.before),
+            Some(&preview.after),
+            cancel,
+        );
+    }
+    let preview = preview.ssh.ok_or(Error::Input)?;
     match remote_transfer::run(
         settings.ssh.clone(),
         remote_transfer::Action::Apply(preview),
@@ -485,6 +586,7 @@ pub(crate) mod tests {
     pub fn settings(root: &Path) -> Settings {
         Settings {
             ssh: crate::remote_transfer::tests::config(),
+            wsl: None,
             root: root.display().to_string(),
             cargo: "/home/rafael/.cargo/bin/cargo".into(),
             analyzer: "/home/rafael/.cargo/bin/rust-analyzer".into(),
