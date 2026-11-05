@@ -41,7 +41,10 @@ Unicode/BOM/CRLF edits, undo, stale edits and a real Cargo build observing the e
 Existing real compiler and rust-analyzer feature-fix tests also pass.
 
 Saving and dependent execution now use the barriers described in background-saving.md.
-Session restoration and workspace preparation remain under migration; E-12 stays partial.
+Workspace and session restoration now prepare on the bounded worker described in
+workspace-restoration.md; Project tree reads use the pool described in project-tree-io.md.
+These complete the documented E-12 scope; feature-specific file operations elsewhere retain
+their own migration scope.
 The generic atomic writer already uses unique sibling temporaries, preserves existing file
 permissions and rejects special destinations; it does not promise power-loss durability or
 filesystem-wide compare-and-swap semantics.

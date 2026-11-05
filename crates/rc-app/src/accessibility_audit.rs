@@ -250,6 +250,12 @@ fn project_tree_supports_expansion_focus_and_open_without_project_execution() {
     let mut h = crate::screens::harness(app, egui::vec2(1400.0, 1000.0));
     h.run_steps(3);
     let _tree = h.get_by_role_and_label(Role::Tree, rc_kit::i18n::tr("Project files"));
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while h.query_by_role_and_label(Role::TreeItem, "src").is_none() {
+        assert!(std::time::Instant::now() < until);
+        h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let src = h.get_by_role_and_label(Role::TreeItem, "src");
     assert_eq!(src.accesskit_node().data().is_expanded(), Some(false));
     let mut ancestor = src.parent();

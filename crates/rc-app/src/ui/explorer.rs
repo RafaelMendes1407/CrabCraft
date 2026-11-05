@@ -2,7 +2,10 @@
 //! folders and files (read lazily from disk). Keyboard navigation like Rider: ↑/↓ move,
 //! →/← expand/collapse, Enter or double-click opens, F2 renames, ⌫ deletes.
 
-use rc_core::workspace::{FileNode, list_dir};
+#[path="explorer_io.rs"]
+mod explorer_io;
+use rc_core::workspace::FileNode;
+use std::sync::Arc;
 use rc_dotnet::{ProjectInfo, Solution, SolutionItem};
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
@@ -47,13 +50,14 @@ pub struct Row {
 #[derive(Default)]
 pub struct ExplorerState {
     /// The project is in a Git repository (its files have a history to show).
+    io:explorer_io::Io,
     pub git: bool,
     pub expanded: HashSet<String>,
     pub selected: Option<String>,
-    pub dir_cache: HashMap<PathBuf, Vec<FileNode>>,
+    pub dir_cache: HashMap<PathBuf, Arc<[FileNode]>>,
     /// The dependencies shown under External Libraries; their files are not the user's to change.
     pub libraries: Vec<rc_cargo::Library>,
-    pub projects: HashMap<PathBuf, ProjectInfo>,
+    pub projects: HashMap<PathBuf, Arc<ProjectInfo>>,
     /// Scroll the selected row into view on the next frame.
     pub reveal: bool,
     pub has_focus: bool,
@@ -125,26 +129,18 @@ impl ExplorerState {
 
     pub fn invalidate(&mut self, path: &Path) {
         if let Some(parent) = path.parent() {
-            self.dir_cache.remove(parent);
+            self.dir_cache.remove(parent);self.io.invalidate(parent);
         }
-        self.dir_cache.remove(path);
+        self.dir_cache.remove(path);self.io.invalidate(path);
         if path.extension().is_some_and(|e| e == "csproj") {
             self.projects.remove(path);
         }
     }
 
-    fn children_of_dir(&mut self, dir: &Path) -> Vec<FileNode> {
-        self.dir_cache.entry(dir.to_path_buf()).or_insert_with(|| list_dir(dir)).clone()
-    }
-
-    fn project(&mut self, path: &Path) -> Option<ProjectInfo> {
-        if !self.projects.contains_key(path) {
-            let info = ProjectInfo::load(path).ok()?;
-            self.projects.insert(path.to_path_buf(), info);
-        }
-        self.projects.get(path).cloned()
-    }
-
+    fn poll_io(&mut self,root:&Path){if self.io.root(root){self.dir_cache.clear();self.projects.clear();}for(key,value)in self.io.drain(){let entries=self.dir_cache.values().map(|rows|rows.len()).sum::<usize>();let bytes=self.dir_cache.values().flat_map(|rows|rows.iter()).map(|node|node.path.as_os_str().len()+node.name.len()+std::mem::size_of::<FileNode>()).sum::<usize>()+self.projects.values().map(|project|project_bytes(project)).sum::<usize>();let added=match &value{explorer_io::Value::Directory(nodes)=>nodes.iter().map(|node|node.path.as_os_str().len()+node.name.len()+std::mem::size_of::<FileNode>()).sum(),explorer_io::Value::Project(project)=>project_bytes(project)};let added_entries=match &value{explorer_io::Value::Directory(nodes)=>nodes.len(),_=>0};if entries.saturating_add(added_entries)>50_000||self.dir_cache.len()+self.projects.len()>=256||bytes.saturating_add(added)>64*1024*1024{self.io.record_error(key,explorer_io::Error::Limit);continue;}match(key,value){(explorer_io::Key::Directory(path),explorer_io::Value::Directory(nodes))=>{self.dir_cache.insert(path,Arc::from(nodes));},(explorer_io::Key::Project(path),explorer_io::Value::Project(project))=>{self.projects.insert(path,Arc::new(project));},_=>{}}}}
+    fn children_of_dir(&mut self,dir:&Path)->Arc<[FileNode]>{if let Some(nodes)=self.dir_cache.get(dir){return nodes.clone();}self.io.request(explorer_io::Key::Directory(dir.into()));Arc::from([])}
+    fn project(&mut self,path:&Path)->Option<Arc<ProjectInfo>>{if let Some(info)=self.projects.get(path){return Some(info.clone());}self.io.request(explorer_io::Key::Project(path.into()));None}
+    fn known_dotnet(&self,path:&Path,root:&Path)->bool{path.ancestors().take_while(|path|path.starts_with(root)).any(|path|self.dir_cache.get(path).is_some_and(|nodes|nodes.iter().any(|node|!node.is_dir&&node.path.extension().is_some_and(|extension|extension=="csproj"))))}
     /// Expands the parents of `path` and selects it (Locate in explorer / "Always select
     /// opened file").
     pub fn locate(&mut self, path: &Path, solution: Option<&Solution>, root: &Path) {
@@ -204,6 +200,7 @@ impl ExplorerState {
 
     /// The visible rows: a depth-first walk of the expanded nodes.
     pub fn rows(&mut self, solution: Option<&Solution>, root: &Path, root_name: &str) -> Vec<Row> {
+        self.poll_io(root);
         let mut rows = Vec::new();
         let root_row = Row {
             key: "sln".into(),
@@ -242,6 +239,7 @@ impl ExplorerState {
             return;
         }
         for library in self.libraries.clone() {
+            if rows.len()>=20_000{break;}
             let key = format!("dir:{}", library.root.display());
             rows.push(Row { key: key.clone(), kind: NodeKind::Library(library.root.clone()), depth: 2, label: library.name, secondary: library.version, icon: ico::PACKAGE, expandable: true });
             if self.expanded.contains(&key) {
@@ -256,7 +254,9 @@ impl ExplorerState {
     }
 
     fn push_items(&mut self, rows: &mut Vec<Row>, items: &[SolutionItem], depth: usize, trail: &str) {
+        if depth>64||rows.len()>=20_000{return;}
         for item in items {
+            if rows.len()>=20_000{break;}
             match item {
                 SolutionItem::Folder { name, children } => {
                     let path = format!("{trail}/{name}");
@@ -283,7 +283,7 @@ impl ExplorerState {
     fn push_project(&mut self, rows: &mut Vec<Row>, path: &Path, name: &str, depth: usize) {
         let key = format!("proj:{}", path.display());
         let info = self.project(path);
-        let exists = path.exists();
+        let exists = !matches!(self.io.error(&explorer_io::Key::Project(path.into())),Some(explorer_io::Error::Io(std::io::ErrorKind::NotFound)));
         rows.push(Row {
             key: key.clone(),
             kind: NodeKind::Project(path.to_path_buf()),
@@ -331,11 +331,13 @@ impl ExplorerState {
                 match i {
                     0 => {
                         for fw in &info.target_frameworks {
+                            if rows.len()>=20_000{break;}
                             rows.push(Row { key: format!("{gkey}/{fw}"), kind: NodeKind::Framework(fw.clone()), depth: depth + 3, label: framework_label(fw), secondary: fw.clone(), icon: ico::LIBRARY, expandable: false });
                         }
                     }
                     1 => {
                         for p in &info.packages {
+                            if rows.len()>=20_000{break;}
                             rows.push(Row {
                                 key: format!("{gkey}/{}", p.name),
                                 kind: NodeKind::Package { name: p.name.clone(), version: p.version.clone() },
@@ -349,6 +351,7 @@ impl ExplorerState {
                     }
                     _ => {
                         for r in &info.project_refs {
+                            if rows.len()>=20_000{break;}
                             let name = r.file_stem().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                             rows.push(Row { key: format!("{gkey}/{}", r.display()), kind: NodeKind::ProjectRef(r.clone()), depth: depth + 3, label: name, secondary: String::new(), icon: ico::PROJECT, expandable: false });
                         }
@@ -359,20 +362,23 @@ impl ExplorerState {
         let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
         let children = self.children_of_dir(&dir);
         let cargo = has_cargo_toml(&children);
-        for c in children {
+        for c in children.iter() {
+            if rows.len()>=20_000{break;}
             if c.path == path {
                 continue;
             }
-            self.push_node(rows, &c, depth + 1, cargo);
+            self.push_node(rows, c, depth + 1, cargo);
         }
     }
 
     fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize) {
+        if depth>64||rows.len()>=20_000{self.io.record_error(explorer_io::Key::Directory(dir.into()),explorer_io::Error::Limit);return;}
         let children = self.children_of_dir(dir);
         // From the cached listing: no file system access while drawing.
         let cargo = has_cargo_toml(&children);
-        for c in children {
-            self.push_node(rows, &c, depth, cargo);
+        for c in children.iter() {
+            if rows.len()>=20_000{break;}
+            self.push_node(rows, c, depth, cargo);
         }
     }
 
@@ -397,6 +403,9 @@ impl ExplorerState {
         }
     }
 }
+
+fn project_bytes(project:&ProjectInfo)->usize{project.path.as_os_str().len()+project.name.len()+project.sdk.len()+project.output_type.len()+project.target_frameworks.iter().map(String::len).sum::<usize>()+project.packages.iter().map(|package|package.name.len()+package.version.len()+std::mem::size_of_val(package)).sum::<usize>()+project.project_refs.iter().map(|path|path.as_os_str().len()).sum::<usize>()}
+fn explorer_error(error:explorer_io::Error)->String{tr(match error{explorer_io::Error::Io(_)=>"Could not read project files",explorer_io::Error::Unsupported=>"Unsupported project file",explorer_io::Error::Limit=>"Project tree input or cache limit exceeded",explorer_io::Error::Cancelled=>"Project tree read cancelled",explorer_io::Error::Changed=>"Project tree changed while reading; refresh it",explorer_io::Error::Busy=>"Project tree worker queue is full; refresh to retry"}).into()}
 
 fn has_cargo_toml(children: &[FileNode]) -> bool {
     children.iter().any(|c| !c.is_dir && c.name == "Cargo.toml")
@@ -486,7 +495,12 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
         }
     }
 
+    state.io.attach(ui.ctx());
     let rows = state.rows(solution, root, root_name);
+    let refresh=ui.small_button(tr("Refresh")).clicked();
+    if state.io.busy(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Loading project files…"));if ui.button(tr("Cancel")).clicked(){state.io.cancel();}});}
+    for(key,error)in state.io.errors.iter().take(3){ui.small(rc_kit::i18n::trf("Explorer read failed for {path}: {error}",&[("path",&key.path().display()),("error",&explorer_error(*error))]));}
+    if refresh{state.io.reset();state.dir_cache.clear();state.projects.clear();ui.ctx().request_repaint();}
     let attached = state.attached.clone();
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
     let tree_id = Id::new("explorer_tree");
@@ -583,9 +597,10 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, solution: Option<&Solution>,
             let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
             if !in_library {
                 resp.context_menu(|ui| {
-                    let rust = rc_cargo::find_manifest(root).is_some();
+                    let rust=state.dir_cache.get(root).is_some_and(|nodes|has_cargo_toml(nodes));
+                    let dotnet=solution.is_some()||state.known_dotnet(row_path(&rows[i]).as_deref().unwrap_or(root),root);
                     let git = state.git;
-                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, git, exclusion, &attached, &mut actions);
+                    context_menu(ui, &rows[i], solution.map(|s| s.path.as_path()), root, rust, dotnet, git, exclusion, &attached, &mut actions);
                 });
             }
         }
@@ -681,7 +696,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, rust: bool, dotnet:bool, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     if let (NodeKind::Solution, Some(sln)) = (&row.kind, solution) {
@@ -741,7 +756,7 @@ fn context_menu(ui: &mut Ui, row: &Row, solution: Option<&Path>, root: &Path, ru
         use crate::item_templates::ItemKind;
         // C# types, controllers and Razor items only where a .NET project is: anywhere else
         // (a Rust project, or a folder of several) the Rust menu, so nothing becomes a `.cs`.
-        let dotnet = !rust && (solution.is_some() || crate::item_templates::in_dotnet_project(&target_dir));
+        let dotnet = !rust && dotnet;
         for entry in if dotnet { ItemKind::MENU } else { ItemKind::RUST_MENU } {
             match entry {
                 None => {
@@ -839,7 +854,7 @@ mod tests {
     fn click_in_menu(exclusion: Exclusion, label: &str, absent: &str) -> Vec<ExplorerAction> {
         let root = Path::new("/ws");
         let row = Row { key: "dir:/ws/gen".into(), kind: NodeKind::Dir(root.join("gen")), depth: 1, label: "gen".into(), secondary: String::new(), icon: ico::FOLDER, expandable: true };
-        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, false, exclusion, &[], actions), Vec::new());
+        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, None, root, true, false, false, exclusion, &[], actions), Vec::new());
         h.run();
         assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
         h.get_by_label(label).click();
@@ -883,7 +898,8 @@ mod icon_tests {
         }
         let mut state = ExplorerState::default();
         state.expanded.extend(["sln".to_string(), format!("dir:{}", root.join("docs").display())]);
-        let rows = state.rows(None, root, "app");
+        let until=std::time::Instant::now()+std::time::Duration::from_secs(5);
+        let rows=loop{let rows=state.rows(None,root,"app");if !state.io.busy()&&state.dir_cache.contains_key(root)&&state.dir_cache.contains_key(&root.join("docs")){break rows;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));};
         let icon = |label: &str, depth: usize| rows.iter().find(|r| r.label == label && r.depth == depth).map(|r| r.icon);
         assert_eq!(icon("src", 1), Some(ico::SOURCE_ROOT));
         assert_eq!(icon("tests", 1), Some(ico::TEST_ROOT));
@@ -893,4 +909,15 @@ mod icon_tests {
         assert_eq!(icon("Cargo.toml", 1), Some(ico::CARGO_TOML));
         assert_eq!(icon("Cargo.lock", 1), Some(ico::CARGO_LOCK));
     }
+}
+
+#[cfg(test)]mod asynchronous_tests {
+use egui_kittest::Harness;
+ use super::*;
+ fn fixture()->tempfile::TempDir{let root=tempfile::tempdir().unwrap();std::fs::create_dir(root.path().join("src")).unwrap();std::fs::write(root.path().join("Cargo.toml"),"[package]\nname=\"explorer_async_evidence\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();std::fs::write(root.path().join("src/main.rs"),"fn main(){println!(\"Rust tree\");}\n").unwrap();std::fs::write(root.path().join("build.rs"),"fn main(){std::fs::write(\"executed-marker\",\"bad\").unwrap();}").unwrap();root}
+ fn wait(state:&mut ExplorerState,root:&Path){let until=std::time::Instant::now()+std::time::Duration::from_secs(5);loop{state.rows(None,root,"Rust");if !state.io.busy(){return;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}}
+ #[test]fn real_directory_cancel_invalidation_and_workspace_switch_reject_old_replies(){let first=fixture();let second=fixture();let mut state=ExplorerState::default();state.expanded.insert("sln".into());assert_eq!(state.rows(None,first.path(),"Rust").len(),1);assert!(state.dir_cache.is_empty());assert!(state.io.busy());state.io.cancel();wait(&mut state,first.path());assert!(state.dir_cache.is_empty());assert_eq!(state.io.error(&explorer_io::Key::Directory(first.path().into())),Some(explorer_io::Error::Cancelled));state.io.reset();state.rows(None,first.path(),"Rust");std::fs::write(first.path().join("fresh.rs"),"pub const N:usize=42;").unwrap();state.invalidate(&first.path().join("fresh.rs"));wait(&mut state,first.path());assert!(state.dir_cache[first.path()].iter().any(|node|node.name=="fresh.rs"));assert_eq!(state.rows(None,second.path(),"Other").len(),1);assert!(state.dir_cache.is_empty());wait(&mut state,second.path());assert!(!state.dir_cache.contains_key(first.path()));assert!(!first.path().join("executed-marker").exists());assert!(!second.path().join("executed-marker").exists());}
+ #[test]fn native_tree_waits_for_real_worker_and_refreshes_without_running_cargo(){use egui_kittest::kittest::Queryable;let root=fixture();let path=root.path().to_path_buf();let mut state=ExplorerState::default();state.expanded.insert("sln".into());let mut first=true;let mut h=Harness::new_ui_state(move|ui,state:&mut ExplorerState|{if std::mem::take(&mut first){rc_kit::theme::install_fonts(ui.ctx());return;}let _=show(ui,state,None,&path,"Rust",None);},state);let until=std::time::Instant::now()+std::time::Duration::from_secs(5);while !h.state().dir_cache.contains_key(root.path()){h.run_steps(2);assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"src");std::fs::write(root.path().join("after_refresh.rs"),"pub const N:usize=42;").unwrap();h.get_by_label(tr("Refresh")).click();loop{h.run_steps(2);if h.state().dir_cache.get(root.path()).is_some_and(|nodes|nodes.iter().any(|node|node.name=="after_refresh.rs")){break;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"after_refresh.rs");assert!(!root.path().join("executed-marker").exists());}
+ #[test]fn oversized_real_directory_reports_limit_and_refresh_recovers(){let root=fixture();for index in 0..5001{std::fs::write(root.path().join(format!("file-{index}.rs")),"// Rust\n").unwrap();}let mut state=ExplorerState::default();state.expanded.insert("sln".into());wait(&mut state,root.path());assert!(state.dir_cache.is_empty());assert_eq!(state.io.error(&explorer_io::Key::Directory(root.path().into())),Some(explorer_io::Error::Limit));for index in 0..5001{std::fs::remove_file(root.path().join(format!("file-{index}.rs"))).unwrap();}state.io.reset();wait(&mut state,root.path());assert!(state.dir_cache[root.path()].iter().any(|node|node.name=="Cargo.toml"));assert!(!root.path().join("executed-marker").exists());}
+ #[test]#[cfg(unix)]fn fifo_project_is_rejected_and_static_xml_is_loaded_off_the_render_path(){use std::os::unix::ffi::OsStrExt;let root=fixture();let fifo=root.path().join("hostile.csproj");let path=std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();assert_eq!(unsafe{libc::mkfifo(path.as_ptr(),0o600)},0);let mut state=ExplorerState::default();state.poll_io(root.path());assert!(state.project(&fifo).is_none());let until=std::time::Instant::now()+std::time::Duration::from_secs(5);while state.io.busy(){state.poll_io(root.path());assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(state.io.error(&explorer_io::Key::Project(fifo)),Some(explorer_io::Error::Unsupported));let project=root.path().join("Static.csproj");std::fs::write(&project,"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>").unwrap();assert!(state.project(&project).is_none());while state.io.busy(){state.poll_io(root.path());assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(state.projects[&project].target_frameworks,["net8.0"]);assert!(!root.path().join("executed-marker").exists());}
 }

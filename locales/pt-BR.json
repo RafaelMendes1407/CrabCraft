@@ -3002,5 +3002,15 @@
     "SSH uses keys and a verified known_hosts file. Interactive SSH password prompts are unsupported.": "SSH usa chaves e known_hosts verificado. Prompts interativos de senha SSH não são suportados.",
     "The remote text editor supports existing UTF-8 files up to 2 MB. Use Reviewed file deployment for new files and binaries.": "O editor remoto suporta arquivos UTF-8 existentes até 2 MB. Use a implantação revisada para novos arquivos e binários.",
     "Text previews show up to 16,384 characters. In-pane editing is limited to 64 KB.": "As prévias mostram até 16.384 caracteres. A edição no painel é limitada a 64 KB."
+  },
+  "explorer_worker": {
+    "Loading project files…": "Carregando arquivos do projeto…",
+    "Explorer read failed for {path}: {error}": "Falha ao ler {path}: {error}",
+    "Could not read project files": "Não foi possível ler os arquivos do projeto",
+    "Unsupported project file": "Arquivo de projeto não suportado",
+    "Project tree input or cache limit exceeded": "Limite de entrada ou cache da árvore do projeto excedido",
+    "Project tree read cancelled": "Leitura da árvore do projeto cancelada",
+    "Project tree changed while reading; refresh it": "A árvore do projeto mudou durante a leitura; atualize-a",
+    "Project tree worker queue is full; refresh to retry": "A fila da árvore do projeto está cheia; atualize para tentar novamente"
   }
 }

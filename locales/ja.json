@@ -3002,5 +3002,15 @@
     "SSH uses keys and a verified known_hosts file. Interactive SSH password prompts are unsupported.": "SSH は鍵と確認済み known_hosts ファイルを使用します。対話式 SSH パスワード入力には未対応です。",
     "The remote text editor supports existing UTF-8 files up to 2 MB. Use Reviewed file deployment for new files and binaries.": "リモートテキストエディターは既存の UTF-8 ファイルを 2 MB まで扱います。新規ファイルやバイナリには確認済みデプロイを使用してください。",
     "Text previews show up to 16,384 characters. In-pane editing is limited to 64 KB.": "テキストプレビューは最大 16,384 文字を表示します。パネル内の編集上限は 64 KB です。"
+  },
+  "explorer_worker": {
+    "Loading project files…": "プロジェクトファイルを読み込み中…",
+    "Explorer read failed for {path}: {error}": "{path} の読み込みに失敗しました: {error}",
+    "Could not read project files": "プロジェクトファイルを読み込めませんでした",
+    "Unsupported project file": "未対応のプロジェクトファイル",
+    "Project tree input or cache limit exceeded": "プロジェクトツリーの入力またはキャッシュの上限を超えました",
+    "Project tree read cancelled": "プロジェクトツリーの読み込みをキャンセルしました",
+    "Project tree changed while reading; refresh it": "読み込み中にプロジェクトツリーが変更されました。更新してください",
+    "Project tree worker queue is full; refresh to retry": "プロジェクトツリーの処理待ちが上限に達しました。更新して再試行してください"
   }
 }

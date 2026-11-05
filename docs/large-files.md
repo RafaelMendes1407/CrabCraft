@@ -3,7 +3,7 @@
 The native editor uses a rope and paints the visible viewport. Files up to 8 MiB retain
 editing and background syntax parsing; larger files open read-only without a syntax tree.
 Files over 128 MiB are rejected before allocating their contents. The regular-file and
-UTF-8 checks also apply. Initial document disk I/O is still synchronous (tracked in E-12).
+UTF-8 checks also apply. Initial document reads and preparation now run on cancellable workers (see document-io.md and E-12).
 
 `cargo test -p rc-app large_file_audit -- --nocapture` creates a genuine Cargo project and
 checks Rust files of 2,097,233 bytes (23,566 lines) and 9,437,241 bytes (106,038 lines).

@@ -52,6 +52,8 @@ explicit Cargo run after trust, cancelled/stale/latest navigation and deferred p
 FIFO/symlink/oversized sessions, live trust/settings changes, and run-option edits during
 reload. CLI/native batches also cover multiple files, outside-root files and source positions.
 
-E-12 remains partial pending the Explorer worker audit and its separate native verification.
+The separate Explorer worker passed seven tests and four accessibility regressions. A final
+private Linux/X11 Orca run observed five editor snapshots and four spoken utterances with
+source geometry and real Explorer parents intact; no project code ran. See project-tree-io.md.
 Other feature-specific filesystem operations retain their own migration scope; this document
 does not claim that every operation in the IDE is free of synchronous filesystem work.

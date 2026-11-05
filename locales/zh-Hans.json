@@ -3002,5 +3002,15 @@
     "SSH uses keys and a verified known_hosts file. Interactive SSH password prompts are unsupported.": "SSH 使用密钥和经过验证的 known_hosts 文件。不支持交互式 SSH 密码提示。",
     "The remote text editor supports existing UTF-8 files up to 2 MB. Use Reviewed file deployment for new files and binaries.": "远程文本编辑器支持最大 2 MB 的现有 UTF-8 文件。新文件和二进制文件请使用经审核的文件部署。",
     "Text previews show up to 16,384 characters. In-pane editing is limited to 64 KB.": "文本预览最多显示 16,384 个字符。面板内编辑限制为 64 KB。"
+  },
+  "explorer_worker": {
+    "Loading project files…": "正在加载项目文件…",
+    "Explorer read failed for {path}: {error}": "读取 {path} 失败：{error}",
+    "Could not read project files": "无法读取项目文件",
+    "Unsupported project file": "不支持的项目文件",
+    "Project tree input or cache limit exceeded": "超出项目树输入或缓存限制",
+    "Project tree read cancelled": "已取消读取项目树",
+    "Project tree changed while reading; refresh it": "读取时项目树已更改；请刷新",
+    "Project tree worker queue is full; refresh to retry": "项目树工作队列已满；请刷新重试"
   }
 }
