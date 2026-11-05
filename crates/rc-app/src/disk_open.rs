@@ -9,22 +9,34 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+#[derive(Clone, Copy)]
+pub enum Position {
+    LineColumn(usize, usize),
+    Offset(usize),
+}
+impl Position {
+    pub fn apply(self, editor: &mut rc_editor::EditorState) {
+        match self {
+            Self::LineColumn(line, column) => editor.goto(line, column),
+            Self::Offset(offset) => editor.set_selection(rc_text::Selection::point(
+                offset.min(editor.buffer.len_chars()),
+            )),
+        }
+    }
+}
+
 pub struct Request {
     id: u64,
     path: PathBuf,
     style_root: Option<PathBuf>,
     read_only_roots: Vec<PathBuf>,
     scratch_root: PathBuf,
-    pub position: Option<(usize, usize)>,
+    pub position: Option<Position>,
     pub preview: bool,
     pub active: Option<u64>,
 }
 impl Request {
-    pub fn new(
-        docs: &mut crate::docs::Docs,
-        path: &Path,
-        position: Option<(usize, usize)>,
-    ) -> Self {
+    pub fn new(docs: &mut crate::docs::Docs, path: &Path, position: Option<Position>) -> Self {
         Self {
             id: docs.reserve_id(),
             path: path.to_path_buf(),
@@ -39,7 +51,7 @@ impl Request {
 }
 pub struct Opened {
     pub doc: Doc,
-    pub position: Option<(usize, usize)>,
+    pub position: Option<Position>,
     pub preview: bool,
     pub active: Option<u64>,
     pub parse: bool,
@@ -346,6 +358,22 @@ mod tests {
                 before
             );
         }
+        h.state_mut().request_open_file(&main);
+        let index = h.state().docs.index_of(&helper).unwrap();
+        h.state_mut().close_tab(index);
+        let offset = 26usize;
+        h.state_mut().nav_back = vec![(helper.clone(), offset)];
+        h.state_mut().nav_forward.clear();
+        h.state_mut().navigate(true);
+        wait(&mut h);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, helper);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(), offset);
+        assert_eq!(h.state().nav_forward.len(), 1);
+        h.state_mut().navigate(false);
+        wait(&mut h);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, main);
+        assert!(h.state().nav_forward.is_empty());
+        assert_eq!(h.state().nav_back.len(), 1);
         let preview_path = source.join("preview.rs");
         std::fs::write(&preview_path, "pub fn preview() {}\n").unwrap();
         let ctx = h.ctx.clone();

@@ -1407,6 +1407,7 @@ fn vscode_shortcuts_reach_their_actions() {
 
     let file = root.join("beta/src/lib.rs");
     h.state_mut().open_at(&file, 3, 14);
+    run_frames(&mut h, "file navigation", |app| !app.disk_open.busy());
     h.run_steps(3);
     h.key_press_modifiers(ctrl, egui::Key::D);
     h.run_steps(2);

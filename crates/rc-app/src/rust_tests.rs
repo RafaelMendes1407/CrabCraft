@@ -31,6 +31,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
         app.poll_disk_watch();
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
+        app.poll_disk_open();
         let outs = app.runner.update();
         crate::ui::run_windows::handle_outputs(app, outs);
         app.docs.poll_parses();
@@ -3865,6 +3866,7 @@ fn cargo_features_and_their_cfg_uses_lead_to_each_other() {
     // A row opens its place, as a click in the Find window does.
     let t = targets[4].clone();
     app.open_at(&t.path, t.line, t.col);
+    pump(&mut app, "feature use navigation", |app| !app.disk_open.busy());
     assert_eq!(here(&app), ("tests/it.rs".into(), 1));
 
     // Find Usages on `"std"` in the array of `full`; Go to Declaration there jumps to `std = []`.

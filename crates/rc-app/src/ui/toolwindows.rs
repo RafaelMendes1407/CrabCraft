@@ -156,11 +156,7 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.explain_error(&code);
     }
     if let Some((path, pos)) = open {
-        app.open_file(&path);
-        if let Some(doc) = app.docs.active_doc_mut() {
-            let pos = pos.min(doc.editor.buffer.len_chars());
-            doc.editor.set_selection(rc_text::Selection::point(pos));
-        }
+        app.request_open_offset(&path,pos);
     }
 }
 

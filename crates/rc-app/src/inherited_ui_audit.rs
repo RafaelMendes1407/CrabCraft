@@ -168,6 +168,7 @@ fn native_recent_files_filter_and_closed_location_restore_the_rust_caret() {
     let helper = root.path().join("src/helper.rs").canonicalize().unwrap();
     let manifest = root.path().join("Cargo.toml").canonicalize().unwrap();
     harness.state_mut().open_at(&helper, 2, 5);
+    frames(&mut harness, "helper navigation", |app| !app.disk_open.busy());
     let position = harness.state().docs.active_doc().unwrap().editor.caret();
     harness.state_mut().open_file(&main);
     let index = harness.state().docs.index_of(&helper).unwrap();

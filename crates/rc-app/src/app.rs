@@ -2057,17 +2057,19 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ documents
 
     pub(crate) fn request_open_file(&mut self, path: &Path) { self.request_open(path, None, false); }
-    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) { self.request_open(path, Some((line,col)), false); }
-    fn request_open(&mut self,path:&Path,position:Option<(usize,usize)>,preview:bool) {
-        self.push_nav(); self.disk_open.cancel();
-        if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some((line,col))=position { self.docs.list[index].editor.goto(line,col); } self.focus_editor=true;self.session_dirty=true;return; }
+    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) { self.request_open(path, Some(crate::disk_open::Position::LineColumn(line,col)), false); }
+    pub(crate) fn request_open_offset(&mut self,path:&Path,offset:usize) {self.request_open(path,Some(crate::disk_open::Position::Offset(offset)),false);}
+    fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
+    fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
+        if record {self.push_nav();} self.disk_open.cancel();
+        if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some(position)=position { position.apply(&mut self.docs.list[index].editor); } self.focus_editor=true;self.session_dirty=true;return; }
         let mut request=crate::disk_open::Request::new(&mut self.docs,path,position); request.preview=preview;
         if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
     }
     pub(crate) fn poll_disk_open(&mut self) {
         for result in self.disk_open.poll(self.waker.clone()) {
             match result {
-                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);if let Some((line,col))=position {self.docs.list[index].editor.goto(line,col);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
+                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);if let Some(position)=position {position.apply(&mut self.docs.list[index].editor);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
                 Err(error)=>self.notify(error.to_string(),true),
             }
         }
@@ -2092,10 +2094,7 @@ impl CrabCraftApp {
 
     /// Opens `path` and puts the caret at (line, col).
     pub fn open_at(&mut self, path: &Path, line: usize, col: usize) {
-        self.open_file(path);
-        if let Some(d) = self.docs.active_doc_mut() {
-            d.editor.goto(line, col);
-        }
+        self.request_open_at(path,line,col);
     }
 
     pub fn push_nav(&mut self) {
@@ -2123,13 +2122,7 @@ impl CrabCraftApp {
         if let Some(d) = self.docs.active_doc() {
             to.push((d.path.clone(), d.editor.caret()));
         }
-        if self.docs.open(&path).is_ok()
-            && let Some(d) = self.docs.active_doc_mut()
-        {
-            let pos = pos.min(d.editor.buffer.len_chars());
-            d.editor.set_selection(rc_text::Selection::point(pos));
-            self.focus_editor = true;
-        }
+        self.open_navigation(&path,Some(crate::disk_open::Position::Offset(pos)),false,false);
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).

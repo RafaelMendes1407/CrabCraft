@@ -1,7 +1,8 @@
 # Document I/O migration
 
-Interactive file opens from the Project explorer (including preview tabs) and Search
-Everywhere now prepare their document on a bounded worker. Path canonicalization, checked
+Interactive file opens from the Project explorer (including preview tabs), Search Everywhere,
+line/column navigation (including language-server targets and diagnostics), and Back/Forward
+now prepare their document on a bounded worker. Path canonicalization, checked
 UTF-8 reads, BOM/CRLF decoding, code-style and LightEdit project discovery, Rope construction,
 and initial small-file syntax analysis happen outside the UI thread. This does not execute
 Cargo, build scripts or proc macros. Installation into the UI does no disk I/O.
@@ -24,11 +25,12 @@ can be replaced. Later watcher updates continue through their own cancellable re
 
 Two tests pass with the real native egui model and a Cargo project: UTF-8/BOM/CRLF, caret and
 style, preserved unsaved buffers, cancelled/stale navigation, canonical alias deduplication,
-preview replacement, actual subsequent Cargo execution, FIFO rejection, explicit cancellation,
-128 MiB rejection, and large/read-only syntax policy. Six search regressions also pass.
+preview replacement, closed-file Back/Forward history without clearing its forward stack,
+actual subsequent Cargo execution, FIFO rejection, explicit cancellation,
+128 MiB rejection, and large/read-only syntax policy. Six search, three navigation, six Cargo-feature and five native UI regressions also pass.
 
-This is a staged migration. Session restoration, open-file dialogs, existing general
-navigation/refactoring paths and saving still have synchronous callers. Saving/build/run/test/
+This is a staged migration. Session restoration, open-file dialogs, general plain-file opening, some
+refactoring paths and saving still have synchronous callers. Saving/build/run/test/
 debug must move together behind a completion barrier so execution cannot observe stale disk
 contents. E-12 remains partial until those paths and ordering are implemented and verified.
 The generic atomic writer already uses unique sibling temporaries, preserves existing file
