@@ -340,13 +340,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
     match choose {
         Some(Hit::File { path, line, col, .. }) => {
             match line {
-                Some(l) => app.open_at(&path, l.saturating_sub(1) as usize, col.unwrap_or(1).saturating_sub(1) as usize),
-                None => app.open_file(&path),
+                Some(l) => app.request_open_at(&path, l.saturating_sub(1) as usize, col.unwrap_or(1).saturating_sub(1) as usize),
+                None => app.request_open_file(&path),
             }
             close = true;
         }
         Some(Hit::Symbol(s)) => {
-            app.open_at(&s.path, s.line, s.col);
+            app.request_open_at(&s.path, s.line, s.col);
             close = true;
         }
         Some(Hit::Action(_, a)) => {
@@ -364,7 +364,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
             se.focus = true;
         }
         Some(Hit::Text(t)) => {
-            app.open_at(&t.path, t.line, t.col);
+            app.request_open_at(&t.path, t.line, t.col);
             close = true;
         }
         None => {}

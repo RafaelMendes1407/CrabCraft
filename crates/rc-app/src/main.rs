@@ -44,6 +44,7 @@ mod http_client;
 mod http_cli;
 mod disassembly_view;
 mod disk_revert;
+mod disk_open;
 mod disk_watch;
 mod insight;
 mod web_languages;

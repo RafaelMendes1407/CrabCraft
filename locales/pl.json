@@ -2733,5 +2733,9 @@
     "The Rust item move exceeded its time limit": "Przekroczono limit czasu przenoszenia elementu Rust",
     "The Rust item move exceeded its file, text or identity-request limit": "Przeniesienie przekroczyło limit plików, tekstu lub żądań tożsamości",
     "Could not read the regular Rust source files for the move": "Nie można odczytać zwykłych plików źródłowych Rust do przeniesienia"
+  },
+  "disk_open": {
+    "Opening file": "Otwieranie pliku",
+    "File opening cancelled": "Anulowano otwieranie pliku"
   }
 }

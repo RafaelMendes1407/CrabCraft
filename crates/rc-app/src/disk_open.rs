@@ -1,0 +1,446 @@
+//! Bounded worker preparation for interactive file navigation. Latest navigation wins.
+use crate::docs::{Doc, MdView, TextReadError};
+use rc_core::{Inbox, Waker};
+use rc_kit::i18n::tr;
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+pub struct Request {
+    id: u64,
+    path: PathBuf,
+    style_root: Option<PathBuf>,
+    read_only_roots: Vec<PathBuf>,
+    scratch_root: PathBuf,
+    pub position: Option<(usize, usize)>,
+    pub preview: bool,
+    pub active: Option<u64>,
+}
+impl Request {
+    pub fn new(
+        docs: &mut crate::docs::Docs,
+        path: &Path,
+        position: Option<(usize, usize)>,
+    ) -> Self {
+        Self {
+            id: docs.reserve_id(),
+            path: path.to_path_buf(),
+            style_root: docs.style_root.clone(),
+            read_only_roots: docs.read_only_roots.clone(),
+            scratch_root: rc_core::paths::scratches_dir(),
+            position,
+            preview: false,
+            active: docs.active_doc().map(|doc| doc.editor.id),
+        }
+    }
+}
+pub struct Opened {
+    pub doc: Doc,
+    pub position: Option<(usize, usize)>,
+    pub preview: bool,
+    pub active: Option<u64>,
+    pub parse: bool,
+}
+fn prepare(request: &Request, cancel: &AtomicBool) -> Result<Opened, TextReadError> {
+    if cancel.load(Ordering::Acquire) {
+        return Err(TextReadError::Cancelled);
+    }
+    let path = request.path.canonicalize()?;
+    let (text, bom, mtime) = crate::docs::read_text_cancellable(&path, Some(cancel))?;
+    let large = text.len().saturating_add(if bom { 3 } else { 0 }) > 8 * 1024 * 1024;
+    let scratch = rc_core::scratch::is_in(&request.scratch_root, &path);
+    let style = match &request.style_root {
+        Some(root) if !scratch && path.starts_with(root) => {
+            rc_core::code_style::for_file(&path, Some(root))
+        }
+        _ => Default::default(),
+    };
+    let light_project = if request.style_root.is_none() && !scratch {
+        crate::docs::cargo_project_of(&path)
+    } else {
+        None
+    };
+    if cancel.load(Ordering::Acquire) {
+        return Err(TextReadError::Cancelled);
+    }
+    let mut editor = rc_editor::EditorState::new(request.id, Some(path.clone()), &text);
+    editor.read_only = large
+        || path
+            .components()
+            .any(|part| part.as_os_str() == "MetadataAsSource")
+        || request
+            .read_only_roots
+            .iter()
+            .any(|root| path.starts_with(root));
+    crate::docs::apply_style(&mut editor, &style);
+    if !large && text.len() < 64 * 1024 {
+        editor.parse_blocking();
+    }
+    let saved = editor.buffer.snapshot();
+    let md_view = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+        .then_some(MdView::Split);
+    if cancel.load(Ordering::Acquire) {
+        return Err(TextReadError::Cancelled);
+    }
+    Ok(Opened {
+        doc: Doc {
+            editor,
+            path,
+            mtime,
+            disk_epoch: 0,
+            bom,
+            pinned: false,
+            preview: false,
+            conflict: false,
+            md_view,
+            saved,
+            scratch,
+            generated: false,
+            style,
+            light_project,
+        },
+        position: request.position,
+        preview: request.preview,
+        active: request.active,
+        parse: !large,
+    })
+}
+struct Job {
+    generation: u64,
+    cancel: Arc<AtomicBool>,
+    inbox: Inbox<Result<Opened, TextReadError>>,
+}
+pub struct State {
+    generation: u64,
+    jobs: Vec<Job>,
+    pending: Option<Request>,
+    path: PathBuf,
+}
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            generation: 0,
+            jobs: Vec::new(),
+            pending: None,
+            path: PathBuf::new(),
+        }
+    }
+}
+impl State {
+    pub fn request(&mut self, request: Request, waker: Waker) -> Result<(), TextReadError> {
+        self.cancel();
+        self.path = request.path.clone();
+        self.pending = Some(request);
+        self.launch(waker)
+    }
+    fn launch(&mut self, waker: Waker) -> Result<(), TextReadError> {
+        if self.jobs.len() >= 2 {
+            return Ok(());
+        }
+        let Some(request) = self.pending.take() else {
+            return Ok(());
+        };
+        let inbox = Inbox::new(waker);
+        let tx = inbox.sender();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        std::thread::Builder::new()
+            .name("rc-open-source".into())
+            .spawn(move || tx.send(prepare(&request, &flag)))?;
+        self.jobs.push(Job {
+            generation: self.generation,
+            cancel,
+            inbox,
+        });
+        Ok(())
+    }
+    pub fn cancel(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending = None;
+        for job in &self.jobs {
+            job.cancel.store(true, Ordering::Release);
+        }
+    }
+    pub fn busy(&self) -> bool {
+        self.pending.is_some()
+            || self
+                .jobs
+                .iter()
+                .any(|job| job.generation == self.generation)
+    }
+    pub fn poll(&mut self, waker: Waker) -> Vec<Result<Opened, TextReadError>> {
+        let mut results = Vec::new();
+        let mut i = 0;
+        while i < self.jobs.len() {
+            let Some(result) = self.jobs[i].inbox.drain().into_iter().next() else {
+                i += 1;
+                continue;
+            };
+            let job = self.jobs.remove(i);
+            if job.generation == self.generation {
+                results.push(result);
+            }
+        }
+        if let Err(error) = self.launch(waker) {
+            results.push(Err(error));
+        }
+        results
+    }
+    pub fn show(&mut self, ctx: &egui::Context) {
+        if self.busy() {
+            egui::Window::new(tr("Opening file"))
+                .id(egui::Id::new("disk-open-progress"))
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(self.path.file_name().unwrap_or_default().to_string_lossy());
+                    });
+                    if ui.button(tr("Cancel")).clicked() {
+                        self.cancel();
+                    }
+                });
+        }
+    }
+}
+impl Drop for State {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+    fn wait(h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>) {
+        let until = Instant::now() + Duration::from_secs(10);
+        while h.state().disk_open.busy() {
+            h.run_steps(1);
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+    #[test]
+    fn native_worker_open_preserves_encoding_edits_and_latest_navigation_in_a_real_cargo_project() {
+        let _home = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("src");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(root.path().join("Cargo.toml"),"[package]\nname=\"worker_open_proof\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
+        let main = source.join("main.rs");
+        let helper = source.join("helper.rs");
+        std::fs::write(
+            &main,
+            "mod helper;\nfn main(){println!(\"{}\",helper::value());}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &helper,
+            "\u{feff}pub fn value() -> i32 {\r\n    // café\r\n    42\r\n}\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.path().join("build.rs"),
+            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
+        )
+        .unwrap();
+        std::fs::write(
+            root.path().join(".editorconfig"),
+            "root = true\n[*.rs]\nindent_style = space\nindent_size = 2\n",
+        )
+        .unwrap();
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(root.path());
+        app.open_file(&main);
+        app.docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .replace(0, 0, "// unsaved\n");
+        let before = app
+            .docs
+            .active_doc()
+            .unwrap()
+            .editor
+            .buffer
+            .rope()
+            .to_string();
+        app.request_open_at(&helper, 2, 4);
+        assert_eq!(app.docs.active_doc().unwrap().path, main);
+        let mut h = crate::screens::harness(app, egui::vec2(1280.0, 850.0));
+        wait(&mut h);
+        let doc = h.state().docs.active_doc().unwrap();
+        assert_eq!(doc.path, helper);
+        assert!(doc.bom);
+        assert_eq!(doc.editor.buffer.line_ending(), rc_text::LineEnding::CrLf);
+        assert_eq!(
+            doc.editor.caret(),
+            doc.editor.buffer.rope().line_to_char(2) + 4
+        );
+        assert_eq!(doc.style.indent_size, Some(2));
+        assert_eq!(
+            h.state().docs.list[h.state().docs.index_of(&main).unwrap()]
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            before
+        );
+        assert!(!root.path().join("build-ran").exists());
+        h.state_mut().request_open_file(&main);
+        h.state_mut().request_open_file(&helper);
+        h.state_mut().request_open_file(&main);
+        wait(&mut h);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, main);
+        assert_eq!(
+            h.state()
+                .docs
+                .active_doc()
+                .unwrap()
+                .editor
+                .buffer
+                .rope()
+                .to_string(),
+            before
+        );
+        let other = source.join("cancelled.rs");
+        std::fs::write(&other, "pub const CANCELLED: i32 = 0;\n").unwrap();
+        h.state_mut().request_open_file(&other);
+        let helper_index = h.state().docs.index_of(&helper).unwrap();
+        h.state_mut().docs.activate(helper_index);
+        wait(&mut h);
+        assert!(h.state().docs.index_of(&other).is_none());
+        h.state_mut().request_open_file(&other);
+        h.state_mut().disk_open.cancel();
+        for _ in 0..10 {
+            h.run_steps(1);
+        }
+        assert!(h.state().docs.index_of(&other).is_none());
+        #[cfg(unix)]
+        {
+            let alias = source.join("alias.rs");
+            std::os::unix::fs::symlink(&main, &alias).unwrap();
+            h.state_mut().request_open_file(&alias);
+            wait(&mut h);
+            assert_eq!(h.state().docs.list.len(), 2);
+            assert_eq!(
+                h.state()
+                    .docs
+                    .active_doc()
+                    .unwrap()
+                    .editor
+                    .buffer
+                    .rope()
+                    .to_string(),
+                before
+            );
+        }
+        let preview_path = source.join("preview.rs");
+        std::fs::write(&preview_path, "pub fn preview() {}\n").unwrap();
+        let ctx = h.ctx.clone();
+        h.state_mut().handle_explorer(
+            &ctx,
+            vec![crate::ui::explorer::ExplorerAction::Preview(
+                preview_path.clone(),
+            )],
+        );
+        wait(&mut h);
+        assert!(h.state().docs.active_doc().unwrap().preview);
+        let first_id = h.state().docs.active_doc().unwrap().editor.id;
+        let next_path = source.join("next_preview.rs");
+        std::fs::write(&next_path, "pub fn next() {}\n").unwrap();
+        h.state_mut().handle_explorer(
+            &ctx,
+            vec![crate::ui::explorer::ExplorerAction::Preview(
+                next_path.clone(),
+            )],
+        );
+        wait(&mut h);
+        assert!(h.state().docs.index_of(&preview_path).is_none());
+        assert!(h.state().docs.active_doc().unwrap().preview);
+        assert_ne!(h.state().docs.active_doc().unwrap().editor.id, first_id);
+        h.state_mut()
+            .docs
+            .active_doc_mut()
+            .unwrap()
+            .editor
+            .replace(0, 0, "// unsaved preview\n");
+        h.state_mut().handle_explorer(
+            &ctx,
+            vec![crate::ui::explorer::ExplorerAction::Preview(
+                preview_path.clone(),
+            )],
+        );
+        wait(&mut h);
+        assert!(h.state().docs.list[h.state().docs.index_of(&next_path).unwrap()].is_modified());
+        let output = std::process::Command::new("cargo")
+            .args(["run", "--offline", "--quiet"])
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    }
+    #[test]
+    fn worker_reader_cancels_and_rejects_special_files_without_starting_project_tools() {
+        let mut docs = crate::docs::Docs::new(rc_syntax::ParserPool::new(Waker::noop().as_fn()));
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("lib.rs");
+        std::fs::write(&path, "pub fn value(){}\n").unwrap();
+        let request = Request::new(&mut docs, &path, None);
+        assert!(matches!(
+            prepare(&request, &AtomicBool::new(true)),
+            Err(TextReadError::Cancelled)
+        ));
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let fifo = root.path().join("fifo.rs");
+            let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+            let request = Request::new(&mut docs, &fifo, None);
+            let start = Instant::now();
+            assert!(matches!(
+                prepare(&request, &AtomicBool::new(false)),
+                Err(TextReadError::NotRegular)
+            ));
+            assert!(start.elapsed() < Duration::from_secs(1));
+        }
+        let large = root.path().join("large.rs");
+        std::fs::write(&large, format!("//{}\n", "x".repeat(9 * 1024 * 1024))).unwrap();
+        let request = Request::new(&mut docs, &large, None);
+        let opened =
+            prepare(&request, &AtomicBool::new(false)).unwrap_or_else(|error| panic!("{error}"));
+        assert!(opened.doc.editor.read_only);
+        assert!(!opened.parse);
+        let mut request = Request::new(&mut docs, &path, None);
+        request.read_only_roots.push(root.path().to_path_buf());
+        let opened =
+            prepare(&request, &AtomicBool::new(false)).unwrap_or_else(|error| panic!("{error}"));
+        assert!(opened.doc.editor.read_only);
+        assert!(opened.parse);
+        let huge = root.path().join("huge.rs");
+        let file = std::fs::File::create(&huge).unwrap();
+        file.set_len(129 * 1024 * 1024).unwrap();
+        let request = Request::new(&mut docs, &huge, None);
+        assert!(matches!(
+            prepare(&request, &AtomicBool::new(false)),
+            Err(TextReadError::TooLarge(_))
+        ));
+    }
+}

@@ -2733,5 +2733,9 @@
     "The Rust item move exceeded its time limit": "Zeitlimit für das Verschieben des Rust-Elements überschritten",
     "The Rust item move exceeded its file, text or identity-request limit": "Datei-, Text- oder Identitätsanfragelimit beim Verschieben überschritten",
     "Could not read the regular Rust source files for the move": "Reguläre Rust-Quelldateien konnten nicht zum Verschieben gelesen werden"
+  },
+  "disk_open": {
+    "Opening file": "Datei wird geöffnet",
+    "File opening cancelled": "Öffnen der Datei abgebrochen"
   }
 }

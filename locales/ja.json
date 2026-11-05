@@ -2733,5 +2733,9 @@
     "The Rust item move exceeded its time limit": "Rust アイテムの移動がタイムアウトしました",
     "The Rust item move exceeded its file, text or identity-request limit": "Rust アイテムの移動がファイル、テキスト、識別情報要求の制限を超えました",
     "Could not read the regular Rust source files for the move": "移動用の通常の Rust ソースファイルを読み取れませんでした"
+  },
+  "disk_open": {
+    "Opening file": "ファイルを開いています",
+    "File opening cancelled": "ファイルの読み込みをキャンセルしました"
   }
 }

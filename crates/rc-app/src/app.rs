@@ -63,6 +63,7 @@ pub struct CrabCraftApp {
     pub docs: Docs,
     pub disk_revert: Option<crate::disk_revert::Job>,
     pub disk_watch: crate::disk_watch::Watch,
+    pub disk_open: crate::disk_open::State,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -300,6 +301,7 @@ impl CrabCraftApp {
         CrabCraftApp {
             disk_revert: None,
             disk_watch: Default::default(),
+            disk_open: Default::default(),
             keymap,
             editor_config,
             workspace: None,
@@ -1427,6 +1429,7 @@ impl CrabCraftApp {
 
     pub fn close_workspace(&mut self) {
         self.disk_watch = Default::default();
+        self.disk_open = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
@@ -2053,8 +2056,26 @@ impl CrabCraftApp {
 
     // ------------------------------------------------------------------ documents
 
+    pub(crate) fn request_open_file(&mut self, path: &Path) { self.request_open(path, None, false); }
+    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) { self.request_open(path, Some((line,col)), false); }
+    fn request_open(&mut self,path:&Path,position:Option<(usize,usize)>,preview:bool) {
+        self.push_nav(); self.disk_open.cancel();
+        if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some((line,col))=position { self.docs.list[index].editor.goto(line,col); } self.focus_editor=true;self.session_dirty=true;return; }
+        let mut request=crate::disk_open::Request::new(&mut self.docs,path,position); request.preview=preview;
+        if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
+    }
+    pub(crate) fn poll_disk_open(&mut self) {
+        for result in self.disk_open.poll(self.waker.clone()) {
+            match result {
+                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);if let Some((line,col))=position {self.docs.list[index].editor.goto(line,col);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
+                Err(error)=>self.notify(error.to_string(),true),
+            }
+        }
+    }
+
     /// Opens a file in an editor tab, remembering the current place for "Back".
     pub fn open_file(&mut self, path: &Path) {
+        self.disk_open.cancel();
         self.push_nav();
         match self.docs.open(path) {
             Ok(i) => {
@@ -2096,6 +2117,7 @@ impl CrabCraftApp {
     }
 
     pub fn navigate(&mut self, back: bool) {
+        self.disk_open.cancel();
         let (from, to) = if back { (&mut self.nav_back, &mut self.nav_forward) } else { (&mut self.nav_forward, &mut self.nav_back) };
         let Some((path, pos)) = from.pop() else { return };
         if let Some(d) = self.docs.active_doc() {
@@ -2204,6 +2226,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_tab(&mut self, i: usize) {
+        self.disk_open.cancel();
         if i < self.docs.list.len() && self.docs.list[i].is_modified()
             && let Err(e) = self.docs.save(i)
         {
@@ -3192,14 +3215,8 @@ impl CrabCraftApp {
     pub fn handle_explorer(&mut self, ctx: &Context, actions: Vec<ExplorerAction>) {
         for a in actions {
             match a {
-                ExplorerAction::Open(p) => self.open_file(&p),
-                ExplorerAction::Preview(p) => {
-                    self.push_nav();
-                    match self.docs.open_preview(&p) {
-                        Ok(_) => self.session_dirty = true,
-                        Err(e) => self.notify(e, true),
-                    }
-                }
+                ExplorerAction::Open(p) => self.request_open_file(&p),
+                ExplorerAction::Preview(p) => self.request_open(&p,None,true),
                 ExplorerAction::Collapse => {
                     self.explorer.expanded.retain(|k| k == "sln");
                     self.session_dirty = true;
@@ -3606,6 +3623,8 @@ impl eframe::App for CrabCraftApp {
         self.handle_debug(outs);
         self.poll_auto_attach();
         self.poll_repl();
+        self.poll_disk_open();
+        self.disk_open.show(&ctx);
         self.poll_disk_revert();
         self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {
