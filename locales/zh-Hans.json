@@ -868,7 +868,8 @@
     "Local": "本地",
     "Paste": "粘贴",
     "Process finished with exit code {code}": "进程已结束，退出代码为 {code}",
-    "Select All": "全选"
+    "Select All": "全选",
+    "Starting terminal…": "正在启动终端…"
   },
   "tests": {
     "Run All Tests": "运行所有测试"

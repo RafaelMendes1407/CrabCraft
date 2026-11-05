@@ -868,7 +868,8 @@
     "Local": "Local",
     "Paste": "Coller",
     "Process finished with exit code {code}": "Processus terminé avec le code de sortie {code}",
-    "Select All": "Tout sélectionner"
+    "Select All": "Tout sélectionner",
+    "Starting terminal…": "Démarrage du terminal…"
   },
   "tests": {
     "Run All Tests": "Exécuter tous les tests"

@@ -570,11 +570,24 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
-    let actions = [(ico::ADD, tr("New Terminal Tab"), true)];
+    let actions = [(ico::ADD, tr("New Terminal Tab"), app.terminal_starting.is_none())];
     match header(ui, tr("Terminal"), &actions) {
         Some(0) => app.open_terminal(None),
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
+    }
+    let mut cancel_startup = false;
+    if app.terminal_starting.is_some() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Starting terminal…"));
+            cancel_startup = ui.button(tr("Cancel")).clicked();
+        });
+    }
+    if cancel_startup {
+        app.terminal_starting = None;
+        app.toggle_tool(ToolWindow::Terminal);
+        return;
     }
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -624,6 +637,53 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn native_terminal_runs_a_real_cargo_project_and_keeps_tabs_independent() {
+        use egui_kittest::kittest::Queryable;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = tempfile::Builder::new().prefix("crabcraft terminal ").tempdir().unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"terminal_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("src/main.rs"), "fn main() { println!(\"CRABCRAFT_TERMINAL_OK\"); }\n").unwrap();
+        let mut app = crate::screens::test_app(home.path(), false);
+        app.open_workspace(root.path());
+        app.open_terminal(None);
+        assert!(app.terminal_starting.is_some());
+        assert!(app.terminals.is_empty(), "PTY startup must finish off the UI thread");
+        let mut harness = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+        let wait_tabs = |harness: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, count: usize| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while harness.state().terminals.len() != count {
+                harness.run_steps(1);
+                assert!(std::time::Instant::now() < deadline, "terminal startup did not finish");
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        wait_tabs(&mut harness, 1);
+        let first = harness.state().terminals.active().unwrap().id();
+        let session = &harness.state().terminals.active().unwrap().session;
+        assert_eq!(session.cwd().unwrap(), root.path().canonicalize().unwrap());
+        session.write(b"cargo run --offline --quiet\r".to_vec());
+        assert!(session.wait_for_text("CRABCRAFT_TERMINAL_OK", std::time::Duration::from_secs(30)), "{:?}", session.screen_lines());
+        harness.state_mut().terminals.rename(first, Some("Cargo shell".into()));
+        harness.get_by_label(tr("New Terminal Tab")).click();
+        harness.run_steps(2);
+        wait_tabs(&mut harness, 2);
+        let second = harness.state().terminals.active().unwrap().id();
+        harness.state_mut().terminals.rename(second, Some("Other shell".into()));
+        harness.run_steps(2);
+        harness.get_by_label("Cargo shell").click(); harness.run_steps(2);
+        assert_eq!(harness.state().terminals.active().unwrap().id(), first);
+        harness.get_by_label("Other shell").click(); harness.run_steps(2);
+        assert_eq!(harness.state().terminals.active().unwrap().id(), second);
+        assert!(!harness.state().terminals.active().unwrap().session.screen_lines().iter().any(|line| line.contains("CRABCRAFT_TERMINAL_OK")));
+        assert!(harness.state_mut().terminals.close(second));
+        assert_eq!(harness.state().terminals.active().unwrap().id(), first);
+        assert!(harness.state().terminals.active().unwrap().session.is_running());
+    }
 
     #[test]
     fn test_names_and_the_filter() {

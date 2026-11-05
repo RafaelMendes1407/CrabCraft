@@ -868,7 +868,8 @@
     "Local": "ローカル",
     "Paste": "貼り付け",
     "Process finished with exit code {code}": "プロセスは終了コード {code} で終了しました",
-    "Select All": "すべて選択"
+    "Select All": "すべて選択",
+    "Starting terminal…": "ターミナルを起動中…"
   },
   "tests": {
     "Run All Tests": "すべてのテストを実行"

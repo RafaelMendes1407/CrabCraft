@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 187 |
-| 🚧 Em andamento | 8 |
-| 🟢 Herdado | 17 |
+| ✅ Pronto | 188 |
+| 🚧 Em andamento | 9 |
+| 🟢 Herdado | 15 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -324,7 +324,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
-| F-01 | Terminal | 🟢 | M1 | |
+| F-01 | Terminal | ✅ | M1 | Terminal nativo PTY/alacritty em projeto Rust real: teste headless abre shell na pasta Cargo com espaços, roda `cargo run --offline --quiet` e confere a saída; duas sessões independentes, troca por abas e fechamento preservam o shell original. Inicialização do PTY corrigida para segundo plano com Cancelar; fechar projeto cancela. ANSI, entrada, redimensionamento, seleção e encerramento cobertos pelos testes reais de rc-term. Não se presume paridade com RustRover |
 | F-02 | Depurar processo a partir do terminal | ⬜ | M6 | |
 | F-03 | HTTP Client (arquivos `.http`) | ✅ | M5 | Arquivos `.http` e `.rest` com realce; requisições separadas por `###` (método, URL com linhas `?`/`&` de continuação, cabeçalhos, corpo, nome por `### nome` ou `# @name`); ícone de execução na margem de cada requisição envia em segundo plano (cancelável, tempo limite de 60 s, corpo limitado a 8 MB). Janela HTTP Client: histórico da sessão, status, tempos, tamanho, cabeçalhos e corpo (JSON reindentado sem reordenar), link de volta à requisição; funciona também com arquivo avulso. Variáveis de arquivo são resolvidas por F-04; variáveis não resolvidas, `< arquivo`, scripts `> {% %}`, `>> arquivo` e diretivas `# @…` aparecem como avisos (referências não resolvidas e `< arquivo` impedem o envio). Testado contra servidor HTTP local; capturas conferidas. Fora: tudo de F-04, WebSocket/gRPC/GraphQL, cookies entre requisições, abrir a resposta no editor |
 | F-04 | HTTP Client: variáveis, OAuth 2.0, scripts | 🚧 | M5 | Variáveis de arquivo `@nome = valor` e referências `{{nome}}` em URL, cabeçalhos e corpo, no cliente gráfico e na CLI; escopo de arquivo, última declaração prevalece e referências aninhadas. Ausentes, ciclos e chaves incompletas impedem envio; limites de 256 variáveis, 32 níveis e 1 MB expandido/cache. Sem acesso implícito ao ambiente ou execução de scripts. Testes de parser/resolvedor, UI, servidor HTTP local com referências aninhadas e rejeição de ciclos/expansão exponencial; corpos sem variáveis mantêm o limite anterior. Ver docs/http-variables.md. Falta: arquivos de ambiente, OAuth 2.0 e scripts. |
@@ -336,7 +336,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | F-10 | Solana (experimental) | 🚫 | - | Plugin de nicho |
 | F-11 | LinkedIn Connected Apps | 🚫 | - | Sem valor para o foco em Rust |
 | F-12 | Ferramentas externas | ✅ | M3 | Configurações › Ferramentas externas: nome, programa, argumentos (com aspas) e pasta, com macros `$FilePath$`, `$FileDir$`, `$FileName$`, `$FileNameWithoutExtension$`, `$FileRelativePath$`, `$ProjectFileDir$`, `$LineNumber$`, `$ColumnNumber$`, `$SelectedText$`; roda por Mais ações › Ferramentas externas ou Find Action, numa aba da janela Run com Rerun e Stop; macro sem valor avisa antes de rodar. Testado com `wc` real num caminho com espaço; capturas conferidas |
-| F-13 | Terminal: abas, divisão e busca | 🟢 | M1 | Conferir o que veio do DotCraft |
+| F-13 | Terminal: abas, divisão e busca | 🚧 | M1 | Abas verificadas num projeto Cargo real (F-01): criar, alternar e fechar preservando sessões independentes. Falta implementar divisão e busca; não existiam no código herdado |
 | F-14 | Terminal: completar comandos | ⬜ | M6 | |
 
 ## 13. Banco de dados, implantação e remoto

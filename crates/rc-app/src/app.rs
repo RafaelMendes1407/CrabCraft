@@ -141,6 +141,7 @@ pub struct CrabCraftApp {
     pub terminals: rc_term::Terminals,
     pub settings_backup: crate::settings_backup::State,
     pub repl_starting: Option<crate::repl::Starting>,
+    pub terminal_starting: Option<crate::repl::Starting>,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -357,6 +358,7 @@ impl CrabCraftApp {
             terminals: rc_term::Terminals::new(),
             settings_backup: Default::default(),
             repl_starting: None,
+            terminal_starting: None,
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -1336,6 +1338,7 @@ impl CrabCraftApp {
         self.search_everywhere = None;
         self.find_bar = None;
         self.repl_starting = None;
+        self.terminal_starting = None;
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
@@ -2445,13 +2448,27 @@ impl CrabCraftApp {
 
     /// A new terminal tab in `dir` (the workspace folder by default).
     pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
+        if self.terminal_starting.is_some() { return; }
         let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
-        match self.terminals.open(&rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
-            Ok(_) => {
+        match crate::repl::Starting::new(rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
+            Ok(starting) => {
+                self.terminal_starting = Some(starting);
+                self.dock.show(ToolWindow::Terminal);
+            }
+            Err(error) => self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true),
+        }
+    }
+
+    fn poll_terminal_startup(&mut self) {
+        let Some(result) = self.terminal_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        self.terminal_starting = None;
+        match result {
+            Ok(session) => {
+                self.terminals.push(session);
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }
-            Err(e) => self.notify(trf("Could not start the terminal: {error}", &[("error", &e)]), true),
+            Err(error) => self.notify(trf("Could not start the terminal: {error}", &[("error", &error)]), true),
         }
     }
 
@@ -3325,6 +3342,7 @@ impl eframe::App for CrabCraftApp {
         self.handle_debug(outs);
         self.poll_auto_attach();
         self.poll_repl();
+        self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);
