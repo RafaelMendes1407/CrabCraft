@@ -1762,7 +1762,6 @@
     "Info": "情報",
     "Off": "オフ",
     "Inspections": "インスペクション",
-    "Profile": "プロファイル",
     "Project (saved with this project)": "プロジェクト（このプロジェクトに保存）",
     "Default (every project)": "デフォルト（すべてのプロジェクト）",
     "Copy from Default": "デフォルトからコピー",
@@ -1771,7 +1770,8 @@
     "Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.": "弱い警告は細い下線で示され、情報は強調されませんがクイックフィックスは使えます。どちらも問題一覧やスクロールバーには表示されません。",
     "Diagnostic code, such as clippy::needless_return": "診断コード（例: clippy::needless_return）",
     "Add Code": "コードを追加",
-    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、コンパイラ、Clippy のコード。prefix::* でグループ全体を指定できます"
+    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、コンパイラ、Clippy のコード。prefix::* でグループ全体を指定できます",
+    "inspections|Profile": "プロファイル"
   },
   "fileops": {
     "The language server sent a path that is not a file": "言語サーバーがファイルではないパスを送信しました",

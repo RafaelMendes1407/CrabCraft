@@ -445,7 +445,7 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
     let (mut use_project, mut project) = app.inspections.draft.take().unwrap_or_else(|| (app.inspections.use_project, app.inspections.project.clone()));
     if project_open {
         ui.horizontal(|ui| {
-            ui.label(tr("Profile"));
+            ui.label(rc_kit::i18n::tr_ctx("inspections", "Profile"));
             let name = |p: bool| if p { tr("Project (saved with this project)") } else { tr("Default (every project)") };
             egui::ComboBox::from_id_salt("inspection_profile").selected_text(name(use_project)).width(260.0).show_ui(ui, |ui| {
                 ui.selectable_value(&mut use_project, false, name(false));

@@ -1762,7 +1762,6 @@
     "Info": "Informacja",
     "Off": "Wyłączona",
     "Inspections": "Inspekcje",
-    "Profile": "Profil",
     "Project (saved with this project)": "Projekt (zapisany z tym projektem)",
     "Default (every project)": "Domyślny (wszystkie projekty)",
     "Copy from Default": "Kopiuj z domyślnego",
@@ -1771,7 +1770,8 @@
     "Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.": "Słabe ostrzeżenia mają cienkie podkreślenie; informacje nie są wyróżniane, ale zachowują szybkie poprawki. Żadne nie trafia do Problemów ani na pasek przewijania.",
     "Diagnostic code, such as clippy::needless_return": "Kod diagnostyki, np. clippy::needless_return",
     "Add Code": "Dodaj kod",
-    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "Kod rust-analyzera, kompilatora lub Clippy; prefiks::* obejmuje całą grupę"
+    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "Kod rust-analyzera, kompilatora lub Clippy; prefiks::* obejmuje całą grupę",
+    "inspections|Profile": "Profil"
   },
   "fileops": {
     "The language server sent a path that is not a file": "Serwer języka wysłał ścieżkę, która nie jest plikiem",

@@ -1762,7 +1762,6 @@
     "Info": "信息",
     "Off": "关闭",
     "Inspections": "检查",
-    "Profile": "配置文件",
     "Project (saved with this project)": "项目（随此项目保存）",
     "Default (every project)": "默认（所有项目）",
     "Copy from Default": "从默认复制",
@@ -1771,7 +1770,8 @@
     "Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.": "弱警告显示细下划线；信息不高亮，但保留快速修复。两者都不会列在“问题”中，也不会标记在滚动条上。",
     "Diagnostic code, such as clippy::needless_return": "诊断代码，例如 clippy::needless_return",
     "Add Code": "添加代码",
-    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、编译器或 Clippy 的代码；prefix::* 覆盖整个组"
+    "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "rust-analyzer、编译器或 Clippy 的代码；prefix::* 覆盖整个组",
+    "inspections|Profile": "配置文件"
   },
   "fileops": {
     "The language server sent a path that is not a file": "语言服务器发送的路径不是文件",

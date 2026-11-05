@@ -17,7 +17,7 @@ Weak Warning	Advertencia débil	Avertissement faible	Aviso fraco	Schwache Warnun
 Info	Información	Info	Informação	Info	Informacja	信息	情報
 Off	Desactivada	Désactivée	Desligada	Aus	Wyłączona	关闭	オフ
 Inspections	Inspecciones	Inspections	Inspeções	Inspektionen	Inspekcje	检查	インスペクション
-Profile	Perfil	Profil	Perfil	Profil	Profil	配置文件	プロファイル
+inspections|Profile	Perfil	Profil	Perfil	Profil	Profil	配置文件	プロファイル
 Project (saved with this project)	Proyecto (guardado con este proyecto)	Projet (enregistré avec ce projet)	Projeto (salvo com este projeto)	Projekt (mit diesem Projekt gespeichert)	Projekt (zapisany z tym projektem)	项目（随此项目保存）	プロジェクト（このプロジェクトに保存）
 Default (every project)	Predeterminado (todos los proyectos)	Par défaut (tous les projets)	Padrão (todos os projetos)	Standard (alle Projekte)	Domyślny (wszystkie projekty)	默认（所有项目）	デフォルト（すべてのプロジェクト）
 Copy from Default	Copiar del predeterminado	Copier depuis le profil par défaut	Copiar do padrão	Aus Standard kopieren	Kopiuj z domyślnego	从默认复制	デフォルトからコピー
