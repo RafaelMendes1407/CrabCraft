@@ -3465,7 +3465,7 @@ fn profile_records_the_selected_binary_or_explains_the_kernel_restriction() {
     let mut h = playground_harness(home.path(), dir.path(), true);
     // A program that runs long enough to be sampled (the harness's own ends at once).
     let main_rs = dir.path().join("demo/src/main.rs");
-    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    println!(\"{}\", fib(std::hint::black_box(34)));\n}\n").unwrap();
+    std::fs::write(&main_rs, "fn fib(n: u64) -> u64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }\n\nfn main() {\n    let t = std::time::Instant::now();\n    let mut n = 0;\n    while t.elapsed().as_millis() < 300 {\n        n += fib(std::hint::black_box(20));\n    }\n    println!(\"{n}\");\n}\n").unwrap();
     assert!(crate::search::action_items().iter().any(|(_, a)| *a == rc_editor::Action::Profile));
     h.state_mut().pending.push(rc_editor::Action::Profile);
     h.run_steps(2);
@@ -3643,4 +3643,103 @@ fn screens_merge_tool() {
     h.state_mut().vcs.merge_tool.as_mut().unwrap().confirm_save = true;
     h.run_steps(6);
     h.render().unwrap().save(out.join("merge-tool-confirm-dark.png")).unwrap();
+}
+
+/// The bottom tool window spans the whole width, under the explorer too; a right-click in an
+/// editor of a split opens its menu at the pointer.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/bottom-tool-window.png"]
+fn bottom_tool_window_capture() {
+    use crate::layout::{Drop, Edge};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let lib = dir.path().join("demo/src/lib.rs");
+    std::fs::write(&lib, "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n").unwrap();
+    h.state_mut().open_file(&lib.canonicalize().unwrap());
+    h.run_steps(3);
+    let id = h.state().docs.active_doc().unwrap().editor.id;
+    let group = h.state().layout.group_of(id).unwrap();
+    assert!(h.state_mut().layout.move_doc(id, Drop::Split { group, edge: Edge::Bottom }));
+    h.state_mut().dock.toggle(crate::toolwindow::ToolWindow::Terminal);
+    h.run_steps(6);
+    right_click(&mut h, egui::pos2(560.0, 130.0));
+    h.run_steps(3);
+    h.render().unwrap().save(out.join("bottom-tool-window.png")).unwrap();
+}
+
+/// With two editors side by side, Alt+Enter in the left one opens its list at that caret, and
+/// clicking "Rename to …" there renames the function.
+#[test]
+fn context_actions_open_at_the_active_editor_of_a_split() {
+    use crate::layout::{Drop, Edge};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    const MAIN: &str = "mod other;\n\nfn main() {\n    let i = 12;\n    println!(\"{i}\");\n    testeDeEscrita();\n}\n\nfn testeDeEscrita() {}\n";
+    std::fs::write(root.join("src/main.rs"), MAIN).unwrap();
+    std::fs::write(root.join("src/other.rs"), "pub fn other() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let (main, other) = (root.join("src/main.rs"), root.join("src/other.rs"));
+    let mut app = test_app(home.path(), true);
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&other);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1600.0, 900.0));
+    h.run_steps(3);
+    // other.rs goes to a group on the right; main.rs stays on the left and is the active one.
+    let other_id = h.state().docs.list[h.state().docs.index_of(&other).unwrap()].editor.id;
+    let group = h.state().layout.group_of(other_id).unwrap();
+    assert!(h.state_mut().layout.move_doc(other_id, Drop::Split { group, edge: Edge::Right }));
+    let i = h.state().docs.index_of(&main).unwrap();
+    h.state_mut().docs.activate(i);
+    run_frames(&mut h, "the case warning", |a| a.docs.list[i].editor.diagnostics.iter().any(|d| d.message.contains("snake_case")));
+    let at = MAIN.rfind("testeDeEscrita").unwrap() + 2;
+    h.state_mut().docs.list[i].editor.set_selection(rc_text::Selection::point(at));
+    h.run_steps(3);
+    let caret = h.state().caret_screen.unwrap();
+    assert!(caret.x < 800.0, "the caret is in the left editor: {caret:?}");
+    h.state_mut().pending.push(rc_editor::Action::ShowIntentions);
+    run_frames(&mut h, "the context actions", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) if !list.is_empty()));
+    let row = h.get_by_label("Rename to teste_de_escrita");
+    let r = row.rect();
+    assert!(r.left() < 800.0 && (r.top() - caret.y).abs() < 40.0, "the list opens at the caret {caret:?}, not at {r:?}");
+    row.click();
+    run_frames(&mut h, "the renamed function", |a| a.docs.list[i].editor.buffer.rope().to_string().contains("fn teste_de_escrita()"));
+    assert!(h.state().docs.list[i].editor.buffer.rope().to_string().contains("    teste_de_escrita();\n"));
+    h.state_mut().insight.stop();
+}
+
+/// Every Settings page has the same size, with a line between the menu and the page; the
+/// Keymap list fills the page.
+#[test]
+#[ignore = "Requires a GPU; writes target/snapshots/settings-page-*.png"]
+fn settings_pages_capture() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = playground_harness(home.path(), dir.path(), true);
+    let mut sizes = Vec::new();
+    for (page, name) in [(SettingsPage::Keymap, "keymap"), (SettingsPage::Appearance, "appearance"), (SettingsPage::Editor, "editor"), (SettingsPage::Inspections, "inspections"), (SettingsPage::LiveTemplates, "live-templates")] {
+        h.state_mut().open_settings(page);
+        h.run_steps(4);
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("settings"))).unwrap_or(egui::Rect::NOTHING);
+        sizes.push((name, rect.size()));
+        h.render().unwrap().save(out.join(format!("settings-page-{name}.png"))).unwrap();
+        h.state_mut().dialog = None;
+        h.run_steps(2);
+    }
+    eprintln!("{sizes:?}");
+    assert!(sizes.windows(2).all(|w| (w[0].1 - w[1].1).length() < 1.0), "{sizes:?}");
 }

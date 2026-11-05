@@ -4434,3 +4434,86 @@ fn inspection_profiles_change_the_level_of_findings() {
     assert!(app.insight.problems.get(&manifest).is_none_or(|l| !l.iter().any(|d| d.message.contains("autthors"))));
     app.insight.stop();
 }
+
+/// rust-analyzer's fix for a module file named against the convention renames the file and
+/// its `mod` line: the file operation of the edit is applied, and the open editor follows.
+#[test]
+fn a_fix_that_renames_a_module_file_renames_it() {
+    use rc_lsp::lsp_types::CodeActionOrCommand as A;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    const MAIN: &str = "mod MyMod;\n\nfn main() {\n    MyMod::hello();\n}\n";
+    write(&root.join("src/main.rs"), MAIN);
+    write(&root.join("src/MyMod.rs"), "pub fn hello() {}\n");
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    let module = root.join("src/MyMod.rs");
+    app.open_file(&module);
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    pump(&mut app, "the case warning", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("snake_case"))));
+    let i = app.docs.index_of(&main).unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(MAIN.find("MyMod").unwrap() + 1);
+    app.run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::ZERO);
+    pump(&mut app, "the actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    let Some(crate::ui::dialogs::Dialog::CodeActions { mut list, .. }) = app.dialog.take() else { unreachable!() };
+    let title = |a: &A| match a {
+        A::Command(c) => c.title.clone(),
+        A::CodeAction(c) => c.title.clone(),
+    };
+    let fix = list.iter().position(|a| title(a).contains("Rename to") && title(a).contains("my_mod")).unwrap_or_else(|| panic!("{:?}", list.iter().map(title).collect::<Vec<_>>()));
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, list.swap_remove(fix), &mut out);
+    app.handle_insight(out);
+    let renamed = root.join("src/my_mod.rs");
+    pump(&mut app, "the renamed file", |a| renamed.is_file() && !module.exists());
+    assert_eq!(std::fs::read_to_string(&renamed).unwrap(), "pub fn hello() {}\n");
+    // The editor of the module follows it, and the `mod` line names the new file.
+    assert!(app.docs.index_of(&renamed).is_some());
+    assert!(app.docs.index_of(&module).is_none());
+    let text = app.docs.list[app.docs.index_of(&main).unwrap()].editor.buffer.rope().to_string();
+    assert!(text.starts_with("mod my_mod;\n"), "{text}");
+    app.insight.stop();
+}
+
+/// rust-analyzer's "Rename to `snake_case`" fix of a function renames it and its calls.
+#[test]
+fn the_snake_case_fix_renames_a_function() {
+    use rc_lsp::lsp_types::CodeActionOrCommand as A;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    demo(&root);
+    const MAIN: &str = "fn main() {\n    testeDeEscrita();\n}\n\nfn testeDeEscrita() {}\n";
+    write(&root.join("src/main.rs"), MAIN);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    let main = root.join("src/main.rs");
+    app.open_file(&main);
+    pump(&mut app, "the analysis", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some());
+    pump(&mut app, "the case warning", |a| a.docs.active_doc().is_some_and(|d| d.editor.diagnostics.iter().any(|x| x.message.contains("snake_case"))));
+    let i = app.docs.index_of(&main).unwrap();
+    app.docs.list[i].editor.selection = rc_text::Selection::point(MAIN.rfind("testeDeEscrita").unwrap() + 2);
+    app.run_insight_action(rc_editor::Action::ShowIntentions, egui::Pos2::ZERO);
+    pump(&mut app, "the actions", |a| matches!(a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { .. })));
+    let Some(crate::ui::dialogs::Dialog::CodeActions { mut list, .. }) = app.dialog.take() else { unreachable!() };
+    let title = |a: &A| match a {
+        A::Command(c) => c.title.clone(),
+        A::CodeAction(c) => c.title.clone(),
+    };
+    let fix = list.iter().position(|a| title(a) == "Rename to teste_de_escrita").unwrap_or_else(|| panic!("{:?}", list.iter().map(title).collect::<Vec<_>>()));
+    eprintln!("fix: {:?}", list[fix]);
+    let mut out = Vec::new();
+    app.insight.run_code_action(&mut app.docs, list.swap_remove(fix), &mut out);
+    app.handle_insight(out);
+    pump(&mut app, "the renamed function", |a| a.docs.list[i].editor.buffer.rope().to_string().contains("fn teste_de_escrita()"));
+    assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main() {\n    teste_de_escrita();\n}\n\nfn teste_de_escrita() {}\n");
+    app.insight.stop();
+}

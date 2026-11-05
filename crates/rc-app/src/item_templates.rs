@@ -197,6 +197,11 @@ impl ItemKind {
     }
 }
 
+/// Whether `dir` is inside a .NET project (a `.csproj` in it or above it).
+pub fn in_dotnet_project(dir: &Path) -> bool {
+    project_of(dir).is_some()
+}
+
 /// The project file that owns `dir` (the nearest `.csproj` above it).
 fn project_of(dir: &Path) -> Option<PathBuf> {
     let mut d = Some(dir);
@@ -277,5 +282,22 @@ mod tests {
         assert_eq!(ItemKind::File.files(dir, " Dockerfile ")[0], (dir.join("Dockerfile"), "$0".to_string()));
         assert_eq!(ItemKind::File.files(dir, "docs/notes.md")[0].0, dir.join("docs/notes.md"));
         assert_eq!(ItemKind::Text.files(dir, "notes")[0].0, dir.join("notes.txt"));
+    }
+}
+
+#[cfg(test)]
+mod dotnet_tests {
+    #[test]
+    fn only_folders_of_a_csproj_are_dotnet() {
+        let dir = tempfile::tempdir().unwrap();
+        let rust = dir.path().join("crate/src");
+        let net = dir.path().join("Shop/Models");
+        std::fs::create_dir_all(&rust).unwrap();
+        std::fs::create_dir_all(&net).unwrap();
+        std::fs::write(dir.path().join("crate/Cargo.toml"), "[package]\nname = \"c\"\n").unwrap();
+        std::fs::write(dir.path().join("Shop/Shop.csproj"), "<Project />").unwrap();
+        assert!(!super::in_dotnet_project(&rust));
+        assert!(!super::in_dotnet_project(dir.path()));
+        assert!(super::in_dotnet_project(&net));
     }
 }

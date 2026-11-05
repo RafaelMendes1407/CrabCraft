@@ -1570,6 +1570,11 @@ impl CrabCraftApp {
                 InsightOutput::RefactorConflicts(review) => self.dialog = Some(Dialog::RefactorConflicts(review)),
                 InsightOutput::AskRename { doc, pos, name } => self.dialog = Some(Dialog::RenameSymbol { doc, pos, original: name.clone(), name, focus: true }),
                 InsightOutput::Message(m) => self.notify(m, false),
+                InsightOutput::ApplyFileOps(edit) => {
+                    if let Err(e) = crate::file_ops::apply(self, &edit) {
+                        self.notify(e, true);
+                    }
+                }
             }
         }
     }

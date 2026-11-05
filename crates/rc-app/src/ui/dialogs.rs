@@ -9,7 +9,7 @@ use rc_kit::i18n::{Lang, tr, trf};
 use rc_kit::{icons, theme};
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SettingsPage {
     Appearance,
     Editor,
@@ -207,25 +207,37 @@ fn buttons(ui: &mut Ui, ok: &str, enabled: bool) -> (bool, bool) {
     res
 }
 
+/// The pages of Settings, in the order of its menu.
+fn settings_pages() -> [(SettingsPage, &'static str); 9] {
+    [
+        (SettingsPage::Appearance, tr("Appearance")),
+        (SettingsPage::Editor, tr("Editor")),
+        (SettingsPage::Keymap, tr("Keymap")),
+        (SettingsPage::Tools, tr("Tools")),
+        (SettingsPage::ExternalTools, tr("External Tools")),
+        (SettingsPage::LiveTemplates, tr("Live Templates")),
+        (SettingsPage::Copyright, tr("Copyright")),
+        (SettingsPage::Scopes, tr("Scopes")),
+        (SettingsPage::Inspections, tr("Inspections")),
+    ]
+}
+
+/// Width of the Settings menu and of its pages: every page has the same size.
+const SETTINGS_NAV_W: f32 = 200.0;
+const SETTINGS_PAGE_W: f32 = 640.0;
+
 fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &mut SettingsPage) -> Outcome {
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
-    let ((ok, cancel), esc) = modal(ctx, "settings", 720.0, |ui| {
+    // One size for every page, from the window's height.
+    let page_h = (ctx.content_rect().height() * 0.7).clamp(360.0, 620.0);
+    let ((ok, cancel), esc) = modal(ctx, "settings", SETTINGS_NAV_W + 1.0 + 28.0 + SETTINGS_PAGE_W, |ui| {
         title(ui, tr("Settings"));
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
-                ui.set_width(170.0);
-                for (pg, label) in [
-                    (SettingsPage::Appearance, tr("Appearance")),
-                    (SettingsPage::Editor, tr("Editor")),
-                    (SettingsPage::Keymap, tr("Keymap")),
-                    (SettingsPage::Tools, tr("Tools")),
-                    (SettingsPage::ExternalTools, tr("External Tools")),
-                    (SettingsPage::LiveTemplates, tr("Live Templates")),
-                    (SettingsPage::Copyright, tr("Copyright")),
-                    (SettingsPage::Scopes, tr("Scopes")),
-                    (SettingsPage::Inspections, tr("Inspections")),
-                ] {
-                    let (r, resp) = ui.allocate_exact_size(vec2(170.0, 28.0), egui::Sense::click());
+                ui.set_width(SETTINGS_NAV_W);
+                ui.set_height(page_h);
+                for (pg, label) in settings_pages() {
+                    let (r, resp) = ui.allocate_exact_size(vec2(SETTINGS_NAV_W, 28.0), egui::Sense::click());
                     if *page == pg {
                         ui.painter().rect_filled(r, 6.0, p.selection);
                     } else if resp.hovered() {
@@ -238,27 +250,30 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                     }
                 }
             });
-            ui.add_space(16.0);
+            // The line between the menu and the page.
+            ui.add_space(12.0);
+            let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
+            ui.painter().rect_filled(line, 0.0, p.control_border);
+            ui.add_space(15.0);
             ui.vertical(|ui| {
-                ui.set_min_height(320.0);
-                ui.set_width(500.0);
-                // A list of its own, outside the two-column grid of the other pages.
-                if *page == SettingsPage::LiveTemplates {
-                    live_templates_page(ui, &mut draft.live_templates, p.text_muted);
-                    return;
+                ui.set_width(SETTINGS_PAGE_W);
+                ui.set_height(page_h);
+                let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
+                ui.label(egui::RichText::new(name).font(theme::bold(14.0)));
+                ui.add_space(10.0);
+                // Pages that lay out their own lists, sized to the page.
+                match page {
+                    SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
+                    SettingsPage::Copyright => {
+                        egui::ScrollArea::vertical().id_salt("copyright_page").auto_shrink([false, false]).show(ui, |ui| copyright_page(ui, app, p.text_muted, p.error));
+                        return;
+                    }
+                    SettingsPage::Scopes => return scopes_page(ui, app, p.text_muted, p.error),
+                    SettingsPage::Inspections => return inspections_page(ui, app, draft, p.text_muted),
+                    SettingsPage::Keymap => return keymap_page(ui, draft),
+                    _ => {}
                 }
-                if *page == SettingsPage::Copyright {
-                    copyright_page(ui, app, p.text_muted, p.error);
-                    return;
-                }
-                if *page == SettingsPage::Scopes {
-                    scopes_page(ui, app, p.text_muted, p.error);
-                    return;
-                }
-                if *page == SettingsPage::Inspections {
-                    inspections_page(ui, app, draft, p.text_muted);
-                    return;
-                }
+                egui::ScrollArea::vertical().id_salt(("settings_page", format!("{page:?}"))).auto_shrink([false, false]).show(ui, |ui| {
                 egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
                     SettingsPage::Appearance => {
                         ui.label(tr("Theme"));
@@ -352,22 +367,6 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         });
                         ui.end_row();
                     }
-                    SettingsPage::Keymap => {
-                        ui.label(tr("Keymap"));
-                        egui::ComboBox::from_id_salt("keymap")
-                            .selected_text(match draft.keymap {
-                                KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
-                                KeymapChoice::VisualStudio => "Visual Studio",
-                                KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut draft.keymap, KeymapChoice::Rider, if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" });
-                                ui.selectable_value(&mut draft.keymap, KeymapChoice::VisualStudio, "Visual Studio");
-                                ui.selectable_value(&mut draft.keymap, KeymapChoice::VsCode, if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" });
-                            });
-                        ui.end_row();
-                        shortcut_rows(ui, draft);
-                    }
                     SettingsPage::Tools => {
                         app.load_toolchain();
                         toolchain_rows(ui, app);
@@ -395,7 +394,8 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
                     }
                     SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
+                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections => {}
+                });
                 });
             });
         });
@@ -451,7 +451,7 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
     ui.add_space(6.0);
     let editing = if project_open && use_project { &mut project } else { &mut draft.inspection_profile };
     let mut remove = None;
-    egui::ScrollArea::vertical().id_salt("inspections_page").max_height(340.0).auto_shrink([false, true]).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt("inspections_page").max_height((ui.available_height() - 44.0).max(120.0)).auto_shrink([false, true]).show(ui, |ui| {
         // One grid for every group, so the level column lines up.
         egui::Grid::new("inspections_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
             for group in [Group::CargoToml, Group::CratesIo, Group::Rust] {
@@ -514,7 +514,7 @@ fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error:
         return;
     }
     let mut draft = app.explorer.scopes.draft.take().unwrap_or_else(|| app.explorer.scopes.draft());
-    egui::ScrollArea::vertical().id_salt("scopes_page").max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt("scopes_page").max_height(ui.available_height()).auto_shrink([false, true]).show(ui, |ui| {
         ui.label(egui::RichText::new(tr("Scopes")).font(theme::bold(13.0)));
         ui.label(egui::RichText::new(tr("Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.")).size(12.0).color(muted));
         ui.add_space(6.0);
@@ -663,10 +663,26 @@ fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, err
 
 /// Settings › Keymap: each action of Find Action with its shortcut, which can be recorded
 /// again (the next key pressed with its modifiers) or removed.
-fn shortcut_rows(ui: &mut Ui, draft: &mut Settings) {
+/// Settings › Keymap: the keymap, then every action with its shortcut, filling the page.
+fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
+    ui.horizontal(|ui| {
+        ui.label(tr("Keymap"));
+        let name = |k: KeymapChoice| match k {
+            KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
+            KeymapChoice::VisualStudio => "Visual Studio",
+            KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
+        };
+        egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
+            for k in [KeymapChoice::Rider, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
+                ui.selectable_value(&mut draft.keymap, k, name(k));
+            }
+        });
+    });
+    ui.add_space(8.0);
     let keymap = crate::app::build_keymap(draft);
     let mac = keymap.kind.is_mac();
     let recording_id = egui::Id::new("recording_shortcut");
+    let filter_id = egui::Id::new("shortcut_filter");
     let recording: Option<String> = ui.ctx().data(|d| d.get_temp(recording_id));
     // The key pressed while recording: Escape cancels.
     if let Some(id) = &recording {
@@ -684,22 +700,45 @@ fn shortcut_rows(ui: &mut Ui, draft: &mut Settings) {
             ui.ctx().data_mut(|d| d.remove::<String>(recording_id));
         }
     }
-    ui.label(tr("Shortcuts"));
-    egui::ScrollArea::vertical().id_salt("shortcuts").max_height(260.0).show(ui, |ui| {
-        egui::Grid::new("shortcuts_grid").num_columns(3).spacing(vec2(10.0, 4.0)).show(ui, |ui| {
-            let mut items = crate::search::action_items();
-            items.sort_by_key(|(label, _)| label.to_lowercase());
+    let mut filter: String = ui.ctx().data(|d| d.get_temp(filter_id)).unwrap_or_default();
+    if ui.add(egui::TextEdit::singleline(&mut filter).hint_text(tr("Filter actions")).desired_width(f32::INFINITY)).changed() {
+        ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter.clone()));
+    }
+    ui.add_space(6.0);
+    let needle = filter.trim().to_lowercase();
+    let mut items = crate::search::action_items();
+    items.retain(|(label, _)| needle.is_empty() || label.to_lowercase().contains(&needle));
+    items.sort_by_key(|(label, _)| label.to_lowercase());
+    let p = rc_kit::pal(ui);
+    // Columns: the action takes what the shortcut and the buttons leave.
+    const KEYS_W: f32 = 150.0;
+    const BUTTONS_W: f32 = 190.0;
+    let name_w = (ui.available_width() - KEYS_W - BUTTONS_W - 16.0).max(160.0);
+    egui::ScrollArea::vertical().id_salt("shortcuts").auto_shrink([false, false]).show(ui, |ui| {
+        if items.is_empty() {
+            ui.label(egui::RichText::new(tr("No action matches the filter")).color(p.text_muted));
+        }
+        egui::Grid::new("shortcuts_grid").num_columns(3).striped(true).min_row_height(26.0).spacing(vec2(8.0, 2.0)).show(ui, |ui| {
             for (label, action) in items {
                 let id = format!("{action:?}");
-                ui.label(label);
+                let left = egui::Layout::left_to_right(egui::Align::Center);
+                ui.allocate_ui_with_layout(vec2(name_w, 22.0), left, |ui| {
+                    ui.set_width(name_w);
+                    ui.add(egui::Label::new(label).truncate()).on_hover_text(label);
+                });
                 let text = if recording.as_deref() == Some(id.as_str()) {
                     tr("Press a shortcut…").to_string()
                 } else {
                     keymap.chord(action).map(|c| rc_editor::keymap::format_chord(c, mac)).unwrap_or_else(|| "—".into())
                 };
                 let changed = draft.shortcuts.contains_key(&id);
-                ui.label(if changed { egui::RichText::new(text).strong() } else { egui::RichText::new(text) });
+                let text = egui::RichText::new(text).monospace();
+                ui.allocate_ui_with_layout(vec2(KEYS_W, 22.0), left, |ui| {
+                    ui.set_width(KEYS_W);
+                    ui.add(egui::Label::new(if changed { text.strong() } else { text.color(p.text_muted) }).truncate());
+                });
                 ui.horizontal(|ui| {
+                    ui.set_width(BUTTONS_W);
                     if ui.small_button(tr("Record Shortcut")).clicked() {
                         ui.ctx().data_mut(|d| d.insert_temp(recording_id, id.clone()));
                     }
@@ -714,7 +753,6 @@ fn shortcut_rows(ui: &mut Ui, draft: &mut Settings) {
             }
         });
     });
-    ui.end_row();
 }
 
 /// Settings › Live Templates: abbreviation, description and body of each template.
@@ -722,7 +760,7 @@ fn live_templates_page(ui: &mut Ui, templates: &mut Vec<rc_core::live_templates:
     ui.add(egui::Label::new(egui::RichText::new(tr("Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.")).color(muted)).wrap());
     ui.add_space(8.0);
     let mut remove = None;
-    egui::ScrollArea::vertical().id_salt("live_templates").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt("live_templates").max_height((ui.available_height() - 44.0).max(120.0)).auto_shrink([false, true]).show(ui, |ui| {
         for (i, t) in templates.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut t.abbreviation).hint_text(tr("Abbreviation")).font(egui::TextStyle::Monospace).desired_width(90.0));
@@ -2270,7 +2308,11 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         ctx.request_repaint_after(std::time::Duration::from_millis(50));
     }
     let preview = intention_preview(app, ctx, area.response.rect);
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && !preview.hovered() && chosen.is_none() {
+    // A press outside the list and its preview closes it. `hovered()` is false over the rows (they
+    // are on top of the area), so the rectangles are tested: a press on a row must not close the
+    // list before its click.
+    let inside = |pos: egui::Pos2| area.response.rect.contains(pos) || preview.rect.contains(pos);
+    if ctx.input(|i| i.pointer.any_pressed() && i.pointer.press_origin().is_some_and(|pos| !inside(pos))) && chosen.is_none() {
         close = true;
     }
     if close || chosen.is_some() {

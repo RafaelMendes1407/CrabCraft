@@ -826,7 +826,9 @@
     "Go to Definition": "Zur Definition"
   },
   "settings": {
-    "Reopen the last project on startup": "Letztes Projekt beim Start erneut öffnen"
+    "Reopen the last project on startup": "Letztes Projekt beim Start erneut öffnen",
+    "Filter actions": "Aktionen filtern",
+    "No action matches the filter": "Keine Aktion passt zum Filter"
   },
   "split": {
     "Move to Main Window": "In das Hauptfenster verschieben",
@@ -1713,5 +1715,12 @@
     "Diagnostic code, such as clippy::needless_return": "Diagnosecode, etwa clippy::needless_return",
     "Add Code": "Code hinzufügen",
     "A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group": "Ein Code von rust-analyzer, dem Compiler oder Clippy; präfix::* deckt eine ganze Gruppe ab"
+  },
+  "fileops": {
+    "The language server sent a path that is not a file": "Der Sprachserver hat einen Pfad gesendet, der keine Datei ist",
+    "The language server asked to change a file outside the project: {file}": "Der Sprachserver wollte eine Datei außerhalb des Projekts ändern: {file}",
+    "Open a project to change its files": "Öffnen Sie ein Projekt, um seine Dateien zu ändern",
+    "This action deletes files, which is not supported yet": "Diese Aktion löscht Dateien, was noch nicht unterstützt wird",
+    "{file} exists already": "{file} existiert bereits"
   }
 }

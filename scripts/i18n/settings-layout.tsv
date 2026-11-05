@@ -1,0 +1,4 @@
+# Settings: the Keymap page filter. Import: python3 scripts/i18n_tsv.py settings scripts/i18n/settings-layout.tsv
+# en	es	fr	pt-BR	de	pl	zh-Hans	ja
+Filter actions	Filtrar acciones	Filtrer les actions	Filtrar ações	Aktionen filtern	Filtruj akcje	筛选操作	アクションを絞り込む
+No action matches the filter	Ninguna acción coincide con el filtro	Aucune action ne correspond au filtre	Nenhuma ação corresponde ao filtro	Keine Aktion passt zum Filter	Żadna akcja nie pasuje do filtra	没有与筛选条件匹配的操作	フィルターに一致するアクションはありません
