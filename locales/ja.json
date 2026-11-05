@@ -2533,5 +2533,18 @@
     "Expanding declarative macro one step…": "宣言的マクロを1段階展開中…",
     "One-step expansion of {name}!": "{name}! の1段階展開",
     "Expand Declarative Macro One Step (unsupported on this platform)": "宣言的マクロを1段階展開（このプラットフォームでは非対応）"
+  },
+  "web_languages": {
+    "HTML language server": "HTML 言語サーバー",
+    "CSS language server": "CSS 言語サーバー",
+    "JavaScript/TypeScript language server": "JavaScript/TypeScript 言語サーバー",
+    "Global tsserver.js path": "グローバル tsserver.js パス",
+    "Not configured; install externally": "未設定。外部でインストールしてください",
+    "Configure external web language servers in Settings › Tools and trust the project before using this action": "この操作を使う前に、設定 › ツールで外部 Web 言語サーバーを設定し、プロジェクトを信頼してください",
+    "This web language server action is not supported yet": "この Web 言語サーバーの操作にはまだ対応していません",
+    "Web edits require unchanged open workspace files; load the affected files and retry": "Web 編集には変更されていない開いたワークスペースファイルが必要です。対象ファイルを読み込んで再試行してください",
+    "Web language server initialization timed out": "Web 言語サーバーの初期化がタイムアウトしました",
+    "Web language server failed: {error}": "Web 言語サーバーでエラーが発生しました：{error}",
+    "The web language server is still initializing": "Web 言語サーバーを初期化しています"
   }
 }

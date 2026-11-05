@@ -425,7 +425,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             let mut cx = crate::manifest_completion::Cx { names: &mut app.crate_names, deps: &mut app.dep_versions, online: app.settings.check_crates_io };
             crate::manifest_completion::accepted(doc, data, &mut cx);
         } else {
-            app.insight.completion_accepted(doc, data);
+            if let Some(insight)=app.web_languages.insight(doc){insight.completion_accepted(doc,data);}else{app.insight.completion_accepted(doc, data);}
         }
     }
     if crate::manifest_completion::is_manifest(doc) {
@@ -440,7 +440,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let server_events: Vec<EditorEvent> = out.events.iter().filter(|e| feature_click.is_none() || !matches!(e, EditorEvent::NavigateAt(_))).cloned().collect();
     if app.debugger.stopped() {
         let insight_events: Vec<_> = server_events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
-        app.insight.on_editor_events(doc, &insight_events);
+        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&insight_events);}else{app.insight.on_editor_events(doc, &insight_events);}
         for e in &out.events {
             match e {
                 EditorEvent::HoverAt { pos, screen } => {
@@ -452,7 +452,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             }
         }
     } else {
-        app.insight.on_editor_events(doc, &server_events);
+        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&server_events);}else{app.insight.on_editor_events(doc, &server_events);}
     }
     let mut run_test_line = None;
     let mut run_binary_line = None;

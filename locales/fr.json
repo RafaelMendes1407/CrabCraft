@@ -2533,5 +2533,18 @@
     "Expanding declarative macro one step…": "Expansion de la macro déclarative d’un pas…",
     "One-step expansion of {name}!": "Expansion d’un pas de {name}!",
     "Expand Declarative Macro One Step (unsupported on this platform)": "Développer la macro déclarative d’un pas (non pris en charge sur cette plateforme)"
+  },
+  "web_languages": {
+    "HTML language server": "Serveur de langage HTML",
+    "CSS language server": "Serveur de langage CSS",
+    "JavaScript/TypeScript language server": "Serveur de langage JavaScript/TypeScript",
+    "Global tsserver.js path": "Chemin global de tsserver.js",
+    "Not configured; install externally": "Non configuré ; installez séparément",
+    "Configure external web language servers in Settings › Tools and trust the project before using this action": "Configurez les serveurs de langage web externes dans Paramètres › Outils et faites confiance au projet avant cette action",
+    "This web language server action is not supported yet": "Cette action du serveur de langage web n’est pas encore prise en charge",
+    "Web edits require unchanged open workspace files; load the affected files and retry": "Les modifications web exigent des fichiers ouverts inchangés ; chargez les fichiers concernés et réessayez",
+    "Web language server initialization timed out": "Délai d’initialisation du serveur de langage web dépassé",
+    "Web language server failed: {error}": "Échec du serveur de langage web : {error}",
+    "The web language server is still initializing": "Le serveur de langage web est encore en cours d’initialisation"
   }
 }

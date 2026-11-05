@@ -11,6 +11,7 @@ mod context;
 pub mod crate_refs;
 mod derive;
 mod highlight;
+mod embedded_web;
 pub mod http;
 pub mod sql;
 pub mod axum;
@@ -41,13 +42,14 @@ pub struct Syntax {
     /// Version of the newest text, the one the pending job parses.
     version: u64,
     folds: Vec<FoldRange>,
+    embedded: Vec<embedded_web::EmbeddedSpan>,
     /// Bumped whenever highlights may have changed (new tree, edit).
     generation: u64,
 }
 
 impl Syntax {
     pub fn new(lang: Lang) -> Self {
-        Syntax { lang, tree: None, tree_version: 0, version: 0, folds: Vec::new(), generation: 0 }
+        Syntax { lang, tree: None, tree_version: 0, version: 0, folds: Vec::new(), embedded: Vec::new(), generation: 0 }
     }
 
     pub fn tree(&self) -> Option<&Tree> {
@@ -56,6 +58,11 @@ impl Syntax {
 
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub fn highlight(&self,rope:&Rope,first:usize,count:usize)->Vec<Vec<Span>>{
+        let mut lines=match &self.tree{Some(tree)=>highlight_lines(self.lang,tree,rope,first,count),None=>highlight_lexical(self.lang,rope,first,count).unwrap_or_else(||vec![Vec::new();count.min(rope.len_lines().saturating_sub(first))])};
+        embedded_web::overlay(&self.embedded,rope,first,&mut lines);lines
     }
 
     pub fn folds(&self) -> &[FoldRange] {
@@ -70,6 +77,7 @@ impl Syntax {
     /// Updates the current tree with edits just applied to the text (now at `version`).
     pub fn edit(&mut self, edits: &[Edit], version: u64) {
         self.version = version;
+        self.embedded.clear();
         self.generation += 1;
         if let Some(tree) = &mut self.tree {
             for e in edits {
@@ -111,6 +119,7 @@ impl Syntax {
         self.tree = Some(result.tree);
         self.tree_version = result.version;
         self.folds = result.folds;
+        self.embedded=result.embedded;
         self.generation += 1;
         true
     }
@@ -120,6 +129,7 @@ impl Syntax {
         self.version = version;
         if let Some(tree) = parse_now(self.lang, rope, self.tree.as_ref()) {
             self.folds = folding_ranges(self.lang, &tree, rope);
+            self.embedded=embedded_web::collect(self.lang,&tree,rope);
             self.tree = Some(tree);
             self.tree_version = version;
             self.generation += 1;

@@ -84,6 +84,10 @@ pub struct Settings {
     pub gdb_path: Option<PathBuf>,
     pub lldb_dap_path: Option<PathBuf>,
     pub rust_analyzer_path: Option<PathBuf>,
+    pub web_html_server: Option<PathBuf>,
+    pub web_css_server: Option<PathBuf>,
+    pub web_typescript_server: Option<PathBuf>,
+    pub web_tsserver_path: Option<PathBuf>,
     /// Clippy instead of `cargo check` on save.
     pub use_clippy: bool,
     /// Run Rust tests with cargo-nextest instead of `cargo test`.
@@ -151,6 +155,10 @@ impl Default for Settings {
             gdb_path: None,
             lldb_dap_path: None,
             rust_analyzer_path: None,
+            web_html_server: None,
+            web_css_server: None,
+            web_typescript_server: None,
+            web_tsserver_path: None,
             use_clippy: false,
             use_nextest: false,
             format_on_save: false,

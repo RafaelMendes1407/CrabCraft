@@ -2533,5 +2533,18 @@
     "Expanding declarative macro one step…": "正在单步展开声明式宏…",
     "One-step expansion of {name}!": "{name}! 的单步展开",
     "Expand Declarative Macro One Step (unsupported on this platform)": "单步展开声明式宏（此平台不支持）"
+  },
+  "web_languages": {
+    "HTML language server": "HTML 语言服务器",
+    "CSS language server": "CSS 语言服务器",
+    "JavaScript/TypeScript language server": "JavaScript/TypeScript 语言服务器",
+    "Global tsserver.js path": "全局 tsserver.js 路径",
+    "Not configured; install externally": "未配置；请另行安装",
+    "Configure external web language servers in Settings › Tools and trust the project before using this action": "使用此操作前，请在设置 › 工具中配置外部 Web 语言服务器并信任项目",
+    "This web language server action is not supported yet": "尚不支持此 Web 语言服务器操作",
+    "Web edits require unchanged open workspace files; load the affected files and retry": "Web 编辑要求工作区文件已打开且未更改；请加载受影响的文件后重试",
+    "Web language server initialization timed out": "Web 语言服务器初始化超时",
+    "Web language server failed: {error}": "Web 语言服务器失败：{error}",
+    "The web language server is still initializing": "Web 语言服务器仍在初始化"
   }
 }

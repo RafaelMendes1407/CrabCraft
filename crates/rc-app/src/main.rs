@@ -46,6 +46,7 @@ mod disassembly_view;
 mod disk_revert;
 mod disk_watch;
 mod insight;
+mod web_languages;
 mod inspection_profile;
 mod intention_preview;
 mod call_tree;

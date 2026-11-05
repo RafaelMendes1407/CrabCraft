@@ -68,6 +68,7 @@ pub struct CrabCraftApp {
     pub dialog: Option<Dialog>,
     pub notices: Vec<Notice>,
     pub insight: Insight,
+    pub web_languages: crate::web_languages::WebLanguages,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
     pub debug_sessions: crate::debug_sessions::Sessions,
@@ -306,6 +307,7 @@ impl CrabCraftApp {
             explorer: ExplorerState::default(),
             dialog: None,
             notices: Vec::new(),
+            web_languages: crate::web_languages::WebLanguages::new(waker.clone()),
             insight: {
                 let mut insight = Insight::new(waker.clone());
                 insight.set_autoimport_exclude(clean_paths(&settings.autoimport_exclude));
@@ -1427,6 +1429,7 @@ impl CrabCraftApp {
         self.auto_attach = None;
         self._watcher = None;
         self.insight.stop();
+        self.web_languages.stop();
         self.runner.stop_all();
         self.runner.clear();
         self.files.close();
@@ -1780,6 +1783,7 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        if let Some(outputs)=self.web_languages.action(&mut self.docs.list[i],action,caret_screen){self.handle_insight(outputs);return;}
         if action == Action::CompleteStatement {
             self.statement_completion = None;
             match crate::complete_statement::Job::start(&self.docs, self.waker.clone()) {
@@ -3561,6 +3565,11 @@ impl eframe::App for CrabCraftApp {
                 editor_actions.push(a);
             }
         }
+        let web_trusted=self.workspace.as_ref().is_some_and(|workspace|self.settings.trusted_projects.contains(&workspace.ws.root));
+        let web_outputs=self.web_languages.update(&mut self.docs,self.workspace.as_ref().map(|workspace|workspace.ws.root.as_path()),&self.settings,web_trusted);
+        if self.web_languages.initializing(){ctx.request_repaint_after(std::time::Duration::from_millis(100));}
+        self.web_languages.merge_problems(&mut self.insight);
+        self.handle_insight(web_outputs);
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
         self.handle_insight(outputs);
         let outs = self.runner.update();

@@ -6,6 +6,7 @@ pub mod rpc;
 pub mod rust_analyzer;
 pub mod semantic;
 pub mod session;
+pub mod web;
 pub mod sync;
 
 pub use lsp_types;
