@@ -4,7 +4,7 @@ use rc_text::Rope;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use tree_sitter::Node;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Route {
     pub method: String, pub path: String, pub handler: String,
     /// Zero-based source location of `.route` and the handler expression.
@@ -25,9 +25,10 @@ fn method(name: &str) -> Option<&'static str> {
     match name { "get" => Some("GET"), "post" => Some("POST"), "put" => Some("PUT"), "patch" => Some("PATCH"), "delete" => Some("DELETE"), "head" => Some("HEAD"), "options" => Some("OPTIONS"), "trace" => Some("TRACE"), "connect" => Some("CONNECT"), "any" => Some("ANY"), _ => None }
 }
 fn literal(node: Node<'_>, source: &str) -> Option<String> {
-    let value = text(node, source);
-    if node.kind() == "raw_string_literal" { let first = value.find('"')?; let last = value.rfind('"')?; return value.get(first + 1..last).map(str::to_string); }
-    if node.kind() != "string_literal" { return None; }
+    string_value(text(node,source),node.kind()=="raw_string_literal")
+}
+pub fn string_value(value:&str,raw:bool)->Option<String>{
+    if raw { let first = value.find('"')?; let last = value.rfind('"')?; return value.get(first + 1..last).map(str::to_string); }
     let mut chars = value.strip_prefix('"')?.strip_suffix('"')?.chars(); let mut out = String::new();
     while let Some(c) = chars.next() {
         if c != '\\' { out.push(c); continue; }

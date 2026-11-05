@@ -1,4 +1,4 @@
-# Static Axum endpoints and Reqwest calls
+# Axum endpoint snapshots and Reqwest calls
 
 Open the **Endpoints** tool window in a Cargo project. It scans saved Rust sources in workspace
 and attached package folders on a worker. **Refresh Endpoints** starts a new snapshot and
@@ -13,10 +13,34 @@ can be filtered, opens the route on double-click and offers navigation to a same
 including inactive cfg/test branches, rather than a statement about a running server.
 
 Macros, runtime strings/conditionals, mutable reassignment inference, wildcard imports,
-cross-file router composition and semantic type inference are unsupported. In those cases
+cross-file composition are unsupported in the static scanner. In those cases
 router-local paths may remain relative to an unresolved outer nesting prefix. The UI reports
 unresolved expressions and incomplete scans; inspect the source and set the request base URL
 accordingly. It does not promise a complete runtime route graph.
+
+**Refresh Semantic Endpoints** is an explicit second scanner, enabled only for a trusted project
+with an existing initialized Rust language server. It verifies constructor/method/handler
+identities through rust-analyzer definitions and the defining package and impl. It follows
+immutable bindings, literal path constants and zero-argument factory functions across saved
+Rust modules, including modules that have never been opened in an editor. Aliased Axum imports,
+`route`, `nest` and `merge` compose paths; handlers navigate to their defining source file.
+Opening the Endpoints window still uses only the static scanner.
+
+Semantic scanning runs on a cancellable worker. It starts no Cargo command, registry request,
+server or explicit macro-expansion request. The existing trusted language server retains its
+own configured analysis/build permissions. This is a source-declaration snapshot, including
+inactive branches, not proof of a complete runtime graph. Dynamic paths, argument-dependent
+factories, generated routers, unknown wrappers and cycles remain unsupported/incomplete.
+Unresolved identities are never accepted merely because a method is named `route`.
+
+The worker captures open Rust buffers, versions, paths, the language-server connection and
+configuration epoch. Changes during scanning cancel publication; saved files are rechecked
+before publication. Changing trust or restarting the server invalidates a published semantic
+snapshot. Editing a source clears its matching hints; refresh before relying on cached routes.
+Semantic limits are 128 files, 16 MiB of project source, 32 MiB including definition sources,
+1,024 definition requests, 5,000 routes and a 45-second total deadline. Transient indexing errors
+and temporarily absent definitions are retried for at most ten seconds within those limits.
+Canceling drops pending requests. No source is saved or changed by either scanner.
 
 **Route hints** shows methods and resolved static paths at the end of declaration lines in open
 Rust editors whose contents match the snapshot. Editing a file clears its hints; refresh to
@@ -34,7 +58,8 @@ is bounded to the first 2,001 lines / 64 KiB before the caret and 8 KiB per line
 F-06 remains partial. [RustRover's public Axum help](https://www.jetbrains.com/help/rust/axum.html)
 describes automatic and manual path/query completion in Rust and non-Rust files. This
 implementation provides manual HTTP request path completion and static Rust hints; it
-does not complete query parameters or Rust URL strings and makes no parity claim.
+does not complete query parameters or Rust URL strings and makes no parity claim. Semantic
+composition and cross-file handler navigation are now available through the explicit scanner.
 
 Select a result to generate a Reqwest call. Enter an HTTP(S) base URL, choose the method and
 fill captured `{name}`, `{*wildcard}` or older `:name`/`*wildcard` path parameters. Values are
@@ -58,6 +83,10 @@ native test scans a copy of that project, navigates, checks hint invalidation an
 request without executing its build.rs. A separate live test compiles the generated Reqwest
 function and verifies the encoded HTTP request against a local server. Those fixture-dependent
 UI/compiler tests are ignored by default and were run explicitly.
+
+The semantic fixture additionally verifies real Axum aliases, cross-file factories, nesting,
+merging and resolved handler identities through rust-analyzer. Native controls scan initially
+closed modules, navigate to a handler and exercise cancellation and stale configuration guards.
 
 Primary references:
 

@@ -3353,6 +3353,7 @@ impl CrabCraftApp {
         self.issue_tracker.poll();
         if self.history_edit.poll() { self.vcs.refresh(); }
         if self.shelves.poll() { self.vcs.refresh(); }
+        self.endpoints.poll_semantic(&mut self.docs,self.insight.session.as_ref().map(|session|&session.client),acp_trusted,self.cfg_epoch);
         self.endpoints.poll(&mut self.docs);
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();

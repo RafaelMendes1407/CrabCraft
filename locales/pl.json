@@ -2801,5 +2801,14 @@
     "Select CriticalUp only after explicitly trusting this Cargo project": "Wybierz CriticalUp dopiero po jawnym zaufaniu projektowi Cargo",
     "This CriticalUp installation has no rustfmt; install the matching Ferrocene package externally": "Ta instalacja CriticalUp nie ma rustfmt; zainstaluj odpowiedni pakiet Ferrocene zewnętrznie",
     "Rustup rustfmt channels are unsupported by CriticalUp; clear the channel to use the selected formatter": "CriticalUp nie obsługuje kanałów rustfmt z rustup; wyczyść kanał, aby użyć wybranego formatera"
+  },
+  "axum_semantic": {
+    "Refresh Semantic Endpoints": "Odśwież endpointy semantyczne",
+    "Uses the existing trusted rust-analyzer; no Cargo command or macro expansion request is started": "Używa istniejącego zaufanego rust-analyzer; nie uruchamia Cargo ani rozwijania makr",
+    "Semantic Axum scan exceeded its source or identity-request limit": "Semantyczne skanowanie Axum przekroczyło limit źródeł lub zapytań tożsamości",
+    "Semantic Axum scan timed out": "Upłynął limit czasu semantycznego skanowania Axum",
+    "Could not read sources or language-server definitions for the Axum scan": "Nie można odczytać źródeł lub definicji serwera języka do skanowania Axum",
+    "Axum sources, metadata, trust or language server changed; refresh the scan": "Źródła Axum, metadane, zaufanie lub serwer języka uległy zmianie; odśwież skanowanie",
+    "RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved.": "Deklaracje Axum zweryfikowane przez RA i składanie fabryk między plikami. To migawka, a nie pełny graf działania; dynamiczne lub generowane routery mogą pozostać nierozwiązane."
   }
 }

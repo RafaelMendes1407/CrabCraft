@@ -12,6 +12,7 @@ mod database_postgres;
 mod sql_injection;
 mod cli;
 mod endpoints;
+mod axum_semantic;
 mod clone_project;
 mod compare_cli;
 mod cargo_dependencies;

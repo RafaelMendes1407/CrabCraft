@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 #[derive(Clone, Debug)]
-pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, search: String }
+pub struct Endpoint { pub file: PathBuf, pub route: rc_syntax::axum::Route, pub handler_file: Option<PathBuf>, search: String }
 #[derive(Default)]
-pub struct Snapshot { pub routes: Vec<Endpoint>, hashes: BTreeMap<PathBuf, u64>, skipped: usize, unresolved: usize, limited: bool }
+pub struct Snapshot { pub routes: Vec<Endpoint>, hashes: BTreeMap<PathBuf, u64>, skipped: usize, unresolved: usize, limited: bool, semantic: bool }
 #[derive(Debug)]
 enum ScanError { Cancelled }
 fn hash(text: &str) -> u64 { text.bytes().fold(0xcbf29ce484222325u64, |value, byte| (value ^ byte as u64).wrapping_mul(0x100000001b3)) }
@@ -51,7 +51,7 @@ fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], cancel: &Ato
             let report = rc_syntax::axum::routes(&text);
             snapshot.unresolved = snapshot.unresolved.saturating_add(report.unresolved); snapshot.limited |= report.limited;
             if snapshot.routes.len().saturating_add(report.routes.len()) > 10_000 { snapshot.limited = true; }
-            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
+            snapshot.routes.extend(report.routes.into_iter().map(|route| Endpoint { file: path.clone(), handler_file: None, search: format!("{} {} {}", route.method, route.path, route.handler).to_lowercase(), route }));
             snapshot.routes.truncate(10_000);
         }
     }
@@ -174,7 +174,12 @@ fn completed_path(path: &str, prefix: &str) -> Option<(String, String)> {
     Some((labels.join("/"), format!("{}$0", inserted.join("/"))))
 }
 
+struct SemanticJob { cancel: Arc<AtomicBool>, inbox: Inbox<Result<crate::axum_semantic::Report,crate::axum_semantic::Error>>, overlays: Vec<crate::axum_semantic::Overlay>, client: rc_lsp::Client, epoch: u64 }
+impl Drop for SemanticJob {fn drop(&mut self){self.cancel.store(true,Ordering::Release);}}
 pub struct Endpoints {
+    waker: Waker,
+    semantic_job: Option<SemanticJob>,
+    semantic_context: Option<(rc_lsp::Client,u64)>,
     snapshot: Snapshot,
     cancel: Option<Arc<AtomicBool>>,
     inbox: Inbox<Result<Snapshot, ScanError>>,
@@ -191,10 +196,208 @@ pub struct Endpoints {
     error: Option<String>,
 }
 impl Endpoints {
-    pub fn new(waker: Waker) -> Self { Self { snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
-    pub fn cancel(&mut self) { if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
+    pub fn new(waker: Waker) -> Self { Self { waker:waker.clone(), semantic_job:None, semantic_context:None, snapshot: Default::default(), cancel: None, inbox: Inbox::new(waker), started: false, selected: None, filter: String::new(), filter_cache: String::new(), visible: None, base: "http://127.0.0.1:3000".into(), method: "GET".into(), values: BTreeMap::new(), show_hints: true, applied: BTreeMap::new(), error: None } }
+    pub fn cancel(&mut self) { self.semantic_job=None; if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
+    fn start_semantic(
+        &mut self,
+        roots: Vec<PathBuf>,
+        workspace: PathBuf,
+        excluded: Vec<String>,
+        docs: &mut crate::docs::Docs,
+        insight: &mut crate::insight::Insight,
+        epoch: u64,
+    ) {
+        if self.cancel.is_some() || self.semantic_job.is_some() {
+            return;
+        }
+        let Some(client) = insight
+            .session
+            .as_ref()
+            .filter(|session| session.is_initialized())
+            .map(|session| session.client.clone())
+        else {
+            return;
+        };
+        let mut overlays = Vec::new();
+        let mut bytes = 0;
+        for doc in docs.list.iter().filter(|doc| {
+            !doc.generated && !doc.scratch && doc.editor.lang() == rc_syntax::Lang::Rust
+        }) {
+            bytes += doc.editor.buffer.rope().len_bytes();
+            if overlays.len() >= 128
+                || doc.editor.buffer.rope().len_bytes() > 2 * 1024 * 1024
+                || bytes > 16 * 1024 * 1024
+            {
+                self.error = Some(
+                    tr("Semantic Axum scan exceeded its source or identity-request limit").into(),
+                );
+                return;
+            }
+            overlays.push(crate::axum_semantic::Overlay {
+                id: doc.editor.id,
+                version: doc.editor.buffer.version(),
+                path: doc.path.clone(),
+                rope: doc.editor.buffer.snapshot(),
+            });
+        }
+        for doc in &mut docs.list {
+            if doc.editor.lang() == rc_syntax::Lang::Rust {
+                insight.flush(doc);
+            }
+        }
+        self.started = true;
+        self.error = None;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let token = cancel.clone();
+        let query_client = client.clone();
+        let sources = overlays.clone();
+        let inbox = Inbox::new(self.waker.clone());
+        let sender = inbox.sender();
+        match std::thread::Builder::new()
+            .name("rc-axum-semantic".into())
+            .spawn(move || {
+                let budget = crate::axum_semantic::Budget {
+                    cancel: token,
+                    deadline: std::time::Instant::now() + std::time::Duration::from_secs(45),
+                };
+                sender.send(crate::axum_semantic::scan(
+                    roots,
+                    &workspace,
+                    &excluded,
+                    &sources,
+                    &query_client,
+                    &budget,
+                ));
+            }) {
+            Ok(_) => {
+                self.semantic_job = Some(SemanticJob {
+                    cancel,
+                    inbox,
+                    overlays,
+                    client,
+                    epoch,
+                })
+            }
+            Err(_) => {
+                self.error = Some(
+                    tr("Could not read sources or language-server definitions for the Axum scan")
+                        .into(),
+                )
+            }
+        }
+    }
+    pub fn poll_semantic(
+        &mut self,
+        docs: &mut crate::docs::Docs,
+        client: Option<&rc_lsp::Client>,
+        trusted: bool,
+        epoch: u64,
+    ) {
+        if self
+            .semantic_context
+            .as_ref()
+            .is_some_and(|(old, generation)| {
+                !trusted
+                    || *generation != epoch
+                    || client.is_none_or(|client| !client.same_connection(old))
+            })
+        {
+            self.semantic_context = None;
+            self.snapshot = Snapshot::default();
+            self.applied.clear();
+            self.visible = None;
+            for doc in &mut docs.list {
+                doc.editor.end_hints.clear();
+            }
+        }
+        let Some(job) = &self.semantic_job else {
+            return;
+        };
+        let eligible = docs
+            .list
+            .iter()
+            .filter(|doc| {
+                !doc.generated && !doc.scratch && doc.editor.lang() == rc_syntax::Lang::Rust
+            })
+            .count();
+        let current = trusted
+            && epoch == job.epoch
+            && client.is_some_and(|client| client.same_connection(&job.client))
+            && eligible == job.overlays.len()
+            && job.overlays.iter().all(|old| {
+                docs.list.iter().any(|doc| {
+                    doc.editor.id == old.id
+                        && doc.path == old.path
+                        && doc.editor.buffer.version() == old.version
+                })
+            });
+        if !current {
+            self.semantic_job = None;
+            self.error = Some(
+                tr("Axum sources, metadata, trust or language server changed; refresh the scan")
+                    .into(),
+            );
+            return;
+        }
+        let Some(result) = job.inbox.drain().into_iter().next() else {
+            return;
+        };
+        let job = self.semantic_job.take();
+        match result {
+            Ok(report) => {
+                self.snapshot = Snapshot {
+                    routes: report
+                        .routes
+                        .into_iter()
+                        .map(|route| Endpoint {
+                            file: route.file,
+                            search: format!(
+                                "{} {} {}",
+                                route.route.method, route.route.path, route.route.handler
+                            )
+                            .to_lowercase(),
+                            route: route.route,
+                            handler_file: route.handler_file,
+                        })
+                        .collect(),
+                    hashes: report.hashes,
+                    unresolved: report.unresolved,
+                    limited: report.limited,
+                    semantic: true,
+                    skipped: 0,
+                };
+                if let Some(job) = job {
+                    self.semantic_context = Some((job.client.clone(), job.epoch));
+                }
+                self.visible = None;
+                self.selected = None;
+                self.values.clear();
+                self.applied.clear();
+                for doc in &mut docs.list {
+                    if doc.editor.lang() == rc_syntax::Lang::Rust {
+                        doc.editor.end_hints.clear();
+                    }
+                }
+            }
+            Err(error) => self.error = Some(
+                tr(match error {
+                    crate::axum_semantic::Error::Cancelled => "Endpoint scan cancelled",
+                    crate::axum_semantic::Error::Timeout => "Semantic Axum scan timed out",
+                    crate::axum_semantic::Error::Limit => {
+                        "Semantic Axum scan exceeded its source or identity-request limit"
+                    }
+                    crate::axum_semantic::Error::Changed => {
+                        "Axum sources, metadata, trust or language server changed; refresh the scan"
+                    }
+                    _ => "Could not read sources or language-server definitions for the Axum scan",
+                })
+                .into(),
+            ),
+        }
+    }
     fn start(&mut self, roots: Vec<PathBuf>, workspace: PathBuf, excluded: Vec<String>) {
-        if self.cancel.is_some() { return; }
+        if self.cancel.is_some() || self.semantic_job.is_some() { return; }
+        self.semantic_context = None;
         self.started = true; self.error = None; let cancel = Arc::new(AtomicBool::new(false)); self.cancel = Some(cancel.clone()); let out = self.inbox.sender();
         std::thread::spawn(move || { out.send(scan(roots, &workspace, &excluded, &cancel)); });
     }
@@ -266,14 +469,16 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
     let state = &mut app.endpoints;
     state.poll(&mut app.docs);
     let mut refresh = !state.started;
+    let trusted=app.settings.trusted_projects.contains(&workspace);let semantic_ready=trusted&&app.insight.ready();let mut semantic=false;
     ui.horizontal_wrapped(|ui| {
-        if ui.add_enabled(state.cancel.is_none(), egui::Button::new(tr("Refresh Endpoints"))).clicked() { refresh = true; }
-        if state.cancel.is_some() { ui.spinner(); if ui.button(tr("Cancel Scan")).clicked() { state.cancel(); } }
+        if ui.add_enabled(state.cancel.is_none()&&state.semantic_job.is_none(), egui::Button::new(tr("Refresh Endpoints"))).clicked() { refresh = true; }
+        semantic=ui.add_enabled(state.cancel.is_none()&&state.semantic_job.is_none()&&semantic_ready,egui::Button::new(tr("Refresh Semantic Endpoints"))).on_hover_text(tr("Uses the existing trusted rust-analyzer; no Cargo command or macro expansion request is started")).clicked();
+        if state.cancel.is_some()||state.semantic_job.is_some() { ui.spinner(); if ui.button(tr("Cancel Scan")).clicked() { state.cancel(); } }
         ui.add(egui::TextEdit::singleline(&mut state.filter).hint_text(tr("Filter method, path or handler")).char_limit(200));
         if ui.checkbox(&mut state.show_hints, tr("Route hints")).changed() { state.applied.clear(); for doc in &mut app.docs.list { if doc.path.extension().is_some_and(|e| e == "rs") { doc.editor.end_hints.clear(); } } }
     });
-    if refresh { state.start(packages, workspace.clone(), app.explorer.excluded.clone()); }
-    ui.small(tr("Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported."));
+    if semantic{state.start_semantic(packages.clone(),workspace.clone(),app.explorer.excluded.clone(),&mut app.docs,&mut app.insight,app.cfg_epoch);}else if refresh { state.start(packages, workspace.clone(), app.explorer.excluded.clone()); }
+    if state.snapshot.semantic{ui.small(tr("RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved."));}else{ui.small(tr("Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported."));}
     ui.small(trf("Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.", &[("n", &state.snapshot.routes.len()), ("skipped", &state.snapshot.skipped), ("unresolved", &state.snapshot.unresolved)]));
     if state.snapshot.limited { ui.colored_label(rc_kit::pal(ui).error, tr("Endpoint scan reached its safety limits; results are incomplete")); }
     if let Some(error) = &state.error { ui.colored_label(rc_kit::pal(ui).error, error); }
@@ -298,7 +503,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
         ui.separator();
         ui.horizontal(|ui| {
             if ui.button(tr("Go to Route")).clicked() { navigate = Some((endpoint.file.clone(), endpoint.route.line, endpoint.route.column)); }
-            if ui.button(tr("Go to Handler")).clicked() { navigate = Some((endpoint.file.clone(), endpoint.route.handler_line, endpoint.route.handler_column)); }
+            if ui.button(tr("Go to Handler")).clicked() { navigate = Some((endpoint.handler_file.clone().unwrap_or_else(||endpoint.file.clone()), endpoint.route.handler_line, endpoint.route.handler_column)); }
             ui.label(tr("Generate Reqwest Call"));
         });
         egui::ScrollArea::vertical().id_salt("reqwest_endpoint_preview").show(ui, |ui| {
@@ -333,6 +538,119 @@ mod tests {
     fn cached() -> Endpoints {
         let mut state = Endpoints::new(Waker::noop()); let root = fixture();
         state.snapshot = scan(vec![root.clone()], &root, &[], &AtomicBool::new(false)).unwrap(); state
+    }
+    #[test]
+    #[ignore = "Uses cached Axum dependencies and real rust-analyzer in the native UI"]
+    fn native_semantic_scan_resolves_initially_closed_modules_and_cancels_stale_work() {
+        use egui_kittest::kittest::Queryable;
+        use std::time::{Duration, Instant};
+        let _home = crate::screens::HOME_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let root = crate::axum_semantic::tests::fixture();
+        for index in 0..20 {
+            std::fs::write(
+                root.path().join(format!("src/slow_{index}.rs")),
+                "// padding\n".repeat(20_000),
+            )
+            .unwrap();
+        }
+        let mut app = crate::screens::test_app(home.path(), true);
+        app.open_workspace(root.path());
+        app.trust_project_tools_for_test();
+        app.insight
+            .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
+        app.insight.start_rust(root.path(), None, false);
+        app.open_file_and_wait(&root.path().join("src/main.rs"));
+        let mut h = crate::screens::harness(app, egui::vec2(1600.0, 1200.0));
+        let until = Instant::now() + Duration::from_secs(60);
+        loop {
+            h.run_steps(2);
+            if h.state().insight.ready() && h.state().runner.cargo_workspace.is_some() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.get_by_label(tr("Endpoints")).click();
+        loop {
+            h.run_steps(2);
+            if h.state().endpoints.started && h.state().endpoints.cancel.is_none() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !h.state()
+                .docs
+                .list
+                .iter()
+                .any(|doc| doc.path.ends_with("api.rs") || doc.path.ends_with("handlers.rs"))
+        );
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        loop {
+            h.run_steps(2);
+            if h.state().endpoints.semantic_job.is_none() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.state().endpoints.snapshot.semantic,
+            "{:?}",
+            h.state().endpoints.error
+        );
+        let index = h
+            .state()
+            .endpoints
+            .snapshot
+            .routes
+            .iter()
+            .position(|row| row.route.path == "/v1/users/{id}" && row.route.method == "GET")
+            .unwrap_or_else(|| panic!("{:?}", h.state().endpoints.snapshot.routes));
+        h.state_mut().endpoints.selected = Some(index);
+        h.run_steps(2);
+        h.get_by_label(tr("Go to Handler")).click();
+        loop {
+            h.run_steps(2);
+            if !h.state().disk_open.busy() {
+                break;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            h.state()
+                .docs
+                .active_doc()
+                .is_some_and(|doc| doc.path.ends_with("handlers.rs"))
+        );
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        assert!(
+            h.state().endpoints.semantic_job.is_some(),
+            "scan not pending: {:?}, status {:?}",
+            h.state().endpoints.error,
+            h.state().insight.status
+        );
+        h.get_by_label(tr("Cancel Scan")).click();
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();
+        h.run_steps(2);
+        {let doc=h.state_mut().docs.active_doc_mut().unwrap();let text=format!("// edited while resolving\n{}",doc.editor.buffer.rope());doc.editor.buffer.replace_all(&text,&rc_text::Selection::point(0));}
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        assert_eq!(h.state().endpoints.error.as_deref(),Some(tr("Axum sources, metadata, trust or language server changed; refresh the scan")));
+        h.get_by_label(tr("Refresh Semantic Endpoints")).click();h.run_steps(2);
+        h.state_mut().cfg_epoch = h.state().cfg_epoch.wrapping_add(1);
+        h.run_steps(2);
+        assert!(h.state().endpoints.semantic_job.is_none());
+        assert!(!h.state().endpoints.snapshot.semantic);
     }
     #[test]
     fn http_path_completion_is_method_aware_and_preserves_origin_query_and_other_text() {
