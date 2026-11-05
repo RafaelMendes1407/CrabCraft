@@ -2654,5 +2654,20 @@
     "The proofreading server returned an invalid or unsafe correction": "校正サーバーが無効または安全でない修正を返しました",
     "The source changed; check comments again": "ソースが変更されました。コメントを再確認してください",
     "Trust this project before checking comments": "コメントを確認する前にこのプロジェクトを信頼してください"
+  },
+  "http_environments": {
+    "Cannot read the HTTP environment file.": "HTTP 環境ファイルを読み取れません。",
+    "The HTTP environment path must be a regular file.": "HTTP 環境のパスには通常のファイルを指定してください。",
+    "The HTTP environment exceeds its size or variable limit.": "HTTP 環境がサイズまたは変数数の上限を超えています。",
+    "HTTP environments must contain named objects with string values.": "HTTP 環境には文字列の値を持つ名前付きオブジェクトが必要です。",
+    "The selected HTTP environment does not exist.": "選択した HTTP 環境は存在しません。",
+    "Load the selected HTTP environment before sending a request.": "リクエストの送信前に選択した HTTP 環境を読み込んでください。",
+    "HTTP environment": "HTTP 環境",
+    "Choose a JSON file and environment explicitly. Values stay in this session; file variables take precedence.": "JSON ファイルと環境を明示的に選択してください。値はこのセッション内に保持され、ファイル変数が優先されます。",
+    "Environment file": "環境ファイル",
+    "Environment name": "環境名",
+    "Load HTTP environment": "HTTP 環境を読み込む",
+    "Clear HTTP environment": "HTTP 環境をクリア",
+    "Loaded {count} HTTP variables. Available environments: {names}": "{count} 個の HTTP 変数を読み込みました。利用可能な環境: {names}"
   }
 }

@@ -5,15 +5,22 @@ use rc_kit::i18n::tr;
 use std::{ffi::OsString, io::Read, path::{Path, PathBuf}, sync::atomic::AtomicBool};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct HttpCommand { pub file: PathBuf, pub request: Option<usize> }
+pub struct HttpCommand { pub file: PathBuf, pub request: Option<usize>, pub environment_file: Option<PathBuf>, pub environment: Option<String> }
 
 pub fn parse(args: impl Iterator<Item = OsString>, cwd: &Path) -> Result<Command, CliError> {
     let (mut file, mut request, mut paths_only) = (None, None, false);
+    let mut environment_file = None;
+    let mut environment = None;
     let mut args = args;
     while let Some(arg) = args.next() {
         match arg.to_str() {
             Some("--") if !paths_only => paths_only = true,
             Some("-h" | "--help") if !paths_only => return Ok(Command::Help),
+            Some("--env-file") if !paths_only => {
+                let path = PathBuf::from(args.next().ok_or(CliError::HttpFile)?);
+                environment_file = Some(if path.is_absolute() { path } else { cwd.join(path) });
+            }
+            Some("--env") if !paths_only => environment = Some(args.next().and_then(|arg| arg.into_string().ok()).filter(|value| !value.is_empty()).ok_or(CliError::HttpFile)?),
             Some("--request") if !paths_only => request = Some(crate::cli::number("--request", args.next())?),
             Some(text) if !paths_only && text.starts_with('-') => return Err(CliError::UnknownOption(text.to_string())),
             _ if file.is_none() => {
@@ -23,7 +30,8 @@ pub fn parse(args: impl Iterator<Item = OsString>, cwd: &Path) -> Result<Command
             _ => return Err(CliError::HttpFile),
         }
     }
-    Ok(Command::Http(HttpCommand { file: file.ok_or(CliError::HttpFile)?, request }))
+    if environment_file.is_some() != environment.is_some() { return Err(CliError::HttpFile); }
+    Ok(Command::Http(HttpCommand { file: file.ok_or(CliError::HttpFile)?, request, environment_file, environment }))
 }
 
 #[derive(Debug)]
@@ -61,7 +69,15 @@ impl HttpCommand {
         if self.request.is_none() && requests.len() > 1 { return Err(Error::SelectRequest); }
         let index = self.request.unwrap_or(1).checked_sub(1).ok_or(Error::NoRequest)?;
         let request = requests.get(index).ok_or(Error::NoRequest)?;
-        let prepared = http_client::prepare(request).map_err(Error::Http)?;
+        let request = match (&self.environment_file, &self.environment) {
+            (None, None) => request.clone(),
+            (Some(path), Some(name)) => {
+                let snapshot = http_client::environment::read(path, name, &AtomicBool::new(false)).map_err(|error| Error::Http(HttpError::Environment(error)))?;
+                http_client::environment::merge(request, &snapshot).map_err(Error::Http)?
+            }
+            _ => return Err(Error::Http(HttpError::Environment(http_client::environment::Error::NotLoaded))),
+        };
+        let prepared = http_client::prepare(&request).map_err(Error::Http)?;
         let response = http_client::send(&prepared, http_client::TIMEOUT, http_client::MAX_BODY_BYTES, &AtomicBool::new(false)).map_err(Error::Http)?;
         let warnings: Vec<_> = request.unsupported.iter().filter(|item| !matches!(item.kind, rc_syntax::http::UnsupportedKind::Variable(_) | rc_syntax::http::UnsupportedKind::FileVariable(_))).map(|item| http_client::unsupported_text(&item.kind)).collect();
         let body = std::str::from_utf8(&response.body).ok();
@@ -93,12 +109,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(matches!(crate::cli::parse(["http".into()], dir.path()), Err(CliError::HttpFile)));
         assert!(crate::cli::parse(["http".into(), "x".into(), "--request".into(), "0".into()], dir.path()).is_err());
+        assert!(crate::cli::parse(["http".into(), "x".into(), "--env-file".into(), "env.json".into()], dir.path()).is_err());
+        assert!(matches!(crate::cli::parse(["http".into(), "x".into(), "--env-file".into(), "env.json".into(), "--env".into(), "local".into()], dir.path()), Ok(Command::Http(HttpCommand { environment: Some(_), .. }))));
         let file = dir.path().join("requests.http");
         std::fs::write(&file, "GET http://127.0.0.1:1/\n###\nGET http://127.0.0.1:1/other\n").unwrap();
-        assert!(matches!(HttpCommand { file: file.clone(), request: None }.execute(), Err(Error::SelectRequest)));
-        assert!(matches!(HttpCommand { file: file.clone(), request: Some(3) }.execute(), Err(Error::NoRequest)));
+        assert!(matches!(HttpCommand { file: file.clone(), request: None, environment_file: None, environment: None }.execute(), Err(Error::SelectRequest)));
+        assert!(matches!(HttpCommand { file: file.clone(), request: Some(3), environment_file: None, environment: None }.execute(), Err(Error::NoRequest)));
         std::fs::write(&file, "GET http://{{host}}/\n").unwrap();
-        assert!(matches!(HttpCommand { file, request: None }.execute(), Err(Error::Http(HttpError::Variable(_)))));
+        assert!(matches!(HttpCommand { file, request: None, environment_file: None, environment: None }.execute(), Err(Error::Http(HttpError::Variable(_)))));
     }
 
     #[test]
@@ -122,7 +140,10 @@ mod tests {
         std::fs::write(project.path().join("build.rs"), "compile_error!(\"HTTP CLI must never build this project\");").unwrap();
         let file = project.path().join("requests.http");
         std::fs::write(&file, format!("@host = {address}\n@base = http://{{{{host}}}}\n###\nGET {{{{base}}}}/unused\n###\nGET {{{{base}}}}/selected\n")).unwrap();
-        let (result, code) = HttpCommand { file, request: Some(2) }.execute().unwrap();
+        let env = project.path().join("http-client.env.json");
+        std::fs::write(&env, serde_json::json!({"local": {"host": address.to_string()}}).to_string()).unwrap();
+        std::fs::write(&file, "@base = http://{{host}}\n###\nGET {{base}}/unused\n###\nGET {{base}}/selected\n").unwrap();
+        let (result, code) = HttpCommand { file, request: Some(2), environment_file: Some(env), environment: Some("local".into()) }.execute().unwrap();
         thread.join().unwrap();
         assert_eq!(code, 1);
         assert_eq!(result["status"], 404);

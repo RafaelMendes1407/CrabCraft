@@ -6,9 +6,10 @@
 //! the body is cut at [`MAX_BODY_BYTES`], shown as text only when it is UTF-8, and JSON is
 //! re-indented without being rebuilt (key order and numbers stay as sent).
 //!
-//! File variables are expanded with bounded recursion. Missing variables and file bodies
-//! prevent sending; response scripts, environment files and OAuth helpers remain unsupported.
+//! File variables and explicit environment snapshots use bounded recursion. Missing variables
+//! and file bodies prevent sending; response scripts and OAuth helpers remain unsupported.
 
+pub mod environment;
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_syntax::http::{HttpRequest, UnsupportedKind};
@@ -32,6 +33,7 @@ pub const MAX_SHOWN_CHARS: usize = 512 * 1024;
 pub enum HttpError {
     /// The request uses something not supported yet (texts for the user).
     Unsupported(Vec<String>),
+    Environment(environment::Error),
     /// The URL cannot be read, or is not `http`/`https`.
     BadUrl(String),
     Variable(rc_syntax::http::vars::VariableError),
@@ -46,6 +48,7 @@ impl HttpError {
     /// The text shown in the response view.
     pub fn text(&self) -> String {
         match self {
+            HttpError::Environment(error) => error.text(),
             HttpError::Unsupported(what) => format!("{}\n{}", tr("This request was not sent: it uses features that are not supported yet."), what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")),
             HttpError::Variable(error) => match error {
                 rc_syntax::http::vars::VariableError::Undefined(name) => trf("Undefined HTTP variable: {name}", &[("name", name)]),
@@ -341,11 +344,12 @@ pub struct HttpClient {
     /// Headers instead of the body.
     pub show_headers: bool,
     next_id: u64,
+    pub environment: environment::State,
 }
 
 impl HttpClient {
     pub fn new(waker: Waker) -> Self {
-        HttpClient { inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
+        HttpClient { environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
     }
 
     pub fn running(&self) -> bool {
@@ -362,7 +366,7 @@ impl HttpClient {
         let id = self.next_id;
         self.next_id += 1;
         let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_))).map(|u| unsupported_text(&u.kind)).collect();
-        let outcome = match prepare(req) {
+        let outcome = match self.environment.resolve(req).and_then(|request| prepare(&request)) {
             Ok(prepared) => {
                 let cancel = Arc::new(AtomicBool::new(false));
                 let flag = cancel.clone();
@@ -403,8 +407,9 @@ impl HttpClient {
 
     /// Takes the finished requests; true when something changed.
     pub fn poll(&mut self) -> bool {
+        let environment_changed = self.environment.poll();
         let done = self.inbox.drain();
-        let changed = !done.is_empty();
+        let changed = environment_changed || !done.is_empty();
         for (id, result) in done {
             let Some(e) = self.history.iter_mut().find(|e| e.id == id) else { continue };
             e.outcome = match result {
@@ -604,3 +609,5 @@ mod tests {
         assert_eq!(e.notes.len(), 1, "the handler is noted: {:?}", e.notes);
     }
 }
+
+impl Drop for HttpClient { fn drop(&mut self) { self.cancel_all(); } }

@@ -2654,5 +2654,20 @@
     "The proofreading server returned an invalid or unsafe correction": "校对服务器返回了无效或不安全的更正",
     "The source changed; check comments again": "源文件已更改；请重新检查注释",
     "Trust this project before checking comments": "请在检查注释前信任此项目"
+  },
+  "http_environments": {
+    "Cannot read the HTTP environment file.": "无法读取 HTTP 环境文件。",
+    "The HTTP environment path must be a regular file.": "HTTP 环境路径必须为普通文件。",
+    "The HTTP environment exceeds its size or variable limit.": "HTTP 环境超出大小或变量数量限制。",
+    "HTTP environments must contain named objects with string values.": "HTTP 环境必须包含具名对象，值必须为字符串。",
+    "The selected HTTP environment does not exist.": "所选 HTTP 环境不存在。",
+    "Load the selected HTTP environment before sending a request.": "发送请求前请加载所选 HTTP 环境。",
+    "HTTP environment": "HTTP 环境",
+    "Choose a JSON file and environment explicitly. Values stay in this session; file variables take precedence.": "请明确选择 JSON 文件和环境。值仅保留在当前会话中；文件变量优先。",
+    "Environment file": "环境文件",
+    "Environment name": "环境名称",
+    "Load HTTP environment": "加载 HTTP 环境",
+    "Clear HTTP environment": "清除 HTTP 环境",
+    "Loaded {count} HTTP variables. Available environments: {names}": "已加载 {count} 个 HTTP 变量。可用环境：{names}"
   }
 }

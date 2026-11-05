@@ -25,6 +25,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Http),
         _ => {}
     }
+    app.http.environment.show(ui);
     if app.http.history.is_empty() {
         empty_state(ui, ToolWindow::Http.icon(), tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request."));
         return;

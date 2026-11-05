@@ -1454,6 +1454,7 @@ impl CrabCraftApp {
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
         self.remote = crate::remote::Remote::new(self.waker.clone());
+        self.http = crate::http_client::HttpClient::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());

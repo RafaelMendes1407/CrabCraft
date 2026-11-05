@@ -23,3 +23,42 @@ per expanded field and across cached variable values. Plain fields without subst
 keep the existing HTTP client limits. No process environment, environment JSON file,
 response script or OAuth helper is evaluated. Secrets stay in the file supplied by the user;
 no variables are automatically loaded from the project.
+
+## Explicit environment files
+
+The HTTP Client window accepts an explicit JSON file path and environment name. Click
+**Load HTTP environment** to read a bounded snapshot on a cancellable worker, then send a
+request separately. There is no automatic search for `http-client.env.json`, private files,
+process environment, or project configuration. Loading never sends a request or runs code.
+
+```json
+{
+  "$shared": { "base": "http://127.0.0.1:3000" },
+  "local": { "token": "example-token" },
+  "staging": { "base": "https://example.test", "token": "another-example" }
+}
+```
+
+Values must be strings. Precedence is `$shared`, selected environment, then `@name = value`
+declarations in the request file. Nested references use the same bounded resolver. A selected
+but missing, failed, cancelled or changed environment blocks sending instead of silently
+falling back. Changing a field invalidates its snapshot; changes to disk need another explicit
+load. Clear removes the selection, restoring file-only variables. Loaded values and paths
+are memory-only and cleared on project changes; values are not shown in the environment
+summary. The file may contain secrets: requests transmit substituted values to their chosen
+endpoint, and the existing CLI response includes the resolved URL.
+
+The CLI accepts both flags together:
+
+```sh
+crabcraft http requests.http --request 1 --env-file ./http-client.env.json --env local
+```
+
+No private-file merging, OAuth acquisition, JavaScript response handlers, or ambient variables
+are provided. Files must be regular UTF-8 JSON, at most 1 MiB, with 64 environments,
+256 variables per object and 256 merged variables; names are bounded. FIFO/device reads are
+rejected before opening and checked again on the opened descriptor. JSON nesting uses
+serde_json's recursion limit. A native egui test loads an environment without making a request,
+sends explicitly to a real loopback server with an authorization header, rejects stale fields,
+and compiles/runs its real Cargo project only afterward. CLI, resolver, cancellation and
+FIFO tests accompany it.

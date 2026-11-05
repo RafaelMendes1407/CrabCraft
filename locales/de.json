@@ -2654,5 +2654,20 @@
     "The proofreading server returned an invalid or unsafe correction": "Der Korrekturserver lieferte eine ungültige oder unsichere Korrektur",
     "The source changed; check comments again": "Die Quelle wurde geändert; Kommentare erneut prüfen",
     "Trust this project before checking comments": "Diesem Projekt vor der Kommentarprüfung vertrauen"
+  },
+  "http_environments": {
+    "Cannot read the HTTP environment file.": "Die HTTP-Umgebungsdatei kann nicht gelesen werden.",
+    "The HTTP environment path must be a regular file.": "Der HTTP-Umgebungspfad muss eine reguläre Datei sein.",
+    "The HTTP environment exceeds its size or variable limit.": "Die HTTP-Umgebung überschreitet die Größen- oder Variablenbegrenzung.",
+    "HTTP environments must contain named objects with string values.": "HTTP-Umgebungen müssen benannte Objekte mit Zeichenfolgenwerten enthalten.",
+    "The selected HTTP environment does not exist.": "Die ausgewählte HTTP-Umgebung existiert nicht.",
+    "Load the selected HTTP environment before sending a request.": "Laden Sie die ausgewählte HTTP-Umgebung vor dem Senden einer Anfrage.",
+    "HTTP environment": "HTTP-Umgebung",
+    "Choose a JSON file and environment explicitly. Values stay in this session; file variables take precedence.": "Wählen Sie ausdrücklich eine JSON-Datei und eine Umgebung. Werte bleiben in dieser Sitzung; Dateivariablen haben Vorrang.",
+    "Environment file": "Umgebungsdatei",
+    "Environment name": "Umgebungsname",
+    "Load HTTP environment": "HTTP-Umgebung laden",
+    "Clear HTTP environment": "HTTP-Umgebung löschen",
+    "Loaded {count} HTTP variables. Available environments: {names}": "{count} HTTP-Variablen geladen. Verfügbare Umgebungen: {names}"
   }
 }
