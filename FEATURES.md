@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 231 |
+| ✅ Pronto | 232 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 15 |
+| ⬜ A fazer | 14 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -372,7 +372,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-12 | CLI: diff e merge | ✅ | M6 | `crabcraft diff LEFT RIGHT` abre comparação nativa somente leitura; `crabcraft merge LEFT RIGHT BASE OUTPUT` abre a ferramenta de três painéis com aceitar lados, edição, desfazer e rolagem sincronizada. Janela independente, sem abrir workspace nem executar projeto; carga e gravação em segundo plano, fechar cancela carga. Salvar resultado grava só OUTPUT de forma atômica (recusa saída alterada desde a abertura; saída nova nunca sobrescreve arquivo concorrente), com confirmação para mudanças não resolvidas; fechar sem salvar mantém a saída. Códigos 0 sucesso, 1 erro/cancelamento e 2 argumentos inválidos. Limite por arquivo: UTF-8 regular, 4 MB e 100000 quebras de linha; saída simbólica recusada. Teste headless com arquivos Rust num projeto Cargo, aceitar direita e salvar; resultado compilado com rustc real. Regressão da ferramenta Git passou. Fora: diretórios e arquivos binários |
 | G-13 | CLI: formatar e inspecionar | ✅ | M6 | `crabcraft format [pasta ou Cargo.toml]` usa `cargo fmt --all`, com `--check`; `crabcraft inspect --trust-project [pasta ou Cargo.toml]` usa Clippy em todo workspace e targets, tratando avisos como falha. Ambos aceitam `--offline`, mostram saída ao vivo, retornam o código do Cargo e rodam sem janela. Inspeção exige confiança explícita a cada chamada. Teste `cli::tests::workspace_tools_format_and_inspect_a_real_rust_project`: projeto Rust real num caminho com espaços, formatação e verificação, lint com falha, e sentinela de `build.rs` comprovando que formatar e recusar inspeção sem confiança não executam o script. |
 | G-14 | Assistente de IA com modelos locais | ✅ | M6 | Painel egui opt-in por sessão, chat explícito com modelo GGUF local instalado, contexto Rust opcional, cancelamento, trust, limites e rejeição cloud/proxy/redirect; prova com Ollama/Qwen real. Sem baixar modelo ou executar ferramentas. Veja `docs/local-ai.md`. |
-| G-15 | Agentes de IA via ACP | ⬜ | M6 | |
+| G-15 | Agentes de IA via ACP | ✅ | M6 | Janela nativa ACP Agents: executable/args separados só em memória, Start explícito após confiança; nada executa ao abrir/restaurar projeto. Protocolo v1 stdio JSON-RPC newline: initialize/capacidades, session/new, authenticate de método agent, prompts texto/chunks/updates de ferramentas/plano/logs. fs/terminal delegation false e RPCs recusadas; anexos, auth terminal, permissões persistentes/replay/v2 visivelmente não suportados. request_permission mostra dados completos do agente e botões canônicos allow_once/reject_once; sem aprovação automática, IDs/kinds/limites checados. Cancel responde cancelled a pendências + session/cancel; se agente ignora por 2s mata grupo. Stop/fechar/revogar confiança cancela filhos; limites de frame/tráfego/fila/tempo/display, decoder preserva fragmentos ao cancelar leitura. Não é sandbox: processo externo confiável tem permissões do usuário; controle só sobre pedidos ACP recebidos. Testes nativos em Rust real: abrir/untrusted não inicia agente; Reject não executa, AllowOnce roda cargo test real/build.rs, Cancel não repete; testes IPC autenticam, recusam leitura de arquivo sem vazar conteúdo, detectam v2 inválida/framing/oversize e cancelamento ignorado. Agente comercial/modelo remoto não exercitado; sem captura. Ver docs/acp-agents.md |
 | G-16 | Completar com next edit suggestions | ✅ | M6 | Proposta Rust sob demanda via modelo local: trecho único exato, preview antes/depois, revisão e apply explícitos, guardas de versão/path e undo sem autosave; fluxo nativo real modelo→revisão→`cargo run --offline` passou. Sem edição autônoma/multiarquivo. Veja `docs/local-ai.md`. |
 
 ---

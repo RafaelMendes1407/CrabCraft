@@ -77,6 +77,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub acp: crate::acp::Acp,
     pub hosting: crate::hosting::Hosting,
     pub issue_tracker: crate::issue_tracker::Tracker,
     pub history_edit: crate::history_edit::HistoryEdit,
@@ -330,6 +331,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            acp: crate::acp::Acp::new(waker.clone()),
             hosting: crate::hosting::Hosting::new(waker.clone()),
             issue_tracker: crate::issue_tracker::Tracker::new(waker.clone()),
             history_edit: crate::history_edit::HistoryEdit::new(waker.clone()),
@@ -1425,6 +1427,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.acp = crate::acp::Acp::new(self.waker.clone());
         self.hosting = crate::hosting::Hosting::new(self.waker.clone());
         self.issue_tracker = crate::issue_tracker::Tracker::new(self.waker.clone());
         self.history_edit = crate::history_edit::HistoryEdit::new(self.waker.clone());
@@ -3266,6 +3269,8 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        if self.acp.poll(acp_trusted) { self.dock.show(ToolWindow::Agents); }
         self.hosting.poll();
         if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
             self.statement_completion = None;

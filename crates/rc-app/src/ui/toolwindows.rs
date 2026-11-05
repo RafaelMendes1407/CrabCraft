@@ -36,6 +36,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
         ToolWindow::Endpoints => crate::endpoints::show(app, ui),
         ToolWindow::Database => crate::database::show(app, ui),
+        ToolWindow::Agents => crate::acp::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -541,6 +542,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
+        ToolWindow::Agents => (tr("ACP Agents"), tr("Start a trusted ACP agent explicitly")),
         ToolWindow::Database => (tr("Database"), tr("Connect to a SQLite database explicitly")),
         ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),
     }
