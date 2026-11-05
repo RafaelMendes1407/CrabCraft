@@ -4142,6 +4142,7 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     // Turned off from the list while stopped, it no longer stops the second call.
     app.set_breakpoint_enabled(&price_rs, 1, false);
     app.run_ide_action(&egui::Context::default(), Action::Resume);
+    assert!(app.debugger.session.as_ref().and_then(|s| s.breakpoints().get(&price_rs, 2)).is_some_and(|bp| !bp.spec.enabled), "the disabled breakpoint must be synchronized before resume is sent");
     let start = Instant::now();
     while !app.debugger.session.as_ref().is_none_or(|s| s.state().is_ended()) {
         let outs = app.debugger.update(&mut app.docs);

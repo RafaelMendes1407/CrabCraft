@@ -2220,6 +2220,10 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if matches!(action, Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut | Action::ForceStepInto | Action::ForceStepOver | Action::RunToCursor | Action::ForceRunToCursor) {
+            // A list/gutter change in this frame must reach DAP before continue/step.
+            self.debugger.sync_breakpoints(&self.docs);
+        }
         if matches!(action, Action::Run | Action::Debug) {
             // "Before launch" tools see the file and caret of this moment.
             self.runner.macro_context = self.macro_context();

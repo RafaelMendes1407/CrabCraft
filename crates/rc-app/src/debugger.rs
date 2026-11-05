@@ -421,7 +421,7 @@ impl Debugger {
 
     /// Keeps the session's breakpoints equal to the editors' (toggled in the gutter, edited
     /// conditions, lines moved by edits).
-    fn sync_breakpoints(&mut self, docs: &Docs) {
+    pub(crate) fn sync_breakpoints(&mut self, docs: &Docs) {
         let Some(s) = &mut self.session else { return };
         if s.state().is_ended() {
             return;
