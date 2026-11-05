@@ -26,5 +26,5 @@ key-down/key-up/text events represent ordinary desktop timing. Run
 `cargo test -p rc-app -p rc-editor keymap::tests`.
 
 This completes configurable sequences, not every other editor's predefined multi-step alias.
-The separate RustRover macOS reference profile and Complete Current Statement remain tracked
-as unfinished in G-03; no product parity is claimed.
+The RustRover macOS counterpart is covered separately in [the reference profile](rust-keymap.md).
+Complete Current Statement remains unfinished in G-03; no product parity is claimed.

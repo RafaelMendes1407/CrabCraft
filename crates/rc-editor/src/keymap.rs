@@ -273,6 +273,7 @@ pub enum KeymapKind {
     Rider,
     /// RustRover Windows/Linux reference shortcuts.
     RustRover,
+    RustRoverMac,
     /// Visual Studio keymap (Windows).
     VisualStudio,
     /// VS Code's default shortcuts on macOS.
@@ -284,7 +285,7 @@ pub enum KeymapKind {
 impl KeymapKind {
     /// Shortcuts use ⌘ and are written with the macOS symbols.
     pub fn is_mac(self) -> bool {
-        matches!(self, KeymapKind::RiderMac | KeymapKind::VsCodeMac)
+        matches!(self, KeymapKind::RiderMac | KeymapKind::RustRoverMac | KeymapKind::VsCodeMac)
     }
 }
 
@@ -329,6 +330,7 @@ impl Keymap {
             KeymapKind::RiderMac => mac_bindings(),
             KeymapKind::Rider => win_bindings(false),
             KeymapKind::RustRover => rustrover_bindings(),
+            KeymapKind::RustRoverMac => rustrover_mac_bindings(),
             KeymapKind::VisualStudio => win_bindings(true),
             KeymapKind::VsCodeMac => vscode_bindings(true),
             KeymapKind::VsCode => vscode_bindings(false),
@@ -700,8 +702,27 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
     ]
 }
 
-/// Functional shortcut facts from the public RustRover help; no reference-card assets are
-/// distributed. Extra editing commands keep the existing IntelliJ-style bindings.
+/// macOS counterpart based on the public platform reference. Additional bindings retain
+/// the inherited map; this is not a claim of installed-product parity.
+fn rustrover_mac_bindings() -> Vec<(Chord, Action)> {
+    use Action::*;
+    let mut bindings = mac_bindings();
+    let command = m(false,false,false,true);
+    let command_alt = m(true,false,false,true);
+    let overrides = [
+        (Chord { key: Key::P, mods: command }, ParameterInfo),
+        (Chord { key: Key::N, mods: command }, Generate),
+        (Chord { key: Key::T, mods: m(false,true,false,false) }, RefactorThis),
+        (Chord { key: Key::O, mods: command_alt }, GotoSymbol),
+        (Chord { key: Key::F3, mods: m(false,false,false,false) }, ToggleBookmark),
+        (Chord { key: Key::F3, mods: command }, ShowBookmarks),
+        (Chord { key: Key::F5, mods: m(true,false,true,false) }, AttachToProcess),
+    ];
+    bindings.retain(|(chord,action)| *action != SearchEverywhere && !overrides.iter().any(|(new,a)| same_chord(*chord,*new) || action == a));
+    bindings.extend(overrides);
+    bindings
+}
+
 fn rustrover_bindings() -> Vec<(Chord, Action)> {
     use Action::*;
     let mut bindings = win_bindings(false);
@@ -1123,6 +1144,26 @@ mod tests {
     }
 
     #[test]
+    fn rust_reference_mac_shortcuts_match_the_compared_public_platform_facts() {
+        let map = Keymap::new(KeymapKind::RustRoverMac);
+        assert!(map.kind.is_mac());
+        for (action, text) in [
+            (Action::ParameterInfo,"⌘P"), (Action::Generate,"⌘N"),
+            (Action::RefactorThis,"⌃T"), (Action::GotoSymbol,"⌥⌘O"),
+            (Action::GotoFile,"⇧⌘O"), (Action::FindAction,"⇧⌘A"),
+            (Action::SaveAll,"⌘S"), (Action::RecentFiles,"⌘E"),
+            (Action::Reformat,"⌥⌘L"), (Action::FindUsages,"⌥F7"),
+            (Action::Rename,"⇧F6"), (Action::ToggleBookmark,"F3"),
+            (Action::ShowBookmarks,"⌘F3"), (Action::AttachToProcess,"⌥⇧F5"),
+            (Action::Run,"⌃R"), (Action::Debug,"⌃D"), (Action::StopRun,"⌘F2"),
+            (Action::Resume,"⌥⌘R"), (Action::StepOver,"F8"), (Action::StepInto,"F7"),
+            (Action::StepOut,"⇧F8"), (Action::RunToCursor,"⌥F9"),
+            (Action::ForceRunToCursor,"⌥⌘F9"), (Action::ToggleBreakpoint,"⌘F8"),
+            (Action::Evaluate,"⌥F8"), (Action::ViewBreakpoints,"⇧⌘F8"),
+        ] { assert_eq!(map.shortcut_text(action).as_deref(),Some(text),"{action:?}"); }
+    }
+
+    #[test]
     fn rustrover_shortcuts_match_the_compared_windows_reference() {
         let map = Keymap::new(KeymapKind::RustRover);
         for (action, shortcut) in [
@@ -1149,7 +1190,7 @@ mod tests {
 
     #[test]
     fn no_chord_is_bound_twice() {
-        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::RustRover, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
+        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::RustRover, KeymapKind::RustRoverMac, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
             let k = Keymap::new(kind);
             for (i, (a, _)) in k.bindings.iter().enumerate() {
                 for (b, act) in &k.bindings[i + 1..] {

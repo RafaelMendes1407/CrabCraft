@@ -719,15 +719,13 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
         ui.label(tr("Keymap"));
         let name = |k: KeymapChoice| match k {
             KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
-            KeymapChoice::RustRover => tr("RustRover (Windows/Linux)"),
+            KeymapChoice::RustRover => if cfg!(target_os = "macos") { tr("RustRover (macOS)") } else { tr("RustRover (Windows/Linux)") },
             KeymapChoice::VisualStudio => "Visual Studio",
             KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
         };
         egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
             for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
-                ui.add_enabled_ui(k != KeymapChoice::RustRover || !cfg!(target_os = "macos"), |ui| {
-                    ui.selectable_value(&mut draft.keymap, k, name(k));
-                }).response.on_disabled_hover_text(tr("This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS."));
+                ui.selectable_value(&mut draft.keymap, k, name(k));
             }
         });
     });

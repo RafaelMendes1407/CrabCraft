@@ -2221,5 +2221,8 @@
     "I reviewed this history plan and accept rewritten commit IDs": "Sprawdzono plan i zaakceptowano zmianę identyfikatorów commitów",
     "Rewrite History": "Przepisz historię",
     "Edit History": "Edytuj historię"
+  },
+  "mac_keymap": {
+    "RustRover (macOS)": "RustRover (macOS)"
   }
 }

@@ -3600,13 +3600,16 @@ pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> V
         .collect()
 }
 
-pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
+pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind { keymap_kind_for(choice, cfg!(target_os = "macos")) }
+
+pub(crate) fn keymap_kind_for(choice: KeymapChoice, mac: bool) -> KeymapKind {
     match choice {
+        KeymapChoice::RustRover if mac => KeymapKind::RustRoverMac,
         KeymapChoice::RustRover => KeymapKind::RustRover,
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
-        KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
+        KeymapChoice::VsCode if mac => KeymapKind::VsCodeMac,
         KeymapChoice::VsCode => KeymapKind::VsCode,
-        KeymapChoice::Rider if cfg!(target_os = "macos") => KeymapKind::RiderMac,
+        KeymapChoice::Rider if mac => KeymapKind::RiderMac,
         KeymapChoice::Rider => KeymapKind::Rider,
     }
 }

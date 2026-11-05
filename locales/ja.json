@@ -2221,5 +2221,8 @@
     "I reviewed this history plan and accept rewritten commit IDs": "このプランを確認し、コミット ID の書き換えを承認します",
     "Rewrite History": "履歴を書き換える",
     "Edit History": "履歴を編集"
+  },
+  "mac_keymap": {
+    "RustRover (macOS)": "RustRover (macOS)"
   }
 }

@@ -4,6 +4,38 @@ mod tests {
     use egui_kittest::kittest::Queryable;
     use rc_kit::i18n::tr;
     #[test]
+    fn native_mac_reference_events_route_in_a_real_rust_project() {
+        use rc_core::settings::KeymapChoice;
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        assert_eq!(crate::app::keymap_kind_for(KeymapChoice::RustRover,true),rc_editor::KeymapKind::RustRoverMac);
+        assert_eq!(crate::app::keymap_kind_for(KeymapChoice::RustRover,false),rc_editor::KeymapKind::RustRover);
+        let home = tempfile::tempdir().unwrap(); let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir(project.path().join("src")).unwrap();
+        std::fs::write(project.path().join("Cargo.toml"),"[package]\nname='mac-keymap-audit'\nversion='0.1.0'\nedition='2024'\n[workspace]\n").unwrap();
+        let path = project.path().join("src/main.rs");
+        std::fs::write(&path,"fn main() { assert_eq!(6 * 7, 42); }\n").unwrap();
+        let built = std::process::Command::new("cargo").args(["check","--offline","--manifest-path"]).arg(project.path().join("Cargo.toml")).output().unwrap();
+        assert!(built.status.success());
+        std::fs::write(project.path().join("build.rs"),"fn main(){ std::fs::write(\"unexpected-build\",\"bad\").unwrap(); }").unwrap();
+        let mut app = crate::screens::test_app(home.path(),true);
+        app.settings.keymap = KeymapChoice::RustRover;
+        app.settings.save().unwrap();
+        // Emulate macOS key events in the headless UI on the test host. Native NSApp/window
+        // integration is not exercised by this test and is not claimed as product parity.
+        app.keymap = rc_editor::Keymap::new(crate::app::keymap_kind_for(KeymapChoice::RustRover,true));
+        app.open_workspace(project.path()); app.open_file(&path);
+        let mut h = crate::screens::harness(app,egui::vec2(1280.0,800.0));
+        let command_shift = egui::Modifiers::MAC_CMD | egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
+        h.key_press_modifiers(command_shift,egui::Key::O); h.run_steps(3);
+        assert_eq!(h.state().search_everywhere.as_ref().unwrap().tab,crate::search::SeTab::Files);
+        h.key_press(egui::Key::Escape); h.run_steps(2);
+        h.key_press_modifiers(command_shift,egui::Key::A); h.run_steps(3);
+        assert_eq!(h.state().search_everywhere.as_ref().unwrap().tab,crate::search::SeTab::Actions);
+        assert_eq!(rc_core::Settings::load().keymap,KeymapChoice::RustRover);
+        assert!(h.state().insight.session.is_none() && h.state().settings.trusted_projects.is_empty());
+        assert!(!project.path().join("unexpected-build").exists());
+    }
+    #[test]
     fn standalone_editor_shortcuts_do_not_insert_the_second_key_or_edit_readonly_sources() {
         use rc_editor::{EditorState, EditorView, EditorConfig, Keymap, KeymapKind};
         let (first,second) = rc_editor::keymap::parse_sequence("ctrl+K C").unwrap();
