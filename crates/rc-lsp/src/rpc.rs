@@ -218,6 +218,8 @@ impl Client {
     pub fn kill(&self) {
         if let Some(mut c) = self.child.lock().take() {
             let _ = c.start_kill();
+            // Reap a killed child asynchronously instead of leaving it as a zombie.
+            rc_core::Runtime::spawn(async move { let _ = c.wait().await; });
         }
     }
 

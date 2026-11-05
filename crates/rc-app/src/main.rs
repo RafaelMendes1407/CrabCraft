@@ -10,6 +10,7 @@ mod missing_crates;
 mod borrow_errors;
 mod repl;
 mod repl_variables;
+mod macro_tester;
 mod settings_backup;
 mod instance;
 mod auto_attach;

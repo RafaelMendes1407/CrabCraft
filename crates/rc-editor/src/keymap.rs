@@ -63,6 +63,7 @@ pub enum Action {
     QuickDoc,
     ExternalDocs,
     ExpandMacro,
+    TestDeclarativeMacro,
     ShowIntentions,
     Generate,
     RefactorThis,
@@ -257,6 +258,7 @@ impl Action {
                 | ZoomOut
                 | ZoomReset
                 | ShareInPlayground
+                | TestDeclarativeMacro
                 | Profile
         )
     }

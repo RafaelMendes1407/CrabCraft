@@ -2104,5 +2104,26 @@
     "Close a debug session before starting another (limit: 8)": "Fermez une session de débogage avant d'en démarrer une autre (limite : 8)",
     "Session {number}: {name}": "Session {number} : {name}",
     "Session {number}: {message}": "Session {number} : {message}"
+  },
+  "macro_tester": {
+    "Trust this project before testing declarative macros": "Faites confiance à ce projet avant de tester les macros déclaratives",
+    "Enter macro_rules definitions and one invocation of a defined macro": "Saisissez des définitions macro_rules et un appel d’une macro définie",
+    "The macro test exceeds its input or expansion limit": "Le test dépasse la limite d’entrée ou d’expansion",
+    "rust-analyzer was not found for the macro tester": "rust-analyzer est introuvable pour le testeur de macros",
+    "Macro test cancelled": "Test de macro annulé",
+    "The macro test timed out": "Le test de macro a expiré",
+    "The macro invocation could not be expanded": "L’appel de macro n’a pas pu être développé",
+    "Macro tester I/O error: {error}": "Erreur d’E/S du testeur de macros : {error}",
+    "Macro analyzer error: {error}": "Erreur de l’analyseur de macros : {error}",
+    "The macro analyzer exited": "L’analyseur de macros s’est arrêté",
+    "Declarative Macro Tester": "Testeur de macros déclaratives",
+    "Edit local macro_rules definitions and one invocation. Expansion only: project code is not executed.": "Modifiez les définitions macro_rules locales et un appel. Expansion seule : le code du projet n’est pas exécuté.",
+    "Macro definitions": "Définitions de macros",
+    "Macro invocation": "Appel de macro",
+    "Test macro expansion": "Tester l’expansion de macro",
+    "Cancel macro test": "Annuler le test de macro",
+    "Isolated Rust 2024 macros only; project dependencies, procedural macros and runtime evaluation are unsupported.": "Macros Rust 2024 isolées uniquement ; dépendances du projet, macros procédurales et évaluation à l’exécution non prises en charge.",
+    "Expansion of {macro}": "Expansion de {macro}",
+    "Test Declarative Macro…": "Tester une macro déclarative…"
   }
 }

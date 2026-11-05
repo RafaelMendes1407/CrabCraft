@@ -149,6 +149,7 @@ pub struct CrabCraftApp {
     pub settings_backup: crate::settings_backup::State,
     pub repl_starting: Option<crate::repl::Starting>,
     pub repl_variables: crate::repl_variables::State,
+    pub macro_tester: crate::macro_tester::Tester,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
     pub focus_terminal: bool,
@@ -378,6 +379,7 @@ impl CrabCraftApp {
             settings_backup: Default::default(),
             repl_starting: None,
             repl_variables: Default::default(),
+            macro_tester: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
             focus_terminal: false,
@@ -1411,6 +1413,7 @@ impl CrabCraftApp {
         self.disk_revert = None;
         self.repl_starting = None;
         self.repl_variables = Default::default();
+        self.macro_tester = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
@@ -2377,6 +2380,7 @@ impl CrabCraftApp {
             Action::InspectCode => self.inspect_code(),
             Action::UpdateCopyright => self.update_copyright(),
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
+            Action::TestDeclarativeMacro => crate::macro_tester::open(self),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {

@@ -2104,5 +2104,26 @@
     "Close a debug session before starting another (limit: 8)": "別のセッションを開始する前にデバッグセッションを閉じてください（上限：8）",
     "Session {number}: {name}": "セッション {number}: {name}",
     "Session {number}: {message}": "セッション {number}: {message}"
+  },
+  "macro_tester": {
+    "Trust this project before testing declarative macros": "宣言的マクロをテストする前にプロジェクトを信頼してください",
+    "Enter macro_rules definitions and one invocation of a defined macro": "macro_rules の定義と定義済みマクロの呼び出しを一つ入力してください",
+    "The macro test exceeds its input or expansion limit": "マクロテストが入力または展開の上限を超えています",
+    "rust-analyzer was not found for the macro tester": "マクロテスター用の rust-analyzer が見つかりません",
+    "Macro test cancelled": "マクロテストをキャンセルしました",
+    "The macro test timed out": "マクロテストがタイムアウトしました",
+    "The macro invocation could not be expanded": "マクロ呼び出しを展開できませんでした",
+    "Macro tester I/O error: {error}": "マクロテスターの I/O エラー: {error}",
+    "Macro analyzer error: {error}": "マクロ解析器のエラー: {error}",
+    "The macro analyzer exited": "マクロ解析器が終了しました",
+    "Declarative Macro Tester": "宣言的マクロテスター",
+    "Edit local macro_rules definitions and one invocation. Expansion only: project code is not executed.": "ローカルの macro_rules 定義と一つの呼び出しを編集します。展開のみで、プロジェクトコードは実行しません。",
+    "Macro definitions": "マクロ定義",
+    "Macro invocation": "マクロ呼び出し",
+    "Test macro expansion": "マクロ展開をテスト",
+    "Cancel macro test": "マクロテストをキャンセル",
+    "Isolated Rust 2024 macros only; project dependencies, procedural macros and runtime evaluation are unsupported.": "分離された Rust 2024 マクロのみ。プロジェクト依存関係、手続き的マクロ、実行時評価は未対応です。",
+    "Expansion of {macro}": "{macro} の展開",
+    "Test Declarative Macro…": "宣言的マクロをテスト…"
   }
 }

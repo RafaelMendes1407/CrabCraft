@@ -2104,5 +2104,26 @@
     "Close a debug session before starting another (limit: 8)": "Cierra una sesión de depuración antes de iniciar otra (límite: 8)",
     "Session {number}: {name}": "Sesión {number}: {name}",
     "Session {number}: {message}": "Sesión {number}: {message}"
+  },
+  "macro_tester": {
+    "Trust this project before testing declarative macros": "Confíe en este proyecto antes de probar macros declarativas",
+    "Enter macro_rules definitions and one invocation of a defined macro": "Introduzca definiciones macro_rules y una invocación de una macro definida",
+    "The macro test exceeds its input or expansion limit": "La prueba de macro supera el límite de entrada o expansión",
+    "rust-analyzer was not found for the macro tester": "No se encontró rust-analyzer para el probador de macros",
+    "Macro test cancelled": "Prueba de macro cancelada",
+    "The macro test timed out": "La prueba de macro agotó el tiempo",
+    "The macro invocation could not be expanded": "No se pudo expandir la invocación de macro",
+    "Macro tester I/O error: {error}": "Error de E/S del probador de macros: {error}",
+    "Macro analyzer error: {error}": "Error del analizador de macros: {error}",
+    "The macro analyzer exited": "El analizador de macros finalizó",
+    "Declarative Macro Tester": "Probador de macros declarativas",
+    "Edit local macro_rules definitions and one invocation. Expansion only: project code is not executed.": "Edite definiciones macro_rules locales y una invocación. Solo expansión: no se ejecuta código del proyecto.",
+    "Macro definitions": "Definiciones de macros",
+    "Macro invocation": "Invocación de macro",
+    "Test macro expansion": "Probar expansión de macro",
+    "Cancel macro test": "Cancelar prueba de macro",
+    "Isolated Rust 2024 macros only; project dependencies, procedural macros and runtime evaluation are unsupported.": "Solo macros Rust 2024 aisladas; no admite dependencias del proyecto, macros procedimentales ni evaluación en ejecución.",
+    "Expansion of {macro}": "Expansión de {macro}",
+    "Test Declarative Macro…": "Probar macro declarativa…"
   }
 }

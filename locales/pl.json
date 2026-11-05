@@ -2104,5 +2104,26 @@
     "Close a debug session before starting another (limit: 8)": "Zamknij sesję debugowania przed uruchomieniem kolejnej (limit: 8)",
     "Session {number}: {name}": "Sesja {number}: {name}",
     "Session {number}: {message}": "Sesja {number}: {message}"
+  },
+  "macro_tester": {
+    "Trust this project before testing declarative macros": "Zaufaj projektowi przed testowaniem makr deklaratywnych",
+    "Enter macro_rules definitions and one invocation of a defined macro": "Wprowadź definicje macro_rules i jedno wywołanie zdefiniowanego makra",
+    "The macro test exceeds its input or expansion limit": "Test makra przekracza limit wejścia lub rozwinięcia",
+    "rust-analyzer was not found for the macro tester": "Nie znaleziono rust-analyzer dla testera makr",
+    "Macro test cancelled": "Test makra anulowany",
+    "The macro test timed out": "Przekroczono czas testu makra",
+    "The macro invocation could not be expanded": "Nie można rozwinąć wywołania makra",
+    "Macro tester I/O error: {error}": "Błąd wejścia/wyjścia testera makr: {error}",
+    "Macro analyzer error: {error}": "Błąd analizatora makr: {error}",
+    "The macro analyzer exited": "Analizator makr zakończył działanie",
+    "Declarative Macro Tester": "Tester makr deklaratywnych",
+    "Edit local macro_rules definitions and one invocation. Expansion only: project code is not executed.": "Edytuj lokalne definicje macro_rules i jedno wywołanie. Tylko rozwijanie: kod projektu nie jest uruchamiany.",
+    "Macro definitions": "Definicje makr",
+    "Macro invocation": "Wywołanie makra",
+    "Test macro expansion": "Testuj rozwinięcie makra",
+    "Cancel macro test": "Anuluj test makra",
+    "Isolated Rust 2024 macros only; project dependencies, procedural macros and runtime evaluation are unsupported.": "Tylko izolowane makra Rust 2024; zależności projektu, makra proceduralne i obliczanie w czasie wykonania nie są obsługiwane.",
+    "Expansion of {macro}": "Rozwinięcie {macro}",
+    "Test Declarative Macro…": "Testuj makro deklaratywne…"
   }
 }

@@ -2104,5 +2104,26 @@
     "Close a debug session before starting another (limit: 8)": "开始新会话前请关闭一个调试会话（上限：8）",
     "Session {number}: {name}": "会话 {number}：{name}",
     "Session {number}: {message}": "会话 {number}：{message}"
+  },
+  "macro_tester": {
+    "Trust this project before testing declarative macros": "测试声明式宏前请信任此项目",
+    "Enter macro_rules definitions and one invocation of a defined macro": "请输入 macro_rules 定义及一次已定义宏的调用",
+    "The macro test exceeds its input or expansion limit": "宏测试超出输入或展开限制",
+    "rust-analyzer was not found for the macro tester": "宏测试器找不到 rust-analyzer",
+    "Macro test cancelled": "宏测试已取消",
+    "The macro test timed out": "宏测试超时",
+    "The macro invocation could not be expanded": "无法展开宏调用",
+    "Macro tester I/O error: {error}": "宏测试器 I/O 错误：{error}",
+    "Macro analyzer error: {error}": "宏分析器错误：{error}",
+    "The macro analyzer exited": "宏分析器已退出",
+    "Declarative Macro Tester": "声明式宏测试器",
+    "Edit local macro_rules definitions and one invocation. Expansion only: project code is not executed.": "编辑本地 macro_rules 定义及一次调用。仅展开，不执行项目代码。",
+    "Macro definitions": "宏定义",
+    "Macro invocation": "宏调用",
+    "Test macro expansion": "测试宏展开",
+    "Cancel macro test": "取消宏测试",
+    "Isolated Rust 2024 macros only; project dependencies, procedural macros and runtime evaluation are unsupported.": "仅支持隔离的 Rust 2024 宏；不支持项目依赖、过程宏和运行时求值。",
+    "Expansion of {macro}": "{macro} 的展开",
+    "Test Declarative Macro…": "测试声明式宏…"
   }
 }
