@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 210 |
+| ✅ Pronto | 211 |
 | 🚧 Em andamento | 11 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 32 |
+| ⬜ A fazer | 31 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -286,7 +286,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | D-28 | Force Step Over e Force Run to Cursor | ✅ | M4 | Alt+Shift+F8 e Ctrl+Alt+F9 (e no menu ⋮ da janela Debug): o adaptador fica sem os breakpoints do usuário (só o do cursor) até o programa parar, e eles voltam em seguida. Testado com GDB real: passa duas vezes por um breakpoint e o Step Over normal volta a parar nele. |
 | D-29 | Console do depurador | ✅ | M2 | Comandos chegam ao GDB, testado; caixa vista na janela |
 | D-30 | Pular a stdlib ao fazer step | ✅ | M3 | Pula `core`/`alloc`/`std` por nome de função; breakpoints e panics ainda param na biblioteca. Um Step Into pode parar de novo na mesma linha, e closures passadas à biblioteca são puladas. |
-| D-31 | Sessões em paralelo | ⬜ | M4 | |
+| D-31 | Sessões em paralelo | ✅ | M4 | Debug in New Session mantém até oito sessões independentes, com seletor numerado, consoles/watches/frames próprios, parada individual e Stop All. Sessões em background são processadas sem trocar a sessão visível ou sobrescrever os valores inline; fechar projeto/IDE encerra todas. Teste nativo com quatro launches Cargo/GDB reais pausa dois binários simultaneamente, alterna, verifica watches e resultados distintos, retoma cada um e testa parada independente/geral. Ver docs/debug-sessions.md; Closes #85. |
 
 ## 10. Profiling e REPL
 

@@ -2096,5 +2096,13 @@
     "Local symbol binary": "本地符号二进制文件",
     "Enter a valid host, TCP port and absolute local binary path.": "请输入有效主机、TCP 端口和本地二进制文件的绝对路径。",
     "Connect": "连接"
+  },
+  "debug_sessions": {
+    "Debug in New Session": "在新会话中调试",
+    "Close Debug Session": "关闭调试会话",
+    "Stop All Debug Sessions": "停止所有调试会话",
+    "Close a debug session before starting another (limit: 8)": "开始新会话前请关闭一个调试会话（上限：8）",
+    "Session {number}: {name}": "会话 {number}：{name}",
+    "Session {number}: {message}": "会话 {number}：{message}"
   }
 }

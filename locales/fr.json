@@ -2096,5 +2096,13 @@
     "Local symbol binary": "Binaire local avec symboles",
     "Enter a valid host, TCP port and absolute local binary path.": "Saisissez un hôte, un port TCP et un chemin absolu de binaire local valides.",
     "Connect": "Connecter"
+  },
+  "debug_sessions": {
+    "Debug in New Session": "Déboguer dans une nouvelle session",
+    "Close Debug Session": "Fermer la session de débogage",
+    "Stop All Debug Sessions": "Arrêter toutes les sessions de débogage",
+    "Close a debug session before starting another (limit: 8)": "Fermez une session de débogage avant d'en démarrer une autre (limite : 8)",
+    "Session {number}: {name}": "Session {number} : {name}",
+    "Session {number}: {message}": "Session {number} : {message}"
   }
 }

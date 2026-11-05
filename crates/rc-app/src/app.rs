@@ -69,6 +69,7 @@ pub struct CrabCraftApp {
     pub insight: Insight,
     pub runner: Runner,
     pub debugger: crate::debugger::Debugger,
+    pub debug_sessions: crate::debug_sessions::Sessions,
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
@@ -157,7 +158,7 @@ pub struct CrabCraftApp {
     pub caret_screen: Option<egui::Pos2>,
     pub test_markers: Vec<crate::runner::TestMarker>,
     /// The Rust test being debugged, for Restart.
-    debug_test: Option<(crate::runner::RunConfig, rc_cargo::RunTarget)>,
+    pub(crate) debug_test: Option<(crate::runner::RunConfig, rc_cargo::RunTarget)>,
     /// The Run/Debug menu of a gutter icon: its line and where it opens.
     pub gutter_menu: Option<(usize, egui::Pos2)>,
     /// Binary target run by the icon of each line of the active Rust document.
@@ -313,6 +314,7 @@ impl CrabCraftApp {
                 debugger.lldb_dap_path = settings.lldb_dap_path.clone();
                 debugger
             },
+            debug_sessions: Default::default(),
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
@@ -1384,6 +1386,8 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.stop_all_debug_sessions();
+        self.debug_sessions = Default::default();
         if self.workspace.is_some() {
             self.save_all_docs();
             self.save_session();
@@ -2720,7 +2724,7 @@ impl CrabCraftApp {
     }
 
     /// Starts the selected configuration under the debugger.
-    fn start_debugging(&mut self) {
+    pub(crate) fn start_debugging(&mut self) {
         if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         self.debug_test = None;
         self.save_all_docs();
@@ -3483,6 +3487,7 @@ impl eframe::App for CrabCraftApp {
         let outs = self.runner.update();
         crate::ui::run_windows::handle_outputs(self, outs);
         self.poll_inspection();
+        self.poll_background_debug_sessions();
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         self.poll_auto_attach();
@@ -3534,7 +3539,7 @@ impl eframe::App for CrabCraftApp {
         self.runner.stop_all();
         self.http.cancel_all();
         self.profiler.cancel();
-        self.debugger.stop();
+        self.stop_all_debug_sessions();
         self.insight.stop();
         self.save_all_docs();
         self.save_session();

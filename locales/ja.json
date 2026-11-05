@@ -2096,5 +2096,13 @@
     "Local symbol binary": "シンボルを含むローカルバイナリ",
     "Enter a valid host, TCP port and absolute local binary path.": "有効なホスト、TCP ポート、ローカルバイナリの絶対パスを入力してください。",
     "Connect": "接続"
+  },
+  "debug_sessions": {
+    "Debug in New Session": "新しいセッションでデバッグ",
+    "Close Debug Session": "デバッグセッションを閉じる",
+    "Stop All Debug Sessions": "すべてのデバッグセッションを停止",
+    "Close a debug session before starting another (limit: 8)": "別のセッションを開始する前にデバッグセッションを閉じてください（上限：8）",
+    "Session {number}: {name}": "セッション {number}: {name}",
+    "Session {number}: {message}": "セッション {number}: {message}"
   }
 }

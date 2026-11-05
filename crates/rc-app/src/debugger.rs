@@ -176,6 +176,10 @@ impl Debugger {
         self.session.as_ref().is_some_and(|s| s.state().is_stopped())
     }
 
+    /// The editor's inline values belong to the selected session, even if both sessions
+    /// stopped at the same source line and frame id.
+    pub fn became_selected(&mut self) { self.inline_frame = None; }
+
     /// Drops what a removed breakpoint had set.
     pub fn forget_breakpoint(&mut self, path: &Path, line: usize) {
         let key = (path.to_path_buf(), line);
@@ -317,6 +321,9 @@ impl Debugger {
     }
 
     pub fn stop(&mut self) {
+        if let Some(download) = self.download.take() { download.cancel(); }
+        self.pending = None;
+        self.downloading = None;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -522,6 +529,14 @@ impl Debugger {
     }
 
     pub fn update(&mut self, docs: &mut Docs) -> Vec<DebugOutput> {
+        self.update_inner(docs, true)
+    }
+
+    pub fn update_background(&mut self, docs: &mut Docs) -> Vec<DebugOutput> {
+        self.update_inner(docs, false)
+    }
+
+    fn update_inner(&mut self, docs: &mut Docs, visible: bool) -> Vec<DebugOutput> {
         let mut out = Vec::new();
         for ev in self.downloads.drain() {
             match ev {
@@ -708,6 +723,7 @@ impl Debugger {
             self.disassembly.sync(session);
         }
         // Execution point and breakpoint state in the editors.
+        if visible {
         let exec = if session.state().is_stopped() { session.execution_point() } else { None };
         if let Some((path, line)) = &exec
             && let Some(frame) = session.selected_frame().map(|f| f.id)
@@ -759,6 +775,7 @@ impl Debugger {
                     }
                 }
             }
+        }
         }
         out
     }
