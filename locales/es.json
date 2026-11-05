@@ -2258,5 +2258,15 @@
     "Connected database column": "Columna de la base de datos conectada",
     "Open SQL in database console…": "Abrir SQL en la consola de base de datos…",
     "SQL copied to the database console; review and run explicitly": "SQL copiado a la consola; revíselo y ejecútelo explícitamente"
+  },
+  "doctest_completion": {
+    "No supported Rust documentation code fence at the caret": "No hay un bloque de código Rust compatible en el cursor",
+    "Doctest completion exceeds its document, code or metadata limit": "El completado de doctests supera el límite de documento, código o metadatos",
+    "Doctest completion cancelled": "Completado de doctests cancelado",
+    "Doctest completion timed out": "El completado de doctests agotó el tiempo",
+    "Doctest completion tool error: {error}": "Error de herramienta de completado de doctests: {error}",
+    "Doctest completion requires resolved offline Cargo metadata for this package": "El completado de doctests requiere metadatos de Cargo resueltos sin conexión para este paquete",
+    "Install rust-src to complete Rust standard library APIs in doctests": "Instale rust-src para completar APIs de la biblioteca estándar de Rust en doctests",
+    "Completion tool pipes were unavailable": "Las tuberías de la herramienta de completado no están disponibles"
   }
 }

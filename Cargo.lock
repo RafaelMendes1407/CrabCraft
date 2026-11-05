@@ -3737,6 +3737,7 @@ name = "rc-lsp"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "libc",
  "lsp-types",
  "parking_lot",
  "percent-encoding",

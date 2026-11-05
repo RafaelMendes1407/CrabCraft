@@ -2258,5 +2258,15 @@
     "Connected database column": "已连接数据库的列",
     "Open SQL in database console…": "在数据库控制台中打开 SQL…",
     "SQL copied to the database console; review and run explicitly": "SQL 已复制到数据库控制台；请检查后明确执行"
+  },
+  "doctest_completion": {
+    "No supported Rust documentation code fence at the caret": "光标处没有支持的 Rust 文档代码块",
+    "Doctest completion exceeds its document, code or metadata limit": "文档测试补全超出文档、代码或元数据限制",
+    "Doctest completion cancelled": "文档测试补全已取消",
+    "Doctest completion timed out": "文档测试补全超时",
+    "Doctest completion tool error: {error}": "文档测试补全工具错误：{error}",
+    "Doctest completion requires resolved offline Cargo metadata for this package": "此包的文档测试补全需要已离线解析的 Cargo 元数据",
+    "Install rust-src to complete Rust standard library APIs in doctests": "请安装 rust-src 以在文档测试中补全 Rust 标准库 API",
+    "Completion tool pipes were unavailable": "补全工具的管道不可用"
   }
 }

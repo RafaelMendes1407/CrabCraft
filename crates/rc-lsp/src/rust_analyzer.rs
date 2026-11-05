@@ -21,6 +21,8 @@ pub fn start(program: &Path, workspace: &Path, env: &[(String, String)], incomin
 pub struct RaSettings {
     /// Clippy instead of `cargo check` on save.
     pub clippy: bool,
+    /// Read-only semantic projections never build scripts, load proc macros or run checks.
+    pub isolated_projection: bool,
     /// Folders and files relative to the workspace root that the server leaves out.
     pub exclude: Vec<String>,
     /// The `Cargo.toml` files to analyse (`linkedProjects`, which replaces the server's own
@@ -48,6 +50,14 @@ pub fn config(s: &RaSettings) -> Value {
             cargo.insert("features".into(), json!(s.features));
             cargo.insert("target".into(), json!(s.target));
         }
+    }
+    if s.isolated_projection {
+        value["checkOnSave"] = json!(false);
+        value["check"]["enable"] = json!(false);
+        value["cargo"]["buildScripts"]["enable"] = json!(false);
+        value["procMacro"]["enable"] = json!(false);
+        value["completion"]["autoimport"]["enable"] = json!(false);
+        value["diagnostics"] = json!({ "enable": false });
     }
     value
 }
@@ -283,4 +293,18 @@ mod tests {
         assert!(!is_quiescent(&json!({ "quiescent": false })));
         assert!(!is_quiescent(&json!({})));
     }
+    #[test]
+    fn isolated_completion_projections_cannot_run_build_scripts_checks_or_proc_macros() {
+        let normal = config(&RaSettings::default());
+        assert_eq!(normal["checkOnSave"], json!(true));
+        assert_eq!(normal["cargo"]["buildScripts"]["enable"], json!(true));
+        assert_eq!(normal["procMacro"]["enable"], json!(true));
+        let isolated = config(&RaSettings { isolated_projection: true, ..Default::default() });
+        assert_eq!(isolated["checkOnSave"], json!(false));
+        assert_eq!(isolated["check"]["enable"], json!(false));
+        assert_eq!(isolated["cargo"]["buildScripts"]["enable"], json!(false));
+        assert_eq!(isolated["procMacro"]["enable"], json!(false));
+        assert_eq!(isolated["completion"]["autoimport"]["enable"], json!(false));
+    }
+
 }

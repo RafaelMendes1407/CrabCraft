@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 219 |
-| 🚧 Em andamento | 11 |
+| ✅ Pronto | 220 |
+| 🚧 Em andamento | 10 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 23 |
@@ -119,7 +119,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | I-01 | Análise do projeto (índice) | ✅ | M1 | rust-analyzer com estado de análise na barra de status; testado e visto no app |
 | I-02 | Autocompletar com documentação | ✅ | M1 | Testado com rust-analyzer real |
-| I-03 | Completar em `#[derive]`, macros e doctests | 🚧 | M1 | Derive e macro testados com rust-analyzer real; em doctest ele não trouxe sugestões na sonda, exige solução própria |
+| I-03 | Completar em `#[derive]`, macros e doctests | ✅ | M1 | Derive/macros/imports preservados em regressão Rust real. Ctrl+Space em fences Rust de comentários de documentação projeta o exemplo em RA isolado com grafo Cargo offline e stdlib, inclusive aliases e buffers Rust não salvos; mapeia UTF-16, linhas ocultas e edições, cancela snapshots obsoletos/Esc com limites e sem alterar projeto/lockfile. Testes nativos completam API String após Unicode e método novo de dependência não salva, aceitam e passam cargo test --doc. Requer biblioteca Cargo/rust-src e lock resolvido para deps; sem autoimports ou proc macros no fallback. Ver docs/doctest-completion.md; [#23](https://github.com/RafaelMendes1407/CrabCraft/issues/23). |
 | I-04 | Auto-import ao completar | ✅ | M1 | Import ao aceitar o item testado com rust-analyzer real |
 | I-05 | Auto-import ao digitar e ao colar | ✅ | M3 | Ao digitar: aceitar uma sugestão da completação de um item de outro módulo adiciona o `use` (testado). Ao colar código Rust: para cada nome tipo-tipo do trecho, o rust-analyzer é consultado; os que têm uma só importação ganham a linha `use` (após os `use` do arquivo, ou após comentários e atributos iniciais) e os ambíguos são avisados para escolher em Mostrar ações de contexto; opção em Configurações › Editor. Testado com rust-analyzer real (`HashMap` importado, `Ordering` ambíguo). Falta: importar sem completação enquanto digita |
 | I-06 | Excluir itens do auto-import | ✅ | M3 | Configurações › Editor › Nunca importar: caminhos (item ou módulo, um por linha) que a completação nunca oferece importar, via `completion.autoimport.exclude` do rust-analyzer, aplicados sem reiniciar o servidor. Testado com rust-analyzer real: `std::sync::atomic::Ordering` some das sugestões e `std::cmp::Ordering` fica Proteção adicional contra respostas antigas do servidor: ao mudar exclusões, completações pendentes/abertas são descartadas; candidatos de auto-import com caminho explicitado pelo rust-analyzer são filtrados localmente por item/módulo antes de aparecer. Teste unitário e rust-analyzer real; Ref #25. |

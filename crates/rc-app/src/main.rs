@@ -15,6 +15,7 @@ mod borrow_errors;
 mod repl;
 mod repl_variables;
 mod macro_tester;
+mod doctest_completion;
 mod settings_backup;
 mod instance;
 mod auto_attach;
