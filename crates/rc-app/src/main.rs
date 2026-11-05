@@ -180,4 +180,7 @@ mod large_file_audit;
 #[cfg(test)]
 mod terminal_completion_audit;
 
+#[cfg(test)]
+mod key_sequence_audit;
+
 mod shelves;

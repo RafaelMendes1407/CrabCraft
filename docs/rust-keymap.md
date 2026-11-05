@@ -34,7 +34,8 @@ RustRover product, and makes no product parity claim.
 
 The RustRover-specific macOS profile is not implemented; its Windows/Linux choice is
 visibly disabled on macOS. Rider and VS Code macOS profiles remain available. Complete
-Current Statement and two-stage shortcut sequences are unsupported. Extra bindings
+Current Statement remains unsupported. Configurable two-stage sequences are implemented and
+verified through native recording and real Rust editor actions; see [key sequences](key-sequences.md). Extra bindings
 inherited from the existing editing map have not all been compared with the reference.
 
 Public sources consulted on 2026-11-04:

@@ -303,6 +303,24 @@ const fn m(alt: bool, ctrl: bool, shift: bool, mac_cmd: bool) -> Modifiers {
 pub struct Keymap {
     pub kind: KeymapKind,
     bindings: Vec<(Chord, Action)>,
+    sequences: Vec<(Chord, Chord, Action)>,
+}
+
+#[derive(Clone, Copy)]
+struct PendingSequence { first: Chord, time: f64, focus: Option<egui::Id> }
+#[derive(Clone)]
+struct SequenceText { key: Key, text: String, time: f64 }
+pub enum SequenceKey { Pass, Waiting, Action(Action) }
+fn same_chord(a: Chord, b: Chord) -> bool {
+    a.key == b.key && (a.mods.alt, a.mods.ctrl, a.mods.shift, a.mods.mac_cmd) == (b.mods.alt, b.mods.ctrl, b.mods.shift, b.mods.mac_cmd)
+}
+
+pub fn parse_sequence(text: &str) -> Option<(Chord, Chord)> {
+    let mut words = text.split_whitespace();
+    let first = parse_chord(words.next()?)?;
+    let second = parse_chord(words.next()?)?;
+    if words.next().is_some() || !(first.mods.ctrl || first.mods.mac_cmd) { return None; }
+    Some((first, second))
 }
 
 impl Keymap {
@@ -315,7 +333,7 @@ impl Keymap {
             KeymapKind::VsCodeMac => vscode_bindings(true),
             KeymapKind::VsCode => vscode_bindings(false),
         };
-        Keymap { kind, bindings }
+        Keymap { kind, bindings, sequences: Vec::new() }
     }
 
     /// The keymap with the user's changes: each action gets the given shortcut (or none),
@@ -333,6 +351,63 @@ impl Keymap {
         keymap
     }
 
+    /// A prefix replaces any single-key binding it would otherwise trigger. One action has
+    /// one custom shortcut, and identical sequences belong to the last configured action.
+    pub fn with_sequences(mut self, sequences: &[(Action, Chord, Chord)]) -> Self {
+        for &(action, first, second) in sequences {
+            if !(first.mods.ctrl || first.mods.mac_cmd) { continue; }
+            self.bindings.retain(|(chord, a)| *a != action && !same_chord(*chord, first));
+            self.sequences.retain(|(a,b,c)| *c != action && !(same_chord(*a,first) && same_chord(*b,second)));
+            self.sequences.push((first, second, action));
+        }
+        self
+    }
+
+    /// Context-local prefix state expires after two seconds or when keyboard focus changes.
+    /// Text fields only use global actions; editor actions require an editor's focus.
+    pub fn sequence_key(&self, ctx: &egui::Context, id: egui::Id, key: Key, mods: Modifiers, editor: bool) -> SequenceKey {
+        ctx.data_mut(|data| data.remove::<SequenceText>(id));
+        let now = ctx.input(|input| input.time);
+        let focus = ctx.memory(|memory| memory.focused());
+        let pending = ctx.data_mut(|data| { let pending = data.get_temp::<PendingSequence>(id); data.remove::<PendingSequence>(id); pending });
+        let chord = Chord { key, mods };
+        if let Some(pending) = pending.filter(|p| p.focus == focus && (0.0..=2.0).contains(&(now - p.time))) {
+            if key == Key::Escape { return SequenceKey::Waiting; }
+            if let Some((_,_, action)) = self.sequences.iter().find(|(first,second,a)| same_chord(*first,pending.first) && same_chord(*second,chord) && (editor || a.is_ide())) {
+                if !mods.ctrl && !mods.mac_cmd && !mods.alt {
+                    let name = if key == Key::Space { " " } else { key.name() };
+                    if name.chars().count() == 1 { ctx.data_mut(|data| data.insert_temp(id, SequenceText { key, text: name.into(), time: now })); }
+                }
+                return SequenceKey::Action(*action);
+            }
+        }
+        if self.sequences.iter().any(|(first,_,a)| same_chord(*first,chord) && (editor || a.is_ide())) {
+            ctx.data_mut(|data| data.insert_temp(id, PendingSequence { first: chord, time: now, focus }));
+            return SequenceKey::Waiting;
+        }
+        SequenceKey::Pass
+    }
+
+    /// Platforms can deliver a character after the key-up or in the next frame. Suppress
+    /// only that character, until another key/pointer event or a short grace period.
+    pub fn sequence_text(ctx: &egui::Context, id: egui::Id, text: &str) -> bool {
+        let now = ctx.input(|input| input.time);
+        ctx.data_mut(|data| {
+            let state = data.get_temp::<SequenceText>(id);
+            if state.is_some_and(|state| (0.0..=0.25).contains(&(now-state.time)) && state.text.eq_ignore_ascii_case(text)) { true }
+            else { data.remove::<SequenceText>(id); false }
+        })
+    }
+    pub fn sequence_repeat(ctx: &egui::Context, id: egui::Id, key: Key) -> bool {
+        let now = ctx.input(|input| input.time);
+        ctx.data_mut(|data| {
+            if let Some(mut state) = data.get_temp::<SequenceText>(id) && state.key == key {
+                state.time = now; data.insert_temp(id,state); true
+            } else { false }
+        })
+    }
+    pub fn cancel_sequence(ctx: &egui::Context, id: egui::Id) { ctx.data_mut(|data| { data.remove::<PendingSequence>(id); data.remove::<SequenceText>(id); }); }
+
     /// The action a shortcut runs, if any.
     pub fn action_of(&self, chord: Chord) -> Option<Action> {
         self.lookup(chord.key, chord.mods)
@@ -346,6 +421,9 @@ impl Keymap {
 
     /// The first shortcut of `action`, formatted for menus and tooltips (⌘⇧F, Ctrl+Shift+F).
     pub fn shortcut_text(&self, action: Action) -> Option<String> {
+        if let Some((first,second,_)) = self.sequences.iter().find(|(_,_,a)| *a == action) {
+            return Some(format!("{}, {}", format_chord(*first,self.kind.is_mac()),format_chord(*second,self.kind.is_mac())));
+        }
         let (chord, _) = self.bindings.iter().find(|(_, a)| *a == action)?;
         Some(format_chord(*chord, self.kind.is_mac()))
     }
@@ -855,8 +933,8 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
     v
 }
 
-/// VS Code's default shortcuts, from its public keyboard shortcut reference. Two-step chords
-/// (⌘K ⌘S...) are not supported, so their commands keep only the single-step shortcut, if any.
+/// VS Code's default single-step shortcuts, from its public keyboard shortcut reference.
+/// User-defined two-step shortcuts are applied separately by `with_sequences`.
 /// `mac` uses ⌘ where Windows uses Ctrl, and the few macOS-only differences.
 fn vscode_bindings(mac: bool) -> Vec<(Chord, Action)> {
     use Action::*;
@@ -1153,5 +1231,19 @@ mod tests {
         let k = Keymap::with_overrides(KeymapKind::Rider, &[(Action::GotoLine, Some(find))]);
         assert_eq!(k.action_of(find), Some(Action::GotoLine));
         assert_ne!(k.chord(Action::Find), Some(find));
+    }
+
+    #[test]
+    fn sequence_settings_reject_plain_prefixes_and_replace_conflicting_single_keys() {
+        assert!(parse_sequence("K ctrl+S").is_none());
+        assert!(parse_sequence("alt+K ctrl+S").is_none());
+        assert!(parse_sequence("ctrl+K ctrl+S ctrl+T").is_none());
+        let (first,second) = parse_sequence("ctrl+K ctrl+S").unwrap();
+        let map = Keymap::new(KeymapKind::Rider).with_sequences(&[(Action::ShowSettings,first,second)]);
+        assert!(map.lookup(Key::K, first.mods).is_none(), "the prefix must not commit before the second key");
+        assert!(map.chord(Action::ShowSettings).is_none(), "OS accelerators must not consume sequence prefixes");
+        assert_eq!(map.shortcut_text(Action::ShowSettings).as_deref(), Some("Ctrl+K, Ctrl+S"));
+        let map = map.with_sequences(&[(Action::SaveAll,first,second)]);
+        assert!(map.sequences.iter().all(|(_,_,a)| *a != Action::ShowSettings));
     }
 }

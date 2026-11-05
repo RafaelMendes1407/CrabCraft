@@ -3099,6 +3099,8 @@ impl CrabCraftApp {
         self.editor_config = editor_config(&self.settings);
         if keymap_changed {
             self.keymap = build_keymap(&self.settings);
+            Keymap::cancel_sequence(ctx, egui::Id::new("app_key_sequence"));
+            if self.native_menu.is_some() && let Some(menu) = NativeMenu::install(ctx, &self.keymap) { self.native_menu = Some(menu); }
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -3301,9 +3303,13 @@ impl CrabCraftApp {
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
     /// fields don't see them.
     fn global_shortcuts(&mut self, ctx: &Context) {
+        if ctx.input(|input| input.events.iter().any(|event| matches!(event, egui::Event::PointerButton { pressed: true, .. } | egui::Event::WindowFocused(false) | egui::Event::Ime(_)))) {
+            Keymap::cancel_sequence(ctx, egui::Id::new("app_key_sequence"));
+        }
         // Settings › Keymap is recording a shortcut: the key belongs to it.
         if ctx.data(|d| d.get_temp::<String>(egui::Id::new("recording_shortcut")).is_some()) {
-            return;
+            if matches!(&self.dialog, Some(Dialog::Settings { page: crate::ui::dialogs::SettingsPage::Keymap, .. })) { return; }
+            crate::ui::dialogs::cancel_shortcut_recording(ctx);
         }
         let now = ctx.input(|i| i.time);
         // Shift, Shift: Search Everywhere.
@@ -3319,19 +3325,27 @@ impl CrabCraftApp {
             self.pending.push(Action::RunAnything);
         }
         let keymap = &self.keymap;
+        let editor_focused = self.docs.active_doc().is_some_and(|doc| ctx.memory(|memory| memory.focused()) == Some(rc_editor::EditorView::id_for(doc.editor.id)));
+        let events = ctx.input(|input| input.events.clone());
+        let mut consumed = std::collections::BTreeSet::new();
         let mut found = Vec::new();
-        ctx.input_mut(|i| {
-            i.events.retain(|e| {
-                if let egui::Event::Key { key, pressed: true, modifiers, .. } = e
-                    && let Some(a) = keymap.lookup(*key, *modifiers)
-                    && a.is_ide()
-                {
-                    found.push(a);
-                    return false;
+        for (index,event) in events.iter().enumerate() {
+            if let egui::Event::Key { key, pressed: true, modifiers, repeat, .. } = event {
+                if *repeat && Keymap::sequence_repeat(ctx, egui::Id::new("app_key_sequence"), *key) { consumed.insert(index); continue; }
+                if !repeat {
+                    match keymap.sequence_key(ctx, egui::Id::new("app_key_sequence"), *key, *modifiers, editor_focused) {
+                        rc_editor::keymap::SequenceKey::Waiting => { consumed.insert(index); continue; }
+                        rc_editor::keymap::SequenceKey::Action(action) => { found.push(action); consumed.insert(index); continue; }
+                        rc_editor::keymap::SequenceKey::Pass => {},
+                    }
                 }
-                true
-            })
-        });
+                if let Some(action) = keymap.lookup(*key,*modifiers).filter(|action| action.is_ide()) {
+                    found.push(action); consumed.insert(index);
+                }
+            } else if let egui::Event::Text(text) = event
+                && Keymap::sequence_text(ctx, egui::Id::new("app_key_sequence"), text) { consumed.insert(index); }
+        }
+        ctx.input_mut(|input| { let mut index = 0; input.events.retain(|_| { let keep = !consumed.contains(&index); index += 1; keep }); });
         self.pending.extend(found);
         // The mouse's back / forward buttons.
         let (back, forward) = ctx.input(|i| (i.pointer.button_pressed(egui::PointerButton::Extra1), i.pointer.button_pressed(egui::PointerButton::Extra2)));
@@ -3559,7 +3573,13 @@ impl eframe::App for CrabCraftApp {
 /// The keymap of the settings with the user's shortcuts. Unknown actions or shortcuts in the
 /// settings file are skipped.
 pub fn build_keymap(settings: &Settings) -> Keymap {
-    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts))
+    let actions = crate::search::action_items();
+    let sequences: Vec<_> = settings.shortcuts.iter().filter_map(|(id,text)| {
+        let action = actions.iter().map(|(_,a)| *a).find(|a| format!("{a:?}") == *id)?;
+        let (first,second) = rc_editor::keymap::parse_sequence(text)?;
+        Some((action,first,second))
+    }).collect();
+    Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts)).with_sequences(&sequences)
 }
 
 /// The user's shortcuts as (action, shortcut) pairs; only actions of Find Action can change.

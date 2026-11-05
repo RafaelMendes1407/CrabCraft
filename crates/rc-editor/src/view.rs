@@ -1198,6 +1198,9 @@ fn hover_popup_hovered(ui: &Ui) -> bool {
 
 fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keymap: &Keymap, out: &mut EditorOutput) {
     let events = ui.input(|i| i.events.clone());
+    if events.iter().any(|event| matches!(event, Event::PointerButton { pressed: true, .. } | Event::WindowFocused(false) | Event::Ime(_))) {
+        Keymap::cancel_sequence(ui.ctx(), Id::new(("editor_key_sequence", state.id)));
+    }
     let now = ui.input(|i| i.time);
     // "Alt Alt + ↑/↓" clones carets: track a double tap of Alt that is still held.
     let alt = ui.input(|i| i.modifiers.alt);
@@ -1212,7 +1215,16 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
 
     for ev in events {
         match ev {
-            Event::Key { key, pressed: true, modifiers, .. } => {
+            Event::Key { key, pressed: true, modifiers, repeat, .. } => {
+                if repeat && Keymap::sequence_repeat(ui.ctx(), Id::new(("editor_key_sequence", state.id)), key) { continue; }
+                if !repeat { match keymap.sequence_key(ui.ctx(), Id::new(("editor_key_sequence", state.id)), key, modifiers, true) {
+                    crate::keymap::SequenceKey::Waiting => continue,
+                    crate::keymap::SequenceKey::Action(action) => {
+                        if action.is_editing() { exec(ui, state, config, action, out); } else { out.actions.push(action); }
+                        continue;
+                    }
+                    crate::keymap::SequenceKey::Pass => {},
+                } }
                 if crate::popups_view::handle_key(state, key, modifiers, out) {
                     continue;
                 }
@@ -1231,7 +1243,7 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
                 }
             }
             Event::Text(text) => {
-                if state.read_only || text.is_empty() {
+                if Keymap::sequence_text(ui.ctx(), Id::new(("editor_key_sequence", state.id)), &text) || state.read_only || text.is_empty() {
                     continue;
                 }
                 type_text(state, config, &text, out);

@@ -2192,5 +2192,10 @@
     "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "Utilisez une URL HTTPS, ou HTTP en boucle locale, sans identifiants intégrés ni fragment.",
     "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "Utilisez une URL HTTPS privée avec GET, PUT et ETags forts. Seules les préférences portables sont envoyées ; le téléchargement ouvre toujours un aperçu. URL et jeton restent en mémoire jusqu'à la fermeture du dialogue.",
     "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "Les décisions de confiance, chemins de projets, historique, outils et variables d'environnement restent sur cet ordinateur."
+  },
+  "key_sequences": {
+    "Record two-step shortcuts": "Enregistrer les raccourcis en deux étapes",
+    "Press the second shortcut…": "Appuyez sur le deuxième raccourci…",
+    "The first shortcut must include Ctrl or Command.": "Le premier raccourci doit inclure Ctrl ou Commande."
   }
 }

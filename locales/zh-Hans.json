@@ -2192,5 +2192,10 @@
     "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "使用 HTTPS URL 或回环地址的 HTTP URL，不得嵌入凭据或片段。",
     "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "使用支持 GET、PUT 和强 ETag 的私有 HTTPS 存储 URL。仅在上传时发送可移植偏好设置；下载始终打开预览。URL 和令牌仅在对话框关闭前保留于内存。",
     "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "信任决定、项目路径、历史记录、工具程序和环境变量保留在此计算机上。"
+  },
+  "key_sequences": {
+    "Record two-step shortcuts": "录制两步快捷键",
+    "Press the second shortcut…": "请按第二个快捷键…",
+    "The first shortcut must include Ctrl or Command.": "第一个快捷键必须包含 Ctrl 或 Command。"
   }
 }

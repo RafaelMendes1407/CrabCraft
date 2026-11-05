@@ -2192,5 +2192,10 @@
     "Use an HTTPS preferences URL, or HTTP on loopback, without embedded credentials or fragments.": "認証情報やフラグメントを含まない HTTPS URL、またはループバックの HTTP URL を使用してください。",
     "Use a private HTTPS storage URL supporting GET, PUT and strong ETags. Only portable preferences are sent after Upload; Download always opens a preview. URL and token stay in memory until this dialog closes.": "GET、PUT、強い ETag に対応する非公開の HTTPS 保存先を使用します。アップロードで移植可能な設定のみ送信し、ダウンロードは必ずプレビューを開きます。URL とトークンはダイアログを閉じるまでメモリに保持されます。",
     "Trust decisions, project paths, history, tool programs and environment variables stay on this computer.": "信頼設定、プロジェクトのパス、履歴、ツール、環境変数はこのコンピューターに保持されます。"
+  },
+  "key_sequences": {
+    "Record two-step shortcuts": "2 段階のショートカットを記録",
+    "Press the second shortcut…": "2 番目のショートカットを押してください…",
+    "The first shortcut must include Ctrl or Command.": "最初のショートカットには Ctrl または Command が必要です。"
   }
 }
