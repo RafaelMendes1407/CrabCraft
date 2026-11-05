@@ -11,7 +11,7 @@ pub struct Remote {
     pub identity: String,
     pub known_hosts: String,
     pub path: String,
-    pub local: String,
+    pub deployment: crate::deployment_ui::Deployments,
     pub original: String,
     pub edited: String,
     pub preview: Option<Preview>,
@@ -32,7 +32,7 @@ impl Remote {
             identity: String::new(),
             known_hosts: String::new(),
             path: String::new(),
-            local: String::new(),
+            deployment: crate::deployment_ui::Deployments::new(waker.clone()),
             original: String::new(),
             edited: String::new(),
             preview: None,
@@ -46,6 +46,7 @@ impl Remote {
         }
     }
     pub fn cancel(&mut self) {
+        self.deployment.cancel();
         if let Some(cancel) = self.cancel.take() {
             cancel.cancel();
         }
@@ -98,6 +99,7 @@ impl Remote {
         }
     }
     pub fn poll(&mut self, trusted: bool) {
+        self.deployment.poll(trusted);
         if !trusted {
             self.cancel();
             self.terminal = None;
@@ -134,8 +136,8 @@ impl Remote {
         }
     }
     fn ui(&mut self, ui: &mut egui::Ui, trusted: bool) {
-        ui.small(tr("SFTP uses OpenSSH keys and a preverified known_hosts file. FTP and password prompts are unsupported."));
-        let busy = self.cancel.is_some();
+        ui.small(tr("SSH uses keys and a verified known_hosts file. Interactive SSH password prompts are unsupported."));
+        let busy = self.cancel.is_some() || self.deployment.pending();
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Host"));
@@ -181,14 +183,7 @@ impl Remote {
                         .desired_width(440.0),
                 );
             });
-            ui.horizontal(|ui| {
-                ui.label(tr("Local deploy file"));
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.local)
-                        .char_limit(8192)
-                        .desired_width(440.0),
-                );
-            });
+
         });
         ui.horizontal_wrapped(|ui| {
             if ui
@@ -214,21 +209,6 @@ impl Remote {
                 );
             }
             if ui
-                .add_enabled(
-                    trusted && !busy,
-                    egui::Button::new(tr("Preview local deployment")),
-                )
-                .clicked()
-            {
-                self.start(
-                    Action::PreviewDeploy {
-                        remote: self.path.clone(),
-                        local: PathBuf::from(&self.local),
-                    },
-                    trusted,
-                );
-            }
-            if ui
                 .add_enabled(trusted && !busy, egui::Button::new(tr("Open SSH terminal")))
                 .clicked()
             {
@@ -249,8 +229,8 @@ impl Remote {
             ui.colored_label(rc_kit::pal(ui).error, error);
         }
         ui.label(&self.status);
-        ui.small(tr("Existing UTF-8 files only, up to 2 MB. No directory sync, automatic upload or remote project execution."));
-        ui.small(tr("Previews show up to 16,384 characters. Files over 64 KB cannot be edited here; local deployment remains available."));
+        ui.small(tr("The remote text editor supports existing UTF-8 files up to 2 MB. Use Reviewed file deployment for new files and binaries."));
+        ui.small(tr("Text previews show up to 16,384 characters. In-pane editing is limited to 64 KB."));
         ui.columns(2, |columns| {
             columns[0].label(tr("Remote snapshot"));
             let mut snapshot = self.original.chars().take(16384).collect::<String>();
@@ -319,6 +299,7 @@ impl Remote {
                 self.start(Action::Apply(preview.clone()), trusted);
             }
         }
+        let ssh=self.config().ok();self.deployment.ui(ui,ssh,trusted,self.cancel.is_some());
     }
 }
 fn error_text(error: Error) -> String {

@@ -9,6 +9,7 @@ mod database;
 mod remote;
 mod remote_transfer;
 mod deployment;
+mod deployment_ui;
 mod deploy_sftp;
 mod deploy_ftps;
 mod remote_development_transport;
