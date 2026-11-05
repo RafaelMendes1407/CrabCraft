@@ -175,3 +175,75 @@ fn native_rust_brackets_quotes_type_over_and_match_the_parser() {
     std::fs::write(&path, before).unwrap();
     compile(&path);
 }
+
+#[test]
+fn markdown_preview_updates_and_switches_views_inside_a_rust_project() {
+    use egui_kittest::kittest::Queryable;
+    use crate::docs::MdView;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (dir, _) = project("fn main() {}\n");
+    let home = tempfile::tempdir().unwrap();
+    let readme = dir.path().join("README.md");
+    std::fs::write(&readme, "# Rust guide\n\nFerris overview\n\n```rust\nlet answer = 42;\n```\n").unwrap();
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.open_workspace(dir.path());
+    app.open_file(&readme);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.get_by_label("Rust guide");
+    h.get_by_label("Ferris overview");
+    h.get_by_label(rc_kit::i18n::tr("Preview Only")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().md_view, Some(MdView::Preview));
+    h.get_by_label("Rust guide");
+    let doc = h.state_mut().docs.active_doc_mut().unwrap();
+    let text = doc.editor.buffer.rope().to_string();
+    let start = text.find("Ferris overview").unwrap();
+    doc.editor.replace(start, start + "Ferris overview".len(), "Live Rust documentation");
+    h.run_steps(3);
+    h.get_by_label("Live Rust documentation");
+    h.get_by_label(rc_kit::i18n::tr("Editor Only")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().md_view, Some(MdView::Editor));
+    assert!(h.query_by_label("Rust guide").is_none());
+    h.get_by_label(rc_kit::i18n::tr("Editor and Preview")).click();
+    h.run_steps(3);
+    h.get_by_label("Live Rust documentation");
+    assert!(h.state().insight.session.is_none(), "preview must not start project code");
+}
+
+#[test]
+fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let source = "fn main() { assert!(include_str!(\"config.json\").contains(\"answer\")); assert!(include_str!(\"config.xml\").contains(\"project\")); }\n";
+    let (dir, path) = project(source);
+    let home = tempfile::tempdir().unwrap();
+    for (name, text) in [("config.json", "{\"answer\":42,\"nested\":{\"enabled\":true}}\n"), ("config.xml", "<project>\n<item enabled=\"true\">Rust</item>\n</project>\n")] {
+        std::fs::write(dir.path().join("src").join(name), text).unwrap();
+    }
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.open_workspace(dir.path());
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    for (name, language) in [("config.json", rc_syntax::Lang::Json), ("config.xml", rc_syntax::Lang::Xml)] {
+        let file = dir.path().join("src").join(name);
+        h.state_mut().open_file(&file);
+        h.run_steps(3);
+        let original = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+        h.state_mut().run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
+        h.run_steps(3);
+        let doc = h.state_mut().docs.active_doc_mut().unwrap();
+        doc.editor.parse_blocking();
+        assert_eq!(doc.editor.lang(), language);
+        assert!(!doc.editor.syntax.tree().unwrap().root_node().has_error());
+        assert!(doc.editor.buffer.rope().to_string().lines().count() > 1);
+        assert!(!doc.editor.syntax.folds().is_empty());
+        h.state_mut().save_all_docs();
+        let formatted = std::fs::read_to_string(&file).unwrap();
+        assert_ne!(formatted, original);
+        // Formatting remains a single undoable editor operation.
+        h.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Z);
+        h.run_steps(2);
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), original);
+    }
+    compile(&path);
+    assert!(h.state().insight.session.is_none());
+}

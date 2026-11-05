@@ -24,9 +24,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 193 |
+| ✅ Pronto | 195 |
 | 🚧 Em andamento | 9 |
-| 🟢 Herdado | 10 |
+| 🟢 Herdado | 8 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -102,8 +102,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-15 | Corretor ortográfico e gramática | ⬜ | M6 | |
 | E-16 | Live templates e variáveis | ✅ | M3 | Configurações › Live Templates: abreviação, descrição e corpo com `$1`, `${2:padrão}` e `$0`, com modelos iniciais (`p`, `pd`, `main`, `fn`, `test`, `tmod`, `st`, `en`, `impl`, `ifl`, `matchr`) e Restaurar padrões. Em arquivo Rust, abreviação + Tab expande na indentação da linha; Tab e Shift+Tab percorrem as paradas, Esc encerra. Snippets da completação do rust-analyzer ganharam as mesmas paradas. Teste headless e captura conferida. Falta: variáveis com expressões e contextos além de Rust |
 | E-17 | Postfix completion (`.if`, `.match`…) | ✅ | M3 | Postfix chega ao completar, testado com rust-analyzer real |
-| E-18 | Pré-visualização de Markdown | 🟢 | M1 | |
-| E-19 | Suporte a JSON e XML | 🟢 | M1 | |
+| E-18 | Pré-visualização de Markdown | ✅ | M1 | Prévia Markdown verificada num README de projeto Cargo real: cabeçalho, texto e bloco Rust renderizados, botões Editor/Prévia/Dividido e atualização imediata após editar. Teste nativo headless `editor_rust_audit::markdown_preview_updates_and_switches_views_inside_a_rust_project`; abrir/alternar a prévia não inicia rust-analyzer nem código do projeto. Imagens remotas/locais e clique em links não exercitados nesse teste. |
+| E-19 | Suporte a JSON e XML | ✅ | M1 | Arquivos JSON/XML usados por include_str! num projeto Cargo real: linguagem, árvore sem erros, dobras, Reformat Code, salvamento e desfazer único verificados no editor nativo headless; Rust com os assets compila com rustc real. JSON é reformatado; XML é reindentado por linhas existentes (não expande tags compactas). Teste `editor_rust_audit::json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project`. Sem validação de esquemas JSON/XML. |
 | E-20 | Suporte a HTML, CSS, JavaScript e TypeScript | 🚧 | M6 | Realce por tree-sitter em HTML, CSS, JS (também JSX/mjs/cjs), TS (também mts/cts) e TSX, com comentários e dobramento; HTML usa gramática própria e preserva fechamento de tags e aspas. Testado com os assets de `tests/fixtures/RustWeb`, incluídos num binário Rust real, e queries reais. Falta: análise semântica, completação, refatorações e realce de JavaScript/CSS embutidos em HTML Avanço parcial: `36d1675`, [#19](https://github.com/RafaelMendes1407/CrabCraft/issues/19). |
 | E-21 | Emmet | 🚫 | - | Depende do suporte web |
 | E-22 | Cabeçalhos de copyright | ✅ | M6 | Configurações › Copyright: perfil do projeto salvo na sessão, com modelo (`$year`, `$file`, `$project`, `$author` = `user.name` do Git, lido numa thread), licença SPDX opcional (expressão inválida fica de fora), opção de pôr o cabeçalho em arquivos novos e prévia. Code › Update Copyright (menu, Find Action) insere o cabeçalho no estilo de comentário da linguagem (`//` em Rust, `#` em TOML, bloco onde não há comentário de linha; JSON não recebe) depois de shebang/BOM/declaração XML e antes de `#![…]`, ou só estende o ano do cabeçalho existente (`2020` → `2020-2026`, também em `/* */`), como edição desfazível; doc comments não contam como cabeçalho. Modelo vindo da sessão é limitado e o casamento não degenera. Teste headless num projeto Cargo com Git real (`screens::copyright_headers_on_new_and_old_files`: New › Rust File, atualização idempotente) e num `main.rs` real do CrabCraft. Captura da página não conferida. Falta: vários perfis por escopo de arquivos e atualizar o projeto inteiro de uma vez |
