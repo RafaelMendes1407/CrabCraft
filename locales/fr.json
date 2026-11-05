@@ -2810,5 +2810,18 @@
     "Could not read sources or language-server definitions for the Axum scan": "Impossible de lire les sources ou définitions du serveur de langage pour l’analyse Axum",
     "Axum sources, metadata, trust or language server changed; refresh the scan": "Les sources, métadonnées, autorisations ou le serveur de langage Axum ont changé ; actualisez l’analyse",
     "RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved.": "Déclarations Axum vérifiées par RA et composition de fabriques entre fichiers. Cet instantané ne représente pas un graphe d’exécution complet ; les routeurs dynamiques ou générés peuvent rester non résolus."
+  },
+  "disk_save": {
+    "Could not save the document: {error}": "Impossible d’enregistrer le document : {error}",
+    "Saving cancelled; unsaved edits were kept": "Enregistrement annulé ; les modifications non enregistrées sont conservées",
+    "The disk file changed before saving; unsaved edits were kept": "Le fichier a changé avant l’enregistrement ; les modifications sont conservées",
+    "Background saving supports documents up to 128 MB": "L’enregistrement en arrière-plan accepte les documents jusqu’à 128 Mo",
+    "The save queue is full; unsaved edits were kept": "La file d’enregistrement est pleine ; les modifications sont conservées",
+    "A read-only document has unsaved edits; the action was stopped": "Un document en lecture seule contient des modifications ; l’action est arrêtée",
+    "Another action is waiting for documents to save": "Une autre action attend l’enregistrement des documents",
+    "Saving documents…": "Enregistrement des documents…",
+    "Edits stay open until saving finishes": "Les modifications restent ouvertes jusqu’à la fin de l’enregistrement",
+    "Cancel saving": "Annuler l’enregistrement",
+    "Save edited documents before changing dependencies.": "Enregistrez les documents modifiés avant de changer les dépendances."
   }
 }

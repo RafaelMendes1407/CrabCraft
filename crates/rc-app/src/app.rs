@@ -63,6 +63,7 @@ pub struct CrabCraftApp {
     pub docs: Docs,
     pub disk_revert: Option<crate::disk_revert::Job>,
     pub disk_watch: crate::disk_watch::Watch,
+    pub disk_save: crate::disk_save::Flow,
     pub disk_open: crate::disk_open::State,
     pub dock: Dock,
     pub explorer: ExplorerState,
@@ -303,6 +304,7 @@ impl CrabCraftApp {
         CrabCraftApp {
             disk_revert: None,
             disk_watch: Default::default(),
+            disk_save: Default::default(),
             disk_open: Default::default(),
             keymap,
             editor_config,
@@ -471,6 +473,10 @@ impl CrabCraftApp {
 
     /// Opens a folder, solution or project, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
+        self.prepare_workspace_save();
+        let already_pending=self.disk_save.continuation.is_some();
+        let queued=path.to_path_buf(); if self.defer_save(false,move |app|app.open_workspace(&queued)){if !already_pending&&self.disk_save.continuation.is_some(){self.disk_save.pending_workspace=Some(path.to_path_buf());}return;}
+        self.disk_save.pending_workspace=None;
         let ws = match Workspace::open(path) {
             Ok(ws) => ws,
             Err(e) => {
@@ -564,6 +570,7 @@ impl CrabCraftApp {
 
     pub(crate) fn cargo_choice(&self)->crate::criticalup_provider::Choice{self.criticalup_provider.choice()}
     pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
+        self.cancel_disk_save();
         self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
         self.cargo_load=None;self.libraries_load=None;self.attached_load=None;self.rustc_cfg_load=None;self.triple_load=None;self.toolchain_load=None;self.explain_load=None;self.explanations.clear();
         self.runner.cargo_workspace=None;self.runner.configs.clear();self.runner.attached.clear();self.explorer.libraries.clear();self.toolchain=None;self.rustc_cfg=None;
@@ -698,6 +705,7 @@ impl CrabCraftApp {
     }
 
     pub fn commit_changes(&mut self, push: bool) {
+        if self.defer_save(true,move |app|app.commit_changes(push)){return;}
         self.save_all_docs();
         let format = self.commit_format();
         self.vcs.commit(push, format);
@@ -732,22 +740,18 @@ impl CrabCraftApp {
         let doc = &self.docs.list[i];
         let rust = doc.path.extension().is_some_and(|e| e == "rs");
         let Some(edition) = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path)).filter(|_| rust).map(str::to_string) else { return false };
-        match self.rustfmt_tool() {
-            Ok(rustfmt) => {
-                let doc = &self.docs.list[i];
-                let job = rustfmt.start(doc.path.clone(), edition, doc.editor.buffer.rope().to_string(), self.waker.clone());
-                // Reformat Code with a selection: rustfmt formats the file and only the changes
-                // touching the selected lines are kept.
-                let sel = doc.editor.selection.primary();
-                let lines = (!save && !sel.is_empty()).then(|| {
-                    let rope = doc.editor.buffer.rope();
-                    let last = if sel.end() > sel.start() && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start()) && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end() { rope.char_to_line(sel.end()) - 1 } else { rope.char_to_line(sel.end()) };
-                    (rope.char_to_line(sel.start()), last)
-                });
-                self.rustfmt_jobs.push_lines(doc.editor.id, doc.editor.buffer.version(), save, lines, job);
-            }
-            Err(e) => self.notify(e, true),
-        }
+        let doc=&self.docs.list[i];
+        let text=doc.editor.buffer.snapshot();
+        let job=rc_cargo::FormatJob::configured(self.runner.cargo_tool(),self.settings.rustfmt.clone(),doc.path.clone(),edition,move||text.to_string(),crate::vcs::rustfmt_failure,self.waker.clone());
+        // Reformat Code with a selection: rustfmt formats the file and only the changes
+        // touching the selected lines are kept.
+        let sel = doc.editor.selection.primary();
+        let lines = (!save && !sel.is_empty()).then(|| {
+            let rope = doc.editor.buffer.rope();
+            let last = if sel.end() > sel.start() && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start()) && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end() { rope.char_to_line(sel.end()) - 1 } else { rope.char_to_line(sel.end()) };
+            (rope.char_to_line(sel.start()), last)
+        });
+        self.rustfmt_jobs.push_lines(doc.editor.id, doc.editor.buffer.version(), save, lines, job);
         true
     }
 
@@ -761,17 +765,17 @@ impl CrabCraftApp {
                 crate::rustfmt::Done::Applied { index, save } => {
                     self.insight.flush(&mut self.docs.list[index]);
                     if save && self.docs.list[index].is_modified() {
-                        match self.docs.save(index) {
-                            Ok(()) => {
-                                let path = self.docs.list[index].path.clone();
-                                self.insight.did_save(&path);
-                            }
-                            Err(e) => self.notify(e, true),
-                        }
+                        self.save_document_async(index,false);
                     }
                 }
                 // Saving half-written code is common; only an explicit Reformat Code reports.
-                crate::rustfmt::Done::Failed { save: true, .. } => {}
+                crate::rustfmt::Done::Skipped { index, save:true } => self.save_document_async(index,false),
+                crate::rustfmt::Done::Skipped { .. } => {},
+                crate::rustfmt::Done::Failed { name, error, save: true } => {
+                    self.disk_save.fail();
+                    if let Some(index)=self.docs.list.iter().position(|d|d.name()==name){self.save_document_async(index,false);}
+                    self.notify(trf("rustfmt failed on {file}: {error}",&[("file",&name),("error",&error)]),true);
+                }
                 crate::rustfmt::Done::Failed { name, error, save: false } => {
                     let first = error.lines().find(|l| !l.trim().is_empty()).unwrap_or_default().to_string();
                     self.notify(trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)]), true);
@@ -1240,6 +1244,7 @@ impl CrabCraftApp {
     /// Runs a target of an attached Cargo project: a binary through its run configuration,
     /// the rest with Cargo and the project's own manifest.
     pub fn run_attached_target(&mut self, ctx: &Context, manifest: &Path, package: &str, target: &rc_cargo::Target) {
+        let c=ctx.clone();let m=manifest.to_path_buf();let p=package.to_string();let t=target.clone();if self.defer_save(true,move|app|app.run_attached_target(&c,&m,&p,&t)){return;}
         let folder = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let name = format!("{} ({folder})", target.name);
         if target.kind == rc_cargo::TargetKind::Bin
@@ -1269,6 +1274,7 @@ impl CrabCraftApp {
     }
 
     fn run_cargo_args(&mut self, args: Vec<String>) {
+        let queued=args.clone();if self.defer_save(true,move |app|app.run_cargo_args(queued)){return;}
         self.save_all_docs();
         let outs = self.runner.cargo_command(args);
         crate::ui::run_windows::handle_outputs(self, outs);
@@ -1372,6 +1378,7 @@ impl CrabCraftApp {
     /// disk, the file index, Git status, the Cargo model and rust-analyzer. Tabs, terminals and
     /// running programs stay. `clean` also deletes Cargo's build output.
     pub fn invalidate_caches(&mut self, clean: bool) {
+        if self.defer_save(clean,move|app|app.invalidate_caches(clean)){return;}
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
         let paths: Vec<PathBuf> = self.docs.list.iter().map(|doc| doc.path.clone()).collect();
         for path in paths {
@@ -1448,24 +1455,23 @@ impl CrabCraftApp {
     /// File › Close Project: back to the welcome screen, which is also where the next start
     /// begins.
     pub fn close_project(&mut self) {
+        self.prepare_workspace_save();
+        if self.defer_save(false,|app|app.close_project()){return;}
         self.close_workspace();
         self.settings.last_workspace = None;
-        if let Err(e) = self.settings.save() {
-            self.notify(trf("Could not save the settings: {error}", &[("error", &e)]), true);
-        }
+        if let Err(error)=self.disk_save.auxiliary.queue(None,Some(self.settings.clone())){self.notify(error.to_string(),true);}
     }
 
     pub fn close_workspace(&mut self) {
+        self.prepare_workspace_save();
+        if self.defer_save(false,|app|app.close_workspace()){return;}
         self.disk_watch = Default::default();
         self.disk_open = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
         self.debug_sessions = Default::default();
-        if self.workspace.is_some() {
-            self.save_all_docs();
-            self.save_session();
-        }
+        self.disk_save.transition_prepared=false;
         self.workspace = None;
         self.auto_attach = None;
         self._watcher = None;
@@ -1708,16 +1714,12 @@ impl CrabCraftApp {
 
     pub fn save_session(&mut self) {
         let layout = self.dock.to_session();
-        if self.workspace.is_some() && self.settings.tool_windows != layout {
-            self.settings.tool_windows = layout;
-            let _ = self.settings.save();
-        }
-        if let Some(w) = &self.workspace
-            && let Err(e) = self.session().save(w.ws.key_path())
-        {
-            eprintln!("could not save the session: {e:#}");
-        }
-        self.session_dirty = false;
+        let settings = if self.workspace.is_some() && self.settings.tool_windows != layout {
+            self.settings.tool_windows=layout;Some(self.settings.clone())
+        } else {None};
+        let session=self.workspace.as_ref().map(|w|(w.ws.key_path().to_path_buf(),self.session()));
+        if let Err(error)=self.disk_save.auxiliary.queue(session,settings){self.disk_save.fail();self.notify(error.to_string(),true);}
+        self.session_dirty=false;
     }
 
     /// Opens the Local History dialog for document `i`; its versions load in the background.
@@ -1759,20 +1761,8 @@ impl CrabCraftApp {
     }
 
     pub fn save_all_docs(&mut self) {
-        let modified: Vec<PathBuf> = self.docs.list.iter().filter(|d| d.is_modified()).map(|d| d.path.clone()).collect();
-        for e in self.docs.save_all() {
-            self.notify(e, true);
-        }
-        for p in modified {
-            self.runner.test_failures.remove(&p);
-            self.insight.did_save(&p);
-            if self.settings.format_on_save
-                && let Some(i) = self.docs.index_of(&p)
-                && !self.rustfmt_document(i, true)
-            {
-                self.insight.format_saved(&self.docs.list[i]);
-            }
-        }
+        let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated).map(|(i,_)| i).collect();
+        for i in modified { self.save_document_async(i, true); }
     }
 
     pub(crate) fn poll_disk_watch(&mut self) {
@@ -1784,9 +1774,8 @@ impl CrabCraftApp {
         for o in outputs {
             match o {
                 InsightOutput::SaveFormatted => {
-                    for e in self.docs.save_all() {
-                        self.notify(e, true);
-                    }
+                    let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_,d)|d.is_modified()).map(|(i,_)|i).collect();
+                    for i in modified { self.save_document_async(i,false); }
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
@@ -2252,12 +2241,8 @@ impl CrabCraftApp {
 
     pub fn close_tab(&mut self, i: usize) {
         self.disk_open.cancel();
-        if i < self.docs.list.len() && self.docs.list[i].is_modified()
-            && let Err(e) = self.docs.save(i)
-        {
-            self.notify(e, true);
-            return;
-        }
+        let Some(id)=self.docs.list.get(i).map(|d|d.editor.id) else{return;};
+        if self.defer_save(false,move |app| {if let Some(i)=app.docs.list.iter().position(|d|d.editor.id==id){app.close_tab(i);}}){return;}
         // The tab beside it in the same group takes its place.
         let id = self.docs.list.get(i).map(|d| d.editor.id);
         let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
@@ -2284,6 +2269,11 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if matches!(action,Action::Build|Action::Run|Action::RunTests|Action::Debug) {
+            let context=ctx.clone();if self.defer_save(true,move|app|app.run_ide_action(&context,action)){return;}
+        }
+        if action==Action::StopRun { self.cancel_disk_save(); }
+
         if matches!(action, Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut | Action::ForceStepInto | Action::ForceStepOver | Action::RunToCursor | Action::ForceRunToCursor) {
             // A list/gutter change in this frame must reach DAP before continue/step.
             self.debugger.sync_breakpoints(&self.docs);
@@ -2851,6 +2841,7 @@ impl CrabCraftApp {
 
     /// Starts the selected configuration under the debugger.
     pub(crate) fn start_debugging(&mut self) {
+        if self.defer_save(true,|app|app.start_debugging()){return;}
         if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         self.debug_test = None;
         self.save_all_docs();
@@ -2880,6 +2871,7 @@ impl CrabCraftApp {
     }
 
     pub fn start_coverage(&mut self) {
+        if self.defer_save(true,|app|app.start_coverage()){return;}
         self.coverage.show = true;
         self.dock.show(ToolWindow::Tests);
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return; };
@@ -2898,6 +2890,7 @@ impl CrabCraftApp {
 
     /// Profile (A-01): builds the selected Rust binary and records it with perf.
     pub fn start_profiling(&mut self) {
+        if self.defer_save(true,|app|app.start_profiling()){return;}
         self.dock.show(ToolWindow::Profiler);
         let config = self.runner.selected_config().cloned();
         let Some(config) = config.filter(|c| matches!(c.kind, crate::runner::ConfigKind::Cargo { .. })) else {
@@ -2930,6 +2923,7 @@ impl CrabCraftApp {
     }
 
     fn debug_rust_test(&mut self, config: crate::runner::RunConfig, target: rc_cargo::RunTarget) {
+        let c=config.clone();let t=target.clone();if self.defer_save(true,move|app|app.debug_rust_test(c,t)){return;}
         if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
         let cargo = match self.runner.cargo_tool() {
             Ok(cargo) => cargo,
@@ -2977,6 +2971,7 @@ impl CrabCraftApp {
 
     /// Click on a test's gutter icon: runs that test (or class) in its project.
     pub fn run_test_at(&mut self, line: usize) {
+        if self.defer_save(true,move|app|app.run_test_at(line)){return;}
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
         let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
         let manifest = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone());
@@ -3036,6 +3031,7 @@ impl CrabCraftApp {
     /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the
     /// Problems window's Inspection tab, grouped by lint.
     pub fn inspect_code(&mut self) {
+        if self.defer_save(true,|app|app.inspect_code()){return;}
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
             self.notify(tr("Open a Cargo project to inspect its code"), false);
             return;
@@ -3078,6 +3074,7 @@ impl CrabCraftApp {
     /// Runs the external tool called `name` in the Run window. Unsaved files are saved first,
     /// since the tool reads them from disk.
     pub fn run_external_tool(&mut self, name: &str) {
+        let queued=name.to_string();if self.defer_save(true,move|app|app.run_external_tool(&queued)){return;}
         let Some(tool) = self.settings.external_tools.iter().find(|t| t.name == name).cloned() else {
             self.notify(trf("There is no external tool called {name}", &[("name", &name)]), true);
             return;
@@ -3388,6 +3385,7 @@ impl CrabCraftApp {
             }
         }
         for p in changed {
+            if self.disk_save.saves.contains(&p) { continue; }
             if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
             // A changed solution file reloads the explorer's model.
             if let Some(w) = &mut self.workspace
@@ -3400,6 +3398,7 @@ impl CrabCraftApp {
                 w.solution = Some(s);
             }
         }
+        self.poll_disk_save();
         self.poll_disk_watch();
         self.docs.poll_parses();
     }
@@ -3603,6 +3602,20 @@ impl eframe::App for CrabCraftApp {
                 }
             }
         }
+        if ctx.input(|i|i.viewport().close_requested()) && !self.disk_save.exit_ready {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if !self.disk_save.exit_prepared {self.save_session();self.disk_save.exit_prepared=true;}
+            let context=ctx.clone();
+            if !self.defer_save(false,move|app|{app.disk_save.exit_ready=true;context.send_viewport_cmd(egui::ViewportCommand::Close);}) {
+                self.disk_save.exit_ready=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+        if self.disk_save.saves.busy() || self.disk_save.continuation.is_some() {
+            egui::Window::new(tr("Saving documents…")).id(egui::Id::new("disk_save_progress")).collapsible(false).resizable(false).show(ctx,|ui| {
+                ui.label(tr("Edits stay open until saving finishes"));
+                if ui.button(tr("Cancel saving")).clicked(){self.cancel_disk_save();}
+            });
+        }
         self.global_shortcuts(ctx);
         self.poll_background();
         let dark = self.dark(ctx);
@@ -3707,8 +3720,6 @@ impl eframe::App for CrabCraftApp {
         self.profiler.cancel();
         self.stop_all_debug_sessions();
         self.insight.stop();
-        self.save_all_docs();
-        self.save_session();
     }
 }
 

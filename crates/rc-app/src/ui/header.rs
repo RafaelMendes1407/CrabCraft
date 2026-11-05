@@ -142,22 +142,19 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                         });
                         if theme::menu_item(ui, Some(ico::REBUILD), tr("Rebuild Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Rebuild);
-                                crate::ui::run_windows::handle_outputs(app, outs);
+                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Rebuild);
                             }
                             ui.close();
                         }
                         if theme::menu_item(ui, Some(ico::DELETE), tr("Clean Project"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Clean);
-                                crate::ui::run_windows::handle_outputs(app, outs);
+                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Clean);
                             }
                             ui.close();
                         }
                         if theme::menu_item(ui, Some(ico::DOWNLOAD), tr("Fetch Dependencies"), false).clicked() {
                             if let Some(t) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                                let outs = app.runner.build(&t, rc_dotnet::BuildAction::Restore);
-                                crate::ui::run_windows::handle_outputs(app, outs);
+                                app.build_project_after_save(&t, rc_dotnet::BuildAction::Restore);
                             }
                             ui.close();
                         }

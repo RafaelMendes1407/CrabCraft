@@ -416,7 +416,7 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     app.apply_build_fix(&file, &fix);
     assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), format!("\n{MAIN}"));
     app.docs.active_doc_mut().unwrap().editor.replace(0, 1, "");
-    app.save_all_docs();
+    app.save_all_and_wait();
 
     let (file, fix) = build(&mut app);
     app.apply_build_fix(&file, &fix);
@@ -2581,7 +2581,7 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     let doc = app.docs.active_doc_mut().unwrap();
     let len = doc.editor.buffer.len_chars();
     doc.editor.replace(0, len, "fn main(){\nlet a=1;\n}\n");
-    app.save_all_docs();
+    app.save_all_and_wait();
     pump(&mut app, "rustfmt on save", |_| std::fs::read_to_string(&main).is_ok_and(|t| t == "fn main() {\n   let a = 1;\n}\n"));
     assert!(!app.docs.active_doc().unwrap().is_modified());
     app.settings.format_on_save = false;
@@ -2992,7 +2992,7 @@ fn clippy_replaces_cargo_check_and_rustfmt_runs_on_save() {
         let _ = app.insight.update(&mut app.docs, true);
         std::thread::sleep(Duration::from_millis(20));
     }
-    app.save_all_docs();
+    app.save_all_and_wait();
     pump(&mut app, "rustfmt to change the file on disk", |_| std::fs::read_to_string(&main).is_ok_and(|t| t.starts_with("fn main() {\n")));
     pump(&mut app, "the lint of Clippy", |a| lint(a));
     app.insight.stop();
@@ -4085,7 +4085,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     assert!(app.feature_fixes(i).is_empty());
 
     // Saved, `cargo check` with both features finds neither error.
-    app.save_all_docs();
+    app.save_all_and_wait();
     app.insight.did_save(&main);
     pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && a.insight.feature_gates.get(&main).is_none());
     app.insight.stop();

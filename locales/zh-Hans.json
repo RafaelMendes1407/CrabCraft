@@ -2810,5 +2810,18 @@
     "Could not read sources or language-server definitions for the Axum scan": "无法读取 Axum 扫描所需的源码或语言服务器定义",
     "Axum sources, metadata, trust or language server changed; refresh the scan": "Axum 源码、元数据、信任状态或语言服务器已更改；请刷新扫描",
     "RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved.": "经 RA 验证的 Axum 声明和跨文件工厂组合。这是快照，并非完整运行时图；动态或生成的路由器可能仍无法解析。"
+  },
+  "disk_save": {
+    "Could not save the document: {error}": "无法保存文档：{error}",
+    "Saving cancelled; unsaved edits were kept": "保存已取消；未保存的编辑已保留",
+    "The disk file changed before saving; unsaved edits were kept": "磁盘文件在保存前已更改；未保存的编辑已保留",
+    "Background saving supports documents up to 128 MB": "后台保存支持最大 128 MB 的文档",
+    "The save queue is full; unsaved edits were kept": "保存队列已满；未保存的编辑已保留",
+    "A read-only document has unsaved edits; the action was stopped": "只读文档有未保存的编辑；操作已停止",
+    "Another action is waiting for documents to save": "另一个操作正在等待文档保存",
+    "Saving documents…": "正在保存文档…",
+    "Edits stay open until saving finishes": "保存完成前编辑内容将保持打开",
+    "Cancel saving": "取消保存",
+    "Save edited documents before changing dependencies.": "更改依赖项之前请保存已编辑的文档。"
   }
 }

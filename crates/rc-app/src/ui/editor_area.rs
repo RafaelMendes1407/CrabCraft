@@ -293,10 +293,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
         if b.button(tr("Load from Disk")).clicked() { app.request_disk_revert(active); }
         if b.button(tr("Keep Mine")).clicked() {
-            app.docs.list[active].conflict = false;
-            if let Err(e) = app.docs.save(active) {
-                app.notify(e, true);
-            }
+            app.keep_mine_after_save(active);
         }
         editor_rect.min.y = banner.bottom();
     }
@@ -338,9 +335,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         }
         if b.button(tr("Run")).on_hover_text(tr("Build it with rustc and run it")).clicked() {
             let path = app.docs.list[active].path.clone();
-            app.save_all_docs();
-            let outs = app.runner.run_scratch(&path);
-            crate::ui::run_windows::handle_outputs(app, outs);
+            app.run_scratch_after_save(&path);
         }
         editor_rect.min.y = banner.bottom();
     }

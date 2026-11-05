@@ -131,6 +131,21 @@ pub struct FormatJob {
 }
 
 impl FormatJob {
+    /// Resolve sibling tools and encode the rope away from the UI before spawning rustfmt.
+    pub fn configured(cargo: Result<Cargo,String>, settings: RustfmtSettings, path: PathBuf, edition:String, text:impl FnOnce()->String+Send+'static,failure:fn(FormatError)->String,waker:Waker)->Self {
+        let inbox=Inbox::new(waker);let out=inbox.sender();
+        let task=rc_core::Runtime::spawn(async move {
+            let prepared=tokio::task::spawn_blocking(move|| {
+                let cargo=cargo?;
+                let formatter=Rustfmt::new(&cargo,&settings).map_err(failure)?;
+                Ok::<_,String>((formatter,text()))
+            }).await;
+            let result=match prepared {
+                Ok(Ok((formatter,text)))=>formatter.format(&path,&edition,&text).await,
+                Ok(Err(error))=>Err(error),Err(error)=>Err(error.to_string()),
+            };out.send(result);
+        });Self{task,inbox}
+    }
     /// The formatted text or rustfmt's error, once it finished.
     pub fn poll(&self) -> Option<Result<String, String>> {
         self.inbox.drain().into_iter().next()

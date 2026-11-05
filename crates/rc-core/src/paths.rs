@@ -46,6 +46,14 @@ pub fn logs_dir() -> PathBuf {
 /// Replaces a regular file atomically using an exclusively created sibling temporary file.
 /// Existing permissions are preserved; this does not promise power-loss durability.
 pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_atomic_cancellable(path, bytes, &std::sync::atomic::AtomicBool::new(false))
+}
+
+/// Cancellation before the atomic replacement preserves the old file. An already committed
+/// replacement is not rolled back. Cancellation is checked between bounded writes.
+pub fn write_atomic_cancellable(path: &std::path::Path, bytes: &[u8], cancel: &std::sync::atomic::AtomicBool) -> std::io::Result<()> {
+    let check = || if cancel.load(std::sync::atomic::Ordering::Acquire) {Err(std::io::Error::from(std::io::ErrorKind::Interrupted))} else {Ok(())};
+    check()?;
     use std::io::Write;
     let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| std::path::Path::new("."));
     std::fs::create_dir_all(parent)?;
@@ -56,8 +64,10 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
         Err(error) => return Err(error),
     };
     let mut temporary = tempfile::Builder::new().prefix(".crabcraft-save-").tempfile_in(parent)?;
-    temporary.write_all(bytes)?;
+    for chunk in bytes.chunks(64*1024) {check()?; temporary.write_all(chunk)?;}
+    check()?;
     if let Some(permissions) = permissions { temporary.as_file().set_permissions(permissions)?; }
+    check()?;
     temporary.persist(path).map_err(|error| error.error)?;
     Ok(())
 }

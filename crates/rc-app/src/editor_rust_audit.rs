@@ -236,7 +236,7 @@ fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
         assert!(!doc.editor.syntax.tree().unwrap().root_node().has_error());
         assert!(doc.editor.buffer.rope().to_string().lines().count() > 1);
         assert!(!doc.editor.syntax.folds().is_empty());
-        h.state_mut().save_all_docs();
+        h.state_mut().save_all_and_wait();
         let formatted = std::fs::read_to_string(&file).unwrap();
         assert_ne!(formatted, original);
         // Formatting remains a single undoable editor operation.

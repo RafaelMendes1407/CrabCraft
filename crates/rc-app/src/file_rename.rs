@@ -255,6 +255,7 @@ pub(crate) fn change(rope: &Rope, path: &Path, edit: lsp::TextEdit, from_server:
 /// undo step, closed files on disk). Returns the number of files edited; fails only when the
 /// rename itself fails, with nothing changed.
 pub fn apply(app: &mut CrabCraftApp, from: &Path, to: &Path, changes: &[Change]) -> Result<usize, String> {
+    if app.disk_save.saves.busy() {return Err(tr("Another action is waiting for documents to save").to_string());}
     if to.exists() {
         return Err(tr("A file or folder with this name already exists").to_string());
     }
@@ -271,6 +272,7 @@ pub fn apply(app: &mut CrabCraftApp, from: &Path, to: &Path, changes: &[Change])
     for d in &mut app.docs.list {
         let p = moved(&d.path);
         if p != d.path {
+            d.cancel_pending_save();
             d.path = p;
             d.editor.path = Some(d.path.clone());
         }

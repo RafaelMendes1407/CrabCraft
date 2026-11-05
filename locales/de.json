@@ -2810,5 +2810,18 @@
     "Could not read sources or language-server definitions for the Axum scan": "Quelltexte oder Sprachserverdefinitionen für die Axum-Suche konnten nicht gelesen werden",
     "Axum sources, metadata, trust or language server changed; refresh the scan": "Axum-Quelltexte, Metadaten, Vertrauen oder Sprachserver wurden geändert; Suche aktualisieren",
     "RA-verified Axum declarations and cross-file factory composition. This is a snapshot, not a complete runtime graph; dynamic or generated routers can remain unresolved.": "Von RA geprüfte Axum-Deklarationen und dateiübergreifende Fabrikkomposition. Diese Momentaufnahme ist kein vollständiger Laufzeitgraph; dynamische oder generierte Router können unaufgelöst bleiben."
+  },
+  "disk_save": {
+    "Could not save the document: {error}": "Dokument konnte nicht gespeichert werden: {error}",
+    "Saving cancelled; unsaved edits were kept": "Speichern abgebrochen; ungespeicherte Änderungen bleiben erhalten",
+    "The disk file changed before saving; unsaved edits were kept": "Die Datei wurde vor dem Speichern geändert; Änderungen bleiben erhalten",
+    "Background saving supports documents up to 128 MB": "Speichern im Hintergrund unterstützt Dokumente bis 128 MB",
+    "The save queue is full; unsaved edits were kept": "Die Speicherwarteschlange ist voll; Änderungen bleiben erhalten",
+    "A read-only document has unsaved edits; the action was stopped": "Ein schreibgeschütztes Dokument hat Änderungen; die Aktion wurde gestoppt",
+    "Another action is waiting for documents to save": "Eine andere Aktion wartet auf das Speichern der Dokumente",
+    "Saving documents…": "Dokumente werden gespeichert…",
+    "Edits stay open until saving finishes": "Änderungen bleiben bis zum Abschluss des Speicherns geöffnet",
+    "Cancel saving": "Speichern abbrechen",
+    "Save edited documents before changing dependencies.": "Bearbeitete Dokumente vor dem Ändern von Abhängigkeiten speichern."
   }
 }

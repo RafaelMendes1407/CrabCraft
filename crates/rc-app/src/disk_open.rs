@@ -106,6 +106,7 @@ fn prepare(request: &Request, cancel: &AtomicBool) -> Result<Opened, TextReadErr
             path,
             mtime,
             disk_epoch: 0,
+            pending_save: Default::default(),
             bom,
             pinned: false,
             preview: false,

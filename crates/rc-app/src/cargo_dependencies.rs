@@ -246,7 +246,7 @@ fn error_text(error: DependencyError) -> &'static str {
 pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &Context) -> bool {
     let packages: Vec<_> = app.runner.cargo_workspace.iter().chain(&app.runner.attached).flat_map(|w| w.packages.clone()).collect();
     let cargo = app.runner.cargo_tool().ok();
-    let clean = !app.docs.list.iter().any(|d| d.path.file_name().is_some_and(|n| n == "Cargo.toml") && d.is_modified());
+    let clean = !app.docs.list.iter().any(|d|d.is_modified()&&!d.generated)&&!app.disk_save.saves.busy()&&app.rustfmt_jobs.is_empty();
     let manager = &mut app.cargo_dependencies;
     if manager.manifest.is_none() && let Some(package) = packages.first() { manager.load(package.manifest.clone()); }
     manager.poll();
@@ -256,7 +256,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &Context) -> bool {
     egui::Modal::new(egui::Id::new("cargo_dependency_manager")).show(ctx, |ui| {
         ui.set_width(720.0);
         ui.heading(tr("Cargo Dependencies"));
-        if !clean { ui.label(tr("Save edited Cargo.toml files before changing dependencies.")); }
+        if !clean { ui.label(tr("Save edited documents before changing dependencies.")); }
         egui::ScrollArea::vertical().id_salt("cargo_dependencies_dialog").max_height((ctx.content_rect().height() - 160.0).max(200.0)).show(ui, |ui| {
             manager.ui(ui, &packages, cargo.as_ref(), trusted, clean);
         });

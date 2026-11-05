@@ -230,6 +230,12 @@ pub struct Watch {
     active: Vec<Active>,
 }
 impl Watch {
+    /// A pending save owns this path until it reports completion. Old read snapshots must
+    /// not be applied after the write, even when the writer replaced the file atomically.
+    pub fn suspend(&mut self,path:&Path) {
+        self.pending.remove(path);
+        for job in &self.active {if job.ticket.path==path{job.cancel.store(true,Ordering::Release);}}
+    }
     pub fn queue(&mut self, docs: &mut Docs, path: &Path) -> Result<(), QueueError> {
         let Some(doc) = docs
             .list
@@ -238,6 +244,7 @@ impl Watch {
         else {
             return Ok(());
         };
+        doc.cancel_pending_save();
         doc.disk_epoch = doc.disk_epoch.saturating_add(1);
         if self.pending.len() >= 256 && !self.pending.contains_key(path) {
             doc.conflict = true;

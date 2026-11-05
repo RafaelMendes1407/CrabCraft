@@ -52,6 +52,7 @@ mod disassembly_view;
 mod disk_revert;
 mod disk_open;
 mod disk_watch;
+mod disk_save;
 mod insight;
 mod web_languages;
 mod move_items_core;
