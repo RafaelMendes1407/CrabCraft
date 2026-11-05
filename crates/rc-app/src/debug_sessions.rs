@@ -174,6 +174,7 @@ mod tests {
         assert!(harness.state().debug_sessions.parked.iter().all(|s| !s.debugger.active()));
         harness.get_by_label(tr("Close Debug Session")).click(); harness.run_steps(2);
         harness.state_mut().close_workspace();
+        harness.state_mut().save_all_and_wait();
         assert!(harness.state().debug_sessions.parked.is_empty());
     }
 }

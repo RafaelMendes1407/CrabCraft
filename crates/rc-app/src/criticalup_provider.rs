@@ -260,6 +260,7 @@ else:sys.exit(6)
         program
     }
     #[cfg(unix)]
+    #[track_caller]
     fn wait(
         h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>,
         test: impl Fn(&crate::app::CrabCraftApp) -> bool,
@@ -269,7 +270,7 @@ else:sys.exit(6)
             h.run_steps(2);
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        assert!(test(h.state()), "{:?}", h.state().criticalup_provider.error);
+        assert!(test(h.state()), "provider={:?}; selected={}; workspace={}; saves={}; pending_action={}; notices={:?}; sync={:?}", h.state().criticalup_provider.error, h.state().criticalup_provider.selected, h.state().runner.cargo_workspace.is_some(), h.state().disk_save.saves.busy(), h.state().disk_save.continuation.is_some(), h.state().notices.iter().map(|notice| &notice.text).collect::<Vec<_>>(), h.state().sync_log.entries.iter().map(|entry| &entry.log).collect::<Vec<_>>());
     }
     #[cfg(unix)]
     #[test]
@@ -345,6 +346,7 @@ else:sys.exit(6)
         assert!(!root.join("wrong-compiler").exists());
         std::fs::write(root.join("criticalup.toml"), "invalid after selection").unwrap();
         h.state_mut().reload_workspace();
+        h.state_mut().save_all_and_wait();
         wait(&mut h, |app| {
             app.runner.cargo_workspace.is_some()
                 && app

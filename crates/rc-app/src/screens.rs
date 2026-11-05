@@ -263,6 +263,7 @@ fn closed_projects_are_not_reopened_on_startup() {
     app.open_workspace(&sln);
     assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
     app.close_project();
+    app.save_all_and_wait();
     assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
     app.open_workspace(&sln);
@@ -1551,8 +1552,8 @@ fn light_edit_offers_the_files_cargo_project() {
     std::fs::write(&loose, "plain\n").unwrap();
 
     let mut app = test_app(&dir.path().join("home"), false);
-    app.open_path(&loose);
-    app.open_path(&ws.join("beta/src/lib.rs"));
+    app.open_file_and_wait(&loose);
+    app.open_file_and_wait(&ws.join("beta/src/lib.rs"));
     assert!(app.workspace.is_none());
     assert_eq!(app.docs.list[0].light_project, None);
     let mut h = harness(app, vec2(1280.0, 800.0));
@@ -2488,7 +2489,7 @@ fn context_info_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     let at = text.find("Action::ToggleHexValues => self.toggle_hex_values()").expect("the line the test puts the caret on");
     let line = text[..at].matches('\n').count();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     let col = text[..at].rsplit('\n').next().map_or(0, |l| l.chars().count());
     {
@@ -2599,6 +2600,7 @@ fn the_status_bar_picks_the_analysis_target() {
     assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
     assert!(h.state().triple_filter.is_empty());
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
     assert!(!root.join("target").exists(), "nothing was built");
 }
@@ -2632,7 +2634,7 @@ fn target_picker_capture() {
 fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static, CrabCraftApp>, PathBuf) {
     let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../rc-editor/src/view.rs").canonicalize().unwrap();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
     let doc = h.state_mut().docs.active_doc_mut().unwrap();
@@ -2930,6 +2932,7 @@ fn copyright_headers_on_new_and_old_files() {
     assert!(h.state().dialog.is_none());
     assert!(h.state().copyright.profile.on_new_files);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).copyright.spdx, "MIT");
 
     // New › Rust File.
@@ -3078,6 +3081,7 @@ fn scopes_narrow_find_in_files_and_color_files() {
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().explorer.scopes.user, [NamedScope { name: "Sources".into(), pattern: "src/**/*.rs, !src/net.rs".into() }]);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     let saved = rc_core::Session::load(&root);
     assert_eq!(saved.scopes.len(), 1);
     assert_eq!(saved.file_colors.len(), 3);
@@ -3274,6 +3278,7 @@ fn run_configurations_are_kept_in_folders() {
     // Out of the folder; then the session keeps the rest.
     h.state_mut().runner.move_to_folder(&worker, None);
     h.state_mut().save_session();
+    h.state_mut().save_all_and_wait();
     let mut again = test_app(&dir.path().join("home"), true);
     again.open_workspace(&root);
     again.trust_project_tools_for_test();
@@ -3388,7 +3393,7 @@ fn http_harness(home: &Path, dir: &Path, base: &str, dark: bool) -> (Harness<'st
     std::fs::write(&file, text).unwrap();
     let file = file.canonicalize().unwrap();
     let mut app = test_app(home, dark);
-    app.open_path(&file);
+    app.open_file_and_wait(&file);
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(4);
     (h, file)

@@ -274,6 +274,7 @@ mod tests {
     use crate::screens::{HOME_LOCK, harness, test_app};
     use egui_kittest::kittest::Queryable;
     use std::time::Instant;
+    #[track_caller]
     fn pump(h: &mut egui_kittest::Harness<'static, crate::app::CrabCraftApp>, done: impl Fn(&crate::app::CrabCraftApp) -> bool) {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(20) {
@@ -364,11 +365,14 @@ mod tests {
         h.state_mut().cargo_dependencies.review(&proposal.manifest,&proposal.name,proposal.scope,None); h.state_mut().dialog=Some(crate::ui::dialogs::Dialog::CargoDependencies); h.run_steps(3); pump(&mut h,|app| !app.cargo_dependencies.loading);
         assert_eq!(h.state().cargo_dependencies.manifest.as_ref(),Some(&manifest)); assert_eq!(h.state().cargo_dependencies.scope,Scope::Normal); assert!(h.state().cargo_dependencies.search_cancel.is_none());
         let cargo=rc_cargo::Cargo::locate().unwrap(); h.state_mut().cargo_dependencies.start(&cargo,Ok(vec![]),false); assert!(h.state().cargo_dependencies.operation.is_none());
+        h.state_mut().save_all_and_wait();
         h.state_mut().settings.trusted_projects.push(root.clone()); h.state_mut().cargo_dependencies.offline=true; h.run_steps(2); h.get_by_label(tr("Add or update dependency")).click(); h.run_steps(2);
         pump(&mut h,|app| app.cargo_dependencies.operation.is_none() && !app.cargo_dependencies.loading && app.cargo_dependencies.installed.iter().any(|dependency| dependency.name=="serde"));
         assert!(!root.join("app/build-ran").exists()); assert!(!root.join("helper-lib/build-ran").exists());
         h.get_by_label(tr("Close")).click(); h.run_steps(2);
         pump(&mut h,|app| app.missing_crates.report.proposals.len()==1 && app.missing_crates.report.proposals[0].name=="helper-lib");
+        assert_eq!(h.state().missing_crates.report.proposals[0].scope,Scope::Dev);
+        h.run_steps(5);
         h.get_by_label(tr("Review dependency…")).click(); h.run_steps(2); pump(&mut h,|app| !app.cargo_dependencies.loading);
         assert_eq!(h.state().cargo_dependencies.scope,Scope::Dev); assert_eq!(h.state().cargo_dependencies.path,root.join("helper-lib").to_string_lossy());
         h.run_steps(5);

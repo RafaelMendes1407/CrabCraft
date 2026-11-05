@@ -457,6 +457,7 @@ fn a_file_outside_the_module_tree_can_be_declared() {
     assert!(!unlinked(&app, "src/main.rs") && !unlinked(&app, "src/lib.rs"));
     let i = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
     app.close_tab(i);
+    app.save_all_and_wait();
 
     // Closed parent: written to disk.
     app.declare_module(&root.join("src/lib.rs"), "lone", false);
@@ -549,6 +550,7 @@ fn bookmarks_follow_their_lines_and_outlive_the_tab() {
     // Closing the tab keeps it, and it comes back with the file.
     let i = app.docs.index_of(&main).unwrap();
     app.close_tab(i);
+    app.save_all_and_wait();
     assert!(app.docs.index_of(&main).is_none());
     assert_eq!(app.bookmark_list().len(), 1);
     app.open_file_and_wait(&main);
@@ -1397,6 +1399,7 @@ fn a_changed_manifest_reloads_the_targets_and_opening_it_opens_the_project() {
 
     // Inside the open project it is a file to edit.
     app.open_path(&manifest);
+    pump(&mut app, "the opened manifest", |a| !a.disk_open.busy());
     assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(manifest.clone()));
 
     write(&root.join("src/extra.rs"), "fn main() {}\n");
@@ -1750,6 +1753,7 @@ fn an_excluded_folder_leaves_the_index_find_in_files_and_rust_analyzer() {
     assert_eq!(found, ["src/lib.rs"]);
     wait_symbols(&mut app, "only_in_generated", "rust-analyzer to drop the folder", |names| names.is_empty());
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).excluded, ["src/generated"]);
 
     // Included again: everything comes back.
@@ -2293,6 +2297,7 @@ fn the_project_environment_reaches_cargo_the_program_and_its_tests() {
 
     // It is kept in the session of the workspace.
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).project_env, "CRAB_PROJECT=from-project\nCRAB_SHARED=project");
 }
 
@@ -2602,7 +2607,8 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     // Settings that cannot work are reported before rustfmt runs.
     app.settings.rustfmt = rc_core::RustfmtSettings { args: "--config 'tab_spaces=2".into(), ..Default::default() };
     app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
-    assert_eq!(app.notices.last().map(|n| n.text.clone()), Some(crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments)));
+    pump(&mut app, "the invalid rustfmt arguments", |a| a.notices.last().is_some_and(|notice| notice.error && notice.text.contains(&crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments))));
+    assert!(app.notices.last().is_some_and(|notice| notice.error && notice.text.contains(&crate::vcs::rustfmt_failure(rc_cargo::FormatError::Arguments))));
     assert!(app.rustfmt_jobs.is_empty());
 
     // At commit: the included file is committed formatted with the same settings.
@@ -2612,8 +2618,11 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
     std::fs::write(&lib, "pub fn a(){\nlet b=1;\n}\n").unwrap();
     let wait = |app: &mut CrabCraftApp, what: &str, done: &dyn Fn(&CrabCraftApp) -> bool| {
         let start = Instant::now();
-        while !done(app) {
+        while app.disk_save.continuation.is_some() || app.disk_save.saves.busy() || !app.rustfmt_jobs.is_empty() || !done(app) {
             assert!(start.elapsed() < Duration::from_secs(60), "timed out waiting for {what}; error {:?}", app.vcs.error);
+            app.poll_file_edits();
+            app.poll_rustfmt();
+            app.poll_disk_save();
             app.vcs.update(&mut app.docs, true);
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -3254,6 +3263,7 @@ fn run_configurations_allow_instances_and_live_in_the_project() {
 
     // Without the session's copy, the project's file still brings the configuration back.
     app.close_workspace();
+    app.save_all_and_wait();
     std::fs::remove_dir_all(rc_core::paths::sessions_dir()).unwrap();
     app.open_workspace(&root);
     let loaded = app.runner.options.get(&name).cloned().unwrap();
@@ -3304,6 +3314,7 @@ fn test_runs_become_temporary_configurations() {
     pump(&mut app, "the reload", |a| a.runner.cargo_workspace.is_some() && a.runner.configs.iter().any(|c| c.name == "t5"));
     assert!(app.runner.configs.iter().any(|c| c.name == "t4" && matches!(c.kind, ConfigKind::TestSelection { .. })), "temporary ones survive a reload");
     app.save_session();
+    app.save_all_and_wait();
     let session = rc_core::session::Session::load(&root);
     assert_eq!(session.test_configs.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["t5"]);
 }
@@ -3486,6 +3497,7 @@ fn an_attached_cargo_project_is_analysed() {
     let text = app.runner.runs[0].console.term.screen_lines().join("\n");
     assert!(text.contains("generated"), "{text}");
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::session::Session::load(&root).attached_projects, ["tools/gen/Cargo.toml"]);
     app.set_attached(&gen_manifest, false);
     assert!(app.explorer.attached.is_empty());
@@ -3720,6 +3732,7 @@ fn a_feature_turned_on_in_the_gutter_reaches_the_fading_and_rust_analyzer() {
     app.open_file_and_wait(&root.join("src/lib.rs"));
     assert_eq!(faded(&mut app), 0, "extra is on");
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_features, vec!["demo/extra".to_string()]);
 
     // Trusted, rust-analyzer builds with the feature.
@@ -3789,6 +3802,7 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     assert_eq!(app.analysis_triple(), Some(WINDOWS));
     pump(&mut app, "the cfg of Windows", |a| faded(a) == vec!["#[cfg(unix)]\npub fn on_unix() {}".to_string()]);
     app.save_session();
+    app.save_all_and_wait();
     assert_eq!(rc_core::Session::load(&root).cargo_target, WINDOWS);
 
     // Opened again, the session brings the target back.
@@ -4168,6 +4182,7 @@ fn breakpoints_of_closed_files_stop_and_groups_turn_on_and_off_together() {
     let before = listed(&app);
     assert_eq!(before.len(), 3);
     app.save_session();
+    app.save_all_and_wait();
     let mut again = new_app(dir.path());
     again.open_workspace(&root);
     assert_eq!(listed(&again), before);
@@ -4312,6 +4327,7 @@ fn the_debugger_attaches_automatically_to_a_program_that_starts() {
     app.debugger.stop();
     app.stop_auto_attach();
     app.save_session();
+    app.save_all_and_wait();
     let mut again = new_app(dir.path());
     again.open_workspace(&root);
     assert_eq!(again.auto_attach_text, "other, auto*");
@@ -4474,6 +4490,7 @@ fn inspection_profiles_change_the_level_of_findings() {
     assert_eq!(level(&app), Some(Severity::Info));
     app.set_project_inspections(true, app.inspections.project.clone());
     app.save_session();
+    app.save_all_and_wait();
     let saved = rc_core::Session::load(&root);
     assert!(saved.use_project_profile);
     assert_eq!(saved.inspection_profile.level("unused_variables"), Some(Level::Error));
