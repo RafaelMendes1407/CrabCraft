@@ -15,7 +15,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-lsp` | JSON-RPC/LSP client, rust-analyzer, explicitly configured web-language servers, and the inherited Roslyn adapter. |
 | `rc-dap` | DAP client, GDB and LLVM LLDB DAP sessions, and inherited netcoredbg support. |
 | `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
-| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX, NuGet. |
+| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX. |
 | `rc-vcs` | Git through the `git` CLI. |
 | `rc-search` | File index, fuzzy search, find/replace in files. |
 | `rc-term` | Terminal emulator (alacritty_terminal + portable-pty) rendered in egui. |

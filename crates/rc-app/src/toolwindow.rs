@@ -19,7 +19,6 @@ pub enum ToolWindow {
     Git,
     Find,
     Notifications,
-    Nuget,
     Cargo,
     Hierarchy,
     /// Responses of the requests sent from `.http` files (F-03).
@@ -71,7 +70,7 @@ impl Side {
 
 impl ToolWindow {
     /// Order of the buttons on the stripes.
-    pub const ALL: [ToolWindow; 27] = [
+    pub const ALL: [ToolWindow; 26] = [
         ToolWindow::Explorer,
         ToolWindow::Commit,
         ToolWindow::Structure,
@@ -84,7 +83,6 @@ impl ToolWindow {
         ToolWindow::Problems,
         ToolWindow::Terminal,
         ToolWindow::Git,
-        ToolWindow::Nuget,
         ToolWindow::Cargo,
         ToolWindow::Http,
         ToolWindow::Profiler,
@@ -115,7 +113,6 @@ impl ToolWindow {
             ToolWindow::Git => "git",
             ToolWindow::Find => "find",
             ToolWindow::Notifications => "notifications",
-            ToolWindow::Nuget => "nuget",
             ToolWindow::Cargo => "cargo",
             ToolWindow::Hierarchy => "hierarchy",
             ToolWindow::Http => "http",
@@ -147,7 +144,6 @@ impl ToolWindow {
             ToolWindow::Git => tr("Git"),
             ToolWindow::Find => tr("Find"),
             ToolWindow::Notifications => tr("Notifications"),
-            ToolWindow::Nuget => "NuGet",
             ToolWindow::Cargo => "Cargo",
             ToolWindow::Hierarchy => tr("Hierarchy"),
             ToolWindow::Http => tr("HTTP Client"),
@@ -179,7 +175,6 @@ impl ToolWindow {
             ToolWindow::Git => ico::TW_VCS,
             ToolWindow::Find => ico::TW_FIND,
             ToolWindow::Notifications => ico::TW_NOTIFICATIONS,
-            ToolWindow::Nuget => ico::PACKAGE,
             ToolWindow::Cargo => ico::TW_DEPENDENCIES,
             ToolWindow::Hierarchy => ico::HIERARCHY,
             ToolWindow::Http => ico::CONFIG_WEB,

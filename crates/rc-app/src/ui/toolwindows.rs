@@ -11,6 +11,10 @@ use rc_kit::{Ico, icons, theme};
 pub const HEADER_H: f32 = 36.0;
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
+    egui::Frame::new().inner_margin(if matches!(tw, ToolWindow::Agents | ToolWindow::DevContainers | ToolWindow::Containers | ToolWindow::Remote | ToolWindow::Plugins | ToolWindow::PrivilegedRun | ToolWindow::RustProvider | ToolWindow::Proofreading) { 12 } else { 0 }).show(ui, |ui| show_content(app, ui, tw));
+}
+
+fn show_content(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
     match tw {
         ToolWindow::Explorer => {
             let Some(w) = &app.workspace else { return };
@@ -31,7 +35,6 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Build => crate::ui::run_windows::build(app, ui),
         ToolWindow::Run => crate::ui::run_windows::run(app, ui),
         ToolWindow::Debug => crate::ui::debug_window::show(app, ui),
-        ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
         ToolWindow::Endpoints => crate::endpoints::show(app, ui),
@@ -540,7 +543,6 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Git => (tr("Git"), tr("Branches, history and changes of the repository.")),
         ToolWindow::Find => (tr("No search results"), tr("Find in Files shows its results here.")),
         ToolWindow::Notifications => (tr("No notifications"), tr("Messages from builds, tools and updates show up here.")),
-        ToolWindow::Nuget => ("NuGet", ""),
         ToolWindow::Cargo => ("Cargo", ""),
         ToolWindow::Profiler => (tr("No profile yet"), tr("Choose the run configuration of a Rust binary and click Profile. Uses perf on Linux.")),
         ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),

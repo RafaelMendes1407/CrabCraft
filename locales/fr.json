@@ -509,49 +509,6 @@
     "Needs cargo-nextest installed. Doctests do not run with it.": "Nécessite cargo-nextest installé. Les doctests ne sont pas exécutés avec lui.",
     "Run tests with cargo-nextest": "Exécuter les tests avec cargo-nextest"
   },
-  "nuget": {
-    "Could not search NuGet: {error}": "Impossible de rechercher dans NuGet : {error}",
-    "Install": "Installer",
-    "Installed": "Installé",
-    "Installed version: {version}": "Version installée : {version}",
-    "Latest": "La plus récente",
-    "Manage NuGet Packages…": "Gérer les paquets NuGet…",
-    "No packages found": "Aucun paquet trouvé",
-    "No packages installed. Type to search nuget.org.": "Aucun paquet installé. Tapez pour rechercher sur nuget.org.",
-    "NuGet Packages — {project}": "Paquets NuGet — {project}",
-    "Prerelease": "Préversion",
-    "Remove": "Supprimer",
-    "Search packages on nuget.org": "Rechercher des paquets sur nuget.org",
-    "Select a package to see its versions": "Sélectionnez un paquet pour voir ses versions",
-    "Update": "Mettre à jour",
-    "Version": "Version",
-    "{id} installed": "{id} installé",
-    "{id} removed": "{id} supprimé",
-    "{n} downloads": "{n} téléchargements"
-  },
-  "nugetwindow": {
-    "1 project": "1 projet",
-    "Browse": "Parcourir",
-    "Consolidate ({n})": "Consolider ({n})",
-    "Every package is up to date": "Tous les packages sont à jour",
-    "Every project uses the same versions": "Tous les projets utilisent les mêmes versions",
-    "Filter installed packages": "Filtrer les packages installés",
-    "Install or update in {n} selected": "Installer ou mettre à jour dans {n} sélectionnés",
-    "Installed ({n})": "Installés ({n})",
-    "Installing {id} {version} in {project}…": "Installation de {id} {version} dans {project}…",
-    "Project": "Projet",
-    "Project site": "Site du projet",
-    "Remove from selected": "Supprimer des sélectionnés",
-    "Removing {id} from {project}…": "Suppression de {id} de {project}…",
-    "Search packages": "Rechercher des packages",
-    "Select a package to see its details and the projects that use it": "Sélectionnez un package pour voir ses détails et les projets qui l'utilisent",
-    "Source": "Source",
-    "The solution has no package references": "La solution n'a aucune référence de package",
-    "Updates ({n})": "Mises à jour ({n})",
-    "by {authors}": "par {authors}",
-    "{id}: done": "{id} : terminé",
-    "{n} projects": "{n} projets"
-  },
   "project-env": {
     "Line {line} is not NAME=value with a valid name.": "La ligne {line} n'est pas NOM=valeur avec un nom valide.",
     "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Un NOM=valeur par ligne. Appliquées à toutes les commandes Cargo, aux programmes qu'elles lancent et à rust-analyzer ; les variables d'une configuration d'exécution l'emportent.",
@@ -602,7 +559,6 @@
     "Rerun": "Relancer",
     "Rerun Failed Tests": "Relancer les tests en échec",
     "Restore": "Restaurer",
-    "Restore NuGet Packages": "Restaurer les paquets NuGet",
     "Running tests of {project}…": "Exécution des tests de {project}…",
     "Running… {passed} passed, {failed} failed": "Exécution… {passed} réussis, {failed} en échec",
     "Show Passed": "Afficher les réussis",
@@ -3028,5 +2984,28 @@
     "Invalid container settings or Linux source path": "Paramètres du conteneur ou chemin source Linux invalides",
     "Container operation timed out": "L’opération du conteneur a expiré",
     "Container error: {error}": "Erreur du conteneur : {error}"
+  },
+  "packages": {
+    "Install": "Installer",
+    "Remove": "Supprimer",
+    "Update": "Mettre à jour",
+    "{n} downloads": "{n} téléchargements",
+    "1 project": "1 projet",
+    "{n} projects": "{n} projets"
+  },
+  "main-menu": {
+    "Main Menu": "Menu principal",
+    "Extend Selection": "Étendre la sélection",
+    "Shrink Selection": "Réduire la sélection",
+    "Move Line Up": "Déplacer la ligne vers le haut",
+    "Move Line Down": "Déplacer la ligne vers le bas",
+    "Next Tab": "Onglet suivant",
+    "Previous Tab": "Onglet précédent",
+    "Save": "Enregistrer",
+    "Search file type": "Rechercher un type de fichier",
+    "Move to New Window": "Déplacer vers une nouvelle fenêtre"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "Aucun type de fichier ne correspond au filtre"
   }
 }

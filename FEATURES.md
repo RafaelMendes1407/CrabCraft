@@ -4,6 +4,58 @@ Lista de tudo o que o **RustRover 2026.2** oferece, com a situação de cada ite
 É o documento de acompanhamento do projeto: **atualize o status no mesmo commit que implementa
 a funcionalidade**.
 
+Interface: removidos o gerenciador e o cliente NuGet herdados; configurações com largura
+horizontal limitada, margens nos painéis de ferramentas, menu de edição/compilação/execução/ajuda,
+halo suave no projeto e transição no destino de arraste de abas. O teste
+`settings_keep_the_same_width_when_switching_pages` verifica a largura entre todas as categorias
+e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limita ambas as
+dimensões para impedir o crescimento vertical contínuo do modal.
+Verificação por testes de interface e capturas GPU conferidas; sem alteração dos status de prontidão.
+
+Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
+de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável
+de templates existentes. A identidade do projeto usa uma cor difusa gaussiana na barra
+superior, desenhada em egui, sem novos assets. Durante o arraste, o editor recebe uma
+sobreposição cinza, mapa de encaixes, nome do arquivo e prévia animada do destino.
+Evidência: testes de edição/desfazer e criação de arquivo em projeto Cargo, captura GPU
+`central_menus_and_docking_capture` e regressão de movimentação de abas. As referências
+visuais locais fornecidas pelo usuário não são distribuídas com a aplicação.
+
+Configurações › Ferramentas: formulário vertical, com nomes acima dos campos e largura
+reservada para Procurar; textos longos quebram linha e caminhos permanecem no campo.
+A área de páginas usa layout vertical explícito, preserva os limites do modal e só mostra
+barras quando necessárias. Verificação por `tools_settings_fields_fit_the_fixed_page_width`,
+teste de estabilidade das categorias e captura `settings-tools-stacked.png`.
+
+O seletor de templates recebe o foco ao abrir, filtra também a pesquisa com espaços nas
+bordas, permite escolher o primeiro resultado com Enter e informa quando não há resultados.
+Os testes `template_picker_tests` exercitam digitação imediata, Enter e busca vazia de resultados.
+
+Configurações responsivas: largura baseada no viewport e estável entre categorias; seleção
+de categoria compacta em janelas estreitas e navegação rolável quando a altura é pequena.
+Os botões OK/Cancelar permanecem acessíveis em tamanhos lógicos de 480×320 a 1280×800,
+incluindo 800×300. Procurar em Ferramentas é assíncrono e cancelável; a seleção pertence
+ao rascunho aberto e é descartada ao fechá-lo. Projetos sem confiança mostram a razão
+da detecção estar desabilitada em vez de um carregamento contínuo. Testes:
+`responsive_settings_tests`, `settings_browse`,
+`untrusted_project_tool_settings_explain_why_detection_is_disabled`. A captura
+`completed_interface_theme_and_size_capture` verifica temas claro/escuro e janelas compactas
+em um projeto Cargo real; imagens em `target/snapshots/completed-*.png` (não distribuídas).
+
+Disponibilidade dos menus: Executar/Depurar/Perfil, Parar, passos do depurador e edição
+da configuração respeitam a seleção, a plataforma e o estado da sessão. Ações sem suporte
+mostram as dicas existentes. O dropdown principal, Ferramentas de janela e Projetos recentes
+têm rolagem limitada pela altura estável do viewport, sem encolher ao reposicionar o popup.
+Nomes longos de projetos são elididos e o caminho completo fica no hover. Verificado pelos
+quatro testes de `ui::main_menu::tests`, inclusive acesso ao último de 60 projetos recentes
+e à Ajuda em janela baixa, além da execução de comandos no projeto Cargo de teste.
+
+Encaixe de abas concluído nos casos estreitos: guias proporcionais sem sobreposição,
+com a mesma geometria no desenho e no destino; sobreposição e prévia limitadas ao grupo;
+nome do arquivo limitado à janela e desenhado acima da prévia. Escape também cancela
+o arraste quando recebido na janela de destino. Verificado por `docking_tests`, encaixe
+pelas guias, restauração de splits/janelas flutuantes e capturas claras/escuras em Cargo.
+
 ## Legenda
 
 | Status | Significado |

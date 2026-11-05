@@ -206,19 +206,6 @@ fn screens() {
         }
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("markdown-preview-{suffix}.png"))).unwrap();
-        // NuGet: installed packages with updates from nuget.org, one selected.
-        h.state_mut().dock.show(crate::toolwindow::ToolWindow::Nuget);
-        h.state_mut().dock.sizes.insert(crate::toolwindow::ToolWindow::Nuget, 420.0);
-        h.run_steps(3);
-        h.state_mut().nuget.select_for_test("xunit");
-        let start = std::time::Instant::now();
-        while start.elapsed() < std::time::Duration::from_secs(25) && !h.state().nuget.ready_for_test() {
-            h.run_steps(1);
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        h.run_steps(3);
-        h.render().unwrap().save(out.join(format!("nuget-{suffix}.png"))).unwrap();
-        h.state_mut().dock.bottom = None;
         // Split right, then a tab in its own window.
         {
             let app = h.state_mut();
@@ -285,7 +272,7 @@ fn the_rustfmt_settings_show_what_is_wrong_with_them() {
     let mut app = test_app(home.path(), true);
     let mut draft = app.settings.clone();
     draft.rustfmt.env = "RUST_LOG=debug\nnot a pair".into();
-    app.dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools });
+    app.dialog = Some(Dialog::Settings { draft: Box::new(draft), page: SettingsPage::Tools, browse: Default::default() });
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.run_steps(3);
     for label in ["rustfmt arguments", "rustfmt channel", "rustfmt environment"] {
@@ -1825,7 +1812,7 @@ fn inspection_profiles_capture() {
         settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
         settings.inspection_profile.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
         settings.inspection_profile.set("clippy::needless_return", Some(Level::Error));
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections, browse: Default::default() });
         h.run_steps(4);
         let suffix = if dark { "dark" } else { "light" };
         h.render().unwrap().save(out.join(format!("inspection-profiles-{suffix}.png"))).unwrap();
@@ -3843,4 +3830,240 @@ fn editor_font_and_ide_zoom_apply_to_a_real_rust_project() {
     assert!((harness.ctx.zoom_factor() - 1.0).abs() < f32::EPSILON);
     assert_eq!(harness.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), text);
     assert_eq!(std::fs::read_to_string(source).unwrap(), text);
+}
+
+#[test]
+fn settings_keep_the_same_width_when_switching_pages() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    let mut widths = Vec::new();
+    for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::ExternalTools, SettingsPage::LiveTemplates, SettingsPage::Copyright, SettingsPage::Scopes, SettingsPage::Inspections, SettingsPage::Backup, SettingsPage::Appearance] {
+        h.state_mut().open_settings(page);
+        h.run_steps(4);
+        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap().height();
+        for _ in 0..30 {
+            h.run_steps(1);
+            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+            assert!((rect.height() - initial_height).abs() < 1.0, "settings height must remain stable: {page:?}: {initial_height} -> {}", rect.height());
+            assert!(rect.height() <= 760.0, "settings must stay inside the viewport: {page:?}: {rect:?}");
+        }
+        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        widths.push(rect.width());
+    }
+    assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "settings widths: {widths:?}");
+}
+
+#[test]
+fn central_menu_commands_and_project_templates_work_in_a_rust_project() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("menu-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"menu-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&root.join("src/main.rs"));
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Duplicate Line or Selection")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 2);
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
+    h.run_steps(2);
+    h.get_by_label(tr("Undo")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 1);
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("Tools"))).click();
+    h.run_steps(2);
+    h.query_all_by_label(tr("ACP Agents")).find(|node| node.rect().width() > 100.0).unwrap().click();
+    h.run_steps(2);
+    assert!(h.state().dock.is_open(crate::toolwindow::ToolWindow::Agents));
+    h.state_mut().dock.hide_all();
+    h.state_mut().dock.show(crate::toolwindow::ToolWindow::Explorer);
+    let source = root.join("src").canonicalize().unwrap();
+    h.state_mut().explorer.selected = Some(format!("dir:{}", source.display()));
+    h.run_steps(3);
+    h.get_by_label(tr("New File…")).click();
+    h.run_steps(2);
+    h.state_mut().explorer.new_item_filter = "Rust".into();
+    h.run_steps(2);
+    assert!(h.query_by_label(tr("JSON File")).is_none());
+    h.get_by_label(tr("Rust File")).click();
+    h.run_steps(2);
+    if let Some(crate::ui::dialogs::Dialog::NewFile { dir, name, .. }) = &mut h.state_mut().dialog {
+        assert_eq!(dir, &source);
+        *name = "created_from_project_menu".into();
+    } else { panic!("project template did not open the creation dialog"); }
+    h.run_steps(2);
+    h.get_by_label(tr("Create")).click();
+    run_frames(&mut h, "the Rust file created from the project menu", |_| source.join("created_from_project_menu.rs").is_file());
+    assert!(source.join("created_from_project_menu.rs").is_file());
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes menu, project identity and docking screenshots"]
+fn central_menus_and_docking_capture() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("project-colours");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"project-colours\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"Hello, CrabCraft!\");\n}\n").unwrap(); }
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.get_by_label(tr("Main Menu")).click(); h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
+    h.render().unwrap().save(out.join("central-menu-file.png")).unwrap();
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+    h.get_by_label(tr("New File…")).click(); h.run_steps(3);
+    h.render().unwrap().save(out.join("project-new-menu.png")).unwrap();
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+    let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
+    h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+    let to = egui::pos2(1050.0, 400.0);
+    for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+    h.run_steps(15);
+    h.render().unwrap().save(out.join("editor-docking-overlay.png")).unwrap();
+    assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
+}
+
+#[test]
+fn editor_docking_guides_create_the_requested_split() {
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("dock-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"dock-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {}\n").unwrap(); }
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    app.dock.hide_all();
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
+    // The right guide in the central docking map, away from the editor's edge region.
+    drag(&mut h, from, egui::pos2(704.0, 424.0));
+    assert!(matches!(h.state().layout.main, crate::layout::Node::Split { vertical: true, .. }));
+    assert_eq!(h.state().layout.main.groups().len(), 2);
+    assert!(h.state().tab_drag.is_none());
+}
+
+#[test]
+fn tools_settings_fields_fit_the_fixed_page_width() {
+    use egui_kittest::kittest::Queryable;
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    h.state_mut().open_settings(SettingsPage::Tools);
+    h.run_steps(5);
+    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+    assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
+    let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
+    assert!(fields.len() >= 10);
+    for field in fields {
+        assert!(field.left() >= modal.left() && field.right() <= modal.right() - 8.0, "tool field must fit inside the modal: {field:?}, {modal:?}");
+    }
+}
+
+#[test]
+#[ignore = "Requires a GPU; writes the Tools settings layout"]
+fn tools_settings_layout_capture() {
+    use crate::ui::dialogs::SettingsPage;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
+    h.state_mut().open_settings(SettingsPage::Tools);
+    run_frames(&mut h, "the installed toolchain versions", |app| app.toolchain.is_some());
+    h.run_steps(6);
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    h.render().unwrap().save(out.join("settings-tools-stacked.png")).unwrap();
+}
+
+#[test]
+#[ignore = "Requires a GPU; captures completed menus, settings and docking in both themes"]
+fn completed_interface_theme_and_size_capture() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let files = tempfile::tempdir().unwrap();
+    let root = files.path().join("interface-demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"interface-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"CrabCraft\");\n}\n").unwrap(); }
+    for (dark, size, label) in [(true, vec2(1280.0, 800.0), "dark"), (false, vec2(1280.0, 800.0), "light"), (true, vec2(640.0, 400.0), "compact-dark"), (false, vec2(640.0, 400.0), "compact-light")] {
+        let home = tempfile::tempdir().unwrap();
+        let mut app = test_app(home.path(), dark);
+        app.open_workspace_and_wait(&root);
+        app.trust_project_tools_for_test();
+        for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+        let mut h = harness(app, size);
+        h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+        run_frames(&mut h, "installed toolchain versions", |app| app.toolchain.is_some());
+        h.run_steps(5);
+        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(modal), "{label}: {modal:?}");
+        h.render().unwrap().save(out.join(format!("completed-settings-{label}.png"))).unwrap();
+        h.state_mut().dialog = None;
+        h.run_steps(3);
+        h.get_by_label(tr("Main Menu")).click(); h.run_steps(3);
+        h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
+        h.render().unwrap().save(out.join(format!("completed-menu-{label}.png"))).unwrap();
+        if size.x > 1000.0 {
+            h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+            let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 120.0).unwrap().rect().center();
+            h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
+            h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+            let to = egui::pos2(size.x - 160.0, size.y * 0.5);
+            for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+            h.run_steps(15);
+            assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
+            h.render().unwrap().save(out.join(format!("completed-docking-{label}.png"))).unwrap();
+            h.input_mut().events.push(egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }); h.run_steps(3);
+            assert_eq!(h.state().layout.main.groups().len(), 2);
+        }
+    }
+}
+
+#[test]
+fn untrusted_project_tool_settings_explain_why_detection_is_disabled() {
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("untrusted-tools");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"untrusted-tools\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut app = test_app(&home.path().join("home"), true);
+    app.open_workspace_and_wait(&root);
+    let mut h = harness(app, vec2(1280.0, 800.0));
+    h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
+    h.run_steps(5);
+    assert!(h.query_by_label(tr("Trust this project before running project tools or code")).is_some());
+    assert!(h.state().toolchain.is_none());
+    assert!(h.state().settings.trusted_projects.is_empty());
 }

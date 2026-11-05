@@ -79,7 +79,6 @@ pub struct CrabCraftApp {
     window_title: String,
     pub files: crate::search::Files,
     pub vcs: crate::vcs::Vcs,
-    pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
     pub criticalup_provider: crate::criticalup_provider::Provider,
@@ -356,7 +355,6 @@ impl CrabCraftApp {
             window_title: String::new(),
             files: crate::search::Files::new(),
             vcs: crate::vcs::Vcs::new(waker.clone()),
-            nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
             criticalup_provider: crate::criticalup_provider::Provider::new(waker.clone()),
             privileged_run: crate::privileged_run::PrivilegedRun::new(waker.clone()),
@@ -533,7 +531,6 @@ impl CrabCraftApp {
         let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
         self.close_workspace();
         if let Some(provider)=retained_provider{self.criticalup_provider=provider;}
-        self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
@@ -3049,7 +3046,7 @@ impl CrabCraftApp {
     pub fn open_settings(&mut self, page: crate::ui::dialogs::SettingsPage) {
         self.copyright.draft = None;
         self.explorer.scopes.draft = None;
-        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page });
+        self.dialog = Some(Dialog::Settings { draft: Box::new(self.settings.clone()), page, browse: Default::default() });
     }
 
     /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the
@@ -3286,10 +3283,6 @@ impl CrabCraftApp {
                 ExplorerAction::ShowHistory(path) => self.show_git_history(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
                 ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
-                ExplorerAction::ManagePackages(project) => {
-                    self.nuget.focus_project(&project);
-                    self.dock.show(ToolWindow::Nuget);
-                }
                 ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
                 ExplorerAction::SetAttached(path, on) => self.set_attached(&path, on),
             }

@@ -509,49 +509,6 @@
     "Needs cargo-nextest installed. Doctests do not run with it.": "cargo-nextest のインストールが必要です。doctest は実行されません。",
     "Run tests with cargo-nextest": "cargo-nextest でテストを実行"
   },
-  "nuget": {
-    "Could not search NuGet: {error}": "NuGet を検索できませんでした: {error}",
-    "Install": "インストール",
-    "Installed": "インストール済み",
-    "Installed version: {version}": "インストール済みのバージョン: {version}",
-    "Latest": "最新",
-    "Manage NuGet Packages…": "NuGet パッケージの管理…",
-    "No packages found": "パッケージが見つかりません",
-    "No packages installed. Type to search nuget.org.": "パッケージはインストールされていません。入力して nuget.org を検索します。",
-    "NuGet Packages — {project}": "NuGet パッケージ — {project}",
-    "Prerelease": "プレリリース",
-    "Remove": "削除",
-    "Search packages on nuget.org": "nuget.org でパッケージを検索",
-    "Select a package to see its versions": "パッケージを選択するとバージョンが表示されます",
-    "Update": "更新",
-    "Version": "バージョン",
-    "{id} installed": "{id} をインストールしました",
-    "{id} removed": "{id} を削除しました",
-    "{n} downloads": "{n} ダウンロード"
-  },
-  "nugetwindow": {
-    "1 project": "1 プロジェクト",
-    "Browse": "参照",
-    "Consolidate ({n})": "統合 ({n})",
-    "Every package is up to date": "すべてのパッケージが最新です",
-    "Every project uses the same versions": "すべてのプロジェクトが同じバージョンを使用しています",
-    "Filter installed packages": "インストール済みパッケージを絞り込む",
-    "Install or update in {n} selected": "選択した {n} 件にインストールまたは更新",
-    "Installed ({n})": "インストール済み ({n})",
-    "Installing {id} {version} in {project}…": "{project} に {id} {version} をインストール中…",
-    "Project": "プロジェクト",
-    "Project site": "プロジェクト サイト",
-    "Remove from selected": "選択した項目から削除",
-    "Removing {id} from {project}…": "{project} から {id} を削除中…",
-    "Search packages": "パッケージを検索",
-    "Select a package to see its details and the projects that use it": "パッケージを選択すると詳細と使用しているプロジェクトが表示されます",
-    "Source": "ソース",
-    "The solution has no package references": "ソリューションにパッケージ参照がありません",
-    "Updates ({n})": "更新 ({n})",
-    "by {authors}": "作成者: {authors}",
-    "{id}: done": "{id}: 完了",
-    "{n} projects": "{n} プロジェクト"
-  },
   "project-env": {
     "Line {line} is not NAME=value with a valid name.": "{line} 行目は有効な名前の NAME=value ではありません。",
     "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "1 行に 1 つの NAME=value。すべての Cargo コマンド、それが起動するプログラム、rust-analyzer に適用されます。実行構成の変数が優先されます。",
@@ -602,7 +559,6 @@
     "Rerun": "再実行",
     "Rerun Failed Tests": "失敗したテストを再実行",
     "Restore": "復元",
-    "Restore NuGet Packages": "NuGet パッケージの復元",
     "Running tests of {project}…": "{project} のテストを実行中…",
     "Running… {passed} passed, {failed} failed": "実行中… 成功 {passed}、失敗 {failed}",
     "Show Passed": "成功したテストを表示",
@@ -3028,5 +2984,28 @@
     "Invalid container settings or Linux source path": "コンテナー設定または Linux ソースパスが無効です",
     "Container operation timed out": "コンテナー操作がタイムアウトしました",
     "Container error: {error}": "コンテナーエラー: {error}"
+  },
+  "packages": {
+    "Install": "インストール",
+    "Remove": "削除",
+    "Update": "更新",
+    "{n} downloads": "{n} ダウンロード",
+    "1 project": "1 プロジェクト",
+    "{n} projects": "{n} プロジェクト"
+  },
+  "main-menu": {
+    "Main Menu": "メインメニュー",
+    "Extend Selection": "選択範囲を拡張",
+    "Shrink Selection": "選択範囲を縮小",
+    "Move Line Up": "行を上に移動",
+    "Move Line Down": "行を下に移動",
+    "Next Tab": "次のタブ",
+    "Previous Tab": "前のタブ",
+    "Save": "保存",
+    "Search file type": "ファイルの種類を検索",
+    "Move to New Window": "新しいウィンドウに移動"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "フィルターに一致するファイルの種類はありません"
   }
 }

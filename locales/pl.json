@@ -509,49 +509,6 @@
     "Needs cargo-nextest installed. Doctests do not run with it.": "Wymaga zainstalowanego cargo-nextest. Doctesty nie są z nim uruchamiane.",
     "Run tests with cargo-nextest": "Uruchamiaj testy za pomocą cargo-nextest"
   },
-  "nuget": {
-    "Could not search NuGet: {error}": "Nie można przeszukać NuGet: {error}",
-    "Install": "Zainstaluj",
-    "Installed": "Zainstalowany",
-    "Installed version: {version}": "Zainstalowana wersja: {version}",
-    "Latest": "Najnowsza",
-    "Manage NuGet Packages…": "Zarządzaj pakietami NuGet…",
-    "No packages found": "Nie znaleziono pakietów",
-    "No packages installed. Type to search nuget.org.": "Brak zainstalowanych pakietów. Wpisz, aby przeszukać nuget.org.",
-    "NuGet Packages — {project}": "Pakiety NuGet — {project}",
-    "Prerelease": "Wersja przedpremierowa",
-    "Remove": "Usuń",
-    "Search packages on nuget.org": "Szukaj pakietów w nuget.org",
-    "Select a package to see its versions": "Wybierz pakiet, aby zobaczyć jego wersje",
-    "Update": "Aktualizuj",
-    "Version": "Wersja",
-    "{id} installed": "Zainstalowano {id}",
-    "{id} removed": "Usunięto {id}",
-    "{n} downloads": "Pobrania: {n}"
-  },
-  "nugetwindow": {
-    "1 project": "1 projekt",
-    "Browse": "Przeglądaj",
-    "Consolidate ({n})": "Konsoliduj ({n})",
-    "Every package is up to date": "Wszystkie pakiety są aktualne",
-    "Every project uses the same versions": "Wszystkie projekty używają tych samych wersji",
-    "Filter installed packages": "Filtruj zainstalowane pakiety",
-    "Install or update in {n} selected": "Zainstaluj lub zaktualizuj w {n} zaznaczonych",
-    "Installed ({n})": "Zainstalowane ({n})",
-    "Installing {id} {version} in {project}…": "Instalowanie {id} {version} w {project}…",
-    "Project": "Projekt",
-    "Project site": "Strona projektu",
-    "Remove from selected": "Usuń z zaznaczonych",
-    "Removing {id} from {project}…": "Usuwanie {id} z {project}…",
-    "Search packages": "Szukaj pakietów",
-    "Select a package to see its details and the projects that use it": "Wybierz pakiet, aby zobaczyć szczegóły i projekty, które go używają",
-    "Source": "Źródło",
-    "The solution has no package references": "Rozwiązanie nie ma odwołań do pakietów",
-    "Updates ({n})": "Aktualizacje ({n})",
-    "by {authors}": "autor: {authors}",
-    "{id}: done": "{id}: gotowe",
-    "{n} projects": "{n} projektów"
-  },
   "project-env": {
     "Line {line} is not NAME=value with a valid name.": "Wiersz {line} nie ma postaci NAZWA=wartość z poprawną nazwą.",
     "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.": "Jedno NAZWA=wartość w wierszu. Stosowane do każdego polecenia Cargo, uruchamianych przez nie programów i rust-analyzer; zmienne konfiguracji uruchomieniowej mają pierwszeństwo.",
@@ -602,7 +559,6 @@
     "Rerun": "Uruchom ponownie",
     "Rerun Failed Tests": "Uruchom ponownie nieudane testy",
     "Restore": "Przywracanie",
-    "Restore NuGet Packages": "Przywróć pakiety NuGet",
     "Running tests of {project}…": "Uruchamianie testów {project}…",
     "Running… {passed} passed, {failed} failed": "Uruchamianie… zaliczone: {passed}, nieudane: {failed}",
     "Show Passed": "Pokaż zaliczone",
@@ -3028,5 +2984,28 @@
     "Invalid container settings or Linux source path": "Nieprawidłowe ustawienia kontenera lub ścieżka źródła Linux",
     "Container operation timed out": "Przekroczono czas operacji kontenera",
     "Container error: {error}": "Błąd kontenera: {error}"
+  },
+  "packages": {
+    "Install": "Zainstaluj",
+    "Remove": "Usuń",
+    "Update": "Aktualizuj",
+    "{n} downloads": "Pobrania: {n}",
+    "1 project": "1 projekt",
+    "{n} projects": "{n} projektów"
+  },
+  "main-menu": {
+    "Main Menu": "Menu główne",
+    "Extend Selection": "Rozszerz zaznaczenie",
+    "Shrink Selection": "Zmniejsz zaznaczenie",
+    "Move Line Up": "Przenieś wiersz w górę",
+    "Move Line Down": "Przenieś wiersz w dół",
+    "Next Tab": "Następna karta",
+    "Previous Tab": "Poprzednia karta",
+    "Save": "Zapisz",
+    "Search file type": "Szukaj typu pliku",
+    "Move to New Window": "Przenieś do nowego okna"
+  },
+  "project-template-search": {
+    "No file type matches the filter": "Żaden typ pliku nie pasuje do filtra"
   }
 }
