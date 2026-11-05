@@ -105,6 +105,13 @@ They run without opening a window and return Cargo's exit code. Formatting uses 
 `--trust-project` on each invocation because build scripts and procedural macros may run.
 `--offline` prevents Cargo network access. Use Ctrl+C to cancel.
 
+`crabcraft http requests.http --request 2` sends the second HTTP request and writes a JSON
+response (status, headers, body, duration and warnings) to stdout without opening a window.
+For a file with one request, `--request` is optional; multiple requests require an explicit
+selection. Exit status is 1 for HTTP errors, network errors or a truncated response. The
+request file and response body are limited to 8 MB; requests time out after 60 seconds.
+Variables and file bodies are unsupported and block sending, as in the graphical HTTP client.
+
 ## Build from source
 
 CrabCraft needs Rust 1.90 or later (edition 2024).

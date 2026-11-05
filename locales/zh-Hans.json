@@ -950,7 +950,13 @@
     "Specify one Cargo.toml or project folder": "请指定一个 Cargo.toml 或项目文件夹",
     "Specify an existing Cargo.toml or project folder": "请指定现有的 Cargo.toml 或项目文件夹",
     "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "检查可能执行构建脚本和过程宏。仅在信任此项目时传入 --trust-project。",
-    "Could not start Cargo": "无法启动 Cargo"
+    "Could not start Cargo": "无法启动 Cargo",
+    "Specify one HTTP request file": "请指定一个 HTTP 请求文件",
+    "Send an HTTP request without a window; select with --request N; print JSON": "不打开窗口发送 HTTP 请求；使用 --request N 选择；输出 JSON",
+    "The HTTP request file exceeds 8 MB.": "HTTP 请求文件超过 8 MB。",
+    "The HTTP request path must be a regular file.": "HTTP 请求路径必须是普通文件。",
+    "This file contains multiple requests. Select one with --request N.": "此文件包含多个请求。请使用 --request N 选择一个。",
+    "No HTTP request exists at this index.": "此索引处没有 HTTP 请求。"
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "缩进，来自项目的代码样式：{files}"

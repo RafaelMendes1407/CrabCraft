@@ -26,6 +26,7 @@ impl OpenRequest {
 pub enum Command {
     Open(Vec<OpenRequest>),
     Tool(ToolRequest),
+    Http(crate::http_cli::HttpCommand),
     Help,
     Version,
 }
@@ -39,6 +40,7 @@ pub enum CliError {
     MultipleProjects,
     UntrustedProject,
     InvalidManifest,
+    HttpFile,
 }
 
 impl std::fmt::Display for CliError {
@@ -50,6 +52,7 @@ impl std::fmt::Display for CliError {
             Self::MissingFile => tr("--line and --column must come before a file").to_string(),
             Self::MultipleProjects => tr("Specify one Cargo.toml or project folder").to_string(),
             Self::UntrustedProject => tr("Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.").to_string(),
+            Self::HttpFile => tr("Specify one HTTP request file").to_string(),
             Self::InvalidManifest => tr("Specify an existing Cargo.toml or project folder").to_string(),
         };
         f.write_str(&message)
@@ -61,6 +64,7 @@ impl std::error::Error for CliError {}
 /// `--help`, in the user's language.
 pub fn usage() -> String {
     let rows = [
+        ("http FILE", tr("Send an HTTP request without a window; select with --request N; print JSON")),
         ("format [path]", tr("Format a Cargo workspace; --check reports changes without writing")),
         ("inspect [path]", tr("Run Clippy; requires --trust-project because project code may run")),
         ("--offline", tr("Run workspace tools without accessing the network")),
@@ -84,6 +88,10 @@ pub fn usage() -> String {
 /// Reads the arguments after the program name. `cwd` makes relative paths absolute.
 pub fn parse(args: impl IntoIterator<Item = OsString>, cwd: &Path) -> Result<Command, CliError> {
     let mut args = args.into_iter().peekable();
+    if args.peek().is_some_and(|arg| arg == "http") {
+        args.next();
+        return crate::http_cli::parse(args, cwd);
+    }
     if args.peek().is_some_and(|arg| arg == "format" || arg == "inspect") {
         let inspect = args.next().is_some_and(|arg| arg == "inspect");
         return parse_tool(inspect, args, cwd);
@@ -189,7 +197,7 @@ impl ToolRequest {
     }
 }
 
-fn number(option: &str, value: Option<OsString>) -> Result<usize, CliError> {
+pub(super) fn number(option: &str, value: Option<OsString>) -> Result<usize, CliError> {
     let value = value.ok_or_else(|| CliError::MissingNumber(option.to_string()))?;
     let text = value.to_string_lossy();
     text.parse::<usize>().ok().filter(|n| *n > 0).ok_or_else(|| CliError::InvalidNumber { option: option.to_string(), value: text.into_owned() })

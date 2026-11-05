@@ -950,7 +950,13 @@
     "Specify one Cargo.toml or project folder": "Especifica un solo Cargo.toml o carpeta de proyecto",
     "Specify an existing Cargo.toml or project folder": "Especifica un Cargo.toml o carpeta de proyecto existente",
     "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "La inspección puede ejecutar scripts de compilación y macros procedurales. Usa --trust-project solo si confías en el proyecto.",
-    "Could not start Cargo": "No se pudo iniciar Cargo"
+    "Could not start Cargo": "No se pudo iniciar Cargo",
+    "Specify one HTTP request file": "Especifica un archivo de peticiones HTTP",
+    "Send an HTTP request without a window; select with --request N; print JSON": "Enviar petición HTTP sin ventana; elegir con --request N; imprimir JSON",
+    "The HTTP request file exceeds 8 MB.": "El archivo de peticiones HTTP supera 8 MB.",
+    "The HTTP request path must be a regular file.": "La ruta de petición HTTP debe ser un archivo normal.",
+    "This file contains multiple requests. Select one with --request N.": "Este archivo contiene varias peticiones. Elige una con --request N.",
+    "No HTTP request exists at this index.": "No existe una petición HTTP con este índice."
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "Sangría, del estilo de código del proyecto: {files}"

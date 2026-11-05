@@ -950,7 +950,13 @@
     "Specify one Cargo.toml or project folder": "Podaj jeden Cargo.toml lub folder projektu",
     "Specify an existing Cargo.toml or project folder": "Podaj istniejący Cargo.toml lub folder projektu",
     "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "Inspekcja może wykonać skrypty kompilacji i makra proceduralne. Używaj --trust-project tylko dla zaufanego projektu.",
-    "Could not start Cargo": "Nie można uruchomić Cargo"
+    "Could not start Cargo": "Nie można uruchomić Cargo",
+    "Specify one HTTP request file": "Podaj jeden plik żądań HTTP",
+    "Send an HTTP request without a window; select with --request N; print JSON": "Wyślij żądanie HTTP bez okna; wybierz przez --request N; wypisz JSON",
+    "The HTTP request file exceeds 8 MB.": "Plik żądań HTTP przekracza 8 MB.",
+    "The HTTP request path must be a regular file.": "Ścieżka żądania HTTP musi wskazywać zwykły plik.",
+    "This file contains multiple requests. Select one with --request N.": "Plik zawiera wiele żądań. Wybierz jedno przez --request N.",
+    "No HTTP request exists at this index.": "Pod tym indeksem nie ma żądania HTTP."
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "Wcięcie, ze stylu kodu projektu: {files}"

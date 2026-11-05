@@ -14,6 +14,7 @@ mod dep_versions;
 mod feature_fix;
 mod feature_nav;
 mod http_client;
+mod http_cli;
 mod disassembly_view;
 mod insight;
 mod inspection_profile;
@@ -103,6 +104,12 @@ fn main() -> eframe::Result {
     let cwd = std::env::current_dir().unwrap_or_default();
     let open = match cli::parse(std::env::args_os().skip(1), &cwd) {
         Ok(cli::Command::Open(list)) => list,
+        Ok(cli::Command::Http(request)) => {
+            match request.run() {
+                Ok(code) => std::process::exit(code),
+                Err(error) => { eprintln!("crabcraft: {error}"); std::process::exit(1); }
+            }
+        }
         Ok(cli::Command::Tool(request)) => {
             match request.run() {
                 Ok(code) => std::process::exit(code),

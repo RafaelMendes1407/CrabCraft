@@ -950,7 +950,13 @@
     "Specify one Cargo.toml or project folder": "Cargo.toml またはプロジェクトフォルダーを1つ指定してください",
     "Specify an existing Cargo.toml or project folder": "既存の Cargo.toml またはプロジェクトフォルダーを指定してください",
     "Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.": "検査ではビルドスクリプトと手続きマクロが実行される場合があります。信頼できるプロジェクトにのみ --trust-project を指定してください。",
-    "Could not start Cargo": "Cargo を起動できませんでした"
+    "Could not start Cargo": "Cargo を起動できませんでした",
+    "Specify one HTTP request file": "HTTP リクエストファイルを1つ指定してください",
+    "Send an HTTP request without a window; select with --request N; print JSON": "ウィンドウを開かず HTTP リクエストを送信。--request N で選択し JSON を出力",
+    "The HTTP request file exceeds 8 MB.": "HTTP リクエストファイルが 8 MB を超えています。",
+    "The HTTP request path must be a regular file.": "HTTP リクエストのパスには通常のファイルを指定してください。",
+    "This file contains multiple requests. Select one with --request N.": "ファイルに複数のリクエストがあります。--request N で1つ選択してください。",
+    "No HTTP request exists at this index.": "この番号の HTTP リクエストはありません。"
   },
   "code-style": {
     "Indentation, from the project's code style: {files}": "インデント（プロジェクトのコードスタイル: {files}）"
