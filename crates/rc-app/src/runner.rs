@@ -272,6 +272,7 @@ pub struct Runner {
     waker: Waker,
     dotnet: Option<Dotnet>,
     cargo: Option<rc_cargo::Cargo>,
+    cargo_unavailable:Option<String>,
     /// The open Rust workspace.
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Set from the application trust store, never from project session files.
@@ -300,7 +301,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, trusted_project: None, project_root: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_unavailable:None, cargo_workspace: None, trusted_project: None, project_root: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -351,8 +352,11 @@ impl Runner {
 
     /// Builds the run configurations of a Rust workspace: its binaries, then all its tests.
     pub fn set_cargo_workspace(&mut self, workspace: rc_cargo::CargoWorkspace, remembered: Option<&str>) {
+        self.set_cargo_workspace_with_tool(workspace,rc_cargo::Cargo::locate(),remembered);
+    }
+    pub fn set_cargo_workspace_with_tool(&mut self,workspace:rc_cargo::CargoWorkspace,cargo:Option<rc_cargo::Cargo>,remembered:Option<&str>){
         let selected = self.selected_config().map(|c| c.name.clone());
-        self.cargo = rc_cargo::Cargo::locate();
+        self.cargo=cargo;self.cargo_unavailable=None;
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
         for package in workspace.packages.iter().filter(|p| p.cdylib) {
             self.configs.push(RunConfig { name: format!("wasm-pack: {}", package.name), kind: ConfigKind::WasmPack { manifest: package.manifest.clone() } });
@@ -366,7 +370,8 @@ impl Runner {
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
-    pub fn set_cargo_tool(&mut self, cargo: Option<rc_cargo::Cargo>) { self.cargo = cargo; }
+    pub fn set_cargo_tool(&mut self, cargo: Option<rc_cargo::Cargo>) { self.cargo = cargo;self.cargo_unavailable=None; }
+    pub fn set_cargo_unavailable(&mut self,message:String){self.cargo=None;self.cargo_unavailable=Some(message);}
 
     pub fn cargo_tool(&self) -> Result<rc_cargo::Cargo, String> {
         self.cargo()
@@ -374,7 +379,7 @@ impl Runner {
 
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
         self.require_trust().map_err(|e| e.to_string())?;
-        self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string())
+        self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| self.cargo_unavailable.clone().unwrap_or_else(||tr("Cargo was not found. Install Rust with rustup.").to_string()))
     }
 
     /// The project's environment; nothing when the session holds an invalid one.
@@ -383,6 +388,7 @@ impl Runner {
     }
 
     pub fn clear(&mut self) {
+        self.cargo=None;self.cargo_unavailable=None;
         self.cargo_workspace = None;
         self.trusted_project = None;
         self.project_root = None;
@@ -464,6 +470,7 @@ impl Runner {
         };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
+        if !cargo.supports_cargo_args(&args){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
         let title = format!("cargo {}", args.first().map(String::as_str).unwrap_or_default());
         let handle = rc_cargo::start_command(&cargo, &manifest, args, inbox.sender());
         self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, command: true });
@@ -833,6 +840,8 @@ impl Runner {
     }
 
     fn run_wasm_pack(&mut self, config: RunConfig, manifest: &Path) -> Vec<RunnerOutput> {
+        if self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
+
         let trusted = self.cargo_workspace.as_ref().is_some_and(|w| self.trusted_project.as_ref() == Some(&w.root) && w.packages.iter().any(|p| p.manifest == manifest));
         if !trusted {
             return vec![RunnerOutput::Notify(tr("Trust this Cargo project before running wasm-pack").into(), true)];
@@ -922,6 +931,7 @@ impl Runner {
     // ------------------------------------------------------------------ tests
 
     pub fn run_tests(&mut self, target: &Path, filter: Option<TestFilter>) -> Vec<RunnerOutput> {
+        if self.nextest&&self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
         if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
         let manifest = self.cargo_workspace.as_ref().map(|w| w.manifest.clone());
         let target = manifest.as_deref().unwrap_or(target);

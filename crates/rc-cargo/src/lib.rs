@@ -4,11 +4,11 @@
 //! Operations report through the event types of `rc-dotnet`, so the Build, Run and Tests windows
 //! work for both backends while the .NET one is being retired.
 //!
-//! Loading a workspace uses `cargo metadata --no-deps`, which does not compile anything, so it is
-//! safe on a project the user has not trusted. Build, run and test execute the project's code
-//! (`build.rs`, proc macros) and only start from an explicit user action.
+//! Metadata and all project-selected tool invocations are deferred until application trust;
+//! Cargo/rustup configuration can select executable wrappers even for metadata-only commands.
 
 pub mod crates_io;
+pub mod criticalup;
 pub mod dependencies;
 pub mod dependency_names;
 pub mod explain;

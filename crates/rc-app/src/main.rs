@@ -228,3 +228,4 @@ mod proofreader_core;
 mod containers;
 mod dev_containers;
 mod privileged_run;
+mod criticalup_provider;

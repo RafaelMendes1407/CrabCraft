@@ -1581,6 +1581,8 @@ fn format_failure(error: rc_cargo::FormatError) -> String {
 pub fn rustfmt_failure(error: rc_cargo::FormatError) -> String {
     match error {
         rc_cargo::FormatError::Missing => tr("rustfmt was not found. Install it with: rustup component add rustfmt").to_string(),
+        rc_cargo::FormatError::CriticalupMissing => tr("This CriticalUp installation has no rustfmt; install the matching Ferrocene package externally").into(),
+        rc_cargo::FormatError::CriticalupChannel => tr("Rustup rustfmt channels are unsupported by CriticalUp; clear the channel to use the selected formatter").into(),
         rc_cargo::FormatError::Arguments => tr("The rustfmt arguments have a quote that is not closed (Settings › Tools).").to_string(),
         rc_cargo::FormatError::Channel(channel) => trf("The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).", &[("channel", &channel)]),
         rc_cargo::FormatError::Environment(line) => trf("The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).", &[("line", &line)]),

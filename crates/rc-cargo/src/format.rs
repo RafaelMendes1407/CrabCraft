@@ -22,6 +22,8 @@ pub struct FormatFile {
 pub enum FormatError {
     /// The `rustfmt` component is not installed.
     Missing,
+    CriticalupMissing,
+    CriticalupChannel,
     /// The extra arguments end inside a quote.
     Arguments,
     /// The channel is not a toolchain name.
@@ -35,7 +37,7 @@ pub enum FormatError {
 /// How rustfmt runs: its program, the channel and extra arguments, and the environment.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rustfmt {
-    program: PathBuf,
+    cargo: Cargo,
     /// `+channel` first (read by rustup), then the user's arguments.
     args: Vec<String>,
     env: Vec<(String, String)>,
@@ -46,11 +48,14 @@ impl Rustfmt {
     /// mistake is reported before any file is touched.
     pub fn new(cargo: &Cargo, settings: &RustfmtSettings) -> Result<Rustfmt, FormatError> {
         let (args, env) = Self::read(settings)?;
-        let program = cargo.path().with_file_name(if cfg!(windows) { "rustfmt.exe" } else { "rustfmt" });
+        if cargo.is_criticalup()&&!settings.channel.trim().is_empty(){return Err(FormatError::CriticalupChannel);}
+        let missing=if cargo.is_criticalup(){FormatError::CriticalupMissing}else{FormatError::Missing};
+        let program = cargo.tool_path("rustfmt").ok_or_else(||missing.clone())?;
         if !program.is_file() {
-            return Err(FormatError::Missing);
+            return Err(missing);
         }
-        Ok(Rustfmt { program, args, env })
+        let mut merged=cargo.env().to_vec();merged.extend(env.clone());
+        Ok(Rustfmt { cargo:cargo.clone().with_env(merged), args, env })
     }
 
     /// Whether the settings can be used, without looking for the program.
@@ -77,7 +82,7 @@ impl Rustfmt {
     /// `text` formatted as the file at `path`, of a crate of `edition`. The file is not read
     /// or written: the text goes through stdin, and rustfmt.toml is searched from its folder.
     pub async fn format(&self, path: &Path, edition: &str, text: &str) -> Result<String, String> {
-        let mut cmd = tokio::process::Command::new(&self.program);
+        let mut cmd = self.cargo.tool_command("rustfmt");
         cmd.args(&self.args);
         // The user's own `--edition` wins; rustfmt refuses it twice.
         if !self.args.iter().any(|a| a == "--edition" || a.starts_with("--edition=")) {
@@ -86,11 +91,13 @@ impl Rustfmt {
         cmd.args(["--emit", "stdout"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
         // A channel that is not installed must fail, not start a download.
         cmd.env("RUSTUP_AUTO_INSTALL", "0");
-        cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        if !self.cargo.is_criticalup(){cmd.envs(self.env.iter().map(|(k, v)| (k, v)));}
         if let Some(dir) = path.parent().filter(|d| d.is_dir()) {
             cmd.current_dir(dir);
         }
+        #[cfg(unix)]cmd.process_group(0);
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let _group=FormatGroup(child.id());
         let mut stdin = child.stdin.take().ok_or("rustfmt has no input")?;
         let input = text.as_bytes().to_vec();
         tokio::spawn(async move {
@@ -331,3 +338,5 @@ mod tests {
         assert_eq!(run(&Cargo::new(dir.path().join("cargo")), &[]), Err(FormatError::Missing));
     }
 }
+
+struct FormatGroup(Option<u32>);impl Drop for FormatGroup{fn drop(&mut self){if let Some(pid)=self.0{rc_dotnet::kill_tree(pid);}}}

@@ -48,13 +48,14 @@ pub fn error_code(code: &str) -> Option<&str> {
 
 /// `rustc`, next to `cargo` (where rustup and the standalone installers put it).
 pub fn rustc_path(cargo: &crate::Cargo) -> PathBuf {
-    cargo.path().with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" })
+    cargo.rustc_path()
 }
 
 /// How to run `rustc --explain`.
 #[derive(Clone, Debug)]
 pub struct Explainer {
     pub rustc: PathBuf,
+    pub cargo: Option<crate::Cargo>,
     /// The folder whose `rust-toolchain.toml` applies (`None`: the default toolchain).
     pub dir: Option<PathBuf>,
     pub env: Vec<(String, String)>,
@@ -63,22 +64,28 @@ pub struct Explainer {
 
 impl Explainer {
     pub fn new(rustc: impl Into<PathBuf>) -> Explainer {
-        Explainer { rustc: rustc.into(), dir: None, env: Vec::new(), timeout: Duration::from_secs(10) }
+        Explainer { rustc: rustc.into(), cargo:None, dir: None, env: Vec::new(), timeout: Duration::from_secs(10) }
     }
+
+    pub fn for_cargo(cargo:&crate::Cargo)->Self{Self{cargo:Some(cargo.clone()),..Self::new(cargo.rustc_path())}}
 
     /// The text rustc prints for `code` (Markdown), or `None` when rustc has no explanation for
     /// it. Blocks for up to `timeout`: call it from a background thread.
     pub fn explain(&self, code: &str) -> Result<Option<String>, ExplainError> {
         let code = error_code(code).ok_or(ExplainError::InvalidCode)?;
-        let mut cmd = Command::new(&self.rustc);
+        let mut cmd = self.cargo.as_ref().map_or_else(||Command::new(&self.rustc),|cargo|cargo.std_tool_command("rustc"));
         cmd.arg("--explain").arg(code).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        if self.cargo.as_ref().is_none_or(|cargo|!cargo.is_criticalup()){cmd.envs(self.env.iter().map(|(k, v)| (k, v)));}
         // A toolchain file naming a missing toolchain must not start a download.
         cmd.env("RUSTUP_AUTO_INSTALL", "0");
         if let Some(dir) = self.dir.as_deref().filter(|d| d.is_dir()) {
             cmd.current_dir(dir);
         }
+        #[cfg(unix)]{use std::os::unix::process::CommandExt;cmd.process_group(0);}
+        let neutral=if self.dir.is_none(){Some(tempfile::tempdir().map_err(|e|ExplainError::NoRustc(e.to_string()))?)}else{None};
+        if let Some(dir)=&neutral{cmd.current_dir(dir.path()).env_remove("RUSTUP_TOOLCHAIN");}
         let mut child = cmd.spawn().map_err(|e| ExplainError::NoRustc(e.to_string()))?;
+        let _group=ExplainGroup(child.id());
         let stdout = child.stdout.take().map(read_limited);
         let stderr = child.stderr.take().map(read_limited);
         let deadline = Instant::now() + self.timeout;
@@ -179,6 +186,17 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(5));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn explanations_without_a_trusted_project_use_a_neutral_directory(){
+        use std::os::unix::fs::PermissionsExt;
+        let dir=tempfile::tempdir().unwrap();let program=dir.path().join("rustc");
+        std::fs::write(&program,"#!/bin/sh\npwd\n").unwrap();std::fs::set_permissions(&program,std::fs::Permissions::from_mode(0o700)).unwrap();
+        let cwd=Explainer::new(program).explain("E0308").unwrap().unwrap();
+        assert_ne!(PathBuf::from(&cwd),std::env::current_dir().unwrap());
+        assert!(PathBuf::from(cwd).starts_with(std::env::temp_dir()));
+    }
+
     #[test]
     fn the_real_rustc_explains_mismatched_types() {
         let rustc = locate_rustc().expect("rustc is installed next to cargo");
@@ -189,3 +207,5 @@ mod tests {
         assert_eq!(e.explain("E9999"), Ok(None));
     }
 }
+
+struct ExplainGroup(u32);impl Drop for ExplainGroup{fn drop(&mut self){rc_dotnet::kill_tree(self.0);}}

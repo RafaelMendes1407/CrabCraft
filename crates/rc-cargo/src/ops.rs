@@ -20,8 +20,8 @@ const MESSAGE_FORMAT: &str = "--message-format=json-diagnostic-rendered-ansi";
 
 /// Starts a Cargo process with coloured output and no progress bar (it rewrites lines).
 fn cargo_command(cargo: &Cargo, dir: Option<&Path>, args: &[String]) -> tokio::process::Command {
-    let mut cmd = cargo.command();
-    cmd.args(args).env("CARGO_TERM_COLOR", "always").env("CARGO_TERM_PROGRESS_WHEN", "never");
+    let mut cmd = cargo.command_with_args(args);
+    cmd.env("CARGO_TERM_COLOR", "always").env("CARGO_TERM_PROGRESS_WHEN", "never");
     if let Some(d) = dir {
         cmd.current_dir(d);
     }
@@ -381,12 +381,12 @@ pub fn start_scratch(cargo: &Cargo, file: PathBuf, out: PathBuf, outbox: Outbox<
     let (input, input_rx) = mpsc::unbounded_channel();
     let pid = Arc::new(AtomicU32::new(0));
     let pid2 = pid.clone();
-    let rustc = cargo.path().with_file_name(if cfg!(windows) { "rustc.exe" } else { "rustc" });
+    let compiler = cargo.clone();
     let env = cargo.env().to_vec();
     let task = Runtime::spawn(async move {
         let events = outbox.clone();
         let end = async {
-            let mut cmd = tokio::process::Command::new(&rustc);
+            let mut cmd = compiler.tool_command("rustc");
             cmd.args(["--edition", "2021", "--color", "always", "-o"]).arg(&out).arg(&file);
             cmd.envs(env.iter().map(|(k, v)| (k, v)));
             events.send(RunEvent::Build(BuildEvent::Task(OutputLine { stream: Stream::Stdout, text: format!("rustc {}", file.display()), newline: true })));

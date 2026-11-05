@@ -49,6 +49,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             theme::Side::Right => {
                 ui.add_space(10.0);
                 ui.spacing_mut().item_spacing.x = 0.0;
+                if app.workspace.as_ref().is_some_and(|w|w.ws.cargo_manifest().is_some()){
+                    let label=app.criticalup_provider.label();
+                    if theme::flat_button(ui,None,&label,FontId::proportional(12.5),false,true).on_hover_text(tr("Rust Toolchain Provider")).clicked(){app.toggle_tool(crate::toolwindow::ToolWindow::RustProvider);}
+                }
                 insight_widget(app, ui);
                 debugger_widget(app, ui);
                 linter_widget(app, ui);
