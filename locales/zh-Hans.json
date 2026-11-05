@@ -2246,5 +2246,10 @@
     "Use in Commit Message": "用于提交消息",
     "Create Issue Branch…": "创建问题分支…",
     "Issues": "问题"
+  },
+  "complete_statement": {
+    "Complete Current Statement": "补全当前语句",
+    "Open an editable Rust file with one caret": "打开只有一个光标的可编辑 Rust 文件",
+    "This statement needs manual editing; no changes were made": "此语句需要手动编辑；未作任何更改"
   }
 }

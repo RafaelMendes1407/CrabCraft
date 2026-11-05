@@ -40,7 +40,8 @@ its default macOS keymap. Using that common-platform reference is an inference, 
 installed RustRover comparison. Tests emulate Command-key events in the native headless UI
 on Linux with a real Cargo project; native NSApp/hardware behavior is not claimed as tested.
 
-Complete Current Statement remains unsupported. Configurable two-stage sequences are implemented and
+Complete Current Statement is available as Ctrl+Shift+Enter (Windows/Linux) or
+Command+Shift+Enter (macOS); see [statement completion](complete-statement.md). Configurable two-stage sequences are implemented and
 verified through native recording and real Rust editor actions; see [key sequences](key-sequences.md). Extra bindings
 inherited from the existing editing map have not all been compared with the reference.
 

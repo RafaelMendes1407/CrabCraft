@@ -387,6 +387,7 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("New Scratch File…"), NewScratchFile),
         (tr("Select In…"), SelectIn),
         (tr("Reformat Code"), Reformat),
+        (tr("Complete Current Statement"), CompleteStatement),
         (tr("Share in Playground…"), ShareInPlayground),
         (tr("Generate…"), Generate),
         (tr("Refactor This…"), RefactorThis),

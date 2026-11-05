@@ -171,6 +171,7 @@ pub struct CrabCraftApp {
     pub bench_markers: std::collections::BTreeMap<usize, Vec<String>>,
     pub native_menu: Option<NativeMenu>,
     pub waker: Waker,
+    statement_completion: Option<crate::complete_statement::Job>,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
     cargo_load: Option<Inbox<(Result<rc_cargo::CargoWorkspace, String>, Option<rc_cargo::LoadLog>)>>,
@@ -399,6 +400,7 @@ impl CrabCraftApp {
             native_menu,
             fs_inbox: Inbox::new(waker.clone()),
             waker,
+            statement_completion: None,
             _watcher: None,
             cargo_load: None,
             sync_log: Default::default(),
@@ -1394,6 +1396,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.statement_completion = None;
         self.stop_all_debug_sessions();
         self.debug_sessions = Default::default();
         if self.workspace.is_some() {
@@ -1748,6 +1751,14 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
+        if action == Action::CompleteStatement {
+            self.statement_completion = None;
+            match crate::complete_statement::Job::start(&self.docs, self.waker.clone()) {
+                Ok(job) => self.statement_completion = Some(job),
+                Err(message) => self.notify(message, false),
+            }
+            return;
+        }
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
         if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
             if self.rustfmt_document(i, false) {
@@ -3229,6 +3240,10 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
+            self.statement_completion = None;
+            if let Err(message) = result { self.notify(message, false); }
+        }
         self.issue_tracker.poll();
         if self.history_edit.poll() { self.vcs.refresh(); }
         if self.shelves.poll() { self.vcs.refresh(); }

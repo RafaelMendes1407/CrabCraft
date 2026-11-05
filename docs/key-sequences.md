@@ -27,4 +27,5 @@ key-down/key-up/text events represent ordinary desktop timing. Run
 
 This completes configurable sequences, not every other editor's predefined multi-step alias.
 The RustRover macOS counterpart is covered separately in [the reference profile](rust-keymap.md).
-Complete Current Statement remains unfinished in G-03; no product parity is claimed.
+Complete Current Statement is covered in [statement completion](complete-statement.md).
+No product parity is claimed.

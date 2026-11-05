@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod complete_statement;
 mod database_core;
 mod database;
 mod cli;

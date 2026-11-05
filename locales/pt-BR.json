@@ -2246,5 +2246,10 @@
     "Use in Commit Message": "Usar na mensagem do commit",
     "Create Issue Branch…": "Criar branch da issue…",
     "Issues": "Issues"
+  },
+  "complete_statement": {
+    "Complete Current Statement": "Completar instrução atual",
+    "Open an editable Rust file with one caret": "Abra um arquivo Rust editável com um único cursor",
+    "This statement needs manual editing; no changes were made": "Esta instrução precisa de edição manual; nenhuma alteração foi feita"
   }
 }

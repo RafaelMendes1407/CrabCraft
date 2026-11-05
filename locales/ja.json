@@ -2246,5 +2246,10 @@
     "Use in Commit Message": "コミットメッセージに使用",
     "Create Issue Branch…": "課題ブランチを作成…",
     "Issues": "課題"
+  },
+  "complete_statement": {
+    "Complete Current Statement": "現在の文を完成",
+    "Open an editable Rust file with one caret": "カーソルが1つの編集可能な Rust ファイルを開いてください",
+    "This statement needs manual editing; no changes were made": "この文は手動編集が必要です。変更はありません"
   }
 }

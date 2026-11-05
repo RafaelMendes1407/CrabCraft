@@ -59,6 +59,7 @@ pub enum Action {
     UnfoldAll,
     // --- code insight (reported to the app)
     Complete,
+    CompleteStatement,
     ParameterInfo,
     QuickDoc,
     ExternalDocs,
@@ -166,6 +167,7 @@ impl Action {
         !matches!(
             self,
             Complete
+                | CompleteStatement
                 | ParameterInfo
                 | QuickDoc
                 | ExternalDocs
@@ -710,6 +712,7 @@ fn rustrover_mac_bindings() -> Vec<(Chord, Action)> {
     let command = m(false,false,false,true);
     let command_alt = m(true,false,false,true);
     let overrides = [
+        (Chord { key: Key::Enter, mods: m(false,false,true,true) }, CompleteStatement),
         (Chord { key: Key::P, mods: command }, ParameterInfo),
         (Chord { key: Key::N, mods: command }, Generate),
         (Chord { key: Key::T, mods: m(false,true,false,false) }, RefactorThis),
@@ -735,6 +738,7 @@ fn rustrover_bindings() -> Vec<(Chord, Action)> {
     let ctrl_alt = m(true, true, false, false);
     // Clear every displaced action/chord together before adding the primary bindings.
     let overrides = [
+        (Chord { key: Key::Enter, mods: ctrl_shift }, CompleteStatement),
         (Chord { key: Key::P, mods: ctrl }, ParameterInfo),
         (Chord { key: Key::F6, mods: shift }, Rename),
         (Chord { key: Key::R, mods: ctrl_shift }, ReplaceInFiles),
@@ -1147,6 +1151,7 @@ mod tests {
     fn rust_reference_mac_shortcuts_match_the_compared_public_platform_facts() {
         let map = Keymap::new(KeymapKind::RustRoverMac);
         assert!(map.kind.is_mac());
+        assert_eq!(map.shortcut_text(Action::CompleteStatement).as_deref(), Some("⇧⌘↩"));
         for (action, text) in [
             (Action::ParameterInfo,"⌘P"), (Action::Generate,"⌘N"),
             (Action::RefactorThis,"⌃T"), (Action::GotoSymbol,"⌥⌘O"),
@@ -1166,6 +1171,7 @@ mod tests {
     #[test]
     fn rustrover_shortcuts_match_the_compared_windows_reference() {
         let map = Keymap::new(KeymapKind::RustRover);
+        assert_eq!(map.shortcut_text(Action::CompleteStatement).as_deref(), Some("Ctrl+Shift+Enter"));
         for (action, shortcut) in [
             (Action::FindAction, "Ctrl+Shift+A"), (Action::ShowIntentions, "Alt+Enter"),
             (Action::NextError, "F2"), (Action::PreviousError, "Shift+F2"),
