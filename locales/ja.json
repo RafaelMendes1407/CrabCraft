@@ -2708,5 +2708,30 @@
     "HTTP script assertion failed": "HTTP スクリプトのアサーションに失敗しました",
     "HTTP script log limit reached": "HTTP スクリプトのログ数の上限に達しました",
     "Response script": "応答スクリプト"
+  },
+  "move_items": {
+    "Move public Rust item…": "Rust の公開アイテムを移動…",
+    "Move public Rust item": "Rust の公開アイテムを移動",
+    "Destination open Rust module": "開いている移動先 Rust モジュール",
+    "Preview item move": "アイテム移動をプレビュー",
+    "Apply move to buffers": "移動をバッファーに適用",
+    "Checking Rust item identity and frozen sources…": "Rust アイテムの識別情報と固定ソースを確認しています…",
+    "Frozen move preview: {name}": "固定された移動プレビュー：{name}",
+    "Moved {name} in two buffers; save or undo each file explicitly": "2つのバッファー内で {name} を移動しました。各ファイルを明示的に保存または元に戻してください",
+    "Trust the Rust project, wait for rust-analyzer, and place one caret in a public item": "Rust プロジェクトを信頼し、rust-analyzer を待って、公開アイテムにカーソルを1つ置いてください",
+    "Open the crate root and both module files first. The crate root must match its saved text.": "最初にクレートのルートと両モジュールを開いてください。ルートは保存済みの内容と一致する必要があります。",
+    "Moves primitive-only public functions, structs with public fields, enums, constants and type aliases between existing sibling crate modules. The old path remains a re-export.": "既存の兄弟モジュール間で、プリミティブ型のみの公開関数、公開フィールドを持つ構造体、列挙型、定数、型エイリアスを移動します。旧パスは再エクスポートとして残ります。",
+    "Unsupported: private items or fields, generics, dependent names, methods, macros, attributes, doc comments, glob imports and multiple Cargo targets. No files are saved automatically.": "非公開アイテムやフィールド、ジェネリクス、依存名、メソッド、マクロ、属性、ドキュメントコメント、glob インポート、複数の Cargo ターゲットは未対応です。ファイルは自動保存されません。",
+    "Preview text is limited to 16,384 characters per pane; apply checks every captured buffer and source file again.": "プレビューは各ペイン最大16,384文字です。適用時に取得済みの全バッファーとソースファイルを再確認します。",
+    "This item is outside the supported move scope; no changes were made": "このアイテムは対応範囲外です。変更は行われていません",
+    "The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused": "名前の独立性や名前空間の安定性を証明できません。マクロ、属性、ドキュメントコメント、glob インポートは拒否されます",
+    "Only pub or pub(crate) items with equally public struct fields can move": "pub または pub(crate) のアイテムのみ移動できます。構造体のフィールドにも同等の公開範囲が必要です",
+    "The destination already contains the item name or a reference that could be captured": "移動先に同名のアイテムまたは解決先が変わる可能性のある参照があります",
+    "Open sibling module files and their saved crate root in a single-target Cargo package": "単一ターゲットの Cargo パッケージで、兄弟モジュールと保存済みのクレートルートを開いてください",
+    "Sources, metadata, trust or the Rust server changed; reopen and preview the move": "ソース、メタデータ、信頼状態、Rust サーバーが変更されました。再度開いて移動をプレビューしてください",
+    "rust-analyzer could not establish an unambiguous item identity": "rust-analyzer がアイテムを一意に識別できませんでした",
+    "The Rust item move exceeded its time limit": "Rust アイテムの移動がタイムアウトしました",
+    "The Rust item move exceeded its file, text or identity-request limit": "Rust アイテムの移動がファイル、テキスト、識別情報要求の制限を超えました",
+    "Could not read the regular Rust source files for the move": "移動用の通常の Rust ソースファイルを読み取れませんでした"
   }
 }

@@ -2708,5 +2708,30 @@
     "HTTP script assertion failed": "HTTP-Skript-Zusicherung fehlgeschlagen",
     "HTTP script log limit reached": "HTTP-Skript-Protokolllimit erreicht",
     "Response script": "Antwortskript"
+  },
+  "move_items": {
+    "Move public Rust item…": "Öffentliches Rust-Element verschieben…",
+    "Move public Rust item": "Öffentliches Rust-Element verschieben",
+    "Destination open Rust module": "Geöffnetes Rust-Zielmodul",
+    "Preview item move": "Verschiebung prüfen",
+    "Apply move to buffers": "Verschiebung auf Puffer anwenden",
+    "Checking Rust item identity and frozen sources…": "Rust-Identität und eingefrorene Quellen werden geprüft…",
+    "Frozen move preview: {name}": "Eingefrorene Verschiebungsvorschau: {name}",
+    "Moved {name} in two buffers; save or undo each file explicitly": "{name} in zwei Puffern verschoben; jede Datei ausdrücklich speichern oder rückgängig machen",
+    "Trust the Rust project, wait for rust-analyzer, and place one caret in a public item": "Vertrauen Sie dem Rust-Projekt, warten Sie auf rust-analyzer und setzen Sie einen Cursor in ein öffentliches Element",
+    "Open the crate root and both module files first. The crate root must match its saved text.": "Öffnen Sie zuerst die Crate-Wurzel und beide Moduldateien. Die Wurzel muss dem gespeicherten Text entsprechen.",
+    "Moves primitive-only public functions, structs with public fields, enums, constants and type aliases between existing sibling crate modules. The old path remains a re-export.": "Verschiebt öffentliche Funktionen mit primitiven Typen, Structs mit öffentlichen Feldern, Enums, Konstanten und Typaliase zwischen vorhandenen Geschwistermodulen. Der alte Pfad bleibt als Reexport erhalten.",
+    "Unsupported: private items or fields, generics, dependent names, methods, macros, attributes, doc comments, glob imports and multiple Cargo targets. No files are saved automatically.": "Nicht unterstützt: private Elemente/Felder, Generics, abhängige Namen, Methoden, Makros, Attribute, Dokumentationskommentare, Glob-Imports und mehrere Cargo-Ziele. Dateien werden nicht automatisch gespeichert.",
+    "Preview text is limited to 16,384 characters per pane; apply checks every captured buffer and source file again.": "Die Vorschau ist auf 16.384 Zeichen pro Bereich begrenzt; vor Anwendung werden alle erfassten Puffer und Quellen erneut geprüft.",
+    "This item is outside the supported move scope; no changes were made": "Dieses Element liegt außerhalb des unterstützten Umfangs; keine Änderungen vorgenommen",
+    "The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused": "Unabhängige Namen oder stabile Namensräume sind nicht beweisbar; Makros, Attribute, Dokumentation und Glob-Imports werden abgelehnt",
+    "Only pub or pub(crate) items with equally public struct fields can move": "Nur pub- oder pub(crate)-Elemente mit entsprechend öffentlichen Struct-Feldern können verschoben werden",
+    "The destination already contains the item name or a reference that could be captured": "Das Ziel enthält bereits den Elementnamen oder eine möglicherweise erfasste Referenz",
+    "Open sibling module files and their saved crate root in a single-target Cargo package": "Öffnen Sie Geschwistermodule und deren gespeicherte Crate-Wurzel in einem Cargo-Paket mit einem Ziel",
+    "Sources, metadata, trust or the Rust server changed; reopen and preview the move": "Quellen, Metadaten, Vertrauen oder Rust-Server wurden geändert; erneut öffnen und prüfen",
+    "rust-analyzer could not establish an unambiguous item identity": "rust-analyzer konnte keine eindeutige Elementidentität bestimmen",
+    "The Rust item move exceeded its time limit": "Zeitlimit für das Verschieben des Rust-Elements überschritten",
+    "The Rust item move exceeded its file, text or identity-request limit": "Datei-, Text- oder Identitätsanfragelimit beim Verschieben überschritten",
+    "Could not read the regular Rust source files for the move": "Reguläre Rust-Quelldateien konnten nicht zum Verschieben gelesen werden"
   }
 }

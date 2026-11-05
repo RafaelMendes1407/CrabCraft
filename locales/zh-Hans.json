@@ -2708,5 +2708,30 @@
     "HTTP script assertion failed": "HTTP 脚本断言失败",
     "HTTP script log limit reached": "已达到 HTTP 脚本日志数量限制",
     "Response script": "响应脚本"
+  },
+  "move_items": {
+    "Move public Rust item…": "移动公共 Rust 项…",
+    "Move public Rust item": "移动公共 Rust 项",
+    "Destination open Rust module": "已打开的目标 Rust 模块",
+    "Preview item move": "预览项移动",
+    "Apply move to buffers": "将移动应用到缓冲区",
+    "Checking Rust item identity and frozen sources…": "正在检查 Rust 项身份和冻结的源代码…",
+    "Frozen move preview: {name}": "冻结的移动预览：{name}",
+    "Moved {name} in two buffers; save or undo each file explicitly": "已在两个缓冲区中移动 {name}；请明确保存或撤销每个文件",
+    "Trust the Rust project, wait for rust-analyzer, and place one caret in a public item": "请信任 Rust 项目，等待 rust-analyzer，并在公共项中放置单个光标",
+    "Open the crate root and both module files first. The crate root must match its saved text.": "请先打开 crate 根文件和两个模块文件。根文件必须与已保存文本一致。",
+    "Moves primitive-only public functions, structs with public fields, enums, constants and type aliases between existing sibling crate modules. The old path remains a re-export.": "在现有同级 crate 模块之间移动仅使用原始类型的公共函数、带公共字段的结构体、枚举、常量和类型别名。旧路径保留为重新导出。",
+    "Unsupported: private items or fields, generics, dependent names, methods, macros, attributes, doc comments, glob imports and multiple Cargo targets. No files are saved automatically.": "不支持私有项或字段、泛型、依赖名称、方法、宏、属性、文档注释、通配导入和多个 Cargo 目标。不会自动保存文件。",
+    "Preview text is limited to 16,384 characters per pane; apply checks every captured buffer and source file again.": "每个预览窗格最多显示 16,384 个字符；应用时会再次检查所有捕获的缓冲区和源文件。",
+    "This item is outside the supported move scope; no changes were made": "此项不在支持的移动范围内；未进行任何更改",
+    "The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused": "无法证明名称独立性或命名空间稳定性；拒绝宏、属性、文档注释和通配导入",
+    "Only pub or pub(crate) items with equally public struct fields can move": "仅可移动 pub 或 pub(crate) 项，结构体字段也必须具有相应的公共可见性",
+    "The destination already contains the item name or a reference that could be captured": "目标已包含该项名称或可能被捕获的引用",
+    "Open sibling module files and their saved crate root in a single-target Cargo package": "请在单目标 Cargo 包中打开同级模块文件及其已保存的 crate 根文件",
+    "Sources, metadata, trust or the Rust server changed; reopen and preview the move": "源代码、元数据、信任状态或 Rust 服务器已更改；请重新打开并预览移动",
+    "rust-analyzer could not establish an unambiguous item identity": "rust-analyzer 无法确定明确的项身份",
+    "The Rust item move exceeded its time limit": "Rust 项移动超时",
+    "The Rust item move exceeded its file, text or identity-request limit": "Rust 项移动超出了文件、文本或身份请求限制",
+    "Could not read the regular Rust source files for the move": "无法读取用于移动的普通 Rust 源文件"
   }
 }

@@ -127,6 +127,9 @@ pub fn frame(body: &str) -> String {
 }
 
 impl Client {
+    /// Whether two handles still address the same language-server connection.
+    pub fn same_connection(&self, other: &Self) -> bool { Arc::ptr_eq(&self.shared, &other.shared) }
+
     /// Starts `program` and talks LSP over its stdin/stdout. Must be called inside the tokio
     /// runtime (`rc_core::Runtime::handle().enter()` or from a task).
     pub fn spawn(program: &Path, args: &[String], cwd: &Path, env: &[(String, String)], incoming: Outbox<Incoming>) -> std::io::Result<Client> {

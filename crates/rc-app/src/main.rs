@@ -47,6 +47,8 @@ mod disk_revert;
 mod disk_watch;
 mod insight;
 mod web_languages;
+mod move_items_core;
+mod move_items;
 mod inspection_profile;
 mod intention_preview;
 mod call_tree;

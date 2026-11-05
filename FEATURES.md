@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 239 |
+| ✅ Pronto | 240 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 6 |
+| ⬜ A fazer | 5 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -185,7 +185,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | R-05 | Extrair variável, constante, função | ✅ | M3 | Extrair variável e função testados com rust-analyzer real |
 | R-06 | Inline de variável e função | ✅ | M3 | Inline de variável testado com rust-analyzer real |
 | R-07 | Mudar assinatura | ⬜ | M4 | |
-| R-08 | Mover itens entre módulos | ⬜ | M4 | |
+| R-08 | Mover itens entre módulos | ✅ | M4 | Movimentação conservadora nativa de funções pub/pub(crate), structs com campos públicos, enums, const e aliases primitivos entre módulos irmãos existentes; re-export mantém caminhos/callers/aliases e visibilidade. AST+identidade RA, prévia congelada de dois buffers, preflight de disco/namespace, cancelamento e undo sem autosave; Cargo+RA+UI reais verificam seis movimentos, impl, enum payload e navegação ao novo local. Dependências/generics/privados/macros/attrs/globs/graphs complexos são recusados explicitamente; [escopo](docs/moving-items.md). |
 | R-09 | Popup Generate (Alt+Insert) | ✅ | M3 | Alt+Insert mostra só as ações que geram código; teste real, atalho não exercido na janela |
 | R-10 | Implementar membros de trait | ✅ | M3 | Implementar membros de trait testado com rust-analyzer real |
 | R-11 | Gerar `derive` | ✅ | M3 | Alt+Insert sobre struct, enum ou union mostra Derive…: marca os traits comuns e outros digitados; junta no #[derive] existente ou cria acima do item. Testado com rust-analyzer real e tree-sitter |

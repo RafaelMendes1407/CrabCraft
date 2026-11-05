@@ -2708,5 +2708,30 @@
     "HTTP script assertion failed": "Échec d’une assertion du script HTTP",
     "HTTP script log limit reached": "Limite de journaux du script HTTP atteinte",
     "Response script": "Script de réponse"
+  },
+  "move_items": {
+    "Move public Rust item…": "Déplacer un élément Rust public…",
+    "Move public Rust item": "Déplacer un élément Rust public",
+    "Destination open Rust module": "Module Rust ouvert de destination",
+    "Preview item move": "Prévisualiser le déplacement",
+    "Apply move to buffers": "Appliquer le déplacement aux tampons",
+    "Checking Rust item identity and frozen sources…": "Vérification de l’identité Rust et des sources figées…",
+    "Frozen move preview: {name}": "Aperçu figé du déplacement : {name}",
+    "Moved {name} in two buffers; save or undo each file explicitly": "{name} déplacé dans deux tampons ; enregistrez ou annulez chaque fichier explicitement",
+    "Trust the Rust project, wait for rust-analyzer, and place one caret in a public item": "Faites confiance au projet Rust, attendez rust-analyzer et placez un curseur dans un élément public",
+    "Open the crate root and both module files first. The crate root must match its saved text.": "Ouvrez d’abord la racine du crate et les deux modules. La racine doit correspondre au texte enregistré.",
+    "Moves primitive-only public functions, structs with public fields, enums, constants and type aliases between existing sibling crate modules. The old path remains a re-export.": "Déplace les fonctions publiques à types primitifs, structures à champs publics, énumérations, constantes et alias entre modules frères existants. L’ancien chemin reste réexporté.",
+    "Unsupported: private items or fields, generics, dependent names, methods, macros, attributes, doc comments, glob imports and multiple Cargo targets. No files are saved automatically.": "Non pris en charge : éléments ou champs privés, génériques, noms dépendants, méthodes, macros, attributs, commentaires de documentation, imports globaux et cibles Cargo multiples. Aucun enregistrement automatique.",
+    "Preview text is limited to 16,384 characters per pane; apply checks every captured buffer and source file again.": "L’aperçu est limité à 16 384 caractères par volet ; l’application revérifie chaque tampon et source capturés.",
+    "This item is outside the supported move scope; no changes were made": "Cet élément dépasse le périmètre pris en charge ; aucune modification effectuée",
+    "The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused": "Le déplacement ne peut prouver l’indépendance des noms ni la stabilité des espaces de noms ; macros, attributs, documentation et imports globaux refusés",
+    "Only pub or pub(crate) items with equally public struct fields can move": "Seuls les éléments pub ou pub(crate) avec des champs de structure également publics sont déplaçables",
+    "The destination already contains the item name or a reference that could be captured": "La destination contient déjà le nom ou une référence susceptible d’être capturée",
+    "Open sibling module files and their saved crate root in a single-target Cargo package": "Ouvrez les modules frères et leur racine de crate enregistrée dans un paquet Cargo à cible unique",
+    "Sources, metadata, trust or the Rust server changed; reopen and preview the move": "Les sources, métadonnées, la confiance ou le serveur Rust ont changé ; rouvrez et prévisualisez",
+    "rust-analyzer could not establish an unambiguous item identity": "rust-analyzer n’a pas pu établir une identité d’élément non ambiguë",
+    "The Rust item move exceeded its time limit": "Le déplacement de l’élément Rust a dépassé le délai",
+    "The Rust item move exceeded its file, text or identity-request limit": "Le déplacement a dépassé la limite de fichiers, texte ou requêtes d’identité",
+    "Could not read the regular Rust source files for the move": "Impossible de lire les fichiers source Rust ordinaires pour le déplacement"
   }
 }
