@@ -447,7 +447,11 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     // ⌘+click: the clicked spot goes into Back/Forward history.
     let navigated_from = out.events.iter().find_map(|e| matches!(e, EditorEvent::NavigateAt(_)).then(|| (doc.path.clone(), doc.editor.caret())));
     let caret_screen = out.caret_rect.map_or(editor_rect.center_top(), |r| r.left_bottom());
-    app.caret_screen = Some(caret_screen);
+    // Popups at the caret (Alt+Enter, completion of actions) follow the active editor only: in
+    // a split the other groups' editors are drawn too, and would move them there.
+    if focused || app.caret_screen.is_none() {
+        app.caret_screen = Some(caret_screen);
+    }
     for ev in out.events {
         match ev {
             EditorEvent::GutterClicked { line } => {

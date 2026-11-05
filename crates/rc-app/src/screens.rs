@@ -3670,3 +3670,51 @@ fn bottom_tool_window_capture() {
     h.run_steps(3);
     h.render().unwrap().save(out.join("bottom-tool-window.png")).unwrap();
 }
+
+/// With two editors side by side, Alt+Enter in the left one opens its list at that caret, and
+/// clicking "Rename to …" there renames the function.
+#[test]
+fn context_actions_open_at_the_active_editor_of_a_split() {
+    use crate::layout::{Drop, Edge};
+    use egui_kittest::kittest::Queryable;
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("demo");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n").unwrap();
+    const MAIN: &str = "mod other;\n\nfn main() {\n    let i = 12;\n    println!(\"{i}\");\n    testeDeEscrita();\n}\n\nfn testeDeEscrita() {}\n";
+    std::fs::write(root.join("src/main.rs"), MAIN).unwrap();
+    std::fs::write(root.join("src/other.rs"), "pub fn other() {}\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let (main, other) = (root.join("src/main.rs"), root.join("src/other.rs"));
+    let mut app = test_app(home.path(), true);
+    app.settings.trusted_projects.push(root.clone());
+    app.open_workspace(&root);
+    app.open_file(&other);
+    app.open_file(&main);
+    let mut h = harness(app, vec2(1600.0, 900.0));
+    h.run_steps(3);
+    // other.rs goes to a group on the right; main.rs stays on the left and is the active one.
+    let other_id = h.state().docs.list[h.state().docs.index_of(&other).unwrap()].editor.id;
+    let group = h.state().layout.group_of(other_id).unwrap();
+    assert!(h.state_mut().layout.move_doc(other_id, Drop::Split { group, edge: Edge::Right }));
+    let i = h.state().docs.index_of(&main).unwrap();
+    h.state_mut().docs.activate(i);
+    run_frames(&mut h, "the case warning", |a| a.docs.list[i].editor.diagnostics.iter().any(|d| d.message.contains("snake_case")));
+    let at = MAIN.rfind("testeDeEscrita").unwrap() + 2;
+    h.state_mut().docs.list[i].editor.set_selection(rc_text::Selection::point(at));
+    h.run_steps(3);
+    let caret = h.state().caret_screen.unwrap();
+    assert!(caret.x < 800.0, "the caret is in the left editor: {caret:?}");
+    h.state_mut().pending.push(rc_editor::Action::ShowIntentions);
+    run_frames(&mut h, "the context actions", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::CodeActions { list, .. }) if !list.is_empty()));
+    let row = h.get_by_label("Rename to teste_de_escrita");
+    let r = row.rect();
+    assert!(r.left() < 800.0 && (r.top() - caret.y).abs() < 40.0, "the list opens at the caret {caret:?}, not at {r:?}");
+    row.click();
+    run_frames(&mut h, "the renamed function", |a| a.docs.list[i].editor.buffer.rope().to_string().contains("fn teste_de_escrita()"));
+    assert!(h.state().docs.list[i].editor.buffer.rope().to_string().contains("    teste_de_escrita();\n"));
+    h.state_mut().insight.stop();
+}
+

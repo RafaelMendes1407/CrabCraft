@@ -2270,7 +2270,11 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         ctx.request_repaint_after(std::time::Duration::from_millis(50));
     }
     let preview = intention_preview(app, ctx, area.response.rect);
-    if ctx.input(|i| i.pointer.any_pressed()) && !area.response.hovered() && !preview.hovered() && chosen.is_none() {
+    // A press outside the list and its preview closes it. `hovered()` is false over the rows (they
+    // are on top of the area), so the rectangles are tested: a press on a row must not close the
+    // list before its click.
+    let inside = |pos: egui::Pos2| area.response.rect.contains(pos) || preview.rect.contains(pos);
+    if ctx.input(|i| i.pointer.any_pressed() && i.pointer.press_origin().is_some_and(|pos| !inside(pos))) && chosen.is_none() {
         close = true;
     }
     if close || chosen.is_some() {
