@@ -440,6 +440,7 @@ impl CrabCraftApp {
             rc_core::WorkspaceKind::Solution(_) | rc_core::WorkspaceKind::Cargo(_) => Vec::new(),
         };
         let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
+        self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
         self.runner.project_env = session.project_env.clone();
         self.insight.set_env(self.runner.project_env_pairs());
         self.cargo_features = clean_features(&session.cargo_features);
@@ -1203,6 +1204,7 @@ impl CrabCraftApp {
             self.settings.trusted_projects.push(root.clone());
             let _ = self.settings.save();
         }
+        self.runner.trusted_project = Some(root.clone());
         self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
     }
 
@@ -1258,6 +1260,10 @@ impl CrabCraftApp {
             None => self.runner.selected_config().cloned(),
         };
         match cfg {
+            Some(RunConfig { name, kind: ConfigKind::WasmPack { manifest } }) => {
+                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
+                self.dialog = Some(Dialog::WasmOptions { name, manifest, options });
+            }
             Some(RunConfig { name, kind: ConfigKind::Cargo { .. } }) => {
                 let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
@@ -2558,6 +2564,9 @@ impl CrabCraftApp {
         self.debug_test = None;
         self.save_all_docs();
         match self.runner.selected_config().cloned() {
+            Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::WasmPack { .. }, .. }) => {
+                self.notify(tr("Debugging wasm-pack configurations is not supported"), false);
+            }
             Some(config) if matches!(config.kind, crate::runner::ConfigKind::Cargo { .. }) => match self.runner.cargo_debug_target(&config) {
                 Some(Ok((cargo, target))) => {
                     let outs = self.debugger.start_cargo(config, cargo, target, &self.docs);

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 175 |
+| ✅ Pronto | 176 |
 | 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 47 |
+| ⬜ A fazer | 46 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -226,7 +226,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | B-13 | Ícones de run na margem (`fn main`, `#[test]`) | ✅ | M2 | Ícones e clique vistos na janela real |
 | B-14 | Seletor de perfil Cargo (dev/release) | ✅ | M3 | Perfil por configuração, na edição da configuração; não há seletor na barra |
 | B-15 | Run Anything (Ctrl duplo) | ✅ | M3 | Comandos Cargo, configurações de execução e histórico; só roda Cargo, não comandos do sistema; visto na janela nativa |
-| B-16 | Configuração wasm-pack | ⬜ | M4 | |
+| B-16 | Configuração wasm-pack | ✅ | M4 | Configuração `wasm-pack: pacote` para membros com target `cdylib` (candidatos, sem presumir compatibilidade wasm), com edição de target JavaScript, dev/release, pasta de saída, features e ambiente, salvos na sessão. Run transmite a saída em segundo plano e oferece Stop/Rerun; exige projeto confiável. Usa `--mode no-install --no-opt`, sem instalar ferramentas ou targets automaticamente. Testado com wasm-pack 0.15.1 e wasm-bindgen 0.2.130 num crate Rust real: bloqueio antes de confiar, geração de `.wasm`/JS para `web` com feature e pasta com espaços, Rerun e Stop de build.rs. Ver docs/wasm-pack.md. Fora: servir navegador, wasm-opt, test/pack/publish, perfis Cargo personalizados e projetos anexados |
 | B-17 | Backtrace configurável (`RUST_BACKTRACE`) | ✅ | M3 | short, full ou 0 na configuração; o ambiente da configuração tem prioridade |
 | B-18 | Links clicáveis em stack traces | ✅ | M2 | Clique simples no console abre o arquivo na linha e coluna; panic real clicado na janela nativa |
 | B-19 | Tarefas antes do launch | ✅ | M3 | Configuração Cargo › Antes de executar: ferramentas externas marcadas rodam antes do build, na ordem em que foram marcadas, também ao depurar; a saída vai para a janela Run (ou o console do depurador) e uma que falha (ou some, ou tem macro sem valor) impede a execução com o motivo. Testado com Cargo real; captura conferida. Falta: tarefas que não sejam ferramentas externas |

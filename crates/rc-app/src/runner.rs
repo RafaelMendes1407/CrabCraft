@@ -1,6 +1,9 @@
 //! Build, run and test: run configurations derived from the solution, the processes they
 //! start (through rc-dotnet) and their consoles, and the test markers of the editor gutter.
 
+#[path = "wasm_pack.rs"]
+pub(crate) mod wasm_pack;
+
 use rc_core::{Inbox, Waker};
 use rc_dotnet::{BuildAction, BuildEvent, BuildRequest, BuildResult, Dotnet, OpHandle, OutputLine, ProjectInfo, RunEvent, RunHandle, RunRequest, Solution, Stream, TestEvent, TestFilter, TestOutcome, TestRequest, TestResult};
 use rc_kit::i18n::{tr, trf};
@@ -19,6 +22,8 @@ pub enum ConfigKind {
     Compound { members: Vec<String> },
     /// A binary of a Cargo package.
     Cargo { package: String, bin: String },
+    /// Builds a cdylib package with wasm-pack (does not launch a browser).
+    WasmPack { manifest: PathBuf },
     /// An external tool of the settings, started as it is (never listed as a configuration).
     External { tool: String },
     /// A command the IDE runs for the user (`rustup update`…), started again by Rerun.
@@ -41,7 +46,7 @@ pub struct RunConfig {
 impl RunConfig {
     pub fn icon(&self) -> rc_kit::Ico {
         match &self.kind {
-            ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
+            ConfigKind::WasmPack { .. } | ConfigKind::App { web: true, .. } => rc_kit::ico::CONFIG_WEB,
             ConfigKind::App { .. } | ConfigKind::Cargo { .. } => rc_kit::ico::CONFIG_APP,
             ConfigKind::Tests { .. } => rc_kit::ico::RUN_ALL,
             ConfigKind::TestSelection { .. } => rc_kit::ico::TEST_UNKNOWN,
@@ -260,6 +265,8 @@ pub struct Runner {
     cargo: Option<rc_cargo::Cargo>,
     /// The open Rust workspace.
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
+    /// Set from the application trust store, never from project session files.
+    pub trusted_project: Option<PathBuf>,
     /// Compound configurations of the workspace (name, member names), kept in the session.
     pub compounds: Vec<(String, Vec<String>)>,
     /// Saved test configurations (from the session).
@@ -282,7 +289,7 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, dotnet: None, cargo: None, cargo_workspace: None, trusted_project: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
     }
 
     /// Builds the run configurations of a workspace: executable projects (one per launch
@@ -336,6 +343,9 @@ impl Runner {
         let selected = self.selected_config().map(|c| c.name.clone());
         self.cargo = rc_cargo::Cargo::locate();
         self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
+        for package in workspace.packages.iter().filter(|p| p.cdylib) {
+            self.configs.push(RunConfig { name: format!("wasm-pack: {}", package.name), kind: ConfigKind::WasmPack { manifest: package.manifest.clone() } });
+        }
         self.configs.push(RunConfig { name: tr("All Tests").to_string(), kind: ConfigKind::Tests { target: workspace.manifest.clone() } });
         self.cargo_workspace = Some(workspace);
         self.insert_attached_configs();
@@ -360,6 +370,7 @@ impl Runner {
 
     pub fn clear(&mut self) {
         self.cargo_workspace = None;
+        self.trusted_project = None;
         self.configs.clear();
         self.temporary.clear();
         self.attached.clear();
@@ -451,6 +462,7 @@ impl Runner {
         match cfg.kind.clone() {
             ConfigKind::App { .. } => self.run_app(cfg),
             ConfigKind::Cargo { package, bin } => self.run_cargo(cfg, package, bin),
+            ConfigKind::WasmPack { manifest } => self.run_wasm_pack(cfg, &manifest),
             ConfigKind::Tests { target } => self.run_tests(&target, None),
             ConfigKind::TestSelection { target, filter } => self.run_tests(&target, Some(filter)),
             // Tools start from their menu, with the file and caret of that moment.
@@ -790,6 +802,18 @@ impl Runner {
             return cfg.name.clone();
         }
         (2..).map(|n| format!("{} ({n})", cfg.name)).find(|n| !taken.contains(&n.as_str())).unwrap_or_else(|| cfg.name.clone())
+    }
+
+    fn run_wasm_pack(&mut self, config: RunConfig, manifest: &Path) -> Vec<RunnerOutput> {
+        let trusted = self.cargo_workspace.as_ref().is_some_and(|w| self.trusted_project.as_ref() == Some(&w.root) && w.packages.iter().any(|p| p.manifest == manifest));
+        if !trusted {
+            return vec![RunnerOutput::Notify(tr("Trust this Cargo project before running wasm-pack").into(), true)];
+        }
+        let options = self.options.get(&config.name).cloned().unwrap_or_default();
+        match wasm_pack::plan(manifest, &options, self.project_env_pairs()) {
+            Ok(plan) => self.run_process(config, plan),
+            Err(error) => vec![RunnerOutput::Notify(error.to_string(), true)],
+        }
     }
 
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.

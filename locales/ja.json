@@ -1791,5 +1791,16 @@
     "Template generation cancelled": "テンプレートの生成をキャンセルしました",
     "The template did not create a Cargo.toml in {path}": "テンプレートは {path} に Cargo.toml を作成しませんでした",
     "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "cargo-generate が見つかりません。インストール: cargo install --locked cargo-generate"
+  },
+  "wasm_pack": {
+    "Trust this Cargo project before running wasm-pack": "wasm-pack を実行する前にこの Cargo プロジェクトを信頼してください",
+    "Choose a supported wasm-pack target": "対応する wasm-pack ターゲットを選択してください",
+    "Invalid Cargo feature names": "Cargo feature 名が無効です",
+    "Builds WebAssembly and JavaScript bindings; does not start a browser or publish a package.": "WebAssembly と JavaScript バインディングをビルドします。ブラウザーの起動やパッケージの公開は行いません。",
+    "JavaScript target": "JavaScript ターゲット",
+    "Output directory": "出力ディレクトリ",
+    "Development build (otherwise release)": "開発ビルド（それ以外はリリース）",
+    "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "wasm-pack、wasm-bindgen、wasm32-unknown-unknown ターゲットが必要です。ツールは自動インストールされません。wasm-opt は無効です。",
+    "Debugging wasm-pack configurations is not supported": "wasm-pack 構成のデバッグには対応していません"
   }
 }

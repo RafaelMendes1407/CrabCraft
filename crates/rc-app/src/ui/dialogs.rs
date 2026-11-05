@@ -99,6 +99,7 @@ pub enum Dialog {
     /// Every breakpoint and its group (D-27): the selected one and the group name being typed.
     Breakpoints { selected: Option<(PathBuf, usize)>, group: String },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
+    WasmOptions { name: String, manifest: PathBuf, options: rc_core::session::RunOptions },
     RunOptions { name: String, project: PathBuf, profiles: Vec<String>, options: rc_core::session::RunOptions, web: bool },
     /// A compound run configuration: its name and which applications it starts.
     Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
@@ -174,6 +175,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
+        Dialog::WasmOptions { name, manifest, options } => wasm_options(app, ctx, name, manifest, options),
         Dialog::RunOptions { name, project, profiles, options, web } => run_options(app, ctx, name, project, profiles, options, *web),
         Dialog::LocalHistory(v) => local_history(app, ctx, v),
         Dialog::ProjectEnv { text } => project_env(app, ctx, text),
@@ -1120,6 +1122,46 @@ fn project_env(app: &mut CrabCraftApp, ctx: &Context, text: &mut String) -> Outc
     });
     if ok && parsed.is_ok() {
         app.set_project_env(text.trim().to_string());
+        return Outcome::Close;
+    }
+    if cancel || esc { Outcome::Close } else { Outcome::Keep }
+}
+
+fn wasm_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, manifest: &std::path::Path, options: &mut rc_core::session::RunOptions) -> Outcome {
+    let valid = crate::runner::wasm_pack::plan(manifest, options, Vec::new());
+    let ((ok, cancel), esc) = modal(ctx, "wasm_options", 560.0, |ui| {
+        title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
+        ui.label(manifest.display().to_string());
+        ui.label(tr("Builds WebAssembly and JavaScript bindings; does not start a browser or publish a package."));
+        egui::Grid::new("wasm_options_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+            ui.label(tr("JavaScript target"));
+            let shown = if options.wasm_target.is_empty() { "bundler" } else { options.wasm_target.as_str() };
+            egui::ComboBox::from_id_salt("wasm_target").selected_text(shown).show_ui(ui, |ui| {
+                for target in crate::runner::wasm_pack::TARGETS {
+                    ui.selectable_value(&mut options.wasm_target, target.to_string(), *target);
+                }
+            });
+            ui.end_row();
+            ui.label(tr("Output directory"));
+            ui.add(egui::TextEdit::singleline(&mut options.wasm_out_dir).hint_text("pkg").desired_width(350.0));
+            ui.end_row();
+            ui.label(tr("Features"));
+            ui.add(egui::TextEdit::singleline(&mut options.features).hint_text("serde,logging").desired_width(350.0));
+            ui.end_row();
+            ui.label(tr("Environment variables"));
+            ui.add(egui::TextEdit::multiline(&mut options.env).hint_text("CARGO_NET_OFFLINE=true").desired_width(350.0).desired_rows(3));
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut options.wasm_dev, tr("Development build (otherwise release)"));
+            ui.end_row();
+        });
+        ui.label(tr("Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled."));
+        if let Err(error) = &valid { ui.colored_label(rc_kit::pal(ui).error, error.to_string()); }
+        buttons(ui, tr("OK"), valid.is_ok())
+    });
+    if ok {
+        app.runner.options.insert(name.to_string(), options.clone());
+        app.session_dirty = true;
         return Outcome::Close;
     }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }

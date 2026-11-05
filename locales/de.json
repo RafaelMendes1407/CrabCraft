@@ -1791,5 +1791,16 @@
     "Template generation cancelled": "Vorlagenerstellung abgebrochen",
     "The template did not create a Cargo.toml in {path}": "Die Vorlage hat keine Cargo.toml in {path} erstellt",
     "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "cargo-generate nicht gefunden. Installation: cargo install --locked cargo-generate"
+  },
+  "wasm_pack": {
+    "Trust this Cargo project before running wasm-pack": "Diesem Cargo-Projekt vor dem Ausführen von wasm-pack vertrauen",
+    "Choose a supported wasm-pack target": "Ein unterstütztes wasm-pack-Ziel wählen",
+    "Invalid Cargo feature names": "Ungültige Cargo-Feature-Namen",
+    "Builds WebAssembly and JavaScript bindings; does not start a browser or publish a package.": "Erstellt WebAssembly und JavaScript-Bindings; startet keinen Browser und veröffentlicht kein Paket.",
+    "JavaScript target": "JavaScript-Ziel",
+    "Output directory": "Ausgabeverzeichnis",
+    "Development build (otherwise release)": "Entwicklungsbuild (sonst Release)",
+    "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "Erfordert wasm-pack, wasm-bindgen und das Target wasm32-unknown-unknown. Werkzeuge werden nie automatisch installiert; wasm-opt ist deaktiviert.",
+    "Debugging wasm-pack configurations is not supported": "Das Debuggen von wasm-pack-Konfigurationen wird nicht unterstützt"
   }
 }

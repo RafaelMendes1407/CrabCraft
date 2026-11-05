@@ -1791,5 +1791,16 @@
     "Template generation cancelled": "模板生成已取消",
     "The template did not create a Cargo.toml in {path}": "模板未在 {path} 中创建 Cargo.toml",
     "cargo-generate was not found. Install it with: cargo install --locked cargo-generate": "未找到 cargo-generate。安装命令：cargo install --locked cargo-generate"
+  },
+  "wasm_pack": {
+    "Trust this Cargo project before running wasm-pack": "运行 wasm-pack 前请先信任此 Cargo 项目",
+    "Choose a supported wasm-pack target": "请选择受支持的 wasm-pack 目标",
+    "Invalid Cargo feature names": "Cargo feature 名称无效",
+    "Builds WebAssembly and JavaScript bindings; does not start a browser or publish a package.": "构建 WebAssembly 和 JavaScript 绑定；不会启动浏览器或发布软件包。",
+    "JavaScript target": "JavaScript 目标",
+    "Output directory": "输出目录",
+    "Development build (otherwise release)": "开发构建（否则为发布构建）",
+    "Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled.": "需要 wasm-pack、wasm-bindgen 和 wasm32-unknown-unknown 目标。不会自动安装工具；wasm-opt 已禁用。",
+    "Debugging wasm-pack configurations is not supported": "不支持调试 wasm-pack 配置"
   }
 }
