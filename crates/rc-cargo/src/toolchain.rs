@@ -432,12 +432,23 @@ mod tests {
     #[test]
     fn neutral_probes_select_the_user_default_and_leave_the_launch_directory() {
         use std::os::unix::fs::PermissionsExt;
+        use std::io::Write;
+        // Concurrent forks can inherit writable script descriptors until exec,
+        // causing ETXTBSY. Write in a child and wait before executing the fixture.
+        fn write_script(path: &Path, text: &str) -> std::io::Result<()> {
+            let mut child = std::process::Command::new("/bin/sh")
+                .args(["-c", "cat > \"$1\"", "probe-fixture"])
+                .arg(path).stdin(std::process::Stdio::piped()).spawn()?;
+            child.stdin.take().unwrap().write_all(text.as_bytes())?;
+            if child.wait()?.success() { Ok(()) }
+            else { Err(std::io::Error::other("fixture script writer failed")) }
+        }
         let tools = tempfile::tempdir().unwrap();
         let rustup = tools.path().join("rustup");
-        std::fs::write(&rustup, "#!/bin/sh\n[ \"$1\" = default ] || exit 1\n[ -z \"$RUSTUP_TOOLCHAIN\" ] || exit 2\nprintf 'safe-default (default)\\n'\n").unwrap();
+        write_script(&rustup, "#!/bin/sh\n[ \"$1\" = default ] || exit 1\n[ -z \"$RUSTUP_TOOLCHAIN\" ] || exit 2\nprintf 'safe-default (default)\\n'\n").unwrap();
         std::fs::set_permissions(&rustup, std::fs::Permissions::from_mode(0o755)).unwrap();
         let cargo = tools.path().join("cargo");
-        std::fs::write(&cargo, "#!/bin/sh\n[ \"$RUSTUP_TOOLCHAIN\" = safe-default ] || exit 3\n[ \"$RUSTUP_AUTO_INSTALL\" = 0 ] || exit 4\nprintf '%s\\n' \"$PWD\"\n").unwrap();
+        write_script(&cargo, "#!/bin/sh\n[ \"$RUSTUP_TOOLCHAIN\" = safe-default ] || exit 3\n[ \"$RUSTUP_AUTO_INSTALL\" = 0 ] || exit 4\nprintf '%s\\n' \"$PWD\"\n").unwrap();
         std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
         let output = neutral_output(&cargo, &["--version"]).unwrap();
         assert!(output.status.success());
