@@ -19,6 +19,8 @@ pub enum KeymapChoice {
     /// Rider's default for the platform (macOS or Windows/Linux).
     #[default]
     Rider,
+    /// RustRover Windows/Linux shortcuts, compared against the public reference.
+    RustRover,
     VisualStudio,
     /// VS Code's default for the platform.
     VsCode,

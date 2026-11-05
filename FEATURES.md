@@ -25,8 +25,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 196 |
-| 🚧 Em andamento | 9 |
-| 🟢 Herdado | 7 |
+| 🚧 Em andamento | 10 |
+| 🟢 Herdado | 6 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 41 |
 | 🚫 Fora do escopo | 5 |
@@ -91,7 +91,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-04 | Realce semântico (tipos inferidos, macros, `unsafe`) | ✅ | M1 | Tokens semânticos do rust-analyzer; testado |
 | E-05 | Dobramento de código | ✅ | M1 | Itens, `match`, macros e comentários; testado no parser real |
 | E-06 | Múltiplos cursores e seleção | ✅ | M1 | Teste nativo headless em projeto Cargo real: Ctrl+D seleciona três ocorrências, digitação altera todas, Ctrl+Z/Ctrl+Shift+Z desfaz/refaz em grupo, Escape reduz a um cursor, Ctrl+Alt+Down clona na linha seguinte e Ctrl+Shift+L seleciona todas; texto Unicode antes das posições. Rust resultante compilado com rustc real (`editor_rust_audit::native_multicursor_occurrences_type_undo_redo_and_collapse_on_rust`) |
-| E-07 | Colchetes pareados e fechamento automático | ✅ | M1 | Testes nativos headless em projetos Cargo: ()/[]/{}/aspas duplas fecham automaticamente, digitar o fechamento existente avança, parser Rust encontra os pares; lifetimes, labels, char Unicode e closures com parâmetros/|| produzem Rust compilável. Corrigido: pareamento genérico deixava apóstrofo extra em &'a; em Rust o apóstrofo é literal (wrapping de seleção e avanço sobre fechamento existente preservados). Pipes são literais. Resultados compilados com rustc real; ver docs/rust-editor-audit.md |
+| E-07 | Colchetes pareados e fechamento automático | ✅ | M1 | Testes nativos headless em projetos Cargo: ()/[]/{}/aspas duplas fecham automaticamente, digitar o fechamento existente avança, parser Rust encontra os pares; lifetimes, labels, char Unicode e closures com parâmetros/\|\| produzem Rust compilável. Corrigido: pareamento genérico deixava apóstrofo extra em &'a; em Rust o apóstrofo é literal (wrapping de seleção e avanço sobre fechamento existente preservados). Pipes são literais. Resultados compilados com rustc real; ver docs/rust-editor-audit.md |
 | E-08 | Comentar linha/bloco | ✅ | M1 | `//` e `/* */` em Rust, `#` em TOML; testado |
 | E-09 | Sticky lines | ✅ | M3 | Até 5 linhas de abertura dos blocos em volta do topo (dobras do tree-sitter) ficam fixas; clique leva à linha; opção em Configurações > Editor. Teste de UI em código Rust e captura conferida |
 | E-10 | Zoom do editor e da IDE | ✅ | M1 | Teste headless num projeto Cargo real: ações Zoom In/Out/Reset alteram o fator efetivo do egui; preferências aplicam fonte do editor de 21 pt e zoom da IDE de 140%, persistidos nas configurações, sem alterar buffer nem arquivo Rust. Zoom global segue os atalhos do keymap; fonte do editor muda em Configurações. Não há zoom independente do editor pela roda do mouse |
@@ -360,7 +360,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | --- | --- | --- | --- | --- |
 | G-01 | Layout New UI: ilhas e faixas de tool windows | 🟢 | M1 | |
 | G-02 | Tela de boas-vindas e projetos recentes | ✅ | M1 | Abre pasta ou `Cargo.toml`; tela vista no app |
-| G-03 | Keymaps | 🟢 | M1 | Rider (macOS e Windows/Linux), Visual Studio e VS Code (macOS e Windows/Linux, atalhos padrão da referência pública do VS Code; acordes de duas etapas como Ctrl+K Ctrl+S ainda não existem). VS Code testado headless: Ctrl+P, Ctrl+Shift+P e Ctrl+D. Falta o keymap do RustRover: o herdado é o do Rider |
+| G-03 | Keymaps | 🚧 | M1 | Perfis Rider, Visual Studio e VS Code mantidos. Novo RustRover (Windows/Linux), comparado com documentação pública: Ctrl+P para parâmetros, Ctrl+Shift+R para substituir em arquivos, run/debug/steps/breakpoints e atalhos de navegação/edição; 26 vínculos e colisões testados. Teste nativo num projeto Cargo seleciona o perfil, persiste e usa busca de ações/arquivos sem iniciar código; fonte Rust compilada. Não é comparação do produto instalado nem alegação de paridade. Falta: perfil RustRover macOS (opção Windows/Linux visivelmente desabilitada lá), Complete Current Statement e acordes de duas etapas. Fontes e limites em docs/rust-keymap.md. |
 | G-04 | Configurar atalhos | ✅ | M3 | Configurações › Keymap › Atalhos: cada ação do Find Action com seu atalho; Gravar atalho captura a próxima tecla com modificadores (Esc cancela), Remover deixa sem atalho e Restaurar volta ao do keymap; o atalho tomado sai da outra ação; guardado nas configurações e aplicado sem reiniciar. Teste headless. Falta: ações de edição fora do Find Action |
 | G-05 | Interface em vários idiomas (inclui pt-BR) | 🟢 | M1 | Traduções mantidas em sete locales além do inglês; teste de unicidade e placeholders corrigido: Profile de inspeções usa contexto próprio, distinto da ação de profiler. Auditoria de toda a interface em projetos Rust ainda pendente. |
 | G-06 | Backup e sincronização de configurações | 🚧 | M6 | Configurações › Backup de preferências exporta/importa JSON versionado (até 1 MB), com prévia das categorias, aplicação no rascunho e confirmação em OK. Diálogos e disco numa thread; cancelável; gravação atômica. Inclui aparência, editor, modelos, atalhos e níveis de inspeção; confiança, caminhos, histórico, programas e ambiente permanecem locais. Campos fora da lista permitida, números fora dos limites e versões desconhecidas são recusados. Testes de ida/volta, entradas hostis e UI num workspace Cargo real comprovam prévia antes de aplicar e preservação da confiança. Falta: sincronização entre máquinas/nuvem. Leitura recusa arquivos especiais e verifica o descritor aberto; no Unix, a abertura não bloqueia em FIFOs mesmo com troca do caminho. |

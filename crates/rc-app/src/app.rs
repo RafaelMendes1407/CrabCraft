@@ -3449,6 +3449,7 @@ pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> V
 
 pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
     match choice {
+        KeymapChoice::RustRover => KeymapKind::RustRover,
         KeymapChoice::VisualStudio => KeymapKind::VisualStudio,
         KeymapChoice::VsCode if cfg!(target_os = "macos") => KeymapKind::VsCodeMac,
         KeymapChoice::VsCode => KeymapKind::VsCode,

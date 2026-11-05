@@ -1953,5 +1953,9 @@
     "Replacement cancelled; completed changes are kept": "置換をキャンセルしました。完了した変更は保持されます",
     "Replacement errors (first 100)": "置換エラー（最初の100件）",
     "Narrow the search before replacing truncated results": "切り詰められた結果を置換する前に検索範囲を絞ってください"
+  },
+  "keymap": {
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "このショートカット設定は Windows と Linux 向けです。macOS では Rider または VS Code を選択してください。",
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
   }
 }

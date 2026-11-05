@@ -1953,5 +1953,9 @@
     "Replacement cancelled; completed changes are kept": "Sustitución cancelada; se conservan los cambios completados",
     "Replacement errors (first 100)": "Errores de sustitución (primeros 100)",
     "Narrow the search before replacing truncated results": "Acota la búsqueda antes de sustituir resultados truncados"
+  },
+  "keymap": {
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "Este perfil de atajos es para Windows y Linux; elige Rider o VS Code para macOS.",
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
   }
 }

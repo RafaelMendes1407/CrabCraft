@@ -1953,5 +1953,9 @@
     "Replacement cancelled; completed changes are kept": "替换已取消；已完成的更改会保留",
     "Replacement errors (first 100)": "替换错误（前 100 个）",
     "Narrow the search before replacing truncated results": "请缩小搜索范围后再替换截断的结果"
+  },
+  "keymap": {
+    "This shortcut profile targets Windows and Linux; choose Rider or VS Code for macOS.": "此快捷键配置适用于 Windows 和 Linux；macOS 请选用 Rider 或 VS Code。",
+    "RustRover (Windows/Linux)": "RustRover (Windows/Linux)"
   }
 }

@@ -267,6 +267,8 @@ pub enum KeymapKind {
     RiderMac,
     /// Rider's default keymap on Windows/Linux.
     Rider,
+    /// RustRover Windows/Linux reference shortcuts.
+    RustRover,
     /// Visual Studio keymap (Windows).
     VisualStudio,
     /// VS Code's default shortcuts on macOS.
@@ -304,6 +306,7 @@ impl Keymap {
         let bindings = match kind {
             KeymapKind::RiderMac => mac_bindings(),
             KeymapKind::Rider => win_bindings(false),
+            KeymapKind::RustRover => rustrover_bindings(),
             KeymapKind::VisualStudio => win_bindings(true),
             KeymapKind::VsCodeMac => vscode_bindings(true),
             KeymapKind::VsCode => vscode_bindings(false),
@@ -613,6 +616,41 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
         b(Key::Minus, ca, ZoomOut),
         b(Key::Num0, ca, ZoomReset),
     ]
+}
+
+/// Functional shortcut facts from the public RustRover help; no reference-card assets are
+/// distributed. Extra editing commands keep the existing IntelliJ-style bindings.
+fn rustrover_bindings() -> Vec<(Chord, Action)> {
+    use Action::*;
+    let mut bindings = win_bindings(false);
+    let none = m(false, false, false, false);
+    let shift = m(false, false, true, false);
+    let ctrl = m(false, true, false, false);
+    let ctrl_shift = m(false, true, true, false);
+    let alt = m(true, false, false, false);
+    let alt_shift = m(true, false, true, false);
+    let ctrl_alt = m(true, true, false, false);
+    // Clear every displaced action/chord together before adding the primary bindings.
+    let overrides = [
+        (Chord { key: Key::P, mods: ctrl }, ParameterInfo),
+        (Chord { key: Key::F6, mods: shift }, Rename),
+        (Chord { key: Key::R, mods: ctrl_shift }, ReplaceInFiles),
+        (Chord { key: Key::F10, mods: shift }, Run),
+        (Chord { key: Key::F9, mods: shift }, Debug),
+        (Chord { key: Key::F2, mods: ctrl }, StopRun),
+        (Chord { key: Key::F9, mods: none }, Resume),
+        (Chord { key: Key::F8, mods: ctrl }, ToggleBreakpoint),
+        (Chord { key: Key::F8, mods: none }, StepOver),
+        (Chord { key: Key::F7, mods: none }, StepInto),
+        (Chord { key: Key::F8, mods: shift }, StepOut),
+        (Chord { key: Key::F9, mods: alt }, RunToCursor),
+        (Chord { key: Key::F7, mods: alt_shift }, ForceStepInto),
+        (Chord { key: Key::F8, mods: alt_shift }, ForceStepOver),
+        (Chord { key: Key::F9, mods: ctrl_alt }, ForceRunToCursor),
+    ];
+    bindings.retain(|(chord, action)| !overrides.iter().any(|(new_chord, new_action)| chord == new_chord || action == new_action));
+    bindings.extend(overrides);
+    bindings
 }
 
 fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
@@ -1003,8 +1041,33 @@ mod tests {
     }
 
     #[test]
+    fn rustrover_shortcuts_match_the_compared_windows_reference() {
+        let map = Keymap::new(KeymapKind::RustRover);
+        for (action, shortcut) in [
+            (Action::FindAction, "Ctrl+Shift+A"), (Action::ShowIntentions, "Alt+Enter"),
+            (Action::NextError, "F2"), (Action::PreviousError, "Shift+F2"),
+            (Action::RecentFiles, "Ctrl+E"), (Action::Reformat, "Ctrl+Alt+L"),
+            (Action::RefactorThis, "Ctrl+Alt+Shift+T"), (Action::ExtendSelection, "Ctrl+W"),
+            (Action::ShrinkSelection, "Ctrl+Shift+W"), (Action::CommentLine, "Ctrl+/"),
+            (Action::CommentBlock, "Ctrl+Shift+/"), (Action::GotoDeclaration, "Ctrl+B"),
+            (Action::FindUsages, "Alt+F7"), (Action::ParameterInfo, "Ctrl+P"),
+            (Action::ReplaceInFiles, "Ctrl+Shift+R"), (Action::Rename, "Shift+F6"),
+            (Action::Run, "Shift+F10"), (Action::Debug, "Shift+F9"),
+            (Action::StopRun, "Ctrl+F2"), (Action::Resume, "F9"),
+            (Action::ToggleBreakpoint, "Ctrl+F8"), (Action::StepOver, "F8"),
+            (Action::StepInto, "F7"), (Action::StepOut, "Shift+F8"),
+            (Action::RunToCursor, "Alt+F9"), (Action::ForceRunToCursor, "Ctrl+Alt+F9"),
+        ] {
+            assert_eq!(map.shortcut_text(action).as_deref(), Some(shortcut), "{action:?}");
+        }
+        assert_eq!(map.lookup(Key::F5, m(false, false, false, false)), None);
+        assert_eq!(map.lookup(Key::P, m(false, true, false, false)), Some(Action::ParameterInfo));
+        assert_eq!(map.lookup(Key::R, m(false, true, true, false)), Some(Action::ReplaceInFiles));
+    }
+
+    #[test]
     fn no_chord_is_bound_twice() {
-        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
+        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::RustRover, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
             let k = Keymap::new(kind);
             for (i, (a, _)) in k.bindings.iter().enumerate() {
                 for (b, act) in &k.bindings[i + 1..] {

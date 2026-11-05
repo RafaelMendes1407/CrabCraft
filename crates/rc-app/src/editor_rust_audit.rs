@@ -247,3 +247,42 @@ fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
     compile(&path);
     assert!(h.state().insight.session.is_none());
 }
+
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn rust_reference_keymap_is_selected_and_routes_native_actions_in_a_cargo_project() {
+    use egui_kittest::kittest::Queryable;
+    use crate::ui::dialogs::SettingsPage;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let source = "fn main() {\n    let answer = 42;\n    assert_eq!(answer, 42);\n}\n";
+    let (dir, path) = project(source);
+    let home = tempfile::tempdir().unwrap();
+    let mut app = crate::screens::test_app(home.path(), true);
+    app.open_workspace(dir.path());
+    app.open_file(&path);
+    app.open_settings(SettingsPage::Keymap);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.get_by(|node| node.value().as_deref() == Some("Rider")).click();
+    h.run_steps(2);
+    h.get_by_label(rc_kit::i18n::tr("RustRover (Windows/Linux)")).click();
+    h.run_steps(2);
+    h.get_by_label(rc_kit::i18n::tr("OK")).click();
+    h.run_steps(3);
+    assert_eq!(h.state().settings.keymap, rc_core::settings::KeymapChoice::RustRover);
+    assert_eq!(h.state().keymap.kind, rc_editor::KeymapKind::RustRover);
+    assert_eq!(rc_core::Settings::load().keymap, rc_core::settings::KeymapChoice::RustRover);
+    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::A);
+    h.run_steps(3);
+    assert_eq!(h.state().search_everywhere.as_ref().unwrap().tab, crate::search::SeTab::Actions);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::N);
+    h.run_steps(3);
+    assert_eq!(h.state().search_everywhere.as_ref().unwrap().tab, crate::search::SeTab::Files);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), source);
+    assert!(h.state().insight.session.is_none());
+    compile(&path);
+}
