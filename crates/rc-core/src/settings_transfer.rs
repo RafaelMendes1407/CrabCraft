@@ -67,7 +67,12 @@ impl Backup {
         let metadata = std::fs::metadata(path).map_err(TransferError::Io)?;
         if !metadata.is_file() { return Err(TransferError::Invalid); }
         if metadata.len() > MAX_BYTES as u64 { return Err(TransferError::TooLarge); }
-        let file = std::fs::File::open(path).map_err(TransferError::Io)?;
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+        let file = options.open(path).map_err(TransferError::Io)?;
+        if !file.metadata().map_err(TransferError::Io)?.is_file() { return Err(TransferError::Invalid); }
         let mut bytes = Vec::new();
         file.take((MAX_BYTES + 1) as u64).read_to_end(&mut bytes).map_err(TransferError::Io)?;
         if bytes.len() > MAX_BYTES { return Err(TransferError::TooLarge); }

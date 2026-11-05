@@ -3573,6 +3573,7 @@ dependencies = [
  "crossbeam-channel",
  "dirs",
  "globset",
+ "libc",
  "notify",
  "parking_lot",
  "serde",

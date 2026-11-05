@@ -48,8 +48,14 @@ impl HttpCommand {
         let metadata = std::fs::metadata(&self.file).map_err(Error::Io)?;
         if !metadata.is_file() { return Err(Error::NotFile); }
         if metadata.len() > http_client::MAX_BODY_BYTES as u64 { return Err(Error::TooLarge); }
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+        let file = options.open(&self.file).map_err(Error::Io)?;
+        if !file.metadata().map_err(Error::Io)?.is_file() { return Err(Error::NotFile); }
         let mut text = String::new();
-        std::fs::File::open(&self.file).map_err(Error::Io)?.take((http_client::MAX_BODY_BYTES + 1) as u64).read_to_string(&mut text).map_err(Error::Io)?;
+        file.take((http_client::MAX_BODY_BYTES + 1) as u64).read_to_string(&mut text).map_err(Error::Io)?;
         if text.len() > http_client::MAX_BODY_BYTES { return Err(Error::TooLarge); }
         let requests = rc_syntax::http::parse_requests(&text);
         if self.request.is_none() && requests.len() > 1 { return Err(Error::SelectRequest); }

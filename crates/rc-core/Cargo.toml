@@ -16,3 +16,6 @@ parking_lot = "0.12"
 globset = "0.4.20"
 
 tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
