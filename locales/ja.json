@@ -2169,5 +2169,8 @@
     "Database error: {error}": "データベースエラー: {error}",
     "Database": "データベース",
     "Connect to a SQLite database explicitly": "SQLite データベースに明示的に接続してください"
+  },
+  "crate_lookup": {
+    "Look up crate…": "クレートを検索…"
   }
 }

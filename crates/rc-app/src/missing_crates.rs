@@ -44,6 +44,8 @@ pub struct Proposal {
     pub scope: Scope,
     pub local: Option<PathBuf>,
     pub pasted: bool,
+    /// A syntactic crate root outside the local catalog needs an explicit registry search.
+    pub lookup: bool,
 }
 #[derive(Default)]
 pub struct Report {
@@ -427,11 +429,12 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
                     })
             })
             .collect();
-        let (name, local_path) =
+        let (name, local_path, lookup) =
             if local.len() == 1 && local[0].package.name.replace('-', "_") == *key {
                 (
                     local[0].package.name.clone(),
                     local[0].package.manifest.parent().map(Path::to_path_buf),
+                    false,
                 )
             } else if !local.is_empty() {
                 notice(
@@ -443,7 +446,13 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
                 );
                 continue;
             } else if let Some((_, package)) = CATALOG.iter().find(|(root, _)| root == key) {
-                (package.to_string(), None)
+                (package.to_string(), None, false)
+            } else if !references.glob && rc_cargo::valid_crate_name(key)
+                && key.bytes().next().is_some_and(|c| c.is_ascii_lowercase())
+            {
+                // Import roots normalize package hyphens to underscores. They are search
+                // terms, not an asserted registry identity: require selecting a search hit.
+                (key.clone(), None, true)
             } else {
                 continue;
             };
@@ -482,6 +491,7 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
             package: owner.package.name.clone(),
             scope,
             local: local_path,
+            lookup,
             pasted: paste
                 .is_some_and(|(start, end)| reference.start < end && reference.end > start),
         });
@@ -505,7 +515,7 @@ pub fn banner(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
                     ("scope", &proposal.scope.table()),
                 ],
             ));
-            if ui.button(tr("Review dependency…")).clicked() {
+            if ui.button(if proposal.lookup { tr("Look up crate…") } else { tr("Review dependency…") }).clicked() {
                 selected = Some(proposal.clone());
             }
         });
@@ -520,6 +530,7 @@ pub fn banner(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
             proposal.scope,
             proposal.local.as_deref(),
         );
+        if proposal.lookup { app.cargo_dependencies.name.clear(); }
         app.dialog = Some(crate::ui::dialogs::Dialog::CargoDependencies);
     }
 }
@@ -655,4 +666,17 @@ mod tests {
             .insert(manifest, rc_text::Rope::from_str(&text));
         assert!(scan(input, &AtomicBool::new(false)).proposals.is_empty());
     }
+
+    #[test]
+    fn arbitrary_import_roots_offer_lookup_without_asserting_a_package_identity() {
+        let (_temp, mut input) = fixture();
+        input.source = rc_text::Rope::from_str("fn f() { let mut b = itoa::Buffer::new(); let _ = b.format(42); }\nuse custom_external_crate::Thing;\nuse std::path::Path;\nstruct Local; impl Local { fn make() {} } fn g(){ Local::make(); }");
+        let report = scan(input, &AtomicBool::new(false));
+        assert_eq!(report.proposals.len(), 2);
+        assert!(report.proposals.iter().all(|p| p.lookup && p.local.is_none()));
+        assert!(report.proposals.iter().any(|p| p.root == "itoa"));
+        assert!(report.proposals.iter().any(|p| p.root == "custom_external_crate"));
+    }
+
+
 }

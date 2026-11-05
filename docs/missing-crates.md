@@ -21,10 +21,13 @@ The initial handwritten catalog contains 20 import roots: serde, serde_json, tok
 anyhow, thiserror, regex, clap, reqwest, tracing, axum, uuid, chrono, rand, rayon, bytes,
 url, tempfile, futures, parking_lot and crossbeam_channel (package crossbeam-channel).
 Names are factual identifiers, not recommendations, rankings, copied descriptions or
-assets. Other names are proposed only for a unique library in the loaded workspaces whose
-Cargo package and import names agree after hyphen normalization. Unknown registry names,
-custom library-name mappings and ambiguous attached-workspace libraries require manual
-review. I08 remains partial because it does not discover arbitrary registry crates.
+assets. A unique library in loaded workspaces whose package and import names agree after
+hyphen normalization gets a path proposal. Other unresolved lowercase crate roots now get
+**Look up crate…**: this opens the dependency manager with a search term and an empty package
+name. Only pressing Search sends that name to crates.io. Selecting a registry hit supplies
+its actual package name and version; the import spelling is not asserted to be a registry
+identity, since hyphens and underscores can differ. Add remains a separate explicit action.
+Custom library-name mappings and ambiguous workspace libraries still require manual review.
 
 The owner is the unique exact Cargo target or innermost loaded member. Normal source uses
 dependencies; test/example/bench targets and conventional directories use dev-dependencies;
@@ -65,7 +68,13 @@ text-edit event also produces a fresh proposal without contacting a registry.
 `cargo test -p rc-app missing_crates::tests`, `cargo test -p rc-syntax crate_refs` and
 `cargo test -p rc-cargo dependency_names` cover local modules, aliases, globs, cfg(test),
 normal/dev/build scopes, optional dependencies, workspace inheritance, target tables and
-cancellation.
+cancellation, arbitrary roots outside the local catalog and exclusion of standard/local types.
+
+The opt-in native test `cargo test -p rc-app native_lookup_finds -- --ignored --nocapture`
+queries the public registry for `itoa`, selects its actual result through the UI, adds it
+with Offline enabled and runs the real Cargo binary using `itoa::Buffer`. Review makes no
+network request or manifest change. This live proof passed; it stays opt-in so the ordinary
+suite does not depend on an external registry. Cached `itoa` is required for offline add.
 
 ## Public references
 

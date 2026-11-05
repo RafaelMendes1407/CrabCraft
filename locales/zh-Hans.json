@@ -2169,5 +2169,8 @@
     "Database error: {error}": "数据库错误：{error}",
     "Database": "数据库",
     "Connect to a SQLite database explicitly": "请明确连接 SQLite 数据库"
+  },
+  "crate_lookup": {
+    "Look up crate…": "查找 crate…"
   }
 }

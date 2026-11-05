@@ -2169,5 +2169,8 @@
     "Database error: {error}": "Erro de banco de dados: {error}",
     "Database": "Banco de dados",
     "Connect to a SQLite database explicitly": "Conecte explicitamente a um banco SQLite"
+  },
+  "crate_lookup": {
+    "Look up crate…": "Buscar crate…"
   }
 }
