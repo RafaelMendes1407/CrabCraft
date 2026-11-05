@@ -64,6 +64,21 @@ fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     }
 }
 
+fn overflow(app: &mut CrabCraftApp, ui: &mut Ui, side: Side, windows: &[ToolWindow]) {
+    egui::ScrollArea::vertical()
+        .id_salt(("tool_window_stripe", side.id()))
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let origin = ui.cursor().min;
+            let x = origin.x + (ui.available_width() - BUTTON) / 2.0;
+            ui.set_min_height(windows.len() as f32 * (BUTTON + GAP) + 8.0);
+            for (index, window) in windows.iter().enumerate() {
+                button(app, ui, *window, pos2(x, origin.y + 4.0 + index as f32 * (BUTTON + GAP)));
+            }
+        });
+}
+
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, side: Side) {
     let rect = ui.max_rect();
     let x = rect.center().x - BUTTON / 2.0;
@@ -71,12 +86,17 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, side: Side) {
         Side::Left => {
             let mut y = rect.top() + 4.0;
             let list: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Left).collect();
+            let bottoms: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Bottom).collect();
+            if (list.len() + bottoms.len()) as f32 * (BUTTON + GAP) + 8.0 > rect.height() {
+                let windows: Vec<_> = list.into_iter().chain(bottoms).collect();
+                overflow(app, ui, side, &windows);
+                return;
+            }
             for tw in list {
                 button(app, ui, tw, pos2(x, y));
                 y += BUTTON + GAP;
             }
             // Bottom tool windows sit at the lower end of the left stripe.
-            let bottoms: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Bottom).collect();
             let mut y = rect.bottom() - 4.0 - bottoms.len() as f32 * (BUTTON + GAP) + GAP;
             for tw in bottoms {
                 button(app, ui, tw, pos2(x, y));
@@ -86,6 +106,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, side: Side) {
         Side::Right => {
             let mut y = rect.top() + 4.0;
             let list: Vec<ToolWindow> = ToolWindow::ALL.into_iter().filter(|t| app.dock.side_of(*t) == Side::Right).collect();
+            if list.len() as f32 * (BUTTON + GAP) + 8.0 > rect.height() {
+                overflow(app, ui, side, &list);
+                return;
+            }
             for tw in list {
                 button(app, ui, tw, pos2(x, y));
                 y += BUTTON + GAP;

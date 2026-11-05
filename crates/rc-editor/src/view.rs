@@ -167,6 +167,11 @@ impl<'a> EditorView<'a> {
             }
         }
         let (vbar, hbar) = paint_scrollbars(ui, state, config, &scheme, &pal, rect, text_rect, content_h, content_w, &m);
+        if state.selection != before_sel && !out.events.iter().any(|event| matches!(event, EditorEvent::CaretMoved)) {
+            out.events.push(EditorEvent::CaretMoved);
+            state.blink_epoch = ui.input(|input| input.time);
+            state.popups.hover = None;
+        }
         if let Some(r) = vbar.or(hbar) {
             let _ = r;
         }
@@ -839,16 +844,24 @@ fn paint_scrollbars(
             state.scroll.y = (state.scroll.y + dy / (track.height() - thumb_h) * max_scroll).clamp(0.0, max_scroll);
         } else if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
-            && !thumb.contains(p)
         {
-            let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
-            state.scroll.y = t * max_scroll;
+            if !jump_to_problem_mark(state, m, text_rect, &marks, p.y) && !thumb.contains(p) {
+                let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
+                state.scroll.y = t * max_scroll;
+            }
         }
         let active = resp.hovered() || resp.dragged();
         let alpha = if active { 0.5 } else { 0.28 };
         let thumb = if active { thumb.expand2(vec2(1.5, 0.0)).translate(vec2(-1.5, 0.0)) } else { thumb };
         painter.rect_filled(thumb, 4.0, pal.text.gamma_multiply(alpha));
         vresp = Some(resp);
+    } else if !marks.is_empty() {
+        // A short or fully folded document still has a clickable error stripe.
+        let response = ui.interact(track, Id::new(("editor_vbar", state.id)), Sense::click());
+        if response.clicked() && let Some(pointer) = response.interact_pointer_pos() {
+            jump_to_problem_mark(state, m, text_rect, &marks, pointer.y);
+        }
+        vresp = Some(response);
     }
     // Lens: the code at the hovered height of the scrollbar (not while dragging the thumb).
     state.scrollbar_track = track;
@@ -879,6 +892,17 @@ fn paint_scrollbars(
         hresp = Some(resp);
     }
     (vresp, hresp)
+}
+
+/// Problem marks use source rows; the thumb also includes end padding. Navigating to the
+/// reported line prevents overshooting errors near EOF and unfolds a hidden diagnostic.
+fn jump_to_problem_mark(state: &mut EditorState, metrics: &Metrics, text_rect: Rect, marks: &[(f32, usize)], y: f32) -> bool {
+    let nearest = marks.iter().min_by(|a, b| (a.0 - y).abs().total_cmp(&(b.0 - y).abs())).filter(|mark| (mark.0 - y).abs() <= 3.0);
+    let Some((_, line)) = nearest else { return false; };
+    state.goto(*line, 0);
+    scroll_caret_into_view(state, metrics, text_rect);
+    state.scroll_to_caret = false;
+    true
 }
 
 // =====================================================================================

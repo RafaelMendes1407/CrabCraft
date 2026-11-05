@@ -2211,12 +2211,14 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         .filter(|p| filter.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&filter.to_lowercase())))
         .cloned()
         .collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_files", 480.0, |ui| {
         title(ui, tr("Recent Files"));
         let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
         resp.request_focus();
+        if resp.changed() { *selected = 0; }
         if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
             *selected = (*selected + 1).min(items.len().saturating_sub(1));
         }
@@ -2230,7 +2232,9 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         if items.is_empty() {
             ui.label(egui::RichText::new(tr("No recent files")).color(p.muted));
         }
-        for (i, path) in items.iter().enumerate().take(20) {
+        let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
+        egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
+        for (i, path) in items.iter().enumerate() {
             let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
             if i == *selected {
@@ -2242,10 +2246,13 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
             ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
             let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
             ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, dir, FontId::proportional(11.5), p.muted);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == *selected, path.display().to_string()));
+            if move_selection && i == *selected { resp.scroll_to_me(Some(egui::Align::Center)); }
             if resp.clicked() {
                 open = Some(path.clone());
             }
         }
+        });
     });
     if let Some(path) = open {
         app.open_file(&path);
@@ -2597,54 +2604,49 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
 }
 
 fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
-    let items: Vec<(PathBuf, usize, String)> = app
-        .nav_back
-        .iter()
-        .rev()
-        .take(30)
-        .map(|(path, pos)| {
-            let line_text = match app.docs.index_of(path) {
-                Some(i) => {
-                    let e = &app.docs.list[i].editor;
-                    let (l, _) = e.buffer.line_col((*pos).min(e.buffer.len_chars()));
-                    (l, e.buffer.line_text(l))
-                }
-                None => (0, String::new()),
-            };
-            (path.clone(), line_text.0, line_text.1)
-        })
-        .collect();
+    // Character positions remain meaningful when a file was closed; do not invent line 1
+    // or discard the column merely because its preview buffer is no longer open.
+    let items: Vec<(PathBuf, usize, Option<(usize, usize)>, String)> = app.nav_back.iter().rev().take(30).map(|(path, position)| {
+        let preview = app.docs.index_of(path).map(|index| {
+            let editor = &app.docs.list[index].editor;
+            let location = editor.buffer.line_col((*position).min(editor.buffer.len_chars()));
+            (location, editor.buffer.line_text(location.0))
+        });
+        let (location, text) = match preview { Some((location, text)) => (Some(location), text), None => (None, path.display().to_string()) };
+        (path.clone(), *position, location, text)
+    }).collect();
+    *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_locations", 620.0, |ui| {
         title(ui, tr("Recent Locations"));
-        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
-            *selected = (*selected + 1).min(items.len().saturating_sub(1));
-        }
-        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
-            *selected = selected.saturating_sub(1);
-        }
-        if ui.input(|i| i.key_pressed(Key::Enter)) {
-            open = items.get(*selected).cloned();
-        }
-        for (i, (path, line, text)) in items.iter().enumerate() {
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
-            if i == *selected {
-                ui.painter().rect_filled(r, 6.0, p.selection);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(r, 6.0, p.row_hover);
+        if ui.input(|input| input.key_pressed(Key::ArrowDown)) { *selected = (*selected + 1).min(items.len().saturating_sub(1)); }
+        if ui.input(|input| input.key_pressed(Key::ArrowUp)) { *selected = selected.saturating_sub(1); }
+        if ui.input(|input| input.key_pressed(Key::Enter)) { open = items.get(*selected).map(|(path, position, _, _)| (path.clone(), *position)); }
+        let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
+        egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
+            for (index, (path, position, location, text)) in items.iter().enumerate() {
+                let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
+                if index == *selected { ui.painter().rect_filled(rect, 6.0, p.selection); }
+                else if response.hovered() { ui.painter().rect_filled(rect, 6.0, p.row_hover); }
+                let name = path.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+                let caption = location.map_or_else(|| name.clone(), |(line, column)| format!("{name}:{}:{}", line + 1, column + 1));
+                icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+                ui.painter().text(rect.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, &caption, theme::bold(12.5), p.text);
+                ui.painter().text(rect.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
+                response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, index == *selected, format!("{} · {caption}", path.display())));
+                if move_selection && index == *selected { response.scroll_to_me(Some(egui::Align::Center)); }
+                if response.clicked() { open = Some((path.clone(), *position)); }
             }
-            let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
-            ui.painter().text(r.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, format!("{name}:{}", line + 1), theme::bold(12.5), p.text);
-            ui.painter().text(r.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
-            if resp.clicked() {
-                open = Some((path.clone(), *line, text.clone()));
-            }
-        }
+        });
     });
-    if let Some((path, line, _)) = open {
-        app.open_at(&path, line, 0);
+    if let Some((path, position)) = open {
+        app.open_file(&path);
+        if let Some(doc) = app.docs.active_doc_mut().filter(|doc| doc.path == path) {
+            let position = position.min(doc.editor.buffer.len_chars());
+            doc.editor.set_selection(rc_text::Selection::point(position));
+            doc.editor.request_scroll_to_caret();
+        }
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
