@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "Enregistrer les raccourcis en deux étapes",
     "Press the second shortcut…": "Appuyez sur le deuxième raccourci…",
     "The first shortcut must include Ctrl or Command.": "Le premier raccourci doit inclure Ctrl ou Commande."
+  },
+  "history_edit": {
+    "Pick": "Conserver",
+    "Reword": "Modifier le message",
+    "Drop commit": "Supprimer le commit",
+    "Fixup into previous": "Fusionner avec le précédent",
+    "The history plan or private editor data is invalid": "Le plan d’historique ou les données privées de l’éditeur sont invalides",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "L’édition accepte 1 à 20 commits linéaires non racines sur une branche locale ; fusions et variables Git personnalisées non prises en charge",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "Enregistrez les fichiers, nettoyez l’arbre de travail et l’index et terminez les opérations Git avant de modifier l’historique",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "L’historique sélectionné est accessible depuis une branche distante connue ; réécriture refusée",
+    "The branch or history changed; load a fresh history plan": "La branche ou l’historique a changé ; chargez un nouveau plan",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "Édition annulée ; vérifiez le rebase et la référence de récupération avant de continuer",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "Modifiez uniquement la fin linéaire propre et non publiée de la branche courante. Historique distant connu, fusions et commits racines refusés.",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "Du plus ancien au plus récent. Réordonner, supprimer ou fusionner peut créer des conflits. Les commits réécrits perdent leur signature ; une référence de récupération est conservée.",
+    "Save project files and wait for formatting before editing history": "Enregistrez les fichiers et attendez le formatage avant de modifier l’historique",
+    "Recent commits": "Commits récents",
+    "Load History Plan": "Charger le plan d’historique",
+    "Recovery ref": "Référence de récupération",
+    "Move commit earlier": "Avancer le commit",
+    "Move commit later": "Reculer le commit",
+    "New commit message": "Nouveau message du commit",
+    "I reviewed this history plan and accept rewritten commit IDs": "J’ai vérifié ce plan et j’accepte la modification des identifiants de commit",
+    "Rewrite History": "Réécrire l’historique",
+    "Edit History": "Modifier l’historique"
   }
 }

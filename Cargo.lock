@@ -3823,6 +3823,7 @@ name = "rc-vcs"
 version = "0.3.0"
 dependencies = [
  "criterion",
+ "libc",
  "proptest",
  "rc-core",
  "tempfile",

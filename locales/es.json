@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "Grabar atajos de dos pasos",
     "Press the second shortcut…": "Pulsa el segundo atajo…",
     "The first shortcut must include Ctrl or Command.": "El primer atajo debe incluir Ctrl o Command."
+  },
+  "history_edit": {
+    "Pick": "Mantener",
+    "Reword": "Cambiar mensaje",
+    "Drop commit": "Descartar commit",
+    "Fixup into previous": "Combinar con anterior",
+    "The history plan or private editor data is invalid": "El plan de historial o los datos privados del editor no son válidos",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "La edición admite de 1 a 20 commits lineales que no sean raíz en una rama local; no admite merges ni variables Git personalizadas",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "Guarda los archivos, limpia el árbol de trabajo y el índice y termina las operaciones Git antes de editar el historial",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "El historial seleccionado pertenece a una rama remota conocida; se rechaza reescribirlo",
+    "The branch or history changed; load a fresh history plan": "La rama o el historial cambió; carga un plan nuevo",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "Edición cancelada; revisa el rebase y la referencia de recuperación antes de continuar",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "Edita solo el tramo lineal final, limpio y no publicado de la rama actual. Se rechazan historial remoto conocido, merges y commits raíz.",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "Más antiguo primero. Reordenar, descartar o combinar puede causar conflictos. Los commits reescritos pierden sus firmas; se conserva una referencia de recuperación.",
+    "Save project files and wait for formatting before editing history": "Guarda los archivos y espera al formato antes de editar el historial",
+    "Recent commits": "Commits recientes",
+    "Load History Plan": "Cargar plan de historial",
+    "Recovery ref": "Referencia de recuperación",
+    "Move commit earlier": "Mover commit antes",
+    "Move commit later": "Mover commit después",
+    "New commit message": "Nuevo mensaje del commit",
+    "I reviewed this history plan and accept rewritten commit IDs": "Revisé el plan y acepto los nuevos identificadores de commit",
+    "Rewrite History": "Reescribir historial",
+    "Edit History": "Editar historial"
   }
 }

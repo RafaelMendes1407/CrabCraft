@@ -113,6 +113,7 @@ fn i18n_from_settings() {
 }
 
 fn main() -> eframe::Result {
+    if let Some(code) = history_edit::internal() { std::process::exit(code); }
     #[cfg(target_os = "macos")]
     system_path();
     let mut options = eframe::NativeOptions { viewport: rc_kit::window_chrome::viewport(), ..Default::default() };
@@ -184,3 +185,5 @@ mod terminal_completion_audit;
 mod key_sequence_audit;
 
 mod shelves;
+
+mod history_edit;

@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "录制两步快捷键",
     "Press the second shortcut…": "请按第二个快捷键…",
     "The first shortcut must include Ctrl or Command.": "第一个快捷键必须包含 Ctrl 或 Command。"
+  },
+  "history_edit": {
+    "Pick": "保留",
+    "Reword": "修改消息",
+    "Drop commit": "丢弃提交",
+    "Fixup into previous": "合并到前一个",
+    "The history plan or private editor data is invalid": "历史计划或私有编辑器数据无效",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "历史编辑支持本地分支上 1–20 个非根线性提交；不支持合并提交和自定义 Git 环境覆盖",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "编辑历史前请保存文件、清理工作树和索引并完成已有 Git 操作",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "所选历史可从已知远程跟踪分支访问；拒绝重写",
+    "The branch or history changed; load a fresh history plan": "分支或历史已更改；请加载新计划",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "历史编辑已取消；继续前请检查变基状态和恢复引用",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "仅编辑当前分支干净且未发布的线性末尾。拒绝已知远程历史、合并和根提交。",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "最旧提交在前。重排、丢弃或合并可能产生冲突。重写提交会失去原始签名；保留恢复引用。",
+    "Save project files and wait for formatting before editing history": "编辑历史前请保存项目文件并等待格式化完成",
+    "Recent commits": "最近提交",
+    "Load History Plan": "加载历史计划",
+    "Recovery ref": "恢复引用",
+    "Move commit earlier": "前移提交",
+    "Move commit later": "后移提交",
+    "New commit message": "新提交消息",
+    "I reviewed this history plan and accept rewritten commit IDs": "我已审阅此计划并接受重写提交 ID",
+    "Rewrite History": "重写历史",
+    "Edit History": "编辑历史"
   }
 }

@@ -37,3 +37,10 @@ leaves its fsmonitor sentinel untouched until native Trust enables status. Real 
 tests cover commits, branches, diffs, stashes, worktrees, conflicts, signed commits and
 local remotes after explicit trust. The library tests exercise malicious Git helper
 controls independently. These tests do not establish sandbox isolation or RustRover parity.
+
+Read-only Git subcommands also reject output redirection and write switches before any
+process starts: `log`, `show` and `diff --output=...` can otherwise write files. Integration
+controls verify the untrusted API refuses them without creating the output file.
+Git commands own a process group until normal completion; cancellation, future drop and
+I/O-limit failures kill editor/hook descendants too. Background-shell regressions verify
+no delayed child writes survive cancellation or a dropped future.

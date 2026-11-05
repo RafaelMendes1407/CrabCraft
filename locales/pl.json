@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "Nagrywaj skróty dwuetapowe",
     "Press the second shortcut…": "Naciśnij drugi skrót…",
     "The first shortcut must include Ctrl or Command.": "Pierwszy skrót musi zawierać Ctrl lub Command."
+  },
+  "history_edit": {
+    "Pick": "Zachowaj",
+    "Reword": "Zmień opis",
+    "Drop commit": "Pomiń commit",
+    "Fixup into previous": "Połącz z poprzednim",
+    "The history plan or private editor data is invalid": "Plan historii lub prywatne dane edytora są nieprawidłowe",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "Edycja obsługuje 1–20 liniowych commitów poza początkowym na lokalnej gałęzi; scalenia i niestandardowe zmienne Git nie są obsługiwane",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "Zapisz pliki, wyczyść drzewo robocze i indeks oraz zakończ operacje Git przed edycją historii",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "Wybrana historia jest osiągalna ze znanej gałęzi zdalnej; przepisanie zostało odrzucone",
+    "The branch or history changed; load a fresh history plan": "Gałąź lub historia uległa zmianie; wczytaj nowy plan",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "Edycja anulowana; sprawdź stan rebase i referencję odzyskiwania przed kontynuacją",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "Edytuj tylko czystą, nieopublikowaną liniową końcówkę bieżącej gałęzi. Znana historia zdalna, scalenia i commity początkowe są odrzucane.",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "Najstarsze najpierw. Zmiana kolejności, pomijanie i łączenie może powodować konflikty. Przepisane commity tracą podpisy; referencja odzyskiwania zostaje zachowana.",
+    "Save project files and wait for formatting before editing history": "Zapisz pliki i poczekaj na formatowanie przed edycją historii",
+    "Recent commits": "Ostatnie commity",
+    "Load History Plan": "Wczytaj plan historii",
+    "Recovery ref": "Referencja odzyskiwania",
+    "Move commit earlier": "Przenieś commit wcześniej",
+    "Move commit later": "Przenieś commit później",
+    "New commit message": "Nowy opis commita",
+    "I reviewed this history plan and accept rewritten commit IDs": "Sprawdzono plan i zaakceptowano zmianę identyfikatorów commitów",
+    "Rewrite History": "Przepisz historię",
+    "Edit History": "Edytuj historię"
   }
 }

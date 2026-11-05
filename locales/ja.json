@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "2 段階のショートカットを記録",
     "Press the second shortcut…": "2 番目のショートカットを押してください…",
     "The first shortcut must include Ctrl or Command.": "最初のショートカットには Ctrl または Command が必要です。"
+  },
+  "history_edit": {
+    "Pick": "保持",
+    "Reword": "メッセージを変更",
+    "Drop commit": "コミットを除外",
+    "Fixup into previous": "前のコミットに統合",
+    "The history plan or private editor data is invalid": "履歴プランまたは内部エディターのデータが無効です",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "ローカルブランチのルート以外の直線的な 1～20 コミットに対応します。マージコミットと Git 環境の上書きには対応しません",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "履歴編集の前にファイルを保存し、作業ツリーとインデックスをクリーンにして Git 操作を完了してください",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "選択した履歴は既知のリモート追跡ブランチに含まれるため、書き換えを拒否しました",
+    "The branch or history changed; load a fresh history plan": "ブランチまたは履歴が変わりました。新しいプランを読み込んでください",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "履歴編集を中止しました。続行前にリベース状態と復旧用参照を確認してください",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "現在のブランチの未公開でクリーンな直線的末尾のみ編集します。既知のリモート履歴、マージ、ルートコミットは拒否します。",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "古い順に表示します。並べ替え、除外、統合は競合する場合があります。書き換え後は元の署名が失われますが、復旧用参照を保持します。",
+    "Save project files and wait for formatting before editing history": "履歴編集前にファイルを保存し、整形の完了を待ってください",
+    "Recent commits": "最近のコミット",
+    "Load History Plan": "履歴プランを読み込む",
+    "Recovery ref": "復旧用参照",
+    "Move commit earlier": "コミットを前へ",
+    "Move commit later": "コミットを後へ",
+    "New commit message": "新しいコミットメッセージ",
+    "I reviewed this history plan and accept rewritten commit IDs": "このプランを確認し、コミット ID の書き換えを承認します",
+    "Rewrite History": "履歴を書き換える",
+    "Edit History": "履歴を編集"
   }
 }

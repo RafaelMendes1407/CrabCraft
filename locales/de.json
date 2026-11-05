@@ -2197,5 +2197,29 @@
     "Record two-step shortcuts": "Zweistufige Tastenkürzel aufzeichnen",
     "Press the second shortcut…": "Drücken Sie das zweite Tastenkürzel…",
     "The first shortcut must include Ctrl or Command.": "Das erste Tastenkürzel muss Strg oder Command enthalten."
+  },
+  "history_edit": {
+    "Pick": "Behalten",
+    "Reword": "Nachricht ändern",
+    "Drop commit": "Commit verwerfen",
+    "Fixup into previous": "Mit vorherigem verbinden",
+    "The history plan or private editor data is invalid": "Der Verlaufsplan oder die privaten Editordaten sind ungültig",
+    "History editing supports 1–20 non-root linear commits on a local branch; merge commits and custom Git environment overrides are unsupported": "Die Bearbeitung unterstützt 1–20 lineare Commits ohne Wurzelcommit auf einem lokalen Branch; Merge-Commits und eigene Git-Umgebungsvariablen sind nicht unterstützt",
+    "Save files, clean the working tree and index, and finish existing Git operations before editing history": "Dateien speichern, Arbeitsverzeichnis und Index bereinigen und Git-Vorgänge vor der Verlaufsbearbeitung abschließen",
+    "The selected history is reachable from a known remote-tracking branch; rewriting it is refused": "Der ausgewählte Verlauf ist von einem bekannten Remote-Tracking-Branch erreichbar; Umschreiben wird verweigert",
+    "The branch or history changed; load a fresh history plan": "Branch oder Verlauf geändert; einen neuen Plan laden",
+    "History editing cancelled; inspect the rebase state and recovery ref before continuing": "Verlaufsbearbeitung abgebrochen; Rebase-Zustand und Wiederherstellungsreferenz vor dem Fortsetzen prüfen",
+    "Edit only a clean, unpublished linear suffix of the current branch. Known remote-tracking history, merges and root commits are refused.": "Nur einen sauberen, unveröffentlichten linearen Abschluss des aktuellen Branches bearbeiten. Bekannter Remote-Verlauf, Merges und Wurzelcommits werden abgelehnt.",
+    "Oldest first. Reordering, dropping or folding commits may conflict. Rewritten commits lose their original signatures; a recovery ref is kept.": "Älteste zuerst. Umordnen, Verwerfen oder Verbinden kann Konflikte erzeugen. Umgeschriebene Commits verlieren ihre Signaturen; eine Wiederherstellungsreferenz bleibt erhalten.",
+    "Save project files and wait for formatting before editing history": "Projektdateien speichern und Formatierung vor der Verlaufsbearbeitung abwarten",
+    "Recent commits": "Letzte Commits",
+    "Load History Plan": "Verlaufsplan laden",
+    "Recovery ref": "Wiederherstellungsreferenz",
+    "Move commit earlier": "Commit nach vorne",
+    "Move commit later": "Commit nach hinten",
+    "New commit message": "Neue Commit-Nachricht",
+    "I reviewed this history plan and accept rewritten commit IDs": "Ich habe den Plan geprüft und akzeptiere neue Commit-IDs",
+    "Rewrite History": "Verlauf umschreiben",
+    "Edit History": "Verlauf bearbeiten"
   }
 }

@@ -143,6 +143,24 @@ impl Output {
     }
 }
 
+/// A live command owns its descendants until normal completion. Cancellation, future
+/// drop and I/O failures kill the process group, including editors and hook children.
+struct ProcessGroup { pid: Option<u32> }
+impl ProcessGroup {
+    fn new(child: &tokio::process::Child) -> Self { Self { pid: child.id() } }
+    fn disarm(&mut self) { self.pid = None; }
+}
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        let Some(pid) = self.pid else { return };
+        #[cfg(unix)] { unsafe { libc::killpg(pid as libc::pid_t, libc::SIGKILL); } }
+        #[cfg(windows)] {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).creation_flags(0x0800_0000).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        }
+    }
+}
+
 /// Builder for one git invocation.
 #[derive(Clone)]
 pub struct GitCommand<'a> {
@@ -205,6 +223,8 @@ impl GitCommand<'_> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        #[cfg(unix)]
+        cmd.process_group(0);
         #[cfg(windows)]
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         cmd
@@ -221,6 +241,10 @@ impl GitCommand<'_> {
 
     fn read_only(&self) -> bool {
         let Some(command) = self.args.first().and_then(|arg| arg.to_str()) else { return false };
+        // Read-looking subcommands can still redirect output to disk. Refuse output and
+        // write switches before spawning anything (including abbreviated long options).
+        if self.args.iter().any(|arg| arg.to_str().is_some_and(|arg| arg.starts_with("--out") || arg.starts_with("--write") || arg.starts_with("--save") || arg.starts_with("-o"))) { return false; }
+
         if self.args.iter().any(|arg| arg.to_str().is_some_and(|arg| ["--ext-diff","--textconv","--filters","--recurse-submodules","--show-signature"].iter().any(|bad| arg==*bad || arg.starts_with(&format!("{bad}="))))) { return false; }
         match command {
             "status" | "log" | "show" | "diff" | "diff-tree" | "rev-parse" | "rev-list" | "cat-file" | "ls-tree" | "ls-files" | "blame" | "for-each-ref" | "check-ref-format" => true,
@@ -238,6 +262,7 @@ impl GitCommand<'_> {
     async fn read_overrides(&self) -> Result<Vec<OsString>> {
         let mut query=self.clone(); query.args=["config","--null","--name-only","--list"].map(OsString::from).to_vec(); query.stdin=None;
         let mut child=query.build(&[]).spawn().map_err(GitError::Io)?;
+        let mut group=ProcessGroup::new(&child);
         let stdout=child.stdout.take().ok_or(GitError::UnsafeReadConfig)?; let stderr=child.stderr.take().ok_or(GitError::UnsafeReadConfig)?;
         let work=async {
             let read=async { let mut names=Vec::new(); stdout.take(1024*1024+1).read_to_end(&mut names).await.map_err(|_|GitError::UnsafeReadConfig)?; if names.len()>1024*1024 {return Err(GitError::UnsafeReadConfig);} Ok(names) };
@@ -249,6 +274,7 @@ impl GitCommand<'_> {
             Some(token)=>tokio::select! {result=tokio::time::timeout(std::time::Duration::from_secs(5),work)=>result.map_err(|_|GitError::UnsafeReadConfig)??,()=token.cancelled()=>return Err(GitError::Cancelled)},
             None=>tokio::time::timeout(std::time::Duration::from_secs(5),work).await.map_err(|_|GitError::UnsafeReadConfig)??,
         };
+        group.disarm();
         let mut filters=std::collections::BTreeSet::new(); let mut diffs=std::collections::BTreeSet::new();
         for name in names.split(|byte|*byte==0) {
             let name=std::str::from_utf8(name).map_err(|_|GitError::UnsafeReadConfig)?;
@@ -295,6 +321,7 @@ impl GitCommand<'_> {
             self.read_overrides().await?
         };
         let mut child = self.build(&overrides).spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { GitError::GitNotFound } else { GitError::Io(e) })?;
+        let mut group = ProcessGroup::new(&child);
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().expect("piped stdout");
         let mut stderr = child.stderr.take().expect("piped stderr");
@@ -351,11 +378,12 @@ impl GitCommand<'_> {
         let out = match &self.cancel {
             Some(token) => tokio::select! {
                 out = work => out?,
-                // Dropping `work` drops the child, which kills it (`kill_on_drop`).
+                // The process-group guard kills editor/hook descendants as well.
                 () = token.cancelled() => return Err(GitError::Cancelled),
             },
             None => work.await?,
         };
+        group.disarm();
         self.finish(out)
     }
 }

@@ -305,6 +305,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.vcs.tab = GitTab::Stashes;
         }
         if theme::tab(ui, app.vcs.tab == GitTab::Shelves, Some(ico::HISTORY), tr("Shelves"), false).0.clicked() { app.vcs.tab = GitTab::Shelves; }
+        if theme::tab(ui, app.vcs.tab == GitTab::HistoryEdit, Some(ico::HISTORY), tr("Edit History"), false).0.clicked() { app.vcs.tab = GitTab::HistoryEdit; }
         let worktrees = trf("Worktrees ({n})", &[("n", &app.vcs.worktrees.len())]);
         if theme::tab(ui, app.vcs.tab == GitTab::Worktrees, Some(ico::FOLDER), &worktrees, false).0.clicked() {
             app.vcs.tab = GitTab::Worktrees;
@@ -332,6 +333,7 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         GitTab::Tags => tags_view(app, ui),
         GitTab::Stashes => stashes_view(app, ui),
         GitTab::Worktrees => worktrees_view(app, ui),
+        GitTab::HistoryEdit => { if let Some(repo) = app.vcs.repo.clone() { let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.history_edit.show(ui, repo, app.vcs.busy.is_some(), unsaved); } },
         GitTab::Shelves => { if let Some(repo) = app.vcs.repo.clone() { let checked = app.vcs.included(); let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.shelves.show(ui, repo, checked, app.vcs.busy.is_some(), unsaved); } },
     }
     // Git refused to remove a worktree with local changes: offer to force it.
