@@ -145,6 +145,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let mut open = None;
     let mut apply = None;
     let mut explain = None;
+    let mut borrow = None;
     if !diags.is_empty() {
         let h = (diags.len() as f32 * 24.0 + 4.0).min(ui.available_height() * 0.45);
         egui::ScrollArea::vertical().id_salt("build_diags").max_height(h).auto_shrink([false, true]).show(ui, |ui| {
@@ -176,12 +177,17 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 {
                     open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
                 }
+                if d.borrow.is_some() {
+                    if ui.small_button(trf("Visualize {code} source ranges…", &[("code", &d.code)])).clicked() { borrow = Some(d.clone()); }
+                }
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", d.code, d.message)));
                 crate::ui::toolwindows::explain_menu(&resp, &d.code, &mut explain);
             }
         });
         ui.separator();
     }
+    if let Some(diagnostic) = borrow { app.borrow_errors.select(diagnostic); }
+    app.borrow_errors.show(ui, &mut app.docs);
     let cwd = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let events = console(ui, &app.runner.build.as_ref().expect("checked").console.term);
     if let Some((f, l, c)) = open {

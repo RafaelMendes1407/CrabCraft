@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "Schriftlizenzen"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "Die Quellbereiche des Compilers sind veraltet; vor der Navigation speichern und neu bauen",
+    "Compiler source is outside the loaded workspace": "Die Compiler-Quelldatei liegt außerhalb des geladenen Arbeitsbereichs",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "Die Compiler-Quellnavigation unterstützt reguläre UTF-8-Dateien bis 1 MB",
+    "The compiler source range could not be validated": "Der Compiler-Quellbereich konnte nicht validiert werden",
+    "Could not read the compiler source file": "Die Compiler-Quelldatei konnte nicht gelesen werden",
+    "Borrow checker source ranges": "Quellbereiche der Ausleihprüfung",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "Compiler-Beschriftungen zeigen gemeldete Quellbereiche, keine vollständigen abgeleiteten Lebensdauern.",
+    "Compiler range details were truncated at the display limit": "Die Compiler-Bereichsdetails wurden am Anzeigelimit gekürzt",
+    "Primary range": "Primärer Bereich",
+    "Related range": "Zugehöriger Bereich",
+    "Open source range {n}": "Quellbereich {n} öffnen",
+    "Checking compiler source…": "Compiler-Quelle wird geprüft…",
+    "Visualize {code} source ranges…": "Quellbereiche für {code} anzeigen…"
   }
 }

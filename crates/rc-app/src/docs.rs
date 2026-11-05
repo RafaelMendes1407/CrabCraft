@@ -276,6 +276,21 @@ impl Docs {
         Ok(i)
     }
 
+    /// Installs a checked compiler-source snapshot prepared off the UI thread. No disk I/O
+    /// or synchronous parse occurs here; callers must validate document identity/version.
+    pub(crate) fn insert_compiler_source(&mut self, path: PathBuf, text: &str, bom: bool, mtime: Option<SystemTime>, style: rc_core::code_style::CodeStyle) -> usize {
+        if let Some(index) = self.index_of(&path) { self.activate(index); return index; }
+        let id = self.next_id; self.next_id += 1;
+        let mut editor = EditorState::new(id, Some(path.clone()), text);
+        editor.read_only = self.read_only_roots.iter().any(|root| path.starts_with(root));
+        editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
+        editor.breakpoints = self.closed_breakpoints.remove(&path).unwrap_or_default();
+        apply_style(&mut editor, &style); editor.request_parse(&self.pool);
+        let saved = editor.buffer.snapshot();
+        self.list.push(Doc { editor, path, mtime, disk_epoch: 0, bom, pinned: false, preview: false, conflict: false, md_view: None, scratch: false, generated: false, saved, style, light_project: None });
+        let index = self.list.len()-1; self.activate(index); index
+    }
+
     /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
     pub fn open_preview(&mut self, path: &Path) -> Result<usize, String> {
         let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());

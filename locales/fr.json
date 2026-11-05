@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "Licences des polices"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "Les plages du compilateur sont obsolètes ; enregistrez et recompilez avant de naviguer",
+    "Compiler source is outside the loaded workspace": "Le source du compilateur est hors de l’espace de travail chargé",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "La navigation du compilateur accepte les fichiers UTF-8 ordinaires jusqu’à 1 Mo",
+    "The compiler source range could not be validated": "La plage source du compilateur n’a pas pu être validée",
+    "Could not read the compiler source file": "Impossible de lire le fichier source du compilateur",
+    "Borrow checker source ranges": "Plages source du vérificateur d’emprunts",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "Les étiquettes du compilateur montrent les plages signalées, pas les durées de vie inférées complètes.",
+    "Compiler range details were truncated at the display limit": "Les détails des plages du compilateur ont été tronqués à la limite d’affichage",
+    "Primary range": "Plage principale",
+    "Related range": "Plage associée",
+    "Open source range {n}": "Ouvrir la plage source {n}",
+    "Checking compiler source…": "Vérification du source du compilateur…",
+    "Visualize {code} source ranges…": "Visualiser les plages source de {code}…"
   }
 }

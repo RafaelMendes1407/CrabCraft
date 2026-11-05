@@ -7,6 +7,7 @@ mod clone_project;
 mod compare_cli;
 mod cargo_dependencies;
 mod missing_crates;
+mod borrow_errors;
 mod repl;
 mod settings_backup;
 mod instance;

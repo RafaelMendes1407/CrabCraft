@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "字体许可"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "编译器源代码范围已过期；请保存并重新构建后再导航",
+    "Compiler source is outside the loaded workspace": "编译器源文件位于已加载的工作区之外",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "编译器源代码导航支持最大 1 MB 的普通 UTF-8 文件",
+    "The compiler source range could not be validated": "无法验证编译器源代码范围",
+    "Could not read the compiler source file": "无法读取编译器源文件",
+    "Borrow checker source ranges": "借用检查器源代码范围",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "编译器标签显示报告的源代码范围，并非完整推断的生命周期。",
+    "Compiler range details were truncated at the display limit": "编译器范围详细信息已按显示限制截断",
+    "Primary range": "主要范围",
+    "Related range": "相关范围",
+    "Open source range {n}": "打开源代码范围 {n}",
+    "Checking compiler source…": "正在检查编译器源代码…",
+    "Visualize {code} source ranges…": "可视化 {code} 的源代码范围…"
   }
 }

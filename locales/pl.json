@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "Licencje czcionek"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "Zakresy źródła kompilatora są nieaktualne; zapisz i przebuduj przed nawigacją",
+    "Compiler source is outside the loaded workspace": "Źródło kompilatora znajduje się poza wczytanym obszarem roboczym",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "Nawigacja źródła kompilatora obsługuje zwykłe pliki UTF-8 do 1 MB",
+    "The compiler source range could not be validated": "Nie można zweryfikować zakresu źródła kompilatora",
+    "Could not read the compiler source file": "Nie można odczytać pliku źródłowego kompilatora",
+    "Borrow checker source ranges": "Zakresy źródła kontrolera pożyczeń",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "Etykiety kompilatora pokazują zgłoszone zakresy źródła, a nie pełne wywnioskowane czasy życia.",
+    "Compiler range details were truncated at the display limit": "Szczegóły zakresów kompilatora zostały skrócone do limitu wyświetlania",
+    "Primary range": "Zakres główny",
+    "Related range": "Powiązany zakres",
+    "Open source range {n}": "Otwórz zakres źródła {n}",
+    "Checking compiler source…": "Sprawdzanie źródła kompilatora…",
+    "Visualize {code} source ranges…": "Pokaż zakresy źródła dla {code}…"
   }
 }

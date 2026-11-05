@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "フォントライセンス"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "コンパイラーのソース範囲が古くなっています。保存して再ビルドしてから移動してください",
+    "Compiler source is outside the loaded workspace": "コンパイラーのソースは読み込んだワークスペースの外にあります",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "コンパイラーのソース移動は 1 MB までの通常の UTF-8 ファイルに対応しています",
+    "The compiler source range could not be validated": "コンパイラーのソース範囲を検証できませんでした",
+    "Could not read the compiler source file": "コンパイラーのソースファイルを読み取れませんでした",
+    "Borrow checker source ranges": "借用チェッカーのソース範囲",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "コンパイラーのラベルは報告されたソース範囲を示し、推論されたライフタイム全体を示すものではありません。",
+    "Compiler range details were truncated at the display limit": "コンパイラーの範囲の詳細は表示上限で切り詰められました",
+    "Primary range": "主要な範囲",
+    "Related range": "関連する範囲",
+    "Open source range {n}": "ソース範囲 {n} を開く",
+    "Checking compiler source…": "コンパイラーのソースを確認中…",
+    "Visualize {code} source ranges…": "{code} のソース範囲を可視化…"
   }
 }

@@ -2010,5 +2010,20 @@
   },
   "about": {
     "Font licenses": "Licenças de fontes"
+  },
+  "borrow_errors": {
+    "Compiler source ranges are stale; save and rebuild before navigating": "Os intervalos do compilador estão desatualizados; salve e recompile antes de navegar",
+    "Compiler source is outside the loaded workspace": "O código-fonte do compilador está fora do workspace carregado",
+    "Compiler source navigation supports regular UTF-8 files up to 1 MB": "A navegação do compilador aceita arquivos UTF-8 regulares de até 1 MB",
+    "The compiler source range could not be validated": "Não foi possível validar o intervalo de código-fonte do compilador",
+    "Could not read the compiler source file": "Não foi possível ler o arquivo-fonte do compilador",
+    "Borrow checker source ranges": "Intervalos de código do verificador de empréstimos",
+    "Compiler labels show reported source ranges, not complete inferred lifetimes.": "Os rótulos do compilador mostram os intervalos informados, sem representar os lifetimes inferidos completos.",
+    "Compiler range details were truncated at the display limit": "Os detalhes dos intervalos do compilador foram truncados no limite de exibição",
+    "Primary range": "Intervalo principal",
+    "Related range": "Intervalo relacionado",
+    "Open source range {n}": "Abrir intervalo de código {n}",
+    "Checking compiler source…": "Verificando código-fonte do compilador…",
+    "Visualize {code} source ranges…": "Visualizar intervalos de código de {code}…"
   }
 }

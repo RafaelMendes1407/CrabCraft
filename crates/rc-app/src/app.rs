@@ -77,6 +77,7 @@ pub struct CrabCraftApp {
     pub cargo_input: String,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
+    pub borrow_errors: crate::borrow_errors::BorrowErrors,
     pub missing_crates: crate::missing_crates::MissingCrates,
     pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
@@ -314,6 +315,7 @@ impl CrabCraftApp {
             cargo_input: String::new(),
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
+            borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
             missing_crates: crate::missing_crates::MissingCrates::new(waker.clone()),
             cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
@@ -427,6 +429,7 @@ impl CrabCraftApp {
         };
         self.close_workspace();
         self.nuget = crate::ui::nuget::NugetManager::new(self.waker.clone());
+        self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         let (solution, solution_error) = match ws.solution() {
@@ -1345,6 +1348,7 @@ impl CrabCraftApp {
         self.files.close();
         self.vcs.close();
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
+        self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.find_in_files = None;
@@ -3438,6 +3442,7 @@ impl eframe::App for CrabCraftApp {
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
+        if self.borrow_errors.poll(&mut self.docs) { self.focus_editor = true; self.session_dirty = true; }
         self.missing_crates.update(&self.docs, &self.runner, self.cfg_epoch, &ctx);
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
