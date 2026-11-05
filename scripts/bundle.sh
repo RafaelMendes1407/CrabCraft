@@ -40,6 +40,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/CrabCraft"
 cp assets/CrabCraft.icns "$APP/Contents/Resources/CrabCraft.icns"
+python3 scripts/copy_notices.py "$APP/Contents/Resources"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -151,7 +152,7 @@ if (( WINDOWS )); then
     STAGE=$(mktemp -d)
     mkdir "$STAGE/CrabCraft"
     cp "target/$target/release/crabcraft.exe" "$STAGE/CrabCraft/CrabCraft.exe"
-    cp LICENSE-MIT LICENSE-APACHE "$STAGE/CrabCraft/"
+    python3 scripts/copy_notices.py "$STAGE/CrabCraft"
     ZIP_FILE="$PWD/target/release/CrabCraft-${VERSION}-windows-${WARCH}.zip"
     rm -f "$ZIP_FILE"
     (cd "$STAGE" && zip -qr "$ZIP_FILE" CrabCraft)
