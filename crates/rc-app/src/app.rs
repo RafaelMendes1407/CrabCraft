@@ -65,6 +65,7 @@ pub struct CrabCraftApp {
     pub disk_watch: crate::disk_watch::Watch,
     pub disk_save: crate::disk_save::Flow,
     pub disk_open: crate::disk_open::State,
+    pub file_edits: crate::file_edit::Edits,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -242,10 +243,17 @@ pub struct CrabCraftApp {
 }
 
 /// The edits of a compiler suggestion in characters of the editor, which reads `\r\n` as `\n`.
-fn fix_changes(text: &str, fix: &rc_dotnet::diagnostics::Fix) -> Option<Vec<rc_text::Change>> {
-    let chars = |byte: usize| text.get(..byte).map(|t| t.chars().count() - t.matches("\r\n").count());
-    let changes = fix.edits.iter().map(|(start, end, new)| Some(rc_text::Change { start: chars(*start)?, end: chars(*end)?, text: new.clone() }));
-    changes.collect()
+pub(crate) fn fix_changes(text: &str, fix: &rc_dotnet::diagnostics::Fix) -> Option<Vec<rc_text::Change>> {
+    if fix.edits.len()>256{return None;}
+    let bom=if text.starts_with('\u{feff}'){3}else{0};
+    let chars=|byte:usize|{let prefix=text.get(bom..byte)?;Some(prefix.chars().count()-prefix.matches("\r\n").count())};
+    let mut previous=0;let mut total=0usize;let mut changes=Vec::new();
+    for(start,end,new)in &fix.edits {
+        if *start<previous || end<start || *end>text.len(){return None;}
+        total=total.checked_add(new.len())?;if total>1024*1024{return None;}
+        changes.push(rc_text::Change::new(chars(*start)?,chars(*end)?,new.replace("\r\n","\n")));previous=*end;
+    }
+    Some(changes)
 }
 
 /// Text or a key other than the modifiers, which egui also reports as keys.
@@ -308,6 +316,7 @@ impl CrabCraftApp {
             disk_watch: Default::default(),
             disk_save: Default::default(),
             disk_open: Default::default(),
+            file_edits: Default::default(),
             keymap,
             editor_config,
             workspace: None,
@@ -1472,6 +1481,7 @@ impl CrabCraftApp {
         if self.defer_save(false,|app|app.close_workspace()){return;}
         self.disk_watch = Default::default();
         self.disk_open = Default::default();
+        self.file_edits = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
@@ -1768,6 +1778,8 @@ impl CrabCraftApp {
     }
 
     pub fn save_all_docs(&mut self) {
+        if self.disk_save.continuation.is_none() && !self.disk_save.saves.busy() && !self.disk_save.auxiliary.busy() && self.rustfmt_jobs.is_empty() { self.disk_save.failed = false; }
+        if self.file_edits.busy(){if self.disk_save.continuation.is_none(){self.defer_save(false,|app|app.save_all_docs());}return;}
         let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated).map(|(i,_)| i).collect();
         for i in modified { self.save_document_async(i, true); }
     }
@@ -2088,15 +2100,24 @@ impl CrabCraftApp {
     pub(crate) fn request_open_offset(&mut self,path:&Path,offset:usize) {self.request_open(path,Some(crate::disk_open::Position::Offset(offset)),false);}
     fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
     fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
+        if self.file_edits.busy(){self.cancel_disk_save();}
         if record {self.push_nav();} self.disk_open.cancel();
         if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some(position)=position { position.apply(&mut self.docs.list[index].editor); } self.focus_editor=true;self.session_dirty=true;return; }
         let mut request=crate::disk_open::Request::new(&mut self.docs,path,position); request.preview=preview;
         if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
     }
+    pub(crate) fn request_open_files(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() { return; }
+        if self.file_edits.busy() { self.cancel_disk_save(); }
+        self.push_nav();
+        if paths.len()>256 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
+        let requests=paths.into_iter().map(|path|crate::disk_open::Request::new(&mut self.docs,&path,None)).collect();
+        if let Err(error)=self.disk_open.request_many(requests,self.waker.clone()) { self.notify(error.to_string(),true); }
+    }
     pub(crate) fn poll_disk_open(&mut self) {
         for result in self.disk_open.poll(self.waker.clone()) {
             match result {
-                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);if let Some(position)=position {position.apply(&mut self.docs.list[index].editor);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
+                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{self.disk_open.cancel();continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);self.disk_open.set_active(self.docs.active_doc().map(|doc|doc.editor.id));if let Some(position)=position {position.apply(&mut self.docs.list[index].editor);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
                 Err(error)=>self.notify(error.to_string(),true),
             }
         }
@@ -2113,23 +2134,6 @@ impl CrabCraftApp {
             self.poll_disk_open();
             assert!(std::time::Instant::now()<until,"file opening did not finish: {}",path.display());
             std::thread::sleep(std::time::Duration::from_millis(2));
-        }
-    }
-
-    /// Synchronous legacy adapter for paths whose dependent edits/batch ordering are not yet migrated.
-    pub(crate) fn open_file_sync(&mut self, path: &Path) {
-        self.disk_open.cancel();
-        self.push_nav();
-        match self.docs.open(path) {
-            Ok(i) => {
-                // A Rust scratch gets analysed on its own.
-                if self.docs.list.get(i).is_some_and(|d| d.scratch && d.editor.lang() == rc_syntax::Lang::Rust) {
-                    self.update_linked();
-                }
-                self.focus_editor = true;
-                self.session_dirty = true;
-            }
-            Err(e) => self.notify(e, true),
         }
     }
 
@@ -2589,24 +2593,7 @@ impl CrabCraftApp {
 
     /// Applies the compiler's suggestion to its file, if that is still the text the compiler read.
     pub fn apply_build_fix(&mut self, file: &Path, fix: &rc_dotnet::diagnostics::Fix) {
-        let stale = tr("The file changed after the build: build again to apply this fix");
-        let source = std::fs::read(file).unwrap_or_default();
-        let same = rc_dotnet::diagnostics::source_hash(&source) == fix.source;
-        let open_changed = self.docs.index_of(file).is_some_and(|i| self.docs.list[i].is_modified());
-        let changes = String::from_utf8(source).ok().and_then(|text| fix_changes(&text, fix));
-        let (true, false, Some(changes)) = (same, open_changed, changes) else {
-            self.notify(stale, true);
-            return;
-        };
-        self.open_file_sync(file);
-        if let Some(doc) = self.docs.active_doc_mut() {
-            doc.editor.apply_text_edits(changes);
-        }
-        if let Some(b) = &mut self.runner.build {
-            for d in b.diagnostics.iter_mut().filter(|d| d.fix.as_ref() == Some(fix)) {
-                d.fix = None;
-            }
-        }
+        self.request_file_edit(file,crate::file_edit::Intent::Build(fix.clone()));
     }
 
     /// Opens the declaration of a test from its fully qualified name (Tests window).
@@ -3134,7 +3121,7 @@ impl CrabCraftApp {
         } else if self.opens_workspace(path) {
             self.open_workspace(path);
         } else if path.is_file() {
-            self.open_file_sync(path);
+            self.open_file(path);
         } else {
             self.notify(trf("Could not open {path}: {error}", &[("path", &path.display()), ("error", &tr("the file does not exist"))]), true);
         }
@@ -3146,9 +3133,7 @@ impl CrabCraftApp {
             dialog = dialog.set_directory(dir);
         }
         if let Some(paths) = dialog.pick_files() {
-            for p in paths {
-                self.open_path(&p);
-            }
+            self.open_paths(paths);
         }
     }
 
@@ -3198,9 +3183,7 @@ impl CrabCraftApp {
         if let Some(ws) = workspaces.first() {
             self.open_path(ws);
         }
-        for f in files {
-            self.open_path(&f);
-        }
+        self.request_open_files(files);
     }
 
     pub fn pick_solution(&mut self) {
@@ -3414,6 +3397,7 @@ impl CrabCraftApp {
                 w.solution = Some(s);
             }
         }
+        self.poll_file_edits();
         self.poll_disk_save();
         self.poll_disk_watch();
         self.docs.poll_parses();
@@ -3683,6 +3667,7 @@ impl eframe::App for CrabCraftApp {
         self.poll_repl();
         self.poll_disk_open();
         self.disk_open.show(&ctx);
+        self.file_edits.show(&ctx);
         self.poll_disk_revert();
         self.poll_terminal_startup();
         for (_, ev) in self.terminals.poll() {

@@ -56,6 +56,7 @@ mod http_cli;
 mod disassembly_view;
 mod disk_revert;
 mod disk_open;
+mod file_edit;
 mod disk_watch;
 mod disk_save;
 mod insight;

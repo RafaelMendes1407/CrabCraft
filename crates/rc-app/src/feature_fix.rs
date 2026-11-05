@@ -10,7 +10,7 @@
 
 use crate::app::{CrabCraftApp, FeatureState};
 use rc_cargo::feature_fix::{self, FeatureGate, TextEdit};
-use rc_kit::i18n::{tr, trf};
+use rc_kit::i18n::trf;
 use rc_lsp::lsp_types as lsp;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -129,25 +129,14 @@ impl CrabCraftApp {
             }
             FeatureFix::Default { ref manifest, .. } | FeatureFix::Dependency { ref manifest, .. } => {
                 let manifest = manifest.clone();
-                self.edit_manifest(&manifest, |text| fix.manifest_edit(text));
+                self.edit_manifest(&manifest, fix);
             }
         }
     }
 
     /// Opens `manifest` and makes the edit `edit` finds in its current text, undoably.
-    fn edit_manifest(&mut self, manifest: &Path, edit: impl FnOnce(&str) -> Option<TextEdit>) {
-        if manifest.file_name().is_none_or(|n| n != "Cargo.toml") {
-            return;
-        }
-        self.open_file_sync(manifest);
-        let Some(doc) = self.docs.active_doc_mut().filter(|d| d.path == manifest) else { return };
-        let text = doc.editor.buffer.rope().to_string();
-        match edit(&text) {
-            Some(e) => {
-                doc.editor.replace(e.start, e.end, &e.text);
-                doc.editor.selection = rc_text::Selection::point(e.start + e.text.chars().count());
-            }
-            None => self.notify(tr("The feature is already turned on in Cargo.toml"), false),
-        }
+    fn edit_manifest(&mut self, manifest: &Path, fix: FeatureFix) {
+        if manifest.file_name().is_none_or(|name|name!="Cargo.toml"){return;}
+        self.request_file_edit(manifest,crate::file_edit::Intent::Feature(fix));
     }
 }

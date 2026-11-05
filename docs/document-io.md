@@ -29,10 +29,19 @@ preview replacement, closed-file Back/Forward history without clearing its forwa
 actual subsequent Cargo execution, FIFO rejection, explicit cancellation,
 128 MiB rejection, and large/read-only syntax policy. Six search, three navigation, six Cargo-feature and five native UI regressions also pass.
 
-This is a staged migration. Session restoration, multi-file open/drop batches, manifest/build
-fixes that depend on an immediate edit, and saving still have synchronous callers. Saving/build/run/test/
-debug must move together behind a completion barrier so execution cannot observe stale disk
-contents. E-12 remains partial until those paths and ordering are implemented and verified.
+File/drop/dialog batches now prepare files serially on the same cancellable reader, retaining
+input order and existing unsaved buffers. A batch is limited to 256 files and 512 MiB;
+individual file limits still apply. Changing the active tab discards the remaining batch.
+Compiler suggestions and Cargo feature fixes prepare checked source snapshots and edits on
+workers, including closed files. Installation rejects changed documents and workspace context;
+BOM/CRLF compiler byte offsets map to normalized editor character offsets. Save and tool
+continuations wait for this preparation, and cancellation or rejection aborts waiting execution.
+Native tests cover ordered multi-file opening, cancellation, canonical aliases, closed-file
+Unicode/BOM/CRLF edits, undo, stale edits and a real Cargo build observing the edited feature.
+Existing real compiler and rust-analyzer feature-fix tests also pass.
+
+Saving and dependent execution now use the barriers described in background-saving.md.
+Session restoration and workspace preparation remain under migration; E-12 stays partial.
 The generic atomic writer already uses unique sibling temporaries, preserves existing file
 permissions and rejects special destinations; it does not promise power-loss durability or
 filesystem-wide compare-and-swap semantics.

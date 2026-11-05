@@ -2926,5 +2926,11 @@
     "Administrator Debug": "管理者デバッグ",
     "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "管理者デバッグ：式、条件付きブレークポイント、コンソールコマンドは使用できません",
     "Build and review again before requesting another administrator debug session": "次の管理者デバッグセッションを要求する前に、再ビルドして確認してください"
+  },
+  "file_edits": {
+    "Preparing file edit": "ファイル編集を準備中",
+    "The document changed while preparing the edit; unsaved edits were kept": "編集の準備中に文書が変更されました。未保存の編集は保持されました",
+    "The file edit exceeds its size or change limit": "ファイル編集がサイズまたは変更数の上限を超えています",
+    "Open at most 256 files and 512 MB at a time": "一度に開けるのは最大 256 ファイル、512 MB です"
   }
 }

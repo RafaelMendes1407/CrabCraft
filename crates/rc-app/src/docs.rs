@@ -163,6 +163,7 @@ pub fn style_fixes(editor: &EditorState, style: &rc_core::code_style::CodeStyle)
 pub enum TextReadError {
     Io(std::io::Error),
     NotRegular,
+    BatchLimit,
     TooLarge(u64),
     Binary,
     InvalidUtf8,
@@ -173,6 +174,7 @@ impl std::fmt::Display for TextReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
             Self::Io(error) => error.to_string(),
+            Self::BatchLimit => rc_kit::i18n::tr("Open at most 256 files and 512 MB at a time").to_string(),
             Self::NotRegular => rc_kit::i18n::tr("Only regular files can be opened in the editor").to_string(),
             Self::TooLarge(size) => trf("The file exceeds the editor's 128 MB limit ({size} MB)", &[("size", &(size / 1024 / 1024))]),
             Self::Binary => rc_kit::i18n::tr("This is a binary file and cannot be edited").to_string(),

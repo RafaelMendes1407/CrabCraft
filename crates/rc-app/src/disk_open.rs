@@ -56,12 +56,15 @@ pub struct Opened {
     pub active: Option<u64>,
     pub parse: bool,
 }
-fn prepare(request: &Request, cancel: &AtomicBool) -> Result<Opened, TextReadError> {
+pub(crate) fn prepare(request: &Request, cancel: &AtomicBool) -> Result<Opened, TextReadError> {
     if cancel.load(Ordering::Acquire) {
         return Err(TextReadError::Cancelled);
     }
     let path = request.path.canonicalize()?;
     let (text, bom, mtime) = crate::docs::read_text_cancellable(&path, Some(cancel))?;
+    prepare_loaded(request, path, text, bom, mtime, cancel)
+}
+pub(crate) fn prepare_loaded(request: &Request, path: PathBuf, text: String, bom: bool, mtime: Option<std::time::SystemTime>, cancel: &AtomicBool) -> Result<Opened, TextReadError> {
     let large = text.len().saturating_add(if bom { 3 } else { 0 }) > 8 * 1024 * 1024;
     let scratch = rc_core::scratch::is_in(&request.scratch_root, &path);
     let style = match &request.style_root {
@@ -132,16 +135,18 @@ struct Job {
 pub struct State {
     generation: u64,
     jobs: Vec<Job>,
-    pending: Option<Request>,
+    pending: std::collections::VecDeque<Request>,
     path: PathBuf,
+    remaining: usize,
 }
 impl Default for State {
     fn default() -> Self {
         Self {
             generation: 0,
             jobs: Vec::new(),
-            pending: None,
+            pending: Default::default(),
             path: PathBuf::new(),
+            remaining: 512 * 1024 * 1024,
         }
     }
 }
@@ -149,16 +154,26 @@ impl State {
     pub fn request(&mut self, request: Request, waker: Waker) -> Result<(), TextReadError> {
         self.cancel();
         self.path = request.path.clone();
-        self.pending = Some(request);
+        self.pending.push_back(request);
         self.launch(waker)
     }
+    pub fn request_many(&mut self, requests: Vec<Request>, waker: Waker) -> Result<(), TextReadError> {
+        self.cancel();
+        if requests.len() > 256 { return Err(TextReadError::BatchLimit); }
+        self.pending.extend(requests);
+        self.launch(waker)
+    }
+    pub fn set_active(&mut self, active: Option<u64>) {
+        for request in &mut self.pending { request.active = active; }
+    }
     fn launch(&mut self, waker: Waker) -> Result<(), TextReadError> {
-        if self.jobs.len() >= 2 {
+        if self.jobs.len() >= 2 || self.jobs.iter().any(|job| job.generation == self.generation) {
             return Ok(());
         }
-        let Some(request) = self.pending.take() else {
+        let Some(request) = self.pending.pop_front() else {
             return Ok(());
         };
+        self.path = request.path.clone();
         let inbox = Inbox::new(waker);
         let tx = inbox.sender();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -175,13 +190,14 @@ impl State {
     }
     pub fn cancel(&mut self) {
         self.generation = self.generation.wrapping_add(1);
-        self.pending = None;
+        self.pending.clear();
+        self.remaining = 512 * 1024 * 1024;
         for job in &self.jobs {
             job.cancel.store(true, Ordering::Release);
         }
     }
     pub fn busy(&self) -> bool {
-        self.pending.is_some()
+        !self.pending.is_empty()
             || self
                 .jobs
                 .iter()
@@ -189,6 +205,7 @@ impl State {
     }
     pub fn poll(&mut self, waker: Waker) -> Vec<Result<Opened, TextReadError>> {
         let mut results = Vec::new();
+        if let Err(error) = self.launch(waker) { results.push(Err(error)); }
         let mut i = 0;
         while i < self.jobs.len() {
             let Some(result) = self.jobs[i].inbox.drain().into_iter().next() else {
@@ -197,11 +214,10 @@ impl State {
             };
             let job = self.jobs.remove(i);
             if job.generation == self.generation {
-                results.push(result);
+                let bytes=result.as_ref().ok().map_or(0,|opened|opened.doc.editor.buffer.rope().len_bytes());
+                if bytes > self.remaining { self.cancel(); results.push(Err(TextReadError::BatchLimit)); }
+                else { self.remaining -= bytes; results.push(result); }
             }
-        }
-        if let Err(error) = self.launch(waker) {
-            results.push(Err(error));
         }
         results
     }
@@ -362,6 +378,7 @@ mod tests {
         h.state_mut().request_open_file(&main);
         let index = h.state().docs.index_of(&helper).unwrap();
         h.state_mut().close_tab(index);
+        h.state_mut().save_all_and_wait();
         let offset = 26usize;
         h.state_mut().nav_back = vec![(helper.clone(), offset)];
         h.state_mut().nav_forward.clear();
@@ -396,7 +413,7 @@ mod tests {
             )],
         );
         wait(&mut h);
-        assert!(h.state().docs.index_of(&preview_path).is_none());
+        assert!(h.state().docs.index_of(&preview_path).is_none(), "{:?}", h.state().docs.list.iter().map(|doc|(&doc.path,doc.preview,doc.is_modified())).collect::<Vec<_>>());
         assert!(h.state().docs.active_doc().unwrap().preview);
         assert_ne!(h.state().docs.active_doc().unwrap().editor.id, first_id);
         h.state_mut()
@@ -424,6 +441,31 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    }
+    #[test]
+    fn native_batch_opens_all_files_in_order_and_preserves_unsaved_aliases() {
+        let _lock=crate::screens::HOME_LOCK.lock().unwrap_or_else(|error|error.into_inner());
+        let home=tempfile::tempdir().unwrap();
+        let root=tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("Cargo.toml"),"[package]\nname=\"batch_demo\"\nversion=\"0.1.0\"\nedition=\"2021\"\n").unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        std::fs::write(root.path().join("build.rs"),"fn main(){ std::fs::write(\"BUILD_RAN\",\"\").unwrap(); }").unwrap();
+        let paths:Vec<_>=(0..4).map(|i|{let path=root.path().join(format!("src/file{i}.rs"));std::fs::write(&path,format!("pub fn value{i}()->u8{{{i}}}\n")).unwrap();path}).collect();
+        let mut app=crate::screens::test_app(home.path(),true);
+        app.open_file_and_wait(&paths[0]);
+        app.docs.active_doc_mut().unwrap().editor.replace(0,0,"// unsaved\n");
+        app.request_open_files(paths.clone());
+        let mut h=crate::screens::harness(app,egui::vec2(1200.0,800.0));wait(&mut h);
+        assert_eq!(h.state().docs.list.len(),4);
+        assert!(h.state().docs.list[0].editor.buffer.rope().to_string().starts_with("// unsaved"));
+        assert_eq!(h.state().docs.active_doc().unwrap().path,paths[3]);
+        assert!(!root.path().join("BUILD_RAN").exists());
+        h.state_mut().request_open_files(vec![paths[0].clone(),paths[1].clone()]);
+        h.state_mut().disk_open.cancel();h.run_steps(3);
+        assert_eq!(h.state().docs.active_doc().unwrap().path,paths[3]);
+        h.state_mut().request_open_files(vec![paths[0].clone();257]);
+        assert!(!h.state().disk_open.busy());
+        assert_eq!(h.state().docs.list.len(),4);
     }
     #[test]
     fn worker_reader_cancels_and_rejects_special_files_without_starting_project_tools() {

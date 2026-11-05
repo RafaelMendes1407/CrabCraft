@@ -2926,5 +2926,11 @@
     "Administrator Debug": "Debugowanie administratora",
     "Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable": "Debugowanie administratora: wyrażenia, warunkowe punkty przerwania i polecenia konsoli są niedostępne",
     "Build and review again before requesting another administrator debug session": "Zbuduj i sprawdź ponownie przed żądaniem kolejnej sesji administratora"
+  },
+  "file_edits": {
+    "Preparing file edit": "Przygotowywanie edycji pliku",
+    "The document changed while preparing the edit; unsaved edits were kept": "Dokument zmienił się podczas przygotowania; niezapisane zmiany zachowano",
+    "The file edit exceeds its size or change limit": "Edycja przekracza limit rozmiaru lub liczby zmian",
+    "Open at most 256 files and 512 MB at a time": "Otwieraj najwyżej 256 plików i 512 MB naraz"
   }
 }

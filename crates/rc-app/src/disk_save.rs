@@ -375,7 +375,8 @@ impl crate::app::CrabCraftApp {
         trust: bool,
         action: impl FnOnce(&mut Self) + 'static,
     ) -> bool {
-        if !self.disk_save.saves.busy()
+        if !self.file_edits.busy()
+            && !self.disk_save.saves.busy()
             && !self.disk_save.auxiliary.busy()
             && self.rustfmt_jobs.is_empty()
             && self.disk_save.format_pending.is_empty()
@@ -412,6 +413,7 @@ impl crate::app::CrabCraftApp {
                 .is_none_or(|w| self.settings.trusted_projects.contains(&w.ws.root))
     }
     pub fn cancel_disk_save(&mut self) {
+        self.file_edits.cancel(); self.file_edits.take_cancelled();
         self.disk_save.cancel();
         self.rustfmt_jobs = Default::default();
     }
@@ -425,6 +427,7 @@ impl crate::app::CrabCraftApp {
         self.disk_save.pending_workspace.as_deref()
     }
     pub(crate) fn poll_disk_save(&mut self) {
+        if self.file_edits.take_cancelled(){self.cancel_disk_save();}
         if self.rustfmt_jobs.is_empty()
             && let Some(id) = self.disk_save.format_pending.pop_first()
             && let Some(i) = self.docs.list.iter().position(|d| d.editor.id == id)
@@ -473,7 +476,8 @@ impl crate::app::CrabCraftApp {
         {
             self.cancel_disk_save();
         }
-        if self.disk_save.continuation.is_none()
+        if self.file_edits.busy()
+            || self.disk_save.continuation.is_none()
             || self.disk_save.failed
             || self.disk_save.saves.busy()
             || self.disk_save.auxiliary.busy()
@@ -506,12 +510,15 @@ impl crate::app::CrabCraftApp {
     pub(crate) fn save_all_and_wait(&mut self) {
         self.save_all_docs();
         let end = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        while self.disk_save.saves.busy()
+        while self.file_edits.busy()
+            || self.disk_save.continuation.is_some()
+            || self.disk_save.saves.busy()
             || self.disk_save.auxiliary.busy()
             || !self.rustfmt_jobs.is_empty()
             || !self.disk_save.format_pending.is_empty()
         {
             assert!(std::time::Instant::now() < end, "background save timed out");
+            self.poll_file_edits();
             self.poll_rustfmt();
             self.poll_disk_save();
             std::thread::sleep(std::time::Duration::from_millis(2));

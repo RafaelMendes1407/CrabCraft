@@ -1092,11 +1092,7 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
     let _ = ui.allocate_rect(rect, Sense::hover());
     // Files dropped on the window open in tabs.
     let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
-    for path in dropped {
-        if path.is_file() {
-            app.open_file_sync(&path);
-        }
-    }
+    app.open_paths(dropped);
 }
 
 /// Floating editor windows: each an OS window with its own groups of tabs. Closing one brings

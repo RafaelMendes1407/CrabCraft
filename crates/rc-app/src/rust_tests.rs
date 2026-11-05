@@ -32,6 +32,8 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
         app.poll_disk_open();
+        app.poll_file_edits();
+        app.poll_disk_save();
         let outs = app.runner.update();
         crate::ui::run_windows::handle_outputs(app, outs);
         app.docs.poll_parses();
@@ -407,6 +409,7 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     let changed = format!("// a comment\n{MAIN}");
     write(&file, &changed);
     app.apply_build_fix(&file, &fix);
+    pump(&mut app, "the prepared compiler fix", |a| !a.file_edits.busy());
     assert!(app.docs.index_of(&file).is_none());
     write(&file, MAIN);
 
@@ -414,12 +417,14 @@ fn a_compiler_suggestion_is_applied_only_to_the_text_it_was_made_for() {
     app.open_file_and_wait(&file);
     app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "\n");
     app.apply_build_fix(&file, &fix);
+    pump(&mut app, "the prepared compiler fix", |a| !a.file_edits.busy());
     assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), format!("\n{MAIN}"));
     app.docs.active_doc_mut().unwrap().editor.replace(0, 1, "");
     app.save_all_and_wait();
 
     let (file, fix) = build(&mut app);
     app.apply_build_fix(&file, &fix);
+    pump(&mut app, "the prepared compiler fix", |a| !a.file_edits.busy());
     let doc = app.docs.active_doc().unwrap();
     assert_eq!(doc.editor.buffer.rope().to_string(), MAIN.replace("let mut total", "let total"));
     assert!(doc.is_modified(), "the user decides when to save");
@@ -4063,6 +4068,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     assert_eq!(first, "Add feature `fs` to the tokio dependency");
     app.dialog = None;
     app.apply_feature_fix(tokio);
+    pump(&mut app, "the prepared manifest edit", |a| !a.file_edits.busy());
     let edited = MANIFEST.replace("default-features = false }", "default-features = false, features = [\"fs\"] }");
     let text = |a: &CrabCraftApp| a.docs.active_doc().unwrap().editor.buffer.rope().to_string();
     assert_eq!(app.docs.active_doc().unwrap().path, manifest);
