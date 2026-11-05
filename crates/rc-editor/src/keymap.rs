@@ -71,6 +71,7 @@ pub enum Action {
     RefactorThis,
     MoveItem,
     ChangeSignature,
+    RemoteDevelopment,
     GotoDeclaration,
     GotoImplementation,
     GotoTypeDeclaration,
@@ -267,6 +268,7 @@ impl Action {
                 | TestDeclarativeMacro
                 | MoveItem
                 | ChangeSignature
+                | RemoteDevelopment
                 | Profile
         )
     }

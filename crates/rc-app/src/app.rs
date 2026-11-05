@@ -93,6 +93,7 @@ pub struct CrabCraftApp {
     pub shelves: crate::shelves::Shelves,
     pub database: crate::database::Database,
     pub remote: crate::remote::Remote,
+    pub remote_development: Option<crate::remote_development::RemoteDevelopment>,
     pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub borrow_errors: crate::borrow_errors::BorrowErrors,
@@ -359,6 +360,7 @@ impl CrabCraftApp {
             shelves: crate::shelves::Shelves::new(waker.clone()),
             database: crate::database::Database::new(waker.clone()),
             remote: crate::remote::Remote::new(waker.clone()),
+            remote_development: None,
             endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             borrow_errors: crate::borrow_errors::BorrowErrors::new(waker.clone()),
@@ -1494,6 +1496,7 @@ impl CrabCraftApp {
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
         self.remote = crate::remote::Remote::new(self.waker.clone());
+        if let Some(remote) = &mut self.remote_development { remote.disconnect(); }
         self.http = crate::http_client::HttpClient::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
@@ -2269,6 +2272,7 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
+        if crate::remote_development::route(self, action) { return; }
         if matches!(action,Action::Build|Action::Run|Action::RunTests|Action::Debug) {
             let context=ctx.clone();if self.defer_save(true,move|app|app.run_ide_action(&context,action)){return;}
         }
@@ -2483,6 +2487,7 @@ impl CrabCraftApp {
             Action::InvalidateCaches if self.workspace.is_some() => self.dialog = Some(Dialog::InvalidateCaches { clean: false }),
             Action::TestDeclarativeMacro => crate::macro_tester::open(self),
             Action::ChangeSignature => crate::signature_change::open(self),
+            Action::RemoteDevelopment => crate::remote_development::open(self),
             Action::MoveItem => crate::move_items::open(self),
             Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),

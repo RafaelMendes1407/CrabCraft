@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 241 |
+| ✅ Pronto | 242 |
 | 🚧 Em andamento | 9 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 3 |
+| ⬜ A fazer | 2 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -350,7 +350,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Y-05 | Implantação por SFTP/FTP | 🚧 | M6 | SFTP OpenSSH nativo: arquivo UTF-8 existente até 2 MB, prévia local/remota e confirmação explícita, verificação de conteúdo local/remoto e upload temporário+rename; confiança/hostkey estrita, worker cancelável. Rust real, servidor SSH e UI verificados. FTP, novos arquivos, binários e sincronização ainda indisponíveis; SFTP não oferece CAS contra corrida concorrente; [escopo](docs/remote-files.md). |
 | Y-06 | Comparar e editar arquivos remotos | ✅ | M6 | Comparação textual lado a lado e edição nativa de arquivo SFTP existente: snapshot remoto somente leitura, proposta editável até 64 KB, prévia/confirmar, verificação contra alterações externas e recusa de conteúdo obsoleto. Prévias limitadas e limitações de rename/CAS explícitas; controles nativos + Rust real em servidor OpenSSH testados; [escopo](docs/remote-files.md). |
 | Y-07 | Configurações SSH e terminal SSH | ✅ | M6 | Host/porta/usuário/chave/known_hosts explícitos em memória, hostkey obrigatório, -F none sem configuração SSH/proxy/forward/agente herdados; terminal SSH na PTY nativa somente após confiança e ação explícita. Fixture OpenSSH real verifica autenticação/recusa de host desconhecido, cancelamento e comando digitado no terminal. Sem perfis persistidos/password prompts/aliases; [escopo](docs/remote-files.md). |
-| Y-08 | Desenvolvimento remoto | ⬜ | M6 | |
+| Y-08 | Desenvolvimento remoto | ✅ | M6 | Sessão SSH Linux explícita com confiança/chave/hostkey verificada, editor Rust nativo e namespace remoto separado. RA remoto fornece definição/completion plain/hover/diagnósticos versionados; upload SFTP revisado, Cargo check/build/test com diagnósticos navegáveis e cancelamento de grupos remotos. SSH real + Cargo/RA e UI provaram editar/upload/test, erro de tipo/navegação, troca/close local e reconnect/reload sem perda silenciosa e término de build.rs do Cargo e RA. Sem criação de arquivos/refactor amplo/debugger integrado/sessão persistida; limites e risco de corrida SFTP em `docs/remote-development.md`. |
 | Y-09 | Dev Containers | 🚧 | M6 | Painel nativo para CLI de referência instalada: Version/ReadConfiguration e Build/Up/Exec com preview de argv + confirmação separada; confiança e snapshot de projeto/configuração checados também no backend, nada executa ao abrir. Args separados sem shell do host, Docker path/endpoint locais explícitos, workers com cancelamento de árvore/limites/preview16K. UI alerta sobre initializeCommand no host, hooks, rede/mounts e código do projeto; cancel não promete rollback no daemon. Três testes com projeto Cargo real e CLI determinística validam no-exec/trust/confirm/argv/cancel e UI Up. CLI oficial0.90.0 passou leitura JSONC de projeto Rust real sem executar hooks, com catálogo Docker vazio determinístico (não é prova de contêiner); Up/Exec reais ainda dependem de daemon. IDE/LSP/build/debug dentro do contêiner, install/autoattach não suportados; portanto integração parcial. Ver docs/dev-containers.md |
 | Y-10 | Colaboração em tempo real | 🚫 | - | Exige serviço próprio |
 
