@@ -2582,5 +2582,30 @@
     "Docker output preview is limited to 16,384 characters": "出力プレビューは 16,384 文字までです",
     "Docker": "Docker",
     "Manage Docker resources only through explicit reviewed commands": "明示的に確認したコマンドのみで Docker リソースを管理"
+  },
+  "dev_containers": {
+    "Choose Dev Container and Docker executables and a command with separate arguments": "Dev Container、Docker 実行ファイルと個別引数のコマンドを指定してください",
+    "Review and confirm the Dev Container command before execution": "実行前に Dev Container コマンドを確認してください",
+    "Dev Container settings or project changed; review the command again": "設定またはプロジェクトが変わりました。コマンドを再確認してください",
+    "Could not start or communicate with the Dev Container CLI": "Dev Container CLI を起動できないか通信できません",
+    "Dev Container output or operation time limit exceeded": "Dev Container の出力または時間の上限を超えました",
+    "Dev Container CLI cancelled; containers or lifecycle processes may remain and need explicit management": "CLI をキャンセルしました。コンテナーやライフサイクル処理が残り、明示的な管理が必要な場合があります",
+    "Dev Container CLI failed: {message}": "Dev Container CLI エラー: {message}",
+    "Dev Container actions use the separately installed reference CLI. Nothing runs on project open.": "別途インストールした参照 CLI を利用します。プロジェクトを開く際には実行されません。",
+    "Build, Up and Exec can download images, bind host directories, run host initializeCommand and container lifecycle hooks, and execute project code. Review devcontainer.json and trust its entire configuration.": "Build、Up、Exec はイメージの取得、ホストディレクトリのマウント、ホスト initializeCommand、ライフサイクルフック、プロジェクトコードを実行し得ます。devcontainer.json 全体を確認し信頼してください。",
+    "Container-backed IDE editing, language servers, debugging, installation and automatic attach are unsupported. Manage remaining containers explicitly in Docker.": "コンテナー内 IDE 編集、言語サーバー、デバッグ、インストール、自動接続は未対応です。残ったコンテナーは Docker で明示的に管理してください。",
+    "Dev Container CLI executable": "Dev Container CLI 実行ファイル",
+    "Check Dev Container CLI": "Dev Container CLI を確認",
+    "Read Dev Container Configuration": "Dev Container 設定を読み取る",
+    "Review Dev Container Build": "Dev Container ビルドを確認",
+    "Review Dev Container Up": "Dev Container Up を確認",
+    "Command to execute inside the development container": "開発コンテナー内で実行するコマンド",
+    "Review Dev Container Exec": "Dev Container Exec を確認",
+    "I reviewed the command and configuration; authorize Dev Container execution": "コマンドと設定を確認し Dev Container の実行を承認します",
+    "Execute Reviewed Dev Container Command": "確認済み Dev Container コマンドを実行",
+    "Cancel Dev Container Request": "Dev Container リクエストをキャンセル",
+    "Dev Container output preview is limited to 16,384 characters": "Dev Container 出力プレビューは 16,384 文字までです",
+    "Dev Containers": "開発コンテナー",
+    "Use the reference CLI only after explicitly trusting its configuration": "設定を明示的に信頼してから参照 CLI を利用してください"
   }
 }

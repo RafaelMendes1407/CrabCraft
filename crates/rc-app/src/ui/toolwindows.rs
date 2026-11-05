@@ -40,6 +40,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Agents => crate::acp::show(app, ui),
         ToolWindow::Plugins => crate::plugins::show(app, ui),
         ToolWindow::Containers => crate::containers::show(app, ui),
+        ToolWindow::DevContainers => crate::dev_containers::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -548,6 +549,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Agents => (tr("ACP Agents"), tr("Start a trusted ACP agent explicitly")),
         ToolWindow::Plugins => (tr("Local Plugins"), tr("Install and run trusted local process extensions explicitly")),
         ToolWindow::Containers => (tr("Docker"), tr("Manage Docker resources only through explicit reviewed commands")),
+        ToolWindow::DevContainers => (tr("Dev Containers"), tr("Use the reference CLI only after explicitly trusting its configuration")),
         ToolWindow::Database => (tr("Database"), tr("Connect to a SQLite database explicitly")),
         ToolWindow::Remote => (tr("Remote files"), tr("Explicit SSH connections and reviewed SFTP transfers")),
         ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),

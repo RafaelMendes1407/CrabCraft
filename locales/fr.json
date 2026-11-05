@@ -2582,5 +2582,30 @@
     "Docker output preview is limited to 16,384 characters": "L’aperçu est limité à 16 384 caractères",
     "Docker": "Docker",
     "Manage Docker resources only through explicit reviewed commands": "Gérez Docker uniquement avec des commandes explicites vérifiées"
+  },
+  "dev_containers": {
+    "Choose Dev Container and Docker executables and a command with separate arguments": "Choisissez Dev Container, Docker et une commande aux arguments séparés",
+    "Review and confirm the Dev Container command before execution": "Vérifiez et confirmez la commande Dev Container avant exécution",
+    "Dev Container settings or project changed; review the command again": "La configuration ou le projet a changé ; vérifiez à nouveau la commande",
+    "Could not start or communicate with the Dev Container CLI": "Impossible de démarrer Dev Container CLI ou de communiquer avec lui",
+    "Dev Container output or operation time limit exceeded": "Limite de sortie ou de durée Dev Container dépassée",
+    "Dev Container CLI cancelled; containers or lifecycle processes may remain and need explicit management": "CLI annulée ; des conteneurs ou processus de cycle de vie peuvent subsister et nécessiter une gestion explicite",
+    "Dev Container CLI failed: {message}": "Échec de Dev Container CLI : {message}",
+    "Dev Container actions use the separately installed reference CLI. Nothing runs on project open.": "Ces actions utilisent la CLI de référence installée séparément. Rien ne démarre à l’ouverture du projet.",
+    "Build, Up and Exec can download images, bind host directories, run host initializeCommand and container lifecycle hooks, and execute project code. Review devcontainer.json and trust its entire configuration.": "Build, Up et Exec peuvent télécharger des images, monter des dossiers hôtes, lancer initializeCommand, des hooks et le code du projet. Vérifiez et approuvez toute la configuration devcontainer.json.",
+    "Container-backed IDE editing, language servers, debugging, installation and automatic attach are unsupported. Manage remaining containers explicitly in Docker.": "Édition IDE, serveurs de langage et débogage dans le conteneur, installation et connexion automatique non pris en charge. Gérez explicitement les conteneurs restants dans Docker.",
+    "Dev Container CLI executable": "Exécutable Dev Container CLI",
+    "Check Dev Container CLI": "Vérifier Dev Container CLI",
+    "Read Dev Container Configuration": "Lire la configuration Dev Container",
+    "Review Dev Container Build": "Vérifier la construction Dev Container",
+    "Review Dev Container Up": "Vérifier le démarrage Dev Container",
+    "Command to execute inside the development container": "Commande à exécuter dans le conteneur de développement",
+    "Review Dev Container Exec": "Vérifier l’exécution Dev Container",
+    "I reviewed the command and configuration; authorize Dev Container execution": "J’ai vérifié la commande et la configuration ; j’autorise l’exécution Dev Container",
+    "Execute Reviewed Dev Container Command": "Exécuter la commande Dev Container vérifiée",
+    "Cancel Dev Container Request": "Annuler la requête Dev Container",
+    "Dev Container output preview is limited to 16,384 characters": "L’aperçu Dev Container est limité à 16 384 caractères",
+    "Dev Containers": "Conteneurs de développement",
+    "Use the reference CLI only after explicitly trusting its configuration": "Utilisez la CLI de référence après avoir approuvé sa configuration"
   }
 }

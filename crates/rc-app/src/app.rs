@@ -78,6 +78,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub dev_containers: crate::dev_containers::DevContainers,
     pub containers: crate::containers::Containers,
     pub plugins: crate::plugins::Plugins,
     pub acp: crate::acp::Acp,
@@ -336,6 +337,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            dev_containers: crate::dev_containers::DevContainers::new(waker.clone()),
             containers: crate::containers::Containers::new(waker.clone()),
             plugins: crate::plugins::Plugins::new(waker.clone()),
             acp: crate::acp::Acp::new(waker.clone()),
@@ -1436,6 +1438,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.dev_containers = crate::dev_containers::DevContainers::new(self.waker.clone());
         self.containers = crate::containers::Containers::new(self.waker.clone());
         self.plugins = crate::plugins::Plugins::new(self.waker.clone());
         self.acp = crate::acp::Acp::new(self.waker.clone());
@@ -3279,6 +3282,7 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
         self.plugins.poll(acp_trusted);
         if self.acp.poll(acp_trusted) { self.dock.show(ToolWindow::Agents); }

@@ -25,10 +25,10 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Status | Itens |
 | --- | --- |
 | ✅ Pronto | 237 |
-| 🚧 Em andamento | 7 |
+| 🚧 Em andamento | 8 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 9 |
+| ⬜ A fazer | 8 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -351,7 +351,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | Y-06 | Comparar e editar arquivos remotos | ✅ | M6 | Comparação textual lado a lado e edição nativa de arquivo SFTP existente: snapshot remoto somente leitura, proposta editável até 64 KB, prévia/confirmar, verificação contra alterações externas e recusa de conteúdo obsoleto. Prévias limitadas e limitações de rename/CAS explícitas; controles nativos + Rust real em servidor OpenSSH testados; [escopo](docs/remote-files.md). |
 | Y-07 | Configurações SSH e terminal SSH | ✅ | M6 | Host/porta/usuário/chave/known_hosts explícitos em memória, hostkey obrigatório, -F none sem configuração SSH/proxy/forward/agente herdados; terminal SSH na PTY nativa somente após confiança e ação explícita. Fixture OpenSSH real verifica autenticação/recusa de host desconhecido, cancelamento e comando digitado no terminal. Sem perfis persistidos/password prompts/aliases; [escopo](docs/remote-files.md). |
 | Y-08 | Desenvolvimento remoto | ⬜ | M6 | |
-| Y-09 | Dev Containers | ⬜ | M6 | |
+| Y-09 | Dev Containers | 🚧 | M6 | Painel nativo para CLI de referência instalada: Version/ReadConfiguration e Build/Up/Exec com preview de argv + confirmação separada; confiança e snapshot de projeto/configuração checados também no backend, nada executa ao abrir. Args separados sem shell do host, Docker path/endpoint locais explícitos, workers com cancelamento de árvore/limites/preview16K. UI alerta sobre initializeCommand no host, hooks, rede/mounts e código do projeto; cancel não promete rollback no daemon. Três testes com projeto Cargo real e CLI determinística validam no-exec/trust/confirm/argv/cancel e UI Up. CLI oficial0.90.0 passou leitura JSONC de projeto Rust real sem executar hooks, com catálogo Docker vazio determinístico (não é prova de contêiner); Up/Exec reais ainda dependem de daemon. IDE/LSP/build/debug dentro do contêiner, install/autoattach não suportados; portanto integração parcial. Ver docs/dev-containers.md |
 | Y-10 | Colaboração em tempo real | 🚫 | - | Exige serviço próprio |
 
 ## 14. Plataforma da IDE

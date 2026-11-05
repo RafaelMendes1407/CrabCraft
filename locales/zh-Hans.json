@@ -2582,5 +2582,30 @@
     "Docker output preview is limited to 16,384 characters": "输出预览限于 16,384 个字符",
     "Docker": "Docker",
     "Manage Docker resources only through explicit reviewed commands": "仅通过显式审查的命令管理 Docker 资源"
+  },
+  "dev_containers": {
+    "Choose Dev Container and Docker executables and a command with separate arguments": "请选择 Dev Container、Docker 程序以及独立参数的命令",
+    "Review and confirm the Dev Container command before execution": "执行前请检查并确认 Dev Container 命令",
+    "Dev Container settings or project changed; review the command again": "设置或项目已更改；请重新审查命令",
+    "Could not start or communicate with the Dev Container CLI": "无法启动 Dev Container CLI 或与其通信",
+    "Dev Container output or operation time limit exceeded": "超出 Dev Container 输出或操作时间限制",
+    "Dev Container CLI cancelled; containers or lifecycle processes may remain and need explicit management": "已取消 CLI；容器或生命周期进程可能仍在运行，需要显式管理",
+    "Dev Container CLI failed: {message}": "Dev Container CLI 失败：{message}",
+    "Dev Container actions use the separately installed reference CLI. Nothing runs on project open.": "操作使用另行安装的参考 CLI。打开项目时不会运行任何操作。",
+    "Build, Up and Exec can download images, bind host directories, run host initializeCommand and container lifecycle hooks, and execute project code. Review devcontainer.json and trust its entire configuration.": "Build、Up 和 Exec 可以下载镜像、挂载宿主机目录、运行宿主 initializeCommand、容器生命周期钩子及项目代码。请检查并信任完整 devcontainer.json 配置。",
+    "Container-backed IDE editing, language servers, debugging, installation and automatic attach are unsupported. Manage remaining containers explicitly in Docker.": "不支持容器内 IDE 编辑、语言服务器、调试、安装或自动连接。请在 Docker 中显式管理残留容器。",
+    "Dev Container CLI executable": "Dev Container CLI 可执行文件",
+    "Check Dev Container CLI": "检查 Dev Container CLI",
+    "Read Dev Container Configuration": "读取 Dev Container 配置",
+    "Review Dev Container Build": "审查 Dev Container 构建",
+    "Review Dev Container Up": "审查 Dev Container Up",
+    "Command to execute inside the development container": "在开发容器内执行的命令",
+    "Review Dev Container Exec": "审查 Dev Container Exec",
+    "I reviewed the command and configuration; authorize Dev Container execution": "我已检查命令与配置；授权执行 Dev Container",
+    "Execute Reviewed Dev Container Command": "执行已审查的 Dev Container 命令",
+    "Cancel Dev Container Request": "取消 Dev Container 请求",
+    "Dev Container output preview is limited to 16,384 characters": "Dev Container 输出预览限于 16,384 个字符",
+    "Dev Containers": "开发容器",
+    "Use the reference CLI only after explicitly trusting its configuration": "仅在显式信任配置后使用参考 CLI"
   }
 }
