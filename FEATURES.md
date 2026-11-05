@@ -24,8 +24,8 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 173 |
-| 🚧 Em andamento | 9 |
+| ✅ Pronto | 174 |
+| 🚧 Em andamento | 8 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
 | ⬜ A fazer | 48 |
@@ -58,7 +58,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | P-05 | Toolchain Ferrocene (`criticalup.toml`) | ⬜ | M6 | |
 | P-06 | Variáveis de ambiente do projeto | ✅ | M3 | Por projeto (sessão), em Arquivo › Variáveis de ambiente do projeto…; aplicadas a todo comando cargo (metadata, build, run, test, janela Cargo), aos programas e ao rust-analyzer (reinicia ao mudar); as da configuração de execução prevalecem; testado com cargo e rust-analyzer reais |
 | P-07 | Novo projeto: Binary e Library | ✅ | M1 | `cargo new` com Binary e Library; criação testada com Cargo real |
-| P-08 | Novo projeto: WebAssembly e Procedural Macro | 🚧 | M4 | Feito: modelos Procedural Macro (`proc-macro = true`, syn/quote/proc-macro2, derive de exemplo e teste em `tests/`) e WebAssembly (`cdylib` + `rlib`, wasm-bindgen, função `#[wasm_bindgen]`) no diálogo Novo projeto; o diálogo avisa se faltam o target `wasm32-unknown-unknown` ou o wasm-pack, sem instalar nada. Testado com Cargo real: a macro passa em `cargo check` e `cargo test`; a biblioteca WebAssembly passa em `cargo test` nativo. Falta: verificar `cargo check --target wasm32-unknown-unknown` com o target instalado |
+| P-08 | Novo projeto: WebAssembly e Procedural Macro | ✅ | M4 | Feito: modelos Procedural Macro (`proc-macro = true`, syn/quote/proc-macro2, derive de exemplo e teste em `tests/`) e WebAssembly (`cdylib` + `rlib`, wasm-bindgen, função `#[wasm_bindgen]`) no diálogo Novo projeto; o diálogo avisa se faltam o target `wasm32-unknown-unknown` ou o wasm-pack, sem instalar nada. Testado com Cargo real: a macro passa em `cargo check` e `cargo test`; a biblioteca WebAssembly passa em `cargo test` nativo. Verificado também no target instalado: teste estrito `new_project::tests::webassembly_template_checks_on_the_real_wasm_target` gera o modelo e passa em `cargo check --target wasm32-unknown-unknown --offline` com Cargo/rustc reais |
 | P-09 | Modelos cargo-generate (repositório Git) | ✅ | M4 | Novo projeto › Modelo Git: URL ou repositório Git local, branch opcional, nome, pasta e opção de criar Git; exige cargo-generate 0.26+ e confiança explícita no modelo (trocar fonte/branch desfaz a confiança). Geração em segundo plano, Cancelar encerra o grupo de processos; saída limitada, erros apresentados e pasta existente nunca sobrescrita. Modo não interativo, sem comandos de shell dos hooks, submódulos, formatação ou alterações no workspace pai; variáveis precisam de padrões. Teste headless do diálogo e teste real com Git + cargo-generate: crate gerado passa cargo test; build.rs não roda na geração; hook de comando recusado. Fora: valores personalizados e seleção de submodelos |
 | P-10 | Configuração de run criada junto com o projeto | ✅ | M1 | Projeto novo abre com a config já selecionada e roda; teste real |
 | P-11 | Janela Project (árvore de arquivos e crates) | ✅ | M1 | Árvore de arquivos e Bibliotecas externas (stdlib e crates do `Cargo.lock`, somente leitura); visto na janela nativa com `serde`. Ícones de `.rs`, `.toml`, `Cargo.toml`, `Cargo.lock` e `.lock`; ao lado de um `Cargo.toml`, `src`/`examples` com ícone de fontes, `tests`/`benches` de testes e `target` de excluída; captura offscreen clara e escura conferida |
