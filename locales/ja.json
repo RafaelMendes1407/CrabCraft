@@ -2331,5 +2331,27 @@
     "Send Reviewed Operation": "確認済みの操作を送信",
     "CLI response (first 64 KiB)": "CLI の応答（先頭 64 KiB）",
     "Hosting": "ホスティング"
+  },
+  "settings_migration": {
+    "Apply imported editor preferences": "インポートしたエディター設定を適用",
+    "Autosave": "自動保存",
+    "Choose a settings.json or RustRover options XML file": "settings.json または RustRover オプションの XML ファイルを選択してください",
+    "Could not read editor preferences: {error}": "エディター設定を読み取れませんでした: {error}",
+    "Editor preferences": "エディター設定",
+    "Format on save": "保存時に整形",
+    "Import from another editor": "別のエディターからインポート",
+    "Import portable editor preferences with a preview. Commands, extensions, credentials and project trust are never imported.": "ポータブルなエディター設定をプレビューしてインポートします。コマンド、拡張機能、認証情報、プロジェクトの信頼はインポートされません。",
+    "Indent guides": "インデントガイド",
+    "Inlay hints": "インレイヒント",
+    "Interface zoom": "インターフェースのズーム",
+    "Line spacing": "行間",
+    "Read editor preferences": "エディター設定を読み込む",
+    "Right margin": "右マージン",
+    "Source editor": "元のエディター",
+    "Source preferences file": "元の設定ファイル",
+    "Sticky lines": "固定行",
+    "The editor preferences exceed the import limits": "エディター設定がインポート制限を超えています",
+    "The source preferences contain an unsupported value": "元の設定に未対応の値が含まれています",
+    "Unsupported preferences (left unchanged)": "未対応の設定（変更なし）"
   }
 }

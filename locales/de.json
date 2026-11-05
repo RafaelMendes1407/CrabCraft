@@ -2331,5 +2331,27 @@
     "Send Reviewed Operation": "Geprüften Vorgang senden",
     "CLI response (first 64 KiB)": "CLI-Antwort (erste 64 KiB)",
     "Hosting": "Hosting"
+  },
+  "settings_migration": {
+    "Apply imported editor preferences": "Importierte Editor-Einstellungen anwenden",
+    "Autosave": "Automatisches Speichern",
+    "Choose a settings.json or RustRover options XML file": "Eine settings.json- oder RustRover-Optionsdatei wählen",
+    "Could not read editor preferences: {error}": "Editor-Einstellungen konnten nicht gelesen werden: {error}",
+    "Editor preferences": "Editor-Einstellungen",
+    "Format on save": "Beim Speichern formatieren",
+    "Import from another editor": "Aus einem anderen Editor importieren",
+    "Import portable editor preferences with a preview. Commands, extensions, credentials and project trust are never imported.": "Portable Editor-Einstellungen mit Vorschau importieren. Befehle, Erweiterungen, Zugangsdaten und Projektvertrauen werden nie importiert.",
+    "Indent guides": "Einrückungslinien",
+    "Inlay hints": "Inline-Hinweise",
+    "Interface zoom": "Oberflächenzoom",
+    "Line spacing": "Zeilenabstand",
+    "Read editor preferences": "Editor-Einstellungen lesen",
+    "Right margin": "Rechter Rand",
+    "Source editor": "Quell-Editor",
+    "Source preferences file": "Quelldatei der Einstellungen",
+    "Sticky lines": "Fixierte Zeilen",
+    "The editor preferences exceed the import limits": "Die Editor-Einstellungen überschreiten die Importgrenzen",
+    "The source preferences contain an unsupported value": "Die Quell-Einstellungen enthalten einen nicht unterstützten Wert",
+    "Unsupported preferences (left unchanged)": "Nicht unterstützte Einstellungen (unverändert)"
   }
 }

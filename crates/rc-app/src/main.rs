@@ -18,6 +18,7 @@ mod repl_variables;
 mod macro_tester;
 mod doctest_completion;
 mod settings_backup;
+mod settings_migration;
 mod instance;
 mod auto_attach;
 mod breakpoint_list;

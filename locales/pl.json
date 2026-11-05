@@ -2331,5 +2331,27 @@
     "Send Reviewed Operation": "Wyślij sprawdzoną operację",
     "CLI response (first 64 KiB)": "Odpowiedź CLI (pierwsze 64 KiB)",
     "Hosting": "Hosting"
+  },
+  "settings_migration": {
+    "Apply imported editor preferences": "Zastosuj importowane preferencje edytora",
+    "Autosave": "Automatyczny zapis",
+    "Choose a settings.json or RustRover options XML file": "Wybierz plik settings.json lub XML opcji RustRover",
+    "Could not read editor preferences: {error}": "Nie można odczytać preferencji edytora: {error}",
+    "Editor preferences": "Preferencje edytora",
+    "Format on save": "Formatuj przy zapisie",
+    "Import from another editor": "Importuj z innego edytora",
+    "Import portable editor preferences with a preview. Commands, extensions, credentials and project trust are never imported.": "Importuj przenośne preferencje z podglądem. Polecenia, rozszerzenia, dane uwierzytelniające i zaufanie do projektów nie są importowane.",
+    "Indent guides": "Prowadnice wcięć",
+    "Inlay hints": "Wskazówki w kodzie",
+    "Interface zoom": "Powiększenie interfejsu",
+    "Line spacing": "Interlinia",
+    "Read editor preferences": "Odczytaj preferencje edytora",
+    "Right margin": "Prawy margines",
+    "Source editor": "Edytor źródłowy",
+    "Source preferences file": "Źródłowy plik preferencji",
+    "Sticky lines": "Przypięte wiersze",
+    "The editor preferences exceed the import limits": "Preferencje edytora przekraczają limity importu",
+    "The source preferences contain an unsupported value": "Preferencje źródłowe zawierają nieobsługiwaną wartość",
+    "Unsupported preferences (left unchanged)": "Nieobsługiwane preferencje (bez zmian)"
   }
 }

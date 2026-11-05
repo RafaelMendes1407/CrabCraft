@@ -2331,5 +2331,27 @@
     "Send Reviewed Operation": "发送已审阅操作",
     "CLI response (first 64 KiB)": "CLI 响应（前 64 KiB）",
     "Hosting": "托管"
+  },
+  "settings_migration": {
+    "Apply imported editor preferences": "应用导入的编辑器偏好设置",
+    "Autosave": "自动保存",
+    "Choose a settings.json or RustRover options XML file": "选择 settings.json 或 RustRover 选项 XML 文件",
+    "Could not read editor preferences: {error}": "无法读取编辑器偏好设置：{error}",
+    "Editor preferences": "编辑器偏好设置",
+    "Format on save": "保存时格式化",
+    "Import from another editor": "从其他编辑器导入",
+    "Import portable editor preferences with a preview. Commands, extensions, credentials and project trust are never imported.": "预览并导入可移植的编辑器偏好设置。不会导入命令、扩展、凭据或项目信任。",
+    "Indent guides": "缩进参考线",
+    "Inlay hints": "嵌入提示",
+    "Interface zoom": "界面缩放",
+    "Line spacing": "行间距",
+    "Read editor preferences": "读取编辑器偏好设置",
+    "Right margin": "右边距",
+    "Source editor": "来源编辑器",
+    "Source preferences file": "来源偏好设置文件",
+    "Sticky lines": "固定行",
+    "The editor preferences exceed the import limits": "编辑器偏好设置超出导入限制",
+    "The source preferences contain an unsupported value": "来源偏好设置包含不受支持的值",
+    "Unsupported preferences (left unchanged)": "不支持的偏好设置（保持不变）"
   }
 }

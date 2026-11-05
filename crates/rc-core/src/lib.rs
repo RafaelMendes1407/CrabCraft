@@ -15,6 +15,7 @@ pub mod scratch;
 pub mod session;
 pub mod settings;
 pub mod settings_transfer;
+pub mod editor_import;
 pub mod processes;
 pub mod watch;
 pub mod workspace;

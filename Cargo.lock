@@ -3660,6 +3660,7 @@ dependencies = [
  "libc",
  "notify",
  "parking_lot",
+ "quick-xml",
  "serde",
  "serde_json",
  "tempfile",
