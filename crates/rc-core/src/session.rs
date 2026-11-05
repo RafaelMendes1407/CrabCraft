@@ -130,6 +130,7 @@ pub struct IssueTrackerConfig { pub provider: String, pub base_url: String, pub 
 #[serde(default)]
 pub struct Session {
     pub issue_tracker: Option<IssueTrackerConfig>,
+    pub hosting: Option<IssueTrackerConfig>,
     /// Whole-file local changelists. Session data is validated before use.
     pub changelists: crate::changelists::Changelists,
     pub files: Vec<OpenFile>,

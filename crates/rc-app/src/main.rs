@@ -193,3 +193,5 @@ mod shelves;
 mod history_edit;
 
 mod issue_tracker;
+
+mod hosting;

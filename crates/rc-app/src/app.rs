@@ -76,6 +76,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub hosting: crate::hosting::Hosting,
     pub issue_tracker: crate::issue_tracker::Tracker,
     pub history_edit: crate::history_edit::HistoryEdit,
     pub shelves: crate::shelves::Shelves,
@@ -326,6 +327,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            hosting: crate::hosting::Hosting::new(waker.clone()),
             issue_tracker: crate::issue_tracker::Tracker::new(waker.clone()),
             history_edit: crate::history_edit::HistoryEdit::new(waker.clone()),
             shelves: crate::shelves::Shelves::new(waker.clone()),
@@ -1414,6 +1416,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.hosting = crate::hosting::Hosting::new(self.waker.clone());
         self.issue_tracker = crate::issue_tracker::Tracker::new(self.waker.clone());
         self.history_edit = crate::history_edit::HistoryEdit::new(self.waker.clone());
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
@@ -1455,6 +1458,7 @@ impl CrabCraftApp {
     }
 
     fn restore_session(&mut self, s: Session) {
+        self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
         // A solution without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
@@ -1588,6 +1592,7 @@ impl CrabCraftApp {
         let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
         let (editor_layout, editor_windows) = self.layout.to_session(|id| self.docs.list.iter().position(|d| d.editor.id == id));
         Session {
+            hosting: Some(self.hosting.config.clone()),
             issue_tracker: Some(self.issue_tracker.config.clone()),
             files,
             active: self.docs.active,
@@ -3247,6 +3252,7 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        self.hosting.poll();
         if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
             self.statement_completion = None;
             if let Err(message) = result { self.notify(message, false); }
