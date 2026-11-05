@@ -11,6 +11,7 @@ mod context;
 mod derive;
 mod highlight;
 pub mod http;
+pub mod axum;
 mod lang;
 mod parse;
 mod structure;

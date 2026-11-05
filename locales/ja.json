@@ -1977,5 +1977,26 @@
     "Discard and Reload": "破棄して再読み込み",
     "Reading disk version…": "ディスク上のバージョンを読み取り中…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "ファイルがエディターの 128 MB 制限を超えています（{size} MB）"
+  },
+  "endpoints": {
+    "Endpoints": "エンドポイント",
+    "Open a Cargo project to scan Axum endpoints": "Cargo プロジェクトを開いて Axum のエンドポイントを調べてください",
+    "Refresh Endpoints": "エンドポイントを更新",
+    "Cancel Scan": "スキャンをキャンセル",
+    "Endpoint scan cancelled": "エンドポイントのスキャンをキャンセルしました",
+    "Filter method, path or handler": "メソッド、パス、ハンドラーで絞り込む",
+    "Route hints": "ルートのヒント",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "保存済みソースの静的スナップショットです。無効な cfg 分岐も含みます。編集後は更新してください。マクロ、実行時のパス、ファイルをまたぐルーター合成には対応していません。",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} 件のルート。{skipped} 個のファイルをスキップし、{unresolved} 個の式を解決できませんでした。",
+    "Endpoint scan reached its safety limits; results are incomplete": "スキャンが上限に達しました。結果は不完全です",
+    "Go to Route": "ルートへ移動",
+    "Go to Handler": "ハンドラーへ移動",
+    "Generate Reqwest Call": "Reqwest の呼び出しを生成",
+    "Base URL": "ベース URL",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Cargo.toml の reqwest と非同期ランタイムが必要です。コードを生成するだけで、何も送信しません。",
+    "Copy Reqwest Call": "Reqwest の呼び出しをコピー",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "クエリやフラグメントのない HTTP または HTTPS のベース URL を入力してください",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "すべてのルートパラメーターを入力してください。未対応の構文は生成できません",
+    "Choose a supported HTTP method": "対応する HTTP メソッドを選んでください"
   }
 }

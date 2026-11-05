@@ -1977,5 +1977,26 @@
     "Discard and Reload": "Descartar e recarregar",
     "Reading disk version…": "Lendo versão do disco…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "O arquivo excede o limite de 128 MB do editor ({size} MB)"
+  },
+  "endpoints": {
+    "Endpoints": "Endpoints",
+    "Open a Cargo project to scan Axum endpoints": "Abra um projeto Cargo para buscar endpoints Axum",
+    "Refresh Endpoints": "Atualizar endpoints",
+    "Cancel Scan": "Cancelar busca",
+    "Endpoint scan cancelled": "Busca de endpoints cancelada",
+    "Filter method, path or handler": "Filtrar método, caminho ou handler",
+    "Route hints": "Hints de rotas",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "Retrato estático do código salvo, incluindo ramos cfg inativos. Atualize após editar. Macros, caminhos dinâmicos e composição de routers entre arquivos não são suportados.",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} rotas; {skipped} arquivos ignorados e {unresolved} expressões não resolvidas.",
+    "Endpoint scan reached its safety limits; results are incomplete": "A busca atingiu seus limites; os resultados estão incompletos",
+    "Go to Route": "Ir para a rota",
+    "Go to Handler": "Ir para o handler",
+    "Generate Reqwest Call": "Gerar chamada Reqwest",
+    "Base URL": "URL base",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Exige reqwest em Cargo.toml e runtime assíncrono. Apenas gera código; nada é enviado.",
+    "Copy Reqwest Call": "Copiar chamada Reqwest",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "Informe uma URL base HTTP ou HTTPS sem consulta ou fragmento",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "Preencha os parâmetros; sintaxe não suportada não pode ser gerada",
+    "Choose a supported HTTP method": "Escolha um método HTTP suportado"
   }
 }

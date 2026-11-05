@@ -75,6 +75,7 @@ pub struct CrabCraftApp {
     pub nuget: crate::ui::nuget::NugetManager,
     /// What is typed in the Cargo window.
     pub cargo_input: String,
+    pub endpoints: crate::endpoints::Endpoints,
     pub clone_project: crate::clone_project::CloneProject,
     pub cargo_dependencies: crate::cargo_dependencies::CargoDependencies,
     /// Members folded in the Cargo window.
@@ -310,6 +311,7 @@ impl CrabCraftApp {
             vcs: crate::vcs::Vcs::new(waker.clone()),
             nuget: crate::ui::nuget::NugetManager::new(waker.clone()),
             cargo_input: String::new(),
+            endpoints: crate::endpoints::Endpoints::new(waker.clone()),
             clone_project: crate::clone_project::CloneProject::new(waker.clone()),
             cargo_dependencies: crate::cargo_dependencies::CargoDependencies::new(waker.clone()),
             toolchain: None,
@@ -1339,6 +1341,7 @@ impl CrabCraftApp {
         self.runner.clear();
         self.files.close();
         self.vcs.close();
+        self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.find_in_files = None;
         self.search_everywhere = None;
@@ -2796,6 +2799,7 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
+        if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
         self.dock.toggle(tw);
         if was_open {
             self.focus_editor = true;
@@ -3134,6 +3138,7 @@ impl CrabCraftApp {
     // ------------------------------------------------------------------ frame
 
     fn poll_background(&mut self) {
+        self.endpoints.poll(&mut self.docs);
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();
             if find.replacements.poll(&mut self.docs) {

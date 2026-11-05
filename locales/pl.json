@@ -1977,5 +1977,26 @@
     "Discard and Reload": "Odrzuć i załaduj ponownie",
     "Reading disk version…": "Odczytywanie wersji z dysku…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "Plik przekracza limit edytora wynoszący 128 MB ({size} MB)"
+  },
+  "endpoints": {
+    "Endpoints": "Endpointy",
+    "Open a Cargo project to scan Axum endpoints": "Otwórz projekt Cargo, aby wyszukać endpointy Axum",
+    "Refresh Endpoints": "Odśwież endpointy",
+    "Cancel Scan": "Anuluj skanowanie",
+    "Endpoint scan cancelled": "Anulowano skanowanie endpointów",
+    "Filter method, path or handler": "Filtruj metodę, ścieżkę lub handler",
+    "Route hints": "Wskazówki tras",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "Statyczny obraz zapisanych źródeł, także nieaktywnych gałęzi cfg. Odśwież po edycji. Makra, dynamiczne ścieżki i składanie routerów między plikami nie są obsługiwane.",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} tras; pominięto {skipped} plików, {unresolved} nierozwiązanych wyrażeń.",
+    "Endpoint scan reached its safety limits; results are incomplete": "Skanowanie osiągnęło limity; wyniki są niepełne",
+    "Go to Route": "Przejdź do trasy",
+    "Go to Handler": "Przejdź do handlera",
+    "Generate Reqwest Call": "Wygeneruj wywołanie Reqwest",
+    "Base URL": "Bazowy URL",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Wymaga reqwest w Cargo.toml i środowiska asynchronicznego. Tylko generuje kod; niczego nie wysyła.",
+    "Copy Reqwest Call": "Kopiuj wywołanie Reqwest",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "Podaj bazowy URL HTTP lub HTTPS bez zapytania i fragmentu",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "Wypełnij parametry; nieobsługiwana składnia nie może być wygenerowana",
+    "Choose a supported HTTP method": "Wybierz obsługiwaną metodę HTTP"
   }
 }

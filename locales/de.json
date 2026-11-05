@@ -1977,5 +1977,26 @@
     "Discard and Reload": "Verwerfen und neu laden",
     "Reading disk version…": "Dateiversion wird vom Datenträger gelesen…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "Die Datei überschreitet das 128-MB-Limit des Editors ({size} MB)"
+  },
+  "endpoints": {
+    "Endpoints": "Endpunkte",
+    "Open a Cargo project to scan Axum endpoints": "Ein Cargo-Projekt öffnen, um Axum-Endpunkte zu suchen",
+    "Refresh Endpoints": "Endpunkte aktualisieren",
+    "Cancel Scan": "Analyse abbrechen",
+    "Endpoint scan cancelled": "Endpunktanalyse abgebrochen",
+    "Filter method, path or handler": "Methode, Pfad oder Handler filtern",
+    "Route hints": "Routenhinweise",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "Statischer Stand gespeicherter Quellen einschließlich inaktiver cfg-Zweige. Nach Änderungen aktualisieren. Makros, Laufzeitpfade und Router-Komposition über Dateien werden nicht unterstützt.",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} Routen; {skipped} Dateien übersprungen, {unresolved} Ausdrücke nicht aufgelöst.",
+    "Endpoint scan reached its safety limits; results are incomplete": "Analysegrenzen erreicht; Ergebnisse sind unvollständig",
+    "Go to Route": "Zur Route wechseln",
+    "Go to Handler": "Zum Handler wechseln",
+    "Generate Reqwest Call": "Reqwest-Aufruf erzeugen",
+    "Base URL": "Basis-URL",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Erfordert reqwest in Cargo.toml und eine asynchrone Laufzeit. Erzeugt nur Code; nichts wird gesendet.",
+    "Copy Reqwest Call": "Reqwest-Aufruf kopieren",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "HTTP- oder HTTPS-Basis-URL ohne Query oder Fragment eingeben",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "Alle Routenparameter ausfüllen; nicht unterstützte Syntax kann nicht erzeugt werden",
+    "Choose a supported HTTP method": "Eine unterstützte HTTP-Methode wählen"
   }
 }

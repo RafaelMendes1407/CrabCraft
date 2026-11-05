@@ -1977,5 +1977,26 @@
     "Discard and Reload": "Abandonner et recharger",
     "Reading disk version…": "Lecture de la version sur disque…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "Le fichier dépasse la limite de 128 Mo de l’éditeur ({size} Mo)"
+  },
+  "endpoints": {
+    "Endpoints": "Endpoints",
+    "Open a Cargo project to scan Axum endpoints": "Ouvrez un projet Cargo pour rechercher ses endpoints Axum",
+    "Refresh Endpoints": "Actualiser les endpoints",
+    "Cancel Scan": "Annuler l’analyse",
+    "Endpoint scan cancelled": "Analyse des endpoints annulée",
+    "Filter method, path or handler": "Filtrer méthode, chemin ou gestionnaire",
+    "Route hints": "Indications de routes",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "Instantané statique des sources enregistrées, branches cfg inactives incluses. Actualisez après modification. Macros, chemins dynamiques et composition entre fichiers non pris en charge.",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} routes ; {skipped} fichiers ignorés, {unresolved} expressions non résolues.",
+    "Endpoint scan reached its safety limits; results are incomplete": "L’analyse a atteint ses limites ; résultats incomplets",
+    "Go to Route": "Aller à la route",
+    "Go to Handler": "Aller au gestionnaire",
+    "Generate Reqwest Call": "Générer un appel Reqwest",
+    "Base URL": "URL de base",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Nécessite reqwest dans Cargo.toml et un runtime asynchrone. Génère uniquement du code, sans rien envoyer.",
+    "Copy Reqwest Call": "Copier l’appel Reqwest",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "Saisissez une URL HTTP ou HTTPS sans requête ni fragment",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "Renseignez les paramètres ; une syntaxe non prise en charge ne peut pas être générée",
+    "Choose a supported HTTP method": "Choisissez une méthode HTTP prise en charge"
   }
 }

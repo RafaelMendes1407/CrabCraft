@@ -34,6 +34,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
         ToolWindow::Nuget => crate::ui::nuget::window(app, ui),
         ToolWindow::Cargo => crate::ui::cargo_window::show(app, ui),
         ToolWindow::Http => crate::ui::http_window::show(app, ui),
+        ToolWindow::Endpoints => crate::endpoints::show(app, ui),
         ToolWindow::Profiler => crate::ui::profiler_window::show(app, ui),
         ToolWindow::Hierarchy => {
             if header(ui, tw.title()) {
@@ -534,6 +535,7 @@ fn empty_text(tw: ToolWindow) -> (&'static str, &'static str) {
         ToolWindow::Http => (tr("No requests sent yet"), tr("Open an .http file and click the run icon next to a request.")),
         ToolWindow::Hierarchy => (tr("No hierarchy"), tr("Place the caret on a function and press Ctrl+Alt+H.")),
         ToolWindow::Explorer => ("", ""),
+        ToolWindow::Endpoints => (tr("Endpoints"), tr("Open a Cargo project to scan Axum endpoints")),
     }
 }
 

@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 196 |
-| 🚧 Em andamento | 10 |
+| ✅ Pronto | 198 |
+| 🚧 Em andamento | 11 |
 | 🟢 Herdado | 6 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 41 |
+| ⬜ A fazer | 38 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -329,9 +329,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | F-03 | HTTP Client (arquivos `.http`) | ✅ | M5 | Arquivos `.http` e `.rest` com realce; requisições separadas por `###` (método, URL com linhas `?`/`&` de continuação, cabeçalhos, corpo, nome por `### nome` ou `# @name`); ícone de execução na margem de cada requisição envia em segundo plano (cancelável, tempo limite de 60 s, corpo limitado a 8 MB). Janela HTTP Client: histórico da sessão, status, tempos, tamanho, cabeçalhos e corpo (JSON reindentado sem reordenar), link de volta à requisição; funciona também com arquivo avulso. Variáveis de arquivo são resolvidas por F-04; variáveis não resolvidas, `< arquivo`, scripts `> {% %}`, `>> arquivo` e diretivas `# @…` aparecem como avisos (referências não resolvidas e `< arquivo` impedem o envio). Testado contra servidor HTTP local; capturas conferidas. Fora: tudo de F-04, WebSocket/gRPC/GraphQL, cookies entre requisições, abrir a resposta no editor |
 | F-04 | HTTP Client: variáveis, OAuth 2.0, scripts | 🚧 | M5 | Variáveis de arquivo `@nome = valor` e referências `{{nome}}` em URL, cabeçalhos e corpo, no cliente gráfico e na CLI; escopo de arquivo, última declaração prevalece e referências aninhadas. Ausentes, ciclos e chaves incompletas impedem envio; limites de 256 variáveis, 32 níveis e 1 MB expandido/cache. Sem acesso implícito ao ambiente ou execução de scripts. Testes de parser/resolvedor, UI, servidor HTTP local com referências aninhadas e rejeição de ciclos/expansão exponencial; corpos sem variáveis mantêm o limite anterior. Ver docs/http-variables.md. Falta: arquivos de ambiente, OAuth 2.0 e scripts. Avanço parcial: `b882459`, [#105](https://github.com/RafaelMendes1407/CrabCraft/issues/105). |
 | F-05 | HTTP Client CLI | ✅ | M6 | `crabcraft http arquivo.http [--request N]` envia uma requisição sem abrir janela ou carregar projeto. Arquivos com várias requisições exigem seleção explícita. JSON no stdout inclui status, cabeçalhos, corpo, duração e avisos; corpo binário usa vetor de bytes, sem imprimir escapes remotos diretamente no terminal. Limites de arquivo e resposta de 8 MB, timeout de 60 s e Ctrl+C; código 1 para HTTP >= 400, falha de rede ou resposta cortada. Usa o resolvedor de variáveis de arquivo de F-04; variáveis não resolvidas e corpo de arquivo impedem envio. Teste com servidor HTTP local, resposta 404 e escapes no corpo, dentro de projeto Cargo com build.rs que falharia se executado; seleção e rejeição de casos ambíguos/variáveis também testadas. Leitura recusa arquivos especiais e verifica o descritor aberto; no Unix, a abertura não bloqueia em FIFOs mesmo com troca do caminho. Entrega verificada: `79444b4`, [#106](https://github.com/RafaelMendes1407/CrabCraft/issues/106). |
-| F-06 | Axum: completar URLs e hints de rotas (2026.2) | ⬜ | M5 | |
-| F-07 | Janela Endpoints | ⬜ | M5 | |
-| F-08 | Gerar chamada Reqwest a partir de endpoint (2026.2) | ⬜ | M5 | |
+| F-06 | Axum: completar URLs e hints de rotas (2026.2) | 🚧 | M5 | Hints estáticos na linha das declarações de rota Rust após a busca da janela Endpoints, com métodos e caminhos compostos no mesmo arquivo. Só aparecem quando o editor corresponde ao código salvo analisado; editar limpa os hints, Atualizar refaz. Testado headless num projeto Axum real. Falta: completar URLs em strings/requisições, inferência semântica, expansão de macros e composição entre arquivos. Ver docs/axum-endpoints.md; Refs #107 |
+| F-07 | Janela Endpoints | ✅ | M5 | Tool window nativa Endpoints: busca estática por AST tree-sitter nos pacotes Cargo do workspace e anexados, em segundo plano e cancelável; métodos, caminhos, handlers, filtro, navegação para declaração/handler e snapshot recarregável. Reconhece Router, route, method chains, nest/merge e variáveis/factories do mesmo arquivo. Respeita exclusões, ignora symlinks/target/.git, limita arquivos/bytes/nós/rotas e avisa resultados incompletos. Não executa código; a UI informa limites (macros, caminhos dinâmicos, inferência/branches runtime e composição entre arquivos). Testado com Axum 0.8.9 real e teste headless de busca/navegação/hints sem rodar build.rs. Captura não conferida. Ver docs/axum-endpoints.md; Closes #108 |
+| F-08 | Gerar chamada Reqwest a partir de endpoint (2026.2) | ✅ | M5 | Selecionar rota na janela Endpoints mostra prévia/cópia de função Rust async com Reqwest: URL base HTTP(S), método, parâmetros de caminho e wildcard, percent encoding, timeout e checagem de status. Nada é enviado ou adicionado ao manifesto pela IDE; exige reqwest/runtime no projeto. Código gerado compilado e executado contra servidor HTTP local com parâmetro contendo espaço, barra e aspas; teste headless copia pelo controle nativo e fixture Axum real atende chamada Reqwest. Fora: headers/corpo/schema, consultas, autenticação e rotas dinâmicas não inferidas. Ver docs/axum-endpoints.md; Closes #109 |
 | F-09 | Docker | ⬜ | M5 | Via CLI `docker` |
 | F-10 | Solana (experimental) | 🚫 | - | Plugin de nicho |
 | F-11 | LinkedIn Connected Apps | 🚫 | - | Sem valor para o foco em Rust |

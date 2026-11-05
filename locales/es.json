@@ -1977,5 +1977,26 @@
     "Discard and Reload": "Descartar y recargar",
     "Reading disk version…": "Leyendo versión del disco…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "El archivo supera el límite de 128 MB del editor ({size} MB)"
+  },
+  "endpoints": {
+    "Endpoints": "Endpoints",
+    "Open a Cargo project to scan Axum endpoints": "Abre un proyecto Cargo para buscar endpoints Axum",
+    "Refresh Endpoints": "Actualizar endpoints",
+    "Cancel Scan": "Cancelar búsqueda",
+    "Endpoint scan cancelled": "Búsqueda de endpoints cancelada",
+    "Filter method, path or handler": "Filtrar método, ruta o handler",
+    "Route hints": "Hints de rutas",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "Instantánea estática del código guardado, incluidas ramas cfg inactivas. Actualiza tras editar. No admite macros, rutas dinámicas ni composición entre archivos.",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "{n} rutas; {skipped} archivos omitidos y {unresolved} expresiones sin resolver.",
+    "Endpoint scan reached its safety limits; results are incomplete": "La búsqueda alcanzó sus límites; los resultados están incompletos",
+    "Go to Route": "Ir a la ruta",
+    "Go to Handler": "Ir al handler",
+    "Generate Reqwest Call": "Generar llamada Reqwest",
+    "Base URL": "URL base",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "Requiere reqwest en Cargo.toml y un runtime asíncrono. Solo genera código; no envía nada.",
+    "Copy Reqwest Call": "Copiar llamada Reqwest",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "Introduce una URL base HTTP o HTTPS sin consulta ni fragmento",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "Completa los parámetros; no se puede generar una sintaxis no admitida",
+    "Choose a supported HTTP method": "Elige un método HTTP admitido"
   }
 }

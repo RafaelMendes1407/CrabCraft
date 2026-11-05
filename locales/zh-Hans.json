@@ -1977,5 +1977,26 @@
     "Discard and Reload": "放弃并重新加载",
     "Reading disk version…": "正在读取磁盘版本…",
     "The file exceeds the editor's 128 MB limit ({size} MB)": "文件超过编辑器的 128 MB 限制（{size} MB）"
+  },
+  "endpoints": {
+    "Endpoints": "端点",
+    "Open a Cargo project to scan Axum endpoints": "打开 Cargo 项目以扫描 Axum 端点",
+    "Refresh Endpoints": "刷新端点",
+    "Cancel Scan": "取消扫描",
+    "Endpoint scan cancelled": "端点扫描已取消",
+    "Filter method, path or handler": "筛选方法、路径或处理函数",
+    "Route hints": "路由提示",
+    "Static saved-source snapshot, including inactive cfg branches. Refresh after edits. Macros, runtime paths and cross-file router composition are unsupported.": "保存源码的静态快照，包含未启用的 cfg 分支。编辑后请刷新。不支持宏、运行时路径和跨文件路由组合。",
+    "Found {n} routes; {skipped} files skipped, {unresolved} unresolved expressions.": "发现 {n} 条路由；跳过 {skipped} 个文件，{unresolved} 个表达式未解析。",
+    "Endpoint scan reached its safety limits; results are incomplete": "端点扫描达到安全限制；结果不完整",
+    "Go to Route": "跳转到路由",
+    "Go to Handler": "跳转到处理函数",
+    "Generate Reqwest Call": "生成 Reqwest 调用",
+    "Base URL": "基础 URL",
+    "Requires reqwest in Cargo.toml and an async runtime. This only generates code; nothing is sent.": "需要 Cargo.toml 中的 reqwest 和异步运行时。仅生成代码，不发送请求。",
+    "Copy Reqwest Call": "复制 Reqwest 调用",
+    "Enter an HTTP or HTTPS base URL without a query or fragment": "请输入不含查询或片段的 HTTP 或 HTTPS 基础 URL",
+    "Fill all route parameters; unsupported parameter syntax cannot be generated": "请填写所有路由参数；无法生成不支持的参数语法",
+    "Choose a supported HTTP method": "请选择支持的 HTTP 方法"
   }
 }
