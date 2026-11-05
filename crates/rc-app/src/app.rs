@@ -154,6 +154,7 @@ pub struct CrabCraftApp {
     pub repl_starting: Option<crate::repl::Starting>,
     pub repl_variables: crate::repl_variables::State,
     pub macro_tester: crate::macro_tester::Tester,
+    pub local_ai: crate::local_ai::Assistant,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
     pub terminal_attach: crate::terminal_attach::Picker,
@@ -390,6 +391,7 @@ impl CrabCraftApp {
             repl_starting: None,
             repl_variables: Default::default(),
             macro_tester: Default::default(),
+            local_ai: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
             terminal_attach: Default::default(),
@@ -1432,6 +1434,7 @@ impl CrabCraftApp {
         self.repl_starting = None;
         self.repl_variables = Default::default();
         self.macro_tester = Default::default();
+        self.local_ai = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());

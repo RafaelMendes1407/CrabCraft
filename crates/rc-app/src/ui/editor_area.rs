@@ -383,6 +383,8 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     }
     let mut ed_ui = ui.new_child(egui::UiBuilder::new().max_rect(editor_rect));
     ed_ui.set_clip_rect(editor_rect.intersect(ui.clip_rect()));
+    let ai_trusted = app.workspace.is_some() && app.runner.require_trust().is_ok();
+    crate::local_ai::editor_keys(&mut app.local_ai, &mut app.docs.list[active], &ed_ui, focused, ai_trusted);
     let doc = &mut app.docs.list[active];
     let mut from_menu = Vec::new();
     for a in &editor_actions {
@@ -397,6 +399,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         });
     }
     let out = EditorView::new(&mut doc.editor, &app.editor_config, &app.keymap).focus(focus).show(&mut ed_ui);
+    crate::local_ai::paint_inline(&app.local_ai, &app.docs.list[active], &ed_ui, out.caret_rect, app.editor_config.font.size);
     if out.events.contains(&EditorEvent::Pasted) {
         let doc = &app.docs.list[active];
         app.missing_crates.pasted(doc.editor.id, doc.editor.buffer.version(), doc.editor.last_paste);

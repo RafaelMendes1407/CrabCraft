@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 224 |
+| ✅ Pronto | 227 |
 | 🚧 Em andamento | 10 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
-| ⬜ A fazer | 19 |
+| ⬜ A fazer | 16 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -147,7 +147,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | I-28 | rustfmt ao salvar e ao commitar | ✅ | M3 | Ao salvar (Configurações > Editor) e ao commitar (janela Commit); só os arquivos incluídos, e um erro de sintaxe cancela o commit sem alterar nada |
 | I-29 | Configurar rustfmt (argumentos, canal, env) | ✅ | M3 | Configurações > Ferramentas: argumentos, canal (via rustup, +canal) e variáveis de ambiente; valem para Reformat Code, ao salvar e ao commitar (o mesmo comando rustfmt, sem depender do rust-analyzer); erros de configuração aparecem no diálogo e cancelam o commit |
 | I-30 | Formatador embutido para trechos | ✅ | M3 | Reformatar código com seleção num arquivo Rust: o rustfmt (com as configurações do usuário) formata o arquivo em segundo plano e só os blocos de mudança que tocam as linhas selecionadas são aplicados (um bloco que cruza a borda vai inteiro). Testado com rustfmt real: só a função selecionada mudou |
-| I-31 | Completar linha inteira local | ⬜ | M6 | Pode usar ollama |
+| I-31 | Completar linha inteira local | ✅ | M6 | [#38](https://github.com/RafaelMendes1407/CrabCraft/issues/38): sugestão Rust sob demanda via Ollama local, ghost text de uma linha no fim da linha, Tab/Escape, guardas de versão/cursor e undo; modelo real gerou Rust compilado/executado. Veja `docs/local-ai.md`; sem gatilho automático ou paridade declarada. |
 | I-32 | Otimizar imports | ✅ | M3 | Ctrl+Alt+O remove os não usados e junta o resto, com assists do rust-analyzer; ordenar fica com o rustfmt; visto na janela nativa |
 | I-33 | Pré-visualizar intention antes de aplicar | ✅ | M4 | No Alt+Enter (e nos popups Gerar e Refatorar), a ação destacada mostra ao lado o diff das linhas que muda, arquivo por arquivo quando a edição toca vários (arquivos fechados lidos numa thread). Ações do rust-analyzer sem edição são resolvidas com `codeAction/resolve` em segundo plano; mudar a seleção cancela o pedido e descarta o diff em andamento, e a ação resolvida é aplicada sem novo pedido. As correções próprias (versão e inspeções do `Cargo.toml`, ligar feature, `#[allow]`) também têm diff. Testado com rust-analyzer real (import do `HashMap`) e com a correção de versão do `Cargo.toml`; captura conferida. Operações de arquivo (criar/renomear/apagar) aparecem só como nota; ações que abrem diálogo ou só rodam comando do servidor dizem que não há texto para mostrar |
 
@@ -371,9 +371,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | G-11 | CLI: abrir arquivos | ✅ | M3 | `crabcraft [--line N] [--column N] arquivo[:linha[:coluna]]…`, com `--help` e `--version` traduzidos; arquivos vão para a janela já aberta (socket do usuário em `$XDG_RUNTIME_DIR` ou na pasta de dados; no Windows porta local com token), pasta ou `Cargo.toml` abre outra janela. Visto na janela nativa: `crabcraft src/main.rs:4:20` pôs o cursor em 4:20 no CrabCraft aberto. Falta `--wait` |
 | G-12 | CLI: diff e merge | ✅ | M6 | `crabcraft diff LEFT RIGHT` abre comparação nativa somente leitura; `crabcraft merge LEFT RIGHT BASE OUTPUT` abre a ferramenta de três painéis com aceitar lados, edição, desfazer e rolagem sincronizada. Janela independente, sem abrir workspace nem executar projeto; carga e gravação em segundo plano, fechar cancela carga. Salvar resultado grava só OUTPUT de forma atômica (recusa saída alterada desde a abertura; saída nova nunca sobrescreve arquivo concorrente), com confirmação para mudanças não resolvidas; fechar sem salvar mantém a saída. Códigos 0 sucesso, 1 erro/cancelamento e 2 argumentos inválidos. Limite por arquivo: UTF-8 regular, 4 MB e 100000 quebras de linha; saída simbólica recusada. Teste headless com arquivos Rust num projeto Cargo, aceitar direita e salvar; resultado compilado com rustc real. Regressão da ferramenta Git passou. Fora: diretórios e arquivos binários |
 | G-13 | CLI: formatar e inspecionar | ✅ | M6 | `crabcraft format [pasta ou Cargo.toml]` usa `cargo fmt --all`, com `--check`; `crabcraft inspect --trust-project [pasta ou Cargo.toml]` usa Clippy em todo workspace e targets, tratando avisos como falha. Ambos aceitam `--offline`, mostram saída ao vivo, retornam o código do Cargo e rodam sem janela. Inspeção exige confiança explícita a cada chamada. Teste `cli::tests::workspace_tools_format_and_inspect_a_real_rust_project`: projeto Rust real num caminho com espaços, formatação e verificação, lint com falha, e sentinela de `build.rs` comprovando que formatar e recusar inspeção sem confiança não executam o script. |
-| G-14 | Assistente de IA com modelos locais | ⬜ | M6 | ollama por padrão |
+| G-14 | Assistente de IA com modelos locais | ✅ | M6 | Painel egui opt-in por sessão, chat explícito com modelo GGUF local instalado, contexto Rust opcional, cancelamento, trust, limites e rejeição cloud/proxy/redirect; prova com Ollama/Qwen real. Sem baixar modelo ou executar ferramentas. Veja `docs/local-ai.md`. |
 | G-15 | Agentes de IA via ACP | ⬜ | M6 | |
-| G-16 | Completar com next edit suggestions | ⬜ | M6 | |
+| G-16 | Completar com next edit suggestions | ✅ | M6 | Proposta Rust sob demanda via modelo local: trecho único exato, preview antes/depois, revisão e apply explícitos, guardas de versão/path e undo sem autosave; fluxo nativo real modelo→revisão→`cargo run --offline` passou. Sem edição autônoma/multiarquivo. Veja `docs/local-ai.md`. |
 
 ---
 
