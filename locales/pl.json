@@ -916,7 +916,18 @@
     "Create Branch…": "Utwórz gałąź…",
     "Create Branch from Stash": "Utwórz gałąź ze schowka",
     "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "Przełącza na nową gałąź w pierwotnym commicie schowka i przywraca zmiany. Schowek zostaje zachowany.",
-    "Branch created; stash kept": "Utworzono gałąź; zachowano schowek"
+    "Branch created; stash kept": "Utworzono gałąź; zachowano schowek",
+    "Default Changelist": "Domyślna lista zmian",
+    "Changelist:": "Lista zmian:",
+    "Manage Changelists": "Zarządzaj listami zmian",
+    "Changelist name": "Nazwa listy zmian",
+    "New Changelist": "Nowa lista zmian",
+    "Rename Changelist": "Zmień nazwę listy zmian",
+    "Delete Changelist": "Usuń listę zmian",
+    "Moves its files to the default changelist without changing their contents.": "Przenosi pliki do domyślnej listy bez zmiany ich zawartości.",
+    "A changelist with this name already exists": "Lista zmian o tej nazwie już istnieje",
+    "Choose a unique changelist name of up to 100 characters": "Wybierz unikalną nazwę o długości do 100 znaków",
+    "Move to Changelist": "Przenieś do listy zmian"
   },
   "search-results": {
     "… more": "… więcej"

@@ -193,6 +193,8 @@ pub struct Vcs {
     pub message: String,
     pub amend: bool,
     pub excluded: BTreeSet<String>,
+    pub changelists: rc_core::changelists::Changelists,
+    pub changelist_name: String,
     pub busy: Option<&'static str>,
     pub error: Option<String>,
     pub tab: GitTab,
@@ -278,6 +280,8 @@ impl Vcs {
             message: String::new(),
             amend: false,
             excluded: BTreeSet::new(),
+            changelists: Default::default(),
+            changelist_name: String::new(),
             busy: None,
             error: None,
             tab: GitTab::Log,
@@ -990,7 +994,7 @@ impl Vcs {
 
     /// The changes that go into the next commit, relative to the repository.
     pub fn included(&self) -> Vec<String> {
-        self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p)).collect()
+        self.changes().into_iter().map(|c| c.path).filter(|p| !self.excluded.contains(p) && self.changelists.in_active(p)).collect()
     }
 
     /// The folder of the repository.
@@ -1139,6 +1143,15 @@ impl Vcs {
                     // Files that left the change list lose their exclusion.
                     let paths: BTreeSet<String> = s.entries.iter().map(|e| e.path.clone()).collect();
                     self.excluded.retain(|p| paths.contains(p));
+                    // Keep assignments when Git reports a rename as one changed row.
+                    for entry in &s.entries {
+                        if let Some(old) = &entry.orig_path
+                            && let Some(list) = self.changelists.assignments.remove(old)
+                        {
+                            self.changelists.assignments.entry(entry.path.clone()).or_insert(list);
+                        }
+                    }
+                    self.changelists.retain_changed(&paths);
                     self.status = Some(s);
                     self.status_version += 1;
                 }

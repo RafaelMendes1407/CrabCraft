@@ -1,6 +1,7 @@
 //! Core services of CrabCraft without UI: the shared async runtime, inboxes that wake the UI,
 //! settings and per-workspace sessions, the local history of files, the workspace's file tree and file watching.
 
+pub mod changelists;
 pub mod code_style;
 pub mod external_tools;
 pub mod live_templates;

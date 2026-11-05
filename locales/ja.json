@@ -916,7 +916,18 @@
     "Create Branch…": "ブランチを作成…",
     "Create Branch from Stash": "スタッシュからブランチを作成",
     "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "スタッシュの元のコミットに新しいブランチを作成して切り替え、変更を復元します。スタッシュは保持されます。",
-    "Branch created; stash kept": "ブランチを作成し、スタッシュを保持しました"
+    "Branch created; stash kept": "ブランチを作成し、スタッシュを保持しました",
+    "Default Changelist": "デフォルトの変更リスト",
+    "Changelist:": "変更リスト:",
+    "Manage Changelists": "変更リストを管理",
+    "Changelist name": "変更リスト名",
+    "New Changelist": "新しい変更リスト",
+    "Rename Changelist": "変更リストの名前を変更",
+    "Delete Changelist": "変更リストを削除",
+    "Moves its files to the default changelist without changing their contents.": "ファイルの内容を変えずにデフォルトの変更リストへ移動します。",
+    "A changelist with this name already exists": "この名前の変更リストは既に存在します",
+    "Choose a unique changelist name of up to 100 characters": "100文字以内の一意の変更リスト名を選んでください",
+    "Move to Changelist": "変更リストに移動"
   },
   "search-results": {
     "… more": "… さらに表示"

@@ -432,6 +432,8 @@ impl CrabCraftApp {
         self.insight.set_linked(linked_projects(&ws.root, &self.explorer.attached, &[]));
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root);
+        self.vcs.changelists = session.changelists.clone().clean();
+        self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
         let projects = match &ws.kind {
             rc_core::WorkspaceKind::Project(p) => vec![p.clone()],
             rc_core::WorkspaceKind::Folder => find_projects(&ws.root, 4),
@@ -1481,6 +1483,11 @@ impl CrabCraftApp {
             auto_attach: self.auto_attach_text.clone(),
             test_configs: self.runner.test_configs.clone(),
             run_options: self.runner.options.clone(),
+            changelists: {
+                let mut lists = self.vcs.changelists.clone();
+                lists.lists.insert(lists.active.clone(), self.vcs.message.clone());
+                lists
+            },
             excluded: self.explorer.excluded.clone(),
             attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
             project_env: self.runner.project_env.clone(),

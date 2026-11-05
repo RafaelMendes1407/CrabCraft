@@ -263,6 +263,62 @@ fn selected_files_are_stashed_and_restored_on_a_new_branch_from_the_app() {
 }
 
 #[test]
+fn changelists_limit_commits_and_keep_per_list_messages_in_the_project_session() {
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    // SAFETY: serialized by HOME_LOCK.
+    unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
+    let (_repo, _remote, root) = repo_with_remote();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"changelist_fixture\"\nversion = \"0.1.0\"\n[lib]\npath = \"lib.rs\"\n").unwrap();
+    git(&root, &["add", "Cargo.toml"]);
+    git(&root, &["commit", "-qm", "Add Cargo manifest"]);
+    let mut app = open_app(&root);
+    std::fs::write(root.join("lib.rs"), "pub fn assigned() {}\n").unwrap();
+    std::fs::write(root.join("other.rs"), "pub fn unrelated() {}\n").unwrap();
+    app.vcs.refresh();
+    pump(&mut app, "two changes", |a| a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 2));
+    app.vcs.changelists.create("Library fix").unwrap();
+    app.vcs.changelists.move_file("lib.rs", "Library fix").unwrap();
+    assert_eq!(app.vcs.included(), vec!["other.rs"]);
+    app.vcs.message = "Default draft".into();
+    app.vcs.changelists.select("Library fix", &mut app.vcs.message).unwrap();
+    assert_eq!(app.vcs.included(), vec!["lib.rs"]);
+    app.vcs.message = "Commit assigned library".into();
+    app.session().save(&root).unwrap();
+    let saved = rc_core::Session::load(&root).changelists.clean();
+    assert_eq!(saved.active, "Library fix");
+    assert_eq!(saved.list_of("lib.rs"), "Library fix");
+    assert_eq!(saved.lists.get("Library fix").map(String::as_str), Some("Commit assigned library"));
+    assert_eq!(saved.lists.get("").map(String::as_str), Some("Default draft"));
+    app.vcs.commit(false, None);
+    pump(&mut app, "assigned commit", |a| a.vcs.busy.is_none() && a.vcs.status.as_ref().is_some_and(|s| s.entries.len() == 1));
+    assert_eq!(git_out(&root, &["show", "--format=", "--name-only", "HEAD"]).trim(), "lib.rs");
+    assert!(root.join("other.rs").exists());
+    assert_eq!(app.vcs.changelists.list_of("lib.rs"), "");
+    app.vcs.changelists.select("", &mut app.vcs.message).unwrap();
+    assert_eq!(app.vcs.message, "Default draft");
+    assert_eq!(app.vcs.included(), vec!["other.rs"]);
+    // Exercise the native controls as well as the Git selection behavior.
+    use egui_kittest::kittest::Queryable;
+    use rc_kit::i18n::tr;
+    app.dock.show(crate::toolwindow::ToolWindow::Commit);
+    app.dock.sizes.insert(crate::toolwindow::ToolWindow::Commit, 540.0);
+    app.vcs.changelist_name = "UI list".into();
+    let mut h = crate::screens::harness(app, egui::vec2(1440.0, 900.0));
+    h.get_by_label(tr("Manage Changelists")).click();
+    h.run_steps(2);
+    h.get_by_label(tr("New Changelist")).click();
+    h.run_steps(2);
+    assert!(h.state().vcs.changelists.lists.contains_key("UI list"));
+    h.get_by(|node| node.value().as_deref() == Some(tr("Default Changelist"))).click();
+    h.run_steps(2);
+    h.get_by_label("UI list (0)").click();
+    h.run_steps(2);
+    assert_eq!(h.state().vcs.changelists.active, "UI list");
+    assert!(h.state().vcs.included().is_empty());
+}
+
+#[test]
 fn patches_are_created_and_applied_between_repositories_from_the_app() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();

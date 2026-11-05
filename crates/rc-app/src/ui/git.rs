@@ -27,6 +27,45 @@ fn state_color(state: FileState, untracked: bool, dark: bool) -> Color32 {
     }
 }
 
+fn changelist_label(name: &str) -> &str {
+    if name.is_empty() { tr("Default Changelist") } else { name }
+}
+
+fn changelists_bar(app: &mut CrabCraftApp, ui: &mut Ui) {
+    let mut selected = app.vcs.changelists.active.clone();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(tr("Changelist:"));
+        egui::ComboBox::from_id_salt("active_changelist").selected_text(changelist_label(&selected)).show_ui(ui, |ui| {
+            for name in app.vcs.changelists.lists.keys() {
+                let count = app.vcs.changes().iter().filter(|c| app.vcs.changelists.list_of(&c.path) == name).count();
+                ui.selectable_value(&mut selected, name.clone(), format!("{} ({count})", changelist_label(name)));
+            }
+        });
+        ui.menu_button(tr("Manage Changelists"), |ui| {
+            ui.add(egui::TextEdit::singleline(&mut app.vcs.changelist_name).hint_text(tr("Changelist name")).char_limit(100));
+            let name = app.vcs.changelist_name.trim().to_string();
+            let mutable = !app.vcs.changelists.active.is_empty();
+            let result = if ui.add_enabled(!name.is_empty(), egui::Button::new(tr("New Changelist"))).clicked() {
+                app.vcs.changelists.create(&name)
+            } else if ui.add_enabled(mutable && !name.is_empty(), egui::Button::new(tr("Rename Changelist"))).clicked() {
+                app.vcs.changelists.rename_active(&name)
+            } else if ui.add_enabled(mutable, egui::Button::new(tr("Delete Changelist"))).on_hover_text(tr("Moves its files to the default changelist without changing their contents.")).clicked() {
+                app.vcs.changelists.delete_active(&mut app.vcs.message)
+            } else { return };
+            match result {
+                Ok(()) => { app.session_dirty = true; app.vcs.changelist_name.clear(); ui.close(); }
+                Err(error) => app.vcs.error = Some(match error {
+                    rc_core::changelists::ChangelistError::AlreadyExists => tr("A changelist with this name already exists"),
+                    _ => tr("Choose a unique changelist name of up to 100 characters"),
+                }.to_string()),
+            }
+        });
+    });
+    if selected != app.vcs.changelists.active && app.vcs.changelists.select(&selected, &mut app.vcs.message).is_ok() {
+        app.session_dirty = true;
+    }
+}
+
 pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     if header(ui, tr("Commit")) {
         app.toggle_tool(ToolWindow::Commit);
@@ -37,7 +76,8 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     operation_banner(app, ui);
     let p = rc_kit::pal(ui);
-    let changes = app.vcs.changes();
+    changelists_bar(app, ui);
+    let changes: Vec<_> = app.vcs.changes().into_iter().filter(|c| app.vcs.changelists.in_active(&c.path)).collect();
     let root = app.vcs.repo.as_ref().map(|r| r.root().to_path_buf()).unwrap_or_default();
     let mut patch_action: Option<(PatchSource, bool)> = None;
     // Toolbar.
@@ -122,6 +162,17 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                     }
                 }
                 resp.context_menu(|ui| {
+                    ui.menu_button(tr("Move to Changelist"), |ui| {
+                        let lists: Vec<String> = app.vcs.changelists.lists.keys().cloned().collect();
+                        for name in lists {
+                            let label = changelist_label(&name);
+                            if ui.selectable_label(app.vcs.changelists.list_of(&c.path) == name, label).clicked() {
+                                let _ = app.vcs.changelists.move_file(&c.path, &name);
+                                app.session_dirty = true;
+                                ui.close();
+                            }
+                        }
+                    });
                     if c.state == FileState::Unmerged && theme::menu_item(ui, Some(ico::DIFF), tr("Merge…"), false).clicked() {
                         app.vcs.open_merge_tool(&c.path);
                         ui.close();
@@ -155,7 +206,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     // Message and buttons.
     ui.add_space(4.0);
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap().shrink2(vec2(10.0, 4.0))));
-    child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY));
+    if child.add(egui::TextEdit::multiline(&mut app.vcs.message).hint_text(tr("Commit Message")).desired_rows(4).desired_width(f32::INFINITY)).changed() {
+        app.session_dirty = true;
+    }
     child.horizontal(|ui| {
         ui.checkbox(&mut app.vcs.amend, tr("Amend"));
         let tip = match app.vcs.signing.as_ref().and_then(|c| c.key.as_deref()) {

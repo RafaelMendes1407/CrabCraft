@@ -916,7 +916,18 @@
     "Create Branch…": "Criar branch…",
     "Create Branch from Stash": "Criar branch a partir do stash",
     "Switches to a new branch at the stash's original commit and restores its changes. The stash is kept.": "Muda para um novo branch no commit original do stash e restaura as alterações. O stash é mantido.",
-    "Branch created; stash kept": "Branch criado; stash mantido"
+    "Branch created; stash kept": "Branch criado; stash mantido",
+    "Default Changelist": "Lista padrão",
+    "Changelist:": "Lista de alterações:",
+    "Manage Changelists": "Gerenciar listas de alterações",
+    "Changelist name": "Nome da lista",
+    "New Changelist": "Nova lista de alterações",
+    "Rename Changelist": "Renomear lista de alterações",
+    "Delete Changelist": "Excluir lista de alterações",
+    "Moves its files to the default changelist without changing their contents.": "Move os arquivos para a lista padrão sem alterar o conteúdo.",
+    "A changelist with this name already exists": "Já existe uma lista com este nome",
+    "Choose a unique changelist name of up to 100 characters": "Escolha um nome exclusivo de até 100 caracteres",
+    "Move to Changelist": "Mover para lista de alterações"
   },
   "search-results": {
     "… more": "… mais"

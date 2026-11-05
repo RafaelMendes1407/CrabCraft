@@ -119,6 +119,8 @@ pub struct EditorWindow {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Session {
+    /// Whole-file local changelists. Session data is validated before use.
+    pub changelists: crate::changelists::Changelists,
     pub files: Vec<OpenFile>,
     pub active: Option<usize>,
     /// The editor groups of the main window (none: every file in one group).
