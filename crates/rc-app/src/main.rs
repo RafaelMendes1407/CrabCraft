@@ -20,6 +20,8 @@ mod borrow_errors;
 mod repl;
 mod repl_variables;
 mod macro_tester;
+#[cfg(test)]
+mod macro_actions_audit;
 mod macro_step_engine;
 mod macro_step;
 mod local_ai;
