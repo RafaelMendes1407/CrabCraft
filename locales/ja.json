@@ -2413,5 +2413,10 @@
     "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV は明示的な NULL・バイナリマーカーを使用し、JSON は SQLite の正確な値型を保持します。",
     "Database connection or statement timed out": "データベース接続またはステートメントがタイムアウトしました",
     "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "実行ごとに1つのステートメント。成功したリクエストは自動コミットされます。書き込みには明示的な許可が必要です。"
+  },
+  "disk_watch": {
+    "Could not reload {file}: {error}": "{file} を再読み込みできませんでした: {error}",
+    "External file update queue is full; reopen the affected file": "外部ファイル更新のキューが満杯です。対象ファイルを開き直してください",
+    "External reload supports files up to 8 MB": "外部再読み込みは 8 MB までのファイルに対応しています"
   }
 }

@@ -28,6 +28,7 @@ fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftA
     while start.elapsed() < Duration::from_secs(180) {
         app.poll_cargo_workspace();
         app.poll_rustfmt();
+        app.poll_disk_watch();
         let out = app.insight.update(&mut app.docs, true);
         app.handle_insight(out);
         let outs = app.runner.update();
@@ -1667,6 +1668,7 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     assert_eq!(app.docs.list.len(), 2);
     assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".to_string()));
     let lib = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
+    pump(&mut app, "the asynchronous external reload", |app| app.docs.list[lib].editor.buffer.rope().to_string() == "pub fn changed() {}\n");
     assert_eq!(app.docs.list[lib].editor.buffer.rope().to_string(), "pub fn changed() {}\n");
     let cleaned = |a: &CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.title == "cargo clean" && b.result.as_ref().is_some_and(|r| r.success));
     pump(&mut app, "everything again", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some() && cleaned(a));

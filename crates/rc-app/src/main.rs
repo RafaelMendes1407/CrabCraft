@@ -40,6 +40,7 @@ mod http_client;
 mod http_cli;
 mod disassembly_view;
 mod disk_revert;
+mod disk_watch;
 mod insight;
 mod inspection_profile;
 mod intention_preview;

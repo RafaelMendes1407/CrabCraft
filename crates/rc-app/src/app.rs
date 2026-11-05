@@ -62,6 +62,7 @@ pub struct CrabCraftApp {
     pub workspace: Option<WorkspaceState>,
     pub docs: Docs,
     pub disk_revert: Option<crate::disk_revert::Job>,
+    pub disk_watch: crate::disk_watch::Watch,
     pub dock: Dock,
     pub explorer: ExplorerState,
     pub dialog: Option<Dialog>,
@@ -289,6 +290,7 @@ impl CrabCraftApp {
         let pool = rc_syntax::ParserPool::new(waker.as_fn());
         CrabCraftApp {
             disk_revert: None,
+            disk_watch: Default::default(),
             keymap,
             editor_config,
             workspace: None,
@@ -1323,7 +1325,11 @@ impl CrabCraftApp {
     /// running programs stay. `clean` also deletes Cargo's build output.
     pub fn invalidate_caches(&mut self, clean: bool) {
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
-        self.docs.reload_all();
+        let paths: Vec<PathBuf> = self.docs.list.iter().map(|doc| doc.path.clone()).collect();
+        for path in paths {
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &path) { self.notify(error.to_string(), true); }
+        }
+        for doc in &mut self.docs.list { doc.editor.request_parse(&self.docs.pool); }
         self.files.open(&root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.refresh();
         let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
@@ -1402,6 +1408,7 @@ impl CrabCraftApp {
     }
 
     pub fn close_workspace(&mut self) {
+        self.disk_watch = Default::default();
         self.terminal_attach = Default::default();
         self.statement_completion = None;
         self.stop_all_debug_sessions();
@@ -1708,6 +1715,10 @@ impl CrabCraftApp {
                 self.insight.format_saved(&self.docs.list[i]);
             }
         }
+    }
+
+    pub(crate) fn poll_disk_watch(&mut self) {
+        for error in self.disk_watch.poll(&mut self.docs, self.waker.clone()) { self.notify(error, true); }
     }
 
     /// Code-insight results that leave the editor: navigation, result lists, dialogs.
@@ -3297,7 +3308,7 @@ impl CrabCraftApp {
             }
         }
         for p in changed {
-            self.docs.on_disk_change(&p);
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
             // A changed solution file reloads the explorer's model.
             if let Some(w) = &mut self.workspace
                 && w.ws.solution() == Some(p.as_path())
@@ -3309,6 +3320,7 @@ impl CrabCraftApp {
                 w.solution = Some(s);
             }
         }
+        self.poll_disk_watch();
         self.docs.poll_parses();
     }
 

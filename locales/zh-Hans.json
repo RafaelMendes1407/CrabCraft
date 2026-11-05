@@ -2413,5 +2413,10 @@
     "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV 使用明确的 NULL 和二进制标记；JSON 保留精确的 SQLite 值类型。",
     "Database connection or statement timed out": "数据库连接或语句超时",
     "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "每次运行一条语句；成功的请求自动提交。写入需要明确启用。"
+  },
+  "disk_watch": {
+    "Could not reload {file}: {error}": "无法重新加载 {file}：{error}",
+    "External file update queue is full; reopen the affected file": "外部文件更新队列已满；请重新打开受影响的文件",
+    "External reload supports files up to 8 MB": "外部重新加载支持最大 8 MB 的文件"
   }
 }

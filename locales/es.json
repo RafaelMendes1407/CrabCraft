@@ -2413,5 +2413,10 @@
     "CSV uses explicit NULL and binary markers; JSON preserves exact SQLite value types.": "CSV usa marcadores NULL y binarios explícitos; JSON conserva los tipos exactos de SQLite.",
     "Database connection or statement timed out": "Se agotó el tiempo de conexión o instrucción de base de datos",
     "One statement per run; successful requests commit automatically. Writes require explicit opt-in.": "Una instrucción por ejecución; las solicitudes correctas se confirman automáticamente. La escritura requiere autorización explícita."
+  },
+  "disk_watch": {
+    "Could not reload {file}: {error}": "No se pudo recargar {file}: {error}",
+    "External file update queue is full; reopen the affected file": "La cola de actualizaciones externas está llena; vuelve a abrir el archivo afectado",
+    "External reload supports files up to 8 MB": "La recarga externa admite archivos de hasta 8 MB"
   }
 }
