@@ -146,6 +146,7 @@ pub struct CrabCraftApp {
     pub terminals: rc_term::Terminals,
     pub settings_backup: crate::settings_backup::State,
     pub repl_starting: Option<crate::repl::Starting>,
+    pub repl_variables: crate::repl_variables::State,
     pub terminal_starting: Option<crate::repl::Starting>,
     pub terminal_tools: crate::terminal_tools::Tools,
     pub focus_terminal: bool,
@@ -372,6 +373,7 @@ impl CrabCraftApp {
             terminals: rc_term::Terminals::new(),
             settings_backup: Default::default(),
             repl_starting: None,
+            repl_variables: Default::default(),
             terminal_starting: None,
             terminal_tools: Default::default(),
             focus_terminal: false,
@@ -1401,6 +1403,7 @@ impl CrabCraftApp {
         self.find_bar = None;
         self.disk_revert = None;
         self.repl_starting = None;
+        self.repl_variables = Default::default();
         self.terminal_starting = None;
         self.terminal_tools = Default::default();
         self.coverage = crate::coverage::Coverage::new(self.waker.clone());
@@ -2615,6 +2618,7 @@ impl CrabCraftApp {
             Ok(session) => {
                 let id = self.terminals.push(session);
                 self.terminals.rename(id, Some(tr("Rust REPL").to_string()));
+                self.repl_variables.register(id);
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
             }

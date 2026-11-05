@@ -2046,5 +2046,21 @@
     "GDB executable": "GDB 可执行文件",
     "LLDB DAP executable": "LLDB DAP 可执行文件",
     "LLDB DAP was not found. Install lldb-dap or configure its executable path.": "未找到 LLDB DAP。请安装 lldb-dap 或配置其可执行文件路径。"
+  },
+  "repl_variables": {
+    "REPL Variables": "REPL 变量",
+    "Refresh variables": "刷新变量",
+    "Cancel variable refresh": "取消变量刷新",
+    "Names and types from :vars; values are not evaluated": "来自 :vars 的名称和类型；不求值",
+    "No variable snapshot. Refresh at an empty REPL prompt.": "没有变量快照。请在空的 REPL 提示符处刷新。",
+    "Filter REPL variables": "筛选 REPL 变量",
+    "Refresh variables at an empty Rust REPL prompt": "请在空的 Rust REPL 提示符处刷新变量",
+    "REPL output was discarded; refresh the variables again": "REPL 输出已丢弃；请重新刷新变量",
+    "The REPL variable reply was not recognized": "无法识别 REPL 变量响应",
+    "The REPL variable reply exceeds the display limit": "REPL 变量响应超出显示限制",
+    "The REPL variable request timed out": "REPL 变量请求超时",
+    "The Rust REPL has exited": "Rust REPL 已退出",
+    "REPL input changed; refresh the variables again": "REPL 输入已更改；请重新刷新变量",
+    "Type": "类型"
   }
 }

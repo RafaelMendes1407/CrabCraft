@@ -9,6 +9,7 @@ mod cargo_dependencies;
 mod missing_crates;
 mod borrow_errors;
 mod repl;
+mod repl_variables;
 mod settings_backup;
 mod instance;
 mod auto_attach;

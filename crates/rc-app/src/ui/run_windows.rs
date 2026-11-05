@@ -573,6 +573,7 @@ fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, select
 // ---------------------------------------------------------------------------------- Terminal
 
 pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
+    app.repl_variables.retain(&app.terminals);
     if app.terminals.tabs().is_empty() {
         app.open_terminal(None);
     }
@@ -678,7 +679,8 @@ fn terminal_pane(app: &mut CrabCraftApp, ui: &mut Ui, id: u64, focus: bool) {
     let Some(tab) = app.terminals.get(id) else { return; };
     let cwd = tab.session.cwd().map(std::path::Path::to_path_buf);
     let config = rc_term::TermConfig::default();
-    let output = rc_term::TerminalView::new(&tab.session, &config).focus(focus).show(ui);
+    let locked = app.repl_variables.show(&tab.session, ui);
+    let output = rc_term::TerminalView::new(&tab.session, &config).input_enabled(!locked).focus(focus && !locked).show(ui);
     for event in output.events {
         match event {
             rc_term::ViewEvent::LinkClicked(link) => open_link(app, link, cwd.clone()),

@@ -2046,5 +2046,21 @@
     "GDB executable": "Executável GDB",
     "LLDB DAP executable": "Executável LLDB DAP",
     "LLDB DAP was not found. Install lldb-dap or configure its executable path.": "LLDB DAP não encontrado. Instale lldb-dap ou configure o caminho do executável."
+  },
+  "repl_variables": {
+    "REPL Variables": "Variáveis do REPL",
+    "Refresh variables": "Atualizar variáveis",
+    "Cancel variable refresh": "Cancelar atualização de variáveis",
+    "Names and types from :vars; values are not evaluated": "Nomes e tipos de :vars; valores não são avaliados",
+    "No variable snapshot. Refresh at an empty REPL prompt.": "Sem snapshot de variáveis. Atualize em um prompt vazio do REPL.",
+    "Filter REPL variables": "Filtrar variáveis do REPL",
+    "Refresh variables at an empty Rust REPL prompt": "Atualize variáveis em um prompt vazio do REPL Rust",
+    "REPL output was discarded; refresh the variables again": "A saída do REPL foi descartada; atualize as variáveis novamente",
+    "The REPL variable reply was not recognized": "A resposta de variáveis do REPL não foi reconhecida",
+    "The REPL variable reply exceeds the display limit": "A resposta de variáveis do REPL excede o limite de exibição",
+    "The REPL variable request timed out": "A solicitação de variáveis do REPL excedeu o tempo limite",
+    "The Rust REPL has exited": "O REPL Rust foi encerrado",
+    "REPL input changed; refresh the variables again": "A entrada do REPL mudou; atualize as variáveis novamente",
+    "Type": "Tipo"
   }
 }

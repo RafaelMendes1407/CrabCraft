@@ -2046,5 +2046,21 @@
     "GDB executable": "GDB 実行ファイル",
     "LLDB DAP executable": "LLDB DAP 実行ファイル",
     "LLDB DAP was not found. Install lldb-dap or configure its executable path.": "LLDB DAP が見つかりません。lldb-dap をインストールするか、実行ファイルのパスを設定してください。"
+  },
+  "repl_variables": {
+    "REPL Variables": "REPL 変数",
+    "Refresh variables": "変数を更新",
+    "Cancel variable refresh": "変数の更新をキャンセル",
+    "Names and types from :vars; values are not evaluated": ":vars の名前と型。値は評価しません",
+    "No variable snapshot. Refresh at an empty REPL prompt.": "変数のスナップショットがありません。空の REPL プロンプトで更新してください。",
+    "Filter REPL variables": "REPL 変数を絞り込み",
+    "Refresh variables at an empty Rust REPL prompt": "空の Rust REPL プロンプトで変数を更新してください",
+    "REPL output was discarded; refresh the variables again": "REPL 出力が破棄されました。変数を再度更新してください",
+    "The REPL variable reply was not recognized": "REPL の変数応答を認識できませんでした",
+    "The REPL variable reply exceeds the display limit": "REPL の変数応答が表示上限を超えています",
+    "The REPL variable request timed out": "REPL の変数要求がタイムアウトしました",
+    "The Rust REPL has exited": "Rust REPL が終了しました",
+    "REPL input changed; refresh the variables again": "REPL 入力が変更されました。変数を再度更新してください",
+    "Type": "型"
   }
 }

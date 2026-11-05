@@ -45,11 +45,13 @@ pub struct SpawnSpec {
     pub scrollback: usize,
     /// Print "Process finished with exit code N" when the process ends (Run consoles).
     pub announce_exit: bool,
+    /// Bounded output journal for an explicitly managed protocol (not shell sessions).
+    pub capture_output: bool,
 }
 
 impl SpawnSpec {
     pub fn shell(cwd: Option<PathBuf>) -> Self {
-        SpawnSpec { program: Program::Shell, cwd, env: Vec::new(), cols: 80, rows: 24, scrollback: 10_000, announce_exit: false }
+        SpawnSpec { program: Program::Shell, cwd, env: Vec::new(), cols: 80, rows: 24, scrollback: 10_000, announce_exit: false, capture_output: false }
     }
 
     pub fn command(program: impl Into<String>, args: impl IntoIterator<Item = impl Into<String>>, cwd: Option<PathBuf>) -> Self {
@@ -63,7 +65,9 @@ impl SpawnSpec {
     /// The Evcxr Rust REPL, using terminal input and `:dep` commands.
     /// Calling this only prepares a command; callers must start it after an explicit action.
     pub fn rust_repl(cwd: Option<PathBuf>) -> Self {
-        Self::command("evcxr", ["--disable-readline"], cwd).env("RUSTUP_AUTO_INSTALL", "0")
+        let mut spec = Self::command("evcxr", ["--disable-readline"], cwd).env("RUSTUP_AUTO_INSTALL", "0");
+        spec.capture_output = true;
+        spec
     }
 
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
@@ -270,6 +274,9 @@ pub struct TermSession {
     exited: Arc<AtomicBool>,
     /// No shell reads the clicks, so links open without a modifier.
     output_only: bool,
+    capture: Arc<Mutex<Option<crate::capture::Capture>>>,
+    input_epoch: AtomicU64,
+    input_output_cursor: AtomicU64,
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -326,6 +333,8 @@ impl TermSession {
 
         // Reader thread: parse output into the term and wake the UI.
         let (done_tx, done_rx) = mpsc::channel::<()>();
+        if spec.capture_output { *session.capture.lock() = Some(Default::default()); }
+        let capture = session.capture.clone();
         let state = session.state.clone();
         let wake = waker.clone();
         std::thread::Builder::new().name("rc-term-reader".into()).spawn(move || {
@@ -334,6 +343,7 @@ impl TermSession {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
+                        if let Some(capture) = capture.lock().as_mut() { capture.push(&buf[..n]); }
                         state.lock().advance(&buf[..n]);
                         wake.wake();
                     }
@@ -408,6 +418,9 @@ impl TermSession {
             pid: None,
             exited: Arc::new(AtomicBool::new(false)),
             output_only: false,
+            capture: Arc::new(Mutex::new(None)),
+            input_epoch: AtomicU64::new(0),
+            input_output_cursor: AtomicU64::new(0),
         }
     }
 
@@ -439,9 +452,20 @@ impl TermSession {
     pub fn write(&self, bytes: impl Into<Vec<u8>>) {
         let bytes = bytes.into();
         if !bytes.is_empty() {
+            self.input_output_cursor.store(self.output_cursor().unwrap_or(0), Ordering::Release);
+            self.input_epoch.fetch_add(1, Ordering::AcqRel);
             let _ = self.writer.send(bytes);
         }
     }
+
+    /// Raw output is available only when explicitly enabled before process startup.
+    pub fn output_cursor(&self) -> Option<u64> { self.capture.lock().as_ref().map(|capture| capture.end()) }
+    pub fn output_tail(&self) -> Option<Vec<u8>> { self.capture.lock().as_ref().map(|capture| capture.tail()) }
+    pub fn output_since(&self, cursor: u64) -> Result<Vec<u8>, crate::capture::OutputGap> {
+        self.capture.lock().as_ref().ok_or(crate::capture::OutputGap)?.since(cursor)
+    }
+    pub fn input_epoch(&self) -> u64 { self.input_epoch.load(Ordering::Acquire) }
+    pub fn input_output_cursor(&self) -> u64 { self.input_output_cursor.load(Ordering::Acquire) }
 
     /// Pastes text (bracketed when the application asked for it).
     pub fn paste(&self, text: &str) {
