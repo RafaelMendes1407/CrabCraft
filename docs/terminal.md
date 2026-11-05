@@ -25,7 +25,8 @@ Split Terminal Right and Split Terminal Down start another independent shell asy
 in the current pane's starting directory. Two native panes share a draggable divider.
 Clicking a pane gives it keyboard focus; its tab becomes active. Close Terminal Split
 returns to a single pane while preserving both shells as tabs. Closing either pane's tab
-terminates that shell and removes the split. One pair is shown at a time; creating another
+terminates that shell and removes the split. Cancelling a pending split or tab leaves
+existing panes visible. One pair is shown at a time; creating another
 split replaces the visible pair without killing the older sessions. Splits are not nested
 or restored across restarts.
 

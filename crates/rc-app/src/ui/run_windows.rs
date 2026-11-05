@@ -599,7 +599,7 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if cancel_startup {
         app.terminal_starting = None;
         app.terminal_tools.split_after_start = None;
-        app.toggle_tool(ToolWindow::Terminal);
+        if app.terminals.is_empty() { app.toggle_tool(ToolWindow::Terminal); }
         return;
     }
     ui.horizontal(|ui| {
