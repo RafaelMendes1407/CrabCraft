@@ -564,6 +564,18 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(usize::MAX) => app.toggle_tool(ToolWindow::Terminal),
         _ => {}
     }
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        if app.repl_starting.is_some() {
+            ui.spinner();
+            ui.label(tr("Starting Rust REPL…"));
+            if ui.button(tr("Cancel")).clicked() { app.repl_starting = None; }
+        } else if ui.add_enabled(app.can_open_rust_repl(), egui::Button::new(tr("Rust REPL")))
+            .on_hover_text(tr("Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables."))
+            .clicked() {
+            app.open_rust_repl();
+        }
+    });
     let titles = app.terminals.titles();
     let active = app.terminals.active_index();
     let mut close = None;

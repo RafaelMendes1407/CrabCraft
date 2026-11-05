@@ -1751,5 +1751,11 @@
     "Open a project to change its files": "ファイルを変更するにはプロジェクトを開いてください",
     "This action deletes files, which is not supported yet": "この操作はファイルを削除します。これはまだサポートされていません",
     "{file} exists already": "{file} は既に存在します"
+  },
+  "repl": {
+    "Rust REPL": "Rust REPL",
+    "Starting Rust REPL…": "Rust REPL を起動中…",
+    "Could not start the Rust REPL: {error}": "Rust REPL を起動できませんでした: {error}",
+    "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "信頼済みの Cargo プロジェクトと PATH 内の evcxr が必要です。cargo install --locked evcxr_repl でインストール。:dep で依存関係を追加し、:vars で変数を一覧表示します。"
   }
 }

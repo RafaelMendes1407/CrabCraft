@@ -24,11 +24,11 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 169 |
+| ✅ Pronto | 171 |
 | 🚧 Em andamento | 9 |
 | 🟢 Herdado | 22 |
 | 🔁 Portar | 1 |
-| ⬜ A fazer | 52 |
+| ⬜ A fazer | 50 |
 | 🚫 Fora do escopo | 5 |
 | **Total** | **258** |
 <!-- summary:end -->
@@ -293,9 +293,9 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | ID | Funcionalidade | Status | Marco | Plano |
 | --- | --- | --- | --- | --- |
 | A-01 | Profiler | ✅ | M4 | Ação Profile (Find Action, menu Run e janela Profiler) compila a configuração de execução Rust selecionada e grava com `perf record` (`cpu-clock:u`, pilhas por DWARF) em segundo plano; Stop and Analyze encerra a gravação e mantém as amostras, Cancel mata o `perf` e o programa (grupo de processos). `perf script` é lido em segundo plano, com limites de amostras, profundidade e nós, e vira flame graph (clique amplia, duplo clique abre o código) e árvore de chamadas com total e self; funções do binário são ligadas ao código-fonte por `nm -l`. Com `kernel.perf_event_paranoid` acima de 2 a janela explica o bloqueio e como liberar. Testado com o `perf` real (paranoid = 1): gravação de um binário Rust real e de um projeto Cargo pela ação Profile, com `fib` amostrado e ligado a `src/main.rs`; com paranoid = 4, recusa com a mensagem; cancelamento e o leitor da saída do `perf script`; capturas conferidas. Ainda não há: perfis de alocação/memória, comparar perfis, inline frames e informações de linha em builds release sem debug |
-| A-02 | Console REPL | ⬜ | M4 | `evcxr_repl` em `rc-term` |
+| A-02 | Console REPL | ✅ | M4 | Botão Rust REPL na janela Terminal abre `evcxr --disable-readline` no terminal nativo, somente em projeto Cargo confiável; inicialização em thread, cancelável, ambiente do projeto e fechamento com a aba. Exige evcxr instalado no PATH; falha vira mensagem. Testado com evcxr 0.22 real: avaliação Rust, variável e dependência Cargo local, resultado 42 e `:quit`. Readline desativado: histórico e completação próprios do evcxr não são oferecidos. |
 | A-03 | REPL: painel de variáveis | ⬜ | M4 | |
-| A-04 | REPL: comando `:dep` | ⬜ | M4 | |
+| A-04 | REPL: comando `:dep` | ✅ | M4 | Comando nativo do evcxr no console REPL. Teste real `repl::tests::real_repl_evaluates_rust_and_loads_a_local_cargo_dependency` carrega um crate Cargo local com `:dep`, chama sua função e avalia 42, sem rede. Dependências remotas podem usar a rede, sob controle do usuário. |
 
 ## 11. Controle de versão
 

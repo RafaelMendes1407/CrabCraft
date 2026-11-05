@@ -138,6 +138,7 @@ pub struct CrabCraftApp {
     pub find_in_files: Option<crate::search::FindInFiles>,
     pub terminals: rc_term::Terminals,
     pub settings_backup: crate::settings_backup::State,
+    pub repl_starting: Option<crate::repl::Starting>,
     pub focus_terminal: bool,
     /// Results shown in the Find tool window (usages, implementations…).
     pub find_results: Option<(String, Vec<Target>)>,
@@ -349,6 +350,7 @@ impl CrabCraftApp {
             find_in_files: None,
             terminals: rc_term::Terminals::new(),
             settings_backup: Default::default(),
+            repl_starting: None,
             focus_terminal: false,
             find_results: None,
             caret_screen: None,
@@ -1307,6 +1309,7 @@ impl CrabCraftApp {
         self.find_in_files = None;
         self.search_everywhere = None;
         self.find_bar = None;
+        self.repl_starting = None;
         self.terminals = rc_term::Terminals::new();
         self.find_results = None;
         self.docs.list.clear();
@@ -2420,6 +2423,39 @@ impl CrabCraftApp {
         }
     }
 
+    /// Evcxr may compile code and load Cargo configuration from the current project.
+    pub fn can_open_rust_repl(&self) -> bool {
+        self.workspace.as_ref().is_some_and(|w| {
+            matches!(w.ws.kind, rc_core::WorkspaceKind::Cargo(_))
+                && self.settings.trusted_projects.contains(&w.ws.root)
+        })
+    }
+
+    pub fn open_rust_repl(&mut self) {
+        if !self.can_open_rust_repl() || self.repl_starting.is_some() { return; }
+        let cwd = self.workspace.as_ref().map(|w| w.ws.root.clone());
+        let mut spec = rc_term::SpawnSpec::rust_repl(cwd);
+        spec.env.extend(self.runner.project_env_pairs());
+        match crate::repl::Starting::new(spec, self.waker.clone()) {
+            Ok(starting) => self.repl_starting = Some(starting),
+            Err(error) => self.notify(trf("Could not start the Rust REPL: {error}", &[("error", &error)]), true),
+        }
+    }
+
+    fn poll_repl(&mut self) {
+        let Some(result) = self.repl_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        self.repl_starting = None;
+        match result {
+            Ok(session) => {
+                let id = self.terminals.push(session);
+                self.terminals.rename(id, Some(tr("Rust REPL").to_string()));
+                self.dock.show(ToolWindow::Terminal);
+                self.focus_terminal = true;
+            }
+            Err(error) => self.notify(trf("Could not start the Rust REPL: {error}", &[("error", &error)]), true),
+        }
+    }
+
     /// Run icons next to test classes and methods, with their last outcome.
     pub(crate) fn update_test_markers(&mut self) {
         let Some(i) = self.docs.active else { return };
@@ -3237,6 +3273,7 @@ impl eframe::App for CrabCraftApp {
         let outs = self.debugger.update(&mut self.docs);
         self.handle_debug(outs);
         self.poll_auto_attach();
+        self.poll_repl();
         for (_, ev) in self.terminals.poll() {
             if let rc_term::SessionEvent::Clipboard(text) = ev {
                 ctx.copy_text(text);

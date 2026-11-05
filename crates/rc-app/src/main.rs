@@ -2,6 +2,7 @@
 
 mod app;
 mod cli;
+mod repl;
 mod settings_backup;
 mod instance;
 mod auto_attach;

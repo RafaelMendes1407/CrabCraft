@@ -60,6 +60,12 @@ impl SpawnSpec {
         }
     }
 
+    /// The Evcxr Rust REPL, using terminal input and `:dep` commands.
+    /// Calling this only prepares a command; callers must start it after an explicit action.
+    pub fn rust_repl(cwd: Option<PathBuf>) -> Self {
+        Self::command("evcxr", ["--disable-readline"], cwd).env("RUSTUP_AUTO_INSTALL", "0")
+    }
+
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.push((key.into(), value.into()));
         self

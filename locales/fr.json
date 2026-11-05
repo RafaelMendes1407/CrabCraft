@@ -1751,5 +1751,11 @@
     "Open a project to change its files": "Ouvrez un projet pour modifier ses fichiers",
     "This action deletes files, which is not supported yet": "Cette action supprime des fichiers, ce qui n’est pas encore pris en charge",
     "{file} exists already": "{file} existe déjà"
+  },
+  "repl": {
+    "Rust REPL": "REPL Rust",
+    "Starting Rust REPL…": "Démarrage du REPL Rust…",
+    "Could not start the Rust REPL: {error}": "Impossible de démarrer le REPL Rust : {error}",
+    "Requires a trusted Cargo project and evcxr on PATH. Install with cargo install --locked evcxr_repl. Use :dep to add dependencies and :vars to list variables.": "Nécessite un projet Cargo de confiance et evcxr dans PATH. Installez avec cargo install --locked evcxr_repl. Utilisez :dep pour ajouter des dépendances et :vars pour lister les variables."
   }
 }
