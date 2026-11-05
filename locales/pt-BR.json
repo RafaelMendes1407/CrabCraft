@@ -3012,5 +3012,21 @@
     "Project tree read cancelled": "Leitura da árvore do projeto cancelada",
     "Project tree changed while reading; refresh it": "A árvore do projeto mudou durante a leitura; atualize-a",
     "Project tree worker queue is full; refresh to retry": "A fila da árvore do projeto está cheia; atualize para tentar novamente"
+  },
+  "container_workspace": {
+    "Container analyzer connected; indexing inside the container…": "Analisador conectado; indexando dentro do container…",
+    "Running container Rust workspace": "Workspace Rust em container em execução",
+    "Explicit connection to an already-running Linux container. Start executes Cargo and rust-analyzer inside it. No container is created, started or pulled.": "Conexão explícita a um container Linux já em execução. Iniciar executa Cargo e rust-analyzer dentro dele. Nenhum container é criado, iniciado ou baixado.",
+    "Use an already-running Docker container": "Usar um container Docker já em execução",
+    "Docker CLI executable": "Executável da CLI Docker",
+    "Local Docker socket URI": "URI do socket Docker local",
+    "Running container ID": "ID do container em execução",
+    "Container user or UID:GID": "Usuário do container ou UID:GID",
+    "Docker runtime validation is pending. Only local Unix sockets and existing Linux containers are supported.": "A validação com Docker real está pendente. Somente sockets Unix locais e containers Linux existentes são suportados.",
+    "I trust this Docker daemon, container and workspace to execute project tools": "Confio neste daemon Docker, container e workspace para executar ferramentas do projeto",
+    "Start container workspace": "Iniciar workspace do container",
+    "Invalid container settings or Linux source path": "Configurações do container ou caminho de fonte Linux inválidos",
+    "Container operation timed out": "A operação do container excedeu o tempo limite",
+    "Container error: {error}": "Erro do container: {error}"
   }
 }
