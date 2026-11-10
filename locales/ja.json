@@ -1813,7 +1813,12 @@
     "Trust the project before changing dependencies.": "依存関係を変更する前にプロジェクトを信頼してください。",
     "Version requirement": "バージョン要件",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add は有効な機能を保持します。機能の削除は Cargo.toml で行ってください。",
-    "Development dependencies cannot be optional": "開発用の依存関係は任意にできません"
+    "Development dependencies cannot be optional": "開発用の依存関係は任意にできません",
+    "Installed": "インストール済み",
+    "Search crates.io": "crates.io を検索",
+    "No dependencies in this package yet.": "このパッケージにはまだ依存関係がありません。",
+    "Cargo output": "Cargo の出力",
+    "local": "ローカル"
   },
   "http_variables": {
     "Undefined HTTP variable: {name}": "未定義の HTTP 変数: {name}",

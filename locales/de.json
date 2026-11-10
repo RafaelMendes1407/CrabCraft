@@ -1813,7 +1813,12 @@
     "Trust the project before changing dependencies.": "Dem Projekt vor Abhängigkeitsänderungen vertrauen.",
     "Version requirement": "Versionsanforderung",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add behält aktivierte Features bei. Feature-Einträge in Cargo.toml entfernen.",
-    "Development dependencies cannot be optional": "Entwicklungsabhängigkeiten können nicht optional sein"
+    "Development dependencies cannot be optional": "Entwicklungsabhängigkeiten können nicht optional sein",
+    "Installed": "Installiert",
+    "Search crates.io": "Auf crates.io suchen",
+    "No dependencies in this package yet.": "Dieses Paket hat noch keine Abhängigkeiten.",
+    "Cargo output": "Cargo-Ausgabe",
+    "local": "lokal"
   },
   "http_variables": {
     "Undefined HTTP variable: {name}": "Undefinierte HTTP-Variable: {name}",

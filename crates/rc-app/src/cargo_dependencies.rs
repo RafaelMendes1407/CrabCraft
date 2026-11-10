@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::time::Duration;
 
+/// What the left pane of the manager lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pane { Installed, Search }
+
 pub struct CargoDependencies {
     waker: Waker,
     manifest: Option<PathBuf>,
@@ -35,16 +39,20 @@ pub struct CargoDependencies {
     loading: bool,
     reload_project: bool,
     remove: Option<(String, Scope)>,
+    pub pane: Pane,
+    /// Height the output section took last frame; the panes give it back while it is hidden so
+    /// the dialog keeps its size and its buttons never move.
+    output_height: f32,
 }
 impl CargoDependencies {
     pub fn new(waker: Waker) -> Self {
         Self { waker: waker.clone(), manifest: None, generation: 0, files: Inbox::new(waker.clone()), searches: Inbox::new(waker.clone()), events: Inbox::new(waker), search_cancel: None, operation: None,
             installed: Vec::new(), hits: Vec::new(), query: String::new(), name: String::new(), version: String::new(), features: String::new(), path: String::new(), scope: Scope::Normal,
-            optional: false, defaults: true, offline: false, editable: true, output: String::new(), error: None, loading: false, reload_project: false, remove: None }
+            optional: false, defaults: true, offline: false, editable: true, output: String::new(), error: None, loading: false, reload_project: false, remove: None, pane: Pane::Installed, output_height: 150.0 }
     }
     /// Prefill a local proposal. This reads the manifest but never searches or changes it.
     pub fn review(&mut self, manifest: &Path, name: &str, scope: Scope, local: Option<&Path>) {
-        self.cancel(); self.form(); self.scope = scope; self.query = name.to_string(); self.name = name.to_string();
+        self.cancel(); self.form(); self.pane = Pane::Installed; self.scope = scope; self.query = name.to_string(); self.name = name.to_string();
         self.path = local.map(|path| path.to_string_lossy().into_owned()).unwrap_or_default();
         self.load(manifest.to_path_buf());
     }
@@ -89,6 +97,7 @@ impl CargoDependencies {
         let (generation, query, out) = (self.generation, self.query.trim().to_string(), self.searches.sender());
         self.hits.clear();
         self.error = None;
+        self.pane = Pane::Search;
         std::thread::spawn(move || {
             let result = rc_cargo::crates_io::search_crates_io(&query, Duration::from_secs(12), &cancel).map_err(|e| format!("{e:#}"));
             if !cancel.load(Ordering::Relaxed) { out.send((generation, result)); }
@@ -139,83 +148,143 @@ impl CargoDependencies {
     fn form(&mut self) {
         self.name.clear(); self.version.clear(); self.features.clear(); self.path.clear(); self.optional = false; self.defaults = true; self.editable = true; self.remove = None;
     }
-    fn ui(&mut self, ui: &mut Ui, packages: &[rc_cargo::Package], cargo: Option<&rc_cargo::Cargo>, trusted: bool, clean: bool) {
-        let busy = self.operation.is_some();
+    /// The installed dependency the form currently describes, if any.
+    fn current(&self) -> Option<&Installed> {
+        let name = self.name.trim();
+        self.installed.iter().find(|dep| dep.name == name && dep.scope == self.scope)
+    }
+    fn pick(&mut self, dep: Installed) {
+        self.name = dep.name; self.version = dep.version; self.features = dep.features.join(","); self.scope = dep.scope; self.optional = dep.optional; self.defaults = dep.default_features;
+        self.path = dep.path.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(); self.editable = dep.editable; self.remove = None;
+    }
+    /// Package selector, refresh and the offline switch.
+    fn toolbar(&mut self, ui: &mut Ui, packages: &[rc_cargo::Package], busy: bool) {
         let mut manifest = self.manifest.clone();
         ui.horizontal(|ui| {
             ui.label(tr("Package"));
-            egui::ComboBox::from_id_salt("dependency_package").selected_text(packages.iter().find(|p| Some(&p.manifest) == manifest.as_ref()).map(|p| p.name.as_str()).unwrap_or("")).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("dependency_package").width(220.0).selected_text(packages.iter().find(|p| Some(&p.manifest) == manifest.as_ref()).map(|p| p.name.as_str()).unwrap_or("")).show_ui(ui, |ui| {
                 for package in packages { ui.add_enabled_ui(!busy, |ui| { ui.selectable_value(&mut manifest, Some(package.manifest.clone()), &package.name); }); }
             });
             if ui.add_enabled(!busy, egui::Button::new(tr("Refresh"))).clicked() && let Some(path) = &manifest { self.load(path.clone()); }
-            ui.checkbox(&mut self.offline, tr("Offline"));
+            if self.loading { ui.spinner(); }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.checkbox(&mut self.offline, tr("Offline"));
+            });
         });
         if manifest != self.manifest && let Some(path) = manifest { self.form(); self.load(path); }
-        if let Some(path) = &self.manifest { ui.small(path.display().to_string()); }
-        if cargo.is_none() { ui.label(tr("Cargo was not found. Install Rust with rustup.")); }
-        if !trusted { ui.label(tr("Trust the project before changing dependencies.")); }
-        ui.label(tr("Search contacts crates.io only when you press Search. Cargo edits may access configured registries unless Offline is enabled."));
-        ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(tr("Crate name to search")).char_limit(64));
-            if ui.add_enabled(self.search_cancel.is_none() && !self.loading && rc_cargo::valid_crate_name(self.query.trim()), egui::Button::new(tr("Search"))).clicked() { self.search(); }
-            if self.search_cancel.is_some() {
-                ui.spinner();
-                if ui.button(tr("Cancel Search")).clicked() { if let Some(c) = self.search_cancel.take() { c.store(true, Ordering::Relaxed); } self.generation = self.generation.wrapping_add(1); }
-            }
-        });
-        egui::ScrollArea::vertical().id_salt("crate_search_results").max_height(115.0).show(ui, |ui| {
-            for hit in self.hits.clone() {
-                if ui.selectable_label(false, format!("{}  {}", hit.name, hit.version.as_deref().unwrap_or(""))).clicked() && !busy {
-                    self.form(); self.name = hit.name; self.version = hit.version.unwrap_or_default();
-                }
-                if let Some(description) = hit.description { ui.small(description); }
-            }
-        });
-        ui.separator();
-        ui.label(tr("Installed dependencies"));
-        if self.loading { ui.spinner(); }
-        egui::ScrollArea::vertical().id_salt("installed_crate_dependencies").max_height(160.0).show(ui, |ui| {
-            for dep in self.installed.clone() {
-                ui.horizontal(|ui| {
-                    let label = format!("{}  {}  [{}]", dep.name, dep.version, dep.scope.table());
-                    if ui.selectable_label(false, label).clicked() && !busy {
-                        self.name = dep.name.clone(); self.version = dep.version; self.features = dep.features.join(","); self.scope = dep.scope; self.optional = dep.optional; self.defaults = dep.default_features;
-                        self.path = dep.path.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(); self.editable = dep.editable;
-                    }
-                    if ui.add_enabled(trusted && clean && !busy && cargo.is_some(), egui::Button::new(tr("Remove…"))).clicked() { self.remove = Some((dep.name, dep.scope)); }
-                });
-                if !dep.source.is_empty() { ui.small(dep.source); }
-            }
-        });
-        if let Some((name, scope)) = self.remove.clone() {
-            ui.horizontal(|ui| {
-                ui.label(rc_kit::i18n::trf("Remove {name} from {scope}?", &[("name", &name), ("scope", &scope.table())]));
-                if ui.add_enabled(trusted && clean && !busy, egui::Button::new(tr("Remove"))).clicked() && let (Some(cargo), Some(manifest)) = (cargo, self.manifest.as_ref()) {
-                    self.start(cargo, dependencies::remove_args(manifest, scope, &name, self.offline), trusted); self.remove = None;
-                }
-                if ui.button(tr("Cancel")).clicked() { self.remove = None; }
-            });
+        if let Some(path) = &self.manifest {
+            ui.add(egui::Label::new(egui::RichText::new(path.display().to_string()).small().color(rc_kit::pal(ui).muted)).truncate());
         }
+    }
+    /// Left pane: installed dependencies grouped by table, or crates.io search.
+    fn list(&mut self, ui: &mut Ui, busy: bool) {
+        let p = rc_kit::pal(ui);
+        ui.horizontal(|ui| {
+            let installed = format!("{} ({})", tr("Installed"), self.installed.len());
+            if ui.selectable_label(self.pane == Pane::Installed, installed).clicked() { self.pane = Pane::Installed; }
+            if ui.selectable_label(self.pane == Pane::Search, tr("Search crates.io")).clicked() { self.pane = Pane::Search; }
+        });
         ui.separator();
+        let height = (ui.available_height() - 36.0).max(80.0);
+        match self.pane {
+            Pane::Installed => {
+                egui::ScrollArea::vertical().id_salt("installed_crate_dependencies").max_height(height).min_scrolled_height(height).auto_shrink([false, false]).show(ui, |ui| {
+                    if self.installed.is_empty() && !self.loading {
+                        ui.add_space(8.0);
+                        ui.label(egui::RichText::new(tr("No dependencies in this package yet.")).color(p.muted));
+                    }
+                    let current = self.current().map(|dep| (dep.name.clone(), dep.scope));
+                    for scope in [Scope::Normal, Scope::Dev, Scope::Build] {
+                        let deps: Vec<Installed> = self.installed.iter().filter(|dep| dep.scope == scope).cloned().collect();
+                        if deps.is_empty() { continue; }
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(format!("{}  ·  {}", scope.table(), deps.len())).small().strong().color(p.muted));
+                        for dep in deps {
+                            let selected = current.as_ref().is_some_and(|(name, scope)| *name == dep.name && *scope == dep.scope);
+                            let trailing = if dep.version.is_empty() { dep.path.as_ref().map(|_| tr("local").to_string()).unwrap_or_default() } else { dep.version.clone() };
+                            let subtitle = (!dep.source.is_empty()).then_some(dep.source.as_str());
+                            let label = format!("{}  {}  [{}]", dep.name, dep.version, dep.scope.table());
+                            if row(ui, selected, &dep.name, &trailing, subtitle, &label).clicked() && !busy { self.pick(dep); }
+                        }
+                    }
+                });
+            }
+            Pane::Search => {
+                ui.horizontal(|ui| {
+                    let searching = self.search_cancel.is_some();
+                    let width = (ui.available_width() - 90.0).max(80.0);
+                    let edit = ui.add(egui::TextEdit::singleline(&mut self.query).hint_text(tr("Crate name to search")).char_limit(64).desired_width(width));
+                    let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    let can = !searching && !self.loading && rc_cargo::valid_crate_name(self.query.trim());
+                    if searching {
+                        ui.spinner();
+                        if ui.button(tr("Cancel Search")).clicked() { if let Some(c) = self.search_cancel.take() { c.store(true, Ordering::Relaxed); } self.generation = self.generation.wrapping_add(1); }
+                    } else if ui.add_enabled(can, egui::Button::new(tr("Search"))).clicked() || (enter && can) { self.search(); }
+                });
+                ui.label(egui::RichText::new(tr("Search contacts crates.io only when you press Search. Cargo edits may access configured registries unless Offline is enabled.")).small().color(p.muted));
+                let height = (ui.available_height() - 36.0).max(60.0);
+                egui::ScrollArea::vertical().id_salt("crate_search_results").max_height(height).min_scrolled_height(height).auto_shrink([false, false]).show(ui, |ui| {
+                    if self.hits.is_empty() && self.search_cancel.is_none() && !self.query.trim().is_empty() {
+                        ui.add_space(8.0);
+                        ui.label(egui::RichText::new(tr("No results")).color(p.muted));
+                    }
+                    for hit in self.hits.clone() {
+                        let version = hit.version.clone().unwrap_or_default();
+                        let label = format!("{}  {}", hit.name, version);
+                        let selected = self.name.trim() == hit.name;
+                        if row(ui, selected, &hit.name, &version, hit.description.as_deref(), &label).clicked() && !busy {
+                            let installed = self.installed.iter().find(|dep| dep.name == hit.name).cloned();
+                            match installed {
+                                Some(dep) => self.pick(dep),
+                                None => { self.form(); self.name = hit.name; self.version = version; }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        ui.add_space(4.0);
+        if ui.add_enabled(!busy, egui::Button::new(format!("+  {}", tr("New dependency")))).clicked() { self.form(); }
+    }
+    /// Right pane: the selected or new dependency and its actions.
+    fn details(&mut self, ui: &mut Ui, cargo: Option<&rc_cargo::Cargo>, trusted: bool, clean: bool, busy: bool) {
+        let p = rc_kit::pal(ui);
+        let current = self.current().cloned();
+        let title = if self.name.trim().is_empty() { tr("New dependency").to_string() } else { self.name.trim().to_string() };
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(title).font(rc_kit::theme::bold(16.0)));
+            if let Some(dep) = &current { ui.label(egui::RichText::new(format!(" {} ", dep.scope.table())).small().color(p.badge_fg).background_color(p.badge_bg)); }
+        });
+        if let Some(dep) = &current && !dep.source.is_empty() { ui.label(egui::RichText::new(&dep.source).small().color(p.muted)); }
+        ui.add_space(6.0);
         ui.add_enabled_ui(!busy, |ui| {
-            if ui.button(tr("New dependency")).clicked() { self.form(); }
-            egui::Grid::new("dependency_form").num_columns(2).show(ui, |ui| {
-                ui.label(tr("Crate name")); ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(64)); ui.end_row();
-                ui.label(tr("Version requirement")); ui.add(egui::TextEdit::singleline(&mut self.version).hint_text("1.0").char_limit(200)); ui.end_row();
-                ui.label(tr("Features (comma-separated)")); ui.add(egui::TextEdit::singleline(&mut self.features).char_limit(2048)); ui.end_row();
-                ui.label(tr("Local dependency path (optional)")); ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096)); ui.end_row();
-                ui.label(tr("Dependency scope")); egui::ComboBox::from_id_salt("dep_scope").selected_text(self.scope.table()).show_ui(ui, |ui| {
+            let width = (ui.available_width() - 180.0).max(120.0);
+            egui::Grid::new("dependency_form").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                ui.label(tr("Crate name")); ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(64).desired_width(width)); ui.end_row();
+                ui.label(tr("Version requirement")); ui.add(egui::TextEdit::singleline(&mut self.version).hint_text("1.0").char_limit(200).desired_width(width)); ui.end_row();
+                ui.label(tr("Features (comma-separated)")); ui.add(egui::TextEdit::singleline(&mut self.features).char_limit(2048).desired_width(width)); ui.end_row();
+                ui.label(tr("Local dependency path (optional)")); ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096).desired_width(width)); ui.end_row();
+                ui.label(tr("Dependency scope")); egui::ComboBox::from_id_salt("dep_scope").width(width - 6.0).selected_text(self.scope.table()).show_ui(ui, |ui| {
                     for scope in [Scope::Normal, Scope::Dev, Scope::Build] { ui.selectable_value(&mut self.scope, scope, scope.table()); }
                 }); ui.end_row();
+                if self.scope == Scope::Dev { self.optional = false; }
+                ui.label("");
+                ui.vertical(|ui| {
+                    ui.add_enabled_ui(self.scope != Scope::Dev, |ui| { ui.checkbox(&mut self.optional, tr("Optional dependency")); });
+                    ui.checkbox(&mut self.defaults, tr("Default features"));
+                });
+                ui.end_row();
             });
-            if self.scope == Scope::Dev { self.optional = false; }
-            ui.horizontal(|ui| { ui.add_enabled_ui(self.scope != Scope::Dev, |ui| { ui.checkbox(&mut self.optional, tr("Optional dependency")); }); ui.checkbox(&mut self.defaults, tr("Default features")); });
         });
-        ui.small(tr("Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml."));
-        if !self.editable { ui.label(tr("Edit inherited, Git and alternate-registry dependency settings in Cargo.toml. Removal is supported here.")); }
-        ui.label(tr("Target-specific and workspace-level dependency tables must be edited in Cargo.toml."));
-        if ui.add_enabled(trusted && clean && !busy && self.editable && cargo.is_some() && !self.name.is_empty(), egui::Button::new(tr("Add or update dependency"))).clicked()
-            && let (Some(cargo), Some(manifest)) = (cargo, self.manifest.as_ref()) {
+        ui.add_space(6.0);
+        if !self.editable { ui.colored_label(p.warn, tr("Edit inherited, Git and alternate-registry dependency settings in Cargo.toml. Removal is supported here.")); }
+        ui.label(egui::RichText::new(tr("Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.")).small().color(p.muted));
+        ui.label(egui::RichText::new(tr("Target-specific and workspace-level dependency tables must be edited in Cargo.toml.")).small().color(p.muted));
+        ui.add_space(8.0);
+        let can_edit = trusted && clean && !busy && cargo.is_some();
+        ui.horizontal(|ui| {
+            let add = ui.add_enabled_ui(can_edit && self.editable && !self.name.trim().is_empty(), |ui| rc_kit::theme::primary_button(ui, tr("Add or update dependency"))).inner;
+            if add.clicked() && let (Some(cargo), Some(manifest)) = (cargo, self.manifest.as_ref()) {
                 let path = (!self.path.trim().is_empty()).then(|| {
                     let path = Path::new(self.path.trim());
                     if path.is_absolute() { path.to_path_buf() } else { manifest.parent().unwrap_or(Path::new(".")).join(path) }
@@ -223,14 +292,95 @@ impl CargoDependencies {
                 let add = Add { name: self.name.trim().into(), version: self.version.trim().into(), features: self.features.split([',', ' ']).filter(|s| !s.is_empty()).map(str::to_string).collect(), optional: self.optional, no_default_features: !self.defaults, path };
                 self.start(cargo, dependencies::add_args(manifest, self.scope, &add, self.offline), trusted);
             }
-        if busy && ui.button(tr("Cancel dependency change")).clicked() && let Some(operation) = &self.operation { operation.cancel(); }
-        if let Some(error) = &self.error { ui.colored_label(rc_kit::pal(ui).error, error); }
-        if !self.output.is_empty() { egui::ScrollArea::vertical().id_salt("dependency_output").max_height(100.0).show(ui, |ui| { ui.monospace(&self.output); }); }
+            if let Some(dep) = &current && self.remove.is_none() && ui.add_enabled(can_edit, egui::Button::new(tr("Remove…")).min_size(egui::vec2(72.0, 28.0))).clicked() {
+                self.remove = Some((dep.name.clone(), dep.scope));
+            }
+        });
+        if let Some((name, scope)) = self.remove.clone() {
+            ui.add_space(6.0);
+            notice(ui, p.error, |ui| {
+                ui.label(rc_kit::i18n::trf("Remove {name} from {scope}?", &[("name", &name), ("scope", &scope.table())]));
+                if ui.add_enabled(can_edit, egui::Button::new(tr("Remove"))).clicked() && let (Some(cargo), Some(manifest)) = (cargo, self.manifest.as_ref()) {
+                    self.start(cargo, dependencies::remove_args(manifest, scope, &name, self.offline), trusted); self.remove = None;
+                }
+                if ui.button(tr("Cancel")).clicked() { self.remove = None; }
+            });
+        }
     }
+    fn ui(&mut self, ui: &mut Ui, packages: &[rc_cargo::Package], cargo: Option<&rc_cargo::Cargo>, trusted: bool, clean: bool, body: f32) {
+        let busy = self.operation.is_some();
+        let p = rc_kit::pal(ui);
+        self.toolbar(ui, packages, busy);
+        if cargo.is_none() { notice(ui, p.warn, |ui| { ui.label(tr("Cargo was not found. Install Rust with rustup.")); }); }
+        if !trusted { notice(ui, p.warn, |ui| { ui.label(tr("Trust the project before changing dependencies.")); }); }
+        if !clean { notice(ui, p.warn, |ui| { ui.label(tr("Save edited documents before changing dependencies.")); }); }
+        ui.add_space(4.0);
+        let show_output = !self.output.is_empty() || busy;
+        let body = if show_output { body } else { body + self.output_height };
+        // Two fixed panes side by side; each scrolls inside its own rectangle.
+        let width = ui.available_width().max(200.0);
+        let left = (width * 0.38).clamp(180.0, 340.0);
+        let gap = 10.0;
+        let area = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, body));
+        let left_rect = egui::Rect::from_min_size(area.min, egui::vec2(left, body));
+        let right_rect = egui::Rect::from_min_max(egui::pos2(left_rect.right() + gap, area.top()), area.max);
+        for (rect, is_left) in [(left_rect, true), (right_rect, false)] {
+            ui.painter().rect(rect, 8.0, p.island_bg, egui::Stroke::new(1.0, p.island_border), egui::StrokeKind::Inside);
+            let inner = rect.shrink(10.0);
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
+            child.set_clip_rect(inner.expand(2.0).intersect(ui.clip_rect()));
+            if is_left { self.list(&mut child, busy); } else {
+                egui::ScrollArea::vertical().id_salt("dependency_details").auto_shrink([false, false]).max_height(inner.height()).show(&mut child, |ui| self.details(ui, cargo, trusted, clean, busy));
+            }
+        }
+        ui.advance_cursor_after_rect(area);
+        if let Some(error) = &self.error { ui.add_space(4.0); notice(ui, p.error, |ui| { ui.label(error); }); }
+        if show_output {
+            let top = ui.cursor().min.y;
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(tr("Cargo output")).strong());
+            egui::Frame::new().fill(p.editor_bg).stroke(egui::Stroke::new(1.0, p.island_border)).corner_radius(6).inner_margin(8).show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("dependency_output").max_height(100.0).min_scrolled_height(100.0).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
+                    ui.add(egui::Label::new(egui::RichText::new(&self.output).monospace().size(12.0)).wrap());
+                });
+            });
+            self.output_height = (ui.cursor().min.y - top).clamp(0.0, 400.0);
+        }
+    }
+}
+/// A list row: bold name, trailing version and an optional muted line below.
+fn row(ui: &mut Ui, selected: bool, title: &str, trailing: &str, subtitle: Option<&str>, label: &str) -> egui::Response {
+    let p = rc_kit::pal(ui);
+    let height = if subtitle.is_some() { 42.0 } else { 26.0 };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), selected, label));
+    if ui.is_rect_visible(rect) {
+        if selected { ui.painter().rect_filled(rect, 5.0, p.selection); } else if response.hovered() { ui.painter().rect_filled(rect, 5.0, p.row_hover); }
+        let painter = ui.painter().with_clip_rect(rect.shrink(1.0).intersect(ui.clip_rect()));
+        let trailing = painter.layout_no_wrap(trailing.to_string(), egui::FontId::proportional(12.0), p.muted);
+        let top = rect.top() + 13.0;
+        painter.galley(egui::pos2(rect.right() - 8.0 - trailing.size().x, top - trailing.size().y / 2.0), trailing.clone(), p.muted);
+        let title_clip = painter.with_clip_rect(egui::Rect::from_min_max(rect.min, egui::pos2(rect.right() - 16.0 - trailing.size().x, rect.bottom())).intersect(painter.clip_rect()));
+        let title = title_clip.layout_no_wrap(title.to_string(), rc_kit::theme::bold(13.0), p.text);
+        title_clip.galley(egui::pos2(rect.left() + 8.0, top - title.size().y / 2.0), title, p.text);
+        if let Some(subtitle) = subtitle {
+            let line = subtitle.lines().next().unwrap_or("");
+            let galley = painter.layout_no_wrap(line.to_string(), egui::FontId::proportional(11.5), p.muted);
+            painter.galley(egui::pos2(rect.left() + 8.0, rect.top() + 29.0 - galley.size().y / 2.0), galley, p.muted);
+        }
+    }
+    response
+}
+/// A tinted single-line banner (warnings, errors and confirmations).
+fn notice(ui: &mut Ui, color: egui::Color32, add: impl FnOnce(&mut Ui)) {
+    egui::Frame::new().fill(color.gamma_multiply(0.12)).stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.5))).corner_radius(6).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_wrapped(add);
+    });
 }
 impl Drop for CargoDependencies { fn drop(&mut self) { self.cancel(); } }
 fn append(output: &mut String, line: &str) {
-    if output.len() < 64 * 1024 { output.extend(line.chars().take(2048)); output.push('\n'); }
+    if output.len() < 64 * 1024 { output.extend(rc_dotnet::strip_ansi(line).chars().take(2048)); output.push('\n'); }
 }
 fn error_text(error: DependencyError) -> &'static str {
     match error {
@@ -253,14 +403,24 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &Context) -> bool {
     let reload = std::mem::take(&mut manager.reload_project);
     let trusted = app.workspace.as_ref().is_some_and(|w| app.settings.trusted_projects.contains(&w.ws.root));
     let mut close = false;
+    let screen = ctx.content_rect().size();
+    let width = (screen.x - 48.0).clamp(320.0, 980.0);
+    let body = (screen.y - 330.0).clamp(220.0, 460.0);
     egui::Modal::new(egui::Id::new("cargo_dependency_manager")).show(ctx, |ui| {
-        ui.set_width(720.0);
+        ui.set_width(width);
         ui.heading(tr("Cargo Dependencies"));
-        if !clean { ui.label(tr("Save edited documents before changing dependencies.")); }
-        egui::ScrollArea::vertical().id_salt("cargo_dependencies_dialog").max_height((ctx.content_rect().height() - 160.0).max(200.0)).show(ui, |ui| {
-            manager.ui(ui, &packages, cargo.as_ref(), trusted, clean);
+        ui.add_space(4.0);
+        manager.ui(ui, &packages, cargo.as_ref(), trusted, clean, body);
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if manager.operation.is_some() {
+                ui.spinner();
+                if ui.button(tr("Cancel dependency change")).clicked() && let Some(operation) = &manager.operation { operation.cancel(); }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if rc_kit::theme::secondary_button(ui, tr("Close")).clicked() { close = true; }
+            });
         });
-        if ui.button(tr("Close")).clicked() { close = true; }
     });
     close |= ctx.input(|i| i.key_pressed(egui::Key::Escape));
     if close { manager.cancel(); }
