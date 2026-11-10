@@ -283,6 +283,44 @@ fn idle_autosave_writes_edited_rust_files_after_the_pause() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
+/// Alt+Down and Alt+Up move the caret's line in the default Rider keymap, in a Rust file of a
+/// real Cargo project; the moved code still compiles and nothing runs on its own.
+#[test]
+fn alt_arrows_move_lines_in_a_rust_file() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"move-lines\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
+    let main = root.join("src/main.rs");
+    let before = "fn main() {\n    let a = 1;\n    let b = a + 1;\n    println!(\"{b}\");\n}\n";
+    std::fs::write(&main, before).unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&main);
+    // The caret on `let a = 1;`.
+    app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(16);
+    let mut h = harness(app, egui::vec2(1200.0, 800.0));
+    h.run_steps(2);
+    let alt = egui::Modifiers { alt: true, ..Default::default() };
+    let key = |h: &mut Harness<'static, CrabCraftApp>, key| { h.event(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: alt }); h.run_steps(2); };
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    key(&mut h, egui::Key::ArrowDown);
+    assert_eq!(text(&h), "fn main() {\n    let b = a + 1;\n    let a = 1;\n    println!(\"{b}\");\n}\n");
+    key(&mut h, egui::Key::ArrowUp);
+    key(&mut h, egui::Key::ArrowUp);
+    assert_eq!(text(&h), "    let a = 1;\nfn main() {\n    let b = a + 1;\n    println!(\"{b}\");\n}\n");
+    key(&mut h, egui::Key::ArrowDown);
+    assert_eq!(text(&h), before);
+    h.state_mut().save_all_and_wait();
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), before);
+    assert!(!root.join("build-ran").exists());
+    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
 /// CrabCraft always starts on the welcome screen: neither a closed project nor the one open
 /// when it quit is reopened. Paths from the command line or the system still open.
 #[test]

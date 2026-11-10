@@ -76,13 +76,13 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 <!-- summary:start -->
 | Status | Itens |
 | --- | --- |
-| ✅ Pronto | 246 |
+| ✅ Pronto | 247 |
 | 🚧 Em andamento | 7 |
 | 🟢 Herdado | 0 |
 | 🔁 Portar | 0 |
 | ⬜ A fazer | 0 |
 | 🚫 Fora do escopo | 5 |
-| **Total** | **258** |
+| **Total** | **259** |
 <!-- summary:end -->
 
 ## Marcos
@@ -164,6 +164,7 @@ Um item só vira ✅ com evidência de que funciona num projeto Rust real.
 | E-25 | Lens mode na barra de rolagem | ✅ | M6 | Passar o ponteiro na barra de rolagem mostra 9 linhas do código naquela altura (cores, números, problemas sublinhados, dobras respeitadas); sobre a marca de um erro mostra a mensagem. Desligável em Settings › Editor. Teste headless em `crates/rc-editor/src/view.rs` deste repositório (`the_scrollbar_lens_previews_the_code_under_the_pointer`) e captura GPU `scrollbar_lens_capture`. |
 | E-26 | Abas: fixar, dividir, destacar, pré-visualização | ✅ | M1 | Grupos de abas divididos em qualquer direção; arrastar reordena, move entre grupos, divide pela borda ou solta fora da janela para flutuar; janelas flutuantes com várias abas; layout salvo na sessão. Teste de UI num projeto Cargo arrasta para dividir e para fora; arrasto entre janelas reais do sistema não exercitado |
 | E-27 | Scratch files | ✅ | M3 | Novo arquivo de rascunho (Ctrl+Alt+Shift+Insert / ⌘⇧N): Rust, TOML, Markdown, JSON ou texto, guardado fora do projeto e listado para reabrir. Com um projeto aberto, rascunho Rust é analisado sozinho pelo rust-analyzer (arquivo avulso em `linkedProjects`); o botão Run da faixa compila com `rustc` numa pasta temporária e roda na janela Run (Rerun recompila; erro do rustc impede a execução). Testado com rust-analyzer e rustc reais |
+| E-28 | Mover linhas (Alt+↑/↓) | ✅ | M1 | Editar › Mover linha para cima/baixo move a linha do cursor ou as linhas selecionadas, com desfazer. Nos keymaps Rider e RustRover (Windows/Linux), Alt+↑/↓ além de Alt+Shift+↑/↓; Visual Studio e VS Code já usavam Alt+↑/↓; macOS mantém ⌥⇧↑/↓. Teste nativo num projeto Cargo real move linhas de `main.rs` pelos atalhos, volta ao texto original, salva e passa `cargo check` sem rodar build.rs |
 
 ## 3. Inteligência de código
 

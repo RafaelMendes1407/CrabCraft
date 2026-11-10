@@ -911,6 +911,9 @@ fn win_bindings(visual_studio: bool) -> Vec<(Chord, Action)> {
         v.extend([
             b(Key::Y, c, DeleteLine),
             b(Key::D, c, DuplicateLine),
+            // Alt+Up/Down move lines too (free in these keymaps); Alt+Shift stays JetBrains'.
+            b(Key::ArrowUp, a, MoveLineUp),
+            b(Key::ArrowDown, a, MoveLineDown),
             b(Key::ArrowUp, as_, MoveLineUp),
             b(Key::ArrowDown, as_, MoveLineDown),
             b(Key::Slash, c, CommentLine),
@@ -1200,6 +1203,13 @@ mod tests {
             assert_eq!(map.shortcut_text(action).as_deref(), Some(shortcut), "{action:?}");
         }
         assert_eq!(map.lookup(Key::F5, m(false, false, false, false)), None);
+        for kind in [KeymapKind::Rider, KeymapKind::RustRover] {
+            let map = Keymap::new(kind);
+            for alt_shift in [false, true] {
+                assert_eq!(map.lookup(Key::ArrowUp, m(true, false, alt_shift, false)), Some(Action::MoveLineUp), "{kind:?}");
+                assert_eq!(map.lookup(Key::ArrowDown, m(true, false, alt_shift, false)), Some(Action::MoveLineDown), "{kind:?}");
+            }
+        }
         assert_eq!(map.lookup(Key::P, m(false, true, false, false)), Some(Action::ParameterInfo));
         assert_eq!(map.lookup(Key::R, m(false, true, true, false)), Some(Action::ReplaceInFiles));
     }
