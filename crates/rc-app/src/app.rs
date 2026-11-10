@@ -300,7 +300,7 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        let requests=startup_paths(&app.settings,from_system);
+        let requests=startup_paths(from_system);
         app.open_requests(requests);
         app
     }
@@ -3577,11 +3577,10 @@ pub fn clean_paths(list: &[String]) -> Vec<String> {
     out
 }
 
-pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
-    if !from_system.is_empty() {
-        return from_system;
-    }
-    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).map(crate::cli::OpenRequest::path).into_iter().collect()
+/// Projects to open at startup: only what the command line or the system asked for. Without
+/// explicit paths CrabCraft always starts on the welcome screen.
+pub fn startup_paths(from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
+    from_system
 }
 
 impl eframe::App for CrabCraftApp {

@@ -237,30 +237,25 @@ fn screens() {
     }
 }
 
-/// Phase 1 closure: a 10-project solution opens with every project in the explorer, and the
-/// session (open tabs, caret, folds, tool windows, expanded nodes) is restored on reopen.
-/// Close Project, quit, start: the welcome screen. Quitting with a project open reopens it.
+/// CrabCraft always starts on the welcome screen: neither a closed project nor the one open
+/// when it quit is reopened. Paths from the command line or the system still open.
 #[test]
-fn closed_projects_are_not_reopened_on_startup() {
+fn startup_always_shows_the_welcome_screen() {
     use crate::cli::OpenRequest;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("Shop/Shop.sln");
     let mut app = test_app(home.path(), true);
     app.open_workspace_and_wait(&sln);
-    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
+    app.save_all_and_wait();
+    assert!(crate::app::startup_paths(Vec::new()).is_empty());
     app.close_project();
     app.save_all_and_wait();
-    assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
+    assert!(crate::app::startup_paths(Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
-    app.open_workspace_and_wait(&sln);
-    let mut settings = rc_core::Settings::load();
-    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![OpenRequest::path(&sln)]);
-    settings.reopen_last = false;
-    assert!(crate::app::startup_paths(&settings, Vec::new()).is_empty());
-    // Files from Finder win.
+    // Files from the command line or the file manager still open.
     let file = fixtures().join("Shop/README.md");
-    assert_eq!(crate::app::startup_paths(&settings, vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
+    assert_eq!(crate::app::startup_paths(vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
 }
 
 #[test]

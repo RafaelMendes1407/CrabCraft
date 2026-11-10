@@ -104,8 +104,6 @@ pub struct Settings {
     pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
-    /// Reopen the project that was open when CrabCraft quit (Rider's "Reopen projects on startup").
-    pub reopen_last: bool,
     /// The project open when CrabCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
     /// Programs run from More Actions › External Tools and Find Action.
@@ -167,7 +165,6 @@ impl Default for Settings {
             run_anything_history: Vec::new(),
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
-            reopen_last: true,
             last_workspace: None,
             external_tools: Vec::new(),
             live_templates: crate::live_templates::defaults(),
