@@ -240,6 +240,10 @@ pub struct CrabCraftApp {
     pub last_session_save: f64,
     /// Editor keeps the focus when the window regains it.
     pub had_focus: bool,
+    /// The last key, text or click, for the idle autosave.
+    pub last_input: std::time::Instant,
+    /// The idle autosave already ran since `last_input`.
+    pub idle_saved: bool,
 }
 
 /// The edits of a compiler suggestion in characters of the editor, which reads `\r\n` as `\n`.
@@ -300,7 +304,7 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        let requests=startup_paths(&app.settings,from_system);
+        let requests=startup_paths(from_system);
         app.open_requests(requests);
         app
     }
@@ -465,6 +469,8 @@ impl CrabCraftApp {
             auto_attach: None,
             last_session_save: 0.0,
             had_focus: true,
+            last_input: std::time::Instant::now(),
+            idle_saved: false,
             settings,
         }
     }
@@ -1768,6 +1774,22 @@ impl CrabCraftApp {
             Ok(_) => { self.session_dirty = true; }
             Err(error) => self.notify(error.to_string(), true),
         }
+    }
+
+    /// Saves the edited documents once the user stopped typing for the configured delay. It
+    /// skips rustfmt so the text never moves under the caret, and retries while other edits run.
+    fn autosave_when_idle(&mut self, ctx: &Context) {
+        let input = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Cut | egui::Event::Ime(_) | egui::Event::PointerButton { .. })));
+        if input { self.last_input = std::time::Instant::now(); self.idle_saved = false; }
+        if !self.settings.autosave_idle || self.idle_saved { return; }
+        let edited: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated && !d.editor.read_only).map(|(i, _)| i).collect();
+        if edited.is_empty() { return; }
+        let delay = std::time::Duration::from_secs(u64::from(self.settings.autosave_delay_secs.clamp(1, 600)));
+        let idle = self.last_input.elapsed();
+        if idle < delay { ctx.request_repaint_after(delay - idle); return; }
+        if self.file_edits.busy() || self.disk_save.continuation.is_some() { ctx.request_repaint_after(std::time::Duration::from_millis(500)); return; }
+        self.idle_saved = true;
+        for i in edited { self.save_document_async(i, false); }
     }
 
     pub fn save_all_docs(&mut self) {
@@ -3577,11 +3599,10 @@ pub fn clean_paths(list: &[String]) -> Vec<String> {
     out
 }
 
-pub fn startup_paths(settings: &Settings, from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
-    if !from_system.is_empty() {
-        return from_system;
-    }
-    settings.last_workspace.clone().filter(|p| settings.reopen_last && p.exists()).map(crate::cli::OpenRequest::path).into_iter().collect()
+/// Projects to open at startup: only what the command line or the system asked for. Without
+/// explicit paths CrabCraft always starts on the welcome screen.
+pub fn startup_paths(from_system: Vec<crate::cli::OpenRequest>) -> Vec<crate::cli::OpenRequest> {
+    from_system
 }
 
 impl eframe::App for CrabCraftApp {
@@ -3662,6 +3683,7 @@ impl eframe::App for CrabCraftApp {
             self.save_session();
         }
         self.had_focus = focused;
+        self.autosave_when_idle(ctx);
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {

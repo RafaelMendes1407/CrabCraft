@@ -1813,7 +1813,12 @@
     "Trust the project before changing dependencies.": "Confía en el proyecto antes de cambiar dependencias.",
     "Version requirement": "Requisito de versión",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add conserva las features ya activadas. Elimina sus entradas en Cargo.toml.",
-    "Development dependencies cannot be optional": "Las dependencias de desarrollo no pueden ser opcionales"
+    "Development dependencies cannot be optional": "Las dependencias de desarrollo no pueden ser opcionales",
+    "Installed": "Instaladas",
+    "Search crates.io": "Buscar en crates.io",
+    "No dependencies in this package yet.": "Este paquete aún no tiene dependencias.",
+    "Cargo output": "Salida de Cargo",
+    "local": "local"
   },
   "http_variables": {
     "Undefined HTTP variable: {name}": "Variable HTTP no definida: {name}",
@@ -3007,5 +3012,9 @@
   },
   "project-template-search": {
     "No file type matches the filter": "Ningún tipo de archivo coincide con el filtro"
+  },
+  "autosave": {
+    "Save files automatically after a pause of": "Guardar archivos automáticamente tras una pausa de",
+    " s": " s"
   }
 }

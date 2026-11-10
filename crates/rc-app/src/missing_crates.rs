@@ -530,7 +530,7 @@ pub fn banner(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
             proposal.scope,
             proposal.local.as_deref(),
         );
-        if proposal.lookup { app.cargo_dependencies.name.clear(); }
+        if proposal.lookup { app.cargo_dependencies.name.clear(); app.cargo_dependencies.pane = crate::cargo_dependencies::Pane::Search; }
         app.dialog = Some(crate::ui::dialogs::Dialog::CargoDependencies);
     }
 }

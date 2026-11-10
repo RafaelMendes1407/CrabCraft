@@ -1813,7 +1813,12 @@
     "Trust the project before changing dependencies.": "更改依赖前请信任此项目。",
     "Version requirement": "版本要求",
     "Cargo add keeps previously enabled features. Remove feature entries in Cargo.toml.": "Cargo add 保留已启用的功能。请在 Cargo.toml 中移除功能条目。",
-    "Development dependencies cannot be optional": "开发依赖不能设为可选"
+    "Development dependencies cannot be optional": "开发依赖不能设为可选",
+    "Installed": "已安装",
+    "Search crates.io": "搜索 crates.io",
+    "No dependencies in this package yet.": "此包还没有依赖。",
+    "Cargo output": "Cargo 输出",
+    "local": "本地"
   },
   "http_variables": {
     "Undefined HTTP variable: {name}": "未定义的 HTTP 变量：{name}",
@@ -3007,5 +3012,9 @@
   },
   "project-template-search": {
     "No file type matches the filter": "没有与筛选条件匹配的文件类型"
+  },
+  "autosave": {
+    "Save files automatically after a pause of": "停顿后自动保存文件，间隔",
+    " s": " 秒"
   }
 }

@@ -21,6 +21,8 @@ pub fn test_app(home: &Path, dark: bool) -> CrabCraftApp {
     unsafe { std::env::set_var("CRABCRAFT_HOME", home) };
     let mut settings = Settings::default();
     settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+    // Tests decide when buffers are saved; the idle autosave test turns it back on.
+    settings.autosave_idle = false;
     CrabCraftApp::with_settings(settings, Waker::noop(), None)
 }
 
@@ -237,30 +239,107 @@ fn screens() {
     }
 }
 
-/// Phase 1 closure: a 10-project solution opens with every project in the explorer, and the
-/// session (open tabs, caret, folds, tool windows, expanded nodes) is restored on reopen.
-/// Close Project, quit, start: the welcome screen. Quitting with a project open reopens it.
+/// Typing in a Rust file of a real Cargo project and then pausing saves it, without rustfmt
+/// and without running the project; the buffer stays unsaved while the user keeps typing.
 #[test]
-fn closed_projects_are_not_reopened_on_startup() {
+fn idle_autosave_writes_edited_rust_files_after_the_pause() {
+    use std::time::{Duration, Instant};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"idle-save\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
+    let main = root.join("src/main.rs");
+    std::fs::write(&main, "fn main() {}\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.autosave_idle = true;
+    app.settings.autosave_delay_secs = 1;
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&main);
+    app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(0);
+    let mut h = harness(app, egui::vec2(1200.0, 800.0));
+    h.run_steps(2);
+    h.event(egui::Event::Text("//   spaced\n".into()));
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().is_modified());
+    // Still typing inside the delay: nothing is written.
+    std::thread::sleep(Duration::from_millis(600));
+    h.event(egui::Event::Text("// more\n".into()));
+    h.run_steps(2);
+    std::thread::sleep(Duration::from_millis(600));
+    h.run_steps(2);
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), "fn main() {}\n");
+    let start = Instant::now();
+    while h.state().docs.active_doc().unwrap().is_modified() || h.state().disk_save.saves.busy() {
+        assert!(start.elapsed() < Duration::from_secs(15), "idle autosave did not run");
+        std::thread::sleep(Duration::from_millis(50));
+        h.run_steps(1);
+    }
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), "//   spaced\n// more\nfn main() {}\n");
+    assert!(!root.join("build-ran").exists());
+    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+/// Alt+Down and Alt+Up move the caret's line in the default Rider keymap, in a Rust file of a
+/// real Cargo project; the moved code still compiles and nothing runs on its own.
+#[test]
+fn alt_arrows_move_lines_in_a_rust_file() {
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"move-lines\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
+    let main = root.join("src/main.rs");
+    let before = "fn main() {\n    let a = 1;\n    let b = a + 1;\n    println!(\"{b}\");\n}\n";
+    std::fs::write(&main, before).unwrap();
+    let mut app = test_app(home.path(), true);
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&main);
+    // The caret on `let a = 1;`.
+    app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(16);
+    let mut h = harness(app, egui::vec2(1200.0, 800.0));
+    h.run_steps(2);
+    let alt = egui::Modifiers { alt: true, ..Default::default() };
+    let key = |h: &mut Harness<'static, CrabCraftApp>, key| { h.event(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: alt }); h.run_steps(2); };
+    let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
+    key(&mut h, egui::Key::ArrowDown);
+    assert_eq!(text(&h), "fn main() {\n    let b = a + 1;\n    let a = 1;\n    println!(\"{b}\");\n}\n");
+    key(&mut h, egui::Key::ArrowUp);
+    key(&mut h, egui::Key::ArrowUp);
+    assert_eq!(text(&h), "    let a = 1;\nfn main() {\n    let b = a + 1;\n    println!(\"{b}\");\n}\n");
+    key(&mut h, egui::Key::ArrowDown);
+    assert_eq!(text(&h), before);
+    h.state_mut().save_all_and_wait();
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), before);
+    assert!(!root.join("build-ran").exists());
+    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+/// CrabCraft always starts on the welcome screen: neither a closed project nor the one open
+/// when it quit is reopened. Paths from the command line or the system still open.
+#[test]
+fn startup_always_shows_the_welcome_screen() {
     use crate::cli::OpenRequest;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let sln = fixtures().join("Shop/Shop.sln");
     let mut app = test_app(home.path(), true);
     app.open_workspace_and_wait(&sln);
-    assert_eq!(crate::app::startup_paths(&app.settings, Vec::new()), vec![OpenRequest::path(&sln)]);
+    app.save_all_and_wait();
+    assert!(crate::app::startup_paths(Vec::new()).is_empty());
     app.close_project();
     app.save_all_and_wait();
-    assert!(crate::app::startup_paths(&rc_core::Settings::load(), Vec::new()).is_empty());
+    assert!(crate::app::startup_paths(Vec::new()).is_empty());
     assert_eq!(rc_core::Settings::load().recent_workspaces.first(), Some(&sln));
-    app.open_workspace_and_wait(&sln);
-    let mut settings = rc_core::Settings::load();
-    assert_eq!(crate::app::startup_paths(&settings, Vec::new()), vec![OpenRequest::path(&sln)]);
-    settings.reopen_last = false;
-    assert!(crate::app::startup_paths(&settings, Vec::new()).is_empty());
-    // Files from Finder win.
+    // Files from the command line or the file manager still open.
     let file = fixtures().join("Shop/README.md");
-    assert_eq!(crate::app::startup_paths(&settings, vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
+    assert_eq!(crate::app::startup_paths(vec![OpenRequest::path(&file)]), vec![OpenRequest::path(&file)]);
 }
 
 #[test]

@@ -9,7 +9,7 @@ pub const MAX_BYTES: usize = 1024 * 1024;
 const KEYS: &[&str] = &[
     "theme", "language", "keymap", "editor_font_size", "editor_line_spacing", "ui_zoom",
     "show_inlay_hints", "show_indent_guides", "sticky_lines", "scrollbar_lens", "right_margin",
-    "autosave", "single_click_open", "tabs_multirow", "tab_colors", "use_clippy", "use_nextest",
+    "autosave", "autosave_idle", "autosave_delay_secs", "single_click_open", "tabs_multirow", "tab_colors", "use_clippy", "use_nextest",
     "format_on_save", "format_on_commit", "live_templates", "autoimport_exclude", "imports_on_paste",
     "debugger_hex", "check_crates_io", "shortcuts", "inspection_profile",
 ];

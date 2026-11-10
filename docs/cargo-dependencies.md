@@ -4,6 +4,13 @@ Open the Cargo tool window and choose **Manage Cargo Dependencies…**. Select a
 its workspace (attached Cargo projects are included). Opening the manager reads only that
 package's manifest on a worker thread. It does not search the network or run project code.
 
+The window has a toolbar (package, Refresh, Offline), banners for missing Cargo, untrusted
+projects and unsaved editors, and two panes. The left pane lists the installed dependencies
+grouped by table, or the crates.io search with its results; **New dependency** clears the form.
+The right pane shows the selected or new dependency with its form, **Add or update dependency**
+and, for an installed one, **Remove…** with an inline confirmation. Cargo output appears below,
+with terminal colour codes removed, and the window keeps its size so its buttons do not move.
+
 Use **Search** to query crates.io for the typed crate name. Select a result to fill the name
 and stable version, or enter a name and version requirement directly. Add or update dependencies
 in `dependencies`, `dev-dependencies` or `build-dependencies`, with features, default features,

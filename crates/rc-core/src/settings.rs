@@ -64,6 +64,10 @@ pub struct Settings {
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
     pub autosave: bool,
+    /// Save edited files once nothing was typed for `autosave_delay_secs` seconds.
+    pub autosave_idle: bool,
+    /// Seconds without input before an idle autosave. Untrusted: clamp before use.
+    pub autosave_delay_secs: u32,
     /// Open files from the explorer with a single click (otherwise a double click).
     pub single_click_open: bool,
     /// Editor tabs wrap into several rows instead of scrolling.
@@ -104,8 +108,6 @@ pub struct Settings {
     pub trusted_projects: Vec<PathBuf>,
     /// Most recent first.
     pub recent_workspaces: Vec<PathBuf>,
-    /// Reopen the project that was open when CrabCraft quit (Rider's "Reopen projects on startup").
-    pub reopen_last: bool,
     /// The project open when CrabCraft quit; `None` after Close Project.
     pub last_workspace: Option<PathBuf>,
     /// Programs run from More Actions › External Tools and Find Action.
@@ -143,6 +145,8 @@ impl Default for Settings {
             scrollbar_lens: true,
             right_margin: 120,
             autosave: true,
+            autosave_idle: true,
+            autosave_delay_secs: 5,
             single_click_open: false,
             tabs_multirow: false,
             tab_colors: true,
@@ -167,7 +171,6 @@ impl Default for Settings {
             run_anything_history: Vec::new(),
             trusted_projects: Vec::new(),
             recent_workspaces: Vec::new(),
-            reopen_last: true,
             last_workspace: None,
             external_tools: Vec::new(),
             live_templates: crate::live_templates::defaults(),
