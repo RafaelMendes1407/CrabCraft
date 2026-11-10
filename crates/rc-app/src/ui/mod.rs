@@ -52,7 +52,7 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
         {
             app.new_project = Some(d);
         }
-        if cfg!(target_os = "windows") {
+        if rc_kit::window_chrome::CUSTOM_CAPTION {
             rc_kit::window_chrome::resize_edges(&ctx);
         }
         return;
@@ -96,7 +96,7 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
     {
         app.new_project = Some(d);
     }
-    if cfg!(target_os = "windows") {
+    if rc_kit::window_chrome::CUSTOM_CAPTION {
         rc_kit::window_chrome::resize_edges(&ctx);
     }
 }

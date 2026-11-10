@@ -127,13 +127,13 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 }
             }
             theme::Side::Right => {
-                if cfg!(target_os = "windows") {
+                // Close, maximize and minimize sit right after Settings, one gap apart.
+                if rc_kit::window_chrome::CUSTOM_CAPTION {
                     if let Some(command) = rc_kit::window_chrome::controls(ui) {
                         ui.ctx().send_viewport_cmd(command);
                     }
-                    ui.add_space(8.0);
                 }
-                ui.add_space(6.0);
+                ui.add_space(8.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
                 let keymap = app.keymap.clone();
                 let shortcut = |a: Action| keymap.shortcut_text(a).map(|s| format!(" ({s})")).unwrap_or_default();

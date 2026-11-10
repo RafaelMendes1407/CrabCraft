@@ -1,8 +1,13 @@
-//! Shared application header, with custom Windows controls and native macOS chrome.
+//! Shared application header, with custom window controls on Windows and Linux and native
+//! macOS chrome.
 use crate::i18n::tr;
 use crate::theme::pal;
 use egui::viewport::ResizeDirection;
 use egui::{Color32, CursorIcon, Id, Rect, Sense, Stroke, Ui, Vec2, ViewportCommand, pos2, vec2};
+
+/// Windows and Linux draw their own caption buttons in the header instead of a system title
+/// bar; macOS keeps its traffic lights over the header.
+pub const CUSTOM_CAPTION: bool = !cfg!(target_os = "macos");
 
 pub fn viewport() -> egui::ViewportBuilder {
     egui::ViewportBuilder::default()
@@ -10,7 +15,7 @@ pub fn viewport() -> egui::ViewportBuilder {
         .with_inner_size([1400.0, 900.0])
         .with_min_inner_size([900.0, 560.0])
         .with_resizable(true)
-        .with_decorations(!cfg!(target_os = "windows"))
+        .with_decorations(!CUSTOM_CAPTION)
         .with_fullsize_content_view(true)
         .with_titlebar_shown(false)
         .with_title_shown(false)
@@ -207,9 +212,10 @@ mod tests {
     use egui_kittest::kittest::Queryable;
 
     #[test]
-    fn platform_chrome_keeps_mac_controls_and_removes_the_windows_caption() {
+    fn platform_chrome_keeps_mac_controls_and_removes_the_system_title_bar() {
         let viewport = viewport();
-        assert_eq!(viewport.decorations, Some(!cfg!(target_os = "windows")));
+        assert_eq!(CUSTOM_CAPTION, !cfg!(target_os = "macos"));
+        assert_eq!(viewport.decorations, Some(cfg!(target_os = "macos")));
         assert_eq!(viewport.resizable, Some(true));
         assert_eq!(viewport.fullsize_content_view, Some(true));
         assert_eq!(leading_space(false, false, 1.0), 10.0);
