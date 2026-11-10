@@ -21,6 +21,8 @@ pub fn test_app(home: &Path, dark: bool) -> CrabCraftApp {
     unsafe { std::env::set_var("CRABCRAFT_HOME", home) };
     let mut settings = Settings::default();
     settings.theme = if dark { rc_core::settings::ThemeChoice::Dark } else { rc_core::settings::ThemeChoice::Light };
+    // Tests decide when buffers are saved; the idle autosave test turns it back on.
+    settings.autosave_idle = false;
     CrabCraftApp::with_settings(settings, Waker::noop(), None)
 }
 
@@ -235,6 +237,50 @@ fn screens() {
         h.run_steps(4);
         h.render().unwrap().save(out.join(format!("explorer-right-{suffix}.png"))).unwrap();
     }
+}
+
+/// Typing in a Rust file of a real Cargo project and then pausing saves it, without rustfmt
+/// and without running the project; the buffer stays unsaved while the user keeps typing.
+#[test]
+fn idle_autosave_writes_edited_rust_files_after_the_pause() {
+    use std::time::{Duration, Instant};
+    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join("src")).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"idle-save\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(root.join("build.rs"), "fn main() { std::fs::write(\"build-ran\", \"yes\").unwrap(); }\n").unwrap();
+    let main = root.join("src/main.rs");
+    std::fs::write(&main, "fn main() {}\n").unwrap();
+    let mut app = test_app(home.path(), true);
+    app.settings.autosave_idle = true;
+    app.settings.autosave_delay_secs = 1;
+    app.open_workspace_and_wait(&root);
+    app.open_file_and_wait(&main);
+    app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(0);
+    let mut h = harness(app, egui::vec2(1200.0, 800.0));
+    h.run_steps(2);
+    h.event(egui::Event::Text("//   spaced\n".into()));
+    h.run_steps(2);
+    assert!(h.state().docs.active_doc().unwrap().is_modified());
+    // Still typing inside the delay: nothing is written.
+    std::thread::sleep(Duration::from_millis(600));
+    h.event(egui::Event::Text("// more\n".into()));
+    h.run_steps(2);
+    std::thread::sleep(Duration::from_millis(600));
+    h.run_steps(2);
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), "fn main() {}\n");
+    let start = Instant::now();
+    while h.state().docs.active_doc().unwrap().is_modified() || h.state().disk_save.saves.busy() {
+        assert!(start.elapsed() < Duration::from_secs(15), "idle autosave did not run");
+        std::thread::sleep(Duration::from_millis(50));
+        h.run_steps(1);
+    }
+    assert_eq!(std::fs::read_to_string(&main).unwrap(), "//   spaced\n// more\nfn main() {}\n");
+    assert!(!root.join("build-ran").exists());
+    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
 /// CrabCraft always starts on the welcome screen: neither a closed project nor the one open

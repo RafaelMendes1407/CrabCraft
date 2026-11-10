@@ -384,6 +384,12 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
                         ui.end_row();
                         ui.label("");
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut draft.autosave_idle, tr("Save files automatically after a pause of"));
+                            ui.add_enabled(draft.autosave_idle, egui::DragValue::new(&mut draft.autosave_delay_secs).range(1..=600).suffix(tr(" s")));
+                        });
+                        ui.end_row();
+                        ui.label("");
                         ui.checkbox(&mut draft.single_click_open, tr("Open files with a single click in the Explorer"));
                         ui.end_row();
                         ui.label("");

@@ -3012,5 +3012,9 @@
   },
   "project-template-search": {
     "No file type matches the filter": "Ningún tipo de archivo coincide con el filtro"
+  },
+  "autosave": {
+    "Save files automatically after a pause of": "Guardar archivos automáticamente tras una pausa de",
+    " s": " s"
   }
 }

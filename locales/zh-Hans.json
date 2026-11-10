@@ -3012,5 +3012,9 @@
   },
   "project-template-search": {
     "No file type matches the filter": "没有与筛选条件匹配的文件类型"
+  },
+  "autosave": {
+    "Save files automatically after a pause of": "停顿后自动保存文件，间隔",
+    " s": " 秒"
   }
 }

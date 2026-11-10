@@ -64,6 +64,10 @@ pub struct Settings {
     pub right_margin: usize,
     /// Save files when the window loses focus or when switching tabs (IntelliJ autosave).
     pub autosave: bool,
+    /// Save edited files once nothing was typed for `autosave_delay_secs` seconds.
+    pub autosave_idle: bool,
+    /// Seconds without input before an idle autosave. Untrusted: clamp before use.
+    pub autosave_delay_secs: u32,
     /// Open files from the explorer with a single click (otherwise a double click).
     pub single_click_open: bool,
     /// Editor tabs wrap into several rows instead of scrolling.
@@ -141,6 +145,8 @@ impl Default for Settings {
             scrollbar_lens: true,
             right_margin: 120,
             autosave: true,
+            autosave_idle: true,
+            autosave_delay_secs: 5,
             single_click_open: false,
             tabs_multirow: false,
             tab_colors: true,

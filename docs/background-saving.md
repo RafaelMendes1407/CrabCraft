@@ -1,5 +1,16 @@
 # Background editor saving
 
+## Idle autosave
+
+Settings › Editor › **Save files automatically after a pause of N s** (on by default, 5 s,
+1–600 s) saves every edited, writable document once no key, text, paste or click arrived for
+that delay. It uses the same queued writer as Save All, but never runs rustfmt, so text does
+not move under the caret; format-on-save still applies to explicit saves. Typing again within
+the delay restarts the countdown. It waits while multi-file edits or a save continuation are
+running. Saving never builds or runs the project. Focus-loss autosave remains a separate option.
+
+## Writer
+
 Save, Save All and focus-loss autosave capture immutable document snapshots and queue
 writes outside the egui thread. A single document writer owns a bounded queue of 256
 paths; later pending snapshots for the same path replace earlier pending requests.

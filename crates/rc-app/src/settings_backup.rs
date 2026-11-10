@@ -86,7 +86,7 @@ impl State {
             egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                 let fields: Vec<_> = preview.fields().collect();
                 for (keys, label) in [
-                    (&["theme", "language", "editor_font_size", "editor_line_spacing", "ui_zoom", "show_inlay_hints", "show_indent_guides", "sticky_lines", "scrollbar_lens", "right_margin", "autosave", "single_click_open", "tabs_multirow", "tab_colors"][..], tr("Appearance and editor preferences")),
+                    (&["theme", "language", "editor_font_size", "editor_line_spacing", "ui_zoom", "show_inlay_hints", "show_indent_guides", "sticky_lines", "scrollbar_lens", "right_margin", "autosave", "autosave_idle", "autosave_delay_secs", "single_click_open", "tabs_multirow", "tab_colors"][..], tr("Appearance and editor preferences")),
                     (&["live_templates"][..], tr("Live Templates")),
                     (&["keymap", "shortcuts"][..], tr("Keymap and shortcuts")),
                     (&["autoimport_exclude", "imports_on_paste"][..], tr("Auto-import preferences")),
