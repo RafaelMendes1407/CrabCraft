@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0
+
+### New and improved
+- **Idle autosave:** edited files are saved after a pause without input (Settings › Editor,
+  on by default, 5 s). It reuses the background save queue, never runs rustfmt under the caret
+  and waits while multi-file edits run. Saving on switching applications is still available.
+- **Move lines:** Alt+Up/Down move the caret's lines in the Rider and RustRover keymaps on
+  Windows and Linux; Alt+Shift+Up/Down keep working.
+- **Cargo dependency manager:** a two-pane layout with installed dependencies grouped by table
+  or the crates.io search on the left and the selected dependency's form and actions on the
+  right. Warnings are banners, Cargo output no longer shows terminal color codes, and the
+  dialog keeps a stable size.
+- **Window chrome on Linux:** the system title bar is gone, as on Windows. Minimize, maximize
+  and close sit in the header next to Settings; the header drags the window, double-click
+  maximizes and the edges resize it. macOS keeps its native controls.
+- **Startup:** CrabCraft always opens on the welcome screen instead of reopening the last
+  project. Paths passed on the command line or by the system still open.
+
+### Validation and scope
+- Verified with native egui interface tests and real Cargo projects: idle autosave, moving
+  lines and the dependency manager save and `cargo check` the projects without running
+  `build.rs`; header and dependency captures checked in light and dark themes. The custom
+  Linux title bar has not been verified on every window manager. Other limitations remain
+  documented in [FEATURES.md](https://github.com/RafaelMendes1407/CrabCraft/blob/v0.5.0/FEATURES.md).
+- Opening a project still does not execute its code; project tools require explicit trust.
+
 ## 0.4.1
 
 ### Fixed and improved
