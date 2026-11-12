@@ -1212,68 +1212,6 @@ pub struct TestMarker {
     pub is_class: bool,
 }
 
-const TEST_ATTRIBUTES: &[&str] = &["Fact", "Theory", "Test", "TestCase", "TestCaseSource", "TestMethod", "DataTestMethod", "TestFixture", "TestClass"];
-
-/// Test methods and classes of a C# file (xUnit, NUnit, MSTest attributes).
-pub fn test_markers(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree) -> Vec<TestMarker> {
-    use rc_syntax::tree_sitter::Node;
-    let text = |n: Node| rope.byte_slice(n.start_byte()..n.end_byte()).to_string();
-    let has_test_attr = |n: Node| -> bool {
-        let mut c = n.walk();
-        n.children(&mut c).filter(|ch| ch.kind() == "attribute_list").any(|list| {
-            let mut c2 = list.walk();
-            list.children(&mut c2).filter(|a| a.kind() == "attribute").any(|a| {
-                let name = a.child_by_field_name("name").map(text).unwrap_or_default();
-                let short = name.rsplit('.').next().unwrap_or(&name).trim_end_matches("Attribute").to_string();
-                TEST_ATTRIBUTES.contains(&short.as_str())
-            })
-        })
-    };
-    let mut out = Vec::new();
-    fn walk<'a>(n: Node<'a>, ns: &str, class: &str, out: &mut Vec<TestMarker>, text: &dyn Fn(Node) -> String, has_test_attr: &dyn Fn(Node) -> bool) {
-        let mut cursor = n.walk();
-        let mut file_ns = ns.to_string();
-        for ch in n.children(&mut cursor) {
-            match ch.kind() {
-                "file_scoped_namespace_declaration" => {
-                    file_ns = ch.child_by_field_name("name").map(text).unwrap_or_default();
-                    walk(ch, &file_ns, class, out, text, has_test_attr);
-                }
-                "namespace_declaration" => {
-                    let name = ch.child_by_field_name("name").map(text).unwrap_or_default();
-                    let full = if file_ns.is_empty() { name } else { format!("{file_ns}.{name}") };
-                    if let Some(body) = ch.child_by_field_name("body") {
-                        walk(body, &full, class, out, text, has_test_attr);
-                    }
-                }
-                "class_declaration" | "record_declaration" => {
-                    let name = ch.child_by_field_name("name").map(text).unwrap_or_default();
-                    let full_class = if class.is_empty() { name.clone() } else { format!("{class}+{name}") };
-                    let qualified = if file_ns.is_empty() { full_class.clone() } else { format!("{file_ns}.{full_class}") };
-                    let before = out.len();
-                    if let Some(body) = ch.child_by_field_name("body") {
-                        walk(body, &file_ns, &full_class, out, text, has_test_attr);
-                    }
-                    if out.len() > before || has_test_attr(ch) {
-                        let line = ch.child_by_field_name("name").map_or(ch.start_position().row, |n| n.start_position().row);
-                        out.insert(before, TestMarker { line, name: qualified, is_class: true });
-                    }
-                }
-                "method_declaration" if !class.is_empty() && has_test_attr(ch) => {
-                    let name = ch.child_by_field_name("name").map(text).unwrap_or_default();
-                    let line = ch.child_by_field_name("name").map_or(ch.start_position().row, |n| n.start_position().row);
-                    let qualified = if file_ns.is_empty() { format!("{class}.{name}") } else { format!("{file_ns}.{class}.{name}") };
-                    out.push(TestMarker { line, name: qualified, is_class: false });
-                }
-                "declaration_list" | "compilation_unit" => walk(ch, &file_ns, class, out, text, has_test_attr),
-                _ => {}
-            }
-        }
-    }
-    walk(tree.root_node(), "", "", &mut out, &text, &has_test_attr);
-    out
-}
-
 /// The test project that contains `file`.
 pub fn project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
     configs
@@ -1284,28 +1222,4 @@ pub fn project_of(file: &Path, configs: &[RunConfig]) -> Option<PathBuf> {
         })
         .filter(|p| p.parent().is_some_and(|d| file.starts_with(d)))
         .max_by_key(|p| p.as_os_str().len())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn finds_xunit_nunit_and_mstest_markers() {
-        let src = "using Xunit;\nnamespace Shop.Tests;\n\npublic class PriceTests\n{\n    [Fact]\n    public void Adds() {}\n\n    [Theory, InlineData(1)]\n    public void Data(int x) {}\n\n    public void Helper() {}\n}\n\n[TestFixture]\npublic class Other\n{\n    [Test]\n    public void One() {}\n}\n";
-        let rope = rc_text::Rope::from_str(src);
-        let tree = rc_syntax::parse_now(rc_syntax::Lang::CSharp, &rope, None).unwrap();
-        let m = test_markers(&rope, &tree);
-        let names: Vec<(&str, usize, bool)> = m.iter().map(|t| (t.name.as_str(), t.line, t.is_class)).collect();
-        assert_eq!(
-            names,
-            vec![
-                ("Shop.Tests.PriceTests", 3, true),
-                ("Shop.Tests.PriceTests.Adds", 6, false),
-                ("Shop.Tests.PriceTests.Data", 9, false),
-                ("Shop.Tests.Other", 15, true),
-                ("Shop.Tests.Other.One", 18, false),
-            ]
-        );
-    }
 }

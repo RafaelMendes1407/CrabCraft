@@ -4613,13 +4613,11 @@ dependencies = [
  "rc-text",
  "streaming-iterator",
  "tree-sitter",
- "tree-sitter-c-sharp",
  "tree-sitter-css",
  "tree-sitter-html",
  "tree-sitter-javascript",
  "tree-sitter-json",
  "tree-sitter-md",
- "tree-sitter-razor-modern",
  "tree-sitter-rust",
  "tree-sitter-toml-ng",
  "tree-sitter-typescript",
@@ -6001,16 +5999,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-c-sharp"
-version = "0.23.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1aac67f1ad71de1d6d39708d34811081c26dfa495658de6c14c34200849357c"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
-
-[[package]]
 name = "tree-sitter-css"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6061,16 +6049,6 @@ name = "tree-sitter-md"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed661bfe3c264961425f77cd89ad2998bf5d629e71ce8bab1e5d7e940d6246e"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-razor-modern"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fa817a6896a2c7e2f1f49c532de3000a1aadbd666b6a3e1770011b12e51bae8"
 dependencies = [
  "cc",
  "tree-sitter-language",

@@ -26,73 +26,12 @@ pub struct FoldRange {
     pub end_col: usize,
 }
 
-/// C# nodes that fold from their `{` to their `}`.
-const CS_BLOCKS: &[&str] = &[
-    "declaration_list",
-    "block",
-    "switch_body",
-    "accessor_list",
-    "enum_member_declaration_list",
-    "initializer_expression",
-    "switch_expression",
-    "anonymous_object_creation_expression",
-];
-
 /// Rust nodes that fold on their own (the body of an item, a match, a macro call...).
 const RUST_BLOCKS: &[&str] = &["block", "declaration_list", "field_declaration_list", "enum_variant_list", "match_block", "token_tree", "use_list", "ordered_field_declaration_list"];
 
 pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
     let mut out = Vec::new();
     match lang {
-        Lang::CSharp => {
-            let mut regions: Vec<(usize, usize)> = Vec::new();
-            let mut usings: Option<(usize, usize, usize)> = None;
-            let mut comments: Option<(usize, usize, usize)> = None;
-            walk(tree.root_node(), &mut |node| {
-                let kind = node.kind();
-                let (sr, er) = (node.start_position().row, node.end_position().row);
-                if CS_BLOCKS.contains(&kind) && er > sr {
-                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
-                } else if kind == "using_directive" && node.parent().is_some_and(|p| p.kind() == "compilation_unit") {
-                    usings = Some(match usings {
-                        Some((s, _, c)) => (s, er, c),
-                        None => (sr, er, "using ".len()),
-                    });
-                } else if kind == "comment" {
-                    if er > sr {
-                        out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Comment, start_col: char_col(rope, node), end_col: end_col(rope, node) });
-                    } else {
-                        // Consecutive `//` lines fold together.
-                        comments = match comments {
-                            Some((s, e, c)) if e + 1 == sr => Some((s, sr, c)),
-                            Some((s, e, c)) => {
-                                if e > s {
-                                    out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c, end_col: line_end(rope, e) });
-                                }
-                                Some((sr, sr, char_col(rope, node)))
-                            }
-                            None => Some((sr, sr, char_col(rope, node))),
-                        };
-                    }
-                } else if kind == "preproc_region" {
-                    regions.push((sr, char_col(rope, node)));
-                } else if kind == "preproc_endregion"
-                    && let Some((start, col)) = regions.pop()
-                {
-                    out.push(FoldRange { start_line: start, end_line: sr, kind: FoldKind::Region, start_col: col, end_col: line_end(rope, sr) });
-                }
-            });
-            if let Some((s, e, c)) = comments
-                && e > s
-            {
-                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Comment, start_col: c, end_col: line_end(rope, e) });
-            }
-            if let Some((s, e, c)) = usings
-                && e > s
-            {
-                out.push(FoldRange { start_line: s, end_line: e, kind: FoldKind::Imports, start_col: c, end_col: line_end(rope, e) });
-            }
-        }
         Lang::Rust => {
             let mut comments: Option<(usize, usize, usize)> = None;
             let mut lines: Vec<(usize, usize, usize)> = Vec::new();
@@ -157,16 +96,6 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 }
             }
         }),
-        // Razor: C# blocks, `@code { }` / `@if { }`… and multi-line HTML elements.
-        Lang::Razor => walk(tree.root_node(), &mut |node| {
-            let kind = node.kind();
-            let (sr, er) = (node.start_position().row, node.end_position().row);
-            let foldable = CS_BLOCKS.contains(&kind) || matches!(kind, "razor_block" | "element" | "razor_comment" | "html_comment");
-            if foldable && er > sr {
-                let fold = if kind.ends_with("comment") { FoldKind::Comment } else { FoldKind::Block };
-                out.push(FoldRange { start_line: sr, end_line: er, kind: fold, start_col: char_col(rope, node), end_col: end_col(rope, node) });
-            }
-        }),
         Lang::Html | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => walk(tree.root_node(), &mut |node| {
             let (sr, er) = (node.start_position().row, node.end_position().row);
             let kind = node.kind();
@@ -175,7 +104,7 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 out.push(FoldRange { start_line: sr, end_line: er, kind, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
         }),
-        Lang::Sln | Lang::Http | Lang::Plain => {}
+        Lang::Http | Lang::Plain => {}
     }
     out.sort_by_key(|f| (f.start_line, std::cmp::Reverse(f.end_line)));
     // One fold per start line (the outermost), like IntelliJ.
@@ -261,20 +190,6 @@ mod tests {
     use crate::parse::parse_now;
 
     #[test]
-    fn csharp_folds_blocks_usings_regions_and_comments() {
-        let src = "using A;\nusing B;\nnamespace N\n{\n    #region R\n    class C\n    {\n        // a\n        // b\n        void M()\n        {\n        }\n    }\n    #endregion\n}\n";
-        let rope = Rope::from_str(src);
-        let tree = parse_now(Lang::CSharp, &rope, None).unwrap();
-        let folds = folding_ranges(Lang::CSharp, &tree, &rope);
-        let lines: Vec<(usize, usize, FoldKind)> = folds.iter().map(|f| (f.start_line, f.end_line, f.kind)).collect();
-        assert!(lines.contains(&(0, 1, FoldKind::Imports)), "{lines:?}");
-        assert!(lines.contains(&(3, 14, FoldKind::Block)), "{lines:?}");
-        assert!(lines.contains(&(4, 13, FoldKind::Region)), "{lines:?}");
-        assert!(lines.contains(&(7, 8, FoldKind::Comment)), "{lines:?}");
-        assert!(lines.contains(&(10, 11, FoldKind::Block)), "{lines:?}");
-    }
-
-    #[test]
     fn rust_folds_items_matches_macros_and_comment_runs() {
         let src = "/// One\n/// Two\nstruct S {\n    a: u8,\n}\nfn f(x: u8) {\n    match x {\n        _ => {}\n    }\n    vec![\n        1,\n    ];\n}\n/* a\n b */\n// single\n";
         let rope = Rope::from_str(src);
@@ -301,14 +216,4 @@ mod tests {
         assert!(folds.iter().any(|f| f.start_line == 5 && f.end_line == 7), "{folds:?}");
     }
 
-    #[test]
-    fn brackets_match_outside_strings() {
-        let src = "class C { void M() { var s = \"{\"; } }";
-        let rope = Rope::from_str(src);
-        let tree = parse_now(Lang::CSharp, &rope, None).unwrap();
-        assert_eq!(matching_bracket(&tree, &rope, 8), Some((8, 36)));
-        assert_eq!(matching_bracket(&tree, &rope, 37), Some((36, 8)));
-        assert_eq!(matching_bracket(&tree, &rope, 16), Some((16, 17)));
-        assert_eq!(matching_bracket(&tree, &rope, 30), None);
-    }
 }

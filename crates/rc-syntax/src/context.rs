@@ -270,8 +270,6 @@ mod tests {
 
     #[test]
     fn other_languages_use_the_block_folds() {
-        let src = "namespace N\n{\n    class C\n    {\n        void M()\n        {\n            Call();\n        }\n    }\n}\n";
-        assert_eq!(headers(Lang::CSharp, src, "Call"), vec![(0, "namespace N".to_string()), (2, "class C".to_string()), (4, "void M()".to_string())]);
         // Without a tree, Rust falls back to the folds too (none here: nothing to show).
         let rope = Rope::from_str("fn f() {\n    x();\n}\n");
         assert!(context_headers(Lang::Rust, None, &[], &rope, 12).is_empty());

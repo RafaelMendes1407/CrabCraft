@@ -718,13 +718,11 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
 fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Response) {
     use crate::native_menu::{MenuCommand, forward_edit};
     let insight = app.docs.active_doc().is_some_and(crate::insight::has_insight);
-    let is_csharp = app.docs.active_doc().is_some_and(|d| d.editor.lang() == rc_syntax::Lang::CSharp);
     let manifest = app.docs.active_doc().is_some_and(crate::manifest_completion::is_manifest);
     let rust_file = app.docs.active_doc().is_some_and(|d| d.path.extension().is_some_and(|e| e == "rs"));
     let shortcut = |app: &CrabCraftApp, a: Action| app.keymap.shortcut_text(a);
     let mut actions = Vec::new();
     let mut edit = None;
-    let mut usings = false;
     let sql_fragment = crate::sql_injection::current(&app.docs.list[active]).is_some();
     let mut open_sql = false;
     resp.context_menu(|ui| {
@@ -764,10 +762,6 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
         if rust_file {
             entry(ui, Some(ico::EXTERNAL_LINK), tr("Share in Playground…"), Action::ShareInPlayground);
         }
-        if is_csharp && theme::menu_item(ui, Some(ico::NAMESPACE), tr("Add Missing Usings"), false).clicked() {
-            usings = true;
-            ui.close();
-        }
         ui.separator();
         entry(ui, Some(ico::BREAKPOINT), tr("Toggle Line Breakpoint"), Action::ToggleBreakpoint);
     });
@@ -782,41 +776,16 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
         }
         None => {}
     }
-    if usings && let Some(i) = app.docs.active {
-        app.insight.add_missing_usings(&app.docs.list[i]);
-    }
     if open_sql { crate::sql_injection::open_console(app, active); }
     app.pending.extend(actions);
 }
 
-/// Whether `path` belongs to a test project (its nearest `.csproj`), cached per project.
-fn in_test_project(path: &std::path::Path) -> bool {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-    static CACHE: Mutex<Option<HashMap<std::path::PathBuf, bool>>> = Mutex::new(None);
-    let mut dir = path.parent();
-    while let Some(d) = dir {
-        let project = std::fs::read_dir(d).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "csproj")));
-        if let Some(p) = project {
-            let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-            return *cache.get_or_insert_with(HashMap::new).entry(p.clone()).or_insert_with(|| rc_dotnet::ProjectInfo::load(&p).is_ok_and(|i| i.is_test));
-        }
-        dir = d.parent();
-    }
-    false
-}
-
-/// Rider's file colours, by kind of file: tests green, Razor/HTML/CSS orange, configuration
-/// and project files blue; C# keeps the plain tab.
+/// Tab colours for Rust and web project files.
 fn file_color(path: &std::path::Path) -> Option<egui::Color32> {
-    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    let in_tests = in_test_project(path);
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if ext == "cs" && (in_tests || name.ends_with("tests.cs")) {
-        Some(egui::Color32::from_rgb(0x5F, 0xB8, 0x65))
-    } else if matches!(ext.as_str(), "razor" | "cshtml" | "html" | "htm" | "css" | "scss" | "js" | "ts") {
+    if matches!(ext.as_str(), "html" | "htm" | "css" | "scss" | "js" | "ts") {
         Some(egui::Color32::from_rgb(0xE0, 0x8E, 0x3C))
-    } else if matches!(ext.as_str(), "json" | "xml" | "csproj" | "fsproj" | "sln" | "slnx" | "props" | "targets" | "config" | "yaml" | "yml" | "editorconfig") {
+    } else if matches!(ext.as_str(), "json" | "xml" | "toml" | "yaml" | "yml" | "editorconfig") {
         Some(egui::Color32::from_rgb(0x4A, 0x8F, 0xE0))
     } else {
         None

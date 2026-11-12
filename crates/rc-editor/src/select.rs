@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn extend_grows_word_then_contents_then_node_and_shrinks_back() {
-        let mut s = EditorState::new(1, Some("a.cs".into()), "class C { void M() { Foo(bar, baz); } }");
+        let mut s = EditorState::new(1, Some("main.rs".into()), "fn main() { foo(bar, baz); }");
         s.parse_blocking();
         let pos = s.buffer.rope().to_string().find("bar").unwrap();
         s.selection = Selection::point(pos + 1);

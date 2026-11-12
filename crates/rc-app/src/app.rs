@@ -2804,21 +2804,6 @@ impl CrabCraftApp {
             self.update_rust_markers(i);
             return;
         }
-        if doc.editor.lang() != rc_syntax::Lang::CSharp {
-            return;
-        }
-        let Some(tree) = doc.editor.syntax.tree() else { return };
-        let markers = crate::runner::test_markers(doc.editor.buffer.rope(), tree);
-        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed));
-        for m in &markers {
-            let icon = match self.runner.test_outcomes.get(&m.name) {
-                Some(crate::runner::TestState::Passed) => rc_editor::GutterIcon::TestPassed,
-                Some(crate::runner::TestState::Failed) => rc_editor::GutterIcon::TestFailed,
-                _ => rc_editor::GutterIcon::RunTest,
-            };
-            doc.editor.gutter_icons.insert(m.line, icon);
-        }
-        self.test_markers = markers;
     }
 
     /// Run icons of a Rust document, from the server. An older reply is left alone: the editor

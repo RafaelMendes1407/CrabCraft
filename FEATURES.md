@@ -16,6 +16,9 @@ Limpeza do legado DotCraft: os downloads automáticos de Roslyn pelo feed NuGet 
 netcoredbg pelo release da Samsung, incluindo URLs fixas, arquivos compactados e controles
 de progresso, foram removidos. O suporte C#/.NET ainda usa ferramentas já instaladas e
 permanece pendente de retirada; os recursos Rust continuam usando seus adaptadores próprios.
+Os parsers C#/Razor, suas consultas tree-sitter e o lexer de soluções Visual Studio
+também foram retirados. Arquivos dessas linguagens agora abrem como texto simples;
+os benchmarks de sintaxe e editor usam uma fonte Rust gerada.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

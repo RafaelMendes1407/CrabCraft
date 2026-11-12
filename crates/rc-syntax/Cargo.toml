@@ -7,11 +7,9 @@ license.workspace = true
 [dependencies]
 rc-text.workspace = true
 tree-sitter.workspace = true
-tree-sitter-c-sharp.workspace = true
 tree-sitter-xml.workspace = true
 tree-sitter-json.workspace = true
 tree-sitter-md.workspace = true
-tree-sitter-razor-modern.workspace = true
 tree-sitter-rust.workspace = true
 tree-sitter-toml-ng.workspace = true
 tree-sitter-html.workspace = true

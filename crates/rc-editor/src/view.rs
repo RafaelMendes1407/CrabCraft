@@ -1307,16 +1307,16 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
     }
 }
 
-/// Markup typing assists (Razor/HTML/XML), with one caret: `>` closes the tag, `</` completes
+/// Markup typing assists (HTML/XML), with one caret: `>` closes the tag, `</` completes
 /// the open element's name, `=` in a tag adds the attribute's quotes.
 fn markup_assist(state: &mut EditorState, ch: char) {
     use rc_syntax::Lang;
     use rc_text::markup;
     let lang = state.syntax.lang;
-    if !matches!(lang, Lang::Razor | Lang::Html | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
+    if !matches!(lang, Lang::Html | Lang::Xml) || state.selection.len() != 1 || !state.selection.primary().is_empty() {
         return;
     }
-    let html = matches!(lang, Lang::Razor | Lang::Html);
+    let html = lang == Lang::Html;
     let caret = state.caret();
     let rope = state.buffer.rope().clone();
     let mut remove = 0;
