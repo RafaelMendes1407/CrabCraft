@@ -330,6 +330,14 @@ impl Session {
         paths::write_atomic(&Self::file_for(workspace), serde_json::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
+
+    /// Deletes this workspace's persisted session. An absent session is already cleared.
+    pub fn clear(workspace: &Path) -> std::io::Result<()> {
+        match std::fs::remove_file(Self::file_for(workspace)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
 }
 
 /// FNV-1a: a stable hash for file names (std's hasher is not stable across runs).
@@ -354,6 +362,9 @@ mod tests {
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
         assert_eq!(Session::load(&dir.path().join("Other")), Session::default());
+        Session::clear(&ws).unwrap();
+        assert_eq!(Session::load(&ws), Session::default());
+        Session::clear(&ws).unwrap();
     }
 
     #[test]

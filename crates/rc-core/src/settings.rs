@@ -200,6 +200,17 @@ impl Settings {
         Ok(())
     }
 
+    /// Deletes persisted preferences and the backup of an unreadable settings file.
+    pub fn clear() -> std::io::Result<()> {
+        for file in [Self::file(), Self::file().with_extension("json.bak")] {
+            match std::fs::remove_file(file) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => result?,
+            }
+        }
+        Ok(())
+    }
+
     /// Moves `path` to the top of the recent list (max 15 entries).
     pub fn add_recent(&mut self, path: PathBuf) {
         self.recent_workspaces.retain(|p| p != &path);

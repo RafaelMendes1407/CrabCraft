@@ -1,5 +1,15 @@
 # CrabCraft: funcionalidades e status
 
+Auditoria de dependências (2026-11-12): `libsqlite3-sys` 0.39.1,
+`pulldown-cmark` 0.13.6 e `rustix` 1.1.6 corrigem os avisos RustSec
+identificados no relatório `short_audit.md`. CI verifica avisos e licenças
+com cargo-deny, vulnerabilidades com cargo-audit e gera um SBOM CycloneDX;
+Dependabot acompanha Cargo e GitHub Actions. `Session::clear` apaga a sessão
+de um workspace; `Settings::clear` apaga preferências e backup. A indexação
+de arquivos permanece apenas em memória e é descartada ao fechar o projeto.
+Criptografia dos arquivos locais, trilha de auditoria e conformidade legal
+continuam sem validação e não são declaradas concluídas.
+
 Lista de tudo o que o **RustRover 2026.2** oferece, com a situação de cada item no CrabCraft.
 É o documento de acompanhamento do projeto: **atualize o status no mesmo commit que implementa
 a funcionalidade**.
