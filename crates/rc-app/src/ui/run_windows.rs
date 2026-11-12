@@ -88,7 +88,7 @@ pub fn open_url(url: &str) {
 pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
     let target = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf());
-    let actions = [(ico::BUILD, tr("Build Project"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
+    let actions = [(ico::BUILD, tr("Build Project"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Project"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
     match header(ui, tr("Build"), &actions) {
         Some(0) => app.pending.push(rc_editor::Action::Build),
         Some(1) => {
@@ -316,10 +316,7 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.runner.close_run(i);
         return;
     }
-    let cwd = app.runner.runs.get(app.runner.active_run).and_then(|r| match &r.config.kind {
-        crate::runner::ConfigKind::App { project, .. } => project.parent().map(|d| d.to_path_buf()),
-        _ => None,
-    });
+    let cwd = app.runner.project_root.clone();
     let Some(r) = app.runner.runs.get(app.runner.active_run) else { return };
     let events = console(ui, &r.console.term);
     for e in events {

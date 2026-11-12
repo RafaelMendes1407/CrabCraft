@@ -1,7 +1,7 @@
 //! Parses the human output of libtest (its JSON format needs a nightly compiler) and of
 //! cargo-nextest.
 
-use rc_dotnet::trx::StackFrame;
+use rc_dotnet::test_result::StackFrame;
 use rc_dotnet::{TestOutcome, TestResult};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

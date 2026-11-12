@@ -41,7 +41,7 @@ pub fn plan(manifest: &Path, options: &RunOptions, mut env: Vec<(String, String)
     if !features.is_empty() { args.extend(["--features".into(), features.join(",")]); }
     env.extend(rc_core::session::parse_env(&options.env).map_err(|_| PlanError::Environment)?);
     env.push(("RUSTUP_AUTO_INSTALL".into(), "0".into()));
-    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from("wasm-pack"), args, env, working_dir: dir.to_path_buf(), urls: Vec::new(), profile: None, browser_url: None })
+    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from("wasm-pack"), args, env, working_dir: dir.to_path_buf(), urls: Vec::new() })
 }
 
 #[cfg(test)]

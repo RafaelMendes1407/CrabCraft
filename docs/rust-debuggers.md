@@ -7,7 +7,7 @@ of silently switching backend. Paths and the choice remain local machine setting
 
 GDB uses its native DAP interpreter (`gdb` 14 or newer), preferring `rust-gdb` for pretty
 printers when automatically discovered. LLDB uses LLVM's `lldb-dap` or the older
-`lldb-vscode` name over stdio, without netcoredbg's interpreter argument. Rust launch
+`lldb-vscode` name over stdio, with the adapter arguments required by LLDB. Rust launch
 arguments include program, arguments, working directory, environment and stop-on-entry.
 Project trust is required before either adapter is started. Discovery does not execute them.
 

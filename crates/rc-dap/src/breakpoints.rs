@@ -1,6 +1,6 @@
 //! Source breakpoints by file and 1-based line, with what the debugger made of them
 //! (verified, bound line, message), plus the client-side parts adapters may lack: hit
-//! conditions and log messages (netcoredbg supports neither natively).
+//! conditions and log messages when an adapter lacks native support.
 
 use crate::protocol::{Breakpoint, SourceBreakpoint};
 use std::collections::BTreeMap;
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn requests_responses_and_events_update_state() {
-        let a = PathBuf::from("/w/A.cs");
+        let a = PathBuf::from("/w/a.rs");
         let mut bps = Breakpoints::new();
         bps.set(BreakpointSpec::new(&a, 10).with_condition("x > 1"));
         bps.set(BreakpointSpec::new(&a, 4).with_hit_condition(">= 2").with_log_message("x={x}"));

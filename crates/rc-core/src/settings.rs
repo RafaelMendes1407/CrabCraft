@@ -79,11 +79,6 @@ pub struct Settings {
     /// The last tool window layout (sides, sizes, open windows): solutions opened for the
     /// first time start with it.
     pub tool_windows: std::collections::BTreeMap<String, crate::session::ToolWindowState>,
-    /// Explicit path to `dotnet` (otherwise found on PATH / the default install).
-    pub dotnet_path: Option<PathBuf>,
-    /// Explicit path to the Roslyn language server DLL or executable.
-    pub roslyn_path: Option<PathBuf>,
-    pub netcoredbg_path: Option<PathBuf>,
     pub rust_debugger: RustDebugger,
     pub gdb_path: Option<PathBuf>,
     pub lldb_dap_path: Option<PathBuf>,
@@ -152,9 +147,6 @@ impl Default for Settings {
             tab_colors: true,
             new_project_location: None,
             tool_windows: Default::default(),
-            dotnet_path: None,
-            roslyn_path: None,
-            netcoredbg_path: None,
             rust_debugger: RustDebugger::default(),
             gdb_path: None,
             lldb_dap_path: None,
@@ -205,6 +197,17 @@ impl Settings {
 
     pub fn save(&self) -> anyhow::Result<()> {
         paths::write_atomic(&Self::file(), serde_json::to_string_pretty(self)?.as_bytes())?;
+        Ok(())
+    }
+
+    /// Deletes persisted preferences and the backup of an unreadable settings file.
+    pub fn clear() -> std::io::Result<()> {
+        for file in [Self::file(), Self::file().with_extension("json.bak")] {
+            match std::fs::remove_file(file) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => result?,
+            }
+        }
         Ok(())
     }
 

@@ -2,7 +2,7 @@
 //! [`FrameDecoder`]) and the message bodies CrabCraft uses, as serde types.
 //!
 //! Every type tolerates missing optional fields: adapters differ in what they send
-//! (netcoredbg, for example, never sends `hitBreakpointIds`).
+//! Some adapters do not send `hitBreakpointIds`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -461,7 +461,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_netcoredbg_bodies() {
+    fn parses_adapter_bodies() {
         let caps: Capabilities = serde_json::from_value(json!({
             "exceptionBreakpointFilters": [{"filter": "user-unhandled", "label": "user-unhandled"}, {"filter": "all", "label": "all"}],
             "supportsConditionalBreakpoints": true, "supportsExceptionInfoRequest": true, "supportsSetVariable": true

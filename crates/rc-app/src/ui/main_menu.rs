@@ -209,7 +209,7 @@ fn action_enabled(app: &CrabCraftApp, action: Action) -> bool {
                 || selected.is_some_and(|config| {
                     matches!(
                         config.kind,
-                        ConfigKind::Cargo { .. } | ConfigKind::App { .. }
+                        ConfigKind::Cargo { .. }
                     )
                 })
         }
@@ -262,8 +262,7 @@ fn configuration_editable(app: &CrabCraftApp) -> bool {
     app.runner.selected_config().is_some_and(|config| {
         matches!(
             config.kind,
-            ConfigKind::App { .. }
-                | ConfigKind::Cargo { .. }
+            ConfigKind::Cargo { .. }
                 | ConfigKind::WasmPack { .. }
                 | ConfigKind::Compound { .. }
         )
@@ -423,7 +422,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
 
 fn file_commands(app: &mut CrabCraftApp, ui: &mut Ui) {
     if command(ui, tr("New Project…"), Some(ico::ADD), true) {
-        app.new_project_dialog(None);
+        app.new_project_dialog();
     }
     if command(
         ui,

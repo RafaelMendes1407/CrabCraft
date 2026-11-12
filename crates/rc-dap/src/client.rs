@@ -434,7 +434,7 @@ fn dispatch(msg: Value, shared: &Shared, incoming: &Outbox<Incoming>) {
                 Ok(msg.get("body").cloned().unwrap_or(Value::Null))
             } else {
                 let details = msg.get("body").and_then(|b| b.get("error")).cloned();
-                // The readable text is in `body.error.format` (netcoredbg puts it in `message`).
+                // The readable text may be in `body.error.format` or `message`.
                 let message = details
                     .as_ref()
                     .and_then(|d| d.get("format"))

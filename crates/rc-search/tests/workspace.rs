@@ -13,26 +13,26 @@ fn write(root: &Path, rel: &str, text: &str) {
     fs::write(p, text).unwrap();
 }
 
-/// A small solution with build output, tool folders and a `.gitignore`.
+/// A small Rust workspace with build output, tool folders and a gitignore.
 fn tree() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let r = dir.path();
     write(r, ".gitignore", "*.log\ngenerated/\n");
-    write(r, "Shop.slnx", "<Solution />");
-    write(r, "src/Shop.Core/Shop.Core.csproj", "<Project />");
-    write(r, "src/Shop.Core/OrderService.cs", "class OrderService\n{\n    // TODO: order\n    void PlaceOrder() { }\n}\n");
-    write(r, "src/Shop.Core/Form1.Designer.cs", "// TODO: designer\n");
-    write(r, "src/Shop.Web/OrderController.cs", "class OrderController { }\n");
-    write(r, "src/Shop.Web/notes.txt", "todo later\n");
-    write(r, "src/Shop.Core/bin/Debug/Shop.Core.cs", "// TODO: build output\n");
-    write(r, "src/Shop.Core/obj/project.assets.json", "TODO");
+    write(r, "Cargo.toml", "[workspace]\n");
+    write(r, "src/demo/Cargo.toml", "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n");
+    write(r, "src/demo/order.rs", "pub fn place_order() {\n    // TODO: order\n}\n");
+    write(r, "src/demo/generated.rs", "// TODO: designer\n");
+    write(r, "src/web/handler.rs", "pub fn handler() {}\n");
+    write(r, "src/web/notes.txt", "todo later\n");
+    write(r, "src/demo/target/debug/demo.rs", "// TODO: build output\n");
+    write(r, "src/demo/target/metadata.json", "TODO");
     write(r, "node_modules/x/index.js", "TODO");
-    write(r, ".vs/state.cs", "TODO");
+    write(r, ".idea/state.rs", "TODO");
     write(r, "build.log", "TODO");
-    write(r, "generated/Gen.cs", "// TODO: generated");
-    write(r, "sub/.ignore", "secret.cs\n");
-    write(r, "sub/secret.cs", "TODO");
-    write(r, "sub/public.cs", "// TODO: public");
+    write(r, "generated/gen.rs", "// TODO: generated");
+    write(r, "sub/.ignore", "secret.rs\n");
+    write(r, "sub/secret.rs", "TODO");
+    write(r, "sub/public.rs", "// TODO: public");
     dir
 }
 
@@ -48,19 +48,19 @@ fn index_respects_ignore_files_and_hidden_folders() {
         rels(&index),
         [
             ".gitignore",
-            "Shop.slnx",
-            "src/Shop.Core/Form1.Designer.cs",
-            "src/Shop.Core/OrderService.cs",
-            "src/Shop.Core/Shop.Core.csproj",
-            "src/Shop.Web/OrderController.cs",
-            "src/Shop.Web/notes.txt",
+            "Cargo.toml",
+            "src/demo/Cargo.toml",
+            "src/demo/generated.rs",
+            "src/demo/order.rs",
+            "src/web/handler.rs",
+            "src/web/notes.txt",
             "sub/.ignore",
-            "sub/public.cs",
+            "sub/public.rs",
         ]
     );
     let snap = index.snapshot();
-    assert_eq!(snap.get("Shop.slnx").unwrap().kind(), FileKind::Solution);
-    assert_eq!(snap.get("src/Shop.Core/Shop.Core.csproj").unwrap().kind(), FileKind::Project);
+    assert_eq!(snap.get("Cargo.toml").unwrap().kind(), FileKind::Other);
+    assert_eq!(snap.get("src/demo/Cargo.toml").unwrap().kind(), FileKind::Other);
 }
 
 #[test]
@@ -80,28 +80,28 @@ fn background_scan_wakes_the_ui() {
 fn excluded_folders_and_files_stay_out_of_the_index_and_find_in_files() {
     let dir = tree();
     let r = dir.path();
-    let excluded = vec!["src/Shop.Core".to_string(), "sub/public.cs".to_string()];
+    let excluded = vec!["src/demo".to_string(), "sub/public.rs".to_string()];
     let index = FileIndex::with_excluded(r, excluded.clone());
     index.start_scan(Waker::noop()).wait();
-    assert_eq!(rels(&index), [".gitignore", "Shop.slnx", "src/Shop.Web/OrderController.cs", "src/Shop.Web/notes.txt", "sub/.ignore"]);
+    assert_eq!(rels(&index), [".gitignore", "Cargo.toml", "src/web/handler.rs", "src/web/notes.txt", "sub/.ignore"]);
     // Files created later inside an excluded folder stay out too.
-    write(r, "src/Shop.Core/New.cs", "");
-    write(r, "src/Shop.Core/Deep/More.cs", "");
-    write(r, "src/Shop.Web/New.cs", "");
-    index.apply(&[FsEvent::Created(r.join("src/Shop.Core/New.cs")), FsEvent::Created(r.join("src/Shop.Core/Deep")), FsEvent::Created(r.join("src/Shop.Web/New.cs"))]);
-    assert!(!rels(&index).iter().any(|p| p.starts_with("src/Shop.Core")), "{:?}", rels(&index));
-    assert!(rels(&index).contains(&"src/Shop.Web/New.cs".to_string()));
+    write(r, "src/demo/new.rs", "");
+    write(r, "src/demo/Deep/more.rs", "");
+    write(r, "src/web/new.rs", "");
+    index.apply(&[FsEvent::Created(r.join("src/demo/new.rs")), FsEvent::Created(r.join("src/demo/Deep")), FsEvent::Created(r.join("src/web/new.rs"))]);
+    assert!(!rels(&index).iter().any(|p| p.starts_with("src/demo")), "{:?}", rels(&index));
+    assert!(rels(&index).contains(&"src/web/new.rs".to_string()));
 
     let (files, _) = run_find(r, FindOptions { excluded, ..opts("todo") });
     let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
-    assert_eq!(rels, ["src/Shop.Web/notes.txt"]);
+    assert_eq!(rels, ["src/web/notes.txt"]);
 }
 
 #[cfg(unix)]
 #[test]
 fn symlink_loops_are_skipped() {
     let dir = tree();
-    std::os::unix::fs::symlink(dir.path().join("src"), dir.path().join("src/Shop.Web/loop")).unwrap();
+    std::os::unix::fs::symlink(dir.path().join("src"), dir.path().join("src/web/loop")).unwrap();
     let index = FileIndex::scan_blocking(dir.path());
     // The loop is detected; files reached through it once are fine, but the walk ends.
     assert!(index.snapshot().len() >= 9);
@@ -113,51 +113,50 @@ fn incremental_updates() {
     let r = dir.path();
     let index = FileIndex::scan_blocking(r);
 
-    write(r, "src/Shop.Core/Customer.cs", "");
-    write(r, "src/Shop.Core/debug.log", "");
-    write(r, "src/Shop.Core/bin/Release/x.cs", "");
-    write(r, "src/Shop.Api/Program.cs", "");
-    write(r, "src/Shop.Api/Controllers/HomeController.cs", "");
-    write(r, "generated/More.cs", "");
-    write(r, "sub/secret2.cs", "");
+    write(r, "src/demo/Customer.rs", "");
+    write(r, "src/demo/debug.log", "");
+    write(r, "src/demo/target/release/x.rs", "");
+    write(r, "src/web/Program.rs", "");
+    write(r, "src/web/Controllers/HomeController.rs", "");
+    write(r, "generated/more.rs", "");
+    write(r, "sub/secret2.rs", "");
     index.apply(&[
-        FsEvent::Created(r.join("src/Shop.Core/Customer.cs")),
-        FsEvent::Created(r.join("src/Shop.Core/debug.log")),
-        FsEvent::Created(r.join("src/Shop.Core/bin/Release/x.cs")),
-        FsEvent::Created(r.join("src/Shop.Api")),
-        FsEvent::Created(r.join("generated/More.cs")),
-        FsEvent::Created(r.join("sub/secret2.cs")),
+        FsEvent::Created(r.join("src/demo/Customer.rs")),
+        FsEvent::Created(r.join("src/demo/debug.log")),
+        FsEvent::Created(r.join("src/demo/target/release/x.rs")),
+        FsEvent::Created(r.join("src/web")),
+        FsEvent::Created(r.join("generated/more.rs")),
+        FsEvent::Created(r.join("sub/secret2.rs")),
     ]);
     let snap = index.snapshot();
-    assert!(snap.get("src/Shop.Core/Customer.cs").is_some());
-    assert!(snap.get("src/Shop.Api/Program.cs").is_some());
-    assert!(snap.get("src/Shop.Api/Controllers/HomeController.cs").is_some());
-    assert!(snap.get("sub/secret2.cs").is_some());
-    assert!(snap.get("src/Shop.Core/debug.log").is_none());
-    assert!(snap.get("src/Shop.Core/bin/Release/x.cs").is_none());
-    assert!(snap.get("generated/More.cs").is_none());
+    assert!(snap.get("src/demo/Customer.rs").is_some());
+    assert!(snap.get("src/web/Program.rs").is_some());
+    assert!(snap.get("src/web/Controllers/HomeController.rs").is_some());
+    assert!(snap.get("sub/secret2.rs").is_some());
+    assert!(snap.get("src/demo/debug.log").is_none());
+    assert!(snap.get("src/demo/target/release/x.rs").is_none());
+    assert!(snap.get("generated/more.rs").is_none());
 
     // Rename a file, then remove a whole folder.
-    fs::rename(r.join("src/Shop.Core/Customer.cs"), r.join("src/Shop.Core/Client.cs")).unwrap();
-    index.rename(&r.join("src/Shop.Core/Customer.cs"), &r.join("src/Shop.Core/Client.cs"));
-    fs::remove_dir_all(r.join("src/Shop.Api")).unwrap();
-    index.apply(&[FsEvent::Removed(r.join("src/Shop.Api"))]);
+    fs::rename(r.join("src/demo/Customer.rs"), r.join("src/demo/Client.rs")).unwrap();
+    index.rename(&r.join("src/demo/Customer.rs"), &r.join("src/demo/Client.rs"));
+    fs::remove_dir_all(r.join("src/web")).unwrap();
+    index.apply(&[FsEvent::Removed(r.join("src/web"))]);
     let snap = index.snapshot();
-    assert!(snap.get("src/Shop.Core/Customer.cs").is_none());
-    assert!(snap.get("src/Shop.Core/Client.cs").is_some());
-    assert!(!snap.files().iter().any(|e| e.rel().starts_with("src/Shop.Api/")));
+    assert!(snap.get("src/demo/Customer.rs").is_none());
+    assert!(snap.get("src/demo/Client.rs").is_some());
+    assert!(!snap.files().iter().any(|e| e.rel().starts_with("src/web/")));
 
     // A canonical path from the watcher (macOS reports /private/var/...) maps to the same root.
     let canon = r.canonicalize().unwrap();
-    write(r, "Canon.cs", "");
-    index.apply(&[FsEvent::Created(canon.join("Canon.cs"))]);
-    assert!(index.snapshot().get("Canon.cs").is_some());
+    write(r, "Canon.rs", "");
+    index.apply(&[FsEvent::Created(canon.join("Canon.rs"))]);
+    assert!(index.snapshot().get("Canon.rs").is_some());
     // An event for a path that no longer exists counts as a removal.
-    index.apply(&[FsEvent::Changed(r.join("src/Shop.Web/notes.txt"))]);
-    assert!(index.snapshot().get("src/Shop.Web/notes.txt").is_some());
-    fs::remove_file(r.join("src/Shop.Web/notes.txt")).unwrap();
-    index.apply(&[FsEvent::Changed(r.join("src/Shop.Web/notes.txt"))]);
-    assert!(index.snapshot().get("src/Shop.Web/notes.txt").is_none());
+    index.apply(&[FsEvent::Changed(r.join("src/web/notes.txt"))]);
+    assert!(index.snapshot().get("src/web/notes.txt").is_none());
+    index.apply(&[FsEvent::Changed(r.join("src/web/notes.txt"))]);
+    assert!(index.snapshot().get("src/web/notes.txt").is_none());
 }
 
 #[test]
@@ -166,24 +165,24 @@ fn events_during_a_scan_are_replayed() {
     let r = dir.path();
     let index = FileIndex::new(r);
     let scan = index.start_scan(Waker::noop());
-    write(r, "Late.cs", "");
-    index.apply(&[FsEvent::Created(r.join("Late.cs"))]);
+    write(r, "Late.rs", "");
+    index.apply(&[FsEvent::Created(r.join("Late.rs"))]);
     scan.wait();
-    assert!(index.snapshot().get("Late.cs").is_some());
+    assert!(index.snapshot().get("Late.rs").is_some());
 }
 
 #[test]
 fn go_to_file_over_a_scanned_tree() {
     let dir = tree();
     let index = FileIndex::scan_blocking(dir.path());
-    let r = search_files(&index.snapshot(), &FileQuery::parse("OrdSer:12"), &|_| 0, 10);
-    assert_eq!(r.matches[0].entry.rel(), "src/Shop.Core/OrderService.cs");
+    let r = search_files(&index.snapshot(), &FileQuery::parse("ord:12"), &|_| 0, 10);
+    assert_eq!(r.matches[0].entry.rel(), "src/demo/order.rs");
     assert_eq!(r.query.line, Some(12));
 
     let inbox = Inbox::new(Waker::noop());
     let worker = FileSearchWorker::new(index.clone(), inbox.sender());
     worker.search(FileSearchRequest { text: "zzz".into(), limit: 5, boost: None });
-    let id = worker.search(FileSearchRequest { text: "web/ord".into(), limit: 5, boost: None });
+    let id = worker.search(FileSearchRequest { text: "web/hand".into(), limit: 5, boost: None });
     let mut last = None;
     while let Some(res) = inbox.recv_timeout(Duration::from_secs(5)) {
         if res.generation == id {
@@ -193,7 +192,7 @@ fn go_to_file_over_a_scanned_tree() {
     }
     let res = last.expect("worker answered the latest query");
     assert_eq!(res.matches.len(), 1);
-    assert_eq!(res.matches[0].entry.rel(), "src/Shop.Web/OrderController.cs");
+    assert_eq!(res.matches[0].entry.rel(), "src/web/handler.rs");
 }
 
 fn run_find(root: &Path, options: FindOptions) -> (Vec<FileMatches>, FindSummary) {
@@ -223,31 +222,31 @@ fn find_in_files_respects_ignores_mask_and_scope() {
     let dir = tree();
     let (files, summary) = run_find(dir.path(), opts("todo"));
     let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
-    assert_eq!(rels, ["src/Shop.Core/Form1.Designer.cs", "src/Shop.Core/OrderService.cs", "src/Shop.Web/notes.txt", "sub/public.cs"]);
+    assert_eq!(rels, ["src/demo/generated.rs", "src/demo/order.rs", "src/web/notes.txt", "sub/public.rs"]);
     assert_eq!(summary.matches, 4);
     assert!(!summary.truncated && !summary.cancelled);
 
     let order = &files[1];
-    assert_eq!(order.path, dir.path().join("src/Shop.Core/OrderService.cs"));
+    assert_eq!(order.path, dir.path().join("src/demo/order.rs"));
     assert_eq!(order.lines.len(), 1);
     let line = &order.lines[0];
-    assert_eq!((line.line, line.text.as_str()), (2, "    // TODO: order"));
+    assert_eq!((line.line, line.text.as_str()), (1, "    // TODO: order"));
     assert_eq!(line.ranges, vec![7..11]);
 
-    let mask = FileMask::parse("*.cs, !*.Designer.cs").unwrap();
+    let mask = FileMask::parse("*.rs, !generated.rs").unwrap();
     let (files, _) = run_find(dir.path(), FindOptions { mask, ..opts("todo") });
     let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
-    assert_eq!(rels, ["src/Shop.Core/OrderService.cs", "sub/public.cs"]);
+    assert_eq!(rels, ["src/demo/order.rs", "sub/public.rs"]);
 
-    let (files, _) = run_find(dir.path(), FindOptions { scope: Some("src/Shop.Web".into()), ..opts("todo") });
+    let (files, _) = run_find(dir.path(), FindOptions { scope: Some("src/web".into()), ..opts("todo") });
     let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
-    assert_eq!(rels, ["src/Shop.Web/notes.txt"]);
+    assert_eq!(rels, ["src/web/notes.txt"]);
 }
 
 #[test]
 fn find_options_whole_word_case_regex_and_context() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a.cs", "int order = 1;\nOrder o;\nvar orders = 2;\nreorder();\n");
+    write(dir.path(), "a.rs", "int order = 1;\nOrder o;\nvar orders = 2;\nreorder();\n");
     let count = |q: QueryOptions| run_find(dir.path(), FindOptions { query: q, ..Default::default() }).1.matches;
     assert_eq!(count(QueryOptions::text("order")), 4);
     assert_eq!(count(QueryOptions { pattern: "order".into(), whole_word: true, ..Default::default() }), 2);
@@ -269,7 +268,7 @@ fn find_options_whole_word_case_regex_and_context() {
 #[test]
 fn multi_line_regex_matches() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a.cs", "class A\r\n{\r\n}\r\nclass B\n{\n}\n");
+    write(dir.path(), "a.rs", "class A\r\n{\r\n}\r\nclass B\n{\n}\n");
     let q = QueryOptions { pattern: r"class \w+\s*\{".into(), regex: true, ..Default::default() };
     let (files, summary) = run_find(dir.path(), FindOptions { query: q, ..Default::default() });
     assert_eq!(summary.matches, 2);
@@ -282,12 +281,12 @@ fn multi_line_regex_matches() {
 #[test]
 fn binary_and_huge_files_are_skipped() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "text.cs", "needle\n");
+    write(dir.path(), "text.rs", "needle\n");
     fs::write(dir.path().join("bin.dat"), b"needle\0\x01\x02 needle").unwrap();
-    write(dir.path(), "big.cs", &"needle\n".repeat(2000));
+    write(dir.path(), "big.rs", &"needle\n".repeat(2000));
     let (files, _) = run_find(dir.path(), FindOptions { max_file_size: 1000, ..opts("needle") });
     let rels: Vec<&str> = files.iter().map(|f| f.rel.as_str()).collect();
-    assert_eq!(rels, ["text.cs"]);
+    assert_eq!(rels, ["text.rs"]);
 }
 
 #[test]
@@ -346,16 +345,16 @@ fn bad_patterns_fail_up_front() {
 fn replace_on_disk_keeps_bom_and_crlf_and_buffers_get_edits() {
     let dir = tempfile::tempdir().unwrap();
     let r = dir.path();
-    fs::write(r.join("a.cs"), b"\xEF\xBB\xBFvar x = GetName();\r\nvar y = GetAge();\r\n").unwrap();
-    write(r, "b.cs", "nothing here\n");
-    write(r, "open.cs", "GetName();\n");
+    fs::write(r.join("a.rs"), b"\xEF\xBB\xBFvar x = GetName();\r\nvar y = GetAge();\r\n").unwrap();
+    write(r, "b.rs", "nothing here\n");
+    write(r, "open.rs", "GetName();\n");
     let q = Query::new(QueryOptions { pattern: r"Get(\w+)\(\)".into(), regex: true, case_sensitive: true, ..Default::default() }).unwrap();
     let out = replace_in_files(
         [
-            (r.join("a.cs"), ReplaceTarget::Disk),
-            (r.join("b.cs"), ReplaceTarget::Disk),
-            (r.join("open.cs"), ReplaceTarget::Buffer("x\nGetName();\n".into())),
-            (r.join("missing.cs"), ReplaceTarget::Disk),
+            (r.join("a.rs"), ReplaceTarget::Disk),
+            (r.join("b.rs"), ReplaceTarget::Disk),
+            (r.join("open.rs"), ReplaceTarget::Buffer("x\nGetName();\n".into())),
+            (r.join("missing.rs"), ReplaceTarget::Disk),
         ],
         &q,
         r"$1\n",
@@ -367,9 +366,9 @@ fn replace_on_disk_keeps_bom_and_crlf_and_buffers_get_edits() {
         o => panic!("{o:?}"),
     }
     assert!(matches!(out[3].1, ReplaceOutcome::Failed(ReplaceError::Io(_))));
-    assert_eq!(fs::read(r.join("a.cs")).unwrap(), b"\xEF\xBB\xBFvar x = Name\r\n;\r\nvar y = Age\r\n;\r\n");
+    assert_eq!(fs::read(r.join("a.rs")).unwrap(), b"\xEF\xBB\xBFvar x = Name\r\n;\r\nvar y = Age\r\n;\r\n");
     // Open buffers are not written.
-    assert_eq!(fs::read_to_string(r.join("open.cs")).unwrap(), "GetName();\n");
+    assert_eq!(fs::read_to_string(r.join("open.rs")).unwrap(), "GetName();\n");
     // No temporary files left behind.
     assert_eq!(fs::read_dir(r).unwrap().count(), 3);
 }

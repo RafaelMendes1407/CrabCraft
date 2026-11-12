@@ -1,5 +1,15 @@
 # CrabCraft: funcionalidades e status
 
+Auditoria de dependências (2026-11-12): `libsqlite3-sys` 0.39.1,
+`pulldown-cmark` 0.13.6 e `rustix` 1.1.6 corrigem os avisos RustSec
+identificados no relatório `short_audit.md`. CI verifica avisos e licenças
+com cargo-deny, vulnerabilidades com cargo-audit e gera um SBOM CycloneDX;
+Dependabot acompanha Cargo e GitHub Actions. `Session::clear` apaga a sessão
+de um workspace; `Settings::clear` apaga preferências e backup. A indexação
+de arquivos permanece apenas em memória e é descartada ao fechar o projeto.
+Criptografia dos arquivos locais, trilha de auditoria e conformidade legal
+continuam sem validação e não são declaradas concluídas.
+
 Lista de tudo o que o **RustRover 2026.2** oferece, com a situação de cada item no CrabCraft.
 É o documento de acompanhamento do projeto: **atualize o status no mesmo commit que implementa
 a funcionalidade**.
@@ -11,6 +21,32 @@ halo suave no projeto e transição no destino de arraste de abas. O teste
 e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limita ambas as
 dimensões para impedir o crescimento vertical contínuo do modal.
 Verificação por testes de interface e capturas GPU conferidas; sem alteração dos status de prontidão.
+
+Limpeza do legado DotCraft: os downloads automáticos de Roslyn pelo feed NuGet e de
+netcoredbg pelo release da Samsung, incluindo URLs fixas, arquivos compactados e controles
+de progresso, foram removidos. Os recursos Rust continuam usando seus adaptadores próprios.
+Os parsers C#/Razor, suas consultas tree-sitter e o lexer de soluções Visual Studio
+também foram retirados. Arquivos dessas linguagens agora abrem como texto simples;
+os benchmarks de sintaxe e editor usam uma fonte Rust gerada.
+O adaptador LSP Roslyn foi removido; as capacidades LSP compartilhadas agora ficam em
+`rc-lsp/src/capabilities.rs`, usadas pelo rust-analyzer e pelos servidores web configurados.
+O adaptador DAP netcoredbg e a preparação de depuração .NET foram removidos; sessões
+Rust seguem com GDB/LLDB, incluindo anexação e depuração remota.
+As configurações de execução de projetos .NET, a compilação e os testes .NET foram
+desligados do aplicativo; a execução e os testes usam os alvos Cargo.
+O carregamento de workspace não detecta mais soluções e projetos Visual Studio, e
+as preferências já não oferecem caminhos para .NET, Roslyn ou netcoredbg.
+O explorador de projetos deixou de ler XML de projetos .NET ou exibir soluções e
+dependências MSBuild. O menu de novos arquivos oferece somente arquivos comuns e Rust.
+Os módulos de SDK, MSBuild, soluções, projetos, execução e testes .NET e TRX foram
+removidos de `rc-dotnet`, junto com as fixtures correspondentes. O crate conserva o
+nome e apenas os tipos e a gestão de processos usados por Cargo e outras funções Rust.
+Os pedidos privados do Roslyn e a ação de importar `using` saíram do LSP.
+Os classificadores de arquivos, exemplos de testes e traduções não expõem mais
+os formatos C#/.NET removidos; URLs de documentação de protocolos e de recursos Rust
+permanecem quando são usadas pelo produto.
+Pastas `bin` e `obj` voltaram a aparecer no explorador e no índice; apenas as
+pastas de saída e metadados pertinentes ao projeto Rust seguem ocultas.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

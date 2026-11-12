@@ -232,7 +232,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 ui.close();
                             }
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
@@ -329,17 +329,11 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
         if theme::menu_item(ui, Some(ico::ADD), tr("New Project…"), false).clicked() {
-            app.new_project_dialog(None);
+            app.new_project_dialog();
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::NEW_FILE), tr("New File…"), false).clicked() {
             app.new_file_dialog();
-            ui.close();
-        }
-        if let Some(sln) = app.workspace.as_ref().and_then(|w| w.ws.solution().map(std::path::Path::to_path_buf))
-            && theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked()
-        {
-            app.new_project_dialog(Some(sln));
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::OPEN), tr("Open…"), false).clicked() {
@@ -347,7 +341,7 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::SOLUTION), tr("Open Cargo.toml…"), false).clicked() {
-            app.pick_solution();
+            app.pick_cargo_manifest();
             ui.close();
         }
         if theme::menu_item(ui, Some(ico::OPEN), tr("Open File…"), false).clicked() {

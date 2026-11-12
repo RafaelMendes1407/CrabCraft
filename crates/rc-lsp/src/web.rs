@@ -73,7 +73,7 @@ pub fn initialize(
     settings: &Settings,
 ) -> Pending<lsp_types::InitializeResult> {
     let uri = crate::path_to_uri(root);
-    let mut capabilities = crate::roslyn::client_capabilities();
+    let mut capabilities = crate::capabilities::client_capabilities();
     if let Some(text) = capabilities
         .get_mut("textDocument")
         .and_then(Value::as_object_mut)

@@ -1,6 +1,5 @@
 //! Semantic tokens: decoding the server's relative encoding into per-line colour spans with
-//! the editor's roles. Roslyn names its token types ("class name", "field name"…); standard
-//! LSP names map too.
+//! the editor's roles for standard LSP and rust-analyzer token types.
 
 use rc_syntax::{Hl, Span};
 use rc_text::Rope;
@@ -14,14 +13,13 @@ pub const CLIENT_TOKEN_MODIFIERS: &[&str] = &["declaration", "definition", "read
 /// Colour role of a token type name (`None`: leave the syntax colour).
 pub fn role(token_type: &str) -> Option<Hl> {
     Some(match token_type {
-        "class name" | "record class name" | "class" | "type" => Hl::Class,
-        "struct name" | "record struct name" | "struct" => Hl::Struct,
-        "enum name" | "enum" => Hl::Enum,
-        "interface name" | "interface" => Hl::Interface,
-        "delegate name" => Hl::Delegate,
-        "type parameter name" | "typeParameter" => Hl::TypeParam,
-        "namespace name" | "namespace" => Hl::Namespace,
-        "method name" | "extension method name" | "method" | "function" => Hl::Method,
+        "class" | "type" => Hl::Class,
+        "struct" => Hl::Struct,
+        "enum" => Hl::Enum,
+        "interface" => Hl::Interface,
+        "typeParameter" => Hl::TypeParam,
+        "namespace" => Hl::Namespace,
+        "method" | "function" => Hl::Method,
         // rust-analyzer.
         "macro" | "derive" => Hl::Preproc,
         "builtinType" => Hl::Struct,
@@ -30,19 +28,14 @@ pub fn role(token_type: &str) -> Option<Hl> {
         "union" => Hl::Struct,
         "static" | "const" => Hl::Constant,
         "attribute" | "builtinAttribute" => Hl::Attribute,
-        "property name" | "property" => Hl::Property,
-        "field name" => Hl::Field,
-        "constant name" => Hl::Constant,
-        "event name" | "event" => Hl::Event,
-        "enum member name" | "enumMember" => Hl::EnumMember,
-        "local name" | "variable" => Hl::Local,
-        "parameter name" | "parameter" => Hl::Parameter,
-        "label name" => Hl::Plain,
-        "excluded code" => Hl::Dimmed,
-        "preprocessor keyword" | "preprocessor text" => Hl::Preproc,
-        "string - escape character" => Hl::Escape,
-        "string - verbatim" | "string" => Hl::String,
-        "xml doc comment - delimiter" | "xml doc comment - name" | "xml doc comment - attribute name" | "xml doc comment - attribute quotes" => Hl::DocComment,
+        "property" => Hl::Property,
+        "field" => Hl::Field,
+        "constant" => Hl::Constant,
+        "event" => Hl::Event,
+        "enumMember" => Hl::EnumMember,
+        "variable" => Hl::Local,
+        "parameter" => Hl::Parameter,
+        "string" => Hl::String,
         _ => return None,
     })
 }
@@ -84,7 +77,7 @@ mod tests {
     #[test]
     fn relative_tokens_decode_to_char_spans() {
         let rope = Rope::from_str("var 😀x = Foo.Bar;\nint y;");
-        let legend: Vec<String> = ["keyword", "local name", "class name", "property name"].iter().map(|s| s.to_string()).collect();
+        let legend: Vec<String> = ["keyword", "variable", "class", "property"].iter().map(|s| s.to_string()).collect();
         // "Foo" at utf16 col 10 (the emoji is 2 units), "Bar" 4 later; line 1 "y" at col 4.
         let data = [0, 10, 3, 2, 0, 0, 4, 3, 3, 0, 1, 4, 1, 1, 0];
         let spans = decode(&data, &legend, &rope);

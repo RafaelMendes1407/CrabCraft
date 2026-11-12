@@ -825,7 +825,7 @@ tokio-runtime-w  4322 81234.004200:    1000 cpu-clock:u: \n\
         assert!(!is_restricted("No such file or directory"));
         let text = ProfError::Restricted(Some(4)).text();
         assert!(text.contains("= 4") && text.contains("sysctl"), "{text}");
-        let plan = LaunchPlan { program: "/bin/x".into(), args: vec!["--n".into(), "3".into()], env: Vec::new(), working_dir: "/".into(), urls: Vec::new(), profile: None, browser_url: None };
+        let plan = LaunchPlan { program: "/bin/x".into(), args: vec!["--n".into(), "3".into()], env: Vec::new(), working_dir: "/".into(), urls: Vec::new() };
         let args = record_args(Path::new("/tmp/d/perf.data"), &plan);
         let at = args.iter().position(|a| a == "--").unwrap();
         assert_eq!(&args[at + 1..], ["/bin/x", "--n", "3"]);
@@ -857,7 +857,7 @@ tokio-runtime-w  4322 81234.004200:    1000 cpu-clock:u: \n\
             assert_eq!(map.get("fib::f"), Some(&(src.canonicalize().unwrap(), 1)), "{:?}", map.keys().filter(|k| k.starts_with("fib")).collect::<Vec<_>>());
             assert_eq!(map.get("fib::main").map(|s| s.1), Some(2));
         }
-        let plan = LaunchPlan { program: bin.clone(), args: Vec::new(), env: Vec::new(), working_dir: dir.clone(), urls: Vec::new(), profile: None, browser_url: None };
+        let plan = LaunchPlan { program: bin.clone(), args: Vec::new(), env: Vec::new(), working_dir: dir.clone(), urls: Vec::new() };
         let (result, output) = record_and_analyze(&perf, &plan, &dir, &Control::default(), &|_| {});
         let _ = std::fs::remove_dir_all(&dir);
         match result {
@@ -879,7 +879,7 @@ tokio-runtime-w  4322 81234.004200:    1000 cpu-clock:u: \n\
         let Some(perf) = perf_path() else { return };
         let dir = std::env::temp_dir().join(format!("crabcraft-perf-cancel-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let plan = LaunchPlan { program: "/bin/sleep".into(), args: vec!["30".into()], env: Vec::new(), working_dir: dir.clone(), urls: Vec::new(), profile: None, browser_url: None };
+        let plan = LaunchPlan { program: "/bin/sleep".into(), args: vec!["30".into()], env: Vec::new(), working_dir: dir.clone(), urls: Vec::new() };
         let control = Arc::new(Control::default());
         let c = control.clone();
         let started = std::time::Instant::now();

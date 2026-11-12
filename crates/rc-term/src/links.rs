@@ -1,5 +1,5 @@
 //! Clickable links in terminal output: `http(s)://` URLs and file paths with an optional
-//! position (`path:line:col`, `path:line`, and MSBuild's `path(line,col)`).
+//! position (`path:line:col`, `path:line`, and compiler's `path(line,col)`).
 
 use std::ops::Range;
 
@@ -98,7 +98,7 @@ fn split_position(text: &str) -> (&str, Option<u32>, Option<u32>) {
         };
         Some((line, col))
     };
-    // MSBuild / C# compiler: File.cs(12,5)
+    // compiler / compiler location: file.rs(12,5)
     if let Some(inner) = text.strip_suffix(')')
         && let Some(open) = inner.rfind('(')
         && let Some((line, col)) = nums(&inner[open + 1..])
@@ -150,11 +150,11 @@ mod tests {
 
     #[test]
     fn urls() {
-        let l = "see https://learn.microsoft.com/dotnet/core. and (http://localhost:5000/api)";
+        let l = "see https://docs.rs/egui/latest/egui. and (http://localhost:5000/api)";
         let links = find_links(l);
         assert_eq!(links.len(), 2);
-        assert_eq!(links[0].1, Link::Url("https://learn.microsoft.com/dotnet/core".into()));
-        assert_eq!(&l[links[0].0.clone()], "https://learn.microsoft.com/dotnet/core");
+        assert_eq!(links[0].1, Link::Url("https://docs.rs/egui/latest/egui".into()));
+        assert_eq!(&l[links[0].0.clone()], "https://docs.rs/egui/latest/egui");
         assert_eq!(links[1].1, Link::Url("http://localhost:5000/api".into()));
         assert_eq!(link_at("x https://a.b/c?q=(1) y", 4).unwrap().1, Link::Url("https://a.b/c?q=(1)".into()));
         assert_eq!(link_at("x https://a.b y", 0), None);
@@ -171,15 +171,15 @@ mod tests {
     #[test]
     fn file_positions() {
         assert_eq!(link_at("src/main.rs:12:5: warning", 3).unwrap().1, file("src/main.rs", Some(12), Some(5)));
-        assert_eq!(link_at("at Program.cs:42", 5).unwrap().1, file("Program.cs", Some(42), None));
-        let msbuild = "/repo/Shop/Program.cs(12,34): error CS1002: ; expected [/repo/Shop/Shop.csproj]";
-        let (r, link) = link_at(msbuild, 2).unwrap();
-        assert_eq!(link, file("/repo/Shop/Program.cs", Some(12), Some(34)));
-        assert_eq!(&msbuild[r], "/repo/Shop/Program.cs(12,34)");
-        let (_, proj) = link_at(msbuild, msbuild.len() - 5).unwrap();
-        assert_eq!(proj, file("/repo/Shop/Shop.csproj", None, None));
-        assert_eq!(link_at(r"C:\src\App\Foo.cs(3,1): error", 4).unwrap().1, file(r"C:\src\App\Foo.cs", Some(3), Some(1)));
-        assert_eq!(link_at(r"C:\src\App\Foo.cs:7", 4).unwrap().1, file(r"C:\src\App\Foo.cs", Some(7), None));
+        assert_eq!(link_at("at main.rs:42", 5).unwrap().1, file("main.rs", Some(42), None));
+        let compiler_output = "/repo/demo/src/main.rs(12,34): error E0308: ; expected [/repo/demo/Cargo.toml]";
+        let (r, link) = link_at(compiler_output, 2).unwrap();
+        assert_eq!(link, file("/repo/demo/src/main.rs", Some(12), Some(34)));
+        assert_eq!(&compiler_output[r], "/repo/demo/src/main.rs(12,34)");
+        let (_, proj) = link_at(compiler_output, compiler_output.len() - 5).unwrap();
+        assert_eq!(proj, file("/repo/demo/Cargo.toml", None, None));
+        assert_eq!(link_at(r"C:\src\App\main.rs(3,1): error", 4).unwrap().1, file(r"C:\src\App\main.rs", Some(3), Some(1)));
+        assert_eq!(link_at(r"C:\src\App\main.rs:7", 4).unwrap().1, file(r"C:\src\App\main.rs", Some(7), None));
     }
 
     #[test]

@@ -13,7 +13,6 @@ use rc_core::session::{OpenFile, Session};
 use rc_core::settings::{KeymapChoice, ThemeChoice};
 use rc_core::watch::{FileWatcher, FsEvent};
 use rc_core::{Inbox, Settings, Waker, Workspace};
-use rc_dotnet::Solution;
 use rc_editor::{Action, EditorConfig, Keymap, KeymapKind};
 use rc_kit::i18n::{self, Lang, tr, trf};
 use std::path::{Path, PathBuf};
@@ -38,7 +37,6 @@ pub struct Notice {
 
 pub struct WorkspaceState {
     pub ws: Workspace,
-    pub solution: Option<Solution>,
 }
 
 /// What `rustc --explain` answered: its text, or `None` when it has none.
@@ -489,7 +487,7 @@ impl CrabCraftApp {
 
     // ------------------------------------------------------------------ workspace
 
-    /// Opens a folder, solution or project, restoring its session.
+    /// Opens a folder or Cargo manifest, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
         self.workspace_open.target(path);
         if !self.disk_save.saves.busy()&&!self.disk_save.auxiliary.busy(){self.disk_save.failed=false;}
@@ -499,7 +497,7 @@ impl CrabCraftApp {
         self.prepare_workspace_save();
         let queued=path.to_path_buf();if self.defer_save(false,move|app|app.open_workspace(&queued)){self.disk_save.pending_workspace=Some(path.to_path_buf());return;}
         let ids=(0..256).map(|_|self.docs.reserve_id()).collect();
-        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir(),settings:self.settings.clone()});
+        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir()});
     }
 
     pub fn queue_workspace_files(&mut self,paths:Vec<PathBuf>){
@@ -532,7 +530,7 @@ impl CrabCraftApp {
     }
 
     fn install_workspace(&mut self,prepared:crate::workspace_open::Prepared){
-        let crate::workspace_open::Prepared{ws,solution,session,docs,attached,linked,projects,runner,dotnet,watcher,events,warnings,..}=prepared;
+        let crate::workspace_open::Prepared{ws,session,docs,attached,linked,runner,watcher,events,warnings,..}=prepared;
         for warning in warnings{self.notify(warning,true);}
         let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
         self.close_workspace();
@@ -554,7 +552,6 @@ impl CrabCraftApp {
         self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
         self.vcs.changelists = session.changelists.clone().clean();
         self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
-        let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.runner=runner;self.runner.nextest=self.settings.use_nextest;self.runner.external_tools=self.settings.external_tools.clone();
         self.runner.project_root = Some(ws.root.clone());
         self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
@@ -575,16 +572,14 @@ impl CrabCraftApp {
             } else {
                 if !self.criticalup_provider.selected{self.insight.wait_for_trust(&ws.root);}else{self.insight.stop();}
             }
-        } else if self.settings.trusted_projects.contains(&ws.root) {
-            self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet.clone(), self.settings.roslyn_path.clone());
         } else {
-            self.insight.wait_for_trust(&ws.root);
+            self.insight.stop();
         }
         self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
         self.docs.style_root=Some(ws.root.clone());
-        self.workspace = Some(WorkspaceState { ws, solution });
+        self.workspace = Some(WorkspaceState { ws });
         self.restore_session(session,docs);
         if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
         // Scratches reopened with the session are analysed too.
@@ -1369,10 +1364,6 @@ impl CrabCraftApp {
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
             if !self.criticalup_provider.selected{self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);}else{self.insight.stop();}
             self.load_cargo_workspace(manifest);
-        } else {
-            let solution = self.workspace.as_ref().and_then(|w| w.solution.as_ref().map(|s| s.path.clone()));
-            let projects = self.solution_projects();
-            self.insight.start(&root, solution.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.toolchain = None;
     }
@@ -1393,16 +1384,6 @@ impl CrabCraftApp {
             self.vcs.message = message;
         }
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) { self.load_cargo_workspace(manifest); }
-    }
-
-    /// Every project of the workspace (its solution's, or the ones found in the folder).
-    pub fn solution_projects(&self) -> Vec<PathBuf> {
-        let Some(w) = &self.workspace else { return Vec::new() };
-        match (&w.solution, &w.ws.kind) {
-            (Some(s), _) => s.projects().into_iter().map(|p| p.path.clone()).filter(|p| rc_core::workspace::is_project(p)).collect(),
-            (None, rc_core::WorkspaceKind::Project(p)) => vec![p.clone()],
-            _ => find_projects(&w.ws.root, 4),
-        }
     }
 
     /// Throws away what the IDE derived from the project and builds it again: open files from
@@ -1459,12 +1440,7 @@ impl CrabCraftApp {
             Some(RunConfig { name, kind: ConfigKind::Cargo { .. } }) => {
                 let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
-                self.dialog = Some(Dialog::RunOptions { name, project, profiles: Vec::new(), options, web: false });
-            }
-            Some(RunConfig { name, kind: ConfigKind::App { project, web, .. } }) => {
-                let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
-                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
-                self.dialog = Some(Dialog::RunOptions { name, project, profiles, options, web });
+                self.dialog = Some(Dialog::RunOptions { name, project, options });
             }
             Some(RunConfig { name, kind: ConfigKind::Compound { members } }) => {
                 let all = self.runner.app_names().into_iter().map(|n| {
@@ -1478,8 +1454,8 @@ impl CrabCraftApp {
         }
     }
 
-    /// New Solution, or Add New Project when `solution` is given.
-    pub fn new_project_dialog(&mut self, _solution: Option<PathBuf>) {
+    /// Opens the Cargo project creation dialog.
+    pub fn new_project_dialog(&mut self) {
         self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, self.waker.clone()));
     }
 
@@ -1572,19 +1548,12 @@ impl CrabCraftApp {
     fn restore_session(&mut self, s: Session, prepared:Vec<(usize,crate::docs::Doc,bool)>) {
         self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
-        // A solution without a layout of its own starts with the last one used.
+        // A project without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
         if self.explorer.expanded.is_empty() {
-            // First open: the solution and its top folders expanded, like Rider.
+            // First open: the project root expanded.
             self.explorer.expanded.insert("sln".into());
-            if let Some(sln) = self.workspace.as_ref().and_then(|w| w.solution.as_ref()) {
-                for item in &sln.items {
-                    if let rc_dotnet::SolutionItem::Folder { name, .. } = item {
-                        self.explorer.expanded.insert(format!("sf:/{name}"));
-                    }
-                }
-            }
         }
         // Editor id of each file of the session, for the layout.
         let mut ids=vec![None;s.files.len()];
@@ -1932,15 +1901,14 @@ impl CrabCraftApp {
             }
             self.insight.local_fixes = fixes;
         }
-        // JSON and XML are formatted here; C# by the server.
+        // JSON and XML are formatted here; Rust by rustfmt.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);
             return;
         }
         if !self.insight.ready() || !crate::insight::has_insight(&self.docs.list[i]) {
             let msg = match &self.insight.status {
-                crate::insight::InsightStatus::NotInstalled => tr("Download the C# language server from the status bar to use this action"),
-                crate::insight::InsightStatus::Failed(_) => tr("The C# language server stopped; restart it from the status bar"),
+                crate::insight::InsightStatus::Failed(_) => tr("The language server stopped; restart it from the status bar"),
                 _ if !crate::insight::has_insight(&self.docs.list[i]) => tr("Language server actions are not available in this file"),
                 _ => tr("The Rust language server is still analysing the project"),
             };
@@ -2116,7 +2084,7 @@ impl CrabCraftApp {
     fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
     fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
         if let Some(target)=self.workspace_open.target.clone(){
-            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||rc_core::workspace::is_solution(&target)||rc_core::workspace::is_project(&target){target.parent().unwrap_or(&target)}else{&target};
+            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||false{target.parent().unwrap_or(&target)}else{&target};
             let belongs_old=self.workspace.as_ref().is_some_and(|w|path.starts_with(&w.ws.root));
             if !belongs_old||!root.is_absolute()||path.starts_with(root){
                 if let Err(error)=self.workspace_open.queue_files(vec![path.to_path_buf()]){self.notify(error.to_string(),true);return;}
@@ -2804,21 +2772,6 @@ impl CrabCraftApp {
             self.update_rust_markers(i);
             return;
         }
-        if doc.editor.lang() != rc_syntax::Lang::CSharp {
-            return;
-        }
-        let Some(tree) = doc.editor.syntax.tree() else { return };
-        let markers = crate::runner::test_markers(doc.editor.buffer.rope(), tree);
-        doc.editor.gutter_icons.retain(|_, icon| !matches!(icon, rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed));
-        for m in &markers {
-            let icon = match self.runner.test_outcomes.get(&m.name) {
-                Some(crate::runner::TestState::Passed) => rc_editor::GutterIcon::TestPassed,
-                Some(crate::runner::TestState::Failed) => rc_editor::GutterIcon::TestFailed,
-                _ => rc_editor::GutterIcon::RunTest,
-            };
-            doc.editor.gutter_icons.insert(m.line, icon);
-        }
-        self.test_markers = markers;
     }
 
     /// Run icons of a Rust document, from the server. An older reply is left alone: the editor
@@ -2902,12 +2855,7 @@ impl CrabCraftApp {
             Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::TestSelection { .. }, .. }) => {
                 self.notify(tr("Test configurations cannot be debugged yet: use Debug in the gutter of the test"), false);
             }
-            Some(config) => {
-                let dotnet = dotnet_path(&self.settings);
-                let request = self.runner.request_for(&config);
-                let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
-                self.handle_debug(outs);
-            }
+            Some(_) => self.notify(tr("This run configuration cannot be debugged"), false),
             None => self.notify(tr("There is no run configuration to debug"), false),
         }
     }
@@ -3016,9 +2964,7 @@ impl CrabCraftApp {
     pub fn run_test_at(&mut self, line: usize) {
         if self.defer_save(true,move|app|app.run_test_at(line)){return;}
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
-        let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
-        let manifest = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone());
-        let Some(project) = manifest.or_else(|| crate::runner::project_of(&path, &self.runner.configs)) else {
+        let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
             self.notify(tr("This file is not part of a test project"), false);
             return;
         };
@@ -3051,11 +2997,10 @@ impl CrabCraftApp {
         ctx.request_repaint();
     }
 
-    /// Opens a folder, solution or project as the workspace, and any other file in an editor
+    /// Opens a folder or Cargo manifest as the workspace, and any other file in an editor
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
     fn opens_workspace(&self, path: &Path) -> bool {
-        use rc_core::workspace::{is_project, is_solution};
-        path.is_dir() || is_solution(path) || is_project(path)
+        path.is_dir() || path.file_name().is_some_and(|name| name == "Cargo.toml")
     }
 
     /// The project a `Cargo.toml` opens. Inside the open project it is just a file to edit.
@@ -3189,7 +3134,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// File › New File: asks for a name in the active file's folder (or the solution's), or for a
+    /// File › New File: asks for a name in the active file's folder (or the project root's), or for a
     /// path when nothing is open.
     pub fn new_file_dialog(&mut self) {
         let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
@@ -3215,7 +3160,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// Open…: a folder, solution or project opens as the workspace, any other file in the
+    /// Open…: a folder or Cargo manifest opens as the workspace, any other file in the
     /// editor (macOS lets one panel pick both; elsewhere it picks a folder).
     pub fn pick_and_open(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open"));
@@ -3228,7 +3173,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// Opens the first folder, solution or project among `paths` as the workspace and the other
+    /// Opens the first folder or Cargo manifest among `paths` as the workspace and the other
     /// files in the editor (dropped files, Open…).
     pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
         let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| self.opens_workspace(p) || self.project_of_manifest(p).is_some());
@@ -3238,7 +3183,7 @@ impl CrabCraftApp {
         self.queue_workspace_files(files);
     }
 
-    pub fn pick_solution(&mut self) {
+    pub fn pick_cargo_manifest(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open Cargo.toml…")).add_filter("Cargo.toml", &["toml"]);
         if let Some(path) = dialog.pick_file() {
             self.open_workspace(&path);
@@ -3304,7 +3249,6 @@ impl CrabCraftApp {
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::ShowHistory(path) => self.show_git_history(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
-                ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
                 ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
                 ExplorerAction::SetAttached(path, on) => self.set_attached(&path, on),
             }
@@ -3369,7 +3313,7 @@ impl CrabCraftApp {
     pub fn locate_active(&mut self) {
         let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
         if let Some(w) = &self.workspace {
-            self.explorer.locate(&path, w.solution.as_ref(), &w.ws.root);
+            self.explorer.locate(&path, &w.ws.root);
             self.dock.show(ToolWindow::Explorer);
         }
     }
@@ -3435,16 +3379,6 @@ impl CrabCraftApp {
         for p in changed {
             if self.disk_save.saves.contains(&p) { continue; }
             if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
-            // A changed solution file reloads the explorer's model.
-            if let Some(w) = &mut self.workspace
-                && w.ws.solution() == Some(p.as_path())
-                && let Ok(s) = Solution::load(&p)
-            {
-                // Projects added or removed by hand: new run configurations too.
-                let remembered = self.runner.selected_config().map(|c| c.name.clone());
-                self.runner.set_workspace(Some(&s), &[], &dotnet_path(&self.settings), remembered.as_deref());
-                w.solution = Some(s);
-            }
         }
         self.poll_file_edits();
         self.poll_disk_save();
@@ -3555,7 +3489,7 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
     if !dir.is_dir() {
         return Err(trf("the folder {path} does not exist", &[("path", &dir.display())]));
     }
-    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
+    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new() })
 }
 
 /// Whether a Cargo feature of a package is on for the analysis.
@@ -3631,13 +3565,8 @@ impl eframe::App for CrabCraftApp {
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
                     MenuCommand::NewFile => self.new_file_dialog(),
-                    MenuCommand::NewSolution => self.new_project_dialog(None),
+                    MenuCommand::NewProject => self.new_project_dialog(),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
-                    MenuCommand::AddUsings => {
-                        if let Some(i) = self.docs.active {
-                            self.insight.add_missing_usings(&self.docs.list[i]);
-                        }
-                    }
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();
@@ -3823,32 +3752,6 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         live_templates: rc_core::live_templates::for_editor(&s.live_templates),
         ..EditorConfig::default()
     }
-}
-
-/// The configured `dotnet`, or the default install location, or `dotnet` from PATH.
-pub fn dotnet_path(s: &Settings) -> PathBuf {
-    if let Some(p) = s.dotnet_path.clone().filter(|p| p.exists()) {
-        return p;
-    }
-    let candidates: &[&str] = if cfg!(windows) { &["C:\\Program Files\\dotnet\\dotnet.exe"] } else { &["/usr/local/share/dotnet/dotnet", "/opt/homebrew/bin/dotnet", "/usr/local/bin/dotnet", "/usr/share/dotnet/dotnet"] };
-    candidates.iter().map(PathBuf::from).find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("dotnet"))
-}
-
-/// Project files under `root` (for folders without a solution), skipping build output.
-pub fn find_projects(root: &Path, depth: usize) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut stack = vec![(root.to_path_buf(), 0)];
-    while let Some((dir, d)) = stack.pop() {
-        for n in rc_core::workspace::list_dir(&dir) {
-            if n.is_dir && d < depth {
-                stack.push((n.path, d + 1));
-            } else if rc_core::workspace::is_project(&n.path) {
-                out.push(n.path);
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 pub fn reveal_in_file_manager(path: &Path) {

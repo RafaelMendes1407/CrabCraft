@@ -429,7 +429,7 @@ impl TermSession {
         self.id
     }
 
-    /// Short name of the program (`zsh`, `pwsh`, `dotnet`…).
+    /// Short name of the program (`zsh`, `pwsh`, `cargo`…).
     pub fn name(&self) -> &str {
         &self.name
     }

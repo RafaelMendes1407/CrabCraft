@@ -1,5 +1,5 @@
-//! Reformat Code for files the C# server does not format: JSON (re-indented, keys and
-//! comments kept in place) and XML-like markup (`.csproj`, `.props`, `.config`, `.xml`), which
+//! Reformat Code for JSON (re-indented, keys and
+//! comments kept in place) and XML-like markup, which
 //! is re-indented by nesting depth. Each returns the new text or `None` when it cannot parse.
 
 /// JSON: one value per line, `indent` per level, `": "` after keys; empty objects/arrays stay
@@ -102,7 +102,7 @@ pub fn json(text: &str, indent: &str) -> Option<String> {
     Some(out)
 }
 
-/// XML and MSBuild files: each line re-indented by the elements open before it. Text inside
+/// XML files: each line re-indented by the elements open before it. Text inside
 /// comments, CDATA and multi-line attribute lists keeps its relative position.
 pub fn xml(text: &str, indent: &str) -> Option<String> {
     let mut out = String::with_capacity(text.len());

@@ -143,13 +143,13 @@ mod tests {
 
     #[test]
     fn path_globs_and_separators() {
-        let m = FileMask::parse("src/*.cs; **/Tests/**").unwrap();
-        assert!(m.matches("src/A.cs"));
-        assert!(!m.matches("src/sub/A.cs"));
-        assert!(m.matches("a/Tests/b/c.txt"));
-        assert!(!m.matches("lib/A.cs"));
-        let m = FileMask::parse("*.{cs,csproj}").unwrap();
-        assert!(m.matches("App.csproj") && m.matches("x/A.cs") && !m.matches("A.vb"));
+        let m = FileMask::parse("src/*.rs; **/tests/**").unwrap();
+        assert!(m.matches("src/a.rs"));
+        assert!(!m.matches("src/sub/a.rs"));
+        assert!(m.matches("a/tests/b/c.txt"));
+        assert!(!m.matches("lib/a.rs"));
+        let m = FileMask::parse("*.{rs,toml}").unwrap();
+        assert!(m.matches("Cargo.toml") && m.matches("x/A.rs") && !m.matches("A.txt"));
     }
 
     #[test]

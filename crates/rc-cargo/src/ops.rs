@@ -401,7 +401,7 @@ pub fn start_scratch(cargo: &Cargo, file: PathBuf, out: PathBuf, outbox: Outbox<
                 return Ok(RunEvent::Failed(format!("rustc failed with exit code {}", built.code.map_or("?".to_string(), |c| c.to_string()))));
             }
             let dir = file.parent().map(Path::to_path_buf).unwrap_or_else(std::env::temp_dir);
-            let plan = LaunchPlan { program: out.clone(), args: Vec::new(), env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None };
+            let plan = LaunchPlan { program: out.clone(), args: Vec::new(), env, working_dir: dir, urls: Vec::new() };
             launch(plan, &token, input_rx, &pid2, &mut |e| {
                 events.send(e);
             })
@@ -464,7 +464,7 @@ pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_buil
         env.push(("RUST_BACKTRACE".to_string(), backtrace.to_string()));
     }
     env.extend(t.env.iter().cloned());
-    Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new(), profile: None, browser_url: None }))
+    Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new() }))
 }
 
 async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, mut input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
@@ -616,9 +616,7 @@ async fn tests(cargo: &Cargo, req: &TestRequest, nextest: bool, cancel: &CancelT
         success: !outcome.cancelled && outcome.code == Some(0) && failed == 0,
         cancelled: outcome.cancelled,
         build: Some(build),
-        projects: Vec::new(),
         results,
-        results_dir: root,
         duration: started.elapsed(),
     })
 }

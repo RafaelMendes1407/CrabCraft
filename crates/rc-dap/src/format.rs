@@ -1,31 +1,23 @@
 //! Showing integer values in hexadecimal on the client, for adapters that do not honour the
 //! DAP `ValueFormat { hex }` (GDB does: it prints with `output-radix 16`).
 
-/// Width in bits and signedness of an integer type name (Rust, C and C# spellings), or `None`
+/// Width in bits and signedness of an integer type name (Rust and C spellings), or `None`
 /// when the name is not a plain integer type.
 fn integer_type(name: &str) -> Option<(u32, bool)> {
     let name = name.trim();
     Some(match name {
-        "i8" | "sbyte" | "signed char" | "int8_t" => (8, true),
-        "u8" | "byte" | "unsigned char" | "uint8_t" => (8, false),
+        "i8" | "signed char" | "int8_t" => (8, true),
+        "u8" | "unsigned char" | "uint8_t" => (8, false),
         "i16" | "short" | "int16_t" => (16, true),
-        "u16" | "ushort" | "unsigned short" | "uint16_t" => (16, false),
+        "u16" | "unsigned short" | "uint16_t" => (16, false),
         "i32" | "int" | "int32_t" => (32, true),
         "u32" | "uint" | "unsigned int" | "unsigned" | "uint32_t" => (32, false),
         "i64" | "long" | "long long" | "int64_t" => (64, true),
-        "u64" | "ulong" | "unsigned long" | "unsigned long long" | "uint64_t" => (64, false),
+        "u64" | "unsigned long" | "unsigned long long" | "uint64_t" => (64, false),
         "i128" => (128, true),
         "u128" => (128, false),
-        "isize" | "nint" | "ssize_t" | "System.IntPtr" => (usize::BITS, true),
-        "usize" | "nuint" | "size_t" | "System.UIntPtr" => (usize::BITS, false),
-        "System.SByte" => (8, true),
-        "System.Byte" => (8, false),
-        "System.Int16" => (16, true),
-        "System.UInt16" => (16, false),
-        "System.Int32" => (32, true),
-        "System.UInt32" => (32, false),
-        "System.Int64" => (64, true),
-        "System.UInt64" => (64, false),
+        "isize" | "ssize_t" => (usize::BITS, true),
+        "usize" | "size_t" => (usize::BITS, false),
         _ => return None,
     })
 }

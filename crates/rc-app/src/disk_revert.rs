@@ -239,7 +239,7 @@ mod tests {
         let root = fixture();
         let path = root.path().join("src/main.rs");
         let mut app = crate::screens::test_app(home.path(), false);
-        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap(), solution: None });
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap() });
         app.open_file_and_wait(&path);
         let disk = b"\xEF\xBB\xBFfn main() { println!(\"current disk\"); }\r\n";
         std::fs::write(&path, disk).unwrap();

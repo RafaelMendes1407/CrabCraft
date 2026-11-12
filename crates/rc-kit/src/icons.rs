@@ -492,7 +492,7 @@ pub fn for_file(name: &str) -> Ico {
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "ico" | "svg" | "webp" => ico::FILE_IMAGE,
         "zip" | "nupkg" | "snupkg" | "gz" | "tar" | "7z" => ico::FILE_ARCHIVE,
         "css" | "scss" | "less" => ico::FILE_CSS,
-        "html" | "htm" | "cshtml" | "razor" => ico::FILE_HTML,
+        "html" | "htm" => ico::FILE_HTML,
         "js" | "mjs" | "cjs" => ico::FILE_JS,
         "ts" | "tsx" => ico::FILE_TS,
         "yml" | "yaml" => ico::FILE_YAML,

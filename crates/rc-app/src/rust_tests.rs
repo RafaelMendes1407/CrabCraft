@@ -2460,13 +2460,13 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
 
     // The tree shows them when expanded.
     let name = "project".to_string();
-    let rows = app.explorer.rows(None, &root, &name);
+    let rows = app.explorer.rows( &root, &name);
     assert!(rows.iter().any(|r| r.key == "libraries"));
     assert!(!rows.iter().any(|r| r.label == "near"));
     app.explorer.expanded.insert("libraries".into());
     app.explorer.expanded.insert(format!("dir:{}", near.display()));
-    pump(&mut app, "the expanded library directory", |app| app.explorer.rows(None,&root,&name).iter().any(|row|row.label=="src"));
-    let rows = app.explorer.rows(None, &root, &name);
+    pump(&mut app, "the expanded library directory", |app| app.explorer.rows(&root,&name).iter().any(|row|row.label=="src"));
+    let rows = app.explorer.rows( &root, &name);
     assert!(rows.iter().any(|r| r.label == "near" && r.secondary == "0.2.0"));
     assert!(rows.iter().any(|r| r.label == "src"));
 
@@ -3938,7 +3938,7 @@ fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
     let location = dir.path().canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.new_project_location = Some(location.clone());
-    app.new_project_dialog(None);
+    app.new_project_dialog();
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     h.run_steps(2);
     let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&mut egui_kittest::Harness<'static, CrabCraftApp>) -> bool| {

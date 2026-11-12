@@ -34,18 +34,12 @@ pub struct SavedTestConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunOptions {
-    /// `None`: the configuration's launch profile; `Some("")`: no profile at all
-    /// (`--no-launch-profile`); `Some(name)`: that profile.
-    pub profile: Option<String>,
-    /// Program arguments (a command line); empty: the profile's.
+    /// Program arguments.
     pub args: String,
-    /// `NAME=value` per line, over the profile's environment.
+    /// Environment variables as `NAME=value` lines.
     pub env: String,
-    /// Empty: the profile's or the project folder.
+    /// Empty uses the project folder.
     pub working_dir: String,
-    pub build_first: bool,
-    /// Run with `dotnet watch` (Hot Reload and browser refresh); `None`: on for web projects.
-    pub hot_reload: Option<bool>,
     /// Rust: toolchain (`cargo +channel`); empty: the default one.
     pub channel: String,
     /// Rust: Cargo profile; empty: `dev`.
@@ -74,7 +68,7 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { profile: None, args: String::new(), env: String::new(), working_dir: String::new(), build_first: true, hot_reload: None, channel: String::new(), cargo_profile: String::new(), wasm_target: String::new(), wasm_dev: false, wasm_out_dir: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
+        RunOptions { args: String::new(), env: String::new(), working_dir: String::new(), channel: String::new(), cargo_profile: String::new(), wasm_target: String::new(), wasm_dev: false, wasm_out_dir: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
     }
 }
 
@@ -336,6 +330,14 @@ impl Session {
         paths::write_atomic(&Self::file_for(workspace), serde_json::to_string_pretty(self)?.as_bytes())?;
         Ok(())
     }
+
+    /// Deletes this workspace's persisted session. An absent session is already cleared.
+    pub fn clear(workspace: &Path) -> std::io::Result<()> {
+        match std::fs::remove_file(Self::file_for(workspace)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
 }
 
 /// FNV-1a: a stable hash for file names (std's hasher is not stable across runs).
@@ -360,6 +362,9 @@ mod tests {
         s.save(&ws).unwrap();
         assert_eq!(Session::load(&ws), s);
         assert_eq!(Session::load(&dir.path().join("Other")), Session::default());
+        Session::clear(&ws).unwrap();
+        assert_eq!(Session::load(&ws), Session::default());
+        Session::clear(&ws).unwrap();
     }
 
     #[test]

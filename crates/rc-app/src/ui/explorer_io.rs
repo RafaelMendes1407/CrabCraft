@@ -1,12 +1,10 @@
-//! Bounded static project-tree reads. Workers never invoke Cargo/MSBuild or evaluate code.
+//! Bounded directory reads for the native project explorer.
 use rc_core::{
     Waker,
     workspace::{FileNode, is_hidden},
 };
-use rc_dotnet::ProjectInfo;
 use std::{
     collections::HashMap,
-    io::Read,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock,
@@ -17,19 +15,17 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
     Directory(PathBuf),
-    Project(PathBuf),
 }
 impl Key {
     pub fn path(&self) -> &Path {
         match self {
-            Self::Directory(path) | Self::Project(path) => path,
+            Self::Directory(path) => path,
         }
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Io(std::io::ErrorKind),
-    Unsupported,
     Limit,
     Cancelled,
     Changed,
@@ -38,7 +34,6 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Value {
     Directory(Vec<FileNode>),
-    Project(ProjectInfo),
 }
 struct Reply {
     key: Key,
@@ -97,60 +92,7 @@ fn load(key: &Key, cancel: &AtomicBool) -> Result<Value, Error> {
             }
             Ok(Value::Directory(rows))
         }
-        Key::Project(path) => {
-            let mut options = std::fs::OpenOptions::new();
-            options.read(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-            }
-            let mut file = options.open(path).map_err(io)?;
-            let before = file.metadata().map_err(io)?;
-            if !before.is_file() {
-                return Err(Error::Unsupported);
-            }
-            if before.len() > 2 * 1024 * 1024 {
-                return Err(Error::Limit);
-            }
-            let mut bytes = Vec::new();
-            let mut chunk = [0u8; 8192];
-            loop {
-                check(cancel)?;
-                let count = file.read(&mut chunk).map_err(io)?;
-                if count == 0 {
-                    break;
-                }
-                if bytes.len() + count > 2 * 1024 * 1024 {
-                    return Err(Error::Limit);
-                }
-                bytes.extend_from_slice(&chunk[..count]);
-            }
-            let after = file.metadata().map_err(io)?;
-            if before.modified().ok() != after.modified().ok() || before.len() != after.len() {
-                return Err(Error::Changed);
-            }
-            let text = String::from_utf8(bytes).map_err(|_| Error::Unsupported)?;
-            let project = ProjectInfo::parse(&text, path).map_err(|_| Error::Unsupported)?;
-            if project.target_frameworks.len() > 32
-                || project.packages.len() > 2048
-                || project.project_refs.len() > 512
-                || project
-                    .target_frameworks
-                    .iter()
-                    .any(|name| name.len() > 128)
-                || project
-                    .packages
-                    .iter()
-                    .any(|package| package.name.len() > 1024 || package.version.len() > 1024)
-                || project.sdk.len() > 1024
-                || project.output_type.len() > 128
-            {
-                return Err(Error::Limit);
-            }
-            check(cancel)?;
-            Ok(Value::Project(project))
-        }
+
     }
 }
 fn pool() -> Option<&'static SyncSender<Work>> {

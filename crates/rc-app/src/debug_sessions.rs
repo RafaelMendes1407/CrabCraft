@@ -16,7 +16,7 @@ impl CrabCraftApp {
         if self.debug_sessions.parked.len() >= 7 {
             self.notify(tr("Close a debug session before starting another (limit: 8)"), true); return;
         }
-        if self.debugger.session.is_some() || self.debugger.downloading.is_some() {
+        if self.debugger.session.is_some() {
             let mut fresh = Debugger::new(self.debugger.waker());
             fresh.rust_backend = self.settings.rust_debugger;
             fresh.gdb_path = self.settings.gdb_path.clone();
@@ -88,7 +88,7 @@ pub fn selector(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
             app.debugger.console = None;
             if let Some(id) = app.debug_sessions.parked.last().map(|s| s.id) {
                 app.select_debug_session(id);
-                app.debug_sessions.parked.retain(|s| s.debugger.session.is_some() || s.debugger.downloading.is_some());
+                app.debug_sessions.parked.retain(|s| s.debugger.session.is_some());
             }
         }
         if ui.button(tr("Stop All Debug Sessions")).clicked() { app.stop_all_debug_sessions(); }

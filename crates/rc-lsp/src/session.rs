@@ -2,7 +2,6 @@
 //! keeps documents in sync, answers routine server requests and turns notifications into
 //! [`LspEvent`]s. [`LanguageSession::pump`] is called once per frame and never blocks.
 
-use crate::roslyn::{self, ServerCommand};
 use crate::rpc::{Client, Incoming, Pending, RpcError};
 use crate::sync::{OpenDocs, changes_for, path_to_uri, uri_to_path};
 use lsp_types::{Diagnostic, InitializeResult, ServerCapabilities};
@@ -17,7 +16,7 @@ use std::time::Instant;
 pub enum ServerState {
     /// The process is starting and `initialize` is in flight.
     Starting,
-    /// Projects are loading (Roslyn's design-time builds).
+    /// The Rust workspace is loading.
     LoadingProjects,
     Ready,
     Failed(String),
@@ -48,8 +47,6 @@ pub struct LanguageSession {
     pub semantic_legend: Vec<String>,
     init: Option<Pending<InitializeResult>>,
     root: PathBuf,
-    solution: Option<PathBuf>,
-    projects: Vec<PathBuf>,
     progress: HashMap<String, String>,
     pub started: Instant,
     /// Recent stderr lines, for the error message when the server dies.
@@ -60,33 +57,17 @@ pub struct LanguageSession {
     ra: crate::rust_analyzer::RaSettings,
 }
 
-impl LanguageSession {
-    /// Starts the server for `root`, then opens `solution` (or `projects`) once initialized.
-    pub fn start(cmd: &ServerCommand, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, dotnet_root: Option<&Path>, waker: Waker) -> std::io::Result<Self> {
-        let inbox = Inbox::new(waker);
-        let _rt = rc_core::Runtime::handle().enter();
-        let client = roslyn::start(cmd, root, dotnet_root, inbox.sender())?;
-        let init = roslyn::initialize(&client, root);
-        Ok(LanguageSession {
-            client,
-            inbox,
-            state: ServerState::Starting,
-            capabilities: None,
-            docs: OpenDocs::default(),
-            semantic_legend: Vec::new(),
-            init: Some(init),
-            root: root.to_path_buf(),
-            solution: solution.map(Path::to_path_buf),
-            projects,
-            progress: HashMap::new(),
-            started: Instant::now(),
-            stderr: Vec::new(),
-            rust: false,
-            web: None,
-            ra: Default::default(),
-        })
+fn default_reply(method: &str) -> Option<Value> {
+    match method {
+        "client/registerCapability" | "client/unregisterCapability" | "window/workDoneProgress/create"
+        | "workspace/semanticTokens/refresh" | "workspace/inlayHint/refresh"
+        | "workspace/diagnostic/refresh" | "workspace/codeLens/refresh"
+        | "window/showMessageRequest" => Some(Value::Null),
+        _ => None,
     }
+}
 
+impl LanguageSession {
     /// Starts rust-analyzer for `root` with the project's environment `env`.
     pub fn start_rust(program: &Path, root: &Path, ra: crate::rust_analyzer::RaSettings, env: &[(String, String)], waker: Waker) -> std::io::Result<Self> {
         let inbox = Inbox::new(waker);
@@ -102,8 +83,6 @@ impl LanguageSession {
             semantic_legend: Vec::new(),
             init: Some(init),
             root: root.to_path_buf(),
-            solution: None,
-            projects: Vec::new(),
             progress: HashMap::new(),
             started: Instant::now(),
             stderr: Vec::new(),
@@ -117,7 +96,7 @@ impl LanguageSession {
         let inbox=Inbox::new(waker);let _rt=rc_core::Runtime::handle().enter();
         let client=crate::web::start(&settings,root,inbox.sender())?;
         let init=crate::web::initialize(&client,root,&settings);
-        Ok(Self{client,inbox,state:ServerState::Starting,capabilities:None,docs:OpenDocs::default(),semantic_legend:Vec::new(),init:Some(init),root:root.to_path_buf(),solution:None,projects:Vec::new(),progress:HashMap::new(),started:Instant::now(),stderr:Vec::new(),rust:false,web:Some(settings),ra:Default::default()})
+        Ok(Self{client,inbox,state:ServerState::Starting,capabilities:None,docs:OpenDocs::default(),semantic_legend:Vec::new(),init:Some(init),root:root.to_path_buf(),progress:HashMap::new(),started:Instant::now(),stderr:Vec::new(),rust:false,web:Some(settings),ra:Default::default()})
     }
 
     pub fn is_ready(&self) -> bool {
@@ -147,9 +126,6 @@ impl LanguageSession {
                     }
                     self.capabilities = Some(res.capabilities);
                     self.client.notify_raw("initialized", json!({}));
-                    if !self.rust && self.web.is_none() {
-                        roslyn::open_solution(&self.client, self.solution.as_deref(), &self.projects);
-                    }
                     self.set_state(if self.web.is_some(){ServerState::Ready}else{ServerState::LoadingProjects}, &mut events);
                 }
                 Err(e) => self.set_state(ServerState::Failed(e.to_string()), &mut events),
@@ -162,7 +138,7 @@ impl LanguageSession {
                         self.client.reply(id,Ok(crate::web::configuration(&params)));
                     } else if self.rust && method == "workspace/configuration" {
                         self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, &self.ra)));
-                    } else if let Some(answer) = roslyn::default_reply(&method, &params) {
+                    } else if let Some(answer) = default_reply(&method) {
                         if method == "workspace/semanticTokens/refresh" {
                             events.push(LspEvent::Refresh("semanticTokens"));
                         } else if method == "workspace/inlayHint/refresh" {
@@ -240,8 +216,6 @@ impl LanguageSession {
                 }
                 events.push(LspEvent::Progress { token, title, message, percentage, done });
             }
-            // Roslyn: every project of the solution finished loading.
-            "workspace/projectInitializationComplete" => self.set_state(ServerState::Ready, events),
             // rust-analyzer: nothing is left to analyse for now.
             "experimental/serverStatus" if crate::rust_analyzer::is_quiescent(&params) => self.set_state(ServerState::Ready, events),
             "window/logMessage" => {

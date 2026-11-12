@@ -3,7 +3,7 @@
 //! The server runs the project's `build.rs` files and procedural macros, so the application only
 //! starts it for projects the user trusts.
 
-use crate::roslyn::client_capabilities;
+use crate::capabilities::client_capabilities;
 use crate::rpc::{Client, Incoming, Pending};
 use crate::sync::path_to_uri;
 use rc_core::inbox::Outbox;

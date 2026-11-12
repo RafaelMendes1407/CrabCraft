@@ -37,3 +37,33 @@ jobs:
 
       - name: Test
         run: cargo test --locked -p rc-app -p rc-text -p rc-syntax -p rc-core -p rc-cargo --lib
+
+  supply-chain:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check advisories and licenses
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses sources
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+      - name: Audit locked dependencies
+        run: cargo audit --file Cargo.lock
+
+  sbom:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Install SBOM generator
+        run: cargo install cargo-cyclonedx --locked
+      - name: Generate CycloneDX SBOM
+        run: cargo cyclonedx --format json --all --target all
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: crabcraft-sbom
+          path: '**/*.cdx.json'
+          if-no-files-found: error

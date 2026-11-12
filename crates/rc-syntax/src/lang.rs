@@ -8,7 +8,6 @@ use tree_sitter::{Language, Query};
 pub enum Lang {
     Rust,
     Toml,
-    CSharp,
     Html,
     Css,
     JavaScript,
@@ -17,10 +16,6 @@ pub enum Lang {
     Xml,
     Json,
     Markdown,
-    /// Razor markup (`.razor`, `.cshtml`): C# and HTML.
-    Razor,
-    /// Visual Studio solution files (`.sln`), highlighted by a small lexer (no grammar).
-    Sln,
     /// HTTP request files (`.http`, `.rest`), highlighted by a small lexer.
     Http,
     Plain,
@@ -32,9 +27,7 @@ impl Lang {
         match ext.as_str() {
             "rs" => Lang::Rust,
             "toml" => Lang::Toml,
-            "cs" | "csx" => Lang::CSharp,
-            "csproj" | "props" | "targets" | "xml" | "config" | "resx" | "xaml" | "axaml" | "nuspec" | "slnx" | "fsproj"
-            | "vbproj" | "runsettings" | "xsd" | "svg" => Lang::Xml,
+            "xml" | "config" | "xsd" | "svg" => Lang::Xml,
             "json" | "jsonc" => Lang::Json,
             "md" | "markdown" => Lang::Markdown,
             "html" | "htm" => Lang::Html,
@@ -42,15 +35,11 @@ impl Lang {
             "js" | "mjs" | "cjs" | "jsx" => Lang::JavaScript,
             "ts" | "mts" | "cts" => Lang::TypeScript,
             "tsx" => Lang::Tsx,
-            "razor" | "cshtml" => Lang::Razor,
-            "sln" => Lang::Sln,
             "http" | "rest" => Lang::Http,
             _ => {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if name == "Cargo.lock" {
                     Lang::Toml
-                } else if name.eq_ignore_ascii_case("Directory.Packages.props") {
-                    Lang::Xml
                 } else {
                     Lang::Plain
                 }
@@ -61,8 +50,8 @@ impl Lang {
     /// Prefix used by "Comment with line comment".
     pub fn line_comment(self) -> Option<&'static str> {
         match self {
-            Lang::Rust | Lang::CSharp | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json => Some("//"),
-            Lang::Toml | Lang::Sln | Lang::Http => Some("#"),
+            Lang::Rust | Lang::JavaScript | Lang::TypeScript | Lang::Tsx | Lang::Json => Some("//"),
+            Lang::Toml | Lang::Http => Some("#"),
             _ => None,
         }
     }
@@ -70,9 +59,8 @@ impl Lang {
     /// Block comment delimiters (XML has no line comments).
     pub fn block_comment(self) -> Option<(&'static str, &'static str)> {
         match self {
-            Lang::Rust | Lang::CSharp | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => Some(("/*", "*/")),
+            Lang::Rust | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => Some(("/*", "*/")),
             Lang::Xml | Lang::Markdown | Lang::Html => Some(("<!--", "-->")),
-            Lang::Razor => Some(("@*", "*@")),
             _ => None,
         }
     }
@@ -81,7 +69,6 @@ impl Lang {
         match self {
             Lang::Rust => "Rust",
             Lang::Toml => "TOML",
-            Lang::CSharp => "C#",
             Lang::Html => "HTML",
             Lang::Css => "CSS",
             Lang::JavaScript => "JavaScript",
@@ -90,8 +77,6 @@ impl Lang {
             Lang::Xml => "XML",
             Lang::Json => "JSON",
             Lang::Markdown => "Markdown",
-            Lang::Razor => "Razor",
-            Lang::Sln => "Solution",
             Lang::Http => "HTTP",
             Lang::Plain => "Plain text",
         }
@@ -101,7 +86,6 @@ impl Lang {
         Some(match self {
             Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
             Lang::Toml => tree_sitter_toml_ng::LANGUAGE.into(),
-            Lang::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
             Lang::Html => tree_sitter_html::LANGUAGE.into(),
             Lang::Css => tree_sitter_css::LANGUAGE.into(),
             Lang::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
@@ -110,8 +94,7 @@ impl Lang {
             Lang::Xml => tree_sitter_xml::LANGUAGE_XML.into(),
             Lang::Json => tree_sitter_json::LANGUAGE.into(),
             Lang::Markdown => tree_sitter_md::LANGUAGE.into(),
-            Lang::Razor => tree_sitter_razor_modern::LANGUAGE.into(),
-            Lang::Sln | Lang::Http | Lang::Plain => return None,
+            Lang::Http | Lang::Plain => return None,
         })
     }
 
@@ -119,23 +102,18 @@ impl Lang {
     pub(crate) fn query(self) -> Option<&'static Query> {
         static RUST: OnceLock<Option<Query>> = OnceLock::new();
         static TOML: OnceLock<Option<Query>> = OnceLock::new();
-        static CS: OnceLock<Option<Query>> = OnceLock::new();
         static XML: OnceLock<Option<Query>> = OnceLock::new();
         static JSON: OnceLock<Option<Query>> = OnceLock::new();
         static MD: OnceLock<Option<Query>> = OnceLock::new();
-        static RAZOR: OnceLock<Option<Query>> = OnceLock::new();
         static HTML: OnceLock<Option<Query>> = OnceLock::new();
         static CSS: OnceLock<Option<Query>> = OnceLock::new();
         static JS: OnceLock<Option<Query>> = OnceLock::new();
         static TS: OnceLock<Option<Query>> = OnceLock::new();
         static TSX: OnceLock<Option<Query>> = OnceLock::new();
         static TS_SOURCE: OnceLock<String> = OnceLock::new();
-        // Razor's C# uses the C# grammar's node kinds: the C# patterns apply, Razor's come after.
-        static RAZOR_SOURCE: OnceLock<String> = OnceLock::new();
         let (cell, source) = match self {
             Lang::Rust => (&RUST, include_str!("../queries/rust.scm")),
             Lang::Toml => (&TOML, include_str!("../queries/toml.scm")),
-            Lang::CSharp => (&CS, include_str!("../queries/csharp.scm")),
             Lang::Html => (&HTML, include_str!("../queries/html.scm")),
             Lang::Css => (&CSS, include_str!("../queries/css.scm")),
             Lang::JavaScript => (&JS, include_str!("../queries/javascript.scm")),
@@ -143,8 +121,7 @@ impl Lang {
             Lang::Xml => (&XML, include_str!("../queries/xml.scm")),
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
-            Lang::Razor => (&RAZOR, RAZOR_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/csharp.scm"), include_str!("../queries/razor.scm"))).as_str()),
-            Lang::Sln | Lang::Http | Lang::Plain => return None,
+            Lang::Http | Lang::Plain => return None,
         };
         let language = self.language()?;
         cell.get_or_init(|| Query::new(&language, source).ok()).as_ref()

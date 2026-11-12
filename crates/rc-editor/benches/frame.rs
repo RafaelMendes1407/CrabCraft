@@ -1,5 +1,5 @@
 //! Phase 0 go/no-go: CPU time of a full editor frame (layout, painting and tessellation)
-//! on a 20k-line C# file, while scrolling and while typing.
+//! on a 20k-line Rust file, while scrolling and while typing.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use egui::{Event, RawInput, Rect, pos2, vec2};
@@ -10,7 +10,7 @@ fn setup() -> (egui::Context, EditorState) {
     let ctx = egui::Context::default();
     rc_kit::theme::install_fonts(&ctx);
     rc_kit::theme::apply(&ctx, true);
-    let mut state = EditorState::new(1, Some("Big.cs".into()), &rc_syntax::sample::big_csharp(20_000));
+    let mut state = EditorState::new(1, Some("big.rs".into()), &rc_syntax::sample::big_rust(20_000));
     state.parse_blocking();
     (ctx, state)
 }

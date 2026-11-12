@@ -10,7 +10,7 @@ pub fn data_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("CrabCraft")
 }
 
-/// Downloaded tools (the Roslyn language server, netcoredbg).
+/// Downloaded and installed tools.
 pub fn tools_dir() -> PathBuf {
     data_dir().join("tools")
 }
