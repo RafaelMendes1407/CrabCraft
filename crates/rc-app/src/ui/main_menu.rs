@@ -209,7 +209,7 @@ fn action_enabled(app: &CrabCraftApp, action: Action) -> bool {
                 || selected.is_some_and(|config| {
                     matches!(
                         config.kind,
-                        ConfigKind::Cargo { .. } | ConfigKind::App { .. }
+                        ConfigKind::Cargo { .. }
                     )
                 })
         }
@@ -262,8 +262,7 @@ fn configuration_editable(app: &CrabCraftApp) -> bool {
     app.runner.selected_config().is_some_and(|config| {
         matches!(
             config.kind,
-            ConfigKind::App { .. }
-                | ConfigKind::Cargo { .. }
+            ConfigKind::Cargo { .. }
                 | ConfigKind::WasmPack { .. }
                 | ConfigKind::Compound { .. }
         )

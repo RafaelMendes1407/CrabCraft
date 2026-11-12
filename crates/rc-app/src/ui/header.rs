@@ -232,7 +232,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 ui.close();
                             }
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::App { .. } | crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));

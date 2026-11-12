@@ -23,6 +23,8 @@ O adaptador LSP Roslyn foi removido; as capacidades LSP compartilhadas agora fic
 `rc-lsp/src/capabilities.rs`, usadas pelo rust-analyzer e pelos servidores web configurados.
 O adaptador DAP netcoredbg e a preparação de depuração .NET foram removidos; sessões
 Rust seguem com GDB/LLDB, incluindo anexação e depuração remota.
+As configurações de execução de projetos .NET, a compilação e os testes .NET foram
+desligados do aplicativo; a execução e os testes usam os alvos Cargo.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

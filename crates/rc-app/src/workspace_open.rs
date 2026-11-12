@@ -373,12 +373,6 @@ fn prepare(request: Request, cancel: &AtomicBool, waker: Waker) -> Result<Prepar
         .collect();
     runner.options = session.run_options.clone();
     runner.options.extend(options(&ws.root, cancel)?);
-    runner.set_workspace(
-        solution.as_ref(),
-        &project_paths,
-        &dotnet,
-        session.run_configuration.as_deref(),
-    );
     check(cancel)?;
     let mut nodes: Vec<&rc_core::session::EditorNode> = session
         .editor_layout

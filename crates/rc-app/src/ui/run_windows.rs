@@ -316,10 +316,7 @@ pub fn run(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.runner.close_run(i);
         return;
     }
-    let cwd = app.runner.runs.get(app.runner.active_run).and_then(|r| match &r.config.kind {
-        crate::runner::ConfigKind::App { project, .. } => project.parent().map(|d| d.to_path_buf()),
-        _ => None,
-    });
+    let cwd = app.runner.project_root.clone();
     let Some(r) = app.runner.runs.get(app.runner.active_run) else { return };
     let events = console(ui, &r.console.term);
     for e in events {

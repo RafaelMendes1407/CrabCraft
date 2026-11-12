@@ -1461,11 +1461,6 @@ impl CrabCraftApp {
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
                 self.dialog = Some(Dialog::RunOptions { name, project, profiles: Vec::new(), options, web: false });
             }
-            Some(RunConfig { name, kind: ConfigKind::App { project, web, .. } }) => {
-                let profiles = rc_dotnet::LaunchSettings::load(&project).ok().flatten().map(|s| s.profiles.iter().filter(|p| p.is_project()).map(|p| p.name.clone()).collect()).unwrap_or_default();
-                let options = self.runner.options.get(&name).cloned().unwrap_or_default();
-                self.dialog = Some(Dialog::RunOptions { name, project, profiles, options, web });
-            }
             Some(RunConfig { name, kind: ConfigKind::Compound { members } }) => {
                 let all = self.runner.app_names().into_iter().map(|n| {
                     let on = members.contains(&n);
@@ -2996,9 +2991,7 @@ impl CrabCraftApp {
     pub fn run_test_at(&mut self, line: usize) {
         if self.defer_save(true,move|app|app.run_test_at(line)){return;}
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
-        let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
-        let manifest = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone());
-        let Some(project) = manifest.or_else(|| crate::runner::project_of(&path, &self.runner.configs)) else {
+        let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
             self.notify(tr("This file is not part of a test project"), false);
             return;
         };
@@ -3415,16 +3408,6 @@ impl CrabCraftApp {
         for p in changed {
             if self.disk_save.saves.contains(&p) { continue; }
             if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
-            // A changed solution file reloads the explorer's model.
-            if let Some(w) = &mut self.workspace
-                && w.ws.solution() == Some(p.as_path())
-                && let Ok(s) = Solution::load(&p)
-            {
-                // Projects added or removed by hand: new run configurations too.
-                let remembered = self.runner.selected_config().map(|c| c.name.clone());
-                self.runner.set_workspace(Some(&s), &[], &dotnet_path(&self.settings), remembered.as_deref());
-                w.solution = Some(s);
-            }
         }
         self.poll_file_edits();
         self.poll_disk_save();

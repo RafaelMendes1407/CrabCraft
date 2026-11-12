@@ -95,7 +95,6 @@ mod vcs;
 #[cfg(test)]
 mod vcs_tests;
 #[cfg(test)]
-mod runner_tests;
 #[cfg(test)]
 #[cfg(test)]
 #[cfg(test)]
