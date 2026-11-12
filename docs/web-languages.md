@@ -19,7 +19,7 @@ servers and the global tsserver.js. No server is detected in node_modules, insta
 or launched for an untrusted workspace. A configured session starts only after trust and when
 an appropriate web file is open. The global executable/tsserver path must be outside the
 workspace. HTML, CSS and TS/JS/TSX use separate sessions alongside rust-analyzer; web edits are
-never sent as Rust/C# documents. Closing the project stops them and cancels requests.
+never sent as Rust documents. Closing the project stops them and cancels requests.
 
 The implementation speaks standard LSP over stdio (`--stdio`): completion and acceptance,
 hover/signatures, diagnostics in the editor/Problems, definitions/type definitions/usages,

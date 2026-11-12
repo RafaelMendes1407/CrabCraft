@@ -3938,7 +3938,7 @@ fn the_new_project_dialog_creates_procedural_macro_and_webassembly_projects() {
     let location = dir.path().canonicalize().unwrap();
     let mut app = new_app(dir.path());
     app.settings.new_project_location = Some(location.clone());
-    app.new_project_dialog(None);
+    app.new_project_dialog();
     let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
     h.run_steps(2);
     let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, what: &str, done: &dyn Fn(&mut egui_kittest::Harness<'static, CrabCraftApp>) -> bool| {

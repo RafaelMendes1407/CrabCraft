@@ -675,7 +675,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     touched
 }
 
-/// Right-click in the editor (Rider): code actions and navigation for C#, editing, formatting.
+/// Right-click in the editor (Rider): code actions and navigation, editing, formatting.
 fn is_run_icon(icon: rc_editor::GutterIcon) -> bool {
     use rc_editor::GutterIcon::*;
     matches!(icon, RunApp | RunTest | TestPassed | TestFailed)

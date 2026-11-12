@@ -31,6 +31,10 @@ dependências MSBuild. O menu de novos arquivos oferece somente arquivos comuns 
 Os módulos de SDK, MSBuild, soluções, projetos, execução e testes .NET e TRX foram
 removidos de `rc-dotnet`, junto com as fixtures correspondentes. O crate conserva o
 nome e apenas os tipos e a gestão de processos usados por Cargo e outras funções Rust.
+Os pedidos privados do Roslyn e a ação de importar `using` saíram do LSP.
+Os classificadores de arquivos, exemplos de testes e traduções não expõem mais
+os formatos C#/.NET removidos; URLs de documentação de protocolos e de recursos Rust
+permanecem quando são usadas pelo produto.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

@@ -1814,8 +1814,7 @@ fn evaluate(app: &mut CrabCraftApp, ctx: &Context, expression: &mut String, focu
     if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-/// A new file name gets `.cs` when it has no extension, and a C# file gets a class skeleton
-/// in the namespace of its folder.
+/// Opens the native file creation dialog.
 #[allow(clippy::too_many_arguments)]
 fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, attach: &mut bool, public: &mut bool, error: &mut Option<String>) -> Outcome {
     let heading = trf("New {item}", &[("item", &tr(kind.title()))]);

@@ -28,9 +28,8 @@ pub enum MenuCommand {
     OpenProject,
     OpenFile,
     NewFile,
-    NewSolution,
+    NewProject,
     EditRunConfig,
-    AddUsings,
     CloseProject,
     ThemeLight,
     ThemeDark,
@@ -51,12 +50,11 @@ impl MenuCommand {
         Some(match self {
             MenuCommand::Act(a) => return crate::search::action_icon(a),
             MenuCommand::About => ico::INFO,
-            MenuCommand::NewSolution => ico::ADD,
+            MenuCommand::NewProject => ico::ADD,
             MenuCommand::NewFile => ico::NEW_FILE,
             MenuCommand::OpenProject | MenuCommand::OpenFile => ico::OPEN,
             MenuCommand::CloseProject => ico::CLOSE,
             MenuCommand::EditRunConfig => ico::SETTINGS,
-            MenuCommand::AddUsings => ico::NAMESPACE,
             MenuCommand::Undo => ico::UNDO,
             MenuCommand::Redo => ico::REDO,
             MenuCommand::Cut => ico::CUT,
@@ -373,7 +371,7 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
     let file_menu = submenu(
         || tr("File"),
         &[
-            &item(MenuCommand::NewSolution, || tr("New Project…"), None),
+            &item(MenuCommand::NewProject, || tr("New Project…"), None),
             &item(MenuCommand::NewFile, || tr("New File…"), None),
             &act(Action::NewScratchFile, || tr("New Scratch File…")),
             &item(MenuCommand::OpenProject, || tr("Open…"), None),
@@ -502,7 +500,6 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::Reformat, || tr("Reformat Code")),
             &act(Action::ShareInPlayground, || tr("Share in Playground…")),
             &act(Action::UpdateCopyright, || tr("Update Copyright")),
-            &item(MenuCommand::AddUsings, || tr("Add Missing Usings"), None),
         ],
     )?;
     let build_menu = submenu(|| tr("Build"), &[&act(Action::Build, || tr("Build Project"))])?;

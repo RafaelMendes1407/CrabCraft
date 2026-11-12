@@ -41,9 +41,9 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             if resp.clicked() {
                 match kind {
                     0 => app.pick_and_open(),
-                    1 => app.pick_solution(),
+                    1 => app.pick_cargo_manifest(),
                     3 => app.dialog = Some(crate::ui::dialogs::Dialog::CloneRepository),
-                    _ => app.new_project_dialog(None),
+                    _ => app.new_project_dialog(),
                 }
             }
         }
@@ -92,7 +92,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.settings.recent_workspaces.remove(i);
             let _ = app.settings.save();
         }
-        // A folder, solution or project dropped on the window opens as the workspace; other
+        // A folder or Cargo manifest dropped on the window opens as the workspace; other
         // files open in the editor.
         let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         app.open_paths(dropped);

@@ -132,17 +132,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_folder_opens_as_a_folder() {
+    fn a_folder_with_a_cargo_manifest_opens_as_cargo() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("App.sln"), "").unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "").unwrap();
         std::fs::create_dir(dir.path().join("bin")).unwrap();
         std::fs::create_dir(dir.path().join("Src")).unwrap();
-        std::fs::write(dir.path().join("a.cs"), "").unwrap();
+        std::fs::write(dir.path().join("a.rs"), "").unwrap();
         let ws = Workspace::open(dir.path()).unwrap();
-        assert!(matches!(ws.kind, WorkspaceKind::Folder));
+        assert!(matches!(ws.kind, WorkspaceKind::Cargo(_)));
         assert_eq!(ws.name(), dir.path().file_name().unwrap().to_string_lossy());
         let names: Vec<String> = list_dir(dir.path()).into_iter().map(|n| n.name).collect();
-        assert_eq!(names, vec!["Src", "a.cs", "App.sln"]);
+        assert_eq!(names, vec!["Src", "a.rs", "Cargo.toml"]);
     }
 
     #[test]

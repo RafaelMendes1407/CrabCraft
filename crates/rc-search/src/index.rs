@@ -16,25 +16,13 @@ use std::thread::JoinHandle;
 /// What a file is, for icons and ranking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FileKind {
-    /// `.cs`
-    CSharp,
-    /// `.csproj`, `.fsproj`, `.vbproj`, `.proj`
-    Project,
-    /// `.sln`, `.slnx`, `.slnf`
-    Solution,
+    Rust,
     Other,
 }
 
 impl FileKind {
-    /// The kind of a file from its name.
     pub fn from_name(name: &str) -> FileKind {
-        let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
-        match ext.as_str() {
-            "cs" => FileKind::CSharp,
-            "csproj" | "fsproj" | "vbproj" | "proj" => FileKind::Project,
-            "sln" | "slnx" | "slnf" => FileKind::Solution,
-            _ => FileKind::Other,
-        }
+        if name.rsplit_once('.').is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("rs")) { Self::Rust } else { Self::Other }
     }
 }
 
@@ -449,13 +437,10 @@ mod tests {
 
     #[test]
     fn entries_split_name_and_kind() {
-        let e = FileEntry::new("src/Shop.Core/OrderService.cs");
-        assert_eq!(e.name(), "OrderService.cs");
-        assert_eq!(e.dir(), "src/Shop.Core/");
-        assert_eq!(e.kind(), FileKind::CSharp);
-        assert_eq!(FileEntry::new("Shop.slnx").kind(), FileKind::Solution);
-        assert_eq!(FileEntry::new("Shop.slnx").dir(), "");
-        assert_eq!(FileEntry::new("a/App.CSPROJ").kind(), FileKind::Project);
+        let e = FileEntry::new("src/demo/order.rs");
+        assert_eq!(e.name(), "order.rs");
+        assert_eq!(e.dir(), "src/demo/");
+        assert_eq!(e.kind(), FileKind::Rust);
         assert_eq!(FileEntry::new("README.md").kind(), FileKind::Other);
     }
 

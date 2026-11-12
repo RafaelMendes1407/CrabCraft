@@ -199,7 +199,6 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             };
             theme::flat_button(ui, Some(ico::CHECKMARK), "Rust", FontId::proportional(12.5), false, true).on_hover_text(tip);
         }
-        S::NotInstalled => { ui.label(tr("C# language server unavailable")); }
         S::Starting | S::Loading(_) => {
             let text = match &app.insight.status {
                 S::Loading(t) => t.clone(),

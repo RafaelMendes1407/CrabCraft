@@ -88,7 +88,7 @@ pub fn open_url(url: &str) {
 pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
     let target = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf());
-    let actions = [(ico::BUILD, tr("Build Project"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Solution"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
+    let actions = [(ico::BUILD, tr("Build Project"), !running && target.is_some()), (ico::REBUILD, tr("Rebuild Project"), !running && target.is_some()), (ico::STOP, tr("Cancel Build"), running)];
     match header(ui, tr("Build"), &actions) {
         Some(0) => app.pending.push(rc_editor::Action::Build),
         Some(1) => {

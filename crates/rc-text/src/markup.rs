@@ -1,4 +1,4 @@
-//! Typing assists for markup (HTML, Razor, XML): what to insert after `>` (the closing tag),
+//! Typing assists for markup (HTML and XML): what to insert after `>` (the closing tag),
 //! after `</` (the name of the open element) and after `=` in a tag (the attribute quotes).
 //! Pure text functions, used by the editor right after the character is typed.
 

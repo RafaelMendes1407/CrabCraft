@@ -312,7 +312,7 @@ mod tests {
         let _guard = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.new_project_dialog(None);
+        app.new_project_dialog();
         let mut harness = crate::screens::harness(app, vec2(1100.0, 850.0));
         harness.get_by_label("Git Template").click();
         harness.run_steps(3);

@@ -26,7 +26,6 @@ impl Key {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Io(std::io::ErrorKind),
-    Unsupported,
     Limit,
     Cancelled,
     Changed,

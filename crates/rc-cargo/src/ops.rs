@@ -616,9 +616,7 @@ async fn tests(cargo: &Cargo, req: &TestRequest, nextest: bool, cancel: &CancelT
         success: !outcome.cancelled && outcome.code == Some(0) && failed == 0,
         cancelled: outcome.cancelled,
         build: Some(build),
-        projects: Vec::new(),
         results,
-        results_dir: root,
         duration: started.elapsed(),
     })
 }

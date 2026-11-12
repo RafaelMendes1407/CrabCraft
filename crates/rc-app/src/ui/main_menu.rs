@@ -422,7 +422,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
 
 fn file_commands(app: &mut CrabCraftApp, ui: &mut Ui) {
     if command(ui, tr("New Project…"), Some(ico::ADD), true) {
-        app.new_project_dialog(None);
+        app.new_project_dialog();
     }
     if command(
         ui,

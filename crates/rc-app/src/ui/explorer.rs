@@ -17,7 +17,7 @@ const INDENT: f32 = 18.0;
 /// What a node is; its key (`Node::key`) identifies it across frames and in the session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeKind {
-    Solution,
+    Root,
     Dir(PathBuf),
     File(PathBuf),
     /// The node of the dependencies of a Cargo project.
@@ -159,7 +159,7 @@ impl ExplorerState {
         let mut rows = Vec::new();
         let root_row = Row {
             key: "sln".into(),
-            kind: NodeKind::Solution,
+            kind: NodeKind::Root,
             depth: 0,
             label: root_name.to_string(),
             secondary: String::new(),
@@ -232,7 +232,7 @@ impl ExplorerState {
     }
 }
 
-fn explorer_error(error:explorer_io::Error)->String{tr(match error{explorer_io::Error::Io(_)=>"Could not read project files",explorer_io::Error::Unsupported=>"Unsupported project file",explorer_io::Error::Limit=>"Project tree input or cache limit exceeded",explorer_io::Error::Cancelled=>"Project tree read cancelled",explorer_io::Error::Changed=>"Project tree changed while reading; refresh it",explorer_io::Error::Busy=>"Project tree worker queue is full; refresh to retry"}).into()}
+fn explorer_error(error:explorer_io::Error)->String{tr(match error{explorer_io::Error::Io(_)=>"Could not read project files",explorer_io::Error::Limit=>"Project tree input or cache limit exceeded",explorer_io::Error::Cancelled=>"Project tree read cancelled",explorer_io::Error::Changed=>"Project tree changed while reading; refresh it",explorer_io::Error::Busy=>"Project tree worker queue is full; refresh to retry"}).into()}
 
 fn has_cargo_toml(children: &[FileNode]) -> bool {
     children.iter().any(|c| !c.is_dir && c.name == "Cargo.toml")
@@ -328,7 +328,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
     };
     let popup = egui::Popup::menu(&add);
     if !popup.is_open() { state.new_item_filter.clear(); }
-    popup.show(|ui| new_item_menu(ui, &target, false, &mut state.new_item_filter, &mut actions));
+    popup.show(|ui| new_item_menu(ui, &target, &mut state.new_item_filter, &mut actions));
 
     let refresh=ui.small_button(tr("Refresh")).clicked();
     if state.io.busy(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Loading project files…"));if ui.button(tr("Cancel")).clicked(){state.io.cancel();}});}
@@ -536,7 +536,7 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
         NodeKind::File(p) => (p.clone(), false),
         NodeKind::Dir(p) => (p.clone(), true),
         // The folder of the open project; it cannot be renamed or deleted from inside.
-        NodeKind::Solution => (root.to_path_buf(), true),
+        NodeKind::Root => (root.to_path_buf(), true),
         _ => {
             ui.label(egui::RichText::new(tr("No actions for this item")).color(rc_kit::pal(ui).muted));
             return;
@@ -554,10 +554,10 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
     ui.menu_button(tr("Add"), |ui| {
         let id = ui.id().with("new_item_filter");
         let mut filter = ui.ctx().data(|data| data.get_temp::<String>(id).unwrap_or_default());
-        new_item_menu(ui, &target_dir, false, &mut filter, actions);
+        new_item_menu(ui, &target_dir, &mut filter, actions);
         ui.ctx().data_mut(|data| data.insert_temp(id, filter));
     });
-    if matches!(row.kind, NodeKind::Solution) {
+    if matches!(row.kind, NodeKind::Root) {
         return;
     }
     ui.separator();
@@ -623,7 +623,7 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
 }
 
 /// Existing templates only: the same creation flow handles the header and context menu.
-fn new_item_menu(ui: &mut Ui, target: &Path, _dotnet: bool, filter: &mut String, actions: &mut Vec<ExplorerAction>) {
+fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut Vec<ExplorerAction>) {
     use crate::item_templates::ItemKind;
     ui.set_min_width(260.0);
     ui.set_max_width(320.0);
@@ -761,7 +761,7 @@ mod template_picker_tests {
     fn picker() -> Harness<'static, (String, Vec<ExplorerAction>)> {
         Harness::new_ui_state(|ui, state: &mut (String, Vec<ExplorerAction>)| {
             let button = ui.button("Add template");
-            egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), false, &mut state.0, &mut state.1));
+            egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), &mut state.0, &mut state.1));
         }, (String::new(), Vec::new()))
     }
 

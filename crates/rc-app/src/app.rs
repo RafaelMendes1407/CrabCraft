@@ -487,7 +487,7 @@ impl CrabCraftApp {
 
     // ------------------------------------------------------------------ workspace
 
-    /// Opens a folder, solution or project, restoring its session.
+    /// Opens a folder or Cargo manifest, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
         self.workspace_open.target(path);
         if !self.disk_save.saves.busy()&&!self.disk_save.auxiliary.busy(){self.disk_save.failed=false;}
@@ -1454,8 +1454,8 @@ impl CrabCraftApp {
         }
     }
 
-    /// New Solution, or Add New Project when `solution` is given.
-    pub fn new_project_dialog(&mut self, _solution: Option<PathBuf>) {
+    /// Opens the Cargo project creation dialog.
+    pub fn new_project_dialog(&mut self) {
         self.new_project = Some(crate::ui::new_project::NewProjectDialog::new(self, self.waker.clone()));
     }
 
@@ -1548,11 +1548,11 @@ impl CrabCraftApp {
     fn restore_session(&mut self, s: Session, prepared:Vec<(usize,crate::docs::Doc,bool)>) {
         self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
-        // A solution without a layout of its own starts with the last one used.
+        // A project without a layout of its own starts with the last one used.
         self.dock = Dock::from_session(if s.tool_windows.is_empty() { &self.settings.tool_windows } else { &s.tool_windows });
         self.explorer.expanded = s.expanded.iter().cloned().collect();
         if self.explorer.expanded.is_empty() {
-            // First open: the solution and its top folders expanded, like Rider.
+            // First open: the project root expanded.
             self.explorer.expanded.insert("sln".into());
         }
         // Editor id of each file of the session, for the layout.
@@ -1901,15 +1901,14 @@ impl CrabCraftApp {
             }
             self.insight.local_fixes = fixes;
         }
-        // JSON and XML are formatted here; C# by the server.
+        // JSON and XML are formatted here; Rust by rustfmt.
         if action == Action::Reformat && !crate::insight::has_insight(&self.docs.list[i]) {
             self.format_locally(i);
             return;
         }
         if !self.insight.ready() || !crate::insight::has_insight(&self.docs.list[i]) {
             let msg = match &self.insight.status {
-                crate::insight::InsightStatus::NotInstalled => tr("C# language server unavailable"),
-                crate::insight::InsightStatus::Failed(_) => tr("The C# language server stopped; restart it from the status bar"),
+                crate::insight::InsightStatus::Failed(_) => tr("The language server stopped; restart it from the status bar"),
                 _ if !crate::insight::has_insight(&self.docs.list[i]) => tr("Language server actions are not available in this file"),
                 _ => tr("The Rust language server is still analysing the project"),
             };
@@ -2998,7 +2997,7 @@ impl CrabCraftApp {
         ctx.request_repaint();
     }
 
-    /// Opens a folder, solution or project as the workspace, and any other file in an editor
+    /// Opens a folder or Cargo manifest as the workspace, and any other file in an editor
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
     fn opens_workspace(&self, path: &Path) -> bool {
         path.is_dir() || path.file_name().is_some_and(|name| name == "Cargo.toml")
@@ -3135,7 +3134,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// File › New File: asks for a name in the active file's folder (or the solution's), or for a
+    /// File › New File: asks for a name in the active file's folder (or the project root's), or for a
     /// path when nothing is open.
     pub fn new_file_dialog(&mut self) {
         let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
@@ -3161,7 +3160,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// Open…: a folder, solution or project opens as the workspace, any other file in the
+    /// Open…: a folder or Cargo manifest opens as the workspace, any other file in the
     /// editor (macOS lets one panel pick both; elsewhere it picks a folder).
     pub fn pick_and_open(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open"));
@@ -3174,7 +3173,7 @@ impl CrabCraftApp {
         }
     }
 
-    /// Opens the first folder, solution or project among `paths` as the workspace and the other
+    /// Opens the first folder or Cargo manifest among `paths` as the workspace and the other
     /// files in the editor (dropped files, Open…).
     pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
         let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| self.opens_workspace(p) || self.project_of_manifest(p).is_some());
@@ -3184,7 +3183,7 @@ impl CrabCraftApp {
         self.queue_workspace_files(files);
     }
 
-    pub fn pick_solution(&mut self) {
+    pub fn pick_cargo_manifest(&mut self) {
         let dialog = rfd::FileDialog::new().set_title(tr("Open Cargo.toml…")).add_filter("Cargo.toml", &["toml"]);
         if let Some(path) = dialog.pick_file() {
             self.open_workspace(&path);
@@ -3566,13 +3565,8 @@ impl eframe::App for CrabCraftApp {
                     MenuCommand::OpenProject => self.pick_and_open(),
                     MenuCommand::OpenFile => self.pick_file(),
                     MenuCommand::NewFile => self.new_file_dialog(),
-                    MenuCommand::NewSolution => self.new_project_dialog(None),
+                    MenuCommand::NewProject => self.new_project_dialog(),
                     MenuCommand::EditRunConfig => self.edit_run_config(None),
-                    MenuCommand::AddUsings => {
-                        if let Some(i) = self.docs.active {
-                            self.insight.add_missing_usings(&self.docs.list[i]);
-                        }
-                    }
                     MenuCommand::CloseProject => self.close_project(),
                     MenuCommand::ThemeLight | MenuCommand::ThemeDark => {
                         let mut s = self.settings.clone();

@@ -981,11 +981,6 @@ impl Runner {
                         TestOutcome::Failed => t.failed += 1,
                         TestOutcome::Skipped => t.skipped += 1,
                     },
-                    TestEvent::ProjectFinished(run) => {
-                        for r in run.results {
-                            t.results.entry(r.fully_qualified_name.clone()).or_default().push(r);
-                        }
-                    }
                     TestEvent::Finished(res) => {
                         t.running = false;
                         t.handle = None;

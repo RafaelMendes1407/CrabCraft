@@ -290,7 +290,7 @@ impl Docs {
         } else {
             editor.request_parse(&self.pool);
         }
-        // Sources Roslyn decompiled from an assembly (⌘+click on a framework type) are read-only.
+        // Generated sources are read-only.
         if path.components().any(|c| c.as_os_str() == "MetadataAsSource") || self.read_only_roots.iter().any(|r| path.starts_with(r)) {
             editor.read_only = true;
         }

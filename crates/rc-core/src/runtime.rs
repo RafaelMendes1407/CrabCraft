@@ -1,4 +1,4 @@
-//! The process-wide tokio runtime: language servers, debug adapters, `dotnet` processes and
+//! The process-wide tokio runtime: language servers, debug adapters, Cargo processes and
 //! network requests run here, never on the UI thread.
 
 use std::future::Future;

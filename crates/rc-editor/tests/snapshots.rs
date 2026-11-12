@@ -102,7 +102,7 @@ fn render_editor_snapshots() {
 fn markup_typing_assists() {
     let config = EditorConfig::default();
     let keymap = Keymap::new(KeymapKind::RiderMac);
-    let state = EditorState::new(1, Some("Index.razor".into()), "");
+    let state = EditorState::new(1, Some("index.html".into()), "");
     let mut h = Harness::builder().with_size(vec2(600.0, 300.0)).build_ui_state(
         move |ui, state: &mut EditorState| {
             let rect = ui.ctx().content_rect();
