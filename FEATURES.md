@@ -1,5 +1,12 @@
 # CrabCraft: funcionalidades e status
 
+Infraestrutura de autoavaliação de segurança: workflow dedicado, execução local
+por `scripts/security-audit.sh`, relatórios JSON/Markdown, SBOM por crate,
+inventário de `unsafe`, Gitleaks e fuzzing limitado em schedule/manual.
+As falhas preexistentes de formatação e Clippy permanecem visíveis sob exceção
+temporária vinculada ao hash exato do código e à versão do Rust; a auditoria
+não certifica conformidade legal nem muda o status das funcionalidades Rust.
+
 Auditoria de dependências (2026-11-12): `libsqlite3-sys` 0.39.1,
 `pulldown-cmark` 0.13.6 e `rustix` 1.1.6 corrigem os avisos RustSec
 identificados no relatório `short_audit.md`. CI verifica avisos e licenças
