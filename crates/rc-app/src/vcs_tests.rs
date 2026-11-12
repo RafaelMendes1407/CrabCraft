@@ -40,8 +40,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     git(&root, &["add", "."]);
     git(&root, &["commit", "-q", "-m", "First"]);
 
-    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
-    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace_and_wait(&root);
     app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some());
@@ -105,8 +104,7 @@ fn repo_with_remote() -> (tempfile::TempDir, tempfile::TempDir, std::path::PathB
 }
 
 fn open_app(root: &Path) -> CrabCraftApp {
-    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
-    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace_and_wait(root);
     app.trust_project();
     pump(&mut app, "status", |a| a.vcs.status.is_some() && !a.vcs.log.is_empty());
@@ -534,8 +532,7 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     git(&root, &["add", "."]);
     git(&root, &["commit", "-q", "--no-gpg-sign", "-m", "First"]);
 
-    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
-    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace_and_wait(&root);
     app.trust_project();
     pump(&mut app, "the signing settings", |a| a.vcs.signing.is_some() && a.vcs.log.len() == 1);
@@ -622,8 +619,7 @@ fn the_log_is_filtered_and_shows_the_history_of_a_file() {
     commit("Work on dev", None);
     git(&root, &["checkout", "-q", "main"]);
 
-    let settings = Settings { roslyn_path: Some("/nonexistent".into()), ..Settings::default() };
-    let mut app = CrabCraftApp::with_settings(settings, Waker::noop(), None);
+    let mut app = CrabCraftApp::with_settings(Settings::default(), Waker::noop(), None);
     app.open_workspace_and_wait(&root);
     app.trust_project();
     pump(&mut app, "the log", |a| a.vcs.log.len() == 5 && !a.vcs.log_loading);

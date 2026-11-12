@@ -915,9 +915,6 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse:
         (tr("Global tsserver.js path"), &mut draft.web_tsserver_path, ToolPath::Tsserver),
         (tr("GDB executable"), &mut draft.gdb_path, ToolPath::Gdb),
         (tr("LLDB DAP executable"), &mut draft.lldb_dap_path, ToolPath::Lldb),
-        (tr(".NET CLI"), &mut draft.dotnet_path, ToolPath::Dotnet),
-        (tr("Roslyn language server"), &mut draft.roslyn_path, ToolPath::Roslyn),
-        (tr("netcoredbg debugger"), &mut draft.netcoredbg_path, ToolPath::Netcoredbg),
     ] {
         let label_response = ui.label(label);
         let browse_width = ui.fonts_mut(|fonts| fonts.layout_no_wrap(tr("Browse…").to_string(), FontId::proportional(13.0), p.text)).size().x + 24.0;

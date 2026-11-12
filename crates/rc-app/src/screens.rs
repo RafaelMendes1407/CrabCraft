@@ -366,7 +366,6 @@ fn screens_tools() {
     std::fs::create_dir_all(&out).unwrap();
     let home = tempfile::tempdir().unwrap();
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&fixtures().join("Shop/Shop.sln"));
     let test_file = std::fs::read_dir(fixtures().join("Shop/tests/Shop.Core.XunitTests")).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "cs")).unwrap();
     app.open_file_and_wait(&test_file);
@@ -449,7 +448,6 @@ fn screens_git() {
     std::fs::write(root.join("src/Shop.Core/Coupon.cs"), "namespace Shop.Core;\n\npublic record Coupon(string Code, decimal Percent);\n").unwrap();
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root.join("Shop.sln"));
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&calc);
@@ -508,7 +506,6 @@ fn screens_git_tags_and_stashes() {
     git(&["stash", "push"]);
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
@@ -576,7 +573,6 @@ fn screens_git_worktrees() {
     std::fs::remove_dir_all(place.join("shop-bisect")).unwrap();
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
@@ -629,7 +625,6 @@ fn screens_git_file_history() {
     git(&["commit", "-q", "-am", "Raise prices"]);
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
@@ -732,7 +727,6 @@ fn screens_readme() {
     for dark in [true, false] {
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
-        app.settings.roslyn_path = Some(roslyn.clone());
         app.open_workspace_and_wait(&shop.join("Shop.sln"));
     app.trust_project_tools_for_test();
         app.explorer.expanded.insert(format!("proj:{}", shop.join("src/Shop.Core/Shop.Core.csproj").display()));
@@ -3482,7 +3476,6 @@ fn screens_git_merge_and_rebase() {
     git(&["switch", "-q", "feature/discount"]);
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     app.dock.show(crate::toolwindow::ToolWindow::Git);
@@ -3536,7 +3529,6 @@ fn screens_merge_tool() {
     let _ = std::process::Command::new("git").args(["merge", "feature/discount"]).current_dir(&root).output();
 
     let mut app = test_app(home.path(), true);
-    app.settings.roslyn_path = Some("/nonexistent".into());
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
     let mut h = harness(app, vec2(1440.0, 900.0));

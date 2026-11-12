@@ -499,7 +499,7 @@ impl CrabCraftApp {
         self.prepare_workspace_save();
         let queued=path.to_path_buf();if self.defer_save(false,move|app|app.open_workspace(&queued)){self.disk_save.pending_workspace=Some(path.to_path_buf());return;}
         let ids=(0..256).map(|_|self.docs.reserve_id()).collect();
-        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir(),settings:self.settings.clone()});
+        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir()});
     }
 
     pub fn queue_workspace_files(&mut self,paths:Vec<PathBuf>){
@@ -532,7 +532,7 @@ impl CrabCraftApp {
     }
 
     fn install_workspace(&mut self,prepared:crate::workspace_open::Prepared){
-        let crate::workspace_open::Prepared{ws,solution,session,docs,attached,linked,projects,runner,dotnet,watcher,events,warnings,..}=prepared;
+        let crate::workspace_open::Prepared{ws,session,docs,attached,linked,runner,watcher,events,warnings,..}=prepared;
         for warning in warnings{self.notify(warning,true);}
         let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
         self.close_workspace();
@@ -554,7 +554,6 @@ impl CrabCraftApp {
         self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
         self.vcs.changelists = session.changelists.clone().clean();
         self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
-        let solution_path = if solution.is_some() { ws.solution().map(Path::to_path_buf) } else { None };
         self.runner=runner;self.runner.nextest=self.settings.use_nextest;self.runner.external_tools=self.settings.external_tools.clone();
         self.runner.project_root = Some(ws.root.clone());
         self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
@@ -575,16 +574,14 @@ impl CrabCraftApp {
             } else {
                 if !self.criticalup_provider.selected{self.insight.wait_for_trust(&ws.root);}else{self.insight.stop();}
             }
-        } else if self.settings.trusted_projects.contains(&ws.root) {
-            self.insight.start(&ws.root, solution_path.as_deref(), projects.clone(), dotnet.clone(), self.settings.roslyn_path.clone());
         } else {
-            self.insight.wait_for_trust(&ws.root);
+            self.insight.stop();
         }
         self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
         self.docs.style_root=Some(ws.root.clone());
-        self.workspace = Some(WorkspaceState { ws, solution });
+        self.workspace = Some(WorkspaceState { ws, solution: None });
         self.restore_session(session,docs);
         if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
         // Scratches reopened with the session are analysed too.
@@ -1369,10 +1366,6 @@ impl CrabCraftApp {
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
             if !self.criticalup_provider.selected{self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);}else{self.insight.stop();}
             self.load_cargo_workspace(manifest);
-        } else {
-            let solution = self.workspace.as_ref().and_then(|w| w.solution.as_ref().map(|s| s.path.clone()));
-            let projects = self.solution_projects();
-            self.insight.start(&root, solution.as_deref(), projects, dotnet_path(&self.settings), self.settings.roslyn_path.clone());
         }
         self.toolchain = None;
     }
@@ -1393,16 +1386,6 @@ impl CrabCraftApp {
             self.vcs.message = message;
         }
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) { self.load_cargo_workspace(manifest); }
-    }
-
-    /// Every project of the workspace (its solution's, or the ones found in the folder).
-    pub fn solution_projects(&self) -> Vec<PathBuf> {
-        let Some(w) = &self.workspace else { return Vec::new() };
-        match (&w.solution, &w.ws.kind) {
-            (Some(s), _) => s.projects().into_iter().map(|p| p.path.clone()).filter(|p| rc_core::workspace::is_project(p)).collect(),
-            (None, rc_core::WorkspaceKind::Project(p)) => vec![p.clone()],
-            _ => find_projects(&w.ws.root, 4),
-        }
     }
 
     /// Throws away what the IDE derived from the project and builds it again: open files from
@@ -2111,7 +2094,7 @@ impl CrabCraftApp {
     fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
     fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
         if let Some(target)=self.workspace_open.target.clone(){
-            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||rc_core::workspace::is_solution(&target)||rc_core::workspace::is_project(&target){target.parent().unwrap_or(&target)}else{&target};
+            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||false{target.parent().unwrap_or(&target)}else{&target};
             let belongs_old=self.workspace.as_ref().is_some_and(|w|path.starts_with(&w.ws.root));
             if !belongs_old||!root.is_absolute()||path.starts_with(root){
                 if let Err(error)=self.workspace_open.queue_files(vec![path.to_path_buf()]){self.notify(error.to_string(),true);return;}
@@ -3027,8 +3010,7 @@ impl CrabCraftApp {
     /// Opens a folder, solution or project as the workspace, and any other file in an editor
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
     fn opens_workspace(&self, path: &Path) -> bool {
-        use rc_core::workspace::{is_project, is_solution};
-        path.is_dir() || is_solution(path) || is_project(path)
+        path.is_dir() || path.file_name().is_some_and(|name| name == "Cargo.toml")
     }
 
     /// The project a `Cargo.toml` opens. Inside the open project it is just a file to edit.
@@ -3786,32 +3768,6 @@ pub fn editor_config(s: &Settings) -> EditorConfig {
         live_templates: rc_core::live_templates::for_editor(&s.live_templates),
         ..EditorConfig::default()
     }
-}
-
-/// The configured `dotnet`, or the default install location, or `dotnet` from PATH.
-pub fn dotnet_path(s: &Settings) -> PathBuf {
-    if let Some(p) = s.dotnet_path.clone().filter(|p| p.exists()) {
-        return p;
-    }
-    let candidates: &[&str] = if cfg!(windows) { &["C:\\Program Files\\dotnet\\dotnet.exe"] } else { &["/usr/local/share/dotnet/dotnet", "/opt/homebrew/bin/dotnet", "/usr/local/bin/dotnet", "/usr/share/dotnet/dotnet"] };
-    candidates.iter().map(PathBuf::from).find(|p| p.exists()).unwrap_or_else(|| PathBuf::from("dotnet"))
-}
-
-/// Project files under `root` (for folders without a solution), skipping build output.
-pub fn find_projects(root: &Path, depth: usize) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut stack = vec![(root.to_path_buf(), 0)];
-    while let Some((dir, d)) = stack.pop() {
-        for n in rc_core::workspace::list_dir(&dir) {
-            if n.is_dir && d < depth {
-                stack.push((n.path, d + 1));
-            } else if rc_core::workspace::is_project(&n.path) {
-                out.push(n.path);
-            }
-        }
-    }
-    out.sort();
-    out
 }
 
 pub fn reveal_in_file_manager(path: &Path) {

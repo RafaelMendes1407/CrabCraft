@@ -124,23 +124,7 @@ fn workspace(path: &Path, cancel: &AtomicBool) -> Result<Workspace, Error> {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
             Err(error) => return Err(error.into()),
         }
-        let mut solutions = Vec::new();
-        for (index, entry) in std::fs::read_dir(&path)?.enumerate() {
-            check(cancel)?;
-            if index >= 8192 {
-                return Err(Error::Limit);
-            }
-            let entry = entry?;
-            let p = entry.path();
-            if rc_core::workspace::is_solution(&p) && entry.metadata()?.is_file() {
-                solutions.push(p);
-            }
-        }
-        let kind = if solutions.len() == 1 {
-            WorkspaceKind::Solution(solutions.remove(0))
-        } else {
-            WorkspaceKind::Folder
-        };
+        let kind = WorkspaceKind::Folder;
         Ok(Workspace { root: path, kind })
     } else {
         if !meta.is_file() {
@@ -149,46 +133,11 @@ fn workspace(path: &Path, cancel: &AtomicBool) -> Result<Workspace, Error> {
         let root = path.parent().ok_or(Error::Invalid)?.to_path_buf();
         let kind = if path.file_name().is_some_and(|p| p == "Cargo.toml") {
             WorkspaceKind::Cargo(path)
-        } else if rc_core::workspace::is_solution(&path) {
-            WorkspaceKind::Solution(path)
-        } else if rc_core::workspace::is_project(&path) {
-            WorkspaceKind::Project(path)
         } else {
             return Err(Error::Invalid);
         };
         Ok(Workspace { root, kind })
     }
-}
-fn projects(root: &Path, cancel: &AtomicBool) -> Result<Vec<PathBuf>, Error> {
-    let mut stack = vec![(root.to_path_buf(), 0)];
-    let mut out = Vec::new();
-    let mut count = 0;
-    while let Some((dir, depth)) = stack.pop() {
-        for entry in std::fs::read_dir(dir)? {
-            check(cancel)?;
-            count += 1;
-            if count > 32768 {
-                return Err(Error::Limit);
-            }
-            let entry = entry?;
-            let path = entry.path();
-            let meta = entry.metadata()?;
-            if meta.is_dir()
-                && depth < 4
-                && !rc_core::workspace::HIDDEN_DIRS
-                    .contains(&entry.file_name().to_string_lossy().as_ref())
-            {
-                stack.push((path, depth + 1));
-            } else if meta.is_file() && rc_core::workspace::is_project(&path) {
-                out.push(path);
-                if out.len() > 1024 {
-                    return Err(Error::Limit);
-                }
-            }
-        }
-    }
-    out.sort();
-    Ok(out)
 }
 fn options(
     root: &Path,
@@ -255,18 +204,14 @@ pub struct Request {
     pub fingerprint: Fingerprint,
     pub ids: Vec<u64>,
     pub scratch: PathBuf,
-    pub settings: rc_core::Settings,
 }
 pub struct Prepared {
     pub ws: Workspace,
-    pub solution: Option<rc_dotnet::Solution>,
     pub session: Session,
     pub docs: Vec<(usize, Doc, bool)>,
     pub attached: Vec<PathBuf>,
     pub linked: Vec<PathBuf>,
-    pub projects: Vec<PathBuf>,
     pub runner: Runner,
-    pub dotnet: PathBuf,
     pub watcher: Option<FileWatcher>,
     pub events: Inbox<FsEvent>,
     pub warnings: Vec<String>,
@@ -275,14 +220,6 @@ pub struct Prepared {
 fn prepare(request: Request, cancel: &AtomicBool, waker: Waker) -> Result<Prepared, Error> {
     let ws = workspace(&request.path, cancel)?;
     let mut warnings = Vec::new();
-    let solution = if let Some(path) = ws.solution() {
-        Some(
-            rc_dotnet::Solution::from_text(path, &read(path, cancel)?)
-                .map_err(|_| Error::Invalid)?,
-        )
-    } else {
-        None
-    };
     let mut session = match read(&Session::file_for(ws.key_path()), cancel) {
         Ok(text) => serde_json::from_str::<Session>(&text).map_err(|_| Error::Invalid)?,
         Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => Session::default(),
@@ -352,12 +289,6 @@ fn prepare(request: Request, cancel: &AtomicBool, waker: Waker) -> Result<Prepar
         linked.push(ws.root.join("Cargo.toml"));
     }
     linked.extend(attached.iter().cloned());
-    let project_paths = match &ws.kind {
-        WorkspaceKind::Project(p) => vec![p.clone()],
-        WorkspaceKind::Folder => projects(&ws.root, cancel)?,
-        _ => Vec::new(),
-    };
-    let dotnet = crate::app::dotnet_path(&request.settings);
     let mut runner = Runner::new(waker.clone());
     runner.project_root = Some(ws.root.clone());
     runner.project_env = session.project_env.clone();
@@ -471,14 +402,11 @@ fn prepare(request: Request, cancel: &AtomicBool, waker: Waker) -> Result<Prepar
     check(cancel)?;
     Ok(Prepared {
         ws,
-        solution,
         session,
         docs,
         attached,
         linked,
-        projects: project_paths,
         runner,
-        dotnet,
         watcher,
         events,
         warnings,

@@ -158,9 +158,6 @@ pub struct Insight {
     pub status: InsightStatus,
     waker: Waker,
     root: Option<PathBuf>,
-    solution: Option<PathBuf>,
-    projects: Vec<PathBuf>,
-    dotnet: PathBuf,
     /// The open workspace is a Rust one: rust-analyzer instead of Roslyn.
     rust: bool,
     web: Option<rc_lsp::web::Settings>,
@@ -289,9 +286,6 @@ impl Insight {
             status: InsightStatus::Idle,
             waker,
             root: None,
-            solution: None,
-            projects: Vec::new(),
-            dotnet: PathBuf::from("dotnet"),
             rust: false,
             web: None,
             web_synced: HashMap::new(),
@@ -368,24 +362,6 @@ impl Insight {
 
     pub fn ready(&self) -> bool {
         self.session.as_ref().is_some_and(|s| s.is_initialized())
-    }
-
-    /// Starts C# support for a workspace (does nothing without C# projects).
-    pub fn start(&mut self, root: &Path, solution: Option<&Path>, projects: Vec<PathBuf>, dotnet: PathBuf, configured: Option<PathBuf>) {
-        self.stop();
-        self.execution_allowed = true;
-        self.rust = false;
-        self.web = None;
-        self.root = Some(root.to_path_buf());
-        self.solution = solution.map(Path::to_path_buf);
-        self.projects = projects;
-        self.dotnet = dotnet;
-        self.configured = configured;
-        if self.solution.is_none() && self.projects.is_empty() {
-            self.status = InsightStatus::Idle;
-            return;
-        }
-        self.launch();
     }
 
     /// Starts rust-analyzer for a trusted project.

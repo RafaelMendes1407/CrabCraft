@@ -1,4 +1,4 @@
-//! The open workspace: a folder, or a solution file and its folder. Directory listings for the
+//! The open workspace: a folder or Cargo manifest. Directory listings for the
 //! explorer are read lazily and skip build output and tool folders.
 
 use std::path::{Path, PathBuf};
@@ -6,58 +6,39 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WorkspaceKind {
     Folder,
-    /// A `.sln`, `.slnx` or `.slnf` file.
-    Solution(PathBuf),
-    /// A lone project file.
-    Project(PathBuf),
     /// A folder with a `Cargo.toml`, the path of that manifest.
     Cargo(PathBuf),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Workspace {
-    /// Folder that contains everything (the solution's folder).
+    /// Folder that contains everything.
     pub root: PathBuf,
     pub kind: WorkspaceKind,
 }
 
 impl Workspace {
-    /// Opens `path`: a folder (using the single solution inside it, if there is exactly one),
-    /// or a solution / project file.
+    /// Opens a folder or Cargo manifest.
     pub fn open(path: &Path) -> std::io::Result<Workspace> {
         let path = path.canonicalize()?;
         if path.is_dir() {
-            let solutions: Vec<PathBuf> = std::fs::read_dir(&path)?
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.is_file() && is_solution(p))
-                .collect();
             let manifest = path.join("Cargo.toml");
-            let kind = match solutions.as_slice() {
-                _ if manifest.is_file() => WorkspaceKind::Cargo(manifest),
-                [only] => WorkspaceKind::Solution(only.clone()),
-                _ => WorkspaceKind::Folder,
-            };
+            let kind = if manifest.is_file() { WorkspaceKind::Cargo(manifest) } else { WorkspaceKind::Folder };
             return Ok(Workspace { root: path, kind });
         }
         let root = path.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
         let kind = if path.file_name().is_some_and(|n| n == "Cargo.toml") {
             WorkspaceKind::Cargo(path)
-        } else if is_solution(&path) {
-            WorkspaceKind::Solution(path)
-        } else if is_project(&path) {
-            WorkspaceKind::Project(path)
         } else {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a folder, solution or project"));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a folder or Cargo manifest"));
         };
         Ok(Workspace { root, kind })
     }
 
-    /// Display name: the solution / project name or the folder name.
+    /// Display name of the folder.
     pub fn name(&self) -> String {
         let p = match &self.kind {
             WorkspaceKind::Folder | WorkspaceKind::Cargo(_) => &self.root,
-            WorkspaceKind::Solution(p) | WorkspaceKind::Project(p) => p,
         };
         p.file_stem().or_else(|| p.file_name()).map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned())
     }
@@ -66,7 +47,6 @@ impl Workspace {
     pub fn key_path(&self) -> &Path {
         match &self.kind {
             WorkspaceKind::Folder | WorkspaceKind::Cargo(_) => &self.root,
-            WorkspaceKind::Solution(p) | WorkspaceKind::Project(p) => p,
         }
     }
 
@@ -77,24 +57,6 @@ impl Workspace {
         }
     }
 
-    pub fn solution(&self) -> Option<&Path> {
-        match &self.kind {
-            WorkspaceKind::Solution(p) => Some(p),
-            _ => None,
-        }
-    }
-}
-
-pub fn is_solution(p: &Path) -> bool {
-    matches!(ext(p).as_str(), "sln" | "slnx" | "slnf")
-}
-
-pub fn is_project(p: &Path) -> bool {
-    matches!(ext(p).as_str(), "csproj" | "fsproj" | "vbproj")
-}
-
-fn ext(p: &Path) -> String {
-    p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
 }
 
 /// Folders never shown in the explorer.
@@ -170,15 +132,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_folder_with_one_solution_opens_the_solution() {
+    fn a_folder_opens_as_a_folder() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("App.sln"), "").unwrap();
         std::fs::create_dir(dir.path().join("bin")).unwrap();
         std::fs::create_dir(dir.path().join("Src")).unwrap();
         std::fs::write(dir.path().join("a.cs"), "").unwrap();
         let ws = Workspace::open(dir.path()).unwrap();
-        assert!(matches!(ws.kind, WorkspaceKind::Solution(_)));
-        assert_eq!(ws.name(), "App");
+        assert!(matches!(ws.kind, WorkspaceKind::Folder));
+        assert_eq!(ws.name(), dir.path().file_name().unwrap().to_string_lossy());
         let names: Vec<String> = list_dir(dir.path()).into_iter().map(|n| n.name).collect();
         assert_eq!(names, vec!["Src", "a.cs", "App.sln"]);
     }

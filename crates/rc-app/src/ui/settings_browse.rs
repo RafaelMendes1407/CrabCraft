@@ -11,9 +11,6 @@ pub enum ToolPath {
     Tsserver,
     Gdb,
     Lldb,
-    Dotnet,
-    Roslyn,
-    Netcoredbg,
 }
 
 impl ToolPath {
@@ -26,9 +23,6 @@ impl ToolPath {
             Self::Tsserver => &mut settings.web_tsserver_path,
             Self::Gdb => &mut settings.gdb_path,
             Self::Lldb => &mut settings.lldb_dap_path,
-            Self::Dotnet => &mut settings.dotnet_path,
-            Self::Roslyn => &mut settings.roslyn_path,
-            Self::Netcoredbg => &mut settings.netcoredbg_path,
         }
     }
 }

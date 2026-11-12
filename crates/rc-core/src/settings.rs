@@ -79,11 +79,6 @@ pub struct Settings {
     /// The last tool window layout (sides, sizes, open windows): solutions opened for the
     /// first time start with it.
     pub tool_windows: std::collections::BTreeMap<String, crate::session::ToolWindowState>,
-    /// Explicit path to `dotnet` (otherwise found on PATH / the default install).
-    pub dotnet_path: Option<PathBuf>,
-    /// Explicit path to the Roslyn language server DLL or executable.
-    pub roslyn_path: Option<PathBuf>,
-    pub netcoredbg_path: Option<PathBuf>,
     pub rust_debugger: RustDebugger,
     pub gdb_path: Option<PathBuf>,
     pub lldb_dap_path: Option<PathBuf>,
@@ -152,9 +147,6 @@ impl Default for Settings {
             tab_colors: true,
             new_project_location: None,
             tool_windows: Default::default(),
-            dotnet_path: None,
-            roslyn_path: None,
-            netcoredbg_path: None,
             rust_debugger: RustDebugger::default(),
             gdb_path: None,
             lldb_dap_path: None,

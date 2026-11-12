@@ -336,12 +336,6 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.new_file_dialog();
             ui.close();
         }
-        if let Some(sln) = app.workspace.as_ref().and_then(|w| w.ws.solution().map(std::path::Path::to_path_buf))
-            && theme::menu_item(ui, Some(ico::ADD), tr("Add New Project…"), false).clicked()
-        {
-            app.new_project_dialog(Some(sln));
-            ui.close();
-        }
         if theme::menu_item(ui, Some(ico::OPEN), tr("Open…"), false).clicked() {
             app.pick_and_open();
             ui.close();
