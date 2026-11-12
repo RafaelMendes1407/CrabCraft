@@ -790,7 +790,7 @@ impl Runner {
     /// which toolchain `rustup update` sees.
     fn command_plan(&self, program: PathBuf, args: Vec<String>) -> rc_dotnet::LaunchPlan {
         let dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        rc_dotnet::LaunchPlan { program, args, env: Vec::new(), working_dir: dir, urls: Vec::new(), profile: None, browser_url: None }
+        rc_dotnet::LaunchPlan { program, args, env: Vec::new(), working_dir: dir, urls: Vec::new() }
     }
 
     fn run_process(&mut self, cfg: RunConfig, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {

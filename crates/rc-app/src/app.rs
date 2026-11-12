@@ -1440,7 +1440,7 @@ impl CrabCraftApp {
             Some(RunConfig { name, kind: ConfigKind::Cargo { .. } }) => {
                 let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
                 let options = self.runner.options.get(&name).cloned().unwrap_or_default();
-                self.dialog = Some(Dialog::RunOptions { name, project, profiles: Vec::new(), options, web: false });
+                self.dialog = Some(Dialog::RunOptions { name, project, options });
             }
             Some(RunConfig { name, kind: ConfigKind::Compound { members } }) => {
                 let all = self.runner.app_names().into_iter().map(|n| {
@@ -3490,7 +3490,7 @@ pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core
     if !dir.is_dir() {
         return Err(trf("the folder {path} does not exist", &[("path", &dir.display())]));
     }
-    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new(), profile: None, browser_url: None })
+    Ok(rc_dotnet::LaunchPlan { program: PathBuf::from(program), args, env, working_dir: dir, urls: Vec::new() })
 }
 
 /// Whether a Cargo feature of a package is on for the analysis.

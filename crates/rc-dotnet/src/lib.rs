@@ -1,35 +1,16 @@
-//! .NET integration: solutions and projects (`.sln`, `.slnx`, `.csproj`), SDK discovery,
-//! evaluated MSBuild properties, launch profiles, build/run/test with streamed output and
-//! parsed diagnostics, TRX results.
-//!
-//! Long operations run on [`rc_core::Runtime`] and report through an [`rc_core::inbox::Outbox`]
-//! (`start_build`, `start_run`, `start_tests`); their handles stop the work (and kill the
-//! process tree) on `cancel()`/`stop()` or when dropped. The `async fn` variants take a
-//! [`CancelToken`] and a callback instead.
+//! Shared process, build and test types. The crate name is retained for upstream merges.
+//! Cargo uses these types; .NET SDK, Roslyn and MSBuild integration have been removed.
 
 pub mod build;
 pub mod diagnostics;
-pub mod launch;
-pub mod msbuild;
-pub mod new_project;
 pub mod process;
-pub mod project;
 pub mod run;
-pub mod sdk;
-pub mod solution;
 pub mod test;
 pub mod trx;
 
-pub use build::{BuildAction, BuildEvent, BuildRequest, BuildResult, start_build};
+pub use build::{BuildAction, BuildEvent, BuildResult};
 pub use diagnostics::{Diagnostic, Severity};
-pub use launch::{LaunchProfile, LaunchSettings};
-pub use msbuild::ProjectProperties;
 pub use process::{CancelToken, OpHandle, OutputLine, Stream, kill_tree, strip_ansi};
-pub use project::ProjectInfo;
-pub use run::{LaunchPlan, RunEvent, RunHandle, RunRequest, start_run};
-pub use sdk::{Dotnet, RuntimeInfo, SdkInfo};
-pub use solution::{ProjectRef, Solution, SolutionItem};
-pub use test::{DiscoveredTest, TestEvent, TestFilter, TestRequest, TestRunResult, start_tests};
+pub use run::{LaunchPlan, RunEvent, RunHandle};
+pub use test::{TestEvent, TestFilter, TestRequest, TestRunResult};
 pub use trx::{TestOutcome, TestResult};
-
-mod config_text;

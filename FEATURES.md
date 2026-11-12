@@ -14,8 +14,7 @@ Verificação por testes de interface e capturas GPU conferidas; sem alteração
 
 Limpeza do legado DotCraft: os downloads automáticos de Roslyn pelo feed NuGet e de
 netcoredbg pelo release da Samsung, incluindo URLs fixas, arquivos compactados e controles
-de progresso, foram removidos. O suporte C#/.NET ainda usa ferramentas já instaladas e
-permanece pendente de retirada; os recursos Rust continuam usando seus adaptadores próprios.
+de progresso, foram removidos. Os recursos Rust continuam usando seus adaptadores próprios.
 Os parsers C#/Razor, suas consultas tree-sitter e o lexer de soluções Visual Studio
 também foram retirados. Arquivos dessas linguagens agora abrem como texto simples;
 os benchmarks de sintaxe e editor usam uma fonte Rust gerada.
@@ -29,6 +28,9 @@ O carregamento de workspace não detecta mais soluções e projetos Visual Studi
 as preferências já não oferecem caminhos para .NET, Roslyn ou netcoredbg.
 O explorador de projetos deixou de ler XML de projetos .NET ou exibir soluções e
 dependências MSBuild. O menu de novos arquivos oferece somente arquivos comuns e Rust.
+Os módulos de SDK, MSBuild, soluções, projetos, execução e testes .NET e TRX foram
+removidos de `rc-dotnet`, junto com as fixtures correspondentes. O crate conserva o
+nome e apenas os tipos e a gestão de processos usados por Cargo e outras funções Rust.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

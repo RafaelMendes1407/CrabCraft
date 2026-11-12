@@ -52,7 +52,7 @@ impl Prepared {
             program: self.executable.clone(), args: arguments(stable), working_dir: self.directory.path().to_path_buf(),
             env: vec![("CARGO_HOME".into(), destinations.cargo.to_string_lossy().into_owned()), ("RUSTUP_HOME".into(), destinations.rustup.to_string_lossy().into_owned()),
                 ("RUSTUP_DIST_SERVER".into(), "https://static.rust-lang.org".into()), ("RUSTUP_UPDATE_ROOT".into(), "https://static.rust-lang.org/rustup".into())],
-            urls: Vec::new(), profile: None, browser_url: None,
+            urls: Vec::new(),
         }
     }
 }

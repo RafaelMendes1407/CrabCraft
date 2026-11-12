@@ -1,5 +1,5 @@
 //! Child processes for build, run and test: output streamed line by line, cancellation that
-//! kills the whole process tree (MSBuild nodes, test hosts, the app itself) and an
+//! kills the whole process tree and an
 //! [`OpHandle`] that stops the work when cancelled or dropped.
 
 use std::process::Stdio;
@@ -194,7 +194,7 @@ pub async fn run_streaming(
     if cancelled {
         kill_tree(pid);
     }
-    // Build servers and MSBuild nodes may keep the pipes open after the process exits:
+    // Child processes may keep the pipes open after the process exits:
     // read what is left for a moment, then stop listening.
     let deadline = tokio::time::Instant::now() + Duration::from_millis(400);
     loop {
@@ -352,7 +352,7 @@ pub fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// Splits a command line the way .NET does for `commandLineArgs`: whitespace separates,
+/// Splits a command line: whitespace separates,
 /// double quotes group, `\"` is a literal quote.
 pub fn split_command_line(s: &str) -> Vec<String> {
     let mut args = Vec::new();

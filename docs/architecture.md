@@ -15,7 +15,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-lsp` | JSON-RPC/LSP client, rust-analyzer, and explicitly configured web-language servers. |
 | `rc-dap` | DAP client and GDB/LLVM LLDB DAP sessions for Rust. |
 | `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
-| `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX. |
+| `rc-dotnet` | Shared process control and build/run/test event types used by Cargo; crate name retained for upstream merges. |
 | `rc-vcs` | Git through the `git` CLI. |
 | `rc-search` | File index, fuzzy search, find/replace in files. |
 | `rc-term` | Terminal emulator (alacritty_terminal + portable-pty) rendered in egui. |
@@ -42,7 +42,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
   Rust integration tests use real Cargo projects and explicitly installed tools such as
   rust-analyzer, Git, GDB or LLVM `lldb-dap`. Optional HTTP, database, SSH, container, AI and
   coverage workflows document their own prerequisites; a fixture or build does not prove a
-  real target-platform workflow. Inherited .NET fixtures remain separate from Rust evidence.
+  real target-platform workflow.
   See [the documentation index](README.md) and [FEATURES.md](../FEATURES.md).
 - **Commits.** Make small, reviewable commits with short English messages. Update
   `FEATURES.md` in the commit that changes a feature and run

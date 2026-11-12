@@ -4527,12 +4527,6 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "libc",
- "rc-core",
- "reqwest",
- "roxmltree",
- "serde",
- "serde_json",
- "tempfile",
  "tokio",
 ]
 
