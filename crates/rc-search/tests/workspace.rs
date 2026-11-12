@@ -24,10 +24,10 @@ fn tree() -> tempfile::TempDir {
     write(r, "src/demo/generated.rs", "// TODO: designer\n");
     write(r, "src/web/handler.rs", "pub fn handler() {}\n");
     write(r, "src/web/notes.txt", "todo later\n");
-    write(r, "src/demo/bin/Debug/demo.rs", "// TODO: build output\n");
-    write(r, "src/demo/obj/project.assets.json", "TODO");
+    write(r, "src/demo/target/debug/demo.rs", "// TODO: build output\n");
+    write(r, "src/demo/target/metadata.json", "TODO");
     write(r, "node_modules/x/index.js", "TODO");
-    write(r, ".vs/state.rs", "TODO");
+    write(r, ".idea/state.rs", "TODO");
     write(r, "build.log", "TODO");
     write(r, "generated/gen.rs", "// TODO: generated");
     write(r, "sub/.ignore", "secret.rs\n");
@@ -115,7 +115,7 @@ fn incremental_updates() {
 
     write(r, "src/demo/Customer.rs", "");
     write(r, "src/demo/debug.log", "");
-    write(r, "src/demo/bin/Release/x.rs", "");
+    write(r, "src/demo/target/release/x.rs", "");
     write(r, "src/web/Program.rs", "");
     write(r, "src/web/Controllers/HomeController.rs", "");
     write(r, "generated/more.rs", "");
@@ -123,7 +123,7 @@ fn incremental_updates() {
     index.apply(&[
         FsEvent::Created(r.join("src/demo/Customer.rs")),
         FsEvent::Created(r.join("src/demo/debug.log")),
-        FsEvent::Created(r.join("src/demo/bin/Release/x.rs")),
+        FsEvent::Created(r.join("src/demo/target/release/x.rs")),
         FsEvent::Created(r.join("src/web")),
         FsEvent::Created(r.join("generated/more.rs")),
         FsEvent::Created(r.join("sub/secret2.rs")),
@@ -134,7 +134,7 @@ fn incremental_updates() {
     assert!(snap.get("src/web/Controllers/HomeController.rs").is_some());
     assert!(snap.get("sub/secret2.rs").is_some());
     assert!(snap.get("src/demo/debug.log").is_none());
-    assert!(snap.get("src/demo/bin/Release/x.rs").is_none());
+    assert!(snap.get("src/demo/target/release/x.rs").is_none());
     assert!(snap.get("generated/more.rs").is_none());
 
     // Rename a file, then remove a whole folder.

@@ -35,6 +35,8 @@ Os pedidos privados do Roslyn e a ação de importar `using` saíram do LSP.
 Os classificadores de arquivos, exemplos de testes e traduções não expõem mais
 os formatos C#/.NET removidos; URLs de documentação de protocolos e de recursos Rust
 permanecem quando são usadas pelo produto.
+Pastas `bin` e `obj` voltaram a aparecer no explorador e no índice; apenas as
+pastas de saída e metadados pertinentes ao projeto Rust seguem ocultas.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

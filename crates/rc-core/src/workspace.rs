@@ -60,11 +60,11 @@ impl Workspace {
 }
 
 /// Folders never shown in the explorer.
-pub const HIDDEN_DIRS: &[&str] = &["target", "bin", "obj", ".git", ".vs", ".idea", "node_modules", ".crabcraft", "TestResults"];
+pub const HIDDEN_DIRS: &[&str] = &["target", ".git", ".idea", "node_modules", ".crabcraft"];
 const HIDDEN_FILES: &[&str] = &[".DS_Store", "Thumbs.db"];
 
 pub fn is_hidden(name: &str, is_dir: bool) -> bool {
-    if is_dir { HIDDEN_DIRS.contains(&name) } else { HIDDEN_FILES.contains(&name) || name.ends_with(".user") || name.ends_with(".suo") }
+    if is_dir { HIDDEN_DIRS.contains(&name) } else { HIDDEN_FILES.contains(&name) }
 }
 
 /// Whether the root-relative, `/`-separated path `rel` is one of the folders or files the user
@@ -135,7 +135,7 @@ mod tests {
     fn a_folder_with_a_cargo_manifest_opens_as_cargo() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("Cargo.toml"), "").unwrap();
-        std::fs::create_dir(dir.path().join("bin")).unwrap();
+        std::fs::create_dir(dir.path().join("target")).unwrap();
         std::fs::create_dir(dir.path().join("Src")).unwrap();
         std::fs::write(dir.path().join("a.rs"), "").unwrap();
         let ws = Workspace::open(dir.path()).unwrap();
