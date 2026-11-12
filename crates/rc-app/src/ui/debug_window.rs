@@ -81,12 +81,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if !has {
         let (t, h) = (tr("No debug session"), tr("Start debugging to see frames, variables and watches."));
-        if let Some((done, total)) = app.debugger.downloading {
-            let pct = total.map(|t| format!(" {}%", done * 100 / t.max(1))).unwrap_or_default();
-            empty_state(ui, ico::DEBUG, &format!("{}{pct}", tr("Downloading netcoredbg…")), h);
-        } else {
-            empty_state(ui, ico::DEBUG, t, h);
-        }
+        empty_state(ui, ico::DEBUG, t, h);
         return;
     }
     // Tabs and the state of the session.

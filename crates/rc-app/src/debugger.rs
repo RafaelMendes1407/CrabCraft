@@ -1,11 +1,11 @@
 //! The debugger in the IDE: starting a session for the selected run configuration (with
-//! netcoredbg, downloaded on first use), breakpoints kept in sync with the editors, the
+//! an installed adapter), breakpoints kept in sync with the editors, the
 //! execution point, the debug console, watches, hover values and expression evaluation.
 
 use crate::docs::Docs;
 use crate::runner::{ConfigKind, RunConfig};
-use rc_core::{Inbox, Waker};
-use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, DownloadEvent, EvalContext, EvalValue, OutputCategory, SessionState};
+use rc_core::Waker;
+use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, EvalContext, EvalValue, OutputCategory, SessionState};
 use rc_kit::i18n::{tr, trf};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -67,10 +67,6 @@ pub struct Debugger {
     pub session: Option<DebugSession>,
     pub console: Option<crate::runner::Console>,
     pub name: String,
-    downloads: Inbox<DownloadEvent>,
-    download: Option<rc_dap::netcoredbg::DownloadHandle>,
-    pub downloading: Option<(u64, Option<u64>)>,
-    pending: Option<(RunConfig, rc_dotnet::RunRequest, PathBuf)>,
     waker: Waker,
     /// Expanded rows of the Variables tree, by path of names (kept across steps).
     pub expanded: BTreeSet<String>,
@@ -127,10 +123,6 @@ impl Debugger {
             session: None,
             console: None,
             name: String::new(),
-            downloads: Inbox::new(waker.clone()),
-            download: None,
-            downloading: None,
-            pending: None,
             waker,
             expanded: BTreeSet::new(),
             selected_var: None,
@@ -293,7 +285,7 @@ impl Debugger {
         vec![DebugOutput::ShowDebugWindow]
     }
 
-    /// Starts debugging `config` (apps only); downloads netcoredbg first when needed.
+    /// Starts debugging `config` (apps only) with an installed adapter.
     pub fn start(&mut self, config: RunConfig, request: Option<rc_dotnet::RunRequest>, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
         self.privileged=false;
         let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {
@@ -303,12 +295,7 @@ impl Debugger {
             s.stop();
         }
         let Some(adapter) = rc_dap::netcoredbg::locate(configured) else {
-            if self.download.is_none() {
-                self.downloading = Some((0, None));
-                self.download = Some(rc_dap::netcoredbg::start_download(self.downloads.sender()));
-            }
-            self.pending = Some((config.clone(), run, dotnet.to_path_buf()));
-            return vec![DebugOutput::Notify(tr("Downloading the netcoredbg debugger (first use)…").into(), false)];
+            return vec![DebugOutput::Notify(tr("netcoredbg debugger not found; configure its installed path in Settings › Tools").into(), true)];
         };
         let Some(dotnet) = rc_dotnet::Dotnet::locate(Some(dotnet)) else {
             return vec![DebugOutput::Notify(tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").into(), true)];
@@ -336,9 +323,6 @@ impl Debugger {
 
     pub fn stop(&mut self) {
         self.privileged=false;
-        if let Some(download) = self.download.take() { download.cancel(); }
-        self.pending = None;
-        self.downloading = None;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -558,26 +542,6 @@ impl Debugger {
 
     fn update_inner(&mut self, docs: &mut Docs, visible: bool) -> Vec<DebugOutput> {
         let mut out = Vec::new();
-        for ev in self.downloads.drain() {
-            match ev {
-                DownloadEvent::Progress { done, total } => self.downloading = Some((done, total)),
-                DownloadEvent::Unpacking => {}
-                DownloadEvent::Done(_) => {
-                    self.downloading = None;
-                    self.download = None;
-                    out.push(DebugOutput::Notify(tr("netcoredbg is ready").into(), false));
-                    if let Some((cfg, run, dotnet)) = self.pending.take() {
-                        out.extend(self.start(cfg, Some(run), &dotnet, None, docs));
-                    }
-                }
-                DownloadEvent::Failed(e) => {
-                    self.downloading = None;
-                    self.download = None;
-                    self.pending = None;
-                    out.push(DebugOutput::Notify(trf("Could not download netcoredbg: {error}", &[("error", &e)]), true));
-                }
-            }
-        }
         self.sync_breakpoints(docs);
         let temp = self.temp.clone();
         let Some(session) = &mut self.session else { return out };

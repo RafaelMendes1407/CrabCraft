@@ -12,6 +12,11 @@ e a estabilidade da altura ao longo de 30 quadros por categoria. A rolagem limit
 dimensões para impedir o crescimento vertical contínuo do modal.
 Verificação por testes de interface e capturas GPU conferidas; sem alteração dos status de prontidão.
 
+Limpeza do legado DotCraft: os downloads automáticos de Roslyn pelo feed NuGet e de
+netcoredbg pelo release da Samsung, incluindo URLs fixas, arquivos compactados e controles
+de progresso, foram removidos. O suporte C#/.NET ainda usa ferramentas já instaladas e
+permanece pendente de retirada; os recursos Rust continuam usando seus adaptadores próprios.
+
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável
 de templates existentes. A identidade do projeto usa uma cor difusa gaussiana na barra

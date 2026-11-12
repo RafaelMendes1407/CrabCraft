@@ -1,5 +1,5 @@
 //! Language Server Protocol client: JSON-RPC over stdio with cancellation, incremental
-//! document sync, semantic token decoding, and the Roslyn C# server adapter.
+//! document sync, semantic token decoding, and server adapters.
 
 pub mod roslyn;
 pub mod rpc;

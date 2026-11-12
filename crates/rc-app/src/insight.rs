@@ -1,4 +1,4 @@
-//! Code insight for C# through the Roslyn language server: starting/downloading the server,
+//! Code insight for C# through an installed Roslyn language server: starting the server,
 //! document sync, diagnostics, completion, hover, parameter info, navigation, rename, context
 //! actions, formatting, semantic colours, inlay hints and the file structure.
 //!
@@ -6,11 +6,11 @@
 
 use crate::convert;
 use crate::docs::{Doc, Docs};
-use rc_core::{Inbox, Runtime, Waker};
+use rc_core::Waker;
 use rc_editor::{Completion, EditorEvent, Hover, Signature, SignatureHelp};
 use rc_kit::i18n::{tr, trf};
 use rc_lsp::lsp_types as lsp;
-use rc_lsp::roslyn::{self, DownloadEvent};
+use rc_lsp::roslyn;
 use rc_lsp::{LanguageSession, LspEvent, Pending, ServerState, path_to_uri, uri_to_path};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -28,7 +28,6 @@ pub enum InsightStatus {
     Untrusted,
     /// rust-analyzer is missing; it comes with the toolchain.
     RustAnalyzerMissing,
-    Downloading { done: u64, total: Option<u64> },
     Starting,
     Loading(String),
     Ready,
@@ -158,7 +157,6 @@ struct CompletionRequest {
 pub struct Insight {
     pub session: Option<LanguageSession>,
     pub status: InsightStatus,
-    downloads: Inbox<DownloadEvent>,
     waker: Waker,
     root: Option<PathBuf>,
     solution: Option<PathBuf>,
@@ -290,7 +288,6 @@ impl Insight {
         Insight {
             session: None,
             status: InsightStatus::Idle,
-            downloads: Inbox::new(waker.clone()),
             waker,
             root: None,
             solution: None,
@@ -551,16 +548,6 @@ impl Insight {
         }
     }
 
-    /// Downloads the server (status bar button), then starts it.
-    pub fn download(&mut self) {
-        if matches!(self.status, InsightStatus::Downloading { .. }) {
-            return;
-        }
-        self.status = InsightStatus::Downloading { done: 0, total: None };
-        let out = self.downloads.sender();
-        Runtime::spawn(roslyn::download(out));
-    }
-
     pub fn restart(&mut self) {
         if let Some(mut s) = self.session.take() {
             s.stop();
@@ -628,13 +615,6 @@ impl Insight {
     /// rest of the UI must show.
     pub fn update(&mut self, docs: &mut Docs, show_inlays: bool) -> Vec<InsightOutput> {
         let mut out = Vec::new();
-        for ev in self.downloads.drain() {
-            match ev {
-                DownloadEvent::Progress { done, total } => self.status = InsightStatus::Downloading { done, total },
-                DownloadEvent::Done(_) => self.launch(),
-                DownloadEvent::Failed(e) => self.status = InsightStatus::Failed(trf("Could not download the C# language server: {error}", &[("error", &e)])),
-            }
-        }
         let Some(session) = &mut self.session else { return out };
         let mut retry = None;
         let web_client=session.client.clone();

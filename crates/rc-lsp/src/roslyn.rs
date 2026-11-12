@@ -1,5 +1,5 @@
 //! The Roslyn language server (`Microsoft.CodeAnalysis.LanguageServer`, MIT): finding or
-//! downloading it, starting it over stdio, the `initialize` handshake and opening the
+//! starting it over stdio, the `initialize` handshake and opening the
 //! solution with Roslyn's `solution/open` / `project/open` notifications.
 
 use crate::rpc::{Client, Incoming, Pending};
@@ -8,25 +8,19 @@ use rc_core::inbox::Outbox;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-/// Version downloaded when no server is installed (the `roslyn-language-server` tool package
-/// of the `vs-impl` feed, the one the VS Code C# extension uses).
-pub const PINNED_VERSION: &str = "5.13.0-1.26523.5";
-const FEED: &str = "https://pkgs.dev.azure.com/azure-public/3ccf6661-f8ce-4e8a-bb2e-eff943ddd3c7/_packaging/3c18fd2c-cc7c-4cef-8ed7-20227ab3275b/nuget/v3/flat2";
-
 /// How to start the server.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerCommand {
     pub program: PathBuf,
     /// Arguments before ours (`<dll>` when it runs through `dotnet`).
     pub prefix: Vec<String>,
-    /// Where it was found, for the status bar ("downloaded", "VS Code C# extension"…).
+    /// Where it was found, for the status bar.
     pub origin: Origin,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
     Settings,
-    Downloaded,
     DotnetTool,
     VsCodeExtension,
 }
@@ -35,24 +29,7 @@ fn exe(name: &str) -> String {
     if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
 }
 
-/// The runtime identifier of this machine for the tool packages.
-pub fn rid() -> &'static str {
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => "osx-arm64",
-        ("macos", _) => "osx-x64",
-        ("windows", "aarch64") => "win-arm64",
-        ("windows", _) => "win-x64",
-        ("linux", "aarch64") => "linux-arm64",
-        _ => "linux-x64",
-    }
-}
-
-/// Folder of the downloaded server.
-pub fn download_dir() -> PathBuf {
-    rc_core::paths::tools_dir().join("roslyn").join(PINNED_VERSION)
-}
-
-/// Finds a server: the configured path, our download, the `roslyn-language-server` dotnet
+/// Finds a server: the configured path, the `roslyn-language-server` dotnet
 /// tool, or the copy inside an installed VS Code C# extension (newest first).
 pub fn locate(configured: Option<&Path>, dotnet: &Path) -> Option<ServerCommand> {
     if let Some(p) = configured.filter(|p| p.exists()) {
@@ -61,10 +38,6 @@ pub fn locate(configured: Option<&Path>, dotnet: &Path) -> Option<ServerCommand>
         } else {
             ServerCommand { program: p.to_path_buf(), prefix: Vec::new(), origin: Origin::Settings }
         });
-    }
-    let ours = download_dir().join(exe("Microsoft.CodeAnalysis.LanguageServer"));
-    if ours.exists() {
-        return Some(ServerCommand { program: ours, prefix: Vec::new(), origin: Origin::Downloaded });
     }
     let home = dirs_home();
     if let Some(home) = &home {
@@ -92,81 +65,6 @@ pub fn locate(configured: Option<&Path>, dotnet: &Path) -> Option<ServerCommand>
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from)
-}
-
-/// Download progress for the status bar.
-#[derive(Clone, Debug, PartialEq)]
-pub enum DownloadEvent {
-    Progress { done: u64, total: Option<u64> },
-    Done(PathBuf),
-    Failed(String),
-}
-
-/// Downloads and unpacks the pinned server into [`download_dir`] (async; run it on the
-/// shared runtime). The package is ~60 MB.
-pub async fn download(events: Outbox<DownloadEvent>) {
-    match download_inner(&events).await {
-        Ok(p) => {
-            events.send(DownloadEvent::Done(p));
-        }
-        Err(e) => {
-            events.send(DownloadEvent::Failed(format!("{e:#}")));
-        }
-    }
-}
-
-async fn download_inner(events: &Outbox<DownloadEvent>) -> anyhow::Result<PathBuf> {
-    let id = format!("roslyn-language-server.{}", rid());
-    let url = format!("{FEED}/{id}/{PINNED_VERSION}/{id}.{PINNED_VERSION}.nupkg");
-    let client = reqwest::Client::builder().build()?;
-    let mut resp = client.get(&url).send().await?.error_for_status()?;
-    let total = resp.content_length();
-    let mut bytes: Vec<u8> = Vec::with_capacity(total.unwrap_or(64 << 20) as usize);
-    let mut last = 0u64;
-    while let Some(chunk) = resp.chunk().await? {
-        bytes.extend_from_slice(&chunk);
-        let done = bytes.len() as u64;
-        if done - last > 1 << 20 {
-            last = done;
-            events.send(DownloadEvent::Progress { done, total });
-        }
-    }
-    let dest = download_dir();
-    let tmp = dest.with_extension("partial");
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp)?;
-    let prefix = format!("tools/net10.0/{}/", rid());
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
-    for i in 0..zip.len() {
-        let mut f = zip.by_index(i)?;
-        let Some(name) = f.enclosed_name() else { continue };
-        let name = name.to_string_lossy().replace('\\', "/");
-        let Some(rel) = name.strip_prefix(&prefix) else { continue };
-        if rel.is_empty() || f.is_dir() {
-            continue;
-        }
-        let out = tmp.join(rel);
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut w = std::fs::File::create(&out)?;
-        std::io::copy(&mut f, &mut w)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Some(mode) = f.unix_mode() {
-                let _ = std::fs::set_permissions(&out, std::fs::Permissions::from_mode(mode | 0o644));
-            }
-            // NuGet packages carry no Unix modes: the apphosts must become executable.
-            let is_host = rel == exe("Microsoft.CodeAnalysis.LanguageServer") || rel == exe("roslyn-language-server") || rel.ends_with(".dylib") || rel.ends_with(".exe");
-            if is_host {
-                let _ = std::fs::set_permissions(&out, std::fs::Permissions::from_mode(0o755));
-            }
-        }
-    }
-    let _ = std::fs::remove_dir_all(&dest);
-    std::fs::rename(&tmp, &dest)?;
-    Ok(dest.join(exe("Microsoft.CodeAnalysis.LanguageServer")))
 }
 
 /// Command-line arguments for a stdio session.

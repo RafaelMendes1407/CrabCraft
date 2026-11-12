@@ -1,6 +1,6 @@
 //! Debugging .NET programs through the Debug Adapter Protocol with netcoredbg.
 //!
-//! - [`netcoredbg`]: finding or downloading the adapter (pinned release).
+//! - [`netcoredbg`]: compatibility command discovery for an installed adapter.
 //! - [`client`]: the DAP client over stdio, non-blocking ([`Pending`] polled per frame).
 //! - [`session`]: [`DebugSession`], the state machine the UI owns: build, launch/attach,
 //!   handshake, breakpoints, stops, frames, variables, watches, evaluation.
@@ -27,6 +27,6 @@ pub use breakpoints::{BreakpointSpec, BreakpointState, Breakpoints};
 pub use client::{DapClient, DapError, Incoming, Pending};
 pub use memory::MemoryBlock;
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
-pub use netcoredbg::{AdapterCommand, DownloadEvent};
+pub use netcoredbg::AdapterCommand;
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};
 pub use session::{DebugEvent, DebugSession, EvalValue, Failure, GotoError, OutputCategory, SessionState, SetMethod, set_method, StopInfo, StopReason, ParallelStack, ThreadFrames, Watch, WatchValue};

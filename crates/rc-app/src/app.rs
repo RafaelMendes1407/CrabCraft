@@ -1939,7 +1939,7 @@ impl CrabCraftApp {
         }
         if !self.insight.ready() || !crate::insight::has_insight(&self.docs.list[i]) {
             let msg = match &self.insight.status {
-                crate::insight::InsightStatus::NotInstalled => tr("Download the C# language server from the status bar to use this action"),
+                crate::insight::InsightStatus::NotInstalled => tr("C# language server unavailable"),
                 crate::insight::InsightStatus::Failed(_) => tr("The C# language server stopped; restart it from the status bar"),
                 _ if !crate::insight::has_insight(&self.docs.list[i]) => tr("Language server actions are not available in this file"),
                 _ => tr("The Rust language server is still analysing the project"),
