@@ -203,7 +203,7 @@ fn open(config: &Config, cancel: Arc<AtomicBool>) -> Result<Connection, Error> {
         OpenFlags::SQLITE_OPEN_READ_ONLY
     } | OpenFlags::SQLITE_OPEN_NO_MUTEX
         | OpenFlags::SQLITE_OPEN_NOFOLLOW;
-    let connection = Connection::open_with_flags(&config.path, flags)?;
+    let mut connection = Connection::open_with_flags(&config.path, flags)?;
     connection.busy_timeout(Duration::from_millis(150))?;
     connection.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
     connection.set_db_config(DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false)?;
@@ -322,7 +322,6 @@ fn query(
     let mut result = Grid {
         columns: statement
             .column_names()
-            .iter()
             .map(|name| name.to_string())
             .collect(),
         ..Default::default()
