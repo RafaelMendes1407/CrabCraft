@@ -19,6 +19,8 @@ permanece pendente de retirada; os recursos Rust continuam usando seus adaptador
 Os parsers C#/Razor, suas consultas tree-sitter e o lexer de soluções Visual Studio
 também foram retirados. Arquivos dessas linguagens agora abrem como texto simples;
 os benchmarks de sintaxe e editor usam uma fonte Rust gerada.
+O adaptador LSP Roslyn foi removido; as capacidades LSP compartilhadas agora ficam em
+`rc-lsp/src/capabilities.rs`, usadas pelo rust-analyzer e pelos servidores web configurados.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

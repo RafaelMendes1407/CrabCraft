@@ -10,7 +10,6 @@ use rc_core::Waker;
 use rc_editor::{Completion, EditorEvent, Hover, Signature, SignatureHelp};
 use rc_kit::i18n::{tr, trf};
 use rc_lsp::lsp_types as lsp;
-use rc_lsp::roslyn;
 use rc_lsp::{LanguageSession, LspEvent, Pending, ServerState, path_to_uri, uri_to_path};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -533,19 +532,7 @@ impl Insight {
             }
             return;
         }
-        match roslyn::locate(self.configured.as_deref(), &self.dotnet) {
-            None => self.status = InsightStatus::NotInstalled,
-            Some(cmd) => {
-                let dotnet_root = self.dotnet.canonicalize().ok().and_then(|p| p.parent().map(Path::to_path_buf));
-                match LanguageSession::start(&cmd, &root, self.solution.as_deref(), self.projects.clone(), dotnet_root.as_deref(), self.waker.clone()) {
-                    Ok(s) => {
-                        self.session = Some(s);
-                        self.status = InsightStatus::Starting;
-                    }
-                    Err(e) => self.status = InsightStatus::Failed(e.to_string()),
-                }
-            }
-        }
+        self.status = InsightStatus::NotInstalled;
     }
 
     pub fn restart(&mut self) {

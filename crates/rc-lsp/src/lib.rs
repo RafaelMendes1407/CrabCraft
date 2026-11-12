@@ -1,7 +1,7 @@
 //! Language Server Protocol client: JSON-RPC over stdio with cancellation, incremental
 //! document sync, semantic token decoding, and server adapters.
 
-pub mod roslyn;
+mod capabilities;
 pub mod rpc;
 pub mod rust_analyzer;
 pub mod semantic;
