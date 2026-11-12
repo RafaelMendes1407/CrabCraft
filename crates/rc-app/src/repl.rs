@@ -83,7 +83,7 @@ mod tests {
         let mut app = CrabCraftApp::with_settings(rc_core::Settings::default(), Waker::noop(), None);
         app.open_rust_repl();
         assert!(app.repl_starting.is_none());
-        app.workspace = Some(WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap(), solution: None });
+        app.workspace = Some(WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap() });
         app.open_rust_repl();
         assert!(app.repl_starting.is_none());
         assert!(!app.can_open_rust_repl());

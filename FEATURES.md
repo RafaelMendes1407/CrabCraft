@@ -27,6 +27,8 @@ As configurações de execução de projetos .NET, a compilação e os testes .N
 desligados do aplicativo; a execução e os testes usam os alvos Cargo.
 O carregamento de workspace não detecta mais soluções e projetos Visual Studio, e
 as preferências já não oferecem caminhos para .NET, Roslyn ou netcoredbg.
+O explorador de projetos deixou de ler XML de projetos .NET ou exibir soluções e
+dependências MSBuild. O menu de novos arquivos oferece somente arquivos comuns e Rust.
 
 Menu principal nativo em dropdown no botão ☰, com 12 categorias e submenus, atalhos, todos os comandos
 de busca de ações e acesso às ferramentas; o painel Projeto ganhou um seletor pesquisável

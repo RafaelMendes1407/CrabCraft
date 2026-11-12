@@ -464,7 +464,7 @@ mod tests {
         let root = source();
         std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"coverage_fixture\"\nversion = \"0.1.0\"\n[workspace]\n").unwrap();
         let mut app = crate::app::CrabCraftApp::with_settings(rc_core::Settings::default(), Waker::noop(), None);
-        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap(), solution: None });
+        app.workspace = Some(crate::app::WorkspaceState { ws: rc_core::Workspace::open(root.path()).unwrap() });
         app.start_coverage();
         assert!(!app.coverage.busy());
         assert!(app.coverage.error.is_some());

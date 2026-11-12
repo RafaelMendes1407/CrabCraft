@@ -2460,13 +2460,13 @@ fn external_libraries_come_from_the_lock_file_and_leave_it_alone() {
 
     // The tree shows them when expanded.
     let name = "project".to_string();
-    let rows = app.explorer.rows(None, &root, &name);
+    let rows = app.explorer.rows( &root, &name);
     assert!(rows.iter().any(|r| r.key == "libraries"));
     assert!(!rows.iter().any(|r| r.label == "near"));
     app.explorer.expanded.insert("libraries".into());
     app.explorer.expanded.insert(format!("dir:{}", near.display()));
-    pump(&mut app, "the expanded library directory", |app| app.explorer.rows(None,&root,&name).iter().any(|row|row.label=="src"));
-    let rows = app.explorer.rows(None, &root, &name);
+    pump(&mut app, "the expanded library directory", |app| app.explorer.rows(&root,&name).iter().any(|row|row.label=="src"));
+    let rows = app.explorer.rows( &root, &name);
     assert!(rows.iter().any(|r| r.label == "near" && r.secondary == "0.2.0"));
     assert!(rows.iter().any(|r| r.label == "src"));
 

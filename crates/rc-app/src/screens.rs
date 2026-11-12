@@ -244,44 +244,6 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     assert_eq!(h.state().docs.list.len(), 2);
 }
 
-#[test]
-fn ten_project_solution_opens_and_its_session_is_restored() {
-    use egui_kittest::kittest::Queryable;
-    let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let home = tempfile::tempdir().unwrap();
-    let sln = fixtures().join("TenProjects/TenProjects.slnx");
-    let file_a = fixtures().join("TenProjects/src/Module03/Class1.cs");
-    let file_b = fixtures().join("TenProjects/src/Module07/Class1.cs");
-
-    let mut app = test_app(home.path(), true);
-    app.open_workspace_and_wait(&sln);
-    let w = app.workspace.as_ref().unwrap();
-    assert_eq!(w.solution.as_ref().unwrap().projects().len(), 10);
-    app.open_file_and_wait(&file_a);
-    app.open_file_and_wait(&file_b);
-    app.docs.list[0].editor.goto(2, 8);
-    app.dock.toggle(crate::toolwindow::ToolWindow::Problems);
-    app.docs.activate(0);
-    let mut h = harness(app, vec2(1280.0, 800.0));
-    // Every project is listed under the expanded "src" solution folder.
-    for i in 1..=10 {
-        assert!(h.query_all_by_label(&format!("Module{i:02}")).count() >= 1, "Module{i:02} not in the explorer");
-    }
-    h.run_steps(2);
-    let mut app = h.into_state();
-    app.close_workspace();
-
-    let mut app = test_app(home.path(), true);
-    app.open_workspace_and_wait(&sln);
-    assert_eq!(app.docs.list.len(), 2);
-    assert_eq!(app.docs.active, Some(0));
-    assert_eq!(app.docs.list[0].path, file_a.canonicalize().unwrap());
-    assert_eq!(app.docs.list[0].editor.caret_line_col(), (2, 8));
-    assert!(app.dock.is_open(crate::toolwindow::ToolWindow::Problems));
-    assert!(app.explorer.expanded.contains("sf:/src"));
-}
-
-/// Drags with the primary button from `from` to `to` in a few steps, like a hand would.
 fn drag(h: &mut Harness<'static, CrabCraftApp>, from: egui::Pos2, to: egui::Pos2) {
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     h.input_mut().events.push(egui::Event::PointerMoved(from));
@@ -3068,8 +3030,8 @@ fn scopes_capture() {
         for f in ["src/main.rs", "src/net.rs", "tests/it.rs", "src/lib.rs"] {
             h.state_mut().open_file_and_wait(&root.join(f));
         }
-        h.state_mut().explorer.locate(&root.join("tests/it.rs"), None, &root);
-        h.state_mut().explorer.locate(&root.join("src/lib.rs"), None, &root);
+        h.state_mut().explorer.locate(&root.join("tests/it.rs"), &root);
+        h.state_mut().explorer.locate(&root.join("src/lib.rs"), &root);
         h.state_mut().pending.push(rc_editor::Action::FindInFiles);
         h.run_steps(3);
         let only = h.state().explorer.scopes.filter("Sources").map_err(|e| e.text());

@@ -1869,14 +1869,8 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
         resp.request_focus();
         if !kind.is_folder() && !name.trim().is_empty() {
             let files = kind.files(dir, name);
-            let detail = if kind.is_plain() || kind.is_rust() {
-                // Where it lands, from the solution folder.
-                let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
-                files[0].0.strip_prefix(&root).unwrap_or(&files[0].0).display().to_string()
-            } else {
-                let shown: Vec<String> = files.iter().filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
-                format!("{} · {}", shown.join(", "), crate::item_templates::namespace_for(dir))
-            };
+            let root = app.workspace.as_ref().map(|w| w.ws.root.clone()).unwrap_or_default();
+            let detail = files[0].0.strip_prefix(&root).unwrap_or(&files[0].0).display().to_string();
             ui.add(egui::Label::new(egui::RichText::new(detail).size(12.0).color(rc_kit::pal(ui).muted)).truncate());
         }
         if kind.is_rust() {
@@ -3719,20 +3713,6 @@ fn local_history(app: &mut CrabCraftApp, ctx: &Context, v: &mut LocalHistoryView
         return Outcome::Close;
     }
     if close || esc { Outcome::Close } else { Outcome::Keep }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn skeleton_namespace_follows_the_project_folder() {
-        let dir = tempfile::tempdir().unwrap();
-        let proj = dir.path().join("Shop.Core");
-        std::fs::create_dir_all(proj.join("Models")).unwrap();
-        std::fs::write(proj.join("Shop.Core.csproj"), "<Project/>").unwrap();
-        let s = crate::item_templates::ItemKind::Class.files(&proj.join("Models"), "Order")[0].1.clone();
-        assert!(s.starts_with("namespace Shop.Core.Models;"), "{s}");
-        assert!(s.contains("public class Order"));
-    }
 }
 
 #[cfg(test)]

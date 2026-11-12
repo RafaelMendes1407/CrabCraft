@@ -13,7 +13,6 @@ use rc_core::session::{OpenFile, Session};
 use rc_core::settings::{KeymapChoice, ThemeChoice};
 use rc_core::watch::{FileWatcher, FsEvent};
 use rc_core::{Inbox, Settings, Waker, Workspace};
-use rc_dotnet::Solution;
 use rc_editor::{Action, EditorConfig, Keymap, KeymapKind};
 use rc_kit::i18n::{self, Lang, tr, trf};
 use std::path::{Path, PathBuf};
@@ -38,7 +37,6 @@ pub struct Notice {
 
 pub struct WorkspaceState {
     pub ws: Workspace,
-    pub solution: Option<Solution>,
 }
 
 /// What `rustc --explain` answered: its text, or `None` when it has none.
@@ -581,7 +579,7 @@ impl CrabCraftApp {
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
         self.docs.style_root=Some(ws.root.clone());
-        self.workspace = Some(WorkspaceState { ws, solution: None });
+        self.workspace = Some(WorkspaceState { ws });
         self.restore_session(session,docs);
         if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
         // Scratches reopened with the session are analysed too.
@@ -1556,13 +1554,6 @@ impl CrabCraftApp {
         if self.explorer.expanded.is_empty() {
             // First open: the solution and its top folders expanded, like Rider.
             self.explorer.expanded.insert("sln".into());
-            if let Some(sln) = self.workspace.as_ref().and_then(|w| w.solution.as_ref()) {
-                for item in &sln.items {
-                    if let rc_dotnet::SolutionItem::Folder { name, .. } = item {
-                        self.explorer.expanded.insert(format!("sf:/{name}"));
-                    }
-                }
-            }
         }
         // Editor id of each file of the session, for the layout.
         let mut ids=vec![None;s.files.len()];
@@ -3259,7 +3250,6 @@ impl CrabCraftApp {
                 ExplorerAction::Reveal(path) => reveal_in_file_manager(&path),
                 ExplorerAction::ShowHistory(path) => self.show_git_history(&path),
                 ExplorerAction::OpenInTerminal(dir) => self.open_terminal(Some(dir)),
-                ExplorerAction::AddProject(sln) => self.new_project_dialog(Some(sln)),
                 ExplorerAction::SetExcluded(path, excluded) => self.set_excluded(&path, excluded),
                 ExplorerAction::SetAttached(path, on) => self.set_attached(&path, on),
             }
@@ -3324,7 +3314,7 @@ impl CrabCraftApp {
     pub fn locate_active(&mut self) {
         let Some(path) = self.docs.active_doc().map(|d| d.path.clone()) else { return };
         if let Some(w) = &self.workspace {
-            self.explorer.locate(&path, w.solution.as_ref(), &w.ws.root);
+            self.explorer.locate(&path, &w.ws.root);
             self.dock.show(ToolWindow::Explorer);
         }
     }
