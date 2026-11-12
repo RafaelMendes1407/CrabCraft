@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "exceptions": [
+    {
+      "id": "GITLEAKS-TEST-SIGNATURE-762",
+      "tool": "gitleaks",
+      "fingerprint": "fd645c2d18e2f80857bd60a771dc321cc4a370b0:crates/rc-app/src/screens.rs:generic-api-key:762",
+      "reason": "Historical Rust UI test uses a synthetic 16-digit signature key, not a credential.",
+      "owner": "RafaelMendes1407",
+      "reviewed_at": "2026-11-12",
+      "expires_at": "2027-02-12"
+    },
+    {
+      "id": "GITLEAKS-TEST-SIGNATURE-764",
+      "tool": "gitleaks",
+      "fingerprint": "fd645c2d18e2f80857bd60a771dc321cc4a370b0:crates/rc-app/src/screens.rs:generic-api-key:764",
+      "reason": "Same synthetic signature key in a second line of the historical Rust UI test.",
+      "owner": "RafaelMendes1407",
+      "reviewed_at": "2026-11-12",
+      "expires_at": "2027-02-12"
+    }
+  ]
+}

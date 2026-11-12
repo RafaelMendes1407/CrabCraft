@@ -1,0 +1,18 @@
+{
+  "id": "STATIC-LEGACY-2026-11-12",
+  "reason": "The inherited Rust workspace has formatting and Clippy debt predating the security workflow. Both strict commands still run and publish their complete logs. This exception applies only to the exact source graph below.",
+  "owner": "RafaelMendes1407",
+  "reviewed_at": "2026-11-12",
+  "expires_at": "2027-02-12",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "known_lint_messages": [
+    "error: items after a test module",
+    "error: large size difference between variants",
+    "error: the loop variable `first` is used to index `spans`",
+    "error: this `if` statement can be collapsed",
+    "error: this `impl` can be derived",
+    "error: this expression creates a reference which is immediately dereferenced by the compiler",
+    "error: this looks like an `else if` but the `else` is missing"
+  ],
+  "source_sha256": "ee0ef43b25927e7c793eede0ffd185c7f58d6b76f66242f790d8d5ba8ff28ed7"
+}

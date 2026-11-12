@@ -1,4 +1,6 @@
 /target
+/security/reports/*
+!/security/reports/README.md
 .DS_Store
 **/bin/
 **/obj/
