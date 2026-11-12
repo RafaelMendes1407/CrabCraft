@@ -297,6 +297,7 @@
     "The program is running": "程序正在运行",
     "The program must be paused to evaluate expressions": "程序必须暂停才能计算表达式",
     "There is no run configuration to debug": "没有可调试的运行配置",
+    "This run configuration cannot be debugged": "无法调试此运行配置",
     "Thread {id}": "线程 {id}",
     "Threads & Variables": "线程和变量",
     "Variables are shown when the program is paused": "程序暂停时显示变量",

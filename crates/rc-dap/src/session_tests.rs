@@ -2,13 +2,13 @@
 //! requests it receives.
 
 use super::*;
-use crate::netcoredbg::Origin;
+use crate::adapter::Origin;
 use std::time::Instant;
 
 fn fake(dir: &Path, mode: &str) -> (AdapterCommand, PathBuf) {
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fake_adapter.py");
     let log = dir.join("requests.jsonl");
-    let mut cmd = AdapterCommand::new("python3", Origin::Settings);
+    let mut cmd = AdapterCommand::new("python3", Origin::Generic);
     cmd.prefix = vec!["-u".into(), script.display().to_string(), log.display().to_string(), mode.into()];
     (cmd, log)
 }
@@ -23,11 +23,11 @@ fn commands(log: &Path) -> Vec<String> {
 }
 
 fn launch() -> DebugTarget {
-    DebugTarget::Launch(LaunchConfig { program: "/usr/bin/dotnet".into(), args: vec!["app.dll".into()], cwd: "/w".into(), env: vec![("A".into(), "1".into())] })
+    DebugTarget::Launch(LaunchConfig { program: "/w/target/debug/calc".into(), args: vec![], cwd: "/w".into(), env: vec![("A".into(), "1".into())] })
 }
 
 fn calc() -> PathBuf {
-    PathBuf::from("/w/Calc.cs")
+    PathBuf::from("/w/Calc.rs")
 }
 
 /// Pumps until `done` holds for an event or for the session.
@@ -101,7 +101,7 @@ fn handshake_order_stops_caches_watches_and_exit() {
     let (adapter, log) = fake(dir.path(), "late");
     let mut bps = Breakpoints::new();
     bps.set(BreakpointSpec::new(calc(), 9));
-    bps.set(BreakpointSpec::new("/w/Other.cs", 3).with_condition("y > 1"));
+    bps.set(BreakpointSpec::new("/w/Other.rs", 3).with_condition("y > 1"));
     let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
     let mut ev = Vec::new();
     pump_until(&mut s, &mut ev, stopped);
@@ -109,11 +109,11 @@ fn handshake_order_stops_caches_watches_and_exit() {
     // initialize → launch → (initialized) → setBreakpoints per file → exception filters → configurationDone.
     assert_eq!(commands(&log)[..6], ["initialize", "launch", "setBreakpoints", "setBreakpoints", "setExceptionBreakpoints", "configurationDone"]);
     let reqs = requests(&log);
-    assert_eq!(reqs[1]["arguments"]["program"], "/usr/bin/dotnet");
+    assert_eq!(reqs[1]["arguments"]["program"], "/w/target/debug/calc");
     assert_eq!(reqs[1]["arguments"]["env"]["A"], "1");
-    assert_eq!(reqs[1]["arguments"]["justMyCode"], true);
+    assert_eq!(reqs[1]["arguments"]["stopOnEntry"], false);
     assert_eq!(reqs[3]["arguments"]["breakpoints"][0]["condition"], "y > 1");
-    assert_eq!(reqs[4]["arguments"]["filters"], json!(["user-unhandled"]));
+    assert_eq!(reqs[4]["arguments"]["filters"], json!(["uncaught"]));
     assert_eq!(s.exception_filters_available().len(), 2);
 
     let states: Vec<SessionState> = ev.iter().filter_map(|e| if let DebugEvent::StateChanged(s) = e { Some(s.clone()) } else { None }).collect();
@@ -128,7 +128,7 @@ fn handshake_order_stops_caches_watches_and_exit() {
     let b = s.breakpoints().get(&calc(), 9).unwrap();
     assert!(b.verified);
     assert_eq!(b.display_line(), 10);
-    assert!(s.breakpoints().get(Path::new("/w/Other.cs"), 3).unwrap().verified);
+    assert!(s.breakpoints().get(Path::new("/w/Other.rs"), 3).unwrap().verified);
 
     let info = s.stop_info().unwrap().clone();
     assert_eq!((info.thread_id, &info.reason, info.frame_id), (1, &StopReason::Breakpoint, Some(10)));
@@ -195,7 +195,7 @@ fn handshake_order_stops_caches_watches_and_exit() {
     // Selecting another frame changes the context.
     let caller = s.frames(1).unwrap().frames[1].id;
     s.select_frame(caller);
-    assert_eq!(s.execution_point(), Some((PathBuf::from("/w/Program.cs"), 5)));
+    assert_eq!(s.execution_point(), Some((PathBuf::from("/w/Program.rs"), 5)));
 
     // Breakpoint edits while stopped re-send that file only.
     let before = commands(&log).len();
@@ -204,13 +204,13 @@ fn handshake_order_stops_caches_watches_and_exit() {
     // Watch evaluations may finish alongside the breakpoint reply; identify the update
     // itself rather than assuming that it is the last request written by the adapter.
     let cleared = |request: &Value| request["command"] == "setBreakpoints"
-        && request["arguments"]["source"]["path"] == "/w/Calc.cs"
+        && request["arguments"]["source"]["path"] == "/w/Calc.rs"
         && request["arguments"]["breakpoints"] == json!([]);
     pump_until_state(&mut s, &mut ev, |_| requests(&log).iter().skip(before).any(cleared));
     let recorded = requests(&log);
     let last = recorded.iter().skip(before).find(|request| cleared(request)).unwrap();
     assert_eq!(last["command"], "setBreakpoints");
-    assert_eq!(last["arguments"]["source"]["path"], "/w/Calc.cs");
+    assert_eq!(last["arguments"]["source"]["path"], "/w/Calc.rs");
     assert_eq!(last["arguments"]["breakpoints"], json!([]));
 
     // Run to the end.
@@ -466,7 +466,7 @@ fn code_is_disassembled_around_the_frame_and_stepped_by_instruction() {
     let id = s.disassemble("0x2000", 0, 0, 8);
     let all = disassembled(&mut s, &mut ev, id).unwrap();
     let r = rows(&all, Some(0x2010));
-    assert_eq!(r[0], DisasmRow::Header { symbol: Some("Calc".into()), location: Some("/w/Calc.cs:9".into()) });
+    assert_eq!(r[0], DisasmRow::Header { symbol: Some("Calc".into()), location: Some("/w/Calc.rs:9".into()) });
     assert!(r.contains(&DisasmRow::Instruction { index: 4, current: true }));
     assert_eq!(r.iter().filter(|r| matches!(r, DisasmRow::Header { .. })).count(), 2);
 
@@ -497,7 +497,7 @@ fn forced_steps_take_the_breakpoints_away_until_the_program_stops() {
     let (adapter, log) = fake(dir.path(), "late");
     let mut bps = Breakpoints::new();
     bps.set(BreakpointSpec::new(calc(), 9));
-    bps.set(BreakpointSpec::new("/w/Other.cs", 3));
+    bps.set(BreakpointSpec::new("/w/Other.rs", 3));
     let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), bps, Waker::noop());
     let mut ev = Vec::new();
     pump_until(&mut s, &mut ev, stopped);
@@ -514,8 +514,8 @@ fn forced_steps_take_the_breakpoints_away_until_the_program_stops() {
     let next = after.iter().position(|c| c == "next").unwrap();
     assert_eq!(after[..next].iter().filter(|c| *c == "setBreakpoints").count(), 2);
     let sets = breakpoint_sets(&log, before);
-    assert_eq!(other(&sets, "/w/Calc.cs"), [vec![], vec![9]]);
-    assert_eq!(other(&sets, "/w/Other.cs"), [vec![], vec![3]]);
+    assert_eq!(other(&sets, "/w/Calc.rs"), [vec![], vec![9]]);
+    assert_eq!(other(&sets, "/w/Other.rs"), [vec![], vec![3]]);
     // The user's breakpoints never changed.
     assert!(s.breakpoints().get(&calc(), 9).is_some_and(|b| b.spec.enabled));
 
@@ -523,12 +523,12 @@ fn forced_steps_take_the_breakpoints_away_until_the_program_stops() {
     // out of the adapter too.
     let before = commands(&log).len();
     s.force_continue_to(BreakpointSpec::new(calc(), 15));
-    s.set_breakpoint(BreakpointSpec::new("/w/Other.cs", 7));
+    s.set_breakpoint(BreakpointSpec::new("/w/Other.rs", 7));
     pump_until(&mut s, &mut ev, stopped);
     pump_until_state(&mut s, &mut ev, |_| breakpoint_sets(&log, before).len() >= 6);
     let sets = breakpoint_sets(&log, before);
-    assert_eq!(other(&sets, "/w/Calc.cs"), [vec![], vec![15], vec![9, 15]]);
-    assert_eq!(other(&sets, "/w/Other.cs"), [vec![], vec![], vec![3, 7]]);
+    assert_eq!(other(&sets, "/w/Calc.rs"), [vec![], vec![15], vec![9, 15]]);
+    assert_eq!(other(&sets, "/w/Other.rs"), [vec![], vec![], vec![3, 7]]);
     let continued = commands(&log)[before..].iter().position(|c| c == "continue").unwrap();
     assert_eq!(commands(&log)[before..][..continued].iter().filter(|c| *c == "setBreakpoints").count(), 3);
 
@@ -593,7 +593,7 @@ fn hit_condition_stops_on_the_nth_hit_and_stop_disconnects() {
 
 #[test]
 fn a_missing_adapter_fails_the_session() {
-    let adapter = AdapterCommand::new("/nonexistent/netcoredbg", Origin::Settings);
+    let adapter = AdapterCommand::new("/nonexistent/gdb", Origin::Gdb);
     let mut s = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
     let ev = s.pump();
     assert!(matches!(s.state(), SessionState::Failed(Failure::AdapterNotStarted(_))));

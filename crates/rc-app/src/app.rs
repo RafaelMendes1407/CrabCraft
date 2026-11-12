@@ -2887,12 +2887,7 @@ impl CrabCraftApp {
             Some(crate::runner::RunConfig { kind: crate::runner::ConfigKind::TestSelection { .. }, .. }) => {
                 self.notify(tr("Test configurations cannot be debugged yet: use Debug in the gutter of the test"), false);
             }
-            Some(config) => {
-                let dotnet = dotnet_path(&self.settings);
-                let request = self.runner.request_for(&config);
-                let outs = self.debugger.start(config, request, &dotnet, self.settings.netcoredbg_path.as_deref(), &self.docs);
-                self.handle_debug(outs);
-            }
+            Some(_) => self.notify(tr("This run configuration cannot be debugged"), false),
             None => self.notify(tr("There is no run configuration to debug"), false),
         }
     }

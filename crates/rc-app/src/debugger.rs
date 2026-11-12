@@ -3,7 +3,7 @@
 //! execution point, the debug console, watches, hover values and expression evaluation.
 
 use crate::docs::Docs;
-use crate::runner::{ConfigKind, RunConfig};
+use crate::runner::RunConfig;
 use rc_core::Waker;
 use rc_dap::{BreakpointSpec, Breakpoints, DebugEvent, DebugOptions, DebugSession, DebugTarget, EvalContext, EvalValue, OutputCategory, SessionState};
 use rc_kit::i18n::{tr, trf};
@@ -153,7 +153,7 @@ impl Debugger {
         }
     }
 
-    fn rust_adapter(&self) -> Result<rc_dap::netcoredbg::AdapterCommand, String> {
+    fn rust_adapter(&self) -> Result<rc_dap::AdapterCommand, String> {
         match self.rust_backend {
             rc_core::settings::RustDebugger::Gdb => rc_dap::gdb::locate_configured(self.gdb_path.as_deref())
                 .ok_or_else(|| tr("GDB was not found. Install it to debug Rust programs.").into()),
@@ -282,42 +282,6 @@ impl Debugger {
         self.stop();self.privileged=true;self.new_watch.clear();self.eval=None;self.hover=None;self.hover_result=None;self.edit=None;self.urls.clear();self.name=name.to_string();self.expanded.clear();self.parallel_stacks.reset();self.memory.reset();self.disassembly.reset();
         let console=crate::runner::Console::new(&self.waker);console.note(&tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));self.console=Some(console);
         self.session=Some(DebugSession::start(adapter,DebugTarget::Launch(launch),DebugOptions::default(),self.breakpoints(docs),self.waker.clone()));
-        vec![DebugOutput::ShowDebugWindow]
-    }
-
-    /// Starts debugging `config` (apps only) with an installed adapter.
-    pub fn start(&mut self, config: RunConfig, request: Option<rc_dotnet::RunRequest>, dotnet: &Path, configured: Option<&Path>, docs: &Docs) -> Vec<DebugOutput> {
-        self.privileged=false;
-        let (ConfigKind::App { .. }, Some(mut run)) = (&config.kind, request) else {
-            return vec![DebugOutput::Notify(tr("Choose an application run configuration to debug").into(), false)];
-        };
-        if let Some(s) = &mut self.session {
-            s.stop();
-        }
-        let Some(adapter) = rc_dap::netcoredbg::locate(configured) else {
-            return vec![DebugOutput::Notify(tr("netcoredbg debugger not found; configure its installed path in Settings › Tools").into(), true)];
-        };
-        let Some(dotnet) = rc_dotnet::Dotnet::locate(Some(dotnet)) else {
-            return vec![DebugOutput::Notify(tr("The .NET SDK was not found. Install it or set its path in Settings › Tools.").into(), true)];
-        };
-        run.env.extend(self.env.iter().cloned());
-        self.urls.clear();
-        let target = DebugTarget::Project { dotnet, run };
-        let console = crate::runner::Console::new(&self.waker);
-        console.note(&trf("Building {name}…", &[("name", &config.name)]));
-        self.console = Some(console);
-        self.name = config.name.clone();
-        self.expanded.clear();
-        self.parallel_stacks.reset();
-        self.memory.reset();
-        self.disassembly.reset();
-        let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
-        let mut session = DebugSession::start(adapter, target, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
-        session.set_hex(self.hex);
-        for w in watches {
-            session.add_watch(w);
-        }
-        self.session = Some(session);
         vec![DebugOutput::ShowDebugWindow]
     }
 

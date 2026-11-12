@@ -92,7 +92,7 @@ while True:
             "supportsSteppingGranularity": True,
             "exceptionBreakpointFilters": [
                 {"filter": "all", "label": "All"},
-                {"filter": "user-unhandled", "label": "User-Unhandled", "default": True},
+                {"filter": "uncaught", "label": "Uncaught", "default": True},
             ],
         })
     elif cmd == "launch":
@@ -123,8 +123,8 @@ while True:
         respond(m, {"threads": [{"id": 1, "name": "Main"}]})
     elif cmd == "stackTrace":
         frames = [
-            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.cs"}, "instructionPointerReference": hex(ip)},
-            {"id": stops * 10 + 1, "name": "Main", "line": 5, "column": 1, "source": {"path": "/w/Program.cs"}},
+            {"id": stops * 10, "name": "Calc", "line": cur_line, "column": 1, "source": {"path": "/w/Calc.rs"}, "instructionPointerReference": hex(ip)},
+            {"id": stops * 10 + 1, "name": "Main", "line": 5, "column": 1, "source": {"path": "/w/Program.rs"}},
         ]
         start = a.get("startFrame", 0)
         levels = a.get("levels", 0) or len(frames)
@@ -203,7 +203,7 @@ while True:
         for _ in range(a["instructionCount"]):
             if 0x2000 <= addr < 0x2100 and addr % 4 == 0:
                 insn = {"address": hex(addr), "instruction": "op %d" % ((addr - 0x2000) // 4), "instructionBytes": "%08x" % addr,
-                        "line": 9 + (addr - 0x2000) // 16, "location": {"name": "Calc.cs", "path": "/w/Calc.cs"}}
+                        "line": 9 + (addr - 0x2000) // 16, "location": {"name": "Calc.rs", "path": "/w/Calc.rs"}}
                 if addr == 0x2000:
                     insn["symbol"] = "Calc"
             else:

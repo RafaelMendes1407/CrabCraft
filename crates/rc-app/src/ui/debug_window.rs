@@ -765,7 +765,7 @@ fn paint_row(ui: &mut Ui, row: &Row, open: bool, selected: bool) -> egui::Respon
     job.append(&row.name, 0.0, egui::TextFormat::simple(font.clone(), name_color));
     if !row.scope && !row.value.is_empty() {
         job.append(" = ", 0.0, egui::TextFormat::simple(font.clone(), p.text));
-        // netcoredbg shows objects as `{Full.Type.Name}`: show the short type once (Rider).
+        // Show a short type name for wrapped object names.
         let object = row.value.starts_with('{') && row.value.ends_with('}');
         if object {
             job.append(&format!("{{{}}}", short_type(&row.value[1..row.value.len() - 1])), 0.0, egui::TextFormat::simple(font.clone(), p.muted));

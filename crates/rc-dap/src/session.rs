@@ -11,8 +11,8 @@
 
 use crate::breakpoints::{BreakpointSpec, Breakpoints, Emulation, LogPart, hit_condition_met, parse_log_message};
 use crate::client::{DapClient, DapError, Incoming, Pending, args};
-use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, attach_arguments, gdb_attach_arguments, gdb_launch_arguments, launch_arguments, prepare};
-use crate::netcoredbg::AdapterCommand;
+use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, gdb_attach_arguments, gdb_launch_arguments};
+use crate::adapter::{AdapterCommand, Origin};
 use crate::protocol::*;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::{BuildEvent, CancelToken, LaunchPlan};
@@ -409,7 +409,7 @@ pub struct DebugSession {
 pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 impl DebugSession {
-    /// Starts a session (never blocks): builds first for [`DebugTarget::Project`], then starts
+    /// Starts a session (never blocks): builds Cargo targets first, then starts
     /// the adapter. `breakpoints` are the ones set before the session (their debugger state
     /// is reset).
     pub fn start(adapter: AdapterCommand, target: DebugTarget, options: DebugOptions, mut breakpoints: Breakpoints, waker: Waker) -> DebugSession {
@@ -460,27 +460,6 @@ impl DebugSession {
             events: Vec::new(),
         };
         match target {
-            DebugTarget::Project { dotnet, run } => {
-                s.set_state(SessionState::Preparing);
-                let cancel = CancelToken::new();
-                s.prep_cancel = Some(cancel.clone());
-                let out = s.prep_inbox.sender();
-                Runtime::spawn(async move {
-                    let build_out = out.clone();
-                    let r = prepare(&dotnet, &run, &cancel, &mut |e| {
-                        build_out.send(Prep::Build(e));
-                    })
-                    .await;
-                    out.send(match r {
-                        Ok(Some(plan)) => Prep::Ready(plan),
-                        Ok(None) => Prep::Cancelled,
-                        Err(e) => {
-                            let msg = format!("{e:#}");
-                            if msg.starts_with("build failed") { Prep::Failed(Failure::BuildFailed(msg)) } else { Prep::Failed(Failure::PrepareFailed(msg)) }
-                        }
-                    });
-                });
-            }
             DebugTarget::Cargo { cargo, target } => {
                 s.set_state(SessionState::Preparing);
                 let cancel = CancelToken::new();
@@ -509,7 +488,7 @@ impl DebugSession {
             DebugTarget::Attach { pid } => {
                 s.attach_pid = Some(pid);
                 s.debuggee_pid = Some(pid);
-                let a = if s.is_gdb() || s.adapter.origin == crate::netcoredbg::Origin::Lldb { gdb_attach_arguments(pid) } else { attach_arguments(pid, &s.options) };
+                let a = gdb_attach_arguments(pid);
                 s.spawn_adapter("attach", a);
             }
             DebugTarget::Remote(remote) => {
@@ -523,9 +502,9 @@ impl DebugSession {
 
     fn launch_arguments(&self, config: &LaunchConfig) -> Value {
         match self.adapter.origin {
-            crate::netcoredbg::Origin::Gdb => gdb_launch_arguments(config, &self.options),
-            crate::netcoredbg::Origin::Lldb => crate::launch::lldb_launch_arguments(config, &self.options),
-            _ => launch_arguments(config, &self.options),
+            Origin::Gdb => gdb_launch_arguments(config, &self.options),
+            Origin::Lldb => crate::launch::lldb_launch_arguments(config, &self.options),
+            Origin::Generic => gdb_launch_arguments(config, &self.options),
         }
     }
 
@@ -537,7 +516,7 @@ impl DebugSession {
                 let init = json!({
                     "clientID": "crabcraft",
                     "clientName": "CrabCraft",
-                    "adapterID": match self.adapter.origin { crate::netcoredbg::Origin::Gdb => "gdb", crate::netcoredbg::Origin::Lldb => "lldb", _ => "coreclr" },
+                    "adapterID": match self.adapter.origin { Origin::Gdb | Origin::Generic => "gdb", Origin::Lldb => "lldb" },
                     "locale": "en-US",
                     "pathFormat": "path",
                     "linesStartAt1": true,
@@ -1088,7 +1067,7 @@ impl DebugSession {
     }
 
     fn is_gdb(&self) -> bool {
-        self.adapter.origin == crate::netcoredbg::Origin::Gdb
+        self.adapter.origin == Origin::Gdb
     }
 
     /// Whether breakpoint changes go to the adapter right away.
@@ -1571,7 +1550,7 @@ impl DebugSession {
         self.events.push(DebugEvent::BreakpointsChanged(path.to_path_buf()));
     }
 
-    /// Filters the adapter offers (`all`, `user-unhandled` for netcoredbg).
+    /// Exception filters offered by the adapter.
     pub fn exception_filters_available(&self) -> &[ExceptionBreakpointsFilter] {
         &self.capabilities.exception_breakpoint_filters
     }

@@ -1,6 +1,6 @@
-//! Debugging .NET programs through the Debug Adapter Protocol with netcoredbg.
+//! Debugging Rust programs through the Debug Adapter Protocol with GDB or LLDB.
 //!
-//! - [`netcoredbg`]: compatibility command discovery for an installed adapter.
+//! - [`adapter`]: command for an installed Rust adapter.
 //! - [`client`]: the DAP client over stdio, non-blocking ([`Pending`] polled per frame).
 //! - [`session`]: [`DebugSession`], the state machine the UI owns: build, launch/attach,
 //!   handshake, breakpoints, stops, frames, variables, watches, evaluation.
@@ -11,6 +11,7 @@
 //! - [`disassembly`]: `disassemble` answers decoded, merged and laid out as rows.
 
 pub mod breakpoints;
+pub mod adapter;
 pub mod client;
 pub mod disassembly;
 pub mod format;
@@ -19,7 +20,6 @@ pub mod lldb;
 pub mod remote;
 pub mod launch;
 pub mod memory;
-pub mod netcoredbg;
 pub mod protocol;
 pub mod session;
 
@@ -27,6 +27,6 @@ pub use breakpoints::{BreakpointSpec, BreakpointState, Breakpoints};
 pub use client::{DapClient, DapError, Incoming, Pending};
 pub use memory::MemoryBlock;
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
-pub use netcoredbg::AdapterCommand;
+pub use adapter::AdapterCommand;
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};
 pub use session::{DebugEvent, DebugSession, EvalValue, Failure, GotoError, OutputCategory, SessionState, SetMethod, set_method, StopInfo, StopReason, ParallelStack, ThreadFrames, Watch, WatchValue};

@@ -745,7 +745,7 @@ pub fn adapter(
     authorize(spec, trusted, approved)?;
     let mut adapter = rc_dap::AdapterCommand::new(
         std::env::current_exe()?.canonicalize()?,
-        rc_dap::netcoredbg::Origin::Gdb,
+        rc_dap::adapter::Origin::Gdb,
     );
     adapter.prefix = vec!["--internal-privileged-debug-proxy".into(), spec.json()?];
     Ok(adapter)

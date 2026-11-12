@@ -1,5 +1,5 @@
 //! LLVM's `lldb-dap` (or its older `lldb-vscode` name), speaking DAP over stdio.
-use crate::netcoredbg::{AdapterCommand, Origin};
+use crate::adapter::{AdapterCommand, Origin};
 use std::path::{Path, PathBuf};
 
 /// Discovery only checks files. It never executes a project tool or silently falls back
@@ -21,7 +21,7 @@ fn exe(name: &str) -> PathBuf { if cfg!(windows) { format!("{name}.exe").into() 
 mod tests {
     use super::*;
     #[test]
-    fn configured_adapter_uses_stdio_without_netcoredbg_switches() {
+    fn configured_adapter_uses_stdio() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(exe("lldb-dap"));
         std::fs::write(&path, "not executed during discovery").unwrap();

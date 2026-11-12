@@ -297,6 +297,7 @@
     "The program is running": "プログラムは実行中です",
     "The program must be paused to evaluate expressions": "式を評価するにはプログラムを一時停止する必要があります",
     "There is no run configuration to debug": "デバッグする実行構成がありません",
+    "This run configuration cannot be debugged": "この実行構成はデバッグできません",
     "Thread {id}": "スレッド {id}",
     "Threads & Variables": "スレッドと変数",
     "Variables are shown when the program is paused": "プログラムが一時停止すると変数が表示されます",

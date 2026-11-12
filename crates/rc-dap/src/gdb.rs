@@ -1,7 +1,7 @@
 //! GDB as the debug adapter for Rust: it speaks DAP natively since version 14. `rust-gdb` runs it
 //! with the pretty printers of the active toolchain.
 
-use crate::netcoredbg::{AdapterCommand, Origin};
+use crate::adapter::{AdapterCommand, Origin};
 use std::path::{Path, PathBuf};
 
 /// The interpreter flag and options that keep GDB from asking anything on start.

@@ -297,6 +297,7 @@
     "The program is running": "El programa se está ejecutando",
     "The program must be paused to evaluate expressions": "El programa debe estar en pausa para evaluar expresiones",
     "There is no run configuration to debug": "No hay ninguna configuración de ejecución para depurar",
+    "This run configuration cannot be debugged": "Esta configuración de ejecución no se puede depurar",
     "Thread {id}": "Hilo {id}",
     "Threads & Variables": "Hilos y variables",
     "Variables are shown when the program is paused": "Las variables se muestran cuando el programa está en pausa",

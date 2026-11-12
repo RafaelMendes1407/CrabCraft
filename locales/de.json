@@ -297,6 +297,7 @@
     "The program is running": "Das Programm läuft",
     "The program must be paused to evaluate expressions": "Das Programm muss angehalten sein, um Ausdrücke auszuwerten",
     "There is no run configuration to debug": "Keine Ausführungskonfiguration zum Debuggen",
+    "This run configuration cannot be debugged": "Diese Ausführungskonfiguration kann nicht debuggt werden",
     "Thread {id}": "Thread {id}",
     "Threads & Variables": "Threads und Variablen",
     "Variables are shown when the program is paused": "Variablen werden angezeigt, wenn das Programm angehalten ist",

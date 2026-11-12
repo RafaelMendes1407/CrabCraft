@@ -13,7 +13,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-syntax` | tree-sitter parsing on a background thread, highlighting, folding, bracket matching. |
 | `rc-editor` | The code editor widget (egui), keymaps (`keymap::Action`), code-insight popups. |
 | `rc-lsp` | JSON-RPC/LSP client, rust-analyzer, and explicitly configured web-language servers. |
-| `rc-dap` | DAP client, GDB and LLVM LLDB DAP sessions, and inherited netcoredbg support. |
+| `rc-dap` | DAP client and GDB/LLVM LLDB DAP sessions for Rust. |
 | `rc-cargo` | Cargo: toolchain, workspace model, build, run and test. |
 | `rc-dotnet` | SDKs, solutions/projects, MSBuild, build/run/test, TRX. |
 | `rc-vcs` | Git through the `git` CLI. |
