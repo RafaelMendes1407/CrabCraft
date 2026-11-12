@@ -91,6 +91,13 @@ def advisory_severity(advisory: dict) -> str:
     return "INFORMATIONAL"
 
 
+def static_source_files() -> list[Path]:
+    """Select project inputs, excluding generated files under fuzz/target."""
+    return sorted([ROOT / "Cargo.toml", ROOT / "Cargo.lock", *ROOT.glob("crates/**/Cargo.toml"),
+                   *ROOT.glob("crates/**/*.rs"), *ROOT.glob("fuzz/fuzz_targets/*.rs"),
+                   ROOT / "fuzz" / "Cargo.toml", ROOT / "fuzz" / "Cargo.lock"])
+
+
 def dependencies() -> dict:
     checks = []
     findings = []
@@ -177,10 +184,7 @@ def static() -> dict:
                                               "--all-features", "--locked", "--", "-D", "warnings"])]
     baseline = load_json(ROOT / "security" / "static-baseline.json")
     digest = hashlib.sha256()
-    sources = sorted([ROOT / "Cargo.toml", ROOT / "Cargo.lock", *ROOT.glob("crates/**/Cargo.toml"),
-                      *ROOT.glob("crates/**/*.rs"), *ROOT.glob("fuzz/**/*.rs"),
-                      ROOT / "fuzz" / "Cargo.toml", ROOT / "fuzz" / "Cargo.lock"])
-    for source in sources:
+    for source in static_source_files():
         digest.update(str(source.relative_to(ROOT)).encode() + b"\0" + source.read_bytes() + b"\0")
     source_digest = digest.hexdigest()
     baseline_valid = False
