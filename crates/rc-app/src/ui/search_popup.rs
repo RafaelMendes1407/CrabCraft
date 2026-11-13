@@ -168,7 +168,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
             choose = hits.get(se.selected).map(|h| h.1.clone());
         }
     });
-    let area = egui::Area::new(Id::new("search_everywhere")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+    let area = egui::Area::new(Id::unique("search_everywhere")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         egui::Frame::NONE
             .fill(p.popup_bg)
             .stroke(egui::Stroke::new(1.0, p.popup_border))

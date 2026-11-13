@@ -372,7 +372,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &egui::Context) {
     let mut preview = false;
     let mut apply = false;
     let mut cancel = false;
-    egui::Window::new(tr("Move public Rust item")).id(egui::Id::new("move-public-rust-item")).open(&mut open).default_width(900.0).resizable(true).show(ctx,|ui|{
+    egui::Window::new(tr("Move public Rust item")).id(egui::Id::unique("move-public-rust-item")).open(&mut open).default_width(900.0).resizable(true).show(ctx,|ui|{
  ui.label(tr("Moves primitive-only public functions, structs with public fields, enums, constants and type aliases between existing sibling crate modules. The old path remains a re-export."));ui.small(tr("Unsupported: private items or fields, generics, dependent names, methods, macros, attributes, doc comments, glob imports and multiple Cargo targets. No files are saved automatically."));ui.monospace(state.source.display().to_string());
  let previous_target=state.target.clone();
  ui.horizontal(|ui|{ui.label(tr("Destination open Rust module"));egui::ComboBox::from_id_salt("move-item-target").selected_text(state.target.display().to_string()).show_ui(ui,|ui|{for doc in app.docs.list.iter().filter(|doc|doc.editor.id!=state.origin&&doc.editor.lang()==rc_syntax::Lang::Rust&&!doc.editor.read_only&&doc.path.parent()==state.source.parent()&&!matches!(doc.path.file_name().and_then(|name|name.to_str()),Some("main.rs"|"lib.rs"))){ui.selectable_value(&mut state.target,doc.path.clone(),doc.path.display().to_string());}});});

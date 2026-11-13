@@ -204,7 +204,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new(tr("Local AI assistant")).id(egui::Id::new("local_ai_assistant")).open(&mut open).default_width(580.0).default_height(520.0).show(ctx, |ui| {
+    egui::Window::new(tr("Local AI assistant")).id(egui::Id::unique("local_ai_assistant")).open(&mut open).default_width(580.0).default_height(520.0).show(ctx, |ui| {
         ui.label(tr("Requests run only when you click a button. Ollama and model weights must be installed separately. No model, project text or chat history is saved by this panel."));
         if ui.checkbox(&mut assistant.enabled, tr("Enable local AI for this session")).changed() && !assistant.enabled { assistant.cancel(); assistant.history.clear(); }
         if !trusted { ui.colored_label(rc_kit::pal(ui).error, tr("Trust this project before sending context to local AI.")); }

@@ -165,7 +165,7 @@ fn flame_graph(app: &mut CrabCraftApp, ui: &mut Ui, profile: &Profile) -> Option
             if profile.source(node).is_some() {
                 text.push_str(&format!("\n{}", tr("Double-click to open the source")));
             }
-            egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::new("flame_tip"), egui::PopupAnchor::Pointer).show(|ui| {
+            egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("flame_tip"), egui::PopupAnchor::Pointer).show(|ui| {
                 ui.label(text);
             });
             if double {

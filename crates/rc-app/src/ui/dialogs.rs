@@ -201,7 +201,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
 }
 
 fn modal<R>(ctx: &Context, id: &str, width: f32, add: impl FnOnce(&mut Ui) -> R) -> (R, bool) {
-    let resp = egui::Modal::new(Id::new(id)).show(ctx, |ui| {
+    let resp = egui::Modal::new(Id::unique(id)).show(ctx, |ui| {
         ui.set_width(width);
         add(ui)
     });
@@ -694,9 +694,9 @@ fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, err
 /// Settings › Keymap: the keymap, then every action with its shortcut, filling the page.
 pub(crate) fn cancel_shortcut_recording(ctx: &Context) {
     ctx.data_mut(|data| {
-        data.remove::<String>(Id::new("recording_shortcut"));
-        data.remove::<rc_editor::keymap::Chord>(Id::new("recording_shortcut_first"));
-        data.remove::<bool>(Id::new("recording_shortcut_error"));
+        data.remove::<String>(Id::unique("recording_shortcut"));
+        data.remove::<rc_editor::keymap::Chord>(Id::unique("recording_shortcut_first"));
+        data.remove::<bool>(Id::unique("recording_shortcut_error"));
     });
 }
 
@@ -730,11 +730,11 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
     });
     ui.add_space(8.0);
     let keymap = crate::app::build_keymap(draft);
-    let recording_id = egui::Id::new("recording_shortcut");
-    let first_id = egui::Id::new("recording_shortcut_first");
-    let mode_id = egui::Id::new("recording_shortcut_sequence");
-    let error_id = egui::Id::new("recording_shortcut_error");
-    let filter_id = egui::Id::new("shortcut_filter");
+    let recording_id = egui::Id::unique("recording_shortcut");
+    let first_id = egui::Id::unique("recording_shortcut_first");
+    let mode_id = egui::Id::unique("recording_shortcut_sequence");
+    let error_id = egui::Id::unique("recording_shortcut_error");
+    let filter_id = egui::Id::unique("shortcut_filter");
     let mut two_step = ui.ctx().data(|data| data.get_temp::<bool>(mode_id)).unwrap_or(false);
     if ui.checkbox(&mut two_step, tr("Record two-step shortcuts")).changed() {
         ui.ctx().data_mut(|data| { data.insert_temp(mode_id, two_step); data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); data.remove::<bool>(error_id); });
@@ -2429,7 +2429,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
     if ctx.input(|i| i.key_pressed(Key::Escape)) {
         close = true;
     }
-    let area = egui::Area::new(Id::new("code_actions")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+    let area = egui::Area::new(Id::unique("code_actions")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.set_min_width(320.0);
             for (i, a) in list.iter().enumerate() {
@@ -2566,7 +2566,7 @@ fn intention_preview(app: &CrabCraftApp, ctx: &Context, list: egui::Rect) -> egu
     let pos = if list.right() + 6.0 + WIDTH <= screen.right() { list.right_top() + vec2(6.0, 0.0) } else { list.left_bottom() + vec2(0.0, 6.0) };
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
     let state = &app.intention_preview.state;
-    let area = egui::Area::new(Id::new("intention_preview")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+    let area = egui::Area::new(Id::unique("intention_preview")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         egui::Frame::NONE.fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             ui.set_width(WIDTH);
             let muted = |ui: &mut Ui, text: &str| {

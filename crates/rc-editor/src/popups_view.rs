@@ -205,7 +205,7 @@ pub(crate) fn open_context(state: &mut EditorState, font_size: f32) {
 #[allow(clippy::too_many_arguments)]
 fn show_context(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool, out: &mut EditorOutput) {
     let Some(ctx) = &state.popups.context else { return };
-    let area_id = Id::new(("context_info", state.id));
+    let area_id = Id::unique(("context_info", state.id));
     // A click on the popup takes the focus from the editor for that frame; it gives it back.
     let on_popup = ui.ctx().pointer_latest_pos().zip(ui.ctx().memory(|m| m.area_rect(area_id))).is_some_and(|(p, r)| r.contains(p));
     if ctx.caret != state.caret() || ctx.version != state.buffer.version() || !(focused || on_popup) {
@@ -314,7 +314,7 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
     let screen = ui.ctx().content_rect();
     let pos = if at.y + height > screen.bottom() - 8.0 { pos2(at.x, at.y - height - 24.0) } else { at };
     let pos = pos2(pos.x.min(screen.right() - LIST_W - 8.0).max(screen.left() + 4.0), pos.y);
-    egui::Area::new(Id::new(("completion", state.id))).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
+    egui::Area::new(Id::unique(("completion", state.id))).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.set_width(LIST_W);
             if c.filtered.is_empty() {
@@ -381,7 +381,7 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
     let doc = c.doc.clone().or_else(|| c.selected_item().and_then(|i| i.doc.clone()));
     if let Some(doc) = doc.filter(|d| !d.trim().is_empty()) {
         let doc_pos = pos2(pos.x + LIST_W + 14.0, pos.y);
-        egui::Area::new(Id::new(("completion_doc", state.id))).order(Order::Foreground).fixed_pos(doc_pos).show(ui.ctx(), |ui| {
+        egui::Area::new(Id::unique(("completion_doc", state.id))).order(Order::Foreground).fixed_pos(doc_pos).show(ui.ctx(), |ui| {
             popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
                 ui.set_max_width(380.0);
                 render_doc(ui, &doc, scheme, pal);
@@ -398,7 +398,7 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
     }
     let lines = sig.signatures.len().min(6) as f32;
     let pos = pos2(anchor.x - 8.0, anchor.y - lines * 22.0 - 14.0);
-    egui::Area::new(Id::new("signature_help")).order(Order::Foreground).fixed_pos(pos).interactable(false).show(ui.ctx(), |ui| {
+    egui::Area::new(Id::unique("signature_help")).order(Order::Foreground).fixed_pos(pos).interactable(false).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::symmetric(10, 6)).show(ui, |ui| {
             for (i, s) in sig.signatures.iter().enumerate().take(6) {
                 let active = i == sig.active;
@@ -426,7 +426,7 @@ fn show_signature(ui: &Ui, sig: &crate::popup::SignatureHelp, scheme: &Scheme, p
 fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, m: &Metrics) -> bool {
     let mut explain = false;
     let pos = h.screen + vec2(-4.0, m.row_h);
-    let resp = egui::Area::new(Id::new("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
+    let resp = egui::Area::new(Id::unique("hover_popup")).order(Order::Foreground).fixed_pos(pos).show(ui.ctx(), |ui| {
         popup_frame(pal).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_max_width(560.0);
             if let Some((sev, msg)) = &h.problem {
@@ -454,7 +454,7 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
         });
     });
     let hovered = resp.response.hovered() || resp.response.contains_pointer();
-    ui.ctx().data_mut(|d| d.insert_temp(Id::new("crabcraft_hover_popup_hovered"), hovered));
+    ui.ctx().data_mut(|d| d.insert_temp(Id::unique("crabcraft_hover_popup_hovered"), hovered));
     explain
 }
 

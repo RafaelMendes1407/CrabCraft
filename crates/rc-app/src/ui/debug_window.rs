@@ -425,7 +425,7 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
     };
     // Thread selector.
     let threads = s.threads().to_vec();
-    let mut thread_id = ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::new("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
+    let mut thread_id = ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::unique("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         icons::image(ui, if thread_id == stop.thread_id { ico::THREAD_AT_BREAKPOINT } else { ico::THREADS }, 16.0);
@@ -436,7 +436,7 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
             }
         });
     });
-    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dbg_thread"), thread_id));
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("dbg_thread"), thread_id));
     if s.frames(thread_id).is_none() {
         s.request_frames(thread_id);
     }

@@ -310,7 +310,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
             match action {
                 Some(a) => actions.push(a),
                 None => ui.ctx().data_mut(|d| {
-                    d.insert_temp(Id::new("explorer_hide"), true);
+                    d.insert_temp(Id::unique("explorer_hide"), true);
                 }),
             }
         }
@@ -336,7 +336,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
     if refresh{state.io.reset();state.dir_cache.clear();ui.ctx().request_repaint();}
     let attached = state.attached.clone();
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
-    let tree_id = Id::new("explorer_tree");
+    let tree_id = Id::unique("explorer_tree");
     let mut open_row: Option<usize> = None;
     let mut toggle_row: Option<usize> = None;
     let mut select_row: Option<usize> = None;

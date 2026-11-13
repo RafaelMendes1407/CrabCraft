@@ -411,7 +411,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &Context) -> bool {
     let screen = ctx.content_rect().size();
     let width = (screen.x - 48.0).clamp(320.0, 980.0);
     let body = (screen.y - 330.0).clamp(220.0, 460.0);
-    egui::Modal::new(egui::Id::new("cargo_dependency_manager")).show(ctx, |ui| {
+    egui::Modal::new(egui::Id::unique("cargo_dependency_manager")).show(ctx, |ui| {
         ui.set_width(width);
         ui.heading(tr("Cargo Dependencies"));
         ui.add_space(4.0);

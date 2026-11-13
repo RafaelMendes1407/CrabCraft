@@ -433,7 +433,7 @@ impl State {
         let mut changed = false;
         let mut move_row = None;
         let mut remove = None;
-        egui::Window::new(tr("Change Rust Function Signature")).id(egui::Id::new("change_rust_signature")).open(&mut open).default_width(880.0).default_height(600.0).show(ctx,|ui|{
+        egui::Window::new(tr("Change Rust Function Signature")).id(egui::Id::unique("change_rust_signature")).open(&mut open).default_width(880.0).default_height(600.0).show(ctx,|ui|{
    ui.label(tr("Change an ordinary free Rust function and its workspace callers. Function values, generated contexts and unsafe argument reordering are refused. Nothing is saved automatically."));
    ui.label(tr("External callers are not updated."));
    if let Some(prepared)=&self.prepared{ui.strong(&prepared.function.name);ui.label(prepared.key.path.strip_prefix(&prepared.project.capture.root).unwrap_or(&prepared.key.path).display().to_string());}

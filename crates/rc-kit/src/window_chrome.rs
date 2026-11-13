@@ -189,7 +189,7 @@ pub fn resize_edges(ctx: &egui::Context) {
     for (index, (direction, rect, cursor)) in
         resize_regions(ctx.content_rect()).into_iter().enumerate()
     {
-        egui::Area::new(Id::new(("window_resize", index)))
+        egui::Area::new(Id::unique(("window_resize", index)))
             .order(egui::Order::Foreground)
             .fixed_pos(rect.min)
             .movable(false)
