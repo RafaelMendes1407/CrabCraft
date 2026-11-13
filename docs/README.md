@@ -87,6 +87,8 @@ start a model service, install a language server, deploy a file or run a contain
 ## Architecture and validation
 
 [Architecture](architecture.md) describes the Cargo workspace and native UI conventions.
+[Security audit](SECURITY_AUDIT.md) explains the local and CI checks, evidence,
+exceptions and current gaps; [SECURITY.md](../SECURITY.md) covers private vulnerability reports.
 [Performance](performance.md) records measurement scope and [the inherited UI audit](inherited-ui-audit.md)
 records earlier verification. Guides link to the relevant tests and describe external prerequisites.
 

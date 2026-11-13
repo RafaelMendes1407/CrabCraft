@@ -1,0 +1,29 @@
+"""Guard the severity policy against accidental promotion of unknown data."""
+
+import unittest
+
+from scripts.security_audit import advisory_severity, static_source_files
+
+
+class SeverityTests(unittest.TestCase):
+    def test_cvss_boundaries(self):
+        cases = ((0, "INFORMATIONAL"), (0.1, "LOW"), (3.9, "LOW"),
+                 (4, "MEDIUM"), (6.9, "MEDIUM"), (7, "HIGH"),
+                 (8.9, "HIGH"), (9, "CRITICAL"), (10, "CRITICAL"))
+        for score, expected in cases:
+            with self.subTest(score=score):
+                self.assertEqual(advisory_severity({"cvss": score}), expected)
+
+    def test_untrusted_cvss_formats_remain_unspecified(self):
+        for score in (None, "9.8", "CVSS:3.1/AV:N", True, -1, 10.1, float("nan")):
+            with self.subTest(score=score):
+                self.assertEqual(advisory_severity({"cvss": score}), "UNSPECIFIED")
+
+    def test_static_baseline_excludes_generated_rust_files(self):
+        paths = [str(path) for path in static_source_files()]
+        self.assertTrue(any(path.endswith("fuzz_targets/session_input.rs") for path in paths))
+        self.assertFalse(any("/target/" in path for path in paths))
+
+
+if __name__ == "__main__":
+    unittest.main()

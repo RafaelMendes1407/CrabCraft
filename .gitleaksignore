@@ -1,0 +1,3 @@
+# Reviewed false positives in historical Rust test fixtures. See security/exceptions.json.
+fd645c2d18e2f80857bd60a771dc321cc4a370b0:crates/rc-app/src/screens.rs:generic-api-key:762
+fd645c2d18e2f80857bd60a771dc321cc4a370b0:crates/rc-app/src/screens.rs:generic-api-key:764
