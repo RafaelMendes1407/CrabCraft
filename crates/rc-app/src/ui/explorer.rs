@@ -352,7 +352,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
         if state.reveal {
             if let Some(index) = selected_index {
                 let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll"))
-                    .map_or(0.0, |state| state.offset().y);
+                    .map_or(0.0, |state| state.clamped_offset().y);
 
                 let height = ui.available_height().max(ROW_H);
                 let top = index as f32 * ROW_H;
