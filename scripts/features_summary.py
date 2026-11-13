@@ -6,12 +6,12 @@ from pathlib import Path
 
 PATH = Path(__file__).resolve().parent.parent / "FEATURES.md"
 LABELS = [
-    ("✅", "Pronto"),
-    ("🚧", "Em andamento"),
-    ("🟢", "Herdado"),
-    ("🔁", "Portar"),
-    ("⬜", "A fazer"),
-    ("🚫", "Fora do escopo"),
+    ("✅", "Ready"),
+    ("🚧", "In progress"),
+    ("🟢", "Inherited"),
+    ("🔁", "Port required"),
+    ("⬜", "Planned"),
+    ("🚫", "Out of scope"),
 ]
 ROW = re.compile(r"^\| [A-Z]-\d+ \|[^|]*\| (\S+) \|", re.M)
 
@@ -22,7 +22,7 @@ def main():
     unknown = set(counts) - {mark for mark, _ in LABELS}
     if unknown:
         raise SystemExit(f"Unknown status in FEATURES.md: {sorted(unknown)}")
-    lines = ["| Status | Itens |", "| --- | --- |"]
+    lines = ["| Status | Items |", "| --- | --- |"]
     lines += [f"| {mark} {label} | {counts[mark]} |" for mark, label in LABELS]
     lines.append(f"| **Total** | **{sum(counts.values())}** |")
     table = "\n".join(lines)
