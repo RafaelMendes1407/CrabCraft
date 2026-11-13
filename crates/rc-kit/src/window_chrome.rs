@@ -122,8 +122,8 @@ fn resize_regions(r: Rect) -> [(ResizeDirection, Rect, CursorIcon); 8] {
         ResizeHorizontal as H, ResizeNeSw as NE, ResizeNwSe as NW, ResizeVertical as V,
     };
     use ResizeDirection::*;
-    let corner = 12.0;
-    let edge = 5.0;
+    let corner = 16.0;
+    let edge = 8.0;
     [
         (
             NorthWest,
@@ -186,6 +186,9 @@ pub fn resize_edges(ctx: &egui::Context) {
     }) {
         return;
     }
+    let pointer = ctx.input(|i| i.pointer.hover_pos());
+    let pressed = ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary));
+    let mut resize = None;
     for (index, (direction, rect, cursor)) in
         resize_regions(ctx.content_rect()).into_iter().enumerate()
     {
@@ -195,14 +198,22 @@ pub fn resize_edges(ctx: &egui::Context) {
             .movable(false)
             .constrain(false)
             .show(ctx, |ui| {
-                let (_, response) = ui.allocate_exact_size(rect.size(), Sense::drag());
-                if response
-                    .on_hover_cursor(cursor)
-                    .drag_started_by(egui::PointerButton::Primary)
-                {
-                    ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
-                }
+                ui.allocate_exact_size(rect.size(), Sense::hover());
             });
+        if pointer.is_some_and(|pos| rect.contains(pos)) {
+            ctx.set_cursor_icon(cursor);
+            if pressed {
+                resize = Some(direction);
+            }
+        }
+    }
+    if let Some(direction) = resize {
+        // The compositor owns the drag from this press onward. Wayland may consume
+        // its release, so egui must not keep a pressed button or captured widget.
+        // Begin on press while the backend still has the matching input serial.
+        ctx.stop_dragging();
+        ctx.input_mut(|input| input.pointer = Default::default());
+        ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
     }
 }
 
@@ -253,6 +264,91 @@ mod tests {
             h.run_steps(2);
             assert_eq!(h.state(), &vec![expected]);
         }
+    }
+
+    #[test]
+    fn native_resize_releases_capture_and_accepts_another_press_without_release() {
+        let ctx = egui::Context::default();
+        let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0));
+        for (point, expected, cursor) in [
+            (pos2(4.0, 200.0), ResizeDirection::West, CursorIcon::ResizeHorizontal),
+            (pos2(450.0, 4.0), ResizeDirection::North, CursorIcon::ResizeVertical),
+            (pos2(896.0, 556.0), ResizeDirection::SouthEast, CursorIcon::ResizeNwSe),
+        ] {
+            let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
+            input.events.push(egui::Event::PointerMoved(point));
+            ctx.begin_pass(input);
+            resize_edges(&ctx);
+            let output = ctx.end_pass();
+            assert_eq!(output.platform_output.cursor_icon, cursor);
+            output.drop_without_applying_deltas();
+
+            let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
+            input.events.push(egui::Event::PointerButton {
+                pos: point, button: egui::PointerButton::Primary, pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            });
+            ctx.begin_pass(input);
+            resize_edges(&ctx);
+            assert!(!ctx.input(|i| i.pointer.any_down()));
+            assert_eq!(ctx.dragged_id(), None);
+            let output = ctx.end_pass();
+            assert!(output.viewport_output[&egui::ViewportId::ROOT].commands
+                .contains(&ViewportCommand::BeginResize(expected)));
+            output.drop_without_applying_deltas();
+            // Deliberately omit PointerButton { pressed: false }: KWin owns it.
+        }
+    }
+
+    #[test]
+    fn native_resize_ignores_content_presses_and_maximized_or_fullscreen_windows() {
+        let ctx = egui::Context::default();
+        for (point, maximized, fullscreen) in [
+            (pos2(450.0, 200.0), false, false),
+            (pos2(4.0, 200.0), true, false),
+            (pos2(4.0, 200.0), false, true),
+        ] {
+            let mut input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0))),
+                ..Default::default()
+            };
+            let viewport = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+            viewport.maximized = Some(maximized);
+            viewport.fullscreen = Some(fullscreen);
+            input.events.push(egui::Event::PointerButton {
+                pos: point, button: egui::PointerButton::Primary, pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            });
+            ctx.begin_pass(input);
+            resize_edges(&ctx);
+            let output = ctx.end_pass();
+            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter()
+                .any(|command| matches!(command, ViewportCommand::BeginResize(_))));
+            output.drop_without_applying_deltas();
+        }
+    }
+
+    #[test]
+    fn dragging_from_editor_across_edge_does_not_start_native_resize() {
+        let ctx = egui::Context::default();
+        let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0));
+        let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
+        input.events.push(egui::Event::PointerButton {
+            pos: pos2(450.0, 200.0), button: egui::PointerButton::Primary,
+            pressed: true, modifiers: egui::Modifiers::NONE,
+        });
+        ctx.begin_pass(input);
+        resize_edges(&ctx);
+        ctx.end_pass().drop_without_applying_deltas();
+        let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
+        input.events.push(egui::Event::PointerMoved(pos2(4.0, 200.0)));
+        ctx.begin_pass(input);
+        resize_edges(&ctx);
+        let output = ctx.end_pass();
+        assert!(ctx.input(|i| i.pointer.primary_down()));
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter()
+            .any(|command| matches!(command, ViewportCommand::BeginResize(_))));
+        output.drop_without_applying_deltas();
     }
 
     #[test]
