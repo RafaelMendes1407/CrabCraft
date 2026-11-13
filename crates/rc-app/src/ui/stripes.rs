@@ -24,7 +24,7 @@ fn shortcut_for(tw: ToolWindow) -> Option<Action> {
 fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(at, vec2(BUTTON, BUTTON));
-    let resp = ui.interact(r, ui.id().with(tw.id()), Sense::click());
+    let resp = ui.interact(r, ui.scope_id().with(tw.id()), Sense::click());
     let open = app.dock.is_open(tw);
     if open {
         ui.painter().rect_filled(r, 6.0, p.stripe_selected);

@@ -99,7 +99,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
     if let Some(workspace) = &app.workspace { project_glow(ui, &workspace.ws.name()); }
     // The whole bar drags the window (behind the widgets).
-    let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
+    let drag = ui.interact(rect, ui.scope_id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }

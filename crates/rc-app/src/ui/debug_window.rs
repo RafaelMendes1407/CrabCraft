@@ -560,7 +560,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
     let mut show_memory = None;
     let caps = s.capabilities().clone();
     let can_set = |row: &Row| stopped && row.set_target().is_some_and(|t| t.supported(&caps));
-    let list_id = ui.id().with("dbg_vars_list");
+    let list_id = ui.scope_id().with("dbg_vars_list");
     let mut select = None;
     let mut start_edit: Option<(String, SetTarget, String)> = None;
     let mut edit_done = None;
@@ -811,7 +811,7 @@ fn edit_row(ui: &mut Ui, row: &Row, edit: &mut ValueEdit) -> Option<bool> {
     let name_w = g.size().x.min((r.width() * 0.5).max(40.0));
     ui.painter().with_clip_rect(r).galley(pos2(x0 + 38.0, r.center().y - g.size().y / 2.0), g, name_color);
     let field = Rect::from_min_max(pos2(x0 + 38.0 + name_w, r.top() + 1.0), pos2(r.right() - 8.0, r.bottom() - 1.0));
-    let id = ui.id().with(("set_value", &edit.key));
+    let id = ui.scope_id().with(("set_value", &edit.key));
     let te = egui::TextEdit::singleline(&mut edit.text).id(id).font(font).margin(vec2(4.0, 1.0)).desired_width(field.width());
     let resp = ui.put(field, te).on_hover_text(tr("Enter to set, Escape to cancel"));
     if edit.focus {

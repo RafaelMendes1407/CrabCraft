@@ -569,7 +569,7 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
         ui.close();
     }
     ui.menu_button(tr("Add"), |ui| {
-        let id = ui.id().with("new_item_filter");
+        let id = ui.scope_id().with("new_item_filter");
         let mut filter = ui.ctx().data(|data| data.get_temp::<String>(id).unwrap_or_default());
         new_item_menu(ui, &target_dir, &mut filter, actions);
         ui.ctx().data_mut(|data| data.insert_temp(id, filter));
@@ -645,7 +645,7 @@ fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut 
     ui.set_min_width(260.0);
     ui.set_max_width(320.0);
     let pass = ui.ctx().cumulative_pass_nr();
-    let focus_id = ui.id().with("new_item_search_opened");
+    let focus_id = ui.scope_id().with("new_item_search_opened");
     let opened = ui.ctx().data_mut(|data| {
         let (last, opened) = data.get_temp::<(u64, u64)>(focus_id).unwrap_or((pass, pass));
         let opened = if last.saturating_add(1) < pass { pass } else { opened };

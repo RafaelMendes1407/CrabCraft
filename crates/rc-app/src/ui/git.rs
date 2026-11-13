@@ -1618,7 +1618,7 @@ pub fn merge_editor(tool: &mut crate::merge_tool::MergeTool, ui: &mut Ui, editor
                 continue;
             }
             let r = Rect::from_center_size(pos2(strip.center().x, y), vec2(20.0, rh.min(20.0)));
-            let id = ui.id().with(("merge_take", g, ci));
+            let id = ui.scope_id().with(("merge_take", g, ci));
             let resp = ui.interact(r, id, Sense::click()).on_hover_text(trf("Accept {side}", &[("side", &tip)]));
             let color = if resp.hovered() { p.accent } else { p.text };
             if resp.hovered() {
