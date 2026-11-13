@@ -283,7 +283,12 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                         else if resp.hovered() { ui.painter().rect_filled(r, 6.0, p.row_hover); }
                         if resp.has_focus() { ui.painter().rect_stroke(r.shrink(1.0), 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside); }
                         ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
-                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, *page == pg, label));
+                        resp.widget_info(|| {
+                            let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, label);
+                            info.selected = Some(*page == pg);
+                            info
+                        });
+
                         if resp.clicked() { *page = pg; }
                     }
                 }));
@@ -2301,7 +2306,12 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
             ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
             let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
             ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, dir, FontId::proportional(11.5), p.muted);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == *selected, path.display().to_string()));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, path.display().to_string());
+                info.selected = Some(i == *selected);
+                info
+            });
+
             if move_selection && i == *selected { resp.scroll_to_me(Some(egui::Align::Center)); }
             if resp.clicked() {
                 open = Some(path.clone());
@@ -2689,7 +2699,11 @@ fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize)
                 icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
                 ui.painter().text(rect.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, &caption, theme::bold(12.5), p.text);
                 ui.painter().text(rect.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
-                response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, index == *selected, format!("{} · {caption}", path.display())));
+                response.widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{} · {caption}", path.display()));
+                    info.selected = Some(index == *selected);
+                    info
+                });
                 if move_selection && index == *selected { response.scroll_to_me(Some(egui::Align::Center)); }
                 if response.clicked() { open = Some((path.clone(), *position)); }
             }

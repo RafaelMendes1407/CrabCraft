@@ -353,7 +353,12 @@ fn row(ui: &mut Ui, selected: bool, title: &str, trailing: &str, subtitle: Optio
     let p = rc_kit::pal(ui);
     let height = if subtitle.is_some() { 42.0 } else { 26.0 };
     let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::click());
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), selected, label));
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label);
+        info.selected = Some(selected);
+        info
+    });
+
     if ui.is_rect_visible(rect) {
         if selected { ui.painter().rect_filled(rect, 5.0, p.selection); } else if response.hovered() { ui.painter().rect_filled(rect, 5.0, p.row_hover); }
         let painter = ui.painter().with_clip_rect(rect.shrink(1.0).intersect(ui.clip_rect()));

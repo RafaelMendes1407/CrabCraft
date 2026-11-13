@@ -182,7 +182,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
             if resp.clicked() && !d.busy {
                 d.template = i;
             }
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == d.template, tr(name)));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tr(name));
+                info.selected = Some(i == d.template);
+                info
+            });
+
         }
         let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
         let (_, name, description, _) = &choices[d.template];

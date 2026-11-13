@@ -36,7 +36,12 @@ fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
         Some(s) => format!("{} ({s})", tw.title()),
         None => tw.title().to_string(),
     };
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, open, tw.title()));
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tw.title());
+        info.selected = Some(open);
+        info
+    });
+
     let resp = resp.on_hover_text(tip);
     if resp.clicked() {
         app.toggle_tool(tw);

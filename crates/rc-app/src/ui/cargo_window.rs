@@ -147,7 +147,11 @@ fn features(app: &mut CrabCraftApp, ui: &mut Ui, package: &rc_cargo::Package, ke
 fn feature_row(ui: &mut Ui, name: &str, note: &str, on: bool, enabled: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 24.0), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, name));
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::CheckBox, enabled, name);
+        info.selected = Some(on);
+        info
+    });
     if response.hovered() && enabled {
         ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
     }

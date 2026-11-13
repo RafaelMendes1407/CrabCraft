@@ -194,7 +194,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             Some(k) => resp.on_hover_text(format!("{} ({k})", t.title())),
                             None => resp,
                         };
-                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, t.title()));
+                        resp.widget_info(|| {
+                            let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, t.title());
+                            info.selected = Some(selected);
+                            info
+                        });
+
                         if resp.clicked() {
                             se.tab = t;
                             se.selected = 0;

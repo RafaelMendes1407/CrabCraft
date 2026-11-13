@@ -152,7 +152,8 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                 let g = ui.painter().layout_no_wrap(name.clone(), FontId::proportional(13.0), color);
                 ui.painter().galley(pos2(r.left() + 60.0, (r.center().y - g.size().y / 2.0).round()), g.clone(), color);
                 ui.painter().text(pos2(r.left() + 68.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, dir, FontId::proportional(12.0), p.muted);
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, true, &name));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::CheckBox, true, &name));
+
                 if resp.clicked() && ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < r.left() + 34.0) {
                     if included {
                         app.vcs.excluded.insert(c.path.clone());
@@ -647,7 +648,12 @@ fn tags_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             job.wrap.overflow_character = Some('…');
             let sg = ui.painter().layout_job(job);
             ui.painter().galley(pos2(r.left() + 14.0, r.top() + 29.0 - sg.size().y / 2.0), sg, p.muted);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &t.name));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &t.name);
+                info.selected = Some(selected);
+                info
+            });
+
             if resp.clicked() {
                 app.vcs.selected_tag = Some(t.name.clone());
             }
@@ -785,7 +791,12 @@ fn worktrees_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             job.wrap.overflow_character = Some('…');
             let sg = ui.painter().layout_job(job);
             ui.painter().galley(pos2(r.left() + 34.0, r.top() + 29.0 - sg.size().y / 2.0), sg, p.muted);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &name));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &name);
+                info.selected = Some(selected);
+                info
+            });
+
             if resp.clicked() {
                 app.vcs.selected_worktree = Some(w.path.clone());
             }
@@ -968,7 +979,12 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             job.wrap.overflow_character = Some('…');
             let sg = ui.painter().layout_job(job);
             ui.painter().galley(pos2(r.left() + 14.0, r.top() + 29.0 - sg.size().y / 2.0), sg, p.muted);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &name));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &name);
+                info.selected = Some(selected);
+                info
+            });
+
             if resp.clicked() && !selected {
                 select = Some(st.hash.clone());
             }
