@@ -75,12 +75,13 @@ pub fn selector(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
     let mut selected = current;
     ui.horizontal_wrapped(|ui| {
         let text = trf("Session {number}: {name}", &[("number", &current), ("name", &app.debugger.name)]);
-        egui::ComboBox::from_id_salt("debug-session-selector").selected_text(text).show_ui(ui, |ui| {
+        let selector = egui::ComboBox::from_id_salt("debug-session-selector").selected_text(&text).show_ui(ui, |ui| {
             ui.selectable_value(&mut selected, current, trf("Session {number}: {name}", &[("number", &current), ("name", &app.debugger.name)]));
             for parked in &app.debug_sessions.parked {
                 ui.selectable_value(&mut selected, parked.id, format!("{} — {}", trf("Session {number}: {name}", &[("number", &parked.id), ("name", &parked.debugger.name)]), parked.debugger.state_label()));
             }
         });
+        selector.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), &text));
         if ui.button(tr("Debug in New Session")).clicked() { app.debug_in_new_session(); }
         if ui.add_enabled(!app.debugger.active(), egui::Button::new(tr("Close Debug Session"))).clicked() {
             app.debugger.stop();

@@ -1,12 +1,29 @@
-# CrabCraft documentation
+# Documentation
 
 Start with the [project README](../README.md) for downloads, prerequisites and the native Rust
 workflow. [FEATURES.md](../FEATURES.md) is the status of record: it records supported cases,
-real-project evidence and remaining work. The current inventory has 246 ready, seven partial
+real-project evidence and remaining work. The current inventory has 247 ready, seven partial
 and five out-of-scope entries. CrabCraft remains an early preview.
 
 Release history is in [CHANGELOG.md](../CHANGELOG.md). A copyable Portuguese announcement
 for Discord is available for [0.4.0](releases/0.4.0-pt-BR.md).
+
+## Choose a starting point
+
+| I want to… | Read |
+| --- | --- |
+| Install and use CrabCraft for the first time | [Installation](../README.md#install), then [your first Rust project](getting-started.md) |
+| Understand the main features and how to use them | [Main feature guide](main-features.md) |
+| Fix an inactive action, missing tool or failed operation | [Troubleshooting](troubleshooting.md) |
+| Check whether a feature is supported and how it was verified | [Feature inventory](../FEATURES.md) |
+| Build, test or contribute documentation/code | [Contributing](../CONTRIBUTING.md), [architecture](architecture.md) |
+
+The guides below preserve detailed prerequisites, behavior and verification evidence.
+The feature guide is a user-facing introduction; the inventory remains the status of record.
+
+Images in the README and feature guide come from the native application. Their example
+projects, capture command, prerequisites and license are recorded in
+[screenshot sources and reproduction](screenshots/README.md).
 
 ## Getting started
 

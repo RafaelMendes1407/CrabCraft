@@ -430,11 +430,13 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
         ui.add_space(8.0);
         icons::image(ui, if thread_id == stop.thread_id { ico::THREAD_AT_BREAKPOINT } else { ico::THREADS }, 16.0);
         let name = threads.iter().find(|t| t.id == thread_id).map(|t| t.name.clone()).unwrap_or_else(|| trf("Thread {id}", &[("id", &thread_id)]));
-        egui::ComboBox::from_id_salt("dbg_threads").selected_text(name).width(ui.available_width() - 16.0).show_ui(ui, |ui| {
+        let selector = egui::ComboBox::from_id_salt("dbg_threads").selected_text(&name).width(ui.available_width() - 16.0).show_ui(ui, |ui| {
             for t in &threads {
                 ui.selectable_value(&mut thread_id, t.id, format!("{} ({})", t.name, t.id));
             }
         });
+        let label = trf("Thread {id}", &[("id", &thread_id)]);
+        selector.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), &label));
     });
     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("dbg_thread"), thread_id));
     if s.frames(thread_id).is_none() {

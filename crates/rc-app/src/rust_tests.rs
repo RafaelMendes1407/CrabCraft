@@ -23,6 +23,83 @@ fn demo(root: &Path) {
     write(&root.join("src/main.rs"), MAIN);
 }
 
+/// Reproducible README screenshots from the native UI and real Rust tools.
+/// No language-server, test-runner or debugger responses are fabricated.
+#[test]
+#[ignore = "Requires GPU, rust-analyzer, Cargo and GDB; writes target/snapshots/docs-*.png"]
+fn documentation_feature_captures() {
+    use crate::toolwindow::ToolWindow;
+    let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    assert!(rc_dap::gdb::locate().is_some(), "GDB is required for the documentation capture");
+    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("rust-demo");
+    demo(&root);
+    let source = "use demo::Greeter;\n\nfn greet() {\n    println!(\"{} from CrabCraft\", Greeter.hello());\n}\n\nfn main() {\n    greet();\n}\n";
+    write(&root.join("src/main.rs"), source);
+    let root = root.canonicalize().unwrap();
+    let mut app = new_app(dir.path());
+    app.open_workspace_and_wait(&root);
+    app.trust_project();
+    app.open_file_and_wait(&root.join("src/lib.rs"));
+    app.open_file_and_wait(&root.join("src/main.rs"));
+    pump(&mut app, "documentation project analysis", |app| {
+        app.insight.status == InsightStatus::Ready && app.runner.cargo_workspace.is_some()
+    });
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.run_steps(8);
+    h.render().unwrap().save(out.join("docs-overview.png")).unwrap();
+
+    let app = h.state_mut();
+    let position = source.find("Greeter.hello").unwrap() + "Greeter.".len();
+    app.docs.active_doc_mut().unwrap().editor.selection = rc_text::Selection::point(position);
+    let index = app.docs.active.unwrap();
+    app.insight.on_editor_events(&mut app.docs.list[index], &[rc_editor::EditorEvent::Typed('.')]);
+    pump(app, "real method completion", |app| {
+        app.docs.active_doc().and_then(|doc| doc.editor.popups.completion.as_ref())
+            .is_some_and(|completion| completion.items.iter().any(|item| item.label.starts_with("hello")))
+    });
+    h.run_steps(4);
+    h.render().unwrap().save(out.join("docs-completion.png")).unwrap();
+    h.state_mut().docs.active_doc_mut().unwrap().editor.popups.close_all();
+
+    let app = h.state_mut();
+    app.run_ide_action(&egui::Context::default(), rc_editor::Action::RunTests);
+    pump(app, "real Cargo tests", |app| app.runner.tests.as_ref().is_some_and(|tests| !tests.running));
+    let tests = app.runner.tests.as_ref().unwrap();
+    assert_eq!((tests.passed, tests.failed), (1, 0));
+    app.dock.show(ToolWindow::Tests);
+    h.run_steps(8);
+    h.render().unwrap().save(out.join("docs-tests.png")).unwrap();
+
+    let app = h.state_mut();
+    let index = app.docs.active.unwrap();
+    app.insight.call_hierarchy(&app.docs.list[index], source.find("fn greet").unwrap() + 4, true);
+    pump(app, "real callers", |app| app.insight.call_tree.as_ref().is_some_and(|tree| tree.root.children.is_some()));
+    assert!(app.insight.call_tree.as_ref().unwrap().rows().iter().any(|(_, node)| node.name == "main"));
+    app.dock.show(ToolWindow::Hierarchy);
+    h.run_steps(8);
+    h.render().unwrap().save(out.join("docs-call-hierarchy.png")).unwrap();
+    h.state_mut().insight.stop();
+    drop(h);
+
+    let debug_dir = tempfile::tempdir().unwrap();
+    let mut app = paused_before_doubling(debug_dir.path());
+    assert!(app.debugger.stopped());
+    let watch = app.debugger.session.as_mut().unwrap().add_watch("n + 1");
+    settle_debugger(&mut app, "real watch", &|app| {
+        app.debugger.session.as_ref().unwrap().watches().iter().any(|item| {
+            item.id == watch && matches!(&item.value, rc_dap::WatchValue::Value(value) if value.result == "256")
+        })
+    });
+    app.dock.show(ToolWindow::Debug);
+    let mut h = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
+    h.run_steps(8);
+    h.render().unwrap().save(out.join("docs-debug.png")).unwrap();
+    h.state_mut().debugger.stop();
+}
+
 fn pump(app: &mut CrabCraftApp, what: &str, mut done: impl FnMut(&mut CrabCraftApp) -> bool) {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(180) {

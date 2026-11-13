@@ -18,10 +18,10 @@
 ![CrabCraft showing a Rust project](docs/screenshots/overview.png)
 
 > **Status: early preview.** CrabCraft is tested with real Rust projects, but supported scope and
-> platform verification vary by feature. The current inventory records **246 ready features,
+> platform verification vary by feature. The current inventory records **247 ready features,
 > seven partial features and five out of scope**. [FEATURES.md](FEATURES.md) is the status of
-> record, in Portuguese; [the documentation index](docs/README.md) explains setup, evidence and
-> limits in English.
+> record. Start with [your first project](docs/getting-started.md), explore the
+> [main feature guide](docs/main-features.md), or browse the [documentation directory](docs/README.md).
 
 CrabCraft is a native Rust/egui desktop application, with no webview shell. It uses
 [rust-analyzer](https://rust-analyzer.github.io/) for Rust code intelligence and tree-sitter for
@@ -62,9 +62,13 @@ is no Rust language-server completion, navigation or error checking. See the
 
 ## Features
 
+The [main feature guide](docs/main-features.md) explains how these workflows fit together,
+including setup, everyday actions and their limits. For help with inactive actions or
+missing tools, see [troubleshooting](docs/troubleshooting.md).
+
 ### Code insight
 
-![Completion with fields and methods](docs/screenshots/completion.png)
+![Rust method completion from rust-analyzer](docs/screenshots/completion.png)
 
 Completion with documentation and auto-import, go to definition, find usages, rename, Refactor This
 (`Ctrl+Alt+Shift+T`), quick fixes, inlay hints and Optimize Imports, powered by rust-analyzer.
