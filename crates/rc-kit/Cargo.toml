@@ -9,11 +9,11 @@ egui.workspace = true
 eframe.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-resvg = { version = "0.45", default-features = false }
+resvg = { version = "0.49", default-features = false }
 sys-locale = "0.3"
-parking_lot = "0.12"
+parking_lot = "0.13"
 
 [dev-dependencies]
 egui_kittest.workspace = true
 wgpu.workspace = true
-tiny-skia = { version = "0.11", features = ["png-format"] }
+tiny-skia = { version = "0.12", features = ["png-format"] }

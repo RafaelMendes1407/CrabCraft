@@ -19,16 +19,16 @@ anyhow.workspace = true
 tempfile = "3"
 serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
+sha2 = "0.11"
 tokio-rustls = "0.26"
 rustls-native-certs = "0.8"
 # Dependency versions in Cargo.toml (C-02, C-04).
 semver = "1"
 # One-layer macro_rules expansion in a separate, bounded helper process.
-ra_ap_mbe = "=0.0.273"
-ra_ap_span = "=0.0.273"
-ra_ap_syntax-bridge = "=0.0.273"
-ra_ap_tt = "=0.0.273"
+ra_ap_mbe = "=0.0.362"
+ra_ap_span = "=0.0.362"
+ra_ap_syntax-bridge = "=0.0.362"
+ra_ap_tt = "=0.0.362"
 toml = "1"
 # The HTTP Client (F-03): the same client and runtime the other crates use.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "http2", "gzip", "system-proxy"] }
@@ -49,8 +49,8 @@ rc-term.workspace = true
 rc-search.workspace = true
 rc-vcs.workspace = true
 rc-dap.workspace = true
-rfd = "0.17"
-dirs = "6"
+rfd = "0.18"
+dirs = "7"
 muda = { version = "0.21", default-features = false }
 egui_commonmark = { version = "0.26.0", default-features = false, features = ["pulldown_cmark", "load-images"] }
 egui_extras = { version = "0.37", default-features = false, features = ["image", "file"] }
