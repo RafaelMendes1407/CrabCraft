@@ -267,7 +267,7 @@ fn look(kind: TargetKind) -> (Ico, &'static str) {
 fn row(ui: &mut Ui, depth: usize, open: Option<bool>, icon: Ico, text: &str, note: &str, enabled: bool) -> egui::Response {
     let p = rc_kit::pal(ui);
     let (r, response) = ui.allocate_exact_size(vec2(ui.available_width().max(200.0), 24.0), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text));
     if response.hovered() {
         ui.painter().rect_filled(r.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
     }

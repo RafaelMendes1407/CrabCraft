@@ -552,7 +552,11 @@ pub fn icon_button_sized(ui: &mut Ui, ico: Ico, enabled: bool, tooltip: &str, si
     let p = pal(ui);
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), sense);
-    if !tooltip.is_empty() { resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, false, tooltip)); }
+    if !tooltip.is_empty() {
+        resp.widget_info(|| {
+            egui::WidgetInfo::selected(egui::Role::Button, enabled, false, tooltip)
+        });
+    }
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
         ui.painter().rect_filled(rect, 6.0, fill);
@@ -572,7 +576,7 @@ pub fn flat_button(ui: &mut Ui, leading: Option<Ico>, text: &str, font: FontId, 
     let h = 26.0;
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, h), sense);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text));
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
         ui.painter().rect_filled(rect, 6.0, fill);
@@ -671,7 +675,7 @@ pub fn menu_entry(ui: &mut Ui, icon: Option<crate::Ico>, text: &str, shortcut: O
             ui.painter().galley(egui::pos2(r.right() - 10.0 - sc.size().x, (r.center().y - sc.size().y / 2.0).round()), sc, p.muted);
         }
     }
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, text));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, text));
     resp
 }
 

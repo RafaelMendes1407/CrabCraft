@@ -218,7 +218,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             }
                         }).response;
                         let title = se.scope.title();
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &title));
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &title));
                         resp.on_hover_text(tr("Search scope"));
                         if let Some(s) = chosen {
                             se.scope = s;
@@ -290,7 +290,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         if let Hit::More(_) = hit {
                             let more = tr("… more");
                             ui.painter().text(pos2(r.left() + 34.0, r.center().y), Align2::LEFT_CENTER, more, FontId::proportional(12.5), p.muted);
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, more));
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, more));
                             if resp.clicked() {
                                 choose = Some(hit.clone());
                             }
@@ -330,7 +330,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                                 ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
                             }
                         }
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
                         if resp.clicked() {
                             choose = Some(hit.clone());
                         }

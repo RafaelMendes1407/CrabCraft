@@ -37,7 +37,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             job.wrap.overflow_character = Some('…');
             let g = ui.painter().layout_job(job);
             ui.painter().galley(pos2(r.center().x, (r.top() + 48.0 - g.size().y / 2.0).round()), g, p.text);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
             if resp.clicked() {
                 match kind {
                     0 => app.pick_and_open(),
@@ -75,7 +75,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 7.0), Align2::LEFT_TOP, &name, theme::bold(13.0), if exists { p.text } else { p.disabled });
             let sub = if exists { path.display().to_string() } else { format!("{} — {}", path.display(), tr("not found")) };
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 25.0), Align2::LEFT_TOP, sub, FontId::proportional(12.0), p.muted);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
             let resp = resp.on_hover_text(path.display().to_string());
             if resp.clicked() && exists {
                 app.open_workspace(path);

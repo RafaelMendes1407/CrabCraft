@@ -273,7 +273,7 @@ fn show_context(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette
             let width = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max) + num_w + 14.0;
             for (row, g) in ctx.rows.iter().zip(galleys) {
                 let (r, resp) = ui.allocate_exact_size(vec2(width, row_h), Sense::click());
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &row.text));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &row.text));
                 if resp.hovered() {
                     ui.painter().rect_filled(r, 4.0, pal.row_hover);
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

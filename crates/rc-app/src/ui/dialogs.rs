@@ -2446,7 +2446,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                 let icon = if quickfix { rc_kit::ico::BULB_QUICKFIX } else { rc_kit::ico::BULB };
                 icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icon, &p, true);
                 ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &title, FontId::proportional(13.0), p.text);
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &title));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &title));
                 if resp.clicked() {
                     chosen = Some(i);
                 }
