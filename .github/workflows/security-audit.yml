@@ -24,7 +24,7 @@ jobs:
       - run: rustup default 1.99.1
       - run: cargo install cargo-audit --version 0.23.0 --locked
       - run: ./scripts/security-audit.sh dependencies
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-dependencies
@@ -42,7 +42,7 @@ jobs:
       - run: rustup default 1.99.1
       - run: cargo install cargo-deny --version 0.20.2 --locked
       - run: ./scripts/security-audit.sh licenses
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-licenses
@@ -61,7 +61,7 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: ./scripts/security-audit.sh static
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-static
@@ -80,7 +80,7 @@ jobs:
       - run: rustup default 1.99.1
       - run: cargo install cargo-geiger --version 0.14.0 --locked
       - run: ./scripts/security-audit.sh unsafe
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-unsafe
@@ -102,7 +102,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - run: ./scripts/security-audit.sh secrets
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-secrets
@@ -120,7 +120,7 @@ jobs:
       - run: rustup default 1.99.1
       - run: cargo install cargo-cyclonedx --version 0.5.10 --locked
       - run: ./scripts/security-audit.sh sbom
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-sbom
@@ -139,7 +139,7 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: ./scripts/security-audit.sh tests
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-tests
@@ -160,7 +160,7 @@ jobs:
       - run: ./scripts/security-audit.sh fuzz
         env:
           SECURITY_FUZZ_TOOLCHAIN: nightly-2026-11-11
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-fuzz
@@ -188,7 +188,7 @@ jobs:
           else
             python3 scripts/security_aggregate.py security-input
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: security-consolidated
