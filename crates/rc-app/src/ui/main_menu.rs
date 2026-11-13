@@ -669,6 +669,7 @@ mod tests {
             .events
             .push(egui::Event::PointerMoved(pointer));
         harness.input_mut().events.push(egui::Event::MouseWheel {
+            source: egui::MouseWheelSource::Unknown,
             unit: egui::MouseWheelUnit::Point,
             delta: egui::vec2(0.0, -2000.0),
             phase: egui::TouchPhase::Move,
