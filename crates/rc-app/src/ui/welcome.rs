@@ -26,7 +26,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         let bw = (col_w - 36.0) / 4.0;
         for (i, (label, icon, kind)) in buttons.into_iter().enumerate() {
             let r = Rect::from_min_size(pos2(left + i as f32 * (bw + 12.0), y), vec2(bw, 72.0));
-            let resp = ui.interact(r, ui.id().with(("welcome", i)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("welcome", i)), Sense::click());
             let fill = if resp.hovered() { theme::blend(p.island_bg, p.hover) } else { p.island_bg };
             ui.painter().rect(r, 10.0, fill, egui::Stroke::new(1.0, if resp.hovered() { p.accent } else { p.control_border }), egui::StrokeKind::Inside);
             icons::paint(ui.painter(), Rect::from_center_size(pos2(r.center().x, r.top() + 20.0), vec2(16.0, 16.0)), icon, &p, true);
@@ -37,7 +37,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             job.wrap.overflow_character = Some('…');
             let g = ui.painter().layout_job(job);
             ui.painter().galley(pos2(r.center().x, (r.top() + 48.0 - g.size().y / 2.0).round()), g, p.text);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
             if resp.clicked() {
                 match kind {
                     0 => app.pick_and_open(),
@@ -62,7 +62,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             if r.bottom() > rect.bottom() - 10.0 {
                 break;
             }
-            let resp = ui.interact(r, ui.id().with(("recent", i)), Sense::click());
+            let resp = ui.interact(r, ui.scope_id().with(("recent", i)), Sense::click());
             if resp.hovered() {
                 ui.painter().rect_filled(r, 8.0, p.row_hover);
             }
@@ -75,7 +75,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 7.0), Align2::LEFT_TOP, &name, theme::bold(13.0), if exists { p.text } else { p.disabled });
             let sub = if exists { path.display().to_string() } else { format!("{} — {}", path.display(), tr("not found")) };
             ui.painter().text(pos2(badge.right() + 12.0, r.top() + 25.0), Align2::LEFT_TOP, sub, FontId::proportional(12.0), p.muted);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
             let resp = resp.on_hover_text(path.display().to_string());
             if resp.clicked() && exists {
                 app.open_workspace(path);

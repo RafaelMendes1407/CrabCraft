@@ -99,7 +99,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) -> bool {
         }
     }
     let mut close = false;
-    egui::Modal::new(egui::Id::new("clone_git_repository")).show(ctx, |ui| {
+    egui::Modal::new(egui::Id::unique("clone_git_repository")).show(ctx, |ui| {
         ui.set_width(600.0);
         ui.heading(tr("Clone Git Repository"));
         let busy = state.cancel.is_some();

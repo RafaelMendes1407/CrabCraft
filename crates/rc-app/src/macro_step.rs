@@ -844,7 +844,7 @@ pub fn show_progress(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
     }
     let mut open = true;
     egui::Window::new(rc_kit::i18n::tr("Expanding declarative macro one step…"))
-        .id(egui::Id::new("macro_step_progress"))
+        .id(egui::Id::unique("macro_step_progress"))
         .open(&mut open)
         .resizable(false)
         .show(ctx, |ui| {

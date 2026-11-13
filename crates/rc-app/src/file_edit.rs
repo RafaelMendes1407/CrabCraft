@@ -121,7 +121,7 @@ impl Edits {
         while index<self.jobs.len(){let Some(result)=self.jobs[index].inbox.drain().into_iter().next()else{index+=1;continue;};let job=self.jobs.remove(index);if job.generation==self.generation{results.push(result);}}
         if let Err(error)=self.launch(waker){results.push(Err(error));}results
     }
-    pub fn show(&mut self,ctx:&egui::Context){if self.busy(){egui::Window::new(tr("Preparing file edit")).id(egui::Id::new("file-edit-progress")).collapsible(false).show(ctx,|ui|{ui.spinner();if ui.button(tr("Cancel")).clicked(){self.cancel();}});}}
+    pub fn show(&mut self,ctx:&egui::Context){if self.busy(){egui::Window::new(tr("Preparing file edit")).id(egui::Id::unique("file-edit-progress")).collapsible(false).show(ctx,|ui|{ui.spinner();if ui.button(tr("Cancel")).clicked(){self.cancel();}});}}
 }
 impl Drop for Edits{fn drop(&mut self){self.cancel();}}
 impl CrabCraftApp {

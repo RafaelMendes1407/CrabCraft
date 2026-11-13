@@ -1,7 +1,7 @@
 # CrabCraft architecture
 
 CrabCraft is a Cargo workspace (`crates/*`, Rust edition 2024) for a native Rust IDE built
-with eframe/egui 0.36 + wgpu 30. The UI thread never blocks: background work runs on threads
+with eframe/egui 0.37 + wgpu 30. The UI thread never blocks: background work runs on threads
 or on the shared tokio runtime and reports back through channels that wake the UI.
 
 | Crate | Role |
@@ -21,6 +21,16 @@ or on the shared tokio runtime and reports back through channels that wake the U
 | `rc-term` | Terminal emulator (alacritty_terminal + portable-pty) rendered in egui. |
 
 ## Conventions
+
+- **Repository formatting.** `rustfmt.toml` sets a 160-column maximum and
+  `use_small_heuristics = "Max"` (issue #181). Run `cargo fmt --all` for an intentional
+  formatting pass; avoid mixing repository-wide formatting with behavioral changes.
+  Existing formatting debt is tracked by the security audit rather than claimed as fixed.
+- **Project scope.** Issue #173 proposes a shared multi-language IDE and add-ons.
+  CrabCraft currently remains a native Rust/Cargo product. Shared improvements can be
+  exchanged with DotCraft through the retained Git history, licenses and `rc-*` crate
+  names. A combined product or DataCraft add-on requires a separate design and maintainer
+  agreement; neither is implemented or promised by this proposal.
 
 - **Threads.** Never block the UI thread on I/O or processes. Long work runs on
   `rc_core::Runtime::spawn` (tokio) or a dedicated thread and sends results through an

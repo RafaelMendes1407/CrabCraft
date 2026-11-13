@@ -310,7 +310,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
             match action {
                 Some(a) => actions.push(a),
                 None => ui.ctx().data_mut(|d| {
-                    d.insert_temp(Id::new("explorer_hide"), true);
+                    d.insert_temp(Id::unique("explorer_hide"), true);
                 }),
             }
         }
@@ -336,20 +336,32 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
     if refresh{state.io.reset();state.dir_cache.clear();ui.ctx().request_repaint();}
     let attached = state.attached.clone();
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
-    let tree_id = Id::new("explorer_tree");
+    let tree_id = Id::unique("explorer_tree");
     let mut open_row: Option<usize> = None;
     let mut toggle_row: Option<usize> = None;
     let mut select_row: Option<usize> = None;
     let mut context: Option<(usize, egui::Response)> = None;
     // The tree takes the keyboard focus, so it is a widget of its own (accessibility needs a
     // node for the focused id).
-    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive()).widget_info(|| egui::WidgetInfo::new(egui::WidgetType::Other));
+    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive())
+        .widget_info(|| egui::WidgetInfo::new(egui::Role::GenericContainer));
 
     let accessibility=ui.ctx().accesskit_node_builder(tree_id,|node|{node.set_role(egui::accesskit::Role::Tree);node.set_label(tr("Project files"));node.set_description(tr("Accessible project hierarchy is limited to visible items and 64 ancestor levels"));node.add_action(egui::accesskit::Action::Focus);}).is_some();
     ui.scope_builder(egui::UiBuilder::new().accessibility_parent(tree_id),|ui| {
     let mut scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
-    if state.reveal {if let Some(index)=selected_index {let offset=egui::scroll_area::State::load(ui.ctx(),ui.make_persistent_id(egui::IdSalt::new("explorer_scroll"))).map_or(0.0,|state|state.offset.y);let height=ui.available_height().max(ROW_H);let top=index as f32*ROW_H;if top<offset||top+ROW_H>offset+height{scroll=scroll.vertical_scroll_offset((top-(height-ROW_H)/2.0).max(0.0));}}}
-    scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
+        if state.reveal {
+            if let Some(index) = selected_index {
+                let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll"))
+                    .map_or(0.0, |state| state.clamped_offset().y);
+
+                let height = ui.available_height().max(ROW_H);
+                let top = index as f32 * ROW_H;
+                if top < offset || top + ROW_H > offset + height {
+                    scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
+                }
+            }
+        }
+        scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
         ui.spacing_mut().item_spacing.y = 0.0;
         let mut accessible_ancestors=HashSet::new();
         let mut parents=Vec::new();if accessibility {let mut ancestors:Vec<usize>=Vec::new();for(index,row)in rows.iter().take(range.end).enumerate(){while ancestors.last().is_some_and(|ancestor|rows[*ancestor].depth>=row.depth){ancestors.pop();}parents.push(ancestors.last().copied());ancestors.push(index);}}
@@ -408,7 +420,12 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
                 ui.scroll_to_rect(rect, Some(egui::Align::Center));
                 state.reveal = false;
             }
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &row.label));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &row.label);
+                info.selected = Some(selected);
+                info
+            });
+
             ui.ctx().accesskit_node_builder(resp.id,|node|{node.set_role(egui::accesskit::Role::TreeItem);node.set_label(row.label.as_str());node.set_level(row.depth.saturating_add(1));node.set_selected(selected);node.add_action(egui::accesskit::Action::Focus);node.add_action(egui::accesskit::Action::Click);if row.expandable{let expanded=state.expanded.contains(&row.key);node.set_expanded(expanded);node.add_action(if expanded{egui::accesskit::Action::Collapse}else{egui::accesskit::Action::Expand});}});
             if selected {ui.ctx().accesskit_node_builder(tree_id,|node|node.set_active_descendant(resp.id.accesskit_id()));}
 
@@ -552,7 +569,7 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
         ui.close();
     }
     ui.menu_button(tr("Add"), |ui| {
-        let id = ui.id().with("new_item_filter");
+        let id = ui.scope_id().with("new_item_filter");
         let mut filter = ui.ctx().data(|data| data.get_temp::<String>(id).unwrap_or_default());
         new_item_menu(ui, &target_dir, &mut filter, actions);
         ui.ctx().data_mut(|data| data.insert_temp(id, filter));
@@ -628,7 +645,7 @@ fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut 
     ui.set_min_width(260.0);
     ui.set_max_width(320.0);
     let pass = ui.ctx().cumulative_pass_nr();
-    let focus_id = ui.id().with("new_item_search_opened");
+    let focus_id = ui.scope_id().with("new_item_search_opened");
     let opened = ui.ctx().data_mut(|data| {
         let (last, opened) = data.get_temp::<(u64, u64)>(focus_id).unwrap_or((pass, pass));
         let opened = if last.saturating_add(1) < pass { pass } else { opened };

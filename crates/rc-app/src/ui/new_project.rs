@@ -157,7 +157,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
     let generated_request = d.generate_request();
     let problem = if d.generated() { generated_request.problem() } else { req.problem() }.map(tr);
     let mut create = false;
-    let resp = egui::Modal::new(Id::new("new_project")).show(ctx, |ui| {
+    let resp = egui::Modal::new(Id::unique("new_project")).show(ctx, |ui| {
         ui.set_width(700.0);
         ui.set_height(if d.generated() { 490.0 } else { 330.0 });
         ui.label(egui::RichText::new(tr(if d.member { "New Crate" } else { "New Project" })).font(theme::bold(15.0)));
@@ -182,7 +182,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
             if resp.clicked() && !d.busy {
                 d.template = i;
             }
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == d.template, tr(name)));
+            resp.widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tr(name));
+                info.selected = Some(i == d.template);
+                info
+            });
+
         }
         let mut ru = ui.new_child(egui::UiBuilder::new().max_rect(right));
         let (_, name, description, _) = &choices[d.template];

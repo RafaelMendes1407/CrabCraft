@@ -99,7 +99,7 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
     if let Some(workspace) = &app.workspace { project_glow(ui, &workspace.ws.name()); }
     // The whole bar drags the window (behind the widgets).
-    let drag = ui.interact(rect, ui.id().with("title_drag"), Sense::click_and_drag());
+    let drag = ui.interact(rect, ui.scope_id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
@@ -325,7 +325,7 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     ui.painter().galley(pos2(sq.right() + 8.0, (r.center().y - galley.size().y / 2.0).round()), galley.clone(), p.text);
     icons::paint(ui.painter(), Rect::from_center_size(pos2(sq.right() + 8.0 + galley.size().x + 4.0 + 8.0, r.center().y), vec2(16.0, 16.0)), ico::CHEVRON_DOWN, &p, true);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
         if theme::menu_item(ui, Some(ico::ADD), tr("New Project…"), false).clicked() {

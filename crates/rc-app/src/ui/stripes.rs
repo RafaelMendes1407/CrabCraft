@@ -24,7 +24,7 @@ fn shortcut_for(tw: ToolWindow) -> Option<Action> {
 fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
     let p = rc_kit::pal(ui);
     let r = Rect::from_min_size(at, vec2(BUTTON, BUTTON));
-    let resp = ui.interact(r, ui.id().with(tw.id()), Sense::click());
+    let resp = ui.interact(r, ui.scope_id().with(tw.id()), Sense::click());
     let open = app.dock.is_open(tw);
     if open {
         ui.painter().rect_filled(r, 6.0, p.stripe_selected);
@@ -36,7 +36,12 @@ fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
         Some(s) => format!("{} ({s})", tw.title()),
         None => tw.title().to_string(),
     };
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, open, tw.title()));
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, tw.title());
+        info.selected = Some(open);
+        info
+    });
+
     let resp = resp.on_hover_text(tip);
     if resp.clicked() {
         app.toggle_tool(tw);

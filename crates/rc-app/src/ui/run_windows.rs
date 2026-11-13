@@ -179,7 +179,7 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 if d.borrow.is_some() {
                     if ui.small_button(trf("Visualize {code} source ranges…", &[("code", &d.code)])).clicked() { borrow = Some(d.clone()); }
                 }
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} {}", d.code, d.message)));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{} {}", d.code, d.message)));
                 crate::ui::toolwindows::explain_menu(&resp, &d.code, &mut explain);
             }
         });
@@ -556,7 +556,7 @@ fn row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, select
     if !secondary.is_empty() {
         ui.painter().text(pos2(x + 32.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, secondary, FontId::proportional(12.0), p.muted);
     }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, text));
     resp
 }
 
@@ -662,7 +662,7 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
             (Rect::from_min_max(rect.min, pos2(middle - 3.0, rect.bottom())), Rect::from_min_max(pos2(middle + 3.0, rect.top()), rect.max), Rect::from_min_max(pos2(middle - 3.0, rect.top()), pos2(middle + 3.0, rect.bottom())))
         };
         ui.allocate_rect(rect, Sense::hover());
-        let response = ui.interact(divider, ui.id().with("terminal_divider"), Sense::drag()).on_hover_cursor(if split.stacked { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
+        let response = ui.interact(divider, ui.scope_id().with("terminal_divider"), Sense::drag()).on_hover_cursor(if split.stacked { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
         if response.dragged() && let Some(pointer) = response.interact_pointer_pos() {
             split.ratio = if split.stacked { (pointer.y - rect.top()) / rect.height().max(1.0) } else { (pointer.x - rect.left()) / rect.width().max(1.0) }.clamp(0.2, 0.8);
             app.terminal_tools.split = Some(split);

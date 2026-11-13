@@ -47,7 +47,7 @@ pub fn preview(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) -> b
     let mut area = egui::ScrollArea::vertical().id_salt(("md_scroll", id)).auto_shrink(false);
     // Side by side, the page follows the editor when the editor scrolls.
     let frac = doc.editor.scroll_fraction();
-    let key = egui::Id::new(("md_sync", id));
+    let key = egui::Id::unique(("md_sync", id));
     let (last, max): (Option<f32>, f32) = ui.data(|d| d.get_temp(key)).unwrap_or((None, 0.0));
     if doc.md_view == Some(MdView::Split) && last.is_some_and(|l| (l - frac).abs() > f32::EPSILON) {
         area = area.vertical_scroll_offset(frac * max);
@@ -71,7 +71,7 @@ pub fn switcher(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) {
     let id = app.docs.list[idx].editor.id;
     let size = vec2(3.0 * 26.0 + 2.0 * 2.0 + 8.0, 34.0);
     let at = egui::pos2(rect.right() - size.x - 22.0, rect.top() + 6.0);
-    egui::Area::new(egui::Id::new(("md_switch", id, rect.left() as i32))).order(egui::Order::Foreground).fixed_pos(at).show(ui.ctx(), |ui| {
+    egui::Area::new(egui::Id::unique(("md_switch", id, rect.left() as i32))).order(egui::Order::Foreground).fixed_pos(at).show(ui.ctx(), |ui| {
         egui::Frame::new().fill(p.island_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;

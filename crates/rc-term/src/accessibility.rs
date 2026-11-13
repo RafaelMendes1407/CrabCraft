@@ -148,7 +148,7 @@ pub fn update(
         }
     }
     response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, tr("Terminal")));
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::GenericContainer, true, tr("Terminal")));
     ui.ctx().accesskit_node_builder(response.id, |node| {
         node.set_role(Role::Terminal);
         let label=if session.name().is_empty(){tr("Terminal").to_owned()}else{trf("Terminal: {name}",&[("name",&session.name())])};

@@ -23,7 +23,7 @@ fn show_content(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
             app.explorer.single_click = app.settings.single_click_open;
             app.explorer.git = app.vcs.repo.is_some();
             let actions = explorer::show(ui, &mut app.explorer, &root, &name, active.as_deref());
-            if ui.ctx().data_mut(|d| d.remove_temp::<bool>(Id::new("explorer_hide")).unwrap_or(false)) {
+            if ui.ctx().data_mut(|d| d.remove_temp::<bool>(Id::unique("explorer_hide")).unwrap_or(false)) {
                 app.toggle_tool(ToolWindow::Explorer);
             }
             if !actions.is_empty() {
@@ -109,7 +109,7 @@ fn list_row(ui: &mut Ui, depth: usize, icon: Ico, text: &str, secondary: &str, s
     if !secondary.is_empty() {
         ui.painter().text(pos2(x + 32.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, secondary, FontId::proportional(12.0), p.muted);
     }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, text));
     resp
 }
 

@@ -552,7 +552,11 @@ pub fn icon_button_sized(ui: &mut Ui, ico: Ico, enabled: bool, tooltip: &str, si
     let p = pal(ui);
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), sense);
-    if !tooltip.is_empty() { resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, false, tooltip)); }
+    if !tooltip.is_empty() {
+        resp.widget_info(|| {
+            egui::WidgetInfo::selected(egui::Role::Button, enabled, false, tooltip)
+        });
+    }
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
         ui.painter().rect_filled(rect, 6.0, fill);
@@ -572,7 +576,7 @@ pub fn flat_button(ui: &mut Ui, leading: Option<Ico>, text: &str, font: FontId, 
     let h = 26.0;
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, h), sense);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text));
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
         ui.painter().rect_filled(rect, 6.0, fill);
@@ -604,7 +608,12 @@ fn text_tool_button(ui: &mut Ui, icon: Ico, text: &str, selected: bool, accented
     let text_color = if !ui.is_enabled() { p.disabled } else if accented { p.accent } else { p.text };
     let galley = ui.painter().layout_no_wrap(text.to_owned(), FontId::proportional(12.5), text_color);
     let (rect, response) = ui.allocate_exact_size(vec2(galley.size().x + 32.0, 24.0), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), selected, text));
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), text);
+        info.selected = Some(selected);
+        info
+    });
+
     if selected {
         ui.painter().rect(rect, 4.0, p.tab_selected_bg, Stroke::new(1.0, p.tab_selected_border), egui::StrokeKind::Inside);
     } else if accented {
@@ -620,7 +629,12 @@ fn text_tool_button(ui: &mut Ui, icon: Ico, text: &str, selected: bool, accented
 pub fn icon_tab(ui: &mut Ui, icon: Ico, label: &str, selected: bool) -> Response {
     let p = pal(ui);
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(24.0), Sense::click());
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), selected, label));
+    response.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label);
+        info.selected = Some(selected);
+        info
+    });
+
     if selected || response.hovered() {
         ui.painter().rect_filled(rect, 4.0, if selected { p.tab_selected_bg } else { p.hover });
     }
@@ -661,7 +675,7 @@ pub fn menu_entry(ui: &mut Ui, icon: Option<crate::Ico>, text: &str, shortcut: O
             ui.painter().galley(egui::pos2(r.right() - 10.0 - sc.size().x, (r.center().y - sc.size().y / 2.0).round()), sc, p.muted);
         }
     }
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, text));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, text));
     resp
 }
 
@@ -808,7 +822,12 @@ pub fn tab_ex(ui: &mut Ui, selected: bool, ico: Option<Ico>, text: &str, closabl
     let sense = if style.draggable { Sense::click_and_drag() } else { Sense::click() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 28.0), sense);
     // The text is painted, so screen readers (and UI tests) need it spelled out.
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, text));
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, text);
+        info.selected = Some(selected);
+        info
+    });
+
     if let Some(c) = style.color {
         // File colour: a light tint behind the tab (Rider's file colours).
         ui.painter().rect_filled(rect, 6.0, c.gamma_multiply(if p.dark { 0.16 } else { 0.12 }));
