@@ -1,5 +1,13 @@
 # CrabCraft: funcionalidades e status
 
+Revisão dos PRs (2026-11-13): Actions #175–#177 integradas; migração egui 0.37
+do #180 complementada com os eventos de roda do mouse dos testes. Issue #181:
+rustfmt do repositório com largura 160 e heurísticas Max; não elimina a dívida
+de formatação existente. Issue #173: proposta de IDE unificada documentada em
+`docs/architecture.md`, sem implementar ou prometer produto/add-on compartilhado.
+A atualização ampla #178 permanece pendente por erros de compilação quick-xml.
+Mudanças de fonte invalidam a exceção estática anterior; não renovada automaticamente.
+
 Infraestrutura de autoavaliação de segurança: workflow dedicado, execução local
 por `scripts/security-audit.sh`, relatórios JSON/Markdown, SBOM por crate,
 inventário de `unsafe`, Gitleaks e fuzzing limitado em schedule/manual.

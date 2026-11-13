@@ -1,7 +1,7 @@
 # CrabCraft architecture
 
 CrabCraft is a Cargo workspace (`crates/*`, Rust edition 2024) for a native Rust IDE built
-with eframe/egui 0.36 + wgpu 30. The UI thread never blocks: background work runs on threads
+with eframe/egui 0.37 + wgpu 30. The UI thread never blocks: background work runs on threads
 or on the shared tokio runtime and reports back through channels that wake the UI.
 
 | Crate | Role |
