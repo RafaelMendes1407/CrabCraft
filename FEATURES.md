@@ -370,7 +370,7 @@ An item becomes ✅ only with evidence that it works in a real Rust project.
 | D-04 | Exception/panic breakpoints | ✅ | M2 | Stops on the source line causing the panic, with real GDB; also stops in should_panic |
 | D-05 | Step over, into, out and Run to Cursor | ✅ | M2 | Over, into, out and Run to Cursor tested with real GDB |
 | D-06 | Force Step Into | ✅ | M4 | Alt+Shift+F7 (also in the Debug window's ⋮ menu): with GDB, disables standard-library skipping until the next stop and enters `String::from`; disabled with an explanation for other adapters. Tested with real GDB. |
-| D-07 | Threads and frames | ✅ | M2 | Thread with the test name and stack observed in the real window |
+| D-07 | Threads and frames | ✅ | M2 | Thread with the test name and stack observed in the real window. Debug session and thread selectors expose localized accessible names; the documentation capture exercises a real GDB stop with egui accessibility checks enabled. |
 | D-08 | Variable tree | ✅ | M2 | Tested with real GDB, including `Vec` and `String`; registers are excluded from the tree |
 | D-09 | Watches | ✅ | M2 | Watches tested with real GDB |
 | D-10 | Evaluate expression | ✅ | M2 | Evaluate Expression tested with real GDB |

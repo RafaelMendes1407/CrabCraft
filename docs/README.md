@@ -21,6 +21,10 @@ for Discord is available for [0.4.0](releases/0.4.0-pt-BR.md).
 The guides below preserve detailed prerequisites, behavior and verification evidence.
 The feature guide is a user-facing introduction; the inventory remains the status of record.
 
+Images in the README and feature guide come from the native application. Their example
+projects, capture command, prerequisites and license are recorded in
+[screenshot sources and reproduction](screenshots/README.md).
+
 ## Getting started
 
 | Guide | What it covers |
