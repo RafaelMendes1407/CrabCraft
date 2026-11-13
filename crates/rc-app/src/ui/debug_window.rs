@@ -425,7 +425,7 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
     };
     // Thread selector.
     let threads = s.threads().to_vec();
-    let mut thread_id = ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::new("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
+    let mut thread_id = ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::unique("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         icons::image(ui, if thread_id == stop.thread_id { ico::THREAD_AT_BREAKPOINT } else { ico::THREADS }, 16.0);
@@ -436,7 +436,7 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
             }
         });
     });
-    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("dbg_thread"), thread_id));
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("dbg_thread"), thread_id));
     if s.frames(thread_id).is_none() {
         s.request_frames(thread_id);
     }
@@ -560,7 +560,7 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
     let mut show_memory = None;
     let caps = s.capabilities().clone();
     let can_set = |row: &Row| stopped && row.set_target().is_some_and(|t| t.supported(&caps));
-    let list_id = ui.id().with("dbg_vars_list");
+    let list_id = ui.scope_id().with("dbg_vars_list");
     let mut select = None;
     let mut start_edit: Option<(String, SetTarget, String)> = None;
     let mut edit_done = None;
@@ -811,7 +811,7 @@ fn edit_row(ui: &mut Ui, row: &Row, edit: &mut ValueEdit) -> Option<bool> {
     let name_w = g.size().x.min((r.width() * 0.5).max(40.0));
     ui.painter().with_clip_rect(r).galley(pos2(x0 + 38.0, r.center().y - g.size().y / 2.0), g, name_color);
     let field = Rect::from_min_max(pos2(x0 + 38.0 + name_w, r.top() + 1.0), pos2(r.right() - 8.0, r.bottom() - 1.0));
-    let id = ui.id().with(("set_value", &edit.key));
+    let id = ui.scope_id().with(("set_value", &edit.key));
     let te = egui::TextEdit::singleline(&mut edit.text).id(id).font(font).margin(vec2(4.0, 1.0)).desired_width(field.width());
     let resp = ui.put(field, te).on_hover_text(tr("Enter to set, Escape to cancel"));
     if edit.focus {

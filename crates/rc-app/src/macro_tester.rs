@@ -198,7 +198,7 @@ impl Tester {
     pub fn show(&mut self, ctx: &egui::Context, trusted: bool, analyzer: Option<PathBuf>, waker: Waker) {
         self.poll(); if !self.open { return; }
         let mut open = self.open;
-        egui::Window::new(tr("Declarative Macro Tester")).id(egui::Id::new("declarative_macro_tester"))
+        egui::Window::new(tr("Declarative Macro Tester")).id(egui::Id::unique("declarative_macro_tester"))
             .open(&mut open).default_width(800.0).default_height(600.0)
             .max_height((ctx.content_rect().height() - 40.0).max(160.0)).vscroll(true).resizable(true).show(ctx, |ui| {
                 ui.set_min_height(540.0);

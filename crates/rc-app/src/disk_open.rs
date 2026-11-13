@@ -227,7 +227,7 @@ impl State {
     pub fn show(&mut self, ctx: &egui::Context) {
         if self.busy() {
             egui::Window::new(tr("Opening file"))
-                .id(egui::Id::new("disk-open-progress"))
+                .id(egui::Id::unique("disk-open-progress"))
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {

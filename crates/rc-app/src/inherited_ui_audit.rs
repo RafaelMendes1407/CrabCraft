@@ -152,7 +152,7 @@ fn native_dock_stripes_move_show_hide_and_restore_the_cargo_layout() {
     assert!(!visible.iter().enumerate().any(|(index, (_, a))| visible.iter().skip(index + 1).any(|(_, b)| a.intersects(*b))), "stripe buttons overlap at the advertised minimum window size: {visible:?}");
 
     harness.hover_at(egui::pos2(20.0, 280.0));
-    harness.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1000.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+    harness.input_mut().events.push(egui::Event::MouseWheel { source: egui::MouseWheelSource::Unknown, unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1000.0), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
     harness.run_steps(12);
     harness.get_by_label(ToolWindow::Endpoints.title()).click(); harness.run_steps(2);
     assert_eq!(harness.state().dock.bottom, Some(ToolWindow::Endpoints), "overflowed stripe controls remain reachable by scrolling");

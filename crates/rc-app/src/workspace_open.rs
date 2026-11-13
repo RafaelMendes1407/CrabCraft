@@ -524,7 +524,7 @@ impl State {
         }
         let mut cancelled = false;
         egui::Window::new(tr("Opening workspace…"))
-            .id(egui::Id::new("workspace_open_progress"))
+            .id(egui::Id::unique("workspace_open_progress"))
             .collapsible(false)
             .resizable(false)
             .show(ctx, |ui| {

@@ -54,7 +54,7 @@ pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
                 Sense::click(),
             );
             response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+                egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label)
             });
             let fill = if index == 0 && response.hovered() {
                 Color32::from_rgb(196, 43, 28)
@@ -192,7 +192,7 @@ pub fn resize_edges(ctx: &egui::Context) {
     for (index, (direction, rect, cursor)) in
         resize_regions(ctx.content_rect()).into_iter().enumerate()
     {
-        egui::Area::new(Id::new(("window_resize", index)))
+        egui::Area::new(Id::unique(("window_resize", index)))
             .order(egui::Order::Foreground)
             .fixed_pos(rect.min)
             .movable(false)

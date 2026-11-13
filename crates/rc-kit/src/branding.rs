@@ -19,7 +19,7 @@ pub fn paint(ui: &Ui, rect: Rect) {
     } else {
         (64, include_bytes!("../../../assets/icon-64.png"))
     };
-    let id = Id::new(("crabcraft_application_icon", size));
+    let id = Id::unique(("crabcraft_application_icon", size));
     let texture = ui
         .ctx()
         .data_mut(|data| data.get_temp::<TextureHandle>(id))

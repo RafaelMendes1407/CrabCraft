@@ -113,7 +113,7 @@ pub(crate) fn show(ui: &Ui, state: &mut EditorState, config: &EditorConfig, sche
     let top = (p.y - h / 2.0).clamp(screen.top(), (screen.bottom() - h).max(screen.top()));
     let rect = Rect::from_min_size(pos2(track.left() - 6.0 - w, top), vec2(w, h));
 
-    let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::new(("scroll_lens", state.id)))).with_clip_rect(rect.expand(8.0));
+    let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::unique(("scroll_lens", state.id)))).with_clip_rect(rect.expand(8.0));
     painter.add(ui.visuals().popup_shadow.as_shape(rect, 6.0));
     painter.rect(rect, 6.0, pal.editor_bg, Stroke::new(1.0, pal.popup_border), egui::StrokeKind::Inside);
     let code_top = rect.top() + 4.0;

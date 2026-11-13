@@ -72,7 +72,7 @@ pub struct EditorView<'a> {
 
 impl<'a> EditorView<'a> {
     pub fn new(state: &'a mut EditorState, config: &'a EditorConfig, keymap: &'a Keymap) -> Self {
-        let id = Id::new(("crabcraft_editor", state.id));
+        let id = Id::unique(("crabcraft_editor", state.id));
         EditorView { state, config, keymap, id, focus_on_show: false }
     }
 
@@ -83,7 +83,7 @@ impl<'a> EditorView<'a> {
     }
 
     pub fn id_for(doc: u64) -> Id {
-        Id::new(("crabcraft_editor", doc))
+        Id::unique(("crabcraft_editor", doc))
     }
 
     pub fn show(self, ui: &mut Ui) -> EditorOutput {
@@ -834,7 +834,7 @@ fn paint_scrollbars(
 
     let mut vresp = None;
     if content_h > text_rect.height() + 0.5 {
-        let id = Id::new(("editor_vbar", state.id));
+        let id = Id::unique(("editor_vbar", state.id));
         let resp = ui.interact(track, id, Sense::click_and_drag());
         let ratio = text_rect.height() / content_h;
         let thumb_h = (track.height() * ratio).max(24.0);
@@ -859,7 +859,7 @@ fn paint_scrollbars(
         vresp = Some(resp);
     } else if !marks.is_empty() {
         // A short or fully folded document still has a clickable error stripe.
-        let response = ui.interact(track, Id::new(("editor_vbar", state.id)), Sense::click());
+        let response = ui.interact(track, Id::unique(("editor_vbar", state.id)), Sense::click());
         if response.clicked() && let Some(pointer) = response.interact_pointer_pos() {
             jump_to_problem_mark(state, m, text_rect, &marks, pointer.y);
         }
@@ -879,7 +879,7 @@ fn paint_scrollbars(
     let mut hresp = None;
     if content_w > text_rect.width() + 0.5 {
         let htrack = Rect::from_min_max(pos2(text_rect.left(), rect.bottom() - 10.0), pos2(text_rect.right(), rect.bottom()));
-        let id = Id::new(("editor_hbar", state.id));
+        let id = Id::unique(("editor_hbar", state.id));
         let resp = ui.interact(htrack, id, Sense::drag());
         let ratio = text_rect.width() / content_w;
         let thumb_w = (htrack.width() * ratio).max(24.0);
@@ -1195,13 +1195,13 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
 }
 
 fn hover_popup_hovered(ui: &Ui) -> bool {
-    ui.ctx().data(|d| d.get_temp::<bool>(Id::new("crabcraft_hover_popup_hovered"))).unwrap_or(false)
+    ui.ctx().data(|d| d.get_temp::<bool>(Id::unique("crabcraft_hover_popup_hovered"))).unwrap_or(false)
 }
 
 fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keymap: &Keymap, out: &mut EditorOutput) {
     let events = ui.input(|i| i.events.clone());
     if events.iter().any(|event| matches!(event, Event::PointerButton { pressed: true, .. } | Event::WindowFocused(false) | Event::Ime(_))) {
-        Keymap::cancel_sequence(ui.ctx(), Id::new(("editor_key_sequence", state.id)));
+        Keymap::cancel_sequence(ui.ctx(), Id::unique(("editor_key_sequence", state.id)));
     }
     let now = ui.input(|i| i.time);
     // "Alt Alt + ↑/↓" clones carets: track a double tap of Alt that is still held.
@@ -1218,8 +1218,8 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
     for ev in events {
         match ev {
             Event::Key { key, pressed: true, modifiers, repeat, .. } => {
-                if repeat && Keymap::sequence_repeat(ui.ctx(), Id::new(("editor_key_sequence", state.id)), key) { continue; }
-                if !repeat { match keymap.sequence_key(ui.ctx(), Id::new(("editor_key_sequence", state.id)), key, modifiers, true) {
+                if repeat && Keymap::sequence_repeat(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key) { continue; }
+                if !repeat { match keymap.sequence_key(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key, modifiers, true) {
                     crate::keymap::SequenceKey::Waiting => continue,
                     crate::keymap::SequenceKey::Action(action) => {
                         if action.is_editing() { exec(ui, state, config, action, out); } else { out.actions.push(action); }
@@ -1245,7 +1245,7 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
                 }
             }
             Event::Text(text) => {
-                if Keymap::sequence_text(ui.ctx(), Id::new(("editor_key_sequence", state.id)), &text) || state.read_only || text.is_empty() {
+                if Keymap::sequence_text(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), &text) || state.read_only || text.is_empty() {
                     continue;
                 }
                 type_text(state, config, &text, out);
@@ -1653,7 +1653,7 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
 /// Runs an editing action on `state` from outside the widget (native menu, actions popup).
 /// Returns the code-insight actions it could not handle itself.
 pub fn run_action(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action) -> Vec<Action> {
-    let response = ui.interact(Rect::NOTHING, Id::new("crabcraft_editor_action"), Sense::hover());
+    let response = ui.interact(Rect::NOTHING, Id::unique("crabcraft_editor_action"), Sense::hover());
     let mut out = EditorOutput { response, actions: Vec::new(), events: Vec::new(), accepted_completion: None, caret_rect: None };
     if action.is_editing() {
         exec(ui, state, config, action, &mut out);

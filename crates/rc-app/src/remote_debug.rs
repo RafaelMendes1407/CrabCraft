@@ -11,7 +11,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &egui::Context, draft: &mut Dialog) -> 
     let mut connect = false;
     let mut cancel = false;
     let valid = draft.port.parse::<u16>().ok().and_then(|port| rc_dap::remote::RemoteTarget::new(&draft.host, port, draft.program.clone().into()).ok());
-    egui::Modal::new(egui::Id::new("remote-gdb-connection")).show(ctx, |ui| {
+    egui::Modal::new(egui::Id::unique("remote-gdb-connection")).show(ctx, |ui| {
         ui.set_width(520.0);
         ui.heading(tr("Connect to GDB Server"));
         ui.label(tr("Connect to an existing gdbserver using a local binary with matching debug symbols. Stop detaches; it does not terminate the remote process."));

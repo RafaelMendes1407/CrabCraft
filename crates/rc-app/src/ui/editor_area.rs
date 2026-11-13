@@ -156,7 +156,7 @@ fn show_node(app: &mut CrabCraftApp, ui: &mut Ui, node: &Node, rect: Rect, windo
         let y = (rect.top() + rect.height() * ratio).round();
         Rect::from_min_max(pos2(rect.left(), y - 3.0), pos2(rect.right(), y + 3.0))
     };
-    let resp = ui.interact(divider, egui::Id::new(("editor_split", window, path.clone())), Sense::drag());
+    let resp = ui.interact(divider, egui::Id::unique(("editor_split", window, path.clone())), Sense::drag());
     let mut ratio = ratio;
     if resp.dragged()
         && let Some(pos) = resp.interact_pointer_pos()
@@ -222,7 +222,7 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
     let Some(pointer) = drag_pointer(app, ui.ctx()) else { return };
     let over_strip = strip.as_ref().is_some_and(|(s, _)| s.contains(pointer));
     let p = rc_kit::pal(ui);
-    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new(("tab_drop", g.id))));
+    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique(("tab_drop", g.id))));
     let from = app.layout.group_of(doc);
     let alone = from.and_then(|f| app.layout.group(f)).is_some_and(|f| f.tabs.len() == 1);
     // Keep every editor visible under a neutral veil, with a map of valid destinations.
@@ -268,7 +268,7 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
                 _ => (None, None),
             };
             if let Some(zone) = zone {
-                let animation_id = egui::Id::new(("tab_drop_animation", g.id, doc, format!("{drop:?}")));
+                let animation_id = egui::Id::unique(("tab_drop_animation", g.id, doc, format!("{drop:?}")));
                 let now = ui.input(|input| input.time);
                 let started = ui.ctx().data_mut(|data| {
                     let (last, started) = data.get_temp::<(f64, f64)>(animation_id).unwrap_or((now, now));
@@ -582,7 +582,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         && *d == doc.editor.id
     {
         let p = rc_kit::pal(ui);
-        egui::Area::new(egui::Id::new("debug_hover")).order(egui::Order::Tooltip).fixed_pos(*screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
+        egui::Area::new(egui::Id::unique("debug_hover")).order(egui::Order::Tooltip).fixed_pos(*screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
             egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
                 ui.set_max_width(520.0);
                 ui.label(egui::RichText::new(text).monospace().size(12.5).color(p.text));
@@ -688,7 +688,7 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
     let ctx = ui.ctx().clone();
     let p = rc_kit::pal(ui);
     let mut chosen = None;
-    let area = egui::Area::new(egui::Id::new("gutter_run_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(&ctx, |ui| {
+    let area = egui::Area::new(egui::Id::unique("gutter_run_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(&ctx, |ui| {
         egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.set_width(150.0);
             if theme::menu_entry(ui, Some(ico::RUN), tr("Run"), None, false, true).clicked() {

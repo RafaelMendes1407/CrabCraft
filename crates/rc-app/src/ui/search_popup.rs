@@ -168,7 +168,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
             choose = hits.get(se.selected).map(|h| h.1.clone());
         }
     });
-    let area = egui::Area::new(Id::new("search_everywhere")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+    let area = egui::Area::new(Id::unique("search_everywhere")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         egui::Frame::NONE
             .fill(p.popup_bg)
             .stroke(egui::Stroke::new(1.0, p.popup_border))
@@ -194,7 +194,12 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             Some(k) => resp.on_hover_text(format!("{} ({k})", t.title())),
                             None => resp,
                         };
-                        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, t.title()));
+                        resp.widget_info(|| {
+                            let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, t.title());
+                            info.selected = Some(selected);
+                            info
+                        });
+
                         if resp.clicked() {
                             se.tab = t;
                             se.selected = 0;
@@ -213,7 +218,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                             }
                         }).response;
                         let title = se.scope.title();
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &title));
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &title));
                         resp.on_hover_text(tr("Search scope"));
                         if let Some(s) = chosen {
                             se.scope = s;
@@ -285,7 +290,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                         if let Hit::More(_) = hit {
                             let more = tr("… more");
                             ui.painter().text(pos2(r.left() + 34.0, r.center().y), Align2::LEFT_CENTER, more, FontId::proportional(12.5), p.muted);
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, more));
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, more));
                             if resp.clicked() {
                                 choose = Some(hit.clone());
                             }
@@ -325,7 +330,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                                 ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
                             }
                         }
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
                         if resp.clicked() {
                             choose = Some(hit.clone());
                         }

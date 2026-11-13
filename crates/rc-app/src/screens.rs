@@ -763,7 +763,7 @@ fn many_files_harness(home: &Path, n: usize, tab: crate::search::SeTab) -> Harne
 fn wheel(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2, dy: f32) {
     h.input_mut().events.push(egui::Event::PointerMoved(at));
     h.run_steps(1);
-    h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+    h.input_mut().events.push(egui::Event::MouseWheel { source: egui::MouseWheelSource::Unknown, unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
     h.run_steps(1);
 }
 
@@ -904,7 +904,7 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     let over = h.get_by_label("feature/topic-00").rect().center();
     for _ in 0..40 {
         h.input_mut().events.push(egui::Event::PointerMoved(over));
-        h.input_mut().events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, -3.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+        h.input_mut().events.push(egui::Event::MouseWheel { source: egui::MouseWheelSource::Unknown, unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, -3.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
         h.run_steps(1);
     }
     h.run_steps(3);
