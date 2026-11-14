@@ -234,7 +234,11 @@ fn normalize(changes: Vec<Change>, old: &[String], new: &[String]) -> Vec<Change
         }
         let next_old = changes.get(i + 1).map_or(old.len(), |x| x.old.start);
         if c.old.is_empty() && !c.new.is_empty() {
-            while c.old.start + 1 < next_old && new.get(c.new.start).is_some() && new.get(c.new.start) == new.get(c.new.end) && old.get(c.old.start) == new.get(c.new.end) {
+            while c.old.start + 1 < next_old
+                && new.get(c.new.start).is_some()
+                && new.get(c.new.start) == new.get(c.new.end)
+                && old.get(c.old.start) == new.get(c.new.end)
+            {
                 c.old = c.old.start + 1..c.old.end + 1;
                 c.new = c.new.start + 1..c.new.end + 1;
             }

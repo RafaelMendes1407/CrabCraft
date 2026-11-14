@@ -82,15 +82,7 @@ pub struct MissingCrates {
 }
 impl MissingCrates {
     pub fn new(waker: Waker) -> Self {
-        Self {
-            key: None,
-            due: Instant::now(),
-            generation: 0,
-            cancel: None,
-            inbox: Inbox::new(waker),
-            report: Report::default(),
-            pasted: None,
-        }
+        Self { key: None, due: Instant::now(), generation: 0, cancel: None, inbox: Inbox::new(waker), report: Report::default(), pasted: None }
     }
     pub fn pasted(&mut self, id: u64, version: u64, range: Option<(usize, usize)>) {
         self.pasted = range.map(|range| (id, version, range));
@@ -103,13 +95,7 @@ impl MissingCrates {
         self.generation = self.generation.wrapping_add(1);
         self.report = Report::default();
     }
-    pub fn update(
-        &mut self,
-        docs: &crate::docs::Docs,
-        runner: &crate::runner::Runner,
-        epoch: u64,
-        ctx: &egui::Context,
-    ) {
+    pub fn update(&mut self, docs: &crate::docs::Docs, runner: &crate::runner::Runner, epoch: u64, ctx: &egui::Context) {
         let Some(doc) = docs.active_doc().filter(|doc| {
             doc.path.extension().is_some_and(|ext| ext == "rs")
                 && !doc.scratch
@@ -125,37 +111,20 @@ impl MissingCrates {
         let manifest_docs: Vec<_> = docs
             .list
             .iter()
-            .filter(|doc| {
-                doc.path
-                    .file_name()
-                    .is_some_and(|name| name == "Cargo.toml")
-                    || doc.path.extension().is_some_and(|ext| ext == "rs")
-            })
+            .filter(|doc| doc.path.file_name().is_some_and(|name| name == "Cargo.toml") || doc.path.extension().is_some_and(|ext| ext == "rs"))
             .take(65)
             .collect();
         let key = Key {
             id: doc.editor.id,
             version: doc.editor.buffer.version(),
             epoch,
-            manifests: manifest_docs
-                .iter()
-                .map(|doc| (doc.editor.id, doc.editor.buffer.version(), doc.disk_epoch))
-                .collect(),
+            manifests: manifest_docs.iter().map(|doc| (doc.editor.id, doc.editor.buffer.version(), doc.disk_epoch)).collect(),
         };
         if self.key.as_ref() != Some(&key) {
             self.invalidate();
             self.key = Some(key.clone());
             self.due = Instant::now()
-                + Duration::from_millis(
-                    if self
-                        .pasted
-                        .is_some_and(|(id, version, _)| id == key.id && version == key.version)
-                    {
-                        0
-                    } else {
-                        450
-                    },
-                );
+                + Duration::from_millis(if self.pasted.is_some_and(|(id, version, _)| id == key.id && version == key.version) { 0 } else { 450 });
         }
         for (generation, report) in self.inbox.drain() {
             if generation == self.generation {
@@ -177,21 +146,12 @@ impl MissingCrates {
             .cargo_workspace
             .iter()
             .chain(&runner.attached)
-            .flat_map(|workspace| {
-                workspace.packages.iter().map(|package| Member {
-                    package: package.clone(),
-                    workspace: workspace.manifest.clone(),
-                })
-            })
+            .flat_map(|workspace| workspace.packages.iter().map(|package| Member { package: package.clone(), workspace: workspace.manifest.clone() }))
             .take(257)
             .collect();
         if members.len() > 256
             || manifest_docs.len() > 64
-            || manifest_docs
-                .iter()
-                .map(|doc| doc.editor.buffer.rope().len_bytes())
-                .sum::<usize>()
-                > 8 * 1024 * 1024
+            || manifest_docs.iter().map(|doc| doc.editor.buffer.rope().len_bytes()).sum::<usize>() > 8 * 1024 * 1024
         {
             return;
         }
@@ -199,14 +159,8 @@ impl MissingCrates {
             path: doc.path.clone(),
             source: doc.editor.buffer.snapshot(),
             members,
-            manifests: manifest_docs
-                .into_iter()
-                .map(|doc| (doc.path.clone(), doc.editor.buffer.snapshot()))
-                .collect(),
-            paste: self
-                .pasted
-                .filter(|(id, version, _)| *id == key.id && *version == key.version)
-                .map(|(_, _, range)| range),
+            manifests: manifest_docs.into_iter().map(|doc| (doc.path.clone(), doc.editor.buffer.snapshot())).collect(),
+            paste: self.pasted.filter(|(id, version, _)| *id == key.id && *version == key.version).map(|(_, _, range)| range),
         };
         let generation = self.generation;
         let out = self.inbox.sender();
@@ -260,101 +214,53 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
     let mut members = input.members.clone();
     members.sort_by_key(|member| std::cmp::Reverse(member.package.manifest.components().count()));
     members.dedup_by(|a, b| a.package.manifest == b.package.manifest);
-    let exact: Vec<_> = members
-        .iter()
-        .filter(|member| {
-            member
-                .package
-                .targets
-                .iter()
-                .any(|target| target.src.canonicalize().ok().as_ref() == Some(&path))
-        })
-        .collect();
+    let exact: Vec<_> =
+        members.iter().filter(|member| member.package.targets.iter().any(|target| target.src.canonicalize().ok().as_ref() == Some(&path))).collect();
     let owner = if exact.len() == 1 {
         exact.first().copied()
     } else if exact.len() > 1 {
         None
     } else {
-        members.iter().find(|member| {
-            member
-                .package
-                .manifest
-                .parent()
-                .and_then(|root| root.canonicalize().ok())
-                .is_some_and(|root| path.starts_with(root))
-        })
+        members.iter().find(|member| member.package.manifest.parent().and_then(|root| root.canonicalize().ok()).is_some_and(|root| path.starts_with(root)))
     };
     let Some(owner) = owner else { return report };
     let Some(root) = owner.package.manifest.parent() else {
         return report;
     };
-    let target = owner
-        .package
-        .targets
-        .iter()
-        .find(|target| target.src.canonicalize().ok().as_ref() == Some(&path));
+    let target = owner.package.targets.iter().find(|target| target.src.canonicalize().ok().as_ref() == Some(&path));
     let scope = match target.map(|target| target.kind) {
         Some(TargetKind::Other) => Scope::Build,
         Some(TargetKind::Test | TargetKind::Bench | TargetKind::Example) => Scope::Dev,
         Some(TargetKind::Lib | TargetKind::Bin) => Scope::Normal,
-        None if ["tests", "benches", "examples"]
-            .iter()
-            .any(|dir| input.path.starts_with(root.join(dir))) =>
-        {
-            Scope::Dev
-        }
+        None if ["tests", "benches", "examples"].iter().any(|dir| input.path.starts_with(root.join(dir))) => Scope::Dev,
         None if input.path.starts_with(root.join("src")) => Scope::Normal,
         _ => return report,
     };
     let Some(manifest) = read(&owner.package.manifest, &input, 4 * 1024 * 1024) else {
-        notice(
-            &mut report,
-            tr("Dependency proposals could not read the package manifest").into(),
-        );
+        notice(&mut report, tr("Dependency proposals could not read the package manifest").into());
         return report;
     };
     let workspace = read(&owner.workspace, &input, 4 * 1024 * 1024);
-    let Ok(names) = rc_cargo::dependency_names::dependency_names(&manifest, workspace.as_deref())
-    else {
-        notice(
-            &mut report,
-            tr("Dependency proposals could not read the package manifest").into(),
-        );
+    let Ok(names) = rc_cargo::dependency_names::dependency_names(&manifest, workspace.as_deref()) else {
+        notice(&mut report, tr("Dependency proposals could not read the package manifest").into());
         return report;
     };
     let source = input.source.to_string();
     let mut references = rc_syntax::crate_refs::references(&source, cancel);
     if references.limited {
-        notice(
-            &mut report,
-            tr("Dependency proposal analysis reached its limit").into(),
-        );
+        notice(&mut report, tr("Dependency proposal analysis reached its limit").into());
         return report;
     }
     let mut locals = references.local_names.clone();
     // Inspect target roots and conventional ancestor modules, bounded and never execute code.
-    let mut files: BTreeSet<_> = owner
-        .package
-        .targets
-        .iter()
-        .map(|target| target.src.clone())
-        .collect();
-    for dir in input
-        .path
-        .ancestors()
-        .skip(1)
-        .take(16)
-        .take_while(|dir| dir.starts_with(root))
-    {
+    let mut files: BTreeSet<_> = owner.package.targets.iter().map(|target| target.src.clone()).collect();
+    for dir in input.path.ancestors().skip(1).take(16).take_while(|dir| dir.starts_with(root)) {
         for name in ["mod.rs", "lib.rs", "main.rs"] {
             files.insert(dir.join(name));
         }
     }
     if files.len() > 64 {
-        notice(
-            &mut report,
-            tr("Dependency proposal analysis reached its limit").into(),
-        );
+        notice(&mut report, tr("Dependency proposal analysis reached its limit").into());
         return report;
     }
     let mut budget = 4 * 1024 * 1024;
@@ -377,25 +283,15 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
             locals.extend(parsed.local_names);
             locals.extend(parsed.imported.into_keys());
         } else {
-            notice(
-                &mut report,
-                tr("Dependency proposal analysis reached its limit").into(),
-            );
+            notice(&mut report, tr("Dependency proposal analysis reached its limit").into());
             return report;
         }
     }
-    let paste = input.paste.map(|(start, end)| {
-        (
-            input
-                .source
-                .char_to_byte(start.min(input.source.len_chars())),
-            input.source.char_to_byte(end.min(input.source.len_chars())),
-        )
-    });
+    let paste = input
+        .paste
+        .map(|(start, end)| (input.source.char_to_byte(start.min(input.source.len_chars())), input.source.char_to_byte(end.min(input.source.len_chars()))));
     let mut seen = BTreeSet::new();
-    references
-        .references
-        .sort_by_key(|reference| reference.test_only);
+    references.references.sort_by_key(|reference| reference.test_only);
     for reference in references.references {
         if cancel.load(Ordering::Relaxed) || report.proposals.len() >= 8 {
             break;
@@ -403,17 +299,11 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
         let key = &reference.root;
         if locals.contains(key)
             || references.imported.get(key).is_some_and(|base| base != key)
-            || owner.package.targets.iter().any(|target| {
-                target.kind == TargetKind::Lib && target.name.replace('-', "_") == *key
-            })
+            || owner.package.targets.iter().any(|target| target.kind == TargetKind::Lib && target.name.replace('-', "_") == *key)
         {
             continue;
         }
-        let scope = if scope == Scope::Normal && reference.test_only {
-            Scope::Dev
-        } else {
-            scope
-        };
+        let scope = if scope == Scope::Normal && reference.test_only { Scope::Dev } else { scope };
         if (scope == Scope::Dev && seen.contains(&(key.clone(), Scope::Normal.table())))
             || !seen.insert((key.clone(), scope.table()))
             || names.scope(scope).roots.contains(key)
@@ -424,51 +314,25 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
             .iter()
             .filter(|member| {
                 member.package.manifest != owner.package.manifest
-                    && member.package.targets.iter().any(|target| {
-                        target.kind == TargetKind::Lib && target.name.replace('-', "_") == *key
-                    })
+                    && member.package.targets.iter().any(|target| target.kind == TargetKind::Lib && target.name.replace('-', "_") == *key)
             })
             .collect();
-        let (name, local_path, lookup) =
-            if local.len() == 1 && local[0].package.name.replace('-', "_") == *key {
-                (
-                    local[0].package.name.clone(),
-                    local[0].package.manifest.parent().map(Path::to_path_buf),
-                    false,
-                )
-            } else if !local.is_empty() {
-                notice(
-                    &mut report,
-                    trf(
-                        "Dependency {crate} is ambiguous; review the manifest manually",
-                        &[("crate", key)],
-                    ),
-                );
-                continue;
-            } else if let Some((_, package)) = CATALOG.iter().find(|(root, _)| root == key) {
-                (package.to_string(), None, false)
-            } else if !references.glob && rc_cargo::valid_crate_name(key)
-                && key.bytes().next().is_some_and(|c| c.is_ascii_lowercase())
-            {
-                // Import roots normalize package hyphens to underscores. They are search
-                // terms, not an asserted registry identity: require selecting a search hit.
-                (key.clone(), None, true)
-            } else {
-                continue;
-            };
-        if references.glob
-            || names
-                .scope(scope)
-                .packages
-                .contains_key(&name.replace('-', "_"))
-        {
-            notice(
-                &mut report,
-                trf(
-                    "Dependency {crate} may be available through an alias or glob; review the manifest manually",
-                    &[("crate", key)],
-                ),
-            );
+        let (name, local_path, lookup) = if local.len() == 1 && local[0].package.name.replace('-', "_") == *key {
+            (local[0].package.name.clone(), local[0].package.manifest.parent().map(Path::to_path_buf), false)
+        } else if !local.is_empty() {
+            notice(&mut report, trf("Dependency {crate} is ambiguous; review the manifest manually", &[("crate", key)]));
+            continue;
+        } else if let Some((_, package)) = CATALOG.iter().find(|(root, _)| root == key) {
+            (package.to_string(), None, false)
+        } else if !references.glob && rc_cargo::valid_crate_name(key) && key.bytes().next().is_some_and(|c| c.is_ascii_lowercase()) {
+            // Import roots normalize package hyphens to underscores. They are search
+            // terms, not an asserted registry identity: require selecting a search hit.
+            (key.clone(), None, true)
+        } else {
+            continue;
+        };
+        if references.glob || names.scope(scope).packages.contains_key(&name.replace('-', "_")) {
+            notice(&mut report, trf("Dependency {crate} may be available through an alias or glob; review the manifest manually", &[("crate", key)]));
             continue;
         }
         // A sibling module could be loaded through a different declaration or cfg branch.
@@ -478,9 +342,7 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
             .skip(1)
             .take(16)
             .take_while(|dir| dir.starts_with(root))
-            .any(|dir| {
-                dir.join(format!("{key}.rs")).exists() || dir.join(key).join("mod.rs").exists()
-            })
+            .any(|dir| dir.join(format!("{key}.rs")).exists() || dir.join(key).join("mod.rs").exists())
         {
             continue;
         }
@@ -492,8 +354,7 @@ fn scan(input: Input, cancel: &AtomicBool) -> Report {
             scope,
             local: local_path,
             lookup,
-            pasted: paste
-                .is_some_and(|(start, end)| reference.start < end && reference.end > start),
+            pasted: paste.is_some_and(|(start, end)| reference.start < end && reference.end > start),
         });
     }
     report
@@ -504,16 +365,8 @@ pub fn banner(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     for proposal in &app.missing_crates.report.proposals {
         ui.horizontal_wrapped(|ui| {
             ui.label(trf(
-                if proposal.pasted {
-                    "Pasted code may need {crate} in {package} [{scope}]"
-                } else {
-                    "Code may need {crate} in {package} [{scope}]"
-                },
-                &[
-                    ("crate", &proposal.root),
-                    ("package", &proposal.package),
-                    ("scope", &proposal.scope.table()),
-                ],
+                if proposal.pasted { "Pasted code may need {crate} in {package} [{scope}]" } else { "Code may need {crate} in {package} [{scope}]" },
+                &[("crate", &proposal.root), ("package", &proposal.package), ("scope", &proposal.scope.table())],
             ));
             if ui.button(if proposal.lookup { tr("Look up crate…") } else { tr("Review dependency…") }).clicked() {
                 selected = Some(proposal.clone());
@@ -524,13 +377,11 @@ pub fn banner(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
         ui.small(notice);
     }
     if let Some(proposal) = selected {
-        app.cargo_dependencies.review(
-            &proposal.manifest,
-            &proposal.name,
-            proposal.scope,
-            proposal.local.as_deref(),
-        );
-        if proposal.lookup { app.cargo_dependencies.name.clear(); app.cargo_dependencies.pane = crate::cargo_dependencies::Pane::Search; }
+        app.cargo_dependencies.review(&proposal.manifest, &proposal.name, proposal.scope, proposal.local.as_deref());
+        if proposal.lookup {
+            app.cargo_dependencies.name.clear();
+            app.cargo_dependencies.pane = crate::cargo_dependencies::Pane::Search;
+        }
         app.dialog = Some(crate::ui::dialogs::Dialog::CargoDependencies);
     }
 }
@@ -541,20 +392,12 @@ mod tests {
     fn fixture() -> (tempfile::TempDir, Input) {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().canonicalize().unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[workspace]\nmembers=[\"app\",\"helper-lib\"]\nresolver=\"2\"\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers=[\"app\",\"helper-lib\"]\nresolver=\"2\"\n").unwrap();
         let mut members = Vec::new();
         for name in ["app", "helper-lib"] {
             let dir = root.join(name);
             std::fs::create_dir_all(dir.join("src")).unwrap();
-            std::fs::write(
-                dir.join("Cargo.toml"),
-                format!("[package]\nname=\"{name}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n"),
-            )
-            .unwrap();
+            std::fs::write(dir.join("Cargo.toml"), format!("[package]\nname=\"{name}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n")).unwrap();
             std::fs::write(dir.join("src/lib.rs"), "pub fn value() -> u32 {42}\n").unwrap();
             members.push(Member {
                 package: Package {
@@ -575,9 +418,7 @@ mod tests {
         }
         let input = Input {
             path: root.join("app/src/lib.rs"),
-            source: rc_text::Rope::from_str(
-                "use serde::de::DeserializeOwned; use helper_lib::value;",
-            ),
+            source: rc_text::Rope::from_str("use serde::de::DeserializeOwned; use helper_lib::value;"),
             members,
             manifests: Default::default(),
             paste: Some((0, 30)),
@@ -591,39 +432,26 @@ mod tests {
         let before = std::fs::read(&manifest).unwrap();
         let report = scan(input, &AtomicBool::new(false));
         assert_eq!(report.proposals.len(), 2);
-        let serde = report
-            .proposals
-            .iter()
-            .find(|proposal| proposal.name == "serde")
-            .unwrap();
+        let serde = report.proposals.iter().find(|proposal| proposal.name == "serde").unwrap();
         assert!(serde.pasted);
         assert_eq!(serde.scope, Scope::Normal);
         assert!(serde.local.is_none());
         assert_eq!(serde.manifest, manifest);
-        let local = report
-            .proposals
-            .iter()
-            .find(|proposal| proposal.name == "helper-lib")
-            .unwrap();
+        let local = report.proposals.iter().find(|proposal| proposal.name == "helper-lib").unwrap();
         assert!(local.local.as_ref().unwrap().ends_with("helper-lib"));
         assert_eq!(std::fs::read(&manifest).unwrap(), before);
     }
     #[test]
     fn aliases_modules_and_globs_refuse_guesses_and_scopes_use_member_manifest() {
         let (_temp, mut input) = fixture();
-        input.source = rc_text::Rope::from_str(
-            "mod serde {} use serde::Value; use crate as regex; fn f(){regex::value();} use other::*; use tokio::task;",
-        );
+        input.source = rc_text::Rope::from_str("mod serde {} use serde::Value; use crate as regex; fn f(){regex::value();} use other::*; use tokio::task;");
         let report = scan(input, &AtomicBool::new(false));
         assert!(report.proposals.is_empty());
         assert_eq!(report.notices.len(), 1);
         let (_temp, mut input) = fixture();
         let manifest = input.members[0].package.manifest.clone();
-        let text = std::fs::read_to_string(&manifest).unwrap()
-            + "\n[dependencies]\nserde_alias={package=\"serde\",version=\"1\"}\n";
-        input
-            .manifests
-            .insert(manifest, rc_text::Rope::from_str(&text));
+        let text = std::fs::read_to_string(&manifest).unwrap() + "\n[dependencies]\nserde_alias={package=\"serde\",version=\"1\"}\n";
+        input.manifests.insert(manifest, rc_text::Rope::from_str(&text));
         input.source = rc_text::Rope::from_str("use serde::Serialize;");
         let report = scan(input, &AtomicBool::new(false));
         assert!(report.proposals.is_empty());
@@ -633,13 +461,7 @@ mod tests {
         let report = scan(input, &AtomicBool::new(false));
         assert_eq!(report.proposals[0].scope, Scope::Dev);
         let (_temp, mut input) = fixture();
-        let path = input
-            .path
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("build.rs");
+        let path = input.path.parent().unwrap().parent().unwrap().join("build.rs");
         std::fs::write(&path, "fn main() {} ").unwrap();
         input.members[0].package.targets.push(rc_cargo::Target {
             name: "build-script-build".into(),
@@ -659,24 +481,21 @@ mod tests {
         let (_temp, mut input) = fixture();
         input.source = rc_text::Rope::from_str("use serde::Serialize;");
         let manifest = input.members[0].package.manifest.clone();
-        let text = std::fs::read_to_string(&manifest).unwrap()
-            + "\n[dependencies]\nserde={version=\"1\",optional=true}\n";
-        input
-            .manifests
-            .insert(manifest, rc_text::Rope::from_str(&text));
+        let text = std::fs::read_to_string(&manifest).unwrap() + "\n[dependencies]\nserde={version=\"1\",optional=true}\n";
+        input.manifests.insert(manifest, rc_text::Rope::from_str(&text));
         assert!(scan(input, &AtomicBool::new(false)).proposals.is_empty());
     }
 
     #[test]
     fn arbitrary_import_roots_offer_lookup_without_asserting_a_package_identity() {
         let (_temp, mut input) = fixture();
-        input.source = rc_text::Rope::from_str("fn f() { let mut b = itoa::Buffer::new(); let _ = b.format(42); }\nuse custom_external_crate::Thing;\nuse std::path::Path;\nstruct Local; impl Local { fn make() {} } fn g(){ Local::make(); }");
+        input.source = rc_text::Rope::from_str(
+            "fn f() { let mut b = itoa::Buffer::new(); let _ = b.format(42); }\nuse custom_external_crate::Thing;\nuse std::path::Path;\nstruct Local; impl Local { fn make() {} } fn g(){ Local::make(); }",
+        );
         let report = scan(input, &AtomicBool::new(false));
         assert_eq!(report.proposals.len(), 2);
         assert!(report.proposals.iter().all(|p| p.lookup && p.local.is_none()));
         assert!(report.proposals.iter().any(|p| p.root == "itoa"));
         assert!(report.proposals.iter().any(|p| p.root == "custom_external_crate"));
     }
-
-
 }

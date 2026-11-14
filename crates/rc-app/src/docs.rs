@@ -6,8 +6,8 @@ use rc_editor::EditorState;
 use rc_kit::i18n::trf;
 use rc_syntax::ParserPool;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 /// Files bigger than this open read-only (no syntax tree).
@@ -17,7 +17,13 @@ const HUGE_FILE: u64 = 128 * 1024 * 1024;
 
 #[derive(Default)]
 pub struct PendingSave(pub Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
-impl Drop for PendingSave {fn drop(&mut self){if let Some(token)=&self.0{token.store(true,std::sync::atomic::Ordering::Release);}}}
+impl Drop for PendingSave {
+    fn drop(&mut self) {
+        if let Some(token) = &self.0 {
+            token.store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
+}
 
 pub struct Doc {
     pub editor: EditorState,
@@ -59,7 +65,9 @@ pub enum MdView {
 
 impl Doc {
     pub fn cancel_pending_save(&mut self) {
-        if let Some(token)=self.pending_save.0.take(){token.store(true,std::sync::atomic::Ordering::Release);}
+        if let Some(token) = self.pending_save.0.take() {
+            token.store(true, std::sync::atomic::Ordering::Release);
+        }
     }
     pub fn name(&self) -> String {
         self.path.file_name().map_or_else(|| self.path.display().to_string(), |n| n.to_string_lossy().into_owned())
@@ -185,13 +193,22 @@ impl std::fmt::Display for TextReadError {
     }
 }
 impl std::error::Error for TextReadError {}
-impl From<std::io::Error> for TextReadError { fn from(error: std::io::Error) -> Self { Self::Io(error) } }
+impl From<std::io::Error> for TextReadError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
 
 fn same_metadata(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
-    if !after.is_file() || before.len() != after.len() || before.modified().ok() != after.modified().ok() { return false; }
-    #[cfg(unix)] {
+    if !after.is_file() || before.len() != after.len() || before.modified().ok() != after.modified().ok() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
         use std::os::unix::fs::MetadataExt;
-        if before.dev() != after.dev() || before.ino() != after.ino() { return false; }
+        if before.dev() != after.dev() || before.ino() != after.ino() {
+            return false;
+        }
     }
     true
 }
@@ -205,13 +222,24 @@ pub fn read_text_checked(path: &Path) -> Result<(String, bool, Option<SystemTime
 pub(crate) fn read_text_cancellable(path: &Path, cancel: Option<&std::sync::atomic::AtomicBool>) -> Result<(String, bool, Option<SystemTime>), TextReadError> {
     let check = || if cancel.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire)) { Err(TextReadError::Cancelled) } else { Ok(()) };
     check()?;
-    if !std::fs::metadata(path)?.is_file() { return Err(TextReadError::NotRegular); }
-    let mut options = std::fs::OpenOptions::new(); options.read(true);
-    #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(TextReadError::NotRegular);
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     let mut file = options.open(path)?;
     let metadata = file.metadata()?;
-    if !metadata.is_file() { return Err(TextReadError::NotRegular); }
-    if metadata.len() > HUGE_FILE { return Err(TextReadError::TooLarge(metadata.len())); }
+    if !metadata.is_file() {
+        return Err(TextReadError::NotRegular);
+    }
+    if metadata.len() > HUGE_FILE {
+        return Err(TextReadError::TooLarge(metadata.len()));
+    }
     let mut bytes = Vec::new();
     let mut chunk = [0u8; 64 * 1024];
     loop {
@@ -220,15 +248,25 @@ pub(crate) fn read_text_cancellable(path: &Path, cancel: Option<&std::sync::atom
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
         };
-        if count == 0 { break; }
-        if bytes.len() as u64 + count as u64 > HUGE_FILE { return Err(TextReadError::TooLarge(bytes.len() as u64 + count as u64)); }
+        if count == 0 {
+            break;
+        }
+        if bytes.len() as u64 + count as u64 > HUGE_FILE {
+            return Err(TextReadError::TooLarge(bytes.len() as u64 + count as u64));
+        }
         bytes.extend_from_slice(&chunk[..count]);
     }
-    if !same_metadata(&metadata, &file.metadata()?) || !same_metadata(&metadata, &std::fs::metadata(path)?) { return Err(TextReadError::Changed); }
+    if !same_metadata(&metadata, &file.metadata()?) || !same_metadata(&metadata, &std::fs::metadata(path)?) {
+        return Err(TextReadError::Changed);
+    }
     check()?;
-    if bytes.contains(&0) { return Err(TextReadError::Binary); }
+    if bytes.contains(&0) {
+        return Err(TextReadError::Binary);
+    }
     let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
-    if bom { bytes.drain(..3); }
+    if bom {
+        bytes.drain(..3);
+    }
     let text = String::from_utf8(bytes).map_err(|_| TextReadError::InvalidUtf8)?;
     Ok((text, bom, metadata.modified().ok()))
 }
@@ -240,7 +278,18 @@ pub fn read_text(path: &Path) -> Result<(String, bool, Option<SystemTime>), Stri
 
 impl Docs {
     pub fn new(pool: ParserPool) -> Self {
-        Docs { list: Vec::new(), active: None, next_id: 1, pool, closed_bookmarks: BTreeMap::new(), closed_breakpoints: BTreeMap::new(), recent: Vec::new(), read_only_roots: Vec::new(), history: None, style_root: None }
+        Docs {
+            list: Vec::new(),
+            active: None,
+            next_id: 1,
+            pool,
+            closed_bookmarks: BTreeMap::new(),
+            closed_breakpoints: BTreeMap::new(),
+            recent: Vec::new(),
+            read_only_roots: Vec::new(),
+            history: None,
+            style_root: None,
+        }
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
@@ -255,19 +304,35 @@ impl Docs {
         self.active.and_then(|i| self.list.get_mut(i))
     }
 
-    pub(crate) fn reserve_id(&mut self) -> u64 { let id = self.next_id; self.next_id = self.next_id.saturating_add(1); id }
+    pub(crate) fn reserve_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
+        id
+    }
 
     /// Installs a worker-prepared document without disk I/O or buffer construction.
     pub(crate) fn insert_prepared(&mut self, mut doc: Doc, preview: bool, parse: bool) -> usize {
-        if let Some(index) = self.index_of(&doc.path) { self.activate(index); return index; }
+        if let Some(index) = self.index_of(&doc.path) {
+            self.activate(index);
+            return index;
+        }
         let old = preview.then(|| self.list.iter().position(|doc| doc.preview && !doc.is_modified())).flatten();
         doc.preview = preview;
         doc.editor.bookmarks = self.closed_bookmarks.remove(&doc.path).unwrap_or_default();
         doc.editor.breakpoints = self.closed_breakpoints.remove(&doc.path).unwrap_or_default();
-        if parse { doc.editor.request_parse(&self.pool); }
-        self.list.push(doc); let mut index = self.list.len()-1;
-        if let Some(old) = old { let doc = self.list.remove(index); let replaced = std::mem::replace(&mut self.list[old], doc); self.keep_bookmarks(&replaced); index = old; }
-        self.activate(index); index
+        if parse {
+            doc.editor.request_parse(&self.pool);
+        }
+        self.list.push(doc);
+        let mut index = self.list.len() - 1;
+        if let Some(old) = old {
+            let doc = self.list.remove(index);
+            let replaced = std::mem::replace(&mut self.list[old], doc);
+            self.keep_bookmarks(&replaced);
+            index = old;
+        }
+        self.activate(index);
+        index
     }
 
     /// Opens `path` (or switches to it) and makes it active.
@@ -294,7 +359,11 @@ impl Docs {
         if path.components().any(|c| c.as_os_str() == "MetadataAsSource") || self.read_only_roots.iter().any(|r| path.starts_with(r)) {
             editor.read_only = true;
         }
-        let md_view = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown")).then_some(MdView::Split);
+        let md_view = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+            .then_some(MdView::Split);
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
         editor.breakpoints = self.closed_breakpoints.remove(&path).unwrap_or_default();
         let saved = editor.buffer.snapshot();
@@ -306,7 +375,23 @@ impl Docs {
         };
         apply_style(&mut editor, &style);
         let light_project = if self.style_root.is_none() && !scratch { cargo_project_of(&path) } else { None };
-        self.list.push(Doc { editor, path: path.clone(), mtime, disk_epoch: 0, pending_save: Default::default(), bom, pinned: false, preview: false, conflict: false, md_view, scratch, generated: false, saved, style, light_project });
+        self.list.push(Doc {
+            editor,
+            path: path.clone(),
+            mtime,
+            disk_epoch: 0,
+            pending_save: Default::default(),
+            bom,
+            pinned: false,
+            preview: false,
+            conflict: false,
+            md_view,
+            scratch,
+            generated: false,
+            saved,
+            style,
+            light_project,
+        });
         let i = self.list.len() - 1;
         self.activate(i);
         Ok(i)
@@ -314,39 +399,97 @@ impl Docs {
 
     /// Installs a checked compiler-source snapshot prepared off the UI thread. No disk I/O
     /// or synchronous parse occurs here; callers must validate document identity/version.
-    pub(crate) fn insert_compiler_source(&mut self, path: PathBuf, text: &str, bom: bool, mtime: Option<SystemTime>, style: rc_core::code_style::CodeStyle) -> usize {
-        if let Some(index) = self.index_of(&path) { self.activate(index); return index; }
-        let id = self.next_id; self.next_id += 1;
+    pub(crate) fn insert_compiler_source(
+        &mut self,
+        path: PathBuf,
+        text: &str,
+        bom: bool,
+        mtime: Option<SystemTime>,
+        style: rc_core::code_style::CodeStyle,
+    ) -> usize {
+        if let Some(index) = self.index_of(&path) {
+            self.activate(index);
+            return index;
+        }
+        let id = self.next_id;
+        self.next_id += 1;
         let mut editor = EditorState::new(id, Some(path.clone()), text);
         editor.read_only = self.read_only_roots.iter().any(|root| path.starts_with(root));
         editor.bookmarks = self.closed_bookmarks.remove(&path).unwrap_or_default();
         editor.breakpoints = self.closed_breakpoints.remove(&path).unwrap_or_default();
-        apply_style(&mut editor, &style); editor.request_parse(&self.pool);
+        apply_style(&mut editor, &style);
+        editor.request_parse(&self.pool);
         let saved = editor.buffer.snapshot();
-        self.list.push(Doc { editor, path, mtime, disk_epoch: 0, pending_save: Default::default(), bom, pinned: false, preview: false, conflict: false, md_view: None, scratch: false, generated: false, saved, style, light_project: None });
-        let index = self.list.len()-1; self.activate(index); index
+        self.list.push(Doc {
+            editor,
+            path,
+            mtime,
+            disk_epoch: 0,
+            pending_save: Default::default(),
+            bom,
+            pinned: false,
+            preview: false,
+            conflict: false,
+            md_view: None,
+            scratch: false,
+            generated: false,
+            saved,
+            style,
+            light_project: None,
+        });
+        let index = self.list.len() - 1;
+        self.activate(index);
+        index
     }
 
     /// Generated views are memory-only: no disk read/write and no synchronous parse.
     pub(crate) fn insert_generated(&mut self, mut path: PathBuf, text: &str) -> usize {
-        if let Some(index)=self.index_of(&path) {
+        if let Some(index) = self.index_of(&path) {
             if self.list[index].generated {
-                let doc=&mut self.list[index]; doc.editor.reload(text); doc.editor.read_only=true;
-                doc.editor.request_parse(&self.pool); doc.saved=doc.editor.buffer.snapshot();
-                self.activate(index); return index;
+                let doc = &mut self.list[index];
+                doc.editor.reload(text);
+                doc.editor.read_only = true;
+                doc.editor.request_parse(&self.pool);
+                doc.saved = doc.editor.buffer.snapshot();
+                self.activate(index);
+                return index;
             }
-            let stem=path.file_stem().unwrap_or_default().to_string_lossy();
-            let extension=path.extension().unwrap_or_default().to_string_lossy();
+            let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+            let extension = path.extension().unwrap_or_default().to_string_lossy();
             for suffix in 0..=self.list.len() {
-                let candidate=path.with_file_name(format!("{stem}-generated-{}-{suffix}.{extension}",self.next_id));
-                if self.index_of(&candidate).is_none() {path=candidate;break;}
+                let candidate = path.with_file_name(format!("{stem}-generated-{}-{suffix}.{extension}", self.next_id));
+                if self.index_of(&candidate).is_none() {
+                    path = candidate;
+                    break;
+                }
             }
         }
-        let id=self.next_id;self.next_id+=1;
-        let mut editor=EditorState::new(id,Some(path.clone()),text); editor.read_only=true; editor.request_parse(&self.pool);
-        let saved=editor.buffer.snapshot();
-        self.list.push(Doc{editor,path,mtime:None,disk_epoch:0,pending_save:Default::default(),bom:false,pinned:false,preview:false,conflict:false,md_view:None,scratch:false,generated:true,saved,style:Default::default(),light_project:None});
-        let index=self.list.len()-1;self.activate(index);index
+        let id = self.next_id;
+        self.next_id += 1;
+        let mut editor = EditorState::new(id, Some(path.clone()), text);
+        editor.read_only = true;
+        editor.request_parse(&self.pool);
+        let saved = editor.buffer.snapshot();
+        self.list.push(Doc {
+            editor,
+            path,
+            mtime: None,
+            disk_epoch: 0,
+            pending_save: Default::default(),
+            bom: false,
+            pinned: false,
+            preview: false,
+            conflict: false,
+            md_view: None,
+            scratch: false,
+            generated: true,
+            saved,
+            style: Default::default(),
+            light_project: None,
+        });
+        let index = self.list.len() - 1;
+        self.activate(index);
+        index
     }
 
     /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
@@ -374,7 +517,9 @@ impl Docs {
     pub fn activate(&mut self, i: usize) {
         if i < self.list.len() {
             self.active = Some(i);
-            if self.list[i].generated { return; }
+            if self.list[i].generated {
+                return;
+            }
             let p = self.list[i].path.clone();
             self.recent.retain(|r| r != &p);
             self.recent.insert(0, p);
@@ -456,7 +601,9 @@ impl Docs {
     #[cfg(test)]
     pub fn save(&mut self, i: usize) -> Result<(), String> {
         let doc = &mut self.list[i];
-        if doc.generated { return Ok(()); }
+        if doc.generated {
+            return Ok(());
+        }
         if !doc.editor.read_only {
             let edits = style_fixes(&doc.editor, &doc.style);
             if !edits.is_empty() {
@@ -670,10 +817,19 @@ mod generated_view_tests {
     use super::*;
     #[test]
     fn markdown_generated_views_never_read_overwrite_or_save_an_existing_document() {
-        let root=tempfile::tempdir().unwrap();let path=root.path().join("E0308.md");std::fs::write(&path,"user notes").unwrap();
-        let mut docs=Docs::new(ParserPool::new(rc_core::Waker::noop().as_fn()));docs.open(&path).unwrap();
-        let index=docs.insert_generated(path.clone(),"# E0308\n\nexplanation");
-        assert_ne!(docs.list[index].path,path);assert_eq!(docs.list[index].path.extension().unwrap(),"md");assert!(docs.list[index].generated && docs.list[index].editor.read_only);assert!(!docs.list[index].path.exists());
-        docs.save(index).unwrap();assert!(!docs.list[index].path.exists());assert_eq!(docs.list[0].editor.buffer.rope().to_string(),"user notes");assert_eq!(std::fs::read_to_string(path).unwrap(),"user notes");
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("E0308.md");
+        std::fs::write(&path, "user notes").unwrap();
+        let mut docs = Docs::new(ParserPool::new(rc_core::Waker::noop().as_fn()));
+        docs.open(&path).unwrap();
+        let index = docs.insert_generated(path.clone(), "# E0308\n\nexplanation");
+        assert_ne!(docs.list[index].path, path);
+        assert_eq!(docs.list[index].path.extension().unwrap(), "md");
+        assert!(docs.list[index].generated && docs.list[index].editor.read_only);
+        assert!(!docs.list[index].path.exists());
+        docs.save(index).unwrap();
+        assert!(!docs.list[index].path.exists());
+        assert_eq!(docs.list[0].editor.buffer.rope().to_string(), "user notes");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "user notes");
     }
 }

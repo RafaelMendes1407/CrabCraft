@@ -141,8 +141,18 @@ fn flame_graph(app: &mut CrabCraftApp, ui: &mut Ui, profile: &Profile) -> Option
                 if w > 30.0 {
                     let name = profile.name(node);
                     let chars = ((w - 6.0) / 6.6) as usize;
-                    let label = if name.chars().count() > chars { format!("{}…", name.chars().take(chars.saturating_sub(1)).collect::<String>()) } else { name.to_string() };
-                    ui.painter().with_clip_rect(r).text(pos2(r.left() + 4.0, r.center().y), Align2::LEFT_CENTER, label, FontId::proportional(11.5), Color32::from_rgb(20, 20, 20));
+                    let label = if name.chars().count() > chars {
+                        format!("{}…", name.chars().take(chars.saturating_sub(1)).collect::<String>())
+                    } else {
+                        name.to_string()
+                    };
+                    ui.painter().with_clip_rect(r).text(
+                        pos2(r.left() + 4.0, r.center().y),
+                        Align2::LEFT_CENTER,
+                        label,
+                        FontId::proportional(11.5),
+                        Color32::from_rgb(20, 20, 20),
+                    );
                 }
                 if pointer.is_some_and(|pt| r.contains(pt)) {
                     hovered = Some(node);
@@ -158,7 +168,11 @@ fn flame_graph(app: &mut CrabCraftApp, ui: &mut Ui, profile: &Profile) -> Option
         if let Some(node) = hovered {
             let n = &profile.nodes[node];
             let all = profile.total();
-            let mut text = format!("{}\n{}", profile.name(node), trf("Total {total} · Self {self}", &[("total", &percent(n.total, all)), ("self", &percent(n.self_, all))]));
+            let mut text = format!(
+                "{}\n{}",
+                profile.name(node),
+                trf("Total {total} · Self {self}", &[("total", &percent(n.total, all)), ("self", &percent(n.self_, all))])
+            );
             if let Some(f) = n.frame {
                 text.push_str(&format!("\n{}", profile.frames[f].dso));
             }

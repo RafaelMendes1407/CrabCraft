@@ -65,18 +65,24 @@ pub fn lens_rows(center: usize, rows: usize, count: usize) -> std::ops::Range<us
 
 /// Index of the mark nearest to `y` within the slop, if any. Marks are `(centre y, item)`.
 pub fn mark_at<T: Copy>(y: f32, marks: &[(f32, T)]) -> Option<T> {
-    marks
-        .iter()
-        .map(|&(my, item)| ((my - y).abs(), item))
-        .filter(|(d, _)| *d <= MARK_SLOP)
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(_, item)| item)
+    marks.iter().map(|&(my, item)| ((my - y).abs(), item)).filter(|(d, _)| *d <= MARK_SLOP).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, item)| item)
 }
 
 /// Works out and paints the lens for a pointer at `p` over `track`; `marks` are the error
 /// stripe marks (centre y, buffer line). Fills `state.scroll_lens`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn show(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, pal: &rc_kit::Palette, m: &Metrics, editor: Rect, track: Rect, p: Pos2, marks: &[(f32, usize)]) {
+pub(crate) fn show(
+    ui: &Ui,
+    state: &mut EditorState,
+    config: &EditorConfig,
+    scheme: &Scheme,
+    pal: &rc_kit::Palette,
+    m: &Metrics,
+    editor: Rect,
+    track: Rect,
+    p: Pos2,
+    marks: &[(f32, usize)],
+) {
     let n_lines = state.buffer.len_lines();
     let line = match mark_at(p.y, marks) {
         Some(l) => Some(l),

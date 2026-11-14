@@ -1,10 +1,10 @@
 //! Shared test requests and results used by Cargo.
 
-use std::path::PathBuf;
-use std::time::Duration;
 use crate::build::{BuildEvent, BuildResult};
 use crate::process::OutputLine;
 use crate::test_result::{TestOutcome, TestResult};
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TestFilter {
@@ -61,8 +61,13 @@ pub struct TestRunResult {
 pub enum TestEvent {
     /// Events of the build that precedes the run.
     Build(BuildEvent),
-    ProjectStarted { project: PathBuf },
-    Output { project: PathBuf, line: OutputLine },
+    ProjectStarted {
+        project: PathBuf,
+    },
+    Output {
+        project: PathBuf,
+        line: OutputLine,
+    },
     Progress(TestProgress),
     /// Always the last event.
     Finished(TestRunResult),

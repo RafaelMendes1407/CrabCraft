@@ -204,11 +204,23 @@ pub fn complete(text: &str, caret: usize) -> Option<ManifestCompletion> {
                 .iter()
                 .filter(|h| if array { h.array } else { !existing.iter().any(|e| e == h.name) || h.array })
                 .map(|h| {
-                    let close = if closes { "" } else if h.array { "]]" } else { "]" };
+                    let close = if closes {
+                        ""
+                    } else if h.array {
+                        "]]"
+                    } else {
+                        "]"
+                    };
                     // From a single `[`, an array table gets its second bracket.
                     let open = if h.array && !array { "[" } else { "" };
                     let close = if h.array && !array && closes { "]" } else { close };
-                    Suggestion { label: h.label.to_string(), insert: format!("{open}{}{close}", h.insert), kind: Kind::Table, doc: Some(h.doc), then_value: false }
+                    Suggestion {
+                        label: h.label.to_string(),
+                        insert: format!("{open}{}{close}", h.insert),
+                        kind: Kind::Table,
+                        doc: Some(h.doc),
+                        then_value: false,
+                    }
                 })
                 .collect()
         }
@@ -457,7 +469,9 @@ pub const HEADERS: &[HeaderDef] = &[
     h("profile.bench", "Compiler settings for benchmarks."),
     HeaderDef { label: "target.'cfg(…)'.dependencies", insert: "target.'${1:cfg(unix)}'.dependencies", name: "", array: false, doc: DOC_CFG_DEPS },
     HeaderDef { label: "target.'cfg(…)'.dev-dependencies", insert: "target.'${1:cfg(unix)}'.dev-dependencies", name: "", array: false, doc: DOC_CFG_DEPS },
-    HeaderDef { label: "target.'cfg(…)'.build-dependencies", insert: "target.'${1:cfg(unix)}'.build-dependencies", name: "", array: false, doc: DOC_CFG_DEPS },
+    HeaderDef {
+        label: "target.'cfg(…)'.build-dependencies", insert: "target.'${1:cfg(unix)}'.build-dependencies", name: "", array: false, doc: DOC_CFG_DEPS
+    },
     h("lints", "Lint levels for this package."),
     h("lints.rust", DOC_LINTS_RUST),
     h("lints.clippy", DOC_LINTS_CLIPPY),
@@ -500,8 +514,24 @@ pub(crate) const PACKAGE_KEYS: &[KeyDef] = &[
 ];
 
 /// Package keys members can inherit from `[workspace.package]`.
-pub(crate) const INHERITABLE: &[&str] =
-    &["version", "authors", "description", "documentation", "readme", "homepage", "repository", "license", "license-file", "keywords", "categories", "edition", "rust-version", "publish", "exclude", "include"];
+pub(crate) const INHERITABLE: &[&str] = &[
+    "version",
+    "authors",
+    "description",
+    "documentation",
+    "readme",
+    "homepage",
+    "repository",
+    "license",
+    "license-file",
+    "keywords",
+    "categories",
+    "edition",
+    "rust-version",
+    "publish",
+    "exclude",
+    "include",
+];
 
 pub(crate) const WORKSPACE_KEYS: &[KeyDef] = &[
     k("members", Shape::Array, "Paths or glob patterns of the packages in the workspace."),
@@ -666,7 +696,9 @@ fn values_for(table: &[String], key: &str) -> Vec<Value> {
         "lto" if profile => vec![b("false"), b("true"), q("off"), q("thin"), q("fat")],
         "opt-level" if profile => vec![b("0"), b("1"), b("2"), b("3"), q("s"), q("z")],
         "strip" if profile => vec![b("false"), b("true"), q("none"), q("debuginfo"), q("symbols")],
-        "debug" if profile => vec![b("false"), b("true"), b("0"), b("1"), b("2"), q("none"), q("line-directives-only"), q("line-tables-only"), q("limited"), q("full")],
+        "debug" if profile => {
+            vec![b("false"), b("true"), b("0"), b("1"), b("2"), q("none"), q("line-directives-only"), q("line-tables-only"), q("limited"), q("full")]
+        }
         "split-debuginfo" if profile => vec![q("off"), q("packed"), q("unpacked")],
         "publish" if matches!(t.as_slice(), ["package"] | ["workspace", "package"]) => vec![b("true"), b("false")],
         "readme" | "build" if t.as_slice() == ["package"] => vec![b("false")],
@@ -809,7 +841,8 @@ mod tests {
 
     #[test]
     fn any_input_is_safe() {
-        let samples = ["", "[", "[[", "\"", "'''", "a = {", "a = [", "]]]", "}}}", "= = =", "[a.'b", "x = \"\\", "[p]\na = { b = [ { c = \"", "ñ = \"é", "\u{0}"];
+        let samples =
+            ["", "[", "[[", "\"", "'''", "a = {", "a = [", "]]]", "}}}", "= = =", "[a.'b", "x = \"\\", "[p]\na = { b = [ { c = \"", "ñ = \"é", "\u{0}"];
         for s in samples {
             for caret in 0..=s.chars().count() + 2 {
                 let _ = complete(s, caret);

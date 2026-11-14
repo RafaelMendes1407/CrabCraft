@@ -6,8 +6,8 @@ pub mod rpc;
 pub mod rust_analyzer;
 pub mod semantic;
 pub mod session;
-pub mod web;
 pub mod sync;
+pub mod web;
 
 pub use lsp_types;
 pub use rpc::{Client, Incoming, Pending, RpcError};

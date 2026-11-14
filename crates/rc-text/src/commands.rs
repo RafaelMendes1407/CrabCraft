@@ -364,7 +364,8 @@ pub fn newline(rope: &Rope, sel: &Selection, indent: &Indent) -> Edited {
         }
         let prev = trimmed.chars().last();
         // `{|}` and `<div>|</div>` open an indented block.
-        let block = (prev == Some('{') && char_at(rope, end) == Some('}')) || (prev == Some('>') && end == r.end() && crate::markup::between_tags(rope, r.end()));
+        let block =
+            (prev == Some('{') && char_at(rope, end) == Some('}')) || (prev == Some('>') && end == r.end() && crate::markup::between_tags(rope, r.end()));
         let (text, caret_offset) = if block {
             let inner = format!("\n{base}{}", indent.unit);
             let n = inner.chars().count();
@@ -430,13 +431,7 @@ pub fn delete_forward(rope: &Rope, sel: &Selection) -> Edited {
     let changes = sel
         .ranges()
         .iter()
-        .filter_map(|r| {
-            if !r.is_empty() {
-                Some(Change::delete(r.start(), r.end()))
-            } else {
-                (r.head < len).then(|| Change::delete(r.head, r.head + 1))
-            }
-        })
+        .filter_map(|r| if !r.is_empty() { Some(Change::delete(r.start(), r.end())) } else { (r.head < len).then(|| Change::delete(r.head, r.head + 1)) })
         .collect();
     let cs = ChangeSet::new(changes);
     let selection = sel.map(&cs).transform(|r| Range::point(r.head));
@@ -577,7 +572,11 @@ pub fn move_lines(rope: &Rope, sel: &Selection, up: bool) -> Edited {
         let moved: Vec<String> = (first..=last).map(line_str).collect();
         let other_text = line_str(other);
         let mut lines = moved;
-        if up { lines.push(other_text.clone()) } else { lines.insert(0, other_text.clone()) }
+        if up {
+            lines.push(other_text.clone())
+        } else {
+            lines.insert(0, other_text.clone())
+        }
         changes.push(Change::new(start, end, lines.join("\n")));
         let step = other_text.chars().count() as isize + 1;
         let block_start = rope.line_to_char(first);
@@ -600,11 +599,7 @@ pub fn indent_lines(rope: &Rope, sel: &Selection, indent: &Indent, outdent: bool
             let start = rope.line_to_char(line);
             if outdent {
                 let lead = line_indent(rope, line);
-                let n = if lead.starts_with('\t') {
-                    1
-                } else {
-                    lead.chars().take_while(|c| *c == ' ').count().min(indent.unit.chars().count().max(1))
-                };
+                let n = if lead.starts_with('\t') { 1 } else { lead.chars().take_while(|c| *c == ' ').count().min(indent.unit.chars().count().max(1)) };
                 if n > 0 {
                     changes.push(Change::delete(start, start + n));
                 }
@@ -663,9 +658,7 @@ pub fn toggle_line_comment(rope: &Rope, sel: &Selection, prefix: &str) -> Edited
         }
     }
     let cs = ChangeSet::new(changes);
-    let selection = sel.transform(|r| {
-        Range::new(cs.map_pos(r.anchor, crate::change::Assoc::After), cs.map_pos(r.head, crate::change::Assoc::After))
-    });
+    let selection = sel.transform(|r| Range::new(cs.map_pos(r.anchor, crate::change::Assoc::After), cs.map_pos(r.head, crate::change::Assoc::After)));
     // A single caret moves to the next line, as in IntelliJ.
     let selection = if sel.len() == 1 && sel.primary().is_empty() {
         let after = {

@@ -23,7 +23,9 @@ pub fn locate() -> Option<AdapterCommand> {
 
 pub fn locate_configured(configured: Option<&Path>) -> Option<AdapterCommand> {
     if let Some(path) = configured {
-        if !path.is_absolute() || !path.is_file() { return None; }
+        if !path.is_absolute() || !path.is_file() {
+            return None;
+        }
         let mut command = AdapterCommand::new(path, Origin::Gdb);
         command.prefix = ARGS.iter().map(ToString::to_string).collect();
         return Some(command);

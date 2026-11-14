@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Characters escaped in a `file://` URI path (like VS Code: keep `/` and `:` readable).
-const PATH: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'%').add(b'<').add(b'>').add(b'?').add(b'`').add(b'{').add(b'}').add(b'[').add(b']').add(b'^').add(b'|');
+const PATH: &AsciiSet =
+    &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'%').add(b'<').add(b'>').add(b'?').add(b'`').add(b'{').add(b'}').add(b'[').add(b']').add(b'^').add(b'|');
 
 /// `file:///Users/me/A B.cs` from a path (Windows: `file:///C:/x.cs`). Windows' verbatim paths
 /// (what `canonicalize` returns there) lose their `\\?\` prefix: in a URI it reads as a
@@ -27,7 +28,17 @@ pub fn path_to_uri(path: &Path) -> Uri {
 
 /// A server-side Unix URI stays in its remote namespace, even on a Windows desktop.
 /// This conversion deliberately performs no local canonicalization or filesystem access.
-pub fn uri_to_unix_path(uri:&Uri)->Option<String>{let raw=uri.as_str().strip_prefix("file://")?;if !raw.starts_with('/')||raw.starts_with("//")||raw.contains(['?','#']){return None;}let decoded=percent_decode_str(raw).decode_utf8().ok()?.into_owned();if decoded.contains('\0'){return None;}Some(decoded)}
+pub fn uri_to_unix_path(uri: &Uri) -> Option<String> {
+    let raw = uri.as_str().strip_prefix("file://")?;
+    if !raw.starts_with('/') || raw.starts_with("//") || raw.contains(['?', '#']) {
+        return None;
+    }
+    let decoded = percent_decode_str(raw).decode_utf8().ok()?.into_owned();
+    if decoded.contains('\0') {
+        return None;
+    }
+    Some(decoded)
+}
 
 pub fn uri_to_path(uri: &Uri) -> Option<PathBuf> {
     let s = uri.as_str();
@@ -145,6 +156,16 @@ mod tests {
 
 #[cfg(test)]
 mod remote_uri_tests {
- use super::*;
- #[test]fn unix_uris_never_become_local_drive_paths_or_accept_authorities(){for (raw,path) in [("file:///tmp/remote%20%F0%9F%A6%80/lib.rs","/tmp/remote 🦀/lib.rs"),("file:///a:/remote/lib.rs","/a:/remote/lib.rs")]{let uri:Uri=raw.parse().unwrap();assert_eq!(uri_to_unix_path(&uri).as_deref(),Some(path));}for raw in ["file://remote/tmp/lib.rs","file:////tmp/lib.rs","file:///tmp/lib.rs#selection","file:///tmp/lib.rs?query","file:///tmp/a%00.rs"]{let uri:Uri=raw.parse().unwrap();assert!(uri_to_unix_path(&uri).is_none(),"{raw}");}}
+    use super::*;
+    #[test]
+    fn unix_uris_never_become_local_drive_paths_or_accept_authorities() {
+        for (raw, path) in [("file:///tmp/remote%20%F0%9F%A6%80/lib.rs", "/tmp/remote 🦀/lib.rs"), ("file:///a:/remote/lib.rs", "/a:/remote/lib.rs")] {
+            let uri: Uri = raw.parse().unwrap();
+            assert_eq!(uri_to_unix_path(&uri).as_deref(), Some(path));
+        }
+        for raw in ["file://remote/tmp/lib.rs", "file:////tmp/lib.rs", "file:///tmp/lib.rs#selection", "file:///tmp/lib.rs?query", "file:///tmp/a%00.rs"] {
+            let uri: Uri = raw.parse().unwrap();
+            assert!(uri_to_unix_path(&uri).is_none(), "{raw}");
+        }
+    }
 }

@@ -41,7 +41,8 @@ impl Branch {
     }
 }
 
-const FORMAT: &str = "--format=%(refname)%00%(objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(committerdate:unix)%00%(symref)%00%(contents:subject)";
+const FORMAT: &str =
+    "--format=%(refname)%00%(objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(committerdate:unix)%00%(symref)%00%(contents:subject)";
 
 impl Repository {
     /// Local branches then remote-tracking ones, by name (symbolic `origin/HEAD` skipped).
@@ -52,7 +53,11 @@ impl Repository {
 
     /// Creates `name` at `start` (default HEAD), optionally checking it out.
     pub async fn create_branch(&self, name: &str, start: Option<&str>, checkout: bool) -> Result<()> {
-        let mut cmd = if checkout { self.cmd().args(["switch", "--quiet", "--no-track", "-c", name]) } else { self.cmd().args(["branch", "--no-track", "--end-of-options", name]) };
+        let mut cmd = if checkout {
+            self.cmd().args(["switch", "--quiet", "--no-track", "-c", name])
+        } else {
+            self.cmd().args(["branch", "--no-track", "--end-of-options", name])
+        };
         if let Some(s) = start {
             cmd = cmd.arg(s);
         }

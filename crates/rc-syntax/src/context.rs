@@ -7,7 +7,8 @@ use rc_text::Rope;
 use tree_sitter::{Node, Tree};
 
 /// Rust nodes whose header is context.
-const RUST_SCOPES: &[&str] = &["mod_item", "impl_item", "trait_item", "function_item", "struct_item", "enum_item", "union_item", "macro_definition", "closure_expression"];
+const RUST_SCOPES: &[&str] =
+    &["mod_item", "impl_item", "trait_item", "function_item", "struct_item", "enum_item", "union_item", "macro_definition", "closure_expression"];
 
 /// A header longer than this many source lines keeps only its first line.
 const MAX_LINES: usize = 6;
@@ -186,7 +187,10 @@ fn build(rope: &Rope, first: usize, raw: &[(usize, usize, usize)], cut: bool) ->
 /// opens on a line of its own), outermost first.
 fn fold_headers(folds: &[FoldRange], rope: &Rope, pos: usize) -> Vec<ContextHeader> {
     let caret_line = rope.char_to_line(pos);
-    let mut blocks: Vec<&FoldRange> = folds.iter().filter(|f| f.kind == FoldKind::Block && f.start_line < caret_line && caret_line <= f.end_line && f.start_line < rope.len_lines()).collect();
+    let mut blocks: Vec<&FoldRange> = folds
+        .iter()
+        .filter(|f| f.kind == FoldKind::Block && f.start_line < caret_line && caret_line <= f.end_line && f.start_line < rope.len_lines())
+        .collect();
     blocks.sort_by_key(|f| (f.start_line, std::cmp::Reverse(f.end_line)));
     let mut out: Vec<ContextHeader> = Vec::new();
     for f in blocks {
@@ -247,7 +251,10 @@ mod tests {
     #[test]
     fn types_traits_macros_and_closures_are_context() {
         let src = "trait T {\n    fn f() {\n        let c = items.iter().map(|x| {\n            x + 1\n        });\n    }\n}\nstruct S {\n    a: u8,\n}\nenum E {\n    A,\n}\nmacro_rules! m {\n    () => {};\n}\n";
-        assert_eq!(headers(Lang::Rust, src, "x + 1"), vec![(0, "trait T".to_string()), (1, "fn f()".to_string()), (2, "let c = items.iter().map(|x|".to_string())]);
+        assert_eq!(
+            headers(Lang::Rust, src, "x + 1"),
+            vec![(0, "trait T".to_string()), (1, "fn f()".to_string()), (2, "let c = items.iter().map(|x|".to_string())]
+        );
         assert_eq!(headers(Lang::Rust, src, "a: u8"), vec![(7, "struct S".to_string())]);
         assert_eq!(headers(Lang::Rust, src, "A,"), vec![(10, "enum E".to_string())]);
         assert_eq!(headers(Lang::Rust, src, "() =>"), vec![(13, "macro_rules! m".to_string())]);

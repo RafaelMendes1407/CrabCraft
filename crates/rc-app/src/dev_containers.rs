@@ -20,7 +20,16 @@ enum Error {
 }
 impl Error {
     fn message(&self) -> String {
-        match self{Self::Trust=>tr("Trust this project before running project tools or code").into(),Self::Input=>tr("Choose Dev Container and Docker executables and a command with separate arguments").into(),Self::Confirm=>tr("Review and confirm the Dev Container command before execution").into(),Self::Stale=>tr("Dev Container settings or project changed; review the command again").into(),Self::Io=>tr("Could not start or communicate with the Dev Container CLI").into(),Self::Output=>tr("Dev Container output or operation time limit exceeded").into(),Self::Cancelled=>tr("Dev Container CLI cancelled; containers or lifecycle processes may remain and need explicit management").into(),Self::Exit(message)=>trf("Dev Container CLI failed: {message}",&[("message",message)])}
+        match self {
+            Self::Trust => tr("Trust this project before running project tools or code").into(),
+            Self::Input => tr("Choose Dev Container and Docker executables and a command with separate arguments").into(),
+            Self::Confirm => tr("Review and confirm the Dev Container command before execution").into(),
+            Self::Stale => tr("Dev Container settings or project changed; review the command again").into(),
+            Self::Io => tr("Could not start or communicate with the Dev Container CLI").into(),
+            Self::Output => tr("Dev Container output or operation time limit exceeded").into(),
+            Self::Cancelled => tr("Dev Container CLI cancelled; containers or lifecycle processes may remain and need explicit management").into(),
+            Self::Exit(message) => trf("Dev Container CLI failed: {message}", &[("message", message)]),
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -31,10 +40,7 @@ struct Config {
 }
 fn program(s: &str) -> bool {
     let p = Path::new(s);
-    !s.is_empty()
-        && s.len() <= 4096
-        && !s.contains('\0')
-        && (p.is_absolute() || p.components().count() == 1)
+    !s.is_empty() && s.len() <= 4096 && !s.contains('\0') && (p.is_absolute() || p.components().count() == 1)
 }
 impl Config {
     fn validate(&self) -> Result<(), Error> {
@@ -42,9 +48,7 @@ impl Config {
             || !program(&self.docker)
             || self.host.len() > 4096
             || self.host.contains(['\0', '\r', '\n'])
-            || (!self.host.is_empty()
-                && !self.host.starts_with("unix://")
-                && !self.host.starts_with("npipe://"))
+            || (!self.host.is_empty() && !self.host.starts_with("unix://") && !self.host.starts_with("npipe://"))
         {
             Err(Error::Input)
         } else {
@@ -86,26 +90,15 @@ impl Plan {
             Action::Exec { .. } => vec!["exec".into()],
         };
         if !matches!(action, Action::Version) {
-            args.extend([
-                "--workspace-folder".into(),
-                root.to_str().ok_or(Error::Input)?.into(),
-                "--docker-path".into(),
-                config.docker.clone(),
-            ]);
+            args.extend(["--workspace-folder".into(), root.to_str().ok_or(Error::Input)?.into(), "--docker-path".into(), config.docker.clone()]);
         }
-        if let Action::Exec {
-            command,
-            args: command_args,
-        } = &action
-        {
+        if let Action::Exec { command, args: command_args } = &action {
             if command.is_empty()
                 || command.starts_with('-')
                 || command.len() > 4096
                 || command.contains('\0')
                 || command_args.len() > 32
-                || command_args
-                    .iter()
-                    .any(|arg| arg.len() > 4096 || arg.contains('\0'))
+                || command_args.iter().any(|arg| arg.len() > 4096 || arg.contains('\0'))
             {
                 return Err(Error::Input);
             }
@@ -113,26 +106,13 @@ impl Plan {
             args.push(command.clone());
             args.extend(command_args.clone());
         }
-        Ok(Self {
-            config,
-            root,
-            action,
-            args,
-        })
+        Ok(Self { config, root, action, args })
     }
     fn preview(&self) -> String {
         let mut parts = vec![self.config.program.clone()];
         parts.extend(self.args.clone());
-        let command = parts
-            .iter()
-            .map(|s| format!("{s:?}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        if self.config.host.is_empty() {
-            command
-        } else {
-            format!("DOCKER_HOST={:?}\n{command}", self.config.host)
-        }
+        let command = parts.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(" ");
+        if self.config.host.is_empty() { command } else { format!("DOCKER_HOST={:?}\n{command}", self.config.host) }
     }
 }
 struct Group(Option<u32>);
@@ -145,22 +125,13 @@ impl Drop for Group {
 }
 async fn limited<R: tokio::io::AsyncRead + Unpin>(reader: R) -> Result<Vec<u8>, Error> {
     let mut output = Vec::new();
-    reader
-        .take(4 * 1024 * 1024 + 1)
-        .read_to_end(&mut output)
-        .await
-        .map_err(|_| Error::Io)?;
+    reader.take(4 * 1024 * 1024 + 1).read_to_end(&mut output).await.map_err(|_| Error::Io)?;
     if output.len() > 4 * 1024 * 1024 {
         return Err(Error::Output);
     }
     Ok(output)
 }
-async fn execute(
-    plan: Plan,
-    trusted: bool,
-    confirmed: bool,
-    stop: rc_dotnet::CancelToken,
-) -> Result<String, Error> {
+async fn execute(plan: Plan, trusted: bool, confirmed: bool, stop: rc_dotnet::CancelToken) -> Result<String, Error> {
     if !trusted {
         return Err(Error::Trust);
     }
@@ -185,10 +156,7 @@ async fn execute(
     if !plan.config.host.is_empty() {
         cmd.env("DOCKER_HOST", &plan.config.host);
     }
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(unix)]
     cmd.process_group(0);
     #[cfg(windows)]
@@ -201,9 +169,7 @@ async fn execute(
         let (out, err) = tokio::try_join!(limited(stdout), limited(stderr))?;
         let status = child.wait().await.map_err(|_| Error::Io)?;
         if !status.success() {
-            return Err(Error::Exit(
-                String::from_utf8_lossy(&err).chars().take(4096).collect(),
-            ));
+            return Err(Error::Exit(String::from_utf8_lossy(&err).chars().take(4096).collect()));
         }
         let mut output = String::from_utf8(out).map_err(|_| Error::Output)?;
         if !err.is_empty() {
@@ -249,11 +215,7 @@ impl DevContainers {
         }
     }
     fn config(&self) -> Config {
-        Config {
-            program: self.program.clone(),
-            docker: self.docker.clone(),
-            host: self.host.clone(),
-        }
+        Config { program: self.program.clone(), docker: self.docker.clone(), host: self.host.clone() }
     }
     fn prepare(&mut self, root: &Path, action: Action) {
         self.confirm = false;
@@ -321,9 +283,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
         app.toggle_tool(crate::toolwindow::ToolWindow::DevContainers);
     }
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
-    let trusted = root
-        .as_ref()
-        .is_some_and(|r| app.settings.trusted_projects.contains(r));
+    let trusted = root.as_ref().is_some_and(|r| app.settings.trusted_projects.contains(r));
     app.dev_containers.show(ui, root, trusted);
 }
 
@@ -333,21 +293,9 @@ mod tests {
     fn fixture(root: &Path) {
         std::fs::create_dir(root.join("src")).unwrap();
         std::fs::create_dir(root.join(".devcontainer")).unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"devcontainer_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("src/main.rs"),
-            "fn main(){println!(\"real Rust workspace\");}",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("build.rs"),
-            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"devcontainer_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n").unwrap();
+        std::fs::write(root.join("src/main.rs"), "fn main(){println!(\"real Rust workspace\");}").unwrap();
+        std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         let config = format!(
             "{{\n// Real JSONC configuration\n\"name\":\"Rust native Dev Container fixture\",\"image\":\"local-rust:latest\",\"initializeCommand\":[\"/usr/bin/touch\",{}]}}",
             serde_json::to_string(&root.join("host-hook-ran").to_string_lossy()).unwrap()
@@ -357,11 +305,7 @@ mod tests {
     #[cfg(unix)]
     fn cli(root: &Path, slow: bool) -> String {
         use std::os::unix::fs::PermissionsExt;
-        let path = root.join(if slow {
-            "slow-devcontainer"
-        } else {
-            "fake-devcontainer"
-        });
+        let path = root.join(if slow { "slow-devcontainer" } else { "fake-devcontainer" });
         let text = format!(
             "#!/usr/bin/python3\nimport json,sys,time\nwith open({:?},'a') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\n{}\nprint(json.dumps({{'outcome':'success','configuration':{{'name':'Rust native Dev Container fixture'}}}}))\n",
             root.join("devcontainer-wire").to_string_lossy(),
@@ -373,42 +317,13 @@ mod tests {
     }
     #[test]
     fn devcontainer_argv_keeps_commands_literal_and_forbids_remote_daemon_uri() {
-        let config = Config {
-            program: "devcontainer".into(),
-            docker: "docker".into(),
-            host: String::new(),
-        };
+        let config = Config { program: "devcontainer".into(), docker: "docker".into(), host: String::new() };
         let root = PathBuf::from("/tmp/project");
-        let plan = Plan::new(
-            config.clone(),
-            root.clone(),
-            Action::Exec {
-                command: "cargo".into(),
-                args: vec!["$(touch host); literal".into()],
-            },
-        )
-        .unwrap();
+        let plan = Plan::new(config.clone(), root.clone(), Action::Exec { command: "cargo".into(), args: vec!["$(touch host); literal".into()] }).unwrap();
         assert_eq!(plan.args.last().unwrap(), "$(touch host); literal");
         assert_eq!(plan.args[plan.args.len() - 3], "--");
-        assert!(
-            Plan::new(
-                config.clone(),
-                root,
-                Action::Exec {
-                    command: "--privileged".into(),
-                    args: vec![]
-                }
-            )
-            .is_err()
-        );
-        assert!(
-            Config {
-                host: "tcp://host:2375".into(),
-                ..config
-            }
-            .validate()
-            .is_err()
-        );
+        assert!(Plan::new(config.clone(), root, Action::Exec { command: "--privileged".into(), args: vec![] }).is_err());
+        assert!(Config { host: "tcp://host:2375".into(), ..config }.validate().is_err());
     }
     #[cfg(unix)]
     #[tokio::test]
@@ -416,55 +331,27 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         fixture(&root);
-        let config = Config {
-            program: cli(&root, false),
-            docker: "docker".into(),
-            host: String::new(),
-        };
+        let config = Config { program: cli(&root, false), docker: "docker".into(), host: String::new() };
         let plan = Plan::new(config, root.clone(), Action::Up).unwrap();
-        assert_eq!(
-            execute(plan.clone(), false, true, rc_dotnet::CancelToken::new()).await,
-            Err(Error::Trust)
-        );
-        assert_eq!(
-            execute(plan.clone(), true, false, rc_dotnet::CancelToken::new()).await,
-            Err(Error::Confirm)
-        );
+        assert_eq!(execute(plan.clone(), false, true, rc_dotnet::CancelToken::new()).await, Err(Error::Trust));
+        assert_eq!(execute(plan.clone(), true, false, rc_dotnet::CancelToken::new()).await, Err(Error::Confirm));
         assert!(!root.join("devcontainer-wire").exists());
-        execute(plan, true, true, rc_dotnet::CancelToken::new())
-            .await
-            .unwrap();
-        assert!(
-            std::fs::read_to_string(root.join("devcontainer-wire"))
-                .unwrap()
-                .contains("up")
-        );
+        execute(plan, true, true, rc_dotnet::CancelToken::new()).await.unwrap();
+        assert!(std::fs::read_to_string(root.join("devcontainer-wire")).unwrap().contains("up"));
         assert!(!root.join("build-ran").exists() && !root.join("host-hook-ran").exists());
-        let config = Config {
-            program: cli(&root, true),
-            docker: "docker".into(),
-            host: String::new(),
-        };
+        let config = Config { program: cli(&root, true), docker: "docker".into(), host: String::new() };
         let plan = Plan::new(config, root, Action::Read).unwrap();
         let stop = rc_dotnet::CancelToken::new();
         let task = tokio::spawn(execute(plan, true, false, stop.clone()));
         tokio::time::sleep(Duration::from_millis(30)).await;
         stop.cancel();
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(3), task)
-                .await
-                .unwrap()
-                .unwrap(),
-            Err(Error::Cancelled)
-        );
+        assert_eq!(tokio::time::timeout(Duration::from_secs(3), task).await.unwrap().unwrap(), Err(Error::Cancelled));
     }
     #[cfg(unix)]
     #[test]
     fn native_devcontainer_up_requires_explicit_trust_and_separate_confirmation() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -472,9 +359,7 @@ mod tests {
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace_and_wait(&root);
         app.dev_containers.program = cli(&root, false);
-        app.dock
-            .sizes
-            .insert(crate::toolwindow::ToolWindow::DevContainers, 900.0);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::DevContainers, 900.0);
         let mut h = crate::screens::harness(app, egui::vec2(1900.0, 1500.0));
         h.get_by_label(tr("Dev Containers")).click();
         h.run_steps(2);
@@ -485,33 +370,20 @@ mod tests {
         h.run_steps(2);
         h.get_by_label(tr("Review Dev Container Up")).click();
         h.run_steps(2);
-        h.get_by_label(tr("Execute Reviewed Dev Container Command"))
-            .click();
+        h.get_by_label(tr("Execute Reviewed Dev Container Command")).click();
         h.run_steps(2);
         assert!(!root.join("devcontainer-wire").exists());
-        h.get_by_label(tr(
-            "I reviewed the command and configuration; authorize Dev Container execution",
-        ))
-        .click();
+        h.get_by_label(tr("I reviewed the command and configuration; authorize Dev Container execution")).click();
         h.run_steps(2);
-        h.get_by_label(tr("Execute Reviewed Dev Container Command"))
-            .click();
+        h.get_by_label(tr("Execute Reviewed Dev Container Command")).click();
         h.run_steps(2);
         let start = std::time::Instant::now();
         while h.state().dev_containers.stop.is_some() && start.elapsed() < Duration::from_secs(15) {
             h.run_steps(2);
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(
-            h.state().dev_containers.error.is_none(),
-            "{:?}",
-            h.state().dev_containers.error
-        );
-        assert!(
-            std::fs::read_to_string(root.join("devcontainer-wire"))
-                .unwrap()
-                .contains("up")
-        );
+        assert!(h.state().dev_containers.error.is_none(), "{:?}", h.state().dev_containers.error);
+        assert!(std::fs::read_to_string(root.join("devcontainer-wire")).unwrap().contains("up"));
         assert!(!root.join("host-hook-ran").exists() && !root.join("build-ran").exists());
     }
     #[cfg(unix)]
@@ -519,31 +391,16 @@ mod tests {
     #[ignore = "Requires separately installed official Dev Container CLI; reads JSONC using a deterministic empty Docker catalog, never starts a container"]
     fn official_cli_reads_real_rust_jsonc_without_running_lifecycle_hooks() {
         use std::os::unix::fs::PermissionsExt;
-        let program =
-            std::env::var("CRABCRAFT_TEST_DEVCONTAINER").expect("explicit official CLI fixture");
+        let program = std::env::var("CRABCRAFT_TEST_DEVCONTAINER").expect("explicit official CLI fixture");
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         fixture(&root);
         let docker = root.join("empty-docker");
-        std::fs::write(
-            &docker,
-            "#!/usr/bin/python3\nimport sys\nif 'version' in sys.argv: print('29.9.3')\n",
-        )
-        .unwrap();
+        std::fs::write(&docker, "#!/usr/bin/python3\nimport sys\nif 'version' in sys.argv: print('29.9.3')\n").unwrap();
         std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let config = Config {
-            program,
-            docker: docker.to_string_lossy().into(),
-            host: String::new(),
-        };
+        let config = Config { program, docker: docker.to_string_lossy().into(), host: String::new() };
         let invoke = |action| {
-            rc_core::Runtime::block_on(execute(
-                Plan::new(config.clone(), root.clone(), action).unwrap(),
-                true,
-                false,
-                rc_dotnet::CancelToken::new(),
-            ))
-            .unwrap()
+            rc_core::Runtime::block_on(execute(Plan::new(config.clone(), root.clone(), action).unwrap(), true, false, rc_dotnet::CancelToken::new())).unwrap()
         };
         let version = invoke(Action::Version);
         assert!(!version.trim().is_empty());

@@ -54,15 +54,11 @@ impl Completion {
     /// first (IntelliJ's ordering, simplified).
     pub fn filter(&mut self, prefix: &str) {
         self.prefix = prefix.to_string();
-        let mut scored: Vec<(i32, usize)> = self
-            .items
-            .iter()
-            .enumerate()
-            .filter_map(|(i, it)| fuzzy_score(&it.label, prefix).map(|s| (s, i)))
-            .collect();
+        let mut scored: Vec<(i32, usize)> = self.items.iter().enumerate().filter_map(|(i, it)| fuzzy_score(&it.label, prefix).map(|s| (s, i))).collect();
         // Ties keep the server's order (its sort text ranks the type's own members first);
         // `object`'s members go last, like Rider.
-        let inherited = |i: usize| matches!(self.items[i].label.as_str(), "Equals" | "GetHashCode" | "GetType" | "ToString" | "ReferenceEquals" | "MemberwiseClone");
+        let inherited =
+            |i: usize| matches!(self.items[i].label.as_str(), "Equals" | "GetHashCode" | "GetType" | "ToString" | "ReferenceEquals" | "MemberwiseClone");
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(inherited(a.1).cmp(&inherited(b.1))).then(a.1.cmp(&b.1)));
         self.filtered = scored.into_iter().map(|(_, i)| i).collect();
         self.selected = 0;

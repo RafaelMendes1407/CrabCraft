@@ -56,7 +56,10 @@ pub fn preview(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) -> b
     let out = area.show(&mut child, |ui| {
         egui::Frame::new().inner_margin(egui::Margin::symmetric(28, 20)).show(ui, |ui| {
             ui.set_width(width.max(100.0));
-            egui_commonmark::CommonMarkViewer::new().default_implicit_uri_scheme(base).max_image_width(Some(width.max(100.0) as usize)).show(ui, md_cache, &text);
+            egui_commonmark::CommonMarkViewer::new()
+                .default_implicit_uri_scheme(base)
+                .max_image_width(Some(width.max(100.0) as usize))
+                .show(ui, md_cache, &text);
         });
     });
     let max = (out.content_size.y - out.inner_rect.height()).max(0.0);
@@ -72,21 +75,28 @@ pub fn switcher(app: &mut CrabCraftApp, ui: &mut Ui, idx: usize, rect: Rect) {
     let size = vec2(3.0 * 26.0 + 2.0 * 2.0 + 8.0, 34.0);
     let at = egui::pos2(rect.right() - size.x - 22.0, rect.top() + 6.0);
     egui::Area::new(egui::Id::unique(("md_switch", id, rect.left() as i32))).order(egui::Order::Foreground).fixed_pos(at).show(ui.ctx(), |ui| {
-        egui::Frame::new().fill(p.island_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
-                for (view, icon, tip) in [(MdView::Editor, ico::EDIT, tr("Editor Only")), (MdView::Split, ico::SPLIT_RIGHT, tr("Editor and Preview")), (MdView::Preview, ico::PREVIEW, tr("Preview Only"))] {
-                    let resp = theme::icon_button(ui, icon, true, tip);
-                    if view == current {
-                        ui.painter().rect_stroke(resp.rect, 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+        egui::Frame::new().fill(p.island_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(8.0).inner_margin(egui::Margin::same(4)).show(
+            ui,
+            |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    for (view, icon, tip) in [
+                        (MdView::Editor, ico::EDIT, tr("Editor Only")),
+                        (MdView::Split, ico::SPLIT_RIGHT, tr("Editor and Preview")),
+                        (MdView::Preview, ico::PREVIEW, tr("Preview Only")),
+                    ] {
+                        let resp = theme::icon_button(ui, icon, true, tip);
+                        if view == current {
+                            ui.painter().rect_stroke(resp.rect, 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+                        }
+                        if resp.clicked() {
+                            app.docs.list[idx].md_view = Some(view);
+                            app.focus_editor = view != MdView::Preview;
+                        }
                     }
-                    if resp.clicked() {
-                        app.docs.list[idx].md_view = Some(view);
-                        app.focus_editor = view != MdView::Preview;
-                    }
-                }
-            });
-        });
+                });
+            },
+        );
     });
 }
 

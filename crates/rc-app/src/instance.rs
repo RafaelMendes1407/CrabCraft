@@ -64,10 +64,7 @@ pub fn listen(endpoint: &Path, deliver: impl Fn(Vec<OpenRequest>) + Send + 'stat
     }
     let listener = imp::bind(endpoint).ok()?;
     let path = endpoint.to_path_buf();
-    std::thread::Builder::new()
-        .name("instance".into())
-        .spawn(move || listener.serve(&deliver))
-        .ok()?;
+    std::thread::Builder::new().name("instance".into()).spawn(move || listener.serve(&deliver)).ok()?;
     Some(Listener { path })
 }
 
@@ -246,7 +243,10 @@ mod tests {
         let huge = vec![b' '; MAX_REQUEST as usize + 10];
         assert_eq!(read_request(&mut &huge[..]), None);
         #[cfg(unix)]
-        assert_eq!(read_request(&mut &b"[{\"path\":\"/a\",\"line\":1,\"column\":null}]\n"[..]), Some(vec![OpenRequest { path: "/a".into(), line: Some(1), column: None }]));
+        assert_eq!(
+            read_request(&mut &b"[{\"path\":\"/a\",\"line\":1,\"column\":null}]\n"[..]),
+            Some(vec![OpenRequest { path: "/a".into(), line: Some(1), column: None }])
+        );
     }
 
     #[test]

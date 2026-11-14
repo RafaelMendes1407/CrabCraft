@@ -34,15 +34,32 @@ pub struct Diagnostic {
 
 /// Compiler-provided ranges, not inferred lifetime/NLL intervals.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BorrowDiagnostic { pub root: PathBuf, pub spans: Vec<BorrowSpan>, pub notes: Vec<String>, pub limited: bool }
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BorrowSpan {
-    pub file: PathBuf, pub start: usize, pub end: usize,
-    pub line: u32, pub column: u32, pub end_line: u32, pub end_column: u32,
-    pub primary: bool, pub label: String, pub text: Vec<BorrowLine>,
+pub struct BorrowDiagnostic {
+    pub root: PathBuf,
+    pub spans: Vec<BorrowSpan>,
+    pub notes: Vec<String>,
+    pub limited: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BorrowLine { pub line: u32, pub text: String, pub start: u32, pub end: u32 }
+pub struct BorrowSpan {
+    pub file: PathBuf,
+    pub start: usize,
+    pub end: usize,
+    pub line: u32,
+    pub column: u32,
+    pub end_line: u32,
+    pub end_column: u32,
+    pub primary: bool,
+    pub label: String,
+    pub text: Vec<BorrowLine>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BorrowLine {
+    pub line: u32,
+    pub text: String,
+    pub start: u32,
+    pub end: u32,
+}
 
 /// Edits proposed by the compiler for the file of a diagnostic.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -1,26 +1,40 @@
 //! Find in Files replacements: bounded background preparation/disk writes, followed by
 //! version-checked undoable edits of open documents on the UI thread.
 
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use rc_search::replace::{FileStamp, ReplaceError, ReplaceLimits};
+use std::path::{Path, PathBuf};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 const MAX_FILES: usize = 5000;
 const TOTAL_BYTES: usize = 64 * 1024 * 1024;
 const MAX_EDITS: usize = 100_000;
 const MAX_ERRORS: usize = 100;
 
-enum Target { Disk(FileStamp), Buffer { id: u64, version: u64, rope: rc_text::Rope, read_only: bool } }
-struct Item { path: PathBuf, rel: String, target: Target }
+enum Target {
+    Disk(FileStamp),
+    Buffer { id: u64, version: u64, rope: rc_text::Rope, read_only: bool },
+}
+struct Item {
+    path: PathBuf,
+    rel: String,
+    target: Target,
+}
 
 enum Outcome {
     Disk(usize),
     Buffer { id: u64, version: u64, edits: Vec<rc_text::Change> },
     Failed(String),
 }
-enum Event { File(PathBuf, Outcome), Done(bool), Failed(String) }
+enum Event {
+    File(PathBuf, Outcome),
+    Done(bool),
+    Failed(String),
+}
 
 #[derive(Default)]
 pub struct Report {
@@ -33,61 +47,155 @@ pub struct Report {
     pub errors: Vec<(PathBuf, String)>,
 }
 
-pub struct ReplaceFiles { inbox: Inbox<Event>, cancel: Option<Arc<AtomicBool>>, pub report: Report }
-impl Drop for ReplaceFiles { fn drop(&mut self) { self.cancel(); } }
+pub struct ReplaceFiles {
+    inbox: Inbox<Event>,
+    cancel: Option<Arc<AtomicBool>>,
+    pub report: Report,
+}
+impl Drop for ReplaceFiles {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
 
 impl ReplaceFiles {
-    pub fn new(waker: Waker) -> Self { Self { inbox: Inbox::new(waker), cancel: None, report: Report::default() } }
-    pub fn running(&self) -> bool { self.cancel.is_some() }
-    pub fn cancelling(&self) -> bool { self.cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Relaxed)) }
-    pub fn cancel(&self) { if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); } }
+    pub fn new(waker: Waker) -> Self {
+        Self { inbox: Inbox::new(waker), cancel: None, report: Report::default() }
+    }
+    pub fn running(&self) -> bool {
+        self.cancel.is_some()
+    }
+    pub fn cancelling(&self) -> bool {
+        self.cancel.as_ref().is_some_and(|cancel| cancel.load(Ordering::Relaxed))
+    }
+    pub fn cancel(&self) {
+        if let Some(cancel) = &self.cancel {
+            cancel.store(true, Ordering::Relaxed);
+        }
+    }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn start(&mut self, root: &Path, files: &[rc_search::FileMatches], docs: &crate::docs::Docs, options: rc_search::QueryOptions, replacement: String, mask: String, excluded: Vec<String>, only: Option<rc_search::ScopeFilter>) -> Result<(), &'static str> {
-        if self.running() { return Err("A replacement is already running"); }
-        if files.len() > MAX_FILES || files.iter().any(|file| file.path.as_os_str().len() > 8192 || file.rel.len() > 8192) || excluded.len() > 4096 || excluded.iter().any(|path| path.len() > 8192) || options.pattern.len() > 64 * 1024 || replacement.len() > 64 * 1024 || mask.len() > 64 * 1024 { return Err("Replacement exceeded its file, edit or output limit"); }
+    pub fn start(
+        &mut self,
+        root: &Path,
+        files: &[rc_search::FileMatches],
+        docs: &crate::docs::Docs,
+        options: rc_search::QueryOptions,
+        replacement: String,
+        mask: String,
+        excluded: Vec<String>,
+        only: Option<rc_search::ScopeFilter>,
+    ) -> Result<(), &'static str> {
+        if self.running() {
+            return Err("A replacement is already running");
+        }
+        if files.len() > MAX_FILES
+            || files.iter().any(|file| file.path.as_os_str().len() > 8192 || file.rel.len() > 8192)
+            || excluded.len() > 4096
+            || excluded.iter().any(|path| path.len() > 8192)
+            || options.pattern.len() > 64 * 1024
+            || replacement.len() > 64 * 1024
+            || mask.len() > 64 * 1024
+        {
+            return Err("Replacement exceeded its file, edit or output limit");
+        }
         let mut snapshot_bytes = 0_usize;
-        let items: Vec<_> = files.iter().map(|file| {
-            let target = match docs.list.iter().find(|doc| doc.path == file.path) {
-                Some(doc) => { snapshot_bytes = snapshot_bytes.saturating_add(doc.editor.buffer.rope().len_bytes()); Target::Buffer { id: doc.editor.id, version: doc.editor.buffer.version(), rope: doc.editor.buffer.snapshot(), read_only: doc.editor.read_only } },
-                None => Target::Disk(file.stamp.clone()),
-            };
-            Item { path: file.path.clone(), rel: file.rel.clone(), target }
-        }).collect();
-        if snapshot_bytes > TOTAL_BYTES { return Err("Replacement exceeded its file, edit or output limit"); }
+        let items: Vec<_> = files
+            .iter()
+            .map(|file| {
+                let target = match docs.list.iter().find(|doc| doc.path == file.path) {
+                    Some(doc) => {
+                        snapshot_bytes = snapshot_bytes.saturating_add(doc.editor.buffer.rope().len_bytes());
+                        Target::Buffer {
+                            id: doc.editor.id,
+                            version: doc.editor.buffer.version(),
+                            rope: doc.editor.buffer.snapshot(),
+                            read_only: doc.editor.read_only,
+                        }
+                    }
+                    None => Target::Disk(file.stamp.clone()),
+                };
+                Item { path: file.path.clone(), rel: file.rel.clone(), target }
+            })
+            .collect();
+        if snapshot_bytes > TOTAL_BYTES {
+            return Err("Replacement exceeded its file, edit or output limit");
+        }
         self.report = Report { total: items.len(), ..Default::default() };
         let cancel = Arc::new(AtomicBool::new(false));
         self.cancel = Some(cancel.clone());
         let out = self.inbox.sender();
         let root = root.to_path_buf();
         std::thread::spawn(move || {
-            let query = match rc_search::Query::new(options) { Ok(query) => query, Err(error) => { out.send(Event::Failed(trf("Cannot replace files: {error}", &[("error", &error.to_string().chars().take(2048).collect::<String>())]))); return; } };
-            let mask = match rc_search::FileMask::parse(&mask) { Ok(mask) => mask, Err(error) => { out.send(Event::Failed(trf("Cannot replace files: {error}", &[("error", &error)]))); return; } };
-            let root = match root.canonicalize() { Ok(root) => root, Err(error) => { out.send(Event::Failed(error.to_string())); return; } };
+            let query = match rc_search::Query::new(options) {
+                Ok(query) => query,
+                Err(error) => {
+                    out.send(Event::Failed(trf("Cannot replace files: {error}", &[("error", &error.to_string().chars().take(2048).collect::<String>())])));
+                    return;
+                }
+            };
+            let mask = match rc_search::FileMask::parse(&mask) {
+                Ok(mask) => mask,
+                Err(error) => {
+                    out.send(Event::Failed(trf("Cannot replace files: {error}", &[("error", &error)])));
+                    return;
+                }
+            };
+            let root = match root.canonicalize() {
+                Ok(root) => root,
+                Err(error) => {
+                    out.send(Event::Failed(error.to_string()));
+                    return;
+                }
+            };
             let (mut remaining_edits, mut remaining_bytes) = (MAX_EDITS, TOTAL_BYTES);
             for item in items {
-                if cancel.load(Ordering::Relaxed) { break; }
-                let eligible = mask.matches(&item.rel) && !rc_core::workspace::is_excluded(&item.rel, &excluded) && only.as_ref().is_none_or(|scope| scope.matches(&item.rel));
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let eligible = mask.matches(&item.rel)
+                    && !rc_core::workspace::is_excluded(&item.rel, &excluded)
+                    && only.as_ref().is_none_or(|scope| scope.matches(&item.rel));
                 let outcome = if !eligible || item.path.canonicalize().ok().is_none_or(|path| !path.starts_with(&root)) {
                     Outcome::Failed(tr("File is no longer in the selected scope; skipped").into())
                 } else {
                     let limits = ReplaceLimits { bytes: (8 * 1024 * 1024).min(remaining_bytes), edits: remaining_edits };
                     match item.target {
                         Target::Disk(stamp) => match rc_search::replace::replace_in_file_guarded(&item.path, &stamp, &query, &replacement, &cancel, limits) {
-                            Ok((count, bytes)) => { remaining_edits = remaining_edits.saturating_sub(count); remaining_bytes = remaining_bytes.saturating_sub(bytes); Outcome::Disk(count) },
+                            Ok((count, bytes)) => {
+                                remaining_edits = remaining_edits.saturating_sub(count);
+                                remaining_bytes = remaining_bytes.saturating_sub(bytes);
+                                Outcome::Disk(count)
+                            }
                             Err(error) => Outcome::Failed(error_text(&error)),
                         },
                         Target::Buffer { read_only: true, .. } => Outcome::Failed(tr("The document is read-only; skipped").into()),
                         Target::Buffer { id, version, rope, .. } => {
                             let text = rope.to_string();
-                            match rc_search::replace::prepare_replacement(&text, &query, &replacement, &cancel, ReplaceLimits { edits: limits.edits.min(10_000), ..limits }) {
-                                Ok(plan) => { remaining_edits = remaining_edits.saturating_sub(plan.edits.len()); remaining_bytes = remaining_bytes.saturating_sub(if plan.edits.is_empty() { 0 } else { plan.output.len() }); Outcome::Buffer { id, version, edits: plan.edits.into_iter().map(|edit| rc_text::Change::new(edit.range.start, edit.range.end, edit.text)).collect() } },
+                            match rc_search::replace::prepare_replacement(
+                                &text,
+                                &query,
+                                &replacement,
+                                &cancel,
+                                ReplaceLimits { edits: limits.edits.min(10_000), ..limits },
+                            ) {
+                                Ok(plan) => {
+                                    remaining_edits = remaining_edits.saturating_sub(plan.edits.len());
+                                    remaining_bytes = remaining_bytes.saturating_sub(if plan.edits.is_empty() { 0 } else { plan.output.len() });
+                                    Outcome::Buffer {
+                                        id,
+                                        version,
+                                        edits: plan.edits.into_iter().map(|edit| rc_text::Change::new(edit.range.start, edit.range.end, edit.text)).collect(),
+                                    }
+                                }
                                 Err(error) => Outcome::Failed(error_text(&error)),
                             }
                         }
                     }
                 };
-                if !out.send(Event::File(item.path, outcome)) { return; }
+                if !out.send(Event::File(item.path, outcome)) {
+                    return;
+                }
             }
             out.send(Event::Done(cancel.load(Ordering::Relaxed)));
         });
@@ -96,7 +204,9 @@ impl ReplaceFiles {
 
     fn failure(&mut self, path: PathBuf, message: String) {
         self.report.skipped += 1;
-        if self.report.errors.len() < MAX_ERRORS { self.report.errors.push((path, message.chars().take(2048).collect())); }
+        if self.report.errors.len() < MAX_ERRORS {
+            self.report.errors.push((path, message.chars().take(2048).collect()));
+        }
     }
 
     /// Returns true once when the job finishes. No file I/O or regex matching runs here.
@@ -107,13 +217,30 @@ impl ReplaceFiles {
                 Event::File(path, outcome) => {
                     self.report.processed += 1;
                     match outcome {
-                        Outcome::Disk(count) => { if count > 0 { self.report.files += 1; self.report.matches += count; } },
+                        Outcome::Disk(count) => {
+                            if count > 0 {
+                                self.report.files += 1;
+                                self.report.matches += count;
+                            }
+                        }
                         Outcome::Failed(message) => self.failure(path, message),
                         Outcome::Buffer { id, version, edits } => {
-                            if self.cancelling() { self.failure(path, tr("Cancelled").into()); continue; }
-                            let Some(doc) = docs.list.iter_mut().find(|doc| doc.path == path && doc.editor.id == id) else { self.failure(path, tr("The document was closed or reopened; skipped").into()); continue };
-                            if doc.editor.read_only { self.failure(path, tr("The document is read-only; skipped").into()); continue; }
-                            if doc.editor.buffer.version() != version { self.failure(path, tr("The open document changed; skipped").into()); continue; }
+                            if self.cancelling() {
+                                self.failure(path, tr("Cancelled").into());
+                                continue;
+                            }
+                            let Some(doc) = docs.list.iter_mut().find(|doc| doc.path == path && doc.editor.id == id) else {
+                                self.failure(path, tr("The document was closed or reopened; skipped").into());
+                                continue;
+                            };
+                            if doc.editor.read_only {
+                                self.failure(path, tr("The document is read-only; skipped").into());
+                                continue;
+                            }
+                            if doc.editor.buffer.version() != version {
+                                self.failure(path, tr("The open document changed; skipped").into());
+                                continue;
+                            }
                             if !edits.is_empty() {
                                 self.report.files += 1;
                                 self.report.matches += edits.len();
@@ -124,16 +251,20 @@ impl ReplaceFiles {
                 }
                 Event::Done(cancelled) => {
                     self.report.cancelled = cancelled || self.cancelling();
-                    if self.report.cancelled { self.report.skipped += self.report.total.saturating_sub(self.report.processed); }
-                    self.cancel = None; finished = true;
-                },
+                    if self.report.cancelled {
+                        self.report.skipped += self.report.total.saturating_sub(self.report.processed);
+                    }
+                    self.cancel = None;
+                    finished = true;
+                }
                 Event::Failed(message) => {
                     self.failure(PathBuf::new(), message);
                     self.report.skipped += self.report.total.saturating_sub(1);
                     self.report.processed = self.report.total;
                     self.report.cancelled = self.cancelling();
-                    self.cancel = None; finished = true;
-                },
+                    self.cancel = None;
+                    finished = true;
+                }
             }
         }
         finished
@@ -170,26 +301,38 @@ mod tests {
         std::fs::write(root.join("build.rs"), r#"fn main() { std::fs::write("build-ran", "yes").unwrap(); }"#).unwrap();
         (dir, root.canonicalize().unwrap())
     }
-    fn options() -> rc_search::QueryOptions { rc_search::QueryOptions { pattern: r"\b(value|number)\b".into(), regex: true, case_sensitive: true, whole_word: false } }
+    fn options() -> rc_search::QueryOptions {
+        rc_search::QueryOptions { pattern: r"\b(value|number)\b".into(), regex: true, case_sensitive: true, whole_word: false }
+    }
     fn results(root: &Path) -> Vec<rc_search::FileMatches> {
         let inbox = Inbox::new(Waker::noop());
-        let handle = rc_search::find_in_files(root, rc_search::FindOptions { query: options(), mask: rc_search::FileMask::parse("*.rs").unwrap(), ..Default::default() }, inbox.sender()).unwrap();
+        let handle = rc_search::find_in_files(
+            root,
+            rc_search::FindOptions { query: options(), mask: rc_search::FileMask::parse("*.rs").unwrap(), ..Default::default() },
+            inbox.sender(),
+        )
+        .unwrap();
         let mut files = Vec::new();
         loop {
             match inbox.recv_timeout(Duration::from_secs(10)).expect("search completes") {
                 rc_search::FindEvent::File { file, .. } => files.push(file),
-                rc_search::FindEvent::Done { summary, .. } => { assert!(!summary.truncated && !summary.cancelled); break; }
+                rc_search::FindEvent::Done { summary, .. } => {
+                    assert!(!summary.truncated && !summary.cancelled);
+                    break;
+                }
             }
         }
         drop(handle);
-        files.sort_by(|a,b| a.path.cmp(&b.path));
+        files.sort_by(|a, b| a.path.cmp(&b.path));
         files
     }
     fn wait(job: &mut ReplaceFiles, docs: &mut crate::docs::Docs) {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(10) {
             job.poll(docs);
-            if !job.running() { return; }
+            if !job.running() {
+                return;
+            }
             std::thread::sleep(Duration::from_millis(5));
         }
         panic!("replacement did not complete");
@@ -228,7 +371,9 @@ mod tests {
         for _ in 0..500 {
             harness.run_steps(1);
             let replacement = &harness.state().find_in_files.as_ref().unwrap().replacements;
-            if replacement.report.total == 2 && !replacement.running() { break; }
+            if replacement.report.total == 2 && !replacement.running() {
+                break;
+            }
             std::thread::sleep(Duration::from_millis(5));
         }
         let replacement = &harness.state().find_in_files.as_ref().unwrap().replacements;

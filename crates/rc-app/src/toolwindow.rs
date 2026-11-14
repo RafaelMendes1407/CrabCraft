@@ -196,18 +196,35 @@ impl ToolWindow {
         match self {
             ToolWindow::Explorer | ToolWindow::Structure | ToolWindow::Commit => Side::Left,
             ToolWindow::Proofreading => Side::Right,
-            ToolWindow::Notifications | ToolWindow::Cargo | ToolWindow::Agents | ToolWindow::Plugins | ToolWindow::Containers | ToolWindow::DevContainers | ToolWindow::PrivilegedRun | ToolWindow::RustProvider => Side::Right,
+            ToolWindow::Notifications
+            | ToolWindow::Cargo
+            | ToolWindow::Agents
+            | ToolWindow::Plugins
+            | ToolWindow::Containers
+            | ToolWindow::DevContainers
+            | ToolWindow::PrivilegedRun
+            | ToolWindow::RustProvider => Side::Right,
             _ => Side::Bottom,
         }
     }
 
     /// Whether the button sits on the lower part of the left stripe (bottom tool windows).
     pub fn default_size(self, side: Side) -> f32 {
-        if self == ToolWindow::Proofreading && side == Side::Right { return 480.0; }
-        if self == ToolWindow::Remote && side == Side::Bottom { return 700.0; }
-        if self == ToolWindow::Agents && side == Side::Right { return 480.0; }
-        if self == ToolWindow::Database && side == Side::Bottom { return 560.0; }
-        if self == ToolWindow::Endpoints && side == Side::Bottom { return 420.0; }
+        if self == ToolWindow::Proofreading && side == Side::Right {
+            return 480.0;
+        }
+        if self == ToolWindow::Remote && side == Side::Bottom {
+            return 700.0;
+        }
+        if self == ToolWindow::Agents && side == Side::Right {
+            return 480.0;
+        }
+        if self == ToolWindow::Database && side == Side::Bottom {
+            return 560.0;
+        }
+        if self == ToolWindow::Endpoints && side == Side::Bottom {
+            return 420.0;
+        }
         match side {
             Side::Left => 300.0,
             Side::Right => 320.0,
@@ -303,7 +320,9 @@ impl Dock {
     pub fn to_session(&self) -> BTreeMap<String, ToolWindowState> {
         ToolWindow::ALL
             .into_iter()
-            .map(|tw| (tw.id().to_string(), ToolWindowState { visible: self.is_open(tw), size: self.size(tw), side: self.sides.get(&tw).map(|s| s.id().to_string()) }))
+            .map(|tw| {
+                (tw.id().to_string(), ToolWindowState { visible: self.is_open(tw), size: self.size(tw), side: self.sides.get(&tw).map(|s| s.id().to_string()) })
+            })
             .collect()
     }
 

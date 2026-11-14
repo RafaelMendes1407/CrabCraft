@@ -83,53 +83,27 @@ impl Assistant {
         let task = rc_core::Runtime::spawn(async move {
             let result = match request {
                 Request::Models => client.models().await.map(Reply::Models),
-                Request::Chat(messages) => {
-                    client.chat(&model, messages, None).await.map(Reply::Chat)
-                }
-                Request::Proposal(snapshot, kind, instruction) => {
-                    match crate::local_ai_proposal::messages(&snapshot, kind, &instruction) {
-                        Ok(messages) => match client
-                            .chat(
-                                &model,
-                                messages,
-                                Some(crate::local_ai_proposal::schema(kind)),
-                            )
-                            .await
-                        {
-                            Ok(text) => Proposal::parse(snapshot, kind, &text).map(Reply::Proposal),
-                            Err(error) => Err(error),
-                        },
+                Request::Chat(messages) => client.chat(&model, messages, None).await.map(Reply::Chat),
+                Request::Proposal(snapshot, kind, instruction) => match crate::local_ai_proposal::messages(&snapshot, kind, &instruction) {
+                    Ok(messages) => match client.chat(&model, messages, Some(crate::local_ai_proposal::schema(kind))).await {
+                        Ok(text) => Proposal::parse(snapshot, kind, &text).map(Reply::Proposal),
                         Err(error) => Err(error),
-                    }
-                }
+                    },
+                    Err(error) => Err(error),
+                },
             };
             sender.send(result);
         });
-        self.job = Some(Job {
-            inbox,
-            task,
-            source,
-        });
+        self.job = Some(Job { inbox, task, source });
     }
     fn remember(&mut self, role: &str, text: String) {
         self.history.push((role.into(), text));
-        while self.history.len() > 20
-            || self
-                .history
-                .iter()
-                .map(|(_, text)| text.len())
-                .sum::<usize>()
-                > 64 * 1024
-        {
+        while self.history.len() > 20 || self.history.iter().map(|(_, text)| text.len()).sum::<usize>() > 64 * 1024 {
             self.history.remove(0);
         }
     }
     fn poll(&mut self) {
-        if let Some(result) = self
-            .job
-            .as_ref()
-            .and_then(|job| job.inbox.drain().into_iter().next())
-        {
+        if let Some(result) = self.job.as_ref().and_then(|job| job.inbox.drain().into_iter().next()) {
             self.job = None;
             match result {
                 Ok(Reply::Models(models)) => {
@@ -154,22 +128,12 @@ enum Request {
 }
 fn error_text(error: &Error) -> &'static str {
     match error {
-        Error::Endpoint => tr(
-            "Local AI requires a loopback HTTP or HTTPS URL without credentials, paths or redirects.",
-        ),
-        Error::Model | Error::RemoteModel => {
-            tr("Choose an installed local GGUF model. Cloud models are unsupported.")
-        }
-        Error::Network => tr(
-            "The local AI service did not respond. Start Ollama separately and check its address.",
-        ),
-        Error::Status(_) => tr(
-            "The local AI service rejected the request. Check the installed model and server logs.",
-        ),
+        Error::Endpoint => tr("Local AI requires a loopback HTTP or HTTPS URL without credentials, paths or redirects."),
+        Error::Model | Error::RemoteModel => tr("Choose an installed local GGUF model. Cloud models are unsupported."),
+        Error::Network => tr("The local AI service did not respond. Start Ollama separately and check its address."),
+        Error::Status(_) => tr("The local AI service rejected the request. Check the installed model and server logs."),
         Error::Limit => tr("The AI request or response exceeds its size limit."),
-        Error::Invalid => {
-            tr("The AI proposal is invalid or its source changed. Request a new suggestion.")
-        }
+        Error::Invalid => tr("The AI proposal is invalid or its source changed. Request a new suggestion."),
     }
 }
 
@@ -179,11 +143,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
         .job
         .as_ref()
         .and_then(|job| job.source.as_ref())
-        .is_some_and(|(snapshot, kind)| {
-            !app.docs
-                .active_doc()
-                .is_some_and(|doc| snapshot.matches(doc, *kind == Kind::Line))
-        })
+        .is_some_and(|(snapshot, kind)| !app.docs.active_doc().is_some_and(|doc| snapshot.matches(doc, *kind == Kind::Line)))
     {
         assistant.cancel();
     }
@@ -192,11 +152,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
     if !trusted {
         assistant.cancel();
     }
-    if assistant.proposal.as_ref().is_some_and(|p| {
-        !app.docs
-            .active_doc()
-            .is_some_and(|doc| p.snapshot.matches(doc, p.kind == Kind::Line))
-    }) {
+    if assistant.proposal.as_ref().is_some_and(|p| !app.docs.active_doc().is_some_and(|doc| p.snapshot.matches(doc, p.kind == Kind::Line))) {
         assistant.proposal = None;
         assistant.reviewed = false;
     }
@@ -277,13 +233,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
 }
 
 /// Only a valid single-line proposal owns Tab/Escape; ordinary editor input is untouched.
-pub fn editor_keys(
-    assistant: &mut Assistant,
-    doc: &mut crate::docs::Doc,
-    ui: &egui::Ui,
-    focused: bool,
-    trusted: bool,
-) {
+pub fn editor_keys(assistant: &mut Assistant, doc: &mut crate::docs::Doc, ui: &egui::Ui, focused: bool, trusted: bool) {
     let Some(proposal) = assistant.proposal.as_ref() else {
         return;
     };
@@ -291,10 +241,7 @@ pub fn editor_keys(
         assistant.cancel();
         return;
     }
-    if !focused
-        || !ui.memory(|memory| memory.has_focus(rc_editor::EditorView::id_for(doc.editor.id)))
-        || proposal.kind != Kind::Line
-    {
+    if !focused || !ui.memory(|memory| memory.has_focus(rc_editor::EditorView::id_for(doc.editor.id))) || proposal.kind != Kind::Line {
         return;
     }
     let reject = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -311,30 +258,14 @@ pub fn editor_keys(
         }
     }
 }
-pub fn paint_inline(
-    assistant: &Assistant,
-    doc: &crate::docs::Doc,
-    ui: &egui::Ui,
-    caret: Option<egui::Rect>,
-    font_size: f32,
-) {
-    let Some(proposal) = assistant
-        .proposal
-        .as_ref()
-        .filter(|p| p.kind == Kind::Line && p.snapshot.matches(doc, true))
-    else {
+pub fn paint_inline(assistant: &Assistant, doc: &crate::docs::Doc, ui: &egui::Ui, caret: Option<egui::Rect>, font_size: f32) {
+    let Some(proposal) = assistant.proposal.as_ref().filter(|p| p.kind == Kind::Line && p.snapshot.matches(doc, true)) else {
         return;
     };
     let Some(caret) = caret else {
         return;
     };
-    ui.painter().text(
-        caret.left_top(),
-        egui::Align2::LEFT_TOP,
-        &proposal.after,
-        egui::FontId::monospace(font_size),
-        rc_kit::pal(ui).muted,
-    );
+    ui.painter().text(caret.left_top(), egui::Align2::LEFT_TOP, &proposal.after, egui::FontId::monospace(font_size), rc_kit::pal(ui).muted);
 }
 
 #[cfg(test)]
@@ -343,9 +274,7 @@ mod tests {
     use egui_kittest::kittest::Queryable;
     #[test]
     fn native_proposals_require_trust_review_and_current_rust_snapshot() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
@@ -360,76 +289,34 @@ mod tests {
         let mut h = crate::screens::harness(app, egui::vec2(1280., 900.));
         h.run_steps(2);
         assert!(h.state().local_ai.job.is_none());
-        h.get_by_label(tr("Enable local AI for this session"))
-            .click();
+        h.get_by_label(tr("Enable local AI for this session")).click();
         h.run_steps(2);
         h.get_by_label(tr("Send local chat")).click();
         h.run_steps(2);
         assert!(h.state().local_ai.job.is_none());
         h.state_mut().trust_project_tools_for_test();
         let snapshot = Snapshot::capture(h.state().docs.active_doc().unwrap()).unwrap();
-        let proposal = Proposal::parse(
-            snapshot,
-            Kind::Edit,
-            r#"{"old_text":"41","text":"42","reason":"Correct answer"}"#,
-        )
-        .unwrap();
+        let proposal = Proposal::parse(snapshot, Kind::Edit, r#"{"old_text":"41","text":"42","reason":"Correct answer"}"#).unwrap();
         h.state_mut().local_ai.proposal = Some(proposal.clone());
         h.run_steps(2);
         h.get_by_label(tr("Apply reviewed AI edit")).click();
         h.run_steps(2);
-        assert_eq!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            text
-        );
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), text);
         h.get_by_label(tr("I reviewed this AI edit")).click();
         h.run_steps(2);
         h.get_by_label(tr("Apply reviewed AI edit")).click();
         h.run_steps(2);
-        assert!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("{ 42 }")
-        );
+        assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("{ 42 }"));
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
-        assert!(
-            proposal
-                .apply(h.state_mut().docs.active_doc_mut().unwrap())
-                .is_err()
-        );
+        assert!(proposal.apply(h.state_mut().docs.active_doc_mut().unwrap()).is_err());
         let doc = h.state_mut().docs.active_doc_mut().unwrap();
         doc.editor.buffer.undo();
         assert_eq!(doc.editor.buffer.rope().to_string(), text);
         let snapshot = Snapshot::capture(doc).unwrap();
-        assert!(
-            Proposal::parse(
-                snapshot.clone(),
-                Kind::Edit,
-                r#"{"old_text":"fn","text":"pub fn"}"#
-            )
-            .is_err()
-        );
+        assert!(Proposal::parse(snapshot.clone(), Kind::Edit, r#"{"old_text":"fn","text":"pub fn"}"#).is_err());
         assert!(Proposal::parse(snapshot, Kind::Line, r#"{"text":"42\n}"}"#).is_err());
         h.state_mut().local_ai.proposal = Some(proposal);
-        h.state_mut()
-            .docs
-            .active_doc_mut()
-            .unwrap()
-            .editor
-            .replace(0, 0, "// edit\n");
+        h.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// edit\n");
         h.run_steps(2);
         assert!(h.state().local_ai.proposal.is_none());
         assert!(h.state().local_ai.job.is_none());
@@ -439,70 +326,27 @@ mod tests {
         doc.editor.replace(0, doc.editor.buffer.len_chars(), prefix);
         doc.editor.goto(0, prefix.chars().count());
         let snapshot = Snapshot::capture(doc).unwrap();
-        app.local_ai.proposal = Some(
-            Proposal::parse(
-                snapshot,
-                Kind::Line,
-                r#"{"text":"2; }","reason":"Complete 42"}"#,
-            )
-            .unwrap(),
-        );
+        app.local_ai.proposal = Some(Proposal::parse(snapshot, Kind::Line, r#"{"text":"2; }","reason":"Complete 42"}"#).unwrap());
         let ctx = egui::Context::default();
         let input = egui::RawInput {
-            events: vec![egui::Event::Key {
-                key: egui::Key::Tab,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::NONE,
-            }],
+            events: vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
             ..Default::default()
         };
         let mut output = ctx.run_ui(input, |ui| {
-            ui.memory_mut(|memory| {
-                memory.request_focus(rc_editor::EditorView::id_for(
-                    app.docs.active_doc().unwrap().editor.id,
-                ))
-            });
-            editor_keys(
-                &mut app.local_ai,
-                app.docs.active_doc_mut().unwrap(),
-                ui,
-                true,
-                true,
-            );
+            ui.memory_mut(|memory| memory.request_focus(rc_editor::EditorView::id_for(app.docs.active_doc().unwrap().editor.id)));
+            editor_keys(&mut app.local_ai, app.docs.active_doc_mut().unwrap(), ui, true, true);
         });
         output.textures_delta.clear();
-        assert_eq!(
-            app.docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            "fn main() { let n = 42; }"
-        );
+        assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), "fn main() { let n = 42; }");
         assert!(app.local_ai.proposal.is_none());
         app.docs.active_doc_mut().unwrap().editor.buffer.undo();
-        assert_eq!(
-            app.docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            prefix
-        );
+        assert_eq!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string(), prefix);
     }
 
     #[test]
     #[ignore = "requires explicitly started local Ollama model; run with CRABCRAFT_OLLAMA_URL"]
     fn real_local_model_native_review_edits_a_cargo_project() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
@@ -529,48 +373,18 @@ mod tests {
             h.run_steps(1);
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        assert!(
-            h.state().local_ai.error.is_none(),
-            "{:?}",
-            h.state().local_ai.error
-        );
+        assert!(h.state().local_ai.error.is_none(), "{:?}", h.state().local_ai.error);
         assert!(h.state().local_ai.proposal.is_some());
-        assert_eq!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            original
-        );
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), original);
         h.get_by_label(tr("I reviewed this AI edit")).click();
         h.run_steps(2);
         h.get_by_label(tr("Apply reviewed AI edit")).click();
         h.run_steps(2);
         assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
-        let generated = h
-            .state()
-            .docs
-            .active_doc()
-            .unwrap()
-            .editor
-            .buffer
-            .rope()
-            .to_string();
+        let generated = h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
         std::fs::write(&file, generated).unwrap();
-        let output = std::process::Command::new("cargo")
-            .args(["run", "--offline", "--quiet"])
-            .current_dir(root.path())
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = std::process::Command::new("cargo").args(["run", "--offline", "--quiet"]).current_dir(root.path()).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     }
 
     #[test]
@@ -578,36 +392,69 @@ mod tests {
     fn real_local_model_chat_line_and_reviewed_edit_compile_rust() {
         let url = std::env::var("CRABCRAFT_OLLAMA_URL").unwrap();
         let client = Client::new(&url).unwrap();
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         runtime.block_on(async {
-            let models = client.models().await.unwrap(); assert!(models.contains(&"qwen2.5-coder:0.5b".into()));
-            let reply = client.chat("qwen2.5-coder:0.5b", vec![json!({"role":"user","content":"What is the Rust type of the literal 42u32? Answer briefly."})], None).await.unwrap();
+            let models = client.models().await.unwrap();
+            assert!(models.contains(&"qwen2.5-coder:0.5b".into()));
+            let reply = client
+                .chat("qwen2.5-coder:0.5b", vec![json!({"role":"user","content":"What is the Rust type of the literal 42u32? Answer briefly."})], None)
+                .await
+                .unwrap();
             assert!(reply.contains("u32"), "{reply}");
             let pool = rc_syntax::ParserPool::new(std::sync::Arc::new(|| {}));
             let mut docs = crate::docs::Docs::new(pool);
-            let root = tempfile::tempdir().unwrap(); let file = root.path().join("main.rs");
+            let root = tempfile::tempdir().unwrap();
+            let file = root.path().join("main.rs");
             let source = "fn answer() -> i32 { 41 }\nfn main() { assert_eq!(answer(), 42); }\n";
-            std::fs::write(&file, source).unwrap(); docs.open(&file).unwrap();
+            std::fs::write(&file, source).unwrap();
+            docs.open(&file).unwrap();
             let snapshot = Snapshot::capture(docs.active_doc().unwrap()).unwrap();
-            let reply = client.chat("qwen2.5-coder:0.5b", crate::local_ai_proposal::messages(&snapshot, Kind::Edit, "Replace exactly the unique literal 41 with 42. old_text must be 41 and text must be 42.").unwrap(), Some(crate::local_ai_proposal::schema(Kind::Edit))).await.unwrap();
-            let proposal = Proposal::parse(snapshot, Kind::Edit, &reply).unwrap_or_else(|error| panic!("{error:?}: {reply}")); proposal.apply(docs.active_doc_mut().unwrap()).unwrap();
+            let reply = client
+                .chat(
+                    "qwen2.5-coder:0.5b",
+                    crate::local_ai_proposal::messages(
+                        &snapshot,
+                        Kind::Edit,
+                        "Replace exactly the unique literal 41 with 42. old_text must be 41 and text must be 42.",
+                    )
+                    .unwrap(),
+                    Some(crate::local_ai_proposal::schema(Kind::Edit)),
+                )
+                .await
+                .unwrap();
+            let proposal = Proposal::parse(snapshot, Kind::Edit, &reply).unwrap_or_else(|error| panic!("{error:?}: {reply}"));
+            proposal.apply(docs.active_doc_mut().unwrap()).unwrap();
             let updated = docs.active_doc().unwrap().editor.buffer.rope().to_string();
             std::fs::write(&file, updated).unwrap();
             let output = std::process::Command::new("rustc").arg("--edition=2024").arg(&file).arg("-o").arg(root.path().join("proof")).output().unwrap();
             assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
             assert!(std::process::Command::new(root.path().join("proof")).status().unwrap().success());
-            std::fs::write(&file, "fn answer() -> i32 {\n    4").unwrap(); docs.close(0); docs.open(&file).unwrap();
-            let doc = docs.active_doc_mut().unwrap(); doc.editor.goto(1, 5);
+            std::fs::write(&file, "fn answer() -> i32 {\n    4").unwrap();
+            docs.close(0);
+            docs.open(&file).unwrap();
+            let doc = docs.active_doc_mut().unwrap();
+            doc.editor.goto(1, 5);
             let snapshot = Snapshot::capture(doc).unwrap();
-            let reply = client.chat("qwen2.5-coder:0.5b", crate::local_ai_proposal::messages(&snapshot, Kind::Line, "Complete the integer literal 42: the prefix already contains 4. Return text 2 only.").unwrap(), Some(crate::local_ai_proposal::schema(Kind::Line))).await.unwrap();
-            let proposal = Proposal::parse(snapshot, Kind::Line, &reply).unwrap_or_else(|error| panic!("{error:?}: {reply}")); assert_eq!(proposal.after, "2", "{reply}");
+            let reply = client
+                .chat(
+                    "qwen2.5-coder:0.5b",
+                    crate::local_ai_proposal::messages(
+                        &snapshot,
+                        Kind::Line,
+                        "Complete the integer literal 42: the prefix already contains 4. Return text 2 only.",
+                    )
+                    .unwrap(),
+                    Some(crate::local_ai_proposal::schema(Kind::Line)),
+                )
+                .await
+                .unwrap();
+            let proposal = Proposal::parse(snapshot, Kind::Line, &reply).unwrap_or_else(|error| panic!("{error:?}: {reply}"));
+            assert_eq!(proposal.after, "2", "{reply}");
             proposal.apply(docs.active_doc_mut().unwrap()).unwrap();
             let updated = format!("{}\n}}\nfn main() {{ assert_eq!(answer(),42); }}", docs.active_doc().unwrap().editor.buffer.rope());
             std::fs::write(&file, updated).unwrap();
-            let status = std::process::Command::new("rustc").arg(&file).arg("-o").arg(root.path().join("line-proof")).status().unwrap(); assert!(status.success());
+            let status = std::process::Command::new("rustc").arg(&file).arg("-o").arg(root.path().join("line-proof")).status().unwrap();
+            assert!(status.success());
             assert!(std::process::Command::new(root.path().join("line-proof")).status().unwrap().success());
         });
     }

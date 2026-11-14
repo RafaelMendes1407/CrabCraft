@@ -60,7 +60,7 @@ pub struct ValueEdit {
 }
 
 pub struct Debugger {
-    pub privileged:bool,
+    pub privileged: bool,
     pub rust_backend: rc_core::settings::RustDebugger,
     pub gdb_path: Option<PathBuf>,
     pub lldb_dap_path: Option<PathBuf>,
@@ -118,8 +118,10 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(waker: Waker) -> Self {
         Debugger {
-            privileged:false,
-            rust_backend: Default::default(), gdb_path: None, lldb_dap_path: None,
+            privileged: false,
+            rust_backend: Default::default(),
+            gdb_path: None,
+            lldb_dap_path: None,
             session: None,
             console: None,
             name: String::new(),
@@ -155,8 +157,9 @@ impl Debugger {
 
     fn rust_adapter(&self) -> Result<rc_dap::AdapterCommand, String> {
         match self.rust_backend {
-            rc_core::settings::RustDebugger::Gdb => rc_dap::gdb::locate_configured(self.gdb_path.as_deref())
-                .ok_or_else(|| tr("GDB was not found. Install it to debug Rust programs.").into()),
+            rc_core::settings::RustDebugger::Gdb => {
+                rc_dap::gdb::locate_configured(self.gdb_path.as_deref()).ok_or_else(|| tr("GDB was not found. Install it to debug Rust programs.").into())
+            }
             rc_core::settings::RustDebugger::Lldb => rc_dap::lldb::locate(self.lldb_dap_path.as_deref())
                 .ok_or_else(|| tr("LLDB DAP was not found. Install lldb-dap or configure its executable path.").into()),
         }
@@ -172,7 +175,9 @@ impl Debugger {
 
     /// The editor's inline values belong to the selected session, even if both sessions
     /// stopped at the same source line and frame id.
-    pub fn became_selected(&mut self) { self.inline_frame = None; }
+    pub fn became_selected(&mut self) {
+        self.inline_frame = None;
+    }
 
     /// Drops what a removed breakpoint had set.
     pub fn forget_breakpoint(&mut self, path: &Path, line: usize) {
@@ -189,10 +194,14 @@ impl Debugger {
         for (path, lines) in docs.all_breakpoints() {
             for (&line, kind) in &lines {
                 let mut spec = BreakpointSpec::new(path.clone(), line as u32 + 1);
-                if !self.privileged&&let Some(c) = self.conditions.get(&(path.clone(), line)) {
+                if !self.privileged
+                    && let Some(c) = self.conditions.get(&(path.clone(), line))
+                {
                     spec = spec.with_condition(c.clone());
                 }
-                if !self.privileged&&let Some(m) = self.logs.get(&(path.clone(), line)) {
+                if !self.privileged
+                    && let Some(m) = self.logs.get(&(path.clone(), line))
+                {
                     spec = spec.with_log_message(m.clone());
                 }
                 spec.enabled = !self.muted && *kind != rc_editor::BreakpointKind::Disabled;
@@ -204,7 +213,7 @@ impl Debugger {
 
     /// Attaches GDB to a running process.
     pub fn attach_gdb(&mut self, pid: u32, name: &str, docs: &Docs) -> Vec<DebugOutput> {
-        self.privileged=false;
+        self.privileged = false;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -229,11 +238,13 @@ impl Debugger {
 
     /// Starts debugging a Rust binary under GDB.
     pub fn start_remote(&mut self, target: rc_dap::remote::RemoteTarget, docs: &Docs) -> Vec<DebugOutput> {
-        self.privileged=false;
+        self.privileged = false;
         let Some(adapter) = rc_dap::gdb::locate_configured(self.gdb_path.as_deref()) else {
             return vec![DebugOutput::Notify(tr("GDB was not found. Install it to debug Rust programs.").into(), true)];
         };
-        if let Some(session) = &mut self.session { session.stop(); }
+        if let Some(session) = &mut self.session {
+            session.stop();
+        }
         self.name = target.endpoint().into();
         self.urls.clear();
         self.expanded.clear();
@@ -249,7 +260,7 @@ impl Debugger {
 
     /// Starts debugging a Rust binary with the selected native DAP adapter.
     pub fn start_cargo(&mut self, config: RunConfig, cargo: rc_cargo::Cargo, mut target: rc_cargo::RunTarget, docs: &Docs) -> Vec<DebugOutput> {
-        self.privileged=false;
+        self.privileged = false;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -268,7 +279,8 @@ impl Debugger {
         self.memory.reset();
         self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
-        let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        let mut session =
+            DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
         session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
@@ -278,15 +290,29 @@ impl Debugger {
     }
 
     /// An explicitly authorized adapter proxy. Its private watchdog owns elevated cleanup.
-    pub(crate) fn start_privileged(&mut self,adapter:rc_dap::AdapterCommand,launch:rc_dap::LaunchConfig,name:&str,docs:&Docs)->Vec<DebugOutput>{
-        self.stop();self.privileged=true;self.new_watch.clear();self.eval=None;self.hover=None;self.hover_result=None;self.edit=None;self.urls.clear();self.name=name.to_string();self.expanded.clear();self.parallel_stacks.reset();self.memory.reset();self.disassembly.reset();
-        let console=crate::runner::Console::new(&self.waker);console.note(&tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));self.console=Some(console);
-        self.session=Some(DebugSession::start(adapter,DebugTarget::Launch(launch),DebugOptions::default(),self.breakpoints(docs),self.waker.clone()));
+    pub(crate) fn start_privileged(&mut self, adapter: rc_dap::AdapterCommand, launch: rc_dap::LaunchConfig, name: &str, docs: &Docs) -> Vec<DebugOutput> {
+        self.stop();
+        self.privileged = true;
+        self.new_watch.clear();
+        self.eval = None;
+        self.hover = None;
+        self.hover_result = None;
+        self.edit = None;
+        self.urls.clear();
+        self.name = name.to_string();
+        self.expanded.clear();
+        self.parallel_stacks.reset();
+        self.memory.reset();
+        self.disassembly.reset();
+        let console = crate::runner::Console::new(&self.waker);
+        console.note(&tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));
+        self.console = Some(console);
+        self.session = Some(DebugSession::start(adapter, DebugTarget::Launch(launch), DebugOptions::default(), self.breakpoints(docs), self.waker.clone()));
         vec![DebugOutput::ShowDebugWindow]
     }
 
     pub fn stop(&mut self) {
-        self.privileged=false;
+        self.privileged = false;
         if let Some(s) = &mut self.session {
             s.stop();
         }
@@ -315,7 +341,9 @@ impl Debugger {
     /// Opens the inline field of Set Value on a row, with `value` (its value as shown, in
     /// hexadecimal when hex is on) to edit. Nothing happens when not paused.
     pub fn start_edit(&mut self, key: String, target: SetTarget, value: &str) {
-        if self.privileged{return;}
+        if self.privileged {
+            return;
+        }
         if !self.stopped() {
             return;
         }
@@ -326,7 +354,9 @@ impl Debugger {
     /// Sends the value typed in the Set Value field; the answer closes it, or shows the
     /// debugger's error under it.
     pub fn apply_edit(&mut self) {
-        if self.privileged{return;}
+        if self.privileged {
+            return;
+        }
         let (Some(edit), Some(s)) = (&mut self.edit, &mut self.session) else { return };
         let value = edit.text.trim();
         if value.is_empty() || edit.pending.is_some() {
@@ -400,12 +430,18 @@ impl Debugger {
             files.entry(p).or_default();
         }
         for (path, lines) in &files {
-            let current: Vec<WantedBreakpoint> = s.breakpoints().in_file(path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.log_message.clone(), b.spec.enabled)).collect();
+            let current: Vec<WantedBreakpoint> =
+                s.breakpoints().in_file(path).iter().map(|b| (b.spec.line, b.spec.condition.clone(), b.spec.log_message.clone(), b.spec.enabled)).collect();
             let wanted: Vec<WantedBreakpoint> = lines
                 .iter()
                 .map(|(&l, k)| {
                     let key = (path.clone(), l);
-                    (l as u32 + 1, (!self.privileged).then(||self.conditions.get(&key).cloned()).flatten(), (!self.privileged).then(||self.logs.get(&key).cloned()).flatten(), !self.muted && *k != rc_editor::BreakpointKind::Disabled)
+                    (
+                        l as u32 + 1,
+                        (!self.privileged).then(|| self.conditions.get(&key).cloned()).flatten(),
+                        (!self.privileged).then(|| self.logs.get(&key).cloned()).flatten(),
+                        !self.muted && *k != rc_editor::BreakpointKind::Disabled,
+                    )
                 })
                 .chain(self.temp.iter().filter(|(p, _)| p == path).map(|(_, l)| (*l, None, None, true)))
                 .collect();
@@ -462,7 +498,9 @@ impl Debugger {
 
     /// Evaluates the expression under the mouse while stopped (hover values).
     pub fn hover(&mut self, doc: u64, pos: usize, screen: egui::Pos2, expression: String) {
-        if self.privileged{return;}
+        if self.privileged {
+            return;
+        }
         if expression.is_empty() || !self.stopped() {
             return;
         }
@@ -473,7 +511,9 @@ impl Debugger {
     }
 
     pub fn evaluate(&mut self, expression: String) {
-        if self.privileged{return;}
+        if self.privileged {
+            return;
+        }
         if let Some(s) = &mut self.session {
             let context = s.expression_context();
             let id = s.evaluate(&expression, context);
@@ -483,7 +523,9 @@ impl Debugger {
 
     /// Sends the console's line to the debugger as one of its commands.
     pub fn send_console_command(&mut self) {
-        if self.privileged{return;}
+        if self.privileged {
+            return;
+        }
         let text = std::mem::take(&mut self.console_input);
         if text.trim().is_empty() {
             return;
@@ -672,58 +714,58 @@ impl Debugger {
         }
         // Execution point and breakpoint state in the editors.
         if visible {
-        let exec = if session.state().is_stopped() { session.execution_point() } else { None };
-        if let Some((path, line)) = &exec
-            && let Some(frame) = session.selected_frame().map(|f| f.id)
-            && self.inline_frame != Some((session.generation(), frame))
-            && let Some(vars) = frame_variables(session, frame)
-            && let Some(d) = docs.list.iter_mut().find(|d| d.path == *path)
-        {
-            d.editor.debug_values = inline_values(&d.editor.buffer, line.saturating_sub(1) as usize, &vars);
-            self.inline_frame = Some((session.generation(), frame));
-        }
-        let muted = self.muted;
-        for d in &mut docs.list {
-            d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
-            if exec.is_none() {
-                d.editor.debug_values.clear();
+            let exec = if session.state().is_stopped() { session.execution_point() } else { None };
+            if let Some((path, line)) = &exec
+                && let Some(frame) = session.selected_frame().map(|f| f.id)
+                && self.inline_frame != Some((session.generation(), frame))
+                && let Some(vars) = frame_variables(session, frame)
+                && let Some(d) = docs.list.iter_mut().find(|d| d.path == *path)
+            {
+                d.editor.debug_values = inline_values(&d.editor.buffer, line.saturating_sub(1) as usize, &vars);
+                self.inline_frame = Some((session.generation(), frame));
             }
-            for st in session.breakpoints().in_file(&d.path) {
-                let line = st.spec.line.saturating_sub(1) as usize;
-                if temp.as_ref().is_some_and(|(p, l)| *p == d.path && *l == st.spec.line) && !d.editor.breakpoints.contains_key(&line) {
-                    continue;
-                }
-                // Muting is not the user disabling these breakpoints: the editors keep them.
-                if muted {
-                    continue;
-                }
-                if let Some(kind) = d.editor.breakpoints.get_mut(&line) {
-                    *kind = if !st.spec.enabled {
-                        rc_editor::BreakpointKind::Disabled
-                    } else if st.spec.log_message.is_some() {
-                        rc_editor::BreakpointKind::Log
-                    } else if st.spec.condition.is_some() {
-                        rc_editor::BreakpointKind::Conditional
-                    } else if st.verified {
-                        rc_editor::BreakpointKind::Verified
-                    } else if session.state().is_ended() {
-                        rc_editor::BreakpointKind::Normal
-                    } else {
-                        rc_editor::BreakpointKind::Invalid
-                    };
-                }
-            }
-        }
-        if session.state().is_ended() {
+            let muted = self.muted;
             for d in &mut docs.list {
-                d.editor.execution_line = None;
-                for k in d.editor.breakpoints.values_mut() {
-                    if matches!(k, rc_editor::BreakpointKind::Verified | rc_editor::BreakpointKind::Invalid) {
-                        *k = rc_editor::BreakpointKind::Normal;
+                d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
+                if exec.is_none() {
+                    d.editor.debug_values.clear();
+                }
+                for st in session.breakpoints().in_file(&d.path) {
+                    let line = st.spec.line.saturating_sub(1) as usize;
+                    if temp.as_ref().is_some_and(|(p, l)| *p == d.path && *l == st.spec.line) && !d.editor.breakpoints.contains_key(&line) {
+                        continue;
+                    }
+                    // Muting is not the user disabling these breakpoints: the editors keep them.
+                    if muted {
+                        continue;
+                    }
+                    if let Some(kind) = d.editor.breakpoints.get_mut(&line) {
+                        *kind = if !st.spec.enabled {
+                            rc_editor::BreakpointKind::Disabled
+                        } else if st.spec.log_message.is_some() {
+                            rc_editor::BreakpointKind::Log
+                        } else if st.spec.condition.is_some() {
+                            rc_editor::BreakpointKind::Conditional
+                        } else if st.verified {
+                            rc_editor::BreakpointKind::Verified
+                        } else if session.state().is_ended() {
+                            rc_editor::BreakpointKind::Normal
+                        } else {
+                            rc_editor::BreakpointKind::Invalid
+                        };
                     }
                 }
             }
-        }
+            if session.state().is_ended() {
+                for d in &mut docs.list {
+                    d.editor.execution_line = None;
+                    for k in d.editor.breakpoints.values_mut() {
+                        if matches!(k, rc_editor::BreakpointKind::Verified | rc_editor::BreakpointKind::Invalid) {
+                            *k = rc_editor::BreakpointKind::Normal;
+                        }
+                    }
+                }
+            }
         }
         out
     }
@@ -829,9 +871,7 @@ fn inline_values(buffer: &rc_text::Buffer, line: usize, vars: &[(String, String)
 /// Whether `word` appears in `text` as a whole identifier.
 fn mentions(text: &str, word: &str) -> bool {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
-    text.match_indices(word).any(|(i, _)| {
-        !text[..i].chars().next_back().is_some_and(is_word) && !text[i + word.len()..].chars().next().is_some_and(is_word)
-    })
+    text.match_indices(word).any(|(i, _)| !text[..i].chars().next_back().is_some_and(is_word) && !text[i + word.len()..].chars().next().is_some_and(is_word))
 }
 
 #[cfg(test)]

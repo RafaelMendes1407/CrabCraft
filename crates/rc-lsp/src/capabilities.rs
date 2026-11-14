@@ -72,4 +72,3 @@ pub fn client_capabilities() -> Value {
         "general": { "positionEncodings": ["utf-16"] }
     })
 }
-

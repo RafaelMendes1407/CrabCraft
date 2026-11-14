@@ -15,7 +15,12 @@ fn fake(dir: &Path, mode: &str) -> (AdapterCommand, PathBuf) {
 
 fn requests(log: &Path) -> Vec<Value> {
     // The adapter writes concurrently; only a newline terminates a committed JSONL row.
-    std::fs::read_to_string(log).unwrap_or_default().split_inclusive('\n').filter(|line| line.ends_with('\n')).map(|line| serde_json::from_str(line).unwrap()).collect()
+    std::fs::read_to_string(log)
+        .unwrap_or_default()
+        .split_inclusive('\n')
+        .filter(|line| line.ends_with('\n'))
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
 }
 
 fn commands(log: &Path) -> Vec<String> {
@@ -57,9 +62,9 @@ fn event_waiters_keep_coalesced_notifications_for_the_next_waiter() {
     let mut session = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
     session.events.extend([DebugEvent::Log("first".into()), DebugEvent::Log("second".into())]);
     let mut events = Vec::new();
-    pump_until(&mut session, &mut events, |event,_|matches!(event,DebugEvent::Log(text) if text=="first"));
-    pump_until(&mut session, &mut events, |event,_|matches!(event,DebugEvent::Log(text) if text=="second"));
-    assert_eq!(events.iter().filter(|event|matches!(event,DebugEvent::Log(text) if text=="first"||text=="second")).count(),2);
+    pump_until(&mut session, &mut events, |event, _| matches!(event,DebugEvent::Log(text) if text=="first"));
+    pump_until(&mut session, &mut events, |event, _| matches!(event,DebugEvent::Log(text) if text=="second"));
+    assert_eq!(events.iter().filter(|event| matches!(event,DebugEvent::Log(text) if text=="first"||text=="second")).count(), 2);
     session.stop();
 }
 
@@ -203,9 +208,9 @@ fn handshake_order_stops_caches_watches_and_exit() {
     pump_until(&mut s, &mut ev, |e, _| matches!(e, DebugEvent::BreakpointsChanged(p) if p == &calc()));
     // Watch evaluations may finish alongside the breakpoint reply; identify the update
     // itself rather than assuming that it is the last request written by the adapter.
-    let cleared = |request: &Value| request["command"] == "setBreakpoints"
-        && request["arguments"]["source"]["path"] == "/w/Calc.rs"
-        && request["arguments"]["breakpoints"] == json!([]);
+    let cleared = |request: &Value| {
+        request["command"] == "setBreakpoints" && request["arguments"]["source"]["path"] == "/w/Calc.rs" && request["arguments"]["breakpoints"] == json!([])
+    };
     pump_until_state(&mut s, &mut ev, |_| requests(&log).iter().skip(before).any(cleared));
     let recorded = requests(&log);
     let last = recorded.iter().skip(before).find(|request| cleared(request)).unwrap();
@@ -394,7 +399,10 @@ fn memory_is_read_decoded_and_partly_unreadable() {
     // Past the readable bytes: `unreadableBytes`.
     assert_eq!(block.bytes[8..], [None, None, None, None]);
     let req = requests(&log).into_iter().find(|r| r["command"] == "readMemory").unwrap();
-    assert_eq!((req["arguments"]["memoryReference"].as_str(), req["arguments"]["offset"].as_i64(), req["arguments"]["count"].as_i64()), (Some("0x1000"), Some(0), Some(12)));
+    assert_eq!(
+        (req["arguments"]["memoryReference"].as_str(), req["arguments"]["offset"].as_i64(), req["arguments"]["count"].as_i64()),
+        (Some("0x1000"), Some(0), Some(12))
+    );
 
     // Before the readable bytes: the answer starts later; a huge count is cut.
     let id = s.read_memory("0x1000", -2, 1 << 30);
@@ -428,7 +436,7 @@ fn disassembled(s: &mut DebugSession, ev: &mut Vec<DebugEvent>, id: u64) -> Resu
 
 #[test]
 fn code_is_disassembled_around_the_frame_and_stepped_by_instruction() {
-    use crate::disassembly::{instructions_before, rows, BACK_BYTES, DisasmRow};
+    use crate::disassembly::{BACK_BYTES, DisasmRow, instructions_before, rows};
     let dir = tempfile::tempdir().unwrap();
     let (adapter, log) = fake(dir.path(), "late");
     let mut bps = Breakpoints::new();
@@ -487,7 +495,12 @@ fn breakpoint_sets(log: &Path, from: usize) -> Vec<(String, Vec<u64>)> {
     requests(log)[from..]
         .iter()
         .filter(|r| r["command"] == "setBreakpoints")
-        .map(|r| (r["arguments"]["source"]["path"].as_str().unwrap().to_string(), r["arguments"]["breakpoints"].as_array().unwrap().iter().map(|b| b["line"].as_u64().unwrap()).collect()))
+        .map(|r| {
+            (
+                r["arguments"]["source"]["path"].as_str().unwrap().to_string(),
+                r["arguments"]["breakpoints"].as_array().unwrap().iter().map(|b| b["line"].as_u64().unwrap()).collect(),
+            )
+        })
         .collect()
 }
 
@@ -558,7 +571,8 @@ fn logpoints_and_hit_conditions_are_emulated() {
     // The adapter lacks both capabilities: neither goes on the wire.
     assert_eq!(requests(&log)[2]["arguments"]["breakpoints"], json!([{"line": 10}]));
     assert!(!ev.iter().any(|e| matches!(e, DebugEvent::Stopped(_))));
-    let console: Vec<&str> = ev.iter().filter_map(|e| if let DebugEvent::Output { category: OutputCategory::Console, text } = e { Some(text.as_str()) } else { None }).collect();
+    let console: Vec<&str> =
+        ev.iter().filter_map(|e| if let DebugEvent::Output { category: OutputCategory::Console, text } = e { Some(text.as_str()) } else { None }).collect();
     assert_eq!(console, ["x=2!\n", "x=3!\n"]);
     assert_eq!(s.state(), &SessionState::Exited(3));
 }
@@ -634,14 +648,18 @@ fn parallel_stack_responses_are_bounded_and_stale_generations_are_discarded() {
     let dir = tempfile::tempdir().unwrap();
     let (adapter, _) = fake(dir.path(), "normal");
     let mut session = DebugSession::start(adapter, launch(), DebugOptions::default(), Breakpoints::new(), Waker::noop());
-    session.state = SessionState::Stopped(StopInfo { thread_id: 1, reason: StopReason::Pause, description: None, text: None, frame_id: None, breakpoints: Vec::new() });
-    let frames: Vec<_> = (0..100).map(|id| json!({"id": id, "name": "é".repeat(4000), "line": 10, "moduleId": "x".repeat(3000), "source": {"path": "x".repeat(10000)}})).collect();
+    session.state =
+        SessionState::Stopped(StopInfo { thread_id: 1, reason: StopReason::Pause, description: None, text: None, frame_id: None, breakpoints: Vec::new() });
+    let frames: Vec<_> = (0..100)
+        .map(|id| json!({"id": id, "name": "é".repeat(4000), "line": 10, "moduleId": "x".repeat(3000), "source": {"path": "x".repeat(10000)}}))
+        .collect();
     let response = json!({"stackFrames": frames, "totalFrames": 100});
     let generation = session.generation;
     session.on_response(Ok(response.clone()), Purpose::ParallelStack { id: 1, generation: generation + 1, thread_id: 1, limit: 64 });
     assert!(!session.events.iter().any(|event| matches!(event, DebugEvent::ParallelStackLoaded { .. })));
     session.on_response(Ok(response), Purpose::ParallelStack { id: 2, generation, thread_id: 1, limit: 64 });
-    let stack = session.events.iter().find_map(|event| if let DebugEvent::ParallelStackLoaded { result: Ok(stack), .. } = event { Some(stack) } else { None }).unwrap();
+    let stack =
+        session.events.iter().find_map(|event| if let DebugEvent::ParallelStackLoaded { result: Ok(stack), .. } = event { Some(stack) } else { None }).unwrap();
     assert_eq!(stack.frames.len(), 64);
     assert!(stack.truncated);
     assert!(stack.frames.iter().all(|frame| frame.name.len() <= 2048 && frame.module_id.is_none() && frame.source.is_none()));

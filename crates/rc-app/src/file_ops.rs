@@ -4,9 +4,9 @@
 //! workspace; deleting files is refused (not supported yet).
 
 use crate::app::CrabCraftApp;
-use rc_lsp::uri_to_path;
 use rc_kit::i18n::{tr, trf};
 use rc_lsp::lsp_types as lsp;
+use rc_lsp::uri_to_path;
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 

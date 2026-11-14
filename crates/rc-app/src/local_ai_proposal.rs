@@ -12,24 +12,14 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub fn capture(doc: &Doc) -> Result<Self, Error> {
-        if doc.generated
-            || doc.editor.read_only
-            || doc.scratch
-            || doc.editor.lang() != rc_syntax::Lang::Rust
-        {
+        if doc.generated || doc.editor.read_only || doc.scratch || doc.editor.lang() != rc_syntax::Lang::Rust {
             return Err(Error::Invalid);
         }
         let rope = doc.editor.buffer.rope();
         if rope.len_bytes() > crate::local_ai_client::MAX_CONTEXT {
             return Err(Error::Limit);
         }
-        Ok(Self {
-            id: doc.editor.id,
-            version: doc.editor.buffer.version(),
-            path: doc.path.clone(),
-            text: rope.to_string(),
-            caret: doc.editor.caret(),
-        })
+        Ok(Self { id: doc.editor.id, version: doc.editor.buffer.version(), path: doc.path.clone(), text: rope.to_string(), caret: doc.editor.caret() })
     }
     pub fn matches(&self, doc: &Doc, caret: bool) -> bool {
         doc.editor.id == self.id
@@ -40,11 +30,7 @@ impl Snapshot {
             && (!caret || doc.editor.caret() == self.caret)
     }
     pub fn byte_caret(&self) -> Option<usize> {
-        self.text
-            .char_indices()
-            .map(|(byte, _)| byte)
-            .chain(std::iter::once(self.text.len()))
-            .nth(self.caret)
+        self.text.char_indices().map(|(byte, _)| byte).chain(std::iter::once(self.text.len())).nth(self.caret)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,19 +51,11 @@ pub struct Proposal {
 impl Proposal {
     pub fn parse(snapshot: Snapshot, kind: Kind, reply: &str) -> Result<Self, Error> {
         let value: Value = serde_json::from_str(reply).map_err(|_| Error::Invalid)?;
-        let after = value
-            .get("text")
-            .and_then(Value::as_str)
-            .ok_or(Error::Invalid)?
-            .to_string();
+        let after = value.get("text").and_then(Value::as_str).ok_or(Error::Invalid)?.to_string();
         if after.len() > 8192 || after.contains('\0') {
             return Err(Error::Limit);
         }
-        let reason = value
-            .get("reason")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
+        let reason = value.get("reason").and_then(Value::as_str).unwrap_or("").to_string();
         if reason.len() > 2048 {
             return Err(Error::Limit);
         }
@@ -93,10 +71,7 @@ impl Proposal {
                 (snapshot.caret, snapshot.caret, String::new())
             }
             Kind::Edit => {
-                let old = value
-                    .get("old_text")
-                    .and_then(Value::as_str)
-                    .ok_or(Error::Invalid)?;
+                let old = value.get("old_text").and_then(Value::as_str).ok_or(Error::Invalid)?;
                 if old.is_empty() || old.len() > 8192 || old == after {
                     return Err(Error::Invalid);
                 }
@@ -109,24 +84,14 @@ impl Proposal {
                 (start, start + old.chars().count(), old.to_owned())
             }
         };
-        Ok(Self {
-            snapshot,
-            kind,
-            start,
-            end,
-            before,
-            after,
-            reason,
-        })
+        Ok(Self { snapshot, kind, start, end, before, after, reason })
     }
     pub fn apply(&self, doc: &mut Doc) -> Result<(), Error> {
         if !self.snapshot.matches(doc, self.kind == Kind::Line) {
             return Err(Error::Invalid);
         }
         let rope = doc.editor.buffer.rope();
-        if self.end > rope.len_chars()
-            || rope.slice(self.start..self.end).to_string() != self.before
-        {
+        if self.end > rope.len_chars() || rope.slice(self.start..self.end).to_string() != self.before {
             return Err(Error::Invalid);
         }
         doc.editor.replace(self.start, self.end, &self.after);
@@ -154,16 +119,9 @@ pub fn messages(snapshot: &Snapshot, kind: Kind, instruction: &str) -> Result<Ve
     };
     let source = if kind == Kind::Line {
         let caret = snapshot.byte_caret().ok_or(Error::Invalid)?;
-        format!(
-            "{}<CARET>{}",
-            &snapshot.text[..caret],
-            &snapshot.text[caret..]
-        )
+        format!("{}<CARET>{}", &snapshot.text[..caret], &snapshot.text[caret..])
     } else {
         snapshot.text.clone()
     };
-    Ok(vec![
-        json!({"role":"system","content":system}),
-        json!({"role":"user","content":format!("REQUEST:\n{instruction}\nSOURCE:\n{source}")}),
-    ])
+    Ok(vec![json!({"role":"system","content":system}), json!({"role":"user","content":format!("REQUEST:\n{instruction}\nSOURCE:\n{source}")})])
 }

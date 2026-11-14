@@ -11,7 +11,9 @@ fn wait(session: &mut DebugSession, done: impl Fn(&DebugSession) -> bool) -> Vec
             assert!(!matches!(&event, DebugEvent::Failed(_)), "{event:?}, {events:?}");
             events.push(event);
         }
-        if done(session) { return events; }
+        if done(session) {
+            return events;
+        }
         assert!(Instant::now() < deadline, "{:?}, {events:?}", session.state());
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -30,10 +32,21 @@ fn llvm_dap_debugs_a_real_rust_project() {
     std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname='lldb-audit'\nversion='0.1.0'\nedition='2024'\n[workspace]\n").unwrap();
     let source = dir.path().join("src/main.rs");
     std::fs::write(&source, "fn main() {\n    let answer: u32 = 42;\n    let next = answer + 1;\n    println!(\"lldb: {next}\");\n}\n").unwrap();
-    let target = rc_cargo::RunTarget { before: vec![], test: None, manifest: dir.path().join("Cargo.toml"), package: "lldb-audit".into(), bin: "lldb-audit".into(), args: vec![], env: vec![], working_dir: None, options: Default::default() };
+    let target = rc_cargo::RunTarget {
+        before: vec![],
+        test: None,
+        manifest: dir.path().join("Cargo.toml"),
+        package: "lldb-audit".into(),
+        bin: "lldb-audit".into(),
+        args: vec![],
+        env: vec![],
+        working_dir: None,
+        options: Default::default(),
+    };
     let mut bps = Breakpoints::default();
     bps.set(BreakpointSpec::new(&source, 3));
-    let mut session = DebugSession::start(adapter, DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target }, DebugOptions::default(), bps, Waker::noop());
+    let mut session =
+        DebugSession::start(adapter, DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target }, DebugOptions::default(), bps, Waker::noop());
     wait(&mut session, |s| s.state().is_stopped());
     wait(&mut session, |s| !s.threads().is_empty());
     let thread = session.threads()[0].id;

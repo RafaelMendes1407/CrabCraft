@@ -72,7 +72,17 @@ fn debugs_a_rust_program() {
     project(dir.path());
     let root = dir.path().canonicalize().unwrap();
     let main = root.join("src/main.rs");
-    let target = RunTarget { before: Vec::new(), test: None, manifest: root.join("Cargo.toml"), package: "crabby".into(), bin: "crabby".into(), args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
+    let target = RunTarget {
+        before: Vec::new(),
+        test: None,
+        manifest: root.join("Cargo.toml"),
+        package: "crabby".into(),
+        bin: "crabby".into(),
+        args: Vec::new(),
+        env: Vec::new(),
+        working_dir: None,
+        options: Default::default(),
+    };
     let mut bps = Breakpoints::default();
     bps.set(BreakpointSpec::new(main.clone(), line_of("let total")));
     bps.set(BreakpointSpec::new(main.clone(), line_of("let sum")));
@@ -106,7 +116,11 @@ fn debugs_a_rust_program() {
     // Runs to the end with its output and exit code.
     run.s.continue_();
     run.until("the end", |s, _| s.state().is_ended());
-    let output: String = run.events.iter().filter_map(|e| if let DebugEvent::Output { category: OutputCategory::Stdout, text } = e { Some(text.as_str()) } else { None }).collect();
+    let output: String = run
+        .events
+        .iter()
+        .filter_map(|e| if let DebugEvent::Output { category: OutputCategory::Stdout, text } = e { Some(text.as_str()) } else { None })
+        .collect();
     assert!(output.contains("hello crab") && output.contains("total 30"), "output {output:?}");
     assert!(matches!(run.s.state(), SessionState::Exited(0)), "{:?}", run.s.state());
 }

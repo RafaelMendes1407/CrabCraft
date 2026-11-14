@@ -21,7 +21,16 @@ pub enum Error {
 }
 impl Error {
     fn message(&self) -> String {
-        match self{Self::Trust=>tr("Trust this project before running project tools or code").into(),Self::Input=>tr("Choose a Docker executable, valid resource ID and project-local build paths").into(),Self::Confirm=>tr("Review and confirm this Docker command before executing it").into(),Self::Io=>tr("Could not start or communicate with the Docker CLI").into(),Self::Exit(text)=>trf("Docker CLI failed: {message}",&[("message",text)]),Self::Output=>tr("Docker output or operation time limit exceeded").into(),Self::Cancelled=>tr("Docker request cancelled; daemon work or containers may still need explicit Stop or Remove").into(),Self::Stale=>tr("Docker settings or project changed; prepare the command again").into()}
+        match self {
+            Self::Trust => tr("Trust this project before running project tools or code").into(),
+            Self::Input => tr("Choose a Docker executable, valid resource ID and project-local build paths").into(),
+            Self::Confirm => tr("Review and confirm this Docker command before executing it").into(),
+            Self::Io => tr("Could not start or communicate with the Docker CLI").into(),
+            Self::Exit(text) => trf("Docker CLI failed: {message}", &[("message", text)]),
+            Self::Output => tr("Docker output or operation time limit exceeded").into(),
+            Self::Cancelled => tr("Docker request cancelled; daemon work or containers may still need explicit Stop or Remove").into(),
+            Self::Stale => tr("Docker settings or project changed; prepare the command again").into(),
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -38,9 +47,7 @@ impl Config {
             || (!path.is_absolute() && path.components().count() != 1)
             || self.host.len() > 4096
             || self.host.contains(['\0', '\n', '\r'])
-            || (!self.host.is_empty()
-                && !self.host.starts_with("unix://")
-                && !self.host.starts_with("npipe://"))
+            || (!self.host.is_empty() && !self.host.starts_with("unix://") && !self.host.starts_with("npipe://"))
         {
             return Err(Error::Input);
         }
@@ -52,37 +59,22 @@ enum Action {
     Info,
     Containers,
     Images,
-    Build {
-        context: String,
-        dockerfile: String,
-        tag: String,
-    },
-    Run {
-        image: String,
-        args: Vec<String>,
-        network: bool,
-    },
+    Build { context: String, dockerfile: String, tag: String },
+    Run { image: String, args: Vec<String>, network: bool },
     Logs(String),
     Stop(String),
     Remove(String),
 }
 impl Action {
     fn write(&self) -> bool {
-        matches!(
-            self,
-            Self::Build { .. } | Self::Run { .. } | Self::Stop(_) | Self::Remove(_)
-        )
+        matches!(self, Self::Build { .. } | Self::Run { .. } | Self::Stop(_) | Self::Remove(_))
     }
 }
 fn resource(s: &str) -> bool {
     (12..=64).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 fn image(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 256
-        && !s.starts_with('-')
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._-/:@".contains(&b))
+    !s.is_empty() && s.len() <= 256 && !s.starts_with('-') && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-/:@".contains(&b))
 }
 #[derive(Clone)]
 struct Plan {
@@ -101,26 +93,9 @@ impl Plan {
         let mut context = None;
         let args: Vec<String> = match &action {
             Action::Info => vec!["version".into(), "--format".into(), "{{json .}}".into()],
-            Action::Containers => vec![
-                "container".into(),
-                "ls".into(),
-                "--all".into(),
-                "--no-trunc".into(),
-                "--format".into(),
-                "{{json .}}".into(),
-            ],
-            Action::Images => vec![
-                "image".into(),
-                "ls".into(),
-                "--no-trunc".into(),
-                "--format".into(),
-                "{{json .}}".into(),
-            ],
-            Action::Build {
-                context: dir,
-                dockerfile,
-                tag,
-            } => {
+            Action::Containers => vec!["container".into(), "ls".into(), "--all".into(), "--no-trunc".into(), "--format".into(), "{{json .}}".into()],
+            Action::Images => vec!["image".into(), "ls".into(), "--no-trunc".into(), "--format".into(), "{{json .}}".into()],
+            Action::Build { context: dir, dockerfile, tag } => {
                 if !image(tag) || dir.is_empty() || dockerfile.is_empty() {
                     return Err(Error::Input);
                 }
@@ -141,26 +116,15 @@ impl Plan {
                     dir.to_string_lossy().into(),
                 ]
             }
-            Action::Run {
-                image: reference,
-                args,
-                network,
-            } => {
-                if !image(reference)
-                    || args.len() > 32
-                    || args.iter().any(|s| s.len() > 4096 || s.contains('\0'))
-                {
+            Action::Run { image: reference, args, network } => {
+                if !image(reference) || args.len() > 32 || args.iter().any(|s| s.len() > 4096 || s.contains('\0')) {
                     return Err(Error::Input);
                 }
                 let mut argv = vec![
                     "run".into(),
                     "--detach".into(),
                     "--pull=never".into(),
-                    if *network {
-                        "--network=bridge".into()
-                    } else {
-                        "--network=none".into()
-                    },
+                    if *network { "--network=bridge".into() } else { "--network=none".into() },
                     "--label=dev.crabcraft.explicit=true".into(),
                     "--".into(),
                     reference.clone(),
@@ -173,30 +137,13 @@ impl Plan {
                     return Err(Error::Input);
                 }
                 match &action {
-                    Action::Logs(_) => vec![
-                        "container".into(),
-                        "logs".into(),
-                        "--tail=200".into(),
-                        "--timestamps".into(),
-                        id.clone(),
-                    ],
-                    Action::Stop(_) => vec![
-                        "container".into(),
-                        "stop".into(),
-                        "--time=10".into(),
-                        id.clone(),
-                    ],
+                    Action::Logs(_) => vec!["container".into(), "logs".into(), "--tail=200".into(), "--timestamps".into(), id.clone()],
+                    Action::Stop(_) => vec!["container".into(), "stop".into(), "--time=10".into(), id.clone()],
                     _ => vec!["container".into(), "rm".into(), id.clone()],
                 }
             }
         };
-        Ok(Self {
-            config,
-            root,
-            action,
-            args,
-            context,
-        })
+        Ok(Self { config, root, action, args, context })
     }
     fn preview(&self) -> String {
         let mut argv = vec![self.config.program.clone()];
@@ -204,10 +151,7 @@ impl Plan {
             argv.extend(["--host".into(), self.config.host.clone()]);
         }
         argv.extend(self.args.clone());
-        argv.into_iter()
-            .map(|s| format!("{s:?}"))
-            .collect::<Vec<_>>()
-            .join(" ")
+        argv.into_iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(" ")
     }
 }
 struct Group(Option<u32>);
@@ -220,22 +164,13 @@ impl Drop for Group {
 }
 async fn bytes<R: tokio::io::AsyncRead + Unpin>(reader: R) -> Result<Vec<u8>, Error> {
     let mut out = Vec::new();
-    reader
-        .take(4 * 1024 * 1024 + 1)
-        .read_to_end(&mut out)
-        .await
-        .map_err(|_| Error::Io)?;
+    reader.take(4 * 1024 * 1024 + 1).read_to_end(&mut out).await.map_err(|_| Error::Io)?;
     if out.len() > 4 * 1024 * 1024 {
         return Err(Error::Output);
     }
     Ok(out)
 }
-async fn execute(
-    plan: Plan,
-    trusted: bool,
-    confirmed: bool,
-    stop: rc_dotnet::CancelToken,
-) -> Result<String, Error> {
+async fn execute(plan: Plan, trusted: bool, confirmed: bool, stop: rc_dotnet::CancelToken) -> Result<String, Error> {
     if !trusted {
         return Err(Error::Trust);
     }
@@ -249,13 +184,7 @@ async fn execute(
         let root = plan.root.canonicalize().map_err(|_| Error::Input)?;
         let context = context.canonicalize().map_err(|_| Error::Input)?;
         let file = file.canonicalize().map_err(|_| Error::Input)?;
-        if !context.starts_with(&root)
-            || !file.starts_with(&context)
-            || !context.is_dir()
-            || !std::fs::metadata(&file)
-                .map_err(|_| Error::Input)?
-                .is_file()
-        {
+        if !context.starts_with(&root) || !file.starts_with(&context) || !context.is_dir() || !std::fs::metadata(&file).map_err(|_| Error::Input)?.is_file() {
             return Err(Error::Input);
         }
     }
@@ -286,9 +215,7 @@ async fn execute(
         let (out, err) = tokio::try_join!(bytes(stdout), bytes(stderr))?;
         let status = child.wait().await.map_err(|_| Error::Io)?;
         if !status.success() {
-            return Err(Error::Exit(
-                String::from_utf8_lossy(&err).chars().take(4096).collect(),
-            ));
+            return Err(Error::Exit(String::from_utf8_lossy(&err).chars().take(4096).collect()));
         }
         let mut text = String::from_utf8(out).map_err(|_| Error::Output)?;
         let err = String::from_utf8_lossy(&err);
@@ -318,24 +245,12 @@ fn rows(text: &str) -> Result<Vec<Row>, Error> {
             return Err(Error::Output);
         }
         let value: Value = serde_json::from_str(line).map_err(|_| Error::Output)?;
-        let field = |key| {
-            value
-                .get(key)
-                .and_then(Value::as_str)
-                .filter(|s| s.len() <= 4096)
-                .ok_or(Error::Output)
-                .map(str::to_string)
-        };
+        let field = |key| value.get(key).and_then(Value::as_str).filter(|s| s.len() <= 4096).ok_or(Error::Output).map(str::to_string);
         let id = field("ID")?;
         if !resource(&id) {
             return Err(Error::Output);
         }
-        result.push(Row {
-            id,
-            name: field("Names")?,
-            image: field("Image")?,
-            status: field("Status")?,
-        });
+        result.push(Row { id, name: field("Names")?, image: field("Image")?, status: field("Status")? });
     }
     Ok(result)
 }
@@ -383,10 +298,7 @@ impl Containers {
         }
     }
     fn config(&self) -> Config {
-        Config {
-            program: self.program.clone(),
-            host: self.host.clone(),
-        }
+        Config { program: self.program.clone(), host: self.host.clone() }
     }
     fn prepare(&mut self, root: &Path, action: Action) {
         self.confirm = false;
@@ -413,10 +325,7 @@ impl Containers {
         let out = self.inbox.sender();
         let action = plan.action.clone();
         rc_core::Runtime::spawn(async move {
-            out.send(Event {
-                action,
-                result: execute(plan, trusted, confirmed, stop).await,
-            });
+            out.send(Event { action, result: execute(plan, trusted, confirmed, stop).await });
         });
     }
     pub fn poll(&mut self, trusted: bool) {
@@ -468,9 +377,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
         app.toggle_tool(crate::toolwindow::ToolWindow::Containers);
     }
     let root = app.workspace.as_ref().map(|w| w.ws.root.clone());
-    let trusted = root
-        .as_ref()
-        .is_some_and(|r| app.settings.trusted_projects.contains(r));
+    let trusted = root.as_ref().is_some_and(|r| app.settings.trusted_projects.contains(r));
     app.containers.show(ui, root, trusted);
 }
 
@@ -479,22 +386,14 @@ mod tests {
     use super::*;
     fn rust_project(root: &Path) {
         std::fs::create_dir(root.join("src")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"docker_native_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n").unwrap();
         std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"docker_native_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+            root.join("src/main.rs"),
+            "fn main(){println!(\"42\");if std::env::args().any(|arg|arg==\"wait\"){std::thread::sleep(std::time::Duration::from_secs(120));}}\n",
         )
         .unwrap();
-        std::fs::write(root.join("src/main.rs"),"fn main(){println!(\"42\");if std::env::args().any(|arg|arg==\"wait\"){std::thread::sleep(std::time::Duration::from_secs(120));}}\n").unwrap();
-        std::fs::write(
-            root.join("build.rs"),
-            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("Dockerfile"),
-            "FROM scratch\nCOPY fixture /fixture\nENTRYPOINT [\"/fixture\"]\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
+        std::fs::write(root.join("Dockerfile"), "FROM scratch\nCOPY fixture /fixture\nENTRYPOINT [\"/fixture\"]\n").unwrap();
     }
     #[cfg(unix)]
     fn fake(root: &Path, sleep: bool) -> Config {
@@ -508,60 +407,26 @@ mod tests {
         );
         std::fs::write(&path, script).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
-        Config {
-            program: path.to_string_lossy().into(),
-            host: String::new(),
-        }
+        Config { program: path.to_string_lossy().into(), host: String::new() }
     }
     #[test]
     fn docker_plans_use_typed_argv_without_shell_or_remote_contexts() {
         let root = PathBuf::from("/tmp/project");
-        let config = Config {
-            program: "docker".into(),
-            host: "unix:///tmp/docker.sock".into(),
-        };
+        let config = Config { program: "docker".into(), host: "unix:///tmp/docker.sock".into() };
         assert!(Plan::prepare(config.clone(), root.clone(), Action::Stop("--all".into())).is_err());
-        assert!(
-            Plan::prepare(
-                config.clone(),
-                root.clone(),
-                Action::Run {
-                    image: "--privileged".into(),
-                    args: vec![],
-                    network: false
-                }
-            )
-            .is_err()
-        );
+        assert!(Plan::prepare(config.clone(), root.clone(), Action::Run { image: "--privileged".into(), args: vec![], network: false }).is_err());
         let plan = Plan::prepare(
             config.clone(),
             root.clone(),
-            Action::Run {
-                image: "local:latest".into(),
-                args: vec!["$(touch marker); literal".into()],
-                network: false,
-            },
+            Action::Run { image: "local:latest".into(), args: vec!["$(touch marker); literal".into()], network: false },
         )
         .unwrap();
         assert!(plan.args.contains(&"--pull=never".into()));
         assert!(plan.args.contains(&"--network=none".into()));
         assert_eq!(plan.args.last().unwrap(), "$(touch marker); literal");
-        assert!(
-            Config {
-                host: "tcp://untrusted:2375".into(),
-                ..config
-            }
-            .validate()
-            .is_err()
-        );
+        assert!(Config { host: "tcp://untrusted:2375".into(), ..config }.validate().is_err());
         assert!(rows("{bad").is_err());
-        assert!(
-            rows(
-                &serde_json::json!({"ID":"--all","Names":"bad","Image":"bad","Status":"bad"})
-                    .to_string()
-            )
-            .is_err()
-        );
+        assert!(rows(&serde_json::json!({"ID":"--all","Names":"bad","Image":"bad","Status":"bad"}).to_string()).is_err());
     }
     #[cfg(unix)]
     #[tokio::test]
@@ -573,21 +438,11 @@ mod tests {
         let build = Plan::prepare(
             config.clone(),
             root.clone(),
-            Action::Build {
-                context: root.to_string_lossy().into(),
-                dockerfile: root.join("Dockerfile").to_string_lossy().into(),
-                tag: "local:latest".into(),
-            },
+            Action::Build { context: root.to_string_lossy().into(), dockerfile: root.join("Dockerfile").to_string_lossy().into(), tag: "local:latest".into() },
         )
         .unwrap();
-        assert_eq!(
-            execute(build.clone(), false, true, rc_dotnet::CancelToken::new()).await,
-            Err(Error::Trust)
-        );
-        assert_eq!(
-            execute(build.clone(), true, false, rc_dotnet::CancelToken::new()).await,
-            Err(Error::Confirm)
-        );
+        assert_eq!(execute(build.clone(), false, true, rc_dotnet::CancelToken::new()).await, Err(Error::Trust));
+        assert_eq!(execute(build.clone(), true, false, rc_dotnet::CancelToken::new()).await, Err(Error::Confirm));
         assert!(!root.join("docker-wire").exists());
         let outside = tempfile::tempdir().unwrap();
         let bad = Plan::prepare(
@@ -600,13 +455,8 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(
-            execute(bad, true, true, rc_dotnet::CancelToken::new()).await,
-            Err(Error::Input)
-        );
-        execute(build, true, true, rc_dotnet::CancelToken::new())
-            .await
-            .unwrap();
+        assert_eq!(execute(bad, true, true, rc_dotnet::CancelToken::new()).await, Err(Error::Input));
+        execute(build, true, true, rc_dotnet::CancelToken::new()).await.unwrap();
         let wire = std::fs::read_to_string(root.join("docker-wire")).unwrap();
         assert!(wire.contains("--network=none") && wire.contains("--pull=false"));
         assert!(!root.join("build-ran").exists());
@@ -615,21 +465,13 @@ mod tests {
         let task = tokio::spawn(execute(plan, true, false, stop.clone()));
         tokio::time::sleep(Duration::from_millis(30)).await;
         stop.cancel();
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(3), task)
-                .await
-                .unwrap()
-                .unwrap(),
-            Err(Error::Cancelled)
-        );
+        assert_eq!(tokio::time::timeout(Duration::from_secs(3), task).await.unwrap().unwrap(), Err(Error::Cancelled));
     }
     #[cfg(unix)]
     #[test]
     fn native_docker_actions_are_disabled_untrusted_and_writes_require_review() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
@@ -638,9 +480,7 @@ mod tests {
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace_and_wait(&root);
         app.containers.program = config.program;
-        app.dock
-            .sizes
-            .insert(crate::toolwindow::ToolWindow::Containers, 900.0);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Containers, 900.0);
         let mut h = crate::screens::harness(app, egui::vec2(1900.0, 1500.0));
         h.get_by_label(tr("Docker")).click();
         h.run_steps(2);
@@ -656,11 +496,7 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(10));
             }
             assert!(h.state().containers.stop.is_none());
-            assert!(
-                h.state().containers.error.is_none(),
-                "{:?}",
-                h.state().containers.error
-            );
+            assert!(h.state().containers.error.is_none(), "{:?}", h.state().containers.error);
         };
         h.get_by_label(tr("List Docker Containers")).click();
         h.run_steps(2);
@@ -671,85 +507,50 @@ mod tests {
         let before = std::fs::read_to_string(root.join("docker-wire")).unwrap();
         h.get_by_label(tr("Review Docker Stop")).click();
         h.run_steps(2);
-        h.get_by_label(tr("Execute Reviewed Docker Command"))
-            .click();
+        h.get_by_label(tr("Execute Reviewed Docker Command")).click();
         h.run_steps(2);
-        assert_eq!(
-            std::fs::read_to_string(root.join("docker-wire")).unwrap(),
-            before
-        );
-        h.get_by_label(tr("I reviewed and authorize this Docker command"))
-            .click();
+        assert_eq!(std::fs::read_to_string(root.join("docker-wire")).unwrap(), before);
+        h.get_by_label(tr("I reviewed and authorize this Docker command")).click();
         h.run_steps(2);
-        h.get_by_label(tr("Execute Reviewed Docker Command"))
-            .click();
+        h.get_by_label(tr("Execute Reviewed Docker Command")).click();
         h.run_steps(2);
         wait(&mut h);
-        assert!(
-            std::fs::read_to_string(root.join("docker-wire"))
-                .unwrap()
-                .contains("stop")
-        );
+        assert!(std::fs::read_to_string(root.join("docker-wire")).unwrap().contains("stop"));
         assert!(!root.join("build-ran").exists());
     }
     #[test]
     #[ignore = "Requires an explicitly provided disposable rootless Docker daemon; never pulls an image"]
     fn real_rootless_engine_builds_and_runs_a_static_rust_project() {
         let program = std::env::var("CRABCRAFT_TEST_DOCKER").expect("explicit fixture CLI");
-        let host =
-            std::env::var("CRABCRAFT_TEST_DOCKER_HOST").expect("explicit fixture Unix socket");
+        let host = std::env::var("CRABCRAFT_TEST_DOCKER_HOST").expect("explicit fixture Unix socket");
         assert!(host.starts_with("unix:///tmp/"));
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
         rust_project(&root);
         let output = std::process::Command::new("rustc")
-            .args([
-                "-C",
-                "target-feature=+crt-static",
-                "-C",
-                "relocation-model=static",
-            ])
+            .args(["-C", "target-feature=+crt-static", "-C", "relocation-model=static"])
             .arg(root.join("src/main.rs"))
             .arg("-o")
             .arg(root.join("fixture"))
             .current_dir(&root)
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let config = Config { program, host };
         let invoke = |action| {
             let plan = Plan::prepare(config.clone(), root.clone(), action).unwrap();
-            rc_core::Runtime::block_on(execute(plan, true, true, rc_dotnet::CancelToken::new()))
-                .unwrap()
+            rc_core::Runtime::block_on(execute(plan, true, true, rc_dotnet::CancelToken::new())).unwrap()
         };
         let version = invoke(Action::Info);
         assert!(version.contains("Server"));
         let tag = format!("crabcraft-rust-fixture:{}", std::process::id());
-        invoke(Action::Build {
-            context: root.to_string_lossy().into(),
-            dockerfile: root.join("Dockerfile").to_string_lossy().into(),
-            tag: tag.clone(),
-        });
-        let id = invoke(Action::Run {
-            image: tag,
-            args: vec![],
-            network: false,
-        })
-        .trim()
-        .to_string();
+        invoke(Action::Build { context: root.to_string_lossy().into(), dockerfile: root.join("Dockerfile").to_string_lossy().into(), tag: tag.clone() });
+        let id = invoke(Action::Run { image: tag, args: vec![], network: false }).trim().to_string();
         assert!(resource(&id), "{id}");
         let mut found = false;
         for _ in 0..100 {
             let output = invoke(Action::Containers);
-            if rows(&output)
-                .unwrap()
-                .iter()
-                .any(|row| row.id == id && row.status.contains("Exited (0)"))
-            {
+            if rows(&output).unwrap().iter().any(|row| row.id == id && row.status.contains("Exited (0)")) {
                 found = true;
                 break;
             }

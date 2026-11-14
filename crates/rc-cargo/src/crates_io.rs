@@ -141,7 +141,15 @@ mod tests {
         ],"meta":{"total":4}}"#;
         let hits = parse_search(body);
         assert_eq!(hits.len(), 3);
-        assert_eq!(hits[0], CrateHit { name: "serde".into(), version: Some("1.0.229".into()), description: Some("A generic serialization framework".into()), downloads: 700_000_000 });
+        assert_eq!(
+            hits[0],
+            CrateHit {
+                name: "serde".into(),
+                version: Some("1.0.229".into()),
+                description: Some("A generic serialization framework".into()),
+                downloads: 700_000_000
+            }
+        );
         assert_eq!((hits[1].version.as_deref(), hits[1].downloads), (Some("2.0.0-rc.1"), 0));
         assert_eq!(hits[2].version, None);
         assert!(parse_search("not json").is_empty());

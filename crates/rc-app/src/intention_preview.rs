@@ -72,7 +72,10 @@ pub enum State {
     Resolving,
     /// The diff is being worked out.
     Computing,
-    Ready { files: Vec<FilePreview>, notes: Vec<String> },
+    Ready {
+        files: Vec<FilePreview>,
+        notes: Vec<String>,
+    },
     /// Nothing to diff.
     Note(String),
     Failed(String),
@@ -175,7 +178,9 @@ impl IntentionPreview {
                             }
                             self.compute(jobs, notes);
                         }
-                        None if action.command.is_some() => self.state = State::Note(tr("Runs a command of the language server; there is no text to preview").into()),
+                        None if action.command.is_some() => {
+                            self.state = State::Note(tr("Runs a command of the language server; there is no text to preview").into())
+                        }
                         None => self.state = State::Note(tr("This action changes no text").into()),
                     }
                     self.resolved = Some(action);
@@ -210,7 +215,9 @@ pub fn edit_jobs(edit: &lsp::WorkspaceEdit, open: &[(PathBuf, Rope)]) -> (Vec<Fi
         for op in ops {
             match op {
                 lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(c)) => notes.push(trf("Creates {file}", &[("file", &name(&c.uri))])),
-                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(r)) => notes.push(trf("Renames {from} to {to}", &[("from", &name(&r.old_uri)), ("to", &name(&r.new_uri))])),
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(r)) => {
+                    notes.push(trf("Renames {from} to {to}", &[("from", &name(&r.old_uri)), ("to", &name(&r.new_uri))]))
+                }
                 lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Delete(d)) => notes.push(trf("Deletes {file}", &[("file", &name(&d.uri))])),
                 lsp::DocumentChangeOperation::Edit(_) => {}
             }
@@ -301,7 +308,9 @@ impl CrabCraftApp {
         };
         match command.command.as_str() {
             crate::insight::UPDATE_DEPENDENCY_COMMAND => {
-                let (Some(line), Some(version)) = (args.first().and_then(|v| v.as_u64()).and_then(|n| usize::try_from(n).ok()), args.get(1).and_then(|v| v.as_str()).map(str::to_string)) else {
+                let (Some(line), Some(version)) =
+                    (args.first().and_then(|v| v.as_u64()).and_then(|n| usize::try_from(n).ok()), args.get(1).and_then(|v| v.as_str()).map(str::to_string))
+                else {
                     return Plan::Note(tr("This action changes no text").into());
                 };
                 active_job(Box::new(move |text| crate::app::dependency_update_edit(text, line, &version)))
@@ -386,7 +395,11 @@ mod tests {
         std::fs::write(&closed, "fn a() {}\nfn b() {}\n").unwrap();
         let open = dir.path().join("a.rs");
         let jobs = vec![
-            FileJob { path: open.clone(), open: Some(Rope::from_str("use x;\nfn main() {}\n")), edits: Edits::Lsp(vec![edit(0, 0, 0, "use std::collections::HashMap;\n")]) },
+            FileJob {
+                path: open.clone(),
+                open: Some(Rope::from_str("use x;\nfn main() {}\n")),
+                edits: Edits::Lsp(vec![edit(0, 0, 0, "use std::collections::HashMap;\n")]),
+            },
             FileJob { path: closed.clone(), open: None, edits: Edits::Lsp(vec![edit(1, 3, 4, "c")]) },
             FileJob { path: dir.path().join("missing.rs"), open: None, edits: Edits::Lsp(vec![edit(0, 0, 0, "x")]) },
         ];
@@ -402,7 +415,11 @@ mod tests {
     fn a_local_fix_is_made_from_the_current_text_and_bad_edits_are_reported() {
         let path = PathBuf::from("Cargo.toml");
         let text = "[dependencies]\nserde = \"1.0\"\n";
-        let ok = FileJob { path: path.clone(), open: Some(Rope::from_str(text)), edits: Edits::Make(Box::new(|t: &str| t.find("1.0").map(|i| (i, i + 3, "1.2".to_string())))) };
+        let ok = FileJob {
+            path: path.clone(),
+            open: Some(Rope::from_str(text)),
+            edits: Edits::Make(Box::new(|t: &str| t.find("1.0").map(|i| (i, i + 3, "1.2".to_string())))),
+        };
         let gone = FileJob { path: path.clone(), open: Some(Rope::from_str(text)), edits: Edits::Make(Box::new(|_: &str| None)) };
         let outside = FileJob { path, open: Some(Rope::from_str(text)), edits: Edits::Make(Box::new(|_: &str| Some((5, 900, String::new())))) };
         let found = previews(vec![ok, gone, outside], &AtomicBool::new(false));
@@ -410,14 +427,21 @@ mod tests {
         assert!(found[1].error.is_some());
         assert!(found[2].error.is_some());
         // Cancelled: nothing more is worked out.
-        assert!(previews(vec![FileJob { path: PathBuf::from("x"), open: Some(Rope::from_str("")), edits: Edits::Lsp(Vec::new()) }], &AtomicBool::new(true)).is_empty());
+        assert!(
+            previews(vec![FileJob { path: PathBuf::from("x"), open: Some(Rope::from_str("")), edits: Edits::Lsp(Vec::new()) }], &AtomicBool::new(true))
+                .is_empty()
+        );
     }
 
     #[test]
     fn file_operations_are_listed_as_notes() {
         let uri = rc_lsp::path_to_uri(std::path::Path::new("/p/src/new.rs"));
         let edit = lsp::WorkspaceEdit {
-            document_changes: Some(lsp::DocumentChanges::Operations(vec![lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(lsp::CreateFile { uri, options: None, annotation_id: None }))])),
+            document_changes: Some(lsp::DocumentChanges::Operations(vec![lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Create(lsp::CreateFile {
+                uri,
+                options: None,
+                annotation_id: None,
+            }))])),
             ..Default::default()
         };
         let (jobs, notes) = edit_jobs(&edit, &[]);
@@ -431,7 +455,15 @@ mod tests {
         let mut p = IntentionPreview::new(Waker::noop());
         p.start((0, "A".into(), 1, 1), Plan::Resolve(lsp::CodeAction { title: "A".into(), ..Default::default() }), Vec::new(), |_| None);
         assert!(matches!(p.state, State::Note(_)));
-        p.start((1, "B".into(), 1, 1), Plan::Edits(vec![FileJob { path: PathBuf::from("a.rs"), open: Some(Rope::from_str("a\n")), edits: Edits::Lsp(vec![edit(0, 0, 1, "b")]) }], Vec::new()), Vec::new(), |_| None);
+        p.start(
+            (1, "B".into(), 1, 1),
+            Plan::Edits(
+                vec![FileJob { path: PathBuf::from("a.rs"), open: Some(Rope::from_str("a\n")), edits: Edits::Lsp(vec![edit(0, 0, 1, "b")]) }],
+                Vec::new(),
+            ),
+            Vec::new(),
+            |_| None,
+        );
         assert!(!p.is_for(&(0, "A".into(), 1, 1)));
         let start = std::time::Instant::now();
         while p.busy() && start.elapsed() < std::time::Duration::from_secs(10) {

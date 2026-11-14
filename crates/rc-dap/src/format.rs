@@ -52,7 +52,13 @@ pub fn hex_integer(value: &str, type_name: Option<&str>) -> Option<String> {
     let magnitude: u128 = number.parse().ok()?;
     if !negative {
         if let Some((bits, signed)) = width {
-            let max = if signed { (1u128 << (bits - 1)) - 1 } else if bits == 128 { u128::MAX } else { (1u128 << bits) - 1 };
+            let max = if signed {
+                (1u128 << (bits - 1)) - 1
+            } else if bits == 128 {
+                u128::MAX
+            } else {
+                (1u128 << bits) - 1
+            };
             if magnitude > max {
                 return None;
             }
@@ -105,7 +111,9 @@ mod tests {
 
     #[test]
     fn everything_else_is_left_alone() {
-        for v in ["2.5", "2", "\"12\"", "0x1f", "97 'a'", "'a'", "true", "{...}", "Some(3)", "", "-", "1e5", "007", "99999999999999999999999999999999999999999999"] {
+        for v in
+            ["2.5", "2", "\"12\"", "0x1f", "97 'a'", "'a'", "true", "{...}", "Some(3)", "", "-", "1e5", "007", "99999999999999999999999999999999999999999999"]
+        {
             let ty = if v == "2" { Some("f64") } else { None };
             assert_eq!(hex_integer(v, ty), None, "{v}");
         }

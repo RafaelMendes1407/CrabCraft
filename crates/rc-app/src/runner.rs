@@ -4,7 +4,9 @@
 pub(crate) mod wasm_pack;
 
 use rc_core::{Inbox, Waker};
-use rc_dotnet::{BuildAction, BuildEvent, BuildResult, OpHandle, OutputLine, RunEvent, RunHandle, Stream, TestEvent, TestFilter, TestOutcome, TestRequest, TestResult};
+use rc_dotnet::{
+    BuildAction, BuildEvent, BuildResult, OpHandle, OutputLine, RunEvent, RunHandle, Stream, TestEvent, TestFilter, TestOutcome, TestRequest, TestResult,
+};
 use rc_kit::i18n::{tr, trf};
 use rc_term::TermSession;
 use std::collections::BTreeMap;
@@ -131,13 +133,20 @@ impl RunTab {
             match ev {
                 rc_cargo::PrepareEvent::Build(BuildEvent::Task(line)) => self.console.line(&line),
                 rc_cargo::PrepareEvent::Build(BuildEvent::Diagnostic(d)) if d.severity == rc_dotnet::Severity::Error => {
-                    self.console.note(&format!("{}({},{}): {}", d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(), d.line.unwrap_or(0), d.column.unwrap_or(0), d.message));
+                    self.console.note(&format!(
+                        "{}({},{}): {}",
+                        d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(),
+                        d.line.unwrap_or(0),
+                        d.column.unwrap_or(0),
+                        d.message
+                    ));
                 }
                 rc_cargo::PrepareEvent::Build(BuildEvent::Finished(res)) if !res.success => out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone())),
                 rc_cargo::PrepareEvent::Build(_) => {}
                 rc_cargo::PrepareEvent::Ready(plan) => {
                     p.prepare = None;
-                    let mut spec = rc_term::SpawnSpec::command(plan.program.display().to_string(), plan.args.clone(), Some(plan.working_dir.clone())).size(160, 40);
+                    let mut spec =
+                        rc_term::SpawnSpec::command(plan.program.display().to_string(), plan.args.clone(), Some(plan.working_dir.clone())).size(160, 40);
                     for (k, v) in &plan.env {
                         spec = spec.env(k, v);
                     }
@@ -243,7 +252,9 @@ pub enum RunnerOutput {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProjectExecutionError { Untrusted }
+pub enum ProjectExecutionError {
+    Untrusted,
+}
 impl std::fmt::Display for ProjectExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(tr("Trust this project before running project tools or code"))
@@ -268,7 +279,7 @@ pub struct Runner {
     pub test_failures: BTreeMap<PathBuf, BTreeMap<usize, String>>,
     waker: Waker,
     cargo: Option<rc_cargo::Cargo>,
-    cargo_unavailable:Option<String>,
+    cargo_unavailable: Option<String>,
     /// The open Rust workspace.
     pub cargo_workspace: Option<rc_cargo::CargoWorkspace>,
     /// Set from the application trust store, never from project session files.
@@ -297,17 +308,47 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(waker: Waker) -> Self {
-        Runner { external_tools: Vec::new(), macro_context: Default::default(), configs: Vec::new(), selected: 0, build: None, runs: Vec::new(), active_run: 0, tests: None, test_outcomes: BTreeMap::new(), test_failures: BTreeMap::new(), waker, cargo: None, cargo_unavailable:None, cargo_workspace: None, trusted_project: None, project_root: None, compounds: Vec::new(), test_configs: Vec::new(), temporary: Vec::new(), folders: BTreeMap::new(), attached: Vec::new(), attached_configs: Vec::new(), options: BTreeMap::new(), project_env: String::new(), nextest: false }
+        Runner {
+            external_tools: Vec::new(),
+            macro_context: Default::default(),
+            configs: Vec::new(),
+            selected: 0,
+            build: None,
+            runs: Vec::new(),
+            active_run: 0,
+            tests: None,
+            test_outcomes: BTreeMap::new(),
+            test_failures: BTreeMap::new(),
+            waker,
+            cargo: None,
+            cargo_unavailable: None,
+            cargo_workspace: None,
+            trusted_project: None,
+            project_root: None,
+            compounds: Vec::new(),
+            test_configs: Vec::new(),
+            temporary: Vec::new(),
+            folders: BTreeMap::new(),
+            attached: Vec::new(),
+            attached_configs: Vec::new(),
+            options: BTreeMap::new(),
+            project_env: String::new(),
+            nextest: false,
+        }
     }
 
     /// Builds the run configurations of a Rust workspace: its binaries, then all its tests.
     pub fn set_cargo_workspace(&mut self, workspace: rc_cargo::CargoWorkspace, remembered: Option<&str>) {
-        self.set_cargo_workspace_with_tool(workspace,rc_cargo::Cargo::locate(),remembered);
+        self.set_cargo_workspace_with_tool(workspace, rc_cargo::Cargo::locate(), remembered);
     }
-    pub fn set_cargo_workspace_with_tool(&mut self,workspace:rc_cargo::CargoWorkspace,cargo:Option<rc_cargo::Cargo>,remembered:Option<&str>){
+    pub fn set_cargo_workspace_with_tool(&mut self, workspace: rc_cargo::CargoWorkspace, cargo: Option<rc_cargo::Cargo>, remembered: Option<&str>) {
         let selected = self.selected_config().map(|c| c.name.clone());
-        self.cargo=cargo;self.cargo_unavailable=None;
-        self.configs = workspace.binaries().map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } }).collect();
+        self.cargo = cargo;
+        self.cargo_unavailable = None;
+        self.configs = workspace
+            .binaries()
+            .map(|(p, t)| RunConfig { name: t.name.clone(), kind: ConfigKind::Cargo { package: p.name.clone(), bin: t.name.clone() } })
+            .collect();
         for package in workspace.packages.iter().filter(|p| p.cdylib) {
             self.configs.push(RunConfig { name: format!("wasm-pack: {}", package.name), kind: ConfigKind::WasmPack { manifest: package.manifest.clone() } });
         }
@@ -320,8 +361,14 @@ impl Runner {
         self.selected = wanted.and_then(|r| self.configs.iter().position(|c| c.name == r)).unwrap_or(0);
     }
 
-    pub fn set_cargo_tool(&mut self, cargo: Option<rc_cargo::Cargo>) { self.cargo = cargo;self.cargo_unavailable=None; }
-    pub fn set_cargo_unavailable(&mut self,message:String){self.cargo=None;self.cargo_unavailable=Some(message);}
+    pub fn set_cargo_tool(&mut self, cargo: Option<rc_cargo::Cargo>) {
+        self.cargo = cargo;
+        self.cargo_unavailable = None;
+    }
+    pub fn set_cargo_unavailable(&mut self, message: String) {
+        self.cargo = None;
+        self.cargo_unavailable = Some(message);
+    }
 
     pub fn cargo_tool(&self) -> Result<rc_cargo::Cargo, String> {
         self.cargo()
@@ -329,7 +376,10 @@ impl Runner {
 
     fn cargo(&self) -> Result<rc_cargo::Cargo, String> {
         self.require_trust().map_err(|e| e.to_string())?;
-        self.cargo.clone().map(|c| c.with_env(self.project_env_pairs())).ok_or_else(|| self.cargo_unavailable.clone().unwrap_or_else(||tr("Cargo was not found. Install Rust with rustup.").to_string()))
+        self.cargo
+            .clone()
+            .map(|c| c.with_env(self.project_env_pairs()))
+            .ok_or_else(|| self.cargo_unavailable.clone().unwrap_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string()))
     }
 
     /// The project's environment; nothing when the session holds an invalid one.
@@ -338,7 +388,8 @@ impl Runner {
     }
 
     pub fn clear(&mut self) {
-        self.cargo=None;self.cargo_unavailable=None;
+        self.cargo = None;
+        self.cargo_unavailable = None;
         self.cargo_workspace = None;
         self.trusted_project = None;
         self.project_root = None;
@@ -363,15 +414,20 @@ impl Runner {
     /// Every project subprocess, including metadata and wrappers, requires the application
     /// trust store. Standalone user-invoked scratches have no project root.
     pub fn require_trust(&self) -> Result<(), ProjectExecutionError> {
-        if self.project_root.as_ref().or_else(|| self.cargo_workspace.as_ref().map(|w| &w.root)).is_some_and(|root| self.trusted_project.as_ref() != Some(root)) {
+        if self.project_root.as_ref().or_else(|| self.cargo_workspace.as_ref().map(|w| &w.root)).is_some_and(|root| self.trusted_project.as_ref() != Some(root))
+        {
             Err(ProjectExecutionError::Untrusted)
-        } else { Ok(()) }
+        } else {
+            Ok(())
+        }
     }
 
     // ------------------------------------------------------------------ build
 
     pub fn build(&mut self, target: &Path, action: BuildAction) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
         let title = match action {
@@ -386,20 +442,34 @@ impl Runner {
             Ok(cargo) => rc_cargo::start_build(&cargo, manifest, action, inbox.sender()),
             Err(error) => return vec![RunnerOutput::Notify(error, true)],
         };
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, command: false });
+        self.build = Some(BuildState {
+            handle: Some(handle),
+            inbox,
+            console,
+            diagnostics: Vec::new(),
+            result: None,
+            failed: None,
+            started: Instant::now(),
+            title,
+            command: false,
+        });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 
     /// Runs a Cargo command in the workspace, shown in the Build window.
     pub fn cargo_command(&mut self, args: Vec<String>) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         let Some(manifest) = self.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return Vec::new() };
         self.cargo_command_in(&manifest, args)
     }
 
     /// Runs `cargo <args>` for `manifest`, which need not be loaded yet.
     pub fn cargo_command_in(&mut self, manifest: &Path, args: Vec<String>) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         if self.build.as_ref().is_some_and(|b| b.handle.is_some()) {
             return vec![RunnerOutput::Notify(tr("Wait for the running build to finish").into(), false)];
         }
@@ -410,10 +480,22 @@ impl Runner {
         };
         let inbox = Inbox::new(self.waker.clone());
         let console = Console::new(&self.waker);
-        if !cargo.supports_cargo_args(&args){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
+        if !cargo.supports_cargo_args(&args) {
+            return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(), true)];
+        }
         let title = format!("cargo {}", args.first().map(String::as_str).unwrap_or_default());
         let handle = rc_cargo::start_command(&cargo, &manifest, args, inbox.sender());
-        self.build = Some(BuildState { handle: Some(handle), inbox, console, diagnostics: Vec::new(), result: None, failed: None, started: Instant::now(), title, command: true });
+        self.build = Some(BuildState {
+            handle: Some(handle),
+            inbox,
+            console,
+            diagnostics: Vec::new(),
+            result: None,
+            failed: None,
+            started: Instant::now(),
+            title,
+            command: true,
+        });
         vec![RunnerOutput::ShowTool(crate::toolwindow::ToolWindow::Build)]
     }
 
@@ -429,7 +511,9 @@ impl Runner {
 
     /// Starts the selected configuration (apps run in the Run window, tests in Tests).
     pub fn run_selected(&mut self) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         let Some(cfg) = self.selected_config().cloned() else {
             return vec![RunnerOutput::Notify(tr("There is nothing to run: the workspace has no executable or test projects").into(), false)];
         };
@@ -446,7 +530,8 @@ impl Runner {
                 self.run_process(cfg, plan)
             }
             ConfigKind::Compound { members } => {
-                let apps: Vec<RunConfig> = members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::Cargo { .. })).cloned()).collect();
+                let apps: Vec<RunConfig> =
+                    members.iter().filter_map(|m| self.configs.iter().find(|c| &c.name == m && matches!(c.kind, ConfigKind::Cargo { .. })).cloned()).collect();
                 if apps.is_empty() {
                     return vec![RunnerOutput::Notify(tr("The compound configuration has no applications to run").into(), true)];
                 }
@@ -525,7 +610,8 @@ impl Runner {
             return;
         }
         // Another selection with the same name (in another project) gets the next free name.
-        let name = (1..).map(|n| if n == 1 { name.clone() } else { format!("{name} ({n})") }).find(|n| !self.configs.iter().any(|c| &c.name == n)).unwrap_or(name);
+        let name =
+            (1..).map(|n| if n == 1 { name.clone() } else { format!("{name} ({n})") }).find(|n| !self.configs.iter().any(|c| &c.name == n)).unwrap_or(name);
         if self.temporary.len() >= Self::MAX_TEMPORARY {
             let oldest = self.temporary.remove(0);
             self.configs.retain(|c| *c != oldest);
@@ -646,7 +732,17 @@ impl Runner {
             Some(m) => m.clone(),
             None => self.cargo_workspace.as_ref()?.manifest.clone(),
         };
-        let mut target = rc_cargo::RunTarget { before: Vec::new(), test: None, manifest, package, bin, args: Vec::new(), env: Vec::new(), working_dir: None, options: Default::default() };
+        let mut target = rc_cargo::RunTarget {
+            before: Vec::new(),
+            test: None,
+            manifest,
+            package,
+            bin,
+            args: Vec::new(),
+            env: Vec::new(),
+            working_dir: None,
+            options: Default::default(),
+        };
         if let Some(o) = self.options.get(name) {
             // A tool that cannot start (renamed, a macro without a value) stops the run with
             // its reason.
@@ -676,7 +772,12 @@ impl Runner {
             None => self.cargo_workspace.as_ref(),
         };
         let packages = workspace.map_or(&[][..], |w| &w.packages);
-        let required = packages.iter().filter(|p| p.name == target.package).flat_map(|p| &p.targets).find(|t| t.kind == rc_cargo::TargetKind::Bin && t.name == target.bin).map_or(&[][..], |t| &t.required_features);
+        let required = packages
+            .iter()
+            .filter(|p| p.name == target.package)
+            .flat_map(|p| &p.targets)
+            .find(|t| t.kind == rc_cargo::TargetKind::Bin && t.name == target.bin)
+            .map_or(&[][..], |t| &t.required_features);
         for feature in required {
             if !target.options.features.contains(feature) {
                 target.options.features.push(feature.clone());
@@ -736,9 +837,12 @@ impl Runner {
     }
 
     fn run_wasm_pack(&mut self, config: RunConfig, manifest: &Path) -> Vec<RunnerOutput> {
-        if self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
+        if self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup) {
+            return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(), true)];
+        }
 
-        let trusted = self.cargo_workspace.as_ref().is_some_and(|w| self.trusted_project.as_ref() == Some(&w.root) && w.packages.iter().any(|p| p.manifest == manifest));
+        let trusted =
+            self.cargo_workspace.as_ref().is_some_and(|w| self.trusted_project.as_ref() == Some(&w.root) && w.packages.iter().any(|p| p.manifest == manifest));
         if !trusted {
             return vec![RunnerOutput::Notify(tr("Trust this Cargo project before running wasm-pack").into(), true)];
         }
@@ -751,13 +855,17 @@ impl Runner {
 
     /// Starts an external tool in a tab of the Run window; running it again restarts the tab.
     pub fn run_external(&mut self, tool: &str, plan: rc_dotnet::LaunchPlan) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         self.run_process(RunConfig { name: tool.to_string(), kind: ConfigKind::External { tool: tool.to_string() } }, plan)
     }
 
     /// Builds a Rust scratch file with `rustc` into a temporary folder and runs it.
     pub fn run_scratch(&mut self, file: &Path) -> Vec<RunnerOutput> {
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         let cargo = match self.cargo.clone().or_else(rc_cargo::Cargo::locate) {
             Some(c) => c.with_env(self.project_env_pairs()),
             None => return vec![RunnerOutput::Notify(tr("Cargo was not found. Install Rust with rustup.").into(), true)],
@@ -781,7 +889,10 @@ impl Runner {
 
     /// Runs a command of the IDE (`rustup update`…) in a tab of the Run window.
     pub fn run_command(&mut self, program: PathBuf, args: Vec<String>) -> Vec<RunnerOutput> {
-        let name = std::iter::once(program.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" ");
+        let name = std::iter::once(program.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default())
+            .chain(args.iter().cloned())
+            .collect::<Vec<_>>()
+            .join(" ");
         let plan = self.command_plan(program.clone(), args.clone());
         self.run_process(RunConfig { name, kind: ConfigKind::Command { program, args } }, plan)
     }
@@ -827,8 +938,12 @@ impl Runner {
     // ------------------------------------------------------------------ tests
 
     pub fn run_tests(&mut self, target: &Path, filter: Option<TestFilter>) -> Vec<RunnerOutput> {
-        if self.nextest&&self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup){return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(),true)];}
-        if let Err(error) = self.require_trust() { return vec![RunnerOutput::Notify(error.to_string(), true)]; }
+        if self.nextest && self.cargo.as_ref().is_some_and(rc_cargo::Cargo::is_criticalup) {
+            return vec![RunnerOutput::Notify(crate::criticalup_provider::unsupported(), true)];
+        }
+        if let Err(error) = self.require_trust() {
+            return vec![RunnerOutput::Notify(error.to_string(), true)];
+        }
         let target = self.cargo_workspace.as_ref().map_or(target, |workspace| workspace.manifest.as_path());
         if let Some(t) = &mut self.tests
             && let Some(h) = t.handle.take()
@@ -931,7 +1046,13 @@ impl Runner {
                 match ev {
                     RunEvent::Build(BuildEvent::Diagnostic(d)) => {
                         if d.severity == rc_dotnet::Severity::Error {
-                            r.console.note(&format!("{}({},{}): {}", d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(), d.line.unwrap_or(0), d.column.unwrap_or(0), d.message));
+                            r.console.note(&format!(
+                                "{}({},{}): {}",
+                                d.file.as_ref().map(|f| f.display().to_string()).unwrap_or_default(),
+                                d.line.unwrap_or(0),
+                                d.column.unwrap_or(0),
+                                d.message
+                            ));
                         }
                     }
                     RunEvent::Build(BuildEvent::Finished(res)) if !res.success => {
@@ -974,7 +1095,10 @@ impl Runner {
                         out.push(RunnerOutput::BuildDiagnostics(res.diagnostics.clone()));
                     }
                     TestEvent::Build(_) => {}
-                    TestEvent::ProjectStarted { project } => t.console.note(&trf("Running tests of {project}…", &[("project", &project.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default())])),
+                    TestEvent::ProjectStarted { project } => t.console.note(&trf(
+                        "Running tests of {project}…",
+                        &[("project", &project.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default())],
+                    )),
                     TestEvent::Output { line, .. } => t.console.line(&line),
                     TestEvent::Progress(p) => match p.outcome {
                         TestOutcome::Passed => t.passed += 1,

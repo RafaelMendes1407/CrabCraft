@@ -110,7 +110,8 @@ pub fn close_open_element(rope: &Rope, caret: usize, html: bool) -> Option<Strin
                 }
                 j += 1;
             }
-            if j < body.len() && body[j] == '>'
+            if j < body.len()
+                && body[j] == '>'
                 && let Some((_, name, closing)) = tag_ending_here(&body[..=j])
             {
                 let self_closing = body[j - 1] == '/';
@@ -152,7 +153,9 @@ pub fn quote_attribute(rope: &Rope, caret: usize) -> bool {
             Some(_) => {}
             None if c == '"' || c == '\'' => quote = Some(c),
             None if c == '>' => return false,
-            None if c == '<' => return text.get(i + 1).is_some_and(|c| c.is_alphabetic()) && (i == 0 || !(text[i - 1].is_alphanumeric() || text[i - 1] == '_')),
+            None if c == '<' => {
+                return text.get(i + 1).is_some_and(|c| c.is_alphabetic()) && (i == 0 || !(text[i - 1].is_alphanumeric() || text[i - 1] == '_'));
+            }
             None => {}
         }
     }

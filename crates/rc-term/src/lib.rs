@@ -17,8 +17,8 @@ pub mod capture;
 pub mod colors;
 pub mod keys;
 pub mod links;
-pub mod session;
 pub mod search;
+pub mod session;
 pub mod tabs;
 pub mod view;
 

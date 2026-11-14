@@ -88,7 +88,16 @@ pub struct Cx<'a> {
 
 impl CrateNames {
     pub fn new(waker: Waker) -> Self {
-        CrateNames { found: Inbox::new(waker.clone()), waker, answers: HashMap::new(), searching: None, local: None, local_loading: None, names: None, versions: None }
+        CrateNames {
+            found: Inbox::new(waker.clone()),
+            waker,
+            answers: HashMap::new(),
+            searching: None,
+            local: None,
+            local_loading: None,
+            names: None,
+            versions: None,
+        }
     }
 
     /// Records a crates.io search answer without the network (tests).

@@ -9,10 +9,10 @@
 //! Handshake: `initialize` → `launch`/`attach` → (wait for `initialized`) → `setBreakpoints`
 //! for every file → `setExceptionBreakpoints` → (their responses) → `configurationDone`.
 
+use crate::adapter::{AdapterCommand, Origin};
 use crate::breakpoints::{BreakpointSpec, Breakpoints, Emulation, LogPart, hit_condition_met, parse_log_message};
 use crate::client::{DapClient, DapError, Incoming, Pending, args};
 use crate::launch::{DebugOptions, DebugTarget, LaunchConfig, gdb_attach_arguments, gdb_launch_arguments};
-use crate::adapter::{AdapterCommand, Origin};
 use crate::protocol::*;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_dotnet::{BuildEvent, CancelToken, LaunchPlan};
@@ -109,7 +109,9 @@ impl Failure {
             Failure::BuildFailed(_) => ("The build failed", vec![]),
             Failure::PrepareFailed(e) => ("Cannot launch the project: {error}", vec![("error", e.clone())]),
             Failure::LaunchFailed(e) => ("The debugger could not launch the program: {error}", vec![("error", e.clone())]),
-            Failure::AttachFailed { pid, error } => ("The debugger could not attach to process {pid}: {error}", vec![("pid", pid.to_string()), ("error", error.clone())]),
+            Failure::AttachFailed { pid, error } => {
+                ("The debugger could not attach to process {pid}: {error}", vec![("pid", pid.to_string()), ("error", error.clone())])
+            }
             Failure::AdapterExited(_) => ("The debugger exited unexpectedly", vec![]),
         }
     }
@@ -230,7 +232,10 @@ pub enum DebugEvent {
     Prepared(LaunchPlan),
     StateChanged(SessionState),
     /// Program output (stdout/stderr) and debugger messages.
-    Output { category: OutputCategory, text: String },
+    Output {
+        category: OutputCategory,
+        text: String,
+    },
     /// Adapter logs (its stderr) and protocol notes.
     Log(String),
     /// Verification or bound line of breakpoints in this file changed.
@@ -239,22 +244,54 @@ pub enum DebugEvent {
     /// The program runs again; everything fetched in the stop is gone.
     Continued,
     ThreadsChanged,
-    ParallelStackLoaded { id: u64, generation: u64, thread_id: i64, result: Result<ParallelStack, String> },
-    FramesLoaded { thread_id: i64 },
-    FrameSelected { frame_id: i64 },
-    ScopesLoaded { frame_id: i64 },
-    VariablesLoaded { reference: i64 },
+    ParallelStackLoaded {
+        id: u64,
+        generation: u64,
+        thread_id: i64,
+        result: Result<ParallelStack, String>,
+    },
+    FramesLoaded {
+        thread_id: i64,
+    },
+    FrameSelected {
+        frame_id: i64,
+    },
+    ScopesLoaded {
+        frame_id: i64,
+    },
+    VariablesLoaded {
+        reference: i64,
+    },
     /// Loading children failed (the reference is cached as empty).
-    VariablesFailed { reference: i64, message: String },
+    VariablesFailed {
+        reference: i64,
+        message: String,
+    },
     WatchesUpdated,
-    Evaluated { id: u64, expression: String, context: EvalContext, result: Result<EvalValue, String> },
+    Evaluated {
+        id: u64,
+        expression: String,
+        context: EvalContext,
+        result: Result<EvalValue, String>,
+    },
     /// The answer of [`DebugSession::set_variable`] or [`DebugSession::set_expression`] with
     /// its id: the new value as the debugger prints it, or its error message.
-    VariableSet { id: u64, reference: i64, name: String, result: Result<String, String> },
+    VariableSet {
+        id: u64,
+        reference: i64,
+        name: String,
+        result: Result<String, String>,
+    },
     /// The answer of [`DebugSession::read_memory`] with its id.
-    MemoryRead { id: u64, result: Result<crate::memory::MemoryBlock, String> },
+    MemoryRead {
+        id: u64,
+        result: Result<crate::memory::MemoryBlock, String>,
+    },
     /// The answer of [`DebugSession::disassemble`] with its id: instructions in address order.
-    Disassembled { id: u64, result: Result<Vec<crate::disassembly::Instruction>, String> },
+    Disassembled {
+        id: u64,
+        result: Result<Vec<crate::disassembly::Instruction>, String>,
+    },
     /// The exception the program stopped on.
     Exception(ExceptionInfo),
     Module(ModuleEvent),
@@ -266,7 +303,10 @@ pub enum DebugEvent {
     Terminated,
     Failed(Failure),
     /// A command (step, continue, pause…) the adapter refused.
-    CommandFailed { command: String, message: String },
+    CommandFailed {
+        command: String,
+        message: String,
+    },
     /// Set Execution Point did not move the program.
     ExecutionPointFailed(GotoError),
 }
@@ -294,25 +334,76 @@ enum Purpose {
     /// `$_gdb_major`, asked before a GDB `launch`.
     GdbVersion,
     /// `gotoTargets`, then `goto` for the first target in this thread.
-    GotoTargets { thread_id: i64 },
+    GotoTargets {
+        thread_id: i64,
+    },
     /// `goto`, or GDB's jump.
     Goto,
     Launch,
     Config,
     ConfigurationDone,
-    SetBreakpoints { path: PathBuf, lines: Vec<u32> },
-    Threads { generation: u64 },
-    StackTrace { generation: u64, thread_id: i64, for_stop: bool },
-    ParallelStack { id: u64, generation: u64, thread_id: i64, limit: usize },
-    Scopes { generation: u64, frame_id: i64 },
-    Variables { generation: u64, key: VarKey, hex: bool },
-    Watch { generation: u64, id: u64, hex: bool },
-    Evaluate { id: u64, expression: String, context: EvalContext, hex: bool },
-    SetVariable { id: u64, generation: u64, reference: i64, name: String, expression: Option<String>, hex: bool },
-    ReadMemory { id: u64, requested: Option<u64>, count: usize },
-    Disassemble { id: u64 },
-    ExceptionInfo { generation: u64 },
-    LogPoint { generation: u64, index: usize, part: usize },
+    SetBreakpoints {
+        path: PathBuf,
+        lines: Vec<u32>,
+    },
+    Threads {
+        generation: u64,
+    },
+    StackTrace {
+        generation: u64,
+        thread_id: i64,
+        for_stop: bool,
+    },
+    ParallelStack {
+        id: u64,
+        generation: u64,
+        thread_id: i64,
+        limit: usize,
+    },
+    Scopes {
+        generation: u64,
+        frame_id: i64,
+    },
+    Variables {
+        generation: u64,
+        key: VarKey,
+        hex: bool,
+    },
+    Watch {
+        generation: u64,
+        id: u64,
+        hex: bool,
+    },
+    Evaluate {
+        id: u64,
+        expression: String,
+        context: EvalContext,
+        hex: bool,
+    },
+    SetVariable {
+        id: u64,
+        generation: u64,
+        reference: i64,
+        name: String,
+        expression: Option<String>,
+        hex: bool,
+    },
+    ReadMemory {
+        id: u64,
+        requested: Option<u64>,
+        count: usize,
+    },
+    Disassemble {
+        id: u64,
+    },
+    ExceptionInfo {
+        generation: u64,
+    },
+    LogPoint {
+        generation: u64,
+        index: usize,
+        part: usize,
+    },
     Command(&'static str),
     Ignore,
 }
@@ -493,8 +584,11 @@ impl DebugSession {
             }
             DebugTarget::Remote(remote) => {
                 s.remote_attach = true;
-                if s.is_gdb() { s.spawn_adapter("attach", remote.arguments()); }
-                else { s.fail(Failure::PrepareFailed("remote TCP connections require the GDB adapter".into())); }
+                if s.is_gdb() {
+                    s.spawn_adapter("attach", remote.arguments());
+                } else {
+                    s.fail(Failure::PrepareFailed("remote TCP connections require the GDB adapter".into()));
+                }
             }
         }
         s
@@ -768,7 +862,9 @@ impl DebugSession {
                 self.maybe_running();
             }
             Purpose::Threads { generation } => {
-                if generation != self.generation { return; }
+                if generation != self.generation {
+                    return;
+                }
                 if let Ok(t) = r.and_then(|v| serde_json::from_value::<ThreadsResponse>(v).map_err(|e| DapError::new(e.to_string()))) {
                     self.threads_generation = Some(generation);
                     self.threads = t.threads;
@@ -790,26 +886,45 @@ impl DebugSession {
                 }
             }
             Purpose::ParallelStack { id, generation, thread_id, limit } => {
-                if generation != self.generation || !self.state.is_stopped() { return; }
-                let result = r.and_then(|v| serde_json::from_value::<StackTraceResponse>(v).map_err(|e| DapError::new(e.to_string()))).map(|mut response| {
-                    let truncated = response.stack_frames.len() > limit || response.total_frames.is_some_and(|total| total > limit as i64) || (response.total_frames.is_none() && response.stack_frames.len() == limit);
-                    response.stack_frames.truncate(limit);
-                    for frame in &mut response.stack_frames {
-                        if frame.name.len() > 2048 { let mut end = 2048; while !frame.name.is_char_boundary(end) { end -= 1; } frame.name.truncate(end); }
-                        frame.module_id = None;
-                        frame.presentation_hint = None;
-                        if frame.instruction_pointer_reference.as_ref().is_some_and(|ip| ip.len() > 512) { frame.instruction_pointer_reference = None; }
-                        if let Some(source) = &mut frame.source { source.name = None; }
-                        if frame.source.as_ref().and_then(|source| source.path.as_ref()).is_some_and(|path| path.as_os_str().len() > 8192) { frame.source = None; }
-                    }
-                    let entry = self.frames.entry(thread_id).or_default();
-                    if entry.frames.len() < response.stack_frames.len() {
-                        entry.frames = response.stack_frames.clone();
-                        entry.total = response.total_frames;
-                        entry.complete = !truncated;
-                    }
-                    ParallelStack { frames: response.stack_frames, truncated }
-                }).map_err(|error| error.message.chars().take(2048).collect());
+                if generation != self.generation || !self.state.is_stopped() {
+                    return;
+                }
+                let result = r
+                    .and_then(|v| serde_json::from_value::<StackTraceResponse>(v).map_err(|e| DapError::new(e.to_string())))
+                    .map(|mut response| {
+                        let truncated = response.stack_frames.len() > limit
+                            || response.total_frames.is_some_and(|total| total > limit as i64)
+                            || (response.total_frames.is_none() && response.stack_frames.len() == limit);
+                        response.stack_frames.truncate(limit);
+                        for frame in &mut response.stack_frames {
+                            if frame.name.len() > 2048 {
+                                let mut end = 2048;
+                                while !frame.name.is_char_boundary(end) {
+                                    end -= 1;
+                                }
+                                frame.name.truncate(end);
+                            }
+                            frame.module_id = None;
+                            frame.presentation_hint = None;
+                            if frame.instruction_pointer_reference.as_ref().is_some_and(|ip| ip.len() > 512) {
+                                frame.instruction_pointer_reference = None;
+                            }
+                            if let Some(source) = &mut frame.source {
+                                source.name = None;
+                            }
+                            if frame.source.as_ref().and_then(|source| source.path.as_ref()).is_some_and(|path| path.as_os_str().len() > 8192) {
+                                frame.source = None;
+                            }
+                        }
+                        let entry = self.frames.entry(thread_id).or_default();
+                        if entry.frames.len() < response.stack_frames.len() {
+                            entry.frames = response.stack_frames.clone();
+                            entry.total = response.total_frames;
+                            entry.complete = !truncated;
+                        }
+                        ParallelStack { frames: response.stack_frames, truncated }
+                    })
+                    .map_err(|error| error.message.chars().take(2048).collect());
                 self.events.push(DebugEvent::ParallelStackLoaded { id, generation, thread_id, result });
             }
             Purpose::StackTrace { generation, thread_id, for_stop } => {
@@ -890,7 +1005,10 @@ impl DebugSession {
             }
             Purpose::Evaluate { id, expression, context, hex } => {
                 let client_hex = self.client_hex(hex);
-                let result = r.and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string()))).map(|v| hex_result(v, client_hex)).map_err(|e| e.message);
+                let result = r
+                    .and_then(|v| serde_json::from_value::<EvaluateResponse>(v).map_err(|e| DapError::new(e.to_string())))
+                    .map(|v| hex_result(v, client_hex))
+                    .map_err(|e| e.message);
                 self.events.push(DebugEvent::Evaluated { id, expression, context, result });
             }
             Purpose::SetVariable { id, generation, reference, name, expression, hex } => {
@@ -1007,7 +1125,11 @@ impl DebugSession {
     }
 
     fn config_answered_check(&mut self) {
-        if self.hs.configuring && self.hs.config_outstanding == 0 && !self.hs.configuration_done && !self.in_flight.iter().any(|(_, p)| matches!(p, Purpose::ConfigurationDone)) {
+        if self.hs.configuring
+            && self.hs.config_outstanding == 0
+            && !self.hs.configuration_done
+            && !self.in_flight.iter().any(|(_, p)| matches!(p, Purpose::ConfigurationDone))
+        {
             if self.capabilities.supports_configuration_done_request {
                 if let Some(c) = &self.client {
                     self.in_flight.push((c.request("configurationDone", json!({})), Purpose::ConfigurationDone));
@@ -1045,7 +1167,10 @@ impl DebugSession {
 
     fn send_exception_filters(&mut self, during_config: bool) {
         let Some(c) = &self.client else { return };
-        let filters = self.exception_filters.clone().unwrap_or_else(|| self.capabilities.exception_breakpoint_filters.iter().filter(|f| f.default_on).map(|f| f.filter.clone()).collect());
+        let filters = self
+            .exception_filters
+            .clone()
+            .unwrap_or_else(|| self.capabilities.exception_breakpoint_filters.iter().filter(|f| f.default_on).map(|f| f.filter.clone()).collect());
         let p = c.request("setExceptionBreakpoints", json!({"filters": filters}));
         if during_config {
             self.hs.config_outstanding += 1;
@@ -1197,7 +1322,11 @@ impl DebugSession {
         let thread_id = ps.thread_id.unwrap_or(0);
         let panicked = self.is_gdb() && frames.first().is_some_and(|f| f.name.contains(PANIC_FUNCTION));
         let top = if panicked { frames.iter().find(|f| is_user_code(f)).or(frames.first()) } else { frames.first() };
-        let breakpoints = if !panicked && ps.event.reason == "breakpoint" { self.breakpoints.at_stop(&ps.event.hit_breakpoint_ids, top.and_then(|f| f.path()), top.map_or(0, |f| f.line)) } else { Vec::new() };
+        let breakpoints = if !panicked && ps.event.reason == "breakpoint" {
+            self.breakpoints.at_stop(&ps.event.hit_breakpoint_ids, top.and_then(|f| f.path()), top.map_or(0, |f| f.line))
+        } else {
+            Vec::new()
+        };
         let info = StopInfo {
             thread_id,
             reason: if panicked { StopReason::Panic } else { StopReason::parse(&ps.event.reason) },
@@ -1317,11 +1446,14 @@ impl DebugSession {
                 let _ = tokio::time::timeout(SHUTDOWN_GRACE, async {
                     loop {
                         let result = client.request::<Value>("evaluate", json!({"expression": "detach", "context": "repl"})).wait().await;
-                        if result.is_ok() || client.has_exited() { break; }
+                        if result.is_ok() || client.has_exited() {
+                            break;
+                        }
                         // The pause reply precedes GDB's asynchronous stopped event.
                         tokio::time::sleep(Duration::from_millis(25)).await;
                     }
-                }).await;
+                })
+                .await;
             }
             let disconnect = if client.has_exited() { None } else { Some(client.disconnect(launched)) };
             if let Some(d) = disconnect {
@@ -1614,30 +1746,47 @@ impl DebugSession {
     }
 
     /// Whether the adapter confirmed that every thread is stopped at this stop.
-    pub fn all_threads_stopped(&self) -> bool { self.state.is_stopped() && self.all_threads_stopped }
+    pub fn all_threads_stopped(&self) -> bool {
+        self.state.is_stopped() && self.all_threads_stopped
+    }
 
     /// The thread list has been refreshed for this stop (not left over from an earlier one).
-    pub fn threads_current(&self) -> bool { self.threads_generation == Some(self.generation) }
+    pub fn threads_current(&self) -> bool {
+        self.threads_generation == Some(self.generation)
+    }
 
     /// Refreshes the thread list while stopped, replacing a stalled previous read if any.
     pub fn refresh_threads(&mut self) {
-        if !self.state.is_stopped() { return; }
-        let indices: Vec<_> = self.in_flight.iter().enumerate().filter_map(|(index, (_, purpose))| matches!(purpose, Purpose::Threads { .. }).then_some(index)).collect();
+        if !self.state.is_stopped() {
+            return;
+        }
+        let indices: Vec<_> =
+            self.in_flight.iter().enumerate().filter_map(|(index, (_, purpose))| matches!(purpose, Purpose::Threads { .. }).then_some(index)).collect();
         for index in indices.into_iter().rev() {
             let (pending, _) = self.in_flight.swap_remove(index);
-            if self.capabilities.supports_cancel_request { pending.cancel(); }
+            if self.capabilities.supports_cancel_request {
+                pending.cancel();
+            }
         }
         self.threads_generation = None;
-        if let Some(client) = &self.client { self.in_flight.push((client.request("threads", json!({})), Purpose::Threads { generation: self.generation })); }
+        if let Some(client) = &self.client {
+            self.in_flight.push((client.request("threads", json!({})), Purpose::Threads { generation: self.generation }));
+        }
     }
 
     /// Snapshot the top frames without changing the selected thread/frame. At most 64 frames
     /// and four simultaneous requests; only stopped threads may be queried.
     pub fn request_parallel_stack(&mut self, thread_id: i64, limit: usize) -> Option<u64> {
         let stopped = self.stop_info()?;
-        if !self.all_threads_stopped && stopped.thread_id != thread_id { return None; }
-        if !self.threads_current() || !self.threads.iter().any(|thread| thread.id == thread_id) { return None; }
-        if self.in_flight.iter().filter(|(_, purpose)| matches!(purpose, Purpose::ParallelStack { .. })).count() >= 4 { return None; }
+        if !self.all_threads_stopped && stopped.thread_id != thread_id {
+            return None;
+        }
+        if !self.threads_current() || !self.threads.iter().any(|thread| thread.id == thread_id) {
+            return None;
+        }
+        if self.in_flight.iter().filter(|(_, purpose)| matches!(purpose, Purpose::ParallelStack { .. })).count() >= 4 {
+            return None;
+        }
         let id = self.next_id();
         let limit = limit.clamp(1, 64);
         let client = self.client.as_ref()?;
@@ -1650,13 +1799,18 @@ impl DebugSession {
     pub fn cancel_parallel_stack(&mut self, id: u64) {
         if let Some(index) = self.in_flight.iter().position(|(_, purpose)| matches!(purpose, Purpose::ParallelStack { id: pending, .. } if *pending == id)) {
             let (pending, _) = self.in_flight.swap_remove(index);
-            if self.capabilities.supports_cancel_request { pending.cancel(); }
+            if self.capabilities.supports_cancel_request {
+                pending.cancel();
+            }
         }
     }
 
     fn cancel_parallel_stacks(&mut self) {
-        let ids: Vec<_> = self.in_flight.iter().filter_map(|(_, purpose)| if let Purpose::ParallelStack { id, .. } = purpose { Some(*id) } else { None }).collect();
-        for id in ids { self.cancel_parallel_stack(id); }
+        let ids: Vec<_> =
+            self.in_flight.iter().filter_map(|(_, purpose)| if let Purpose::ParallelStack { id, .. } = purpose { Some(*id) } else { None }).collect();
+        for id in ids {
+            self.cancel_parallel_stack(id);
+        }
     }
 
     pub fn selected_frame(&self) -> Option<&StackFrame> {
@@ -1762,7 +1916,9 @@ impl DebugSession {
                 self.in_flight.push((p, Purpose::SetVariable { id, generation: self.generation, reference, name: name.to_string(), expression, hex }));
             }
             (_, Err(why)) => self.events.push(DebugEvent::VariableSet { id, reference, name: name.to_string(), result: Err(why.into()) }),
-            (None, Ok(_)) => self.events.push(DebugEvent::VariableSet { id, reference, name: name.to_string(), result: Err("the debugger is not running".into()) }),
+            (None, Ok(_)) => {
+                self.events.push(DebugEvent::VariableSet { id, reference, name: name.to_string(), result: Err("the debugger is not running".into()) })
+            }
         }
         id
     }
@@ -1778,7 +1934,8 @@ impl DebugSession {
     /// `reference`, and any variable known by `expression` (its evaluate name, or its name for
     /// a variable of the selected frame's scopes).
     fn apply_set(&mut self, reference: i64, name: &str, expression: Option<&str>, v: &SetVariableResponse) {
-        let frame_scopes: Vec<i64> = self.selected_frame.and_then(|f| self.scopes.get(&f)).map(|sc| sc.iter().map(|s| s.variables_reference).collect()).unwrap_or_default();
+        let frame_scopes: Vec<i64> =
+            self.selected_frame.and_then(|f| self.scopes.get(&f)).map(|sc| sc.iter().map(|s| s.variables_reference).collect()).unwrap_or_default();
         for (key, vars) in &mut self.variables {
             for var in vars.iter_mut() {
                 let by_expression = expression.is_some_and(|e| match var.evaluate_name.as_deref().filter(|n| !n.is_empty()) {

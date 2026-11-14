@@ -143,8 +143,12 @@ enum State {
     /// Before the request line.
     Start,
     /// After the request line, before the blank line.
-    Headers { any_header: bool },
-    Body { first: bool },
+    Headers {
+        any_header: bool,
+    },
+    Body {
+        first: bool,
+    },
     /// Inside a multi-line `> {% … %}`.
     Script,
 }
@@ -222,27 +226,38 @@ pub fn parse_requests(text: &str) -> Vec<HttpRequest> {
 /// Everything of the file that is not supported yet, also outside requests (a file variable
 /// above the first one).
 pub fn unsupported_in(text: &str) -> Vec<Unsupported> {
-    parse_blocks(text).into_iter().flat_map(|(req, _)| {
-        let mut resolver = vars::Resolver::new(&req.variables);
-        req.unsupported.into_iter().filter(|item| match &item.kind {
-            UnsupportedKind::FileVariable(_) => false,
-            UnsupportedKind::Variable(name) => resolver.variable(name).is_err(),
-            _ => true,
-        }).collect::<Vec<_>>()
-    }).collect()
+    parse_blocks(text)
+        .into_iter()
+        .flat_map(|(req, _)| {
+            let mut resolver = vars::Resolver::new(&req.variables);
+            req.unsupported
+                .into_iter()
+                .filter(|item| match &item.kind {
+                    UnsupportedKind::FileVariable(_) => false,
+                    UnsupportedKind::Variable(name) => resolver.variable(name).is_err(),
+                    _ => true,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 /// Each block between separators, and whether it has a request line.
 fn parse_blocks(text: &str) -> Vec<(HttpRequest, bool)> {
     let lines: Vec<&str> = text.split('\n').collect();
     let roles = line_roles(lines.iter().copied());
-    let variables: std::sync::Arc<std::collections::BTreeMap<String, String>> = std::sync::Arc::new(lines.iter().zip(&roles)
-        .filter(|(_, role)| **role == LineRole::FileVariable)
-        .filter_map(|(line, _)| {
-            let name = file_variable(line)?;
-            let (_, value) = line.split_once('=')?;
-            Some((name.to_string(), value.trim().to_string()))
-        }).collect());
+    let variables: std::sync::Arc<std::collections::BTreeMap<String, String>> = std::sync::Arc::new(
+        lines
+            .iter()
+            .zip(&roles)
+            .filter(|(_, role)| **role == LineRole::FileVariable)
+            .filter_map(|(line, _)| {
+                let name = file_variable(line)?;
+                let (_, value) = line.split_once('=')?;
+                Some((name.to_string(), value.trim().to_string()))
+            })
+            .collect(),
+    );
     // Char offset of each line's start.
     let mut starts = Vec::with_capacity(lines.len());
     let mut at = 0;
@@ -357,7 +372,12 @@ fn parse_block(lines: &[&str], roles: &[LineRole], starts: &[usize], first_line:
     let handler_bytes = handler_lines.iter().fold(0usize, |total, line| total.saturating_add(line.len().saturating_add(1)));
     if handler_bytes <= 64 * 1024 {
         let handler = handler_lines.join("\n");
-        req.response_script = handler.trim().strip_prefix("> {%").and_then(|body| body.strip_suffix("%}")).filter(|body| !body.contains("%}") && !body.contains("{%" )).map(str::to_string);
+        req.response_script = handler
+            .trim()
+            .strip_prefix("> {%")
+            .and_then(|body| body.strip_suffix("%}"))
+            .filter(|body| !body.contains("%}") && !body.contains("{%"))
+            .map(str::to_string);
     }
     req.name = name;
     (req, found)
@@ -497,7 +517,10 @@ mod tests {
         let reqs = parse_requests(FILE);
         assert_eq!(reqs.len(), 3, "{reqs:#?}");
         let r = &reqs[0];
-        assert_eq!((r.name.as_deref(), r.line, r.method.as_str(), r.url.as_str(), r.version.as_deref()), (Some("List users"), 1, "GET", "https://example.test/users?page=1", Some("HTTP/1.1")));
+        assert_eq!(
+            (r.name.as_deref(), r.line, r.method.as_str(), r.url.as_str(), r.version.as_deref()),
+            (Some("List users"), 1, "GET", "https://example.test/users?page=1", Some("HTTP/1.1"))
+        );
         assert_eq!(r.headers, vec![("Accept".to_string(), "application/json".to_string())]);
         assert_eq!(r.body, "");
         let r = &reqs[1];

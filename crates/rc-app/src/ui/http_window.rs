@@ -15,7 +15,10 @@ const ROW_H: f32 = 24.0;
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let selected_running = app.http.history.get(app.http.selected).is_some_and(|e| matches!(e.outcome, Outcome::Running(_)));
-    let actions = [(ico::STOP, tr("Cancel Request"), selected_running), (ico::DELETE, tr("Clear Finished Requests"), app.http.history.iter().any(|e| !matches!(e.outcome, Outcome::Running(_))))];
+    let actions = [
+        (ico::STOP, tr("Cancel Request"), selected_running),
+        (ico::DELETE, tr("Clear Finished Requests"), app.http.history.iter().any(|e| !matches!(e.outcome, Outcome::Running(_)))),
+    ];
     match header(ui, ToolWindow::Http.title(), &actions) {
         Some(0) => app.http.cancel(app.http.selected),
         Some(1) => {
@@ -131,12 +134,25 @@ fn details(ui: &mut Ui, e: &Exchange, show_headers: &mut bool) -> Option<(std::p
             ui.horizontal(|ui| {
                 let status = format!("{} {}", response.status, response.reason);
                 ui.label(RichText::new(status).font(theme::bold(13.0)).color(status_color(response.status, &p)));
-                let ms = |d: std::time::Duration| if d.as_millis() < 10 { format!("{:.1} ms", d.as_secs_f64() * 1000.0) } else { format!("{} ms", d.as_millis()) };
-                let info = trf("{time} (headers after {headers}) · {size} · {version}", &[("time", &ms(response.elapsed)), ("headers", &ms(response.to_headers)), ("size", &size_text(response.body.len())), ("version", &response.version)]);
+                let ms =
+                    |d: std::time::Duration| if d.as_millis() < 10 { format!("{:.1} ms", d.as_secs_f64() * 1000.0) } else { format!("{} ms", d.as_millis()) };
+                let info = trf(
+                    "{time} (headers after {headers}) · {size} · {version}",
+                    &[
+                        ("time", &ms(response.elapsed)),
+                        ("headers", &ms(response.to_headers)),
+                        ("size", &size_text(response.body.len())),
+                        ("version", &response.version),
+                    ],
+                );
                 ui.label(RichText::new(info).size(12.5).color(p.muted));
             });
             if response.truncated {
-                ui.label(RichText::new(trf("The body is larger than {size}; only the start was read.", &[("size", &size_text(response.body.len()))])).size(12.5).color(p.warn));
+                ui.label(
+                    RichText::new(trf("The body is larger than {size}; only the start was read.", &[("size", &size_text(response.body.len()))]))
+                        .size(12.5)
+                        .color(p.warn),
+                );
             }
             ui.horizontal(|ui| {
                 if theme::tab(ui, !*show_headers, None, tr("Body"), false).0.clicked() {

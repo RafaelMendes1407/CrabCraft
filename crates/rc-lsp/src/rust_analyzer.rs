@@ -162,9 +162,8 @@ fn parse_runnable(item: &Value) -> Option<Runnable> {
     let range = location.get("targetSelectionRange").or_else(|| location.get("targetRange"))?;
     let line = usize::try_from(range.pointer("/start/line")?.as_u64()?).ok()?;
     let args = item.get("args")?;
-    let strings = |key: &str| -> Vec<&str> {
-        args.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default()
-    };
+    let strings =
+        |key: &str| -> Vec<&str> { args.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default() };
     let cargo = strings("cargoArgs");
     let executable = strings("executableArgs");
     let kind = match *cargo.first()? {
@@ -193,7 +192,10 @@ mod tests {
 
     #[test]
     fn benchmarks_keep_their_whole_command() {
-        let list = parse_runnables(&json!([entry(1, &["bench", "--package", "p", "--bench", "b"], &[]), entry(2, &["bench", "--package", "p"], &["fast", "--exact"])]));
+        let list = parse_runnables(&json!([
+            entry(1, &["bench", "--package", "p", "--bench", "b"], &[]),
+            entry(2, &["bench", "--package", "p"], &["fast", "--exact"])
+        ]));
         assert_eq!(list[0].kind, RunnableKind::Bench(["bench", "--package", "p", "--bench", "b"].map(String::from).to_vec()));
         assert_eq!(list[1].kind, RunnableKind::Bench(["bench", "--package", "p", "--", "fast", "--exact"].map(String::from).to_vec()));
     }
@@ -216,11 +218,10 @@ mod tests {
         ]);
         let found = parse_runnables(&reply);
         let kinds: Vec<_> = found.iter().map(|r| (r.line, r.kind.clone())).collect();
-        assert_eq!(kinds, vec![
-            (1, RunnableKind::Binary("demo".into())),
-            (2, RunnableKind::Test("tests::works".into())),
-            (3, RunnableKind::Module("tests".into())),
-        ]);
+        assert_eq!(
+            kinds,
+            vec![(1, RunnableKind::Binary("demo".into())), (2, RunnableKind::Test("tests::works".into())), (3, RunnableKind::Module("tests".into())),]
+        );
         assert_eq!(found[1].cargo_args, ["--package", "demo", "--lib"]);
     }
 
@@ -243,7 +244,10 @@ mod tests {
 
     #[test]
     fn the_configuration_answers_every_section() {
-        assert_eq!(configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), &RaSettings::default()).as_array().map(Vec::len), Some(2));
+        assert_eq!(
+            configuration_reply(&json!({ "items": [{ "section": "a" }, { "section": "b" }] }), &RaSettings::default()).as_array().map(Vec::len),
+            Some(2)
+        );
         assert_eq!(configuration_reply(&json!({}), &RaSettings::default()).as_array().map(Vec::len), Some(0));
     }
 
@@ -255,12 +259,18 @@ mod tests {
 
     #[test]
     fn excluded_paths_are_the_files_exclude_setting() {
-        assert_eq!(config(&RaSettings { exclude: vec!["gen".into(), "src/old.rs".into()], ..Default::default() })["files"]["exclude"], json!(["gen", "src/old.rs"]));
+        assert_eq!(
+            config(&RaSettings { exclude: vec!["gen".into(), "src/old.rs".into()], ..Default::default() })["files"]["exclude"],
+            json!(["gen", "src/old.rs"])
+        );
         assert_eq!(config(&RaSettings::default())["files"]["exclude"], json!([]));
         assert!(config(&RaSettings::default()).get("linkedProjects").is_none(), "the server finds the projects itself");
         let excluded = config(&RaSettings { autoimport_exclude: vec!["std::sync::atomic::Ordering".into()], ..Default::default() });
         assert_eq!(excluded["completion"]["autoimport"]["exclude"], json!([{ "path": "std::sync::atomic::Ordering", "type": "always" }]));
-        assert_eq!(config(&RaSettings { linked: vec!["/w/Cargo.toml".into(), "/w/tools/x/Cargo.toml".into()], ..Default::default() })["linkedProjects"], json!(["/w/Cargo.toml", "/w/tools/x/Cargo.toml"]));
+        assert_eq!(
+            config(&RaSettings { linked: vec!["/w/Cargo.toml".into(), "/w/tools/x/Cargo.toml".into()], ..Default::default() })["linkedProjects"],
+            json!(["/w/Cargo.toml", "/w/tools/x/Cargo.toml"])
+        );
     }
 
     #[test]
@@ -306,5 +316,4 @@ mod tests {
         assert_eq!(isolated["procMacro"]["enable"], json!(false));
         assert_eq!(isolated["completion"]["autoimport"]["enable"], json!(false));
     }
-
 }

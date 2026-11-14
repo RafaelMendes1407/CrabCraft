@@ -58,7 +58,14 @@ fn button(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow, at: egui::Pos2) {
             }
         }
         ui.separator();
-        if theme::menu_item(ui, Some(if app.dock.is_open(tw) { ico::HIDE } else { ico::SHOW }), if app.dock.is_open(tw) { tr("Hide") } else { tr("Show") }, false).clicked() {
+        if theme::menu_item(
+            ui,
+            Some(if app.dock.is_open(tw) { ico::HIDE } else { ico::SHOW }),
+            if app.dock.is_open(tw) { tr("Hide") } else { tr("Show") },
+            false,
+        )
+        .clicked()
+        {
             app.toggle_tool(tw);
             ui.close();
         }

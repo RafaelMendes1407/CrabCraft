@@ -87,7 +87,8 @@ mod tests {
         files.insert(open.clone(), vec![edit(0, 7, 10, "new")]);
         files.insert(dir.path().join("missing.rs"), vec![edit(0, 0, 1, "x")]);
         let list = changes_of(files, &[(open.clone(), Rope::from_str("pub fn old() {}\n"))]);
-        let shown: Vec<(String, usize, &str, &str)> = list.iter().map(|c| (c.path.file_name().unwrap().to_string_lossy().into_owned(), c.line, c.before.as_str(), c.after.as_str())).collect();
+        let shown: Vec<(String, usize, &str, &str)> =
+            list.iter().map(|c| (c.path.file_name().unwrap().to_string_lossy().into_owned(), c.line, c.before.as_str(), c.after.as_str())).collect();
         assert_eq!(
             shown,
             [

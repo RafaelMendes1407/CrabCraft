@@ -27,15 +27,31 @@ pub enum ServerState {
 #[derive(Clone, Debug)]
 pub enum LspEvent {
     StateChanged(ServerState),
-    Diagnostics { path: PathBuf, version: Option<i32>, diagnostics: Vec<Diagnostic> },
+    Diagnostics {
+        path: PathBuf,
+        version: Option<i32>,
+        diagnostics: Vec<Diagnostic>,
+    },
     /// A background task's progress (title, message, percentage); `None` when it ended.
-    Progress { token: String, title: String, message: Option<String>, percentage: Option<u32>, done: bool },
+    Progress {
+        token: String,
+        title: String,
+        message: Option<String>,
+        percentage: Option<u32>,
+        done: bool,
+    },
     /// `workspace/applyEdit`: apply it and answer with [`LanguageSession::reply`].
-    ApplyEdit { id: Value, edit: lsp_types::WorkspaceEdit },
+    ApplyEdit {
+        id: Value,
+        edit: lsp_types::WorkspaceEdit,
+    },
     /// The server asked the client to refresh semantic tokens / inlay hints / diagnostics.
     Refresh(&'static str),
     Log(String),
-    ShowMessage { error: bool, text: String },
+    ShowMessage {
+        error: bool,
+        text: String,
+    },
 }
 
 pub struct LanguageSession {
@@ -59,9 +75,13 @@ pub struct LanguageSession {
 
 fn default_reply(method: &str) -> Option<Value> {
     match method {
-        "client/registerCapability" | "client/unregisterCapability" | "window/workDoneProgress/create"
-        | "workspace/semanticTokens/refresh" | "workspace/inlayHint/refresh"
-        | "workspace/diagnostic/refresh" | "workspace/codeLens/refresh"
+        "client/registerCapability"
+        | "client/unregisterCapability"
+        | "window/workDoneProgress/create"
+        | "workspace/semanticTokens/refresh"
+        | "workspace/inlayHint/refresh"
+        | "workspace/diagnostic/refresh"
+        | "workspace/codeLens/refresh"
         | "window/showMessageRequest" => Some(Value::Null),
         _ => None,
     }
@@ -93,10 +113,26 @@ impl LanguageSession {
     }
 
     pub fn start_web(settings: crate::web::Settings, root: &Path, waker: Waker) -> std::io::Result<Self> {
-        let inbox=Inbox::new(waker);let _rt=rc_core::Runtime::handle().enter();
-        let client=crate::web::start(&settings,root,inbox.sender())?;
-        let init=crate::web::initialize(&client,root,&settings);
-        Ok(Self{client,inbox,state:ServerState::Starting,capabilities:None,docs:OpenDocs::default(),semantic_legend:Vec::new(),init:Some(init),root:root.to_path_buf(),progress:HashMap::new(),started:Instant::now(),stderr:Vec::new(),rust:false,web:Some(settings),ra:Default::default()})
+        let inbox = Inbox::new(waker);
+        let _rt = rc_core::Runtime::handle().enter();
+        let client = crate::web::start(&settings, root, inbox.sender())?;
+        let init = crate::web::initialize(&client, root, &settings);
+        Ok(Self {
+            client,
+            inbox,
+            state: ServerState::Starting,
+            capabilities: None,
+            docs: OpenDocs::default(),
+            semantic_legend: Vec::new(),
+            init: Some(init),
+            root: root.to_path_buf(),
+            progress: HashMap::new(),
+            started: Instant::now(),
+            stderr: Vec::new(),
+            rust: false,
+            web: Some(settings),
+            ra: Default::default(),
+        })
     }
 
     pub fn is_ready(&self) -> bool {
@@ -126,7 +162,7 @@ impl LanguageSession {
                     }
                     self.capabilities = Some(res.capabilities);
                     self.client.notify_raw("initialized", json!({}));
-                    self.set_state(if self.web.is_some(){ServerState::Ready}else{ServerState::LoadingProjects}, &mut events);
+                    self.set_state(if self.web.is_some() { ServerState::Ready } else { ServerState::LoadingProjects }, &mut events);
                 }
                 Err(e) => self.set_state(ServerState::Failed(e.to_string()), &mut events),
             }
@@ -135,7 +171,7 @@ impl LanguageSession {
             match msg {
                 Incoming::Request { id, method, params } => {
                     if self.web.is_some() && method == "workspace/configuration" {
-                        self.client.reply(id,Ok(crate::web::configuration(&params)));
+                        self.client.reply(id, Ok(crate::web::configuration(&params)));
                     } else if self.rust && method == "workspace/configuration" {
                         self.client.reply(id, Ok(crate::rust_analyzer::configuration_reply(&params, &self.ra)));
                     } else if let Some(answer) = default_reply(&method) {
@@ -167,7 +203,11 @@ impl LanguageSession {
                 Incoming::Exited(code) => {
                     if !matches!(self.state, ServerState::Stopped) {
                         let tail = self.stderr.iter().rev().take(3).rev().cloned().collect::<Vec<_>>().join("\n");
-                        let why = format!("exit code {}{}", code.map_or_else(|| "?".to_string(), |c| c.to_string()), if tail.is_empty() { String::new() } else { format!(": {tail}") });
+                        let why = format!(
+                            "exit code {}{}",
+                            code.map_or_else(|| "?".to_string(), |c| c.to_string()),
+                            if tail.is_empty() { String::new() } else { format!(": {tail}") }
+                        );
                         self.set_state(ServerState::Failed(why), &mut events);
                     }
                 }

@@ -68,7 +68,8 @@ impl Repository {
     /// the rebase in progress.
     pub async fn rebase(&self, upstream: &str, autostash: bool, cancel: Option<&CancelToken>, progress: Option<ProgressSink>) -> Result<String> {
         self.no_operation().await?;
-        let out = self.cmd().arg("rebase").args(autostash.then_some("--autostash")).args(["--end-of-options", upstream]).cancel(cancel).streamed(progress).await?;
+        let out =
+            self.cmd().arg("rebase").args(autostash.then_some("--autostash")).args(["--end-of-options", upstream]).cancel(cancel).streamed(progress).await?;
         Ok(rebase_report(&out))
     }
 
@@ -172,7 +173,11 @@ pub fn read_operation(git_dir: &Path, state: RepoState) -> Operation {
         RepoState::Reverting => op.target = hash_in(&git_dir.join("REVERT_HEAD")),
         RepoState::Rebasing => {
             // The merge backend keeps `rebase-merge/`, the apply backend `rebase-apply/`.
-            let (dir, step, total) = if git_dir.join("rebase-merge").is_dir() { (git_dir.join("rebase-merge"), "msgnum", "end") } else { (git_dir.join("rebase-apply"), "next", "last") };
+            let (dir, step, total) = if git_dir.join("rebase-merge").is_dir() {
+                (git_dir.join("rebase-merge"), "msgnum", "end")
+            } else {
+                (git_dir.join("rebase-apply"), "next", "last")
+            };
             op.branch = small_file(&dir.join("head-name")).map(|h| h.strip_prefix("refs/heads/").unwrap_or(&h).to_string()).filter(|h| h != "detached HEAD");
             op.target = hash_in(&dir.join("onto"));
             op.commit = hash_in(&git_dir.join("REBASE_HEAD"));

@@ -90,17 +90,32 @@ pub enum EditorEvent {
     Typed(char),
     CaretMoved,
     /// Click in the breakpoint area of the gutter (0-based line).
-    GutterClicked { line: usize },
+    GutterClicked {
+        line: usize,
+    },
     /// Right-click on a line number (0-based line).
-    GutterSecondaryClicked { line: usize, screen: egui::Pos2 },
+    GutterSecondaryClicked {
+        line: usize,
+        screen: egui::Pos2,
+    },
     /// Right-click on an icon of the gutter's icon column.
-    GutterIconSecondaryClicked { line: usize, icon: GutterIcon, screen: egui::Pos2 },
+    GutterIconSecondaryClicked {
+        line: usize,
+        icon: GutterIcon,
+        screen: egui::Pos2,
+    },
     /// Click on an icon of the gutter's icon column.
-    GutterIconClicked { line: usize, icon: GutterIcon },
+    GutterIconClicked {
+        line: usize,
+        icon: GutterIcon,
+    },
     /// ⌘/Ctrl+click on a char offset.
     NavigateAt(usize),
     /// The mouse rests over a char offset (after the hover delay).
-    HoverAt { pos: usize, screen: egui::Pos2 },
+    HoverAt {
+        pos: usize,
+        screen: egui::Pos2,
+    },
     /// The mouse left the hovered word.
     HoverEnd,
     /// The editor gained keyboard focus.
@@ -611,13 +626,8 @@ impl EditorState {
             let n = self.buffer.len_lines();
             let mut hidden_until: Option<usize> = None;
             let mut rows = Vec::with_capacity(n);
-            let folds: BTreeMap<usize, usize> = self
-                .syntax
-                .folds()
-                .iter()
-                .filter(|f| self.folded.contains(&f.start_line))
-                .map(|f| (f.start_line, self.fold_end(f.end_line, f.kind)))
-                .collect();
+            let folds: BTreeMap<usize, usize> =
+                self.syntax.folds().iter().filter(|f| self.folded.contains(&f.start_line)).map(|f| (f.start_line, self.fold_end(f.end_line, f.kind))).collect();
             for line in 0..n {
                 if let Some(h) = hidden_until {
                     if line <= h {
@@ -658,10 +668,7 @@ impl EditorState {
 
     /// Worst diagnostic covering `pos`.
     pub fn diagnostic_at(&self, pos: usize) -> Option<&Diagnostic> {
-        self.diagnostics
-            .iter()
-            .filter(|d| d.start <= pos && pos <= d.end.max(d.start + 1) && d.severity != Severity::Hint)
-            .min_by_key(|d| d.severity)
+        self.diagnostics.iter().filter(|d| d.start <= pos && pos <= d.end.max(d.start + 1) && d.severity != Severity::Hint).min_by_key(|d| d.severity)
     }
 
     /// Next diagnostic (errors first, like F2) after/before the caret.
@@ -701,9 +708,7 @@ impl EditorState {
     /// the visible lines.
     pub(crate) fn spans_of_line(&self, line: usize) -> Vec<Span> {
         let rope = self.buffer.rope();
-        let mut spans = self.syntax.highlight(rope,line,1)
-        .pop()
-        .unwrap_or_default();
+        let mut spans = self.syntax.highlight(rope, line, 1).pop().unwrap_or_default();
         if let Some(sem) = self.semantic.get(line).filter(|s| !s.is_empty()) {
             spans = merge_spans(&spans, sem);
         }
@@ -735,17 +740,14 @@ impl EditorState {
     /// the tree or the semantic tokens change.
     pub(crate) fn line_spans(&mut self, first: usize, count: usize) -> &[Vec<Span>] {
         let generation = self.syntax.generation();
-        let valid = self
-            .hl_cache
-            .as_ref()
-            .is_some_and(|c| c.generation == generation && c.first <= first && first + count <= c.first + c.lines.len());
+        let valid = self.hl_cache.as_ref().is_some_and(|c| c.generation == generation && c.first <= first && first + count <= c.first + c.lines.len());
         if !valid {
             // Highlight a margin around the viewport so small scrolls hit the cache.
             let margin = count / 2;
             let start = first.saturating_sub(margin);
             let total = (count + 2 * margin).min(self.buffer.len_lines() - start);
             let rope = self.buffer.rope();
-            let mut lines = self.syntax.highlight(rope,start,total);
+            let mut lines = self.syntax.highlight(rope, start, total);
             for (i, spans) in lines.iter_mut().enumerate() {
                 if let Some(sem) = self.semantic.get(start + i)
                     && !sem.is_empty()
@@ -765,16 +767,20 @@ impl EditorState {
 fn merge_spans(syntax: &[Span], semantic: &[Span]) -> Vec<Span> {
     // A language server can classify the enclosing Rust string as one token. Preserve
     // locally injected SQL regions while retaining semantics everywhere outside them.
-    let mut filtered=Vec::new();
+    let mut filtered = Vec::new();
     for token in semantic {
-        let mut start=token.start;
-        for protected in syntax.iter().filter(|span|rc_syntax::sql::is_injected(span.hl)&&span.end>token.start&&span.start<token.end) {
-            if start<protected.start {filtered.push(Span{start,end:protected.start.min(token.end),hl:token.hl});}
-            start=start.max(protected.end);
+        let mut start = token.start;
+        for protected in syntax.iter().filter(|span| rc_syntax::sql::is_injected(span.hl) && span.end > token.start && span.start < token.end) {
+            if start < protected.start {
+                filtered.push(Span { start, end: protected.start.min(token.end), hl: token.hl });
+            }
+            start = start.max(protected.end);
         }
-        if start<token.end {filtered.push(Span{start,end:token.end,hl:token.hl});}
+        if start < token.end {
+            filtered.push(Span { start, end: token.end, hl: token.hl });
+        }
     }
-    let semantic=filtered.as_slice();
+    let semantic = filtered.as_slice();
     let mut out: Vec<Span> = Vec::new();
     for s in syntax {
         let mut start = s.start;
@@ -865,13 +871,14 @@ mod sql_injection_colors {
     use super::*;
     #[test]
     fn whole_string_semantic_tokens_keep_injected_sql_and_rust_escape_colors() {
-        let source="// language=SQL\nconst Q: &str = \"SELECT \\\"name\\\" FROM people\";\n";
-        let mut editor=EditorState::new(1,Some(std::path::PathBuf::from("main.rs")),source);editor.parse_blocking();
-        let length=editor.buffer.rope().line(1).len_chars();
-        editor.set_semantic(vec![Vec::new(),vec![Span{start:0,end:length,hl:Hl::String}]]);
-        let spans=&editor.line_spans(1,1)[0];
-        assert!(spans.iter().any(|span|span.hl==Hl::SqlKeyword));
-        assert!(spans.iter().any(|span|span.hl==Hl::SqlEscape));
-        assert!(spans.iter().any(|span|span.hl==Hl::String&&span.start==0));
+        let source = "// language=SQL\nconst Q: &str = \"SELECT \\\"name\\\" FROM people\";\n";
+        let mut editor = EditorState::new(1, Some(std::path::PathBuf::from("main.rs")), source);
+        editor.parse_blocking();
+        let length = editor.buffer.rope().line(1).len_chars();
+        editor.set_semantic(vec![Vec::new(), vec![Span { start: 0, end: length, hl: Hl::String }]]);
+        let spans = &editor.line_spans(1, 1)[0];
+        assert!(spans.iter().any(|span| span.hl == Hl::SqlKeyword));
+        assert!(spans.iter().any(|span| span.hl == Hl::SqlEscape));
+        assert!(spans.iter().any(|span| span.hl == Hl::String && span.start == 0));
     }
 }

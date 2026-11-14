@@ -4,7 +4,22 @@ use rc_kit::i18n::{tr, trf};
 use std::path::{Path, PathBuf};
 type Error = rc_cargo::criticalup::Error;
 fn message(error: &Error) -> String {
-    match error{Error::Trust=>tr("Trust this project before running project tools or code").into(),Error::Path=>tr("Choose the CriticalUp manager executable and a regular workspace-root criticalup.toml; rustup and hardlinked tool proxies are unsupported").into(),Error::Manifest=>tr("Unsupported criticalup.toml: require manifest-version 1, one Ferrocene product and Cargo/rustc packages").into(),Error::Version=>tr("CriticalUp version 1.4 or newer is required for strict toolchain execution").into(),Error::Io=>tr("Could not inspect the CriticalUp manifest or local installation").into(),Error::Limit=>tr("CriticalUp manifest, output or time limit exceeded").into(),Error::Cancelled=>tr("CriticalUp selection cancelled; choose a provider explicitly before running Cargo").into(),Error::ToolMismatch=>tr("CriticalUp did not resolve matching installed Cargo and rustc binaries; rustup fallback is refused").into(),Error::Manager{code,message}=>trf("CriticalUp failed ({code}): {message}",&[("code",&code.map_or_else(||"?".into(),|code|code.to_string())),("message",message)])}
+    match error {
+        Error::Trust => tr("Trust this project before running project tools or code").into(),
+        Error::Path => {
+            tr("Choose the CriticalUp manager executable and a regular workspace-root criticalup.toml; rustup and hardlinked tool proxies are unsupported")
+                .into()
+        }
+        Error::Manifest => tr("Unsupported criticalup.toml: require manifest-version 1, one Ferrocene product and Cargo/rustc packages").into(),
+        Error::Version => tr("CriticalUp version 1.4 or newer is required for strict toolchain execution").into(),
+        Error::Io => tr("Could not inspect the CriticalUp manifest or local installation").into(),
+        Error::Limit => tr("CriticalUp manifest, output or time limit exceeded").into(),
+        Error::Cancelled => tr("CriticalUp selection cancelled; choose a provider explicitly before running Cargo").into(),
+        Error::ToolMismatch => tr("CriticalUp did not resolve matching installed Cargo and rustc binaries; rustup fallback is refused").into(),
+        Error::Manager { code, message } => {
+            trf("CriticalUp failed ({code}): {message}", &[("code", &code.map_or_else(|| "?".into(), |code| code.to_string())), ("message", message)])
+        }
+    }
 }
 #[derive(Clone)]
 pub enum Choice {
@@ -13,7 +28,14 @@ pub enum Choice {
 }
 impl Choice {
     pub fn resolve(&self, env: Vec<(String, String)>) -> Result<rc_cargo::Cargo, String> {
-        match self{Self::Default=>rc_cargo::Cargo::locate().ok_or_else(||tr("Cargo was not found. Install Rust with rustup.").to_string()),Self::Criticalup(Some(cargo))=>Ok(cargo.clone()),Self::Criticalup(None)=>Err(tr("CriticalUp is selected but not ready; select an installed toolchain or explicitly return to Rustup / PATH").into())}.map(|cargo|cargo.with_env(env))
+        match self {
+            Self::Default => rc_cargo::Cargo::locate().ok_or_else(|| tr("Cargo was not found. Install Rust with rustup.").to_string()),
+            Self::Criticalup(Some(cargo)) => Ok(cargo.clone()),
+            Self::Criticalup(None) => {
+                Err(tr("CriticalUp is selected but not ready; select an installed toolchain or explicitly return to Rustup / PATH").into())
+            }
+        }
+        .map(|cargo| cargo.with_env(env))
     }
 }
 #[derive(Clone, Copy)]
@@ -53,21 +75,14 @@ impl Provider {
         }
     }
     pub fn choice(&self) -> Choice {
-        if self.selected {
-            Choice::Criticalup(self.cargo.clone())
-        } else {
-            Choice::Default
-        }
+        if self.selected { Choice::Criticalup(self.cargo.clone()) } else { Choice::Default }
     }
     pub fn label(&self) -> String {
         if self.selected {
             self.cargo
                 .as_ref()
                 .and_then(rc_cargo::Cargo::criticalup_release)
-                .map_or_else(
-                    || tr("CriticalUp unavailable").to_string(),
-                    |release| format!("CriticalUp: {release}"),
-                )
+                .map_or_else(|| tr("CriticalUp unavailable").to_string(), |release| format!("CriticalUp: {release}"))
         } else {
             tr("Rustup / PATH").into()
         }
@@ -82,10 +97,7 @@ impl Provider {
         self.error = None;
         let out = self.inbox.sender();
         rc_core::Runtime::spawn(async move {
-            let result =
-                tokio::task::spawn_blocking(move || rc_cargo::criticalup::inspect(&root, &stop))
-                    .await
-                    .unwrap_or(Err(Error::Io));
+            let result = tokio::task::spawn_blocking(move || rc_cargo::criticalup::inspect(&root, &stop)).await.unwrap_or(Err(Error::Io));
             out.send(Event(epoch, EventKind::Inspected(result)));
         });
     }
@@ -104,12 +116,7 @@ impl Provider {
         self.stop = Some(stop.clone());
         let out = self.inbox.sender();
         rc_core::Runtime::spawn(async move {
-            out.send(Event(
-                epoch,
-                EventKind::Activated(
-                    rc_cargo::criticalup::activate(program, snapshot, trusted, stop).await,
-                ),
-            ));
+            out.send(Event(epoch, EventKind::Activated(rc_cargo::criticalup::activate(program, snapshot, trusted, stop).await)));
         });
     }
     pub fn poll(&mut self, trusted: bool) -> Vec<Change> {
@@ -136,9 +143,7 @@ impl Provider {
                     self.error = Some(message(&Error::Trust));
                     changes.push(Change::Blocked);
                 }
-                EventKind::Inspected(Err(error)) | EventKind::Activated(Err(error)) => {
-                    self.error = Some(message(&error))
-                }
+                EventKind::Inspected(Err(error)) | EventKind::Activated(Err(error)) => self.error = Some(message(&error)),
             }
         }
         changes
@@ -165,14 +170,8 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     if crate::ui::toolwindows::header(ui, tr("Rust Toolchain Provider")) {
         app.toggle_tool(crate::toolwindow::ToolWindow::RustProvider);
     }
-    let root = app
-        .workspace
-        .as_ref()
-        .filter(|w| w.ws.cargo_manifest().is_some())
-        .map(|w| w.ws.root.clone());
-    let trusted = root
-        .as_ref()
-        .is_some_and(|root| app.settings.trusted_projects.contains(root));
+    let root = app.workspace.as_ref().filter(|w| w.ws.cargo_manifest().is_some()).map(|w| w.ws.root.clone());
+    let trusted = root.as_ref().is_some_and(|root| app.settings.trusted_projects.contains(root));
     for change in app.criticalup_provider.show(ui, root, trusted) {
         app.change_cargo_provider(change);
     }
@@ -191,41 +190,17 @@ mod tests {
     fn fixture(root: &Path, missing: bool, gate: bool) -> PathBuf {
         use std::os::unix::fs::PermissionsExt;
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"criticalup_native_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("src/main.rs"),
-            "fn main(){std::fs::write(\"program-ran\",\"yes\").unwrap();println!(\"42\");}",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("build.rs"),
-            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"criticalup_native_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n").unwrap();
+        std::fs::write(root.join("src/main.rs"), "fn main(){std::fs::write(\"program-ran\",\"yes\").unwrap();println!(\"42\");}").unwrap();
+        std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         std::fs::write(root.join("criticalup.toml"),"manifest-version = 1\n[products.ferrocene]\nrelease=\"fixture-1\"\npackages=[\"cargo-${rustc-host}\",\"rustc-${rustc-host}\",\"rustfmt-${rustc-host}\"]\n").unwrap();
-        let rustup = rc_cargo::Cargo::locate()
-            .unwrap()
-            .path()
-            .with_file_name("rustup");
+        let rustup = rc_cargo::Cargo::locate().unwrap().path().with_file_name("rustup");
         let mut tools = std::collections::BTreeMap::new();
         for name in ["cargo", "rustc", "rustfmt", "rustdoc"] {
-            let output = std::process::Command::new(&rustup)
-                .args(["which", name])
-                .current_dir(std::env::temp_dir())
-                .env("RUSTUP_AUTO_INSTALL", "0")
-                .output()
-                .unwrap();
+            let output =
+                std::process::Command::new(&rustup).args(["which", name]).current_dir(std::env::temp_dir()).env("RUSTUP_AUTO_INSTALL", "0").output().unwrap();
             if output.status.success() {
-                tools.insert(
-                    name,
-                    PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
-                        .canonicalize()
-                        .unwrap(),
-                );
+                tools.insert(name, PathBuf::from(String::from_utf8(output.stdout).unwrap().trim()).canonicalize().unwrap());
             }
         }
         let program = root.join("criticalup");
@@ -261,24 +236,29 @@ else:sys.exit(6)
     }
     #[cfg(unix)]
     #[track_caller]
-    fn wait(
-        h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>,
-        test: impl Fn(&crate::app::CrabCraftApp) -> bool,
-    ) {
+    fn wait(h: &mut egui_kittest::Harness<'_, crate::app::CrabCraftApp>, test: impl Fn(&crate::app::CrabCraftApp) -> bool) {
         let start = std::time::Instant::now();
         while !test(h.state()) && start.elapsed() < std::time::Duration::from_secs(20) {
             h.run_steps(2);
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        assert!(test(h.state()), "provider={:?}; selected={}; workspace={}; saves={}; pending_action={}; notices={:?}; sync={:?}", h.state().criticalup_provider.error, h.state().criticalup_provider.selected, h.state().runner.cargo_workspace.is_some(), h.state().disk_save.saves.busy(), h.state().disk_save.continuation.is_some(), h.state().notices.iter().map(|notice| &notice.text).collect::<Vec<_>>(), h.state().sync_log.entries.iter().map(|entry| &entry.log).collect::<Vec<_>>());
+        assert!(
+            test(h.state()),
+            "provider={:?}; selected={}; workspace={}; saves={}; pending_action={}; notices={:?}; sync={:?}",
+            h.state().criticalup_provider.error,
+            h.state().criticalup_provider.selected,
+            h.state().runner.cargo_workspace.is_some(),
+            h.state().disk_save.saves.busy(),
+            h.state().disk_save.continuation.is_some(),
+            h.state().notices.iter().map(|notice| &notice.text).collect::<Vec<_>>(),
+            h.state().sync_log.entries.iter().map(|entry| &entry.log).collect::<Vec<_>>()
+        );
     }
     #[cfg(unix)]
     #[test]
     fn native_provider_blocks_pending_then_routes_metadata_build_run_and_reload_without_fallback() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -286,9 +266,7 @@ else:sys.exit(6)
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace_and_wait(&root);
         app.criticalup_provider.program = program.to_string_lossy().into();
-        app.dock
-            .sizes
-            .insert(crate::toolwindow::ToolWindow::RustProvider, 950.0);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::RustProvider, 950.0);
         let mut h = crate::screens::harness(app, egui::vec2(2000.0, 1500.0));
         h.get_by_label(tr("Rust Toolchain Provider")).click();
         h.run_steps(2);
@@ -310,70 +288,39 @@ else:sys.exit(6)
         assert!(h.state().runner.cargo_workspace.is_none());
         assert!(!root.join("build-ran").exists());
         let poison = root.join("poison");
-        std::fs::write(
-            &poison,
-            format!(
-                "#!/bin/sh\ntouch {:?}\nexit 70\n",
-                root.join("wrong-compiler")
-            ),
-        )
-        .unwrap();
+        std::fs::write(&poison, format!("#!/bin/sh\ntouch {:?}\nexit 70\n", root.join("wrong-compiler"))).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&poison, std::fs::Permissions::from_mode(0o700)).unwrap();
-        h.state_mut().runner.project_env = format!(
-            "CARGO_NET_OFFLINE=true\nRUSTC={}\nRUSTUP_TOOLCHAIN=never-use-rustup\nRUSTC_WRAPPER={}",
-            poison.display(),
-            poison.display()
-        );
+        h.state_mut().runner.project_env =
+            format!("CARGO_NET_OFFLINE=true\nRUSTC={}\nRUSTUP_TOOLCHAIN=never-use-rustup\nRUSTC_WRAPPER={}", poison.display(), poison.display());
         std::fs::remove_file(root.join("gate")).unwrap();
-        wait(&mut h, |app| {
-            app.runner.cargo_workspace.is_some()
-                && app
-                    .runner
-                    .cargo_tool()
-                    .is_ok_and(|cargo| cargo.is_criticalup())
-        });
+        wait(&mut h, |app| app.runner.cargo_workspace.is_some() && app.runner.cargo_tool().is_ok_and(|cargo| cargo.is_criticalup()));
         assert!(!root.join("wrong-compiler").exists());
         assert!(!h.state().can_open_rust_repl());
         assert!(h.state().rustup().is_none());
         let outputs = h.state_mut().runner.run_selected();
         crate::ui::run_windows::handle_outputs(h.state_mut(), outputs);
-        wait(&mut h, |app| {
-            app.runner.runs.last().is_some_and(|run| run.exit.is_some())
-        });
+        wait(&mut h, |app| app.runner.runs.last().is_some_and(|run| run.exit.is_some()));
         assert_eq!(h.state().runner.runs.last().unwrap().exit, Some(Some(0)));
         assert!(root.join("build-ran").exists() && root.join("program-ran").exists());
         assert!(!root.join("wrong-compiler").exists());
         std::fs::write(root.join("criticalup.toml"), "invalid after selection").unwrap();
         h.state_mut().reload_workspace();
         h.state_mut().wait_workspace_open();
-        wait(&mut h, |app| {
-            app.runner.cargo_workspace.is_some()
-                && app
-                    .runner
-                    .cargo_tool()
-                    .is_ok_and(|cargo| cargo.is_criticalup())
-        });
-        assert_eq!(
-            h.state().runner.cargo_tool().unwrap().criticalup_release(),
-            Some("fixture-1")
-        );
+        wait(&mut h, |app| app.runner.cargo_workspace.is_some() && app.runner.cargo_tool().is_ok_and(|cargo| cargo.is_criticalup()));
+        assert_eq!(h.state().runner.cargo_tool().unwrap().criticalup_release(), Some("fixture-1"));
         h.state_mut().runner.project_env = "CARGO_NET_OFFLINE=true".into();
         h.run_steps(2);
         h.get_by_label(tr("Use Rustup / PATH")).click();
         h.run_steps(2);
-        wait(&mut h, |app| {
-            !app.criticalup_provider.selected && app.runner.cargo_workspace.is_some()
-        });
+        wait(&mut h, |app| !app.criticalup_provider.selected && app.runner.cargo_workspace.is_some());
         assert!(!h.state().runner.cargo_tool().unwrap().is_criticalup());
     }
     #[cfg(unix)]
     #[test]
     fn failed_or_cancelled_selection_does_not_restore_rustup_implicitly() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -382,9 +329,7 @@ else:sys.exit(6)
         app.open_workspace_and_wait(&root);
         app.trust_project_tools_for_test();
         app.criticalup_provider.program = program.to_string_lossy().into();
-        app.dock
-            .sizes
-            .insert(crate::toolwindow::ToolWindow::RustProvider, 950.0);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::RustProvider, 950.0);
         let mut h = crate::screens::harness(app, egui::vec2(2000.0, 1500.0));
         h.get_by_label(tr("Rust Toolchain Provider")).click();
         h.run_steps(2);
@@ -404,9 +349,7 @@ else:sys.exit(6)
         assert!(h.state().criticalup_provider.stop.is_some());
         h.get_by_label(tr("Use Rustup / PATH")).click();
         h.run_steps(2);
-        wait(&mut h, |app| {
-            !app.criticalup_provider.selected && app.runner.cargo_workspace.is_some()
-        });
+        wait(&mut h, |app| !app.criticalup_provider.selected && app.runner.cargo_workspace.is_some());
         h.run_steps(10);
         assert!(!h.state().criticalup_provider.selected);
         assert!(h.state().criticalup_provider.error.is_none());

@@ -26,7 +26,8 @@ pub enum DepTree {
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let running = app.runner.build.as_ref().is_some_and(|b| b.handle.is_some());
     let loaded = app.runner.cargo_workspace.is_some();
-    let actions = [(ico::REFRESH, tr("Reload Cargo Project"), loaded), (ico::BUILD, tr("Build Project"), loaded && !running), (ico::STOP, tr("Cancel Build"), running)];
+    let actions =
+        [(ico::REFRESH, tr("Reload Cargo Project"), loaded), (ico::BUILD, tr("Build Project"), loaded && !running), (ico::STOP, tr("Cancel Build"), running)];
     match header(ui, "Cargo", &actions) {
         Some(0) => app.reload_cargo(),
         Some(1) => app.pending.push(rc_editor::Action::Build),

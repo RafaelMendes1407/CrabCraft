@@ -468,7 +468,8 @@ fn g() {}
         let mut open = HashMap::new();
         open.insert(root.join("src/m.rs"), "// unsaved\nfn f() { if cfg!(feature = \"x\") {} }\n".to_string());
         let found = find_feature_uses(root, "x", &open, &cancel).unwrap();
-        let got: Vec<(String, usize, usize)> = found.iter().map(|u| (u.path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), u.line, u.col)).collect();
+        let got: Vec<(String, usize, usize)> =
+            found.iter().map(|u| (u.path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), u.line, u.col)).collect();
         assert_eq!(got, vec![("src/lib.rs".into(), 0, 17), ("src/m.rs".into(), 1, 28), ("tests/t.rs".into(), 0, 21)]);
         assert_eq!(found[1].preview, "fn f() { if cfg!(feature = \"x\") {} }");
         cancel.store(true, Ordering::Relaxed);

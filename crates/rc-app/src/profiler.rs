@@ -95,7 +95,10 @@ fn which(name: &str) -> Option<PathBuf> {
 
 /// Arguments of `perf record` for `plan`, writing to `data`.
 pub fn record_args(data: &Path, plan: &LaunchPlan) -> Vec<String> {
-    let mut a: Vec<String> = ["record", "-e", "cpu-clock:u", "-F", FREQUENCY, "--call-graph", &format!("dwarf,{STACK_BYTES}"), "--max-size=1G", "-o"].iter().map(|s| s.to_string()).collect();
+    let mut a: Vec<String> = ["record", "-e", "cpu-clock:u", "-F", FREQUENCY, "--call-graph", &format!("dwarf,{STACK_BYTES}"), "--max-size=1G", "-o"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     a.push(data.to_string_lossy().into_owned());
     a.push("--".into());
     a.push(plan.program.to_string_lossy().into_owned());
@@ -286,7 +289,8 @@ impl ScriptParser {
 pub fn header_weight(line: &str) -> u64 {
     let words: Vec<&str> = line.split_whitespace().collect();
     // The time ends with `:`; the period follows it.
-    let time = words.iter().position(|w| w.ends_with(':') && w[..w.len() - 1].contains('.') && w[..w.len() - 1].chars().all(|c| c.is_ascii_digit() || c == '.'));
+    let time =
+        words.iter().position(|w| w.ends_with(':') && w[..w.len() - 1].contains('.') && w[..w.len() - 1].chars().all(|c| c.is_ascii_digit() || c == '.'));
     time.and_then(|i| words.get(i + 1)).and_then(|w| w.parse::<u64>().ok()).filter(|&w| w > 0).unwrap_or(1)
 }
 
@@ -385,7 +389,11 @@ impl Control {
 }
 
 /// A child process with its output read on other threads, at most [`MAX_OUTPUT`] bytes kept.
-fn spawn(mut cmd: Command, control: &Control, stdout_to: Option<Box<dyn FnMut(&str) + Send>>) -> std::io::Result<(std::process::Child, Vec<std::thread::JoinHandle<String>>)> {
+fn spawn(
+    mut cmd: Command,
+    control: &Control,
+    stdout_to: Option<Box<dyn FnMut(&str) + Send>>,
+) -> std::io::Result<(std::process::Child, Vec<std::thread::JoinHandle<String>>)> {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -552,7 +560,17 @@ pub struct Profiler {
 
 impl Profiler {
     pub fn new(waker: Waker) -> Self {
-        Profiler { waker, session: None, name: String::new(), result: None, output: String::new(), zoom: 0, show_tree: false, open: Default::default(), selected: None }
+        Profiler {
+            waker,
+            session: None,
+            name: String::new(),
+            result: None,
+            output: String::new(),
+            zoom: 0,
+            show_tree: false,
+            open: Default::default(),
+            selected: None,
+        }
     }
 
     pub fn busy(&self) -> bool {
@@ -810,7 +828,10 @@ tokio-runtime-w  4322 81234.004200:    1000 cpu-clock:u: \n\
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("main.rs");
         std::fs::write(&src, "fn main() {}\n").unwrap();
-        let text = format!("0000000000014c40 t fib::f\t{0}:1\n0000000000014d10 t fib::main::h0123456789abcdef\t{0}:2\n000000000004a700 T std::rt::x\t/rustc/abc/library/std/src/rt.rs:9\n                 U __libc_start_main\n0000000000054e30 b data\t{0}:3\nbad line\n", src.display());
+        let text = format!(
+            "0000000000014c40 t fib::f\t{0}:1\n0000000000014d10 t fib::main::h0123456789abcdef\t{0}:2\n000000000004a700 T std::rt::x\t/rustc/abc/library/std/src/rt.rs:9\n                 U __libc_start_main\n0000000000054e30 b data\t{0}:3\nbad line\n",
+            src.display()
+        );
         let map = parse_nm(&text);
         assert_eq!(map.get("fib::f"), Some(&(src.clone(), 1)));
         assert_eq!(map.get("fib::main"), Some(&(src.clone(), 2)));

@@ -34,10 +34,7 @@ fn server(error: tokio_postgres::Error) -> Error {
     if error.code().is_some_and(|code| code.code() == "25006") {
         return Error::ReadOnly;
     }
-    let message = error
-        .as_db_error()
-        .map(|error| format!("{} [{}]", error.message(), error.code().code()))
-        .unwrap_or_else(|| error.to_string());
+    let message = error.as_db_error().map(|error| format!("{} [{}]", error.message(), error.code().code())).unwrap_or_else(|| error.to_string());
     Error::Database(message.chars().take(2048).collect())
 }
 fn quote(name: &str) -> Result<String, Error> {
@@ -49,11 +46,7 @@ fn quote(name: &str) -> Result<String, Error> {
 #[derive(Debug)]
 struct Parameter(Cell);
 impl ToSql for Parameter {
-    fn to_sql(
-        &self,
-        _: &Type,
-        out: &mut bytes::BytesMut,
-    ) -> Result<IsNull, Box<dyn std::error::Error + Send + Sync>> {
+    fn to_sql(&self, _: &Type, out: &mut bytes::BytesMut) -> Result<IsNull, Box<dyn std::error::Error + Send + Sync>> {
         match &self.0 {
             Cell::Null => return Ok(IsNull::Yes),
             Cell::Blob(value) => {
@@ -79,10 +72,7 @@ fn values(cells: &[Cell]) -> Result<Vec<Parameter>, Error> {
     if cells.len() > 1000 || cells.iter().map(Cell::size).sum::<usize>() > 2 * 1024 * 1024 {
         return Err(Error::Limit);
     }
-    if cells
-        .iter()
-        .any(|cell| matches!(cell,Cell::Real(value)if !value.is_finite()))
-    {
+    if cells.iter().any(|cell| matches!(cell,Cell::Real(value)if !value.is_finite())) {
         return Err(Error::Input);
     }
     Ok(cells.iter().cloned().map(Parameter).collect())
@@ -91,19 +81,11 @@ fn cell(text: Option<&str>, kind: &Type) -> Result<Cell, Error> {
     let Some(text) = text else {
         return Ok(Cell::Null);
     };
-    if text.len()
-        > if *kind == Type::BYTEA {
-            2 * 1024 * 1024
-        } else {
-            1024 * 1024
-        }
-    {
+    if text.len() > if *kind == Type::BYTEA { 2 * 1024 * 1024 } else { 1024 * 1024 } {
         return Err(Error::Limit);
     }
     Ok(match *kind {
-        Type::INT2 | Type::INT4 | Type::INT8 => {
-            Cell::Integer(text.parse().map_err(|_| Error::Input)?)
-        }
+        Type::INT2 | Type::INT4 | Type::INT8 => Cell::Integer(text.parse().map_err(|_| Error::Input)?),
         Type::FLOAT4 | Type::FLOAT8 => match text.parse::<f64>() {
             Ok(number) if number.is_finite() => Cell::Real(number),
             _ => Cell::Text(text.into()),
@@ -116,12 +98,7 @@ fn cell(text: Option<&str>, kind: &Type) -> Result<Cell, Error> {
             let value = bytes
                 .as_bytes()
                 .chunks_exact(2)
-                .map(|pair| {
-                    std::str::from_utf8(pair)
-                        .ok()
-                        .and_then(|pair| u8::from_str_radix(pair, 16).ok())
-                        .ok_or(Error::Input)
-                })
+                .map(|pair| std::str::from_utf8(pair).ok().and_then(|pair| u8::from_str_radix(pair, 16).ok()).ok_or(Error::Input))
                 .collect::<Result<Vec<_>, _>>()?;
             Cell::Blob(value)
         }
@@ -148,16 +125,10 @@ fn changes_rows(sql: &str) -> bool {
             continue;
         }
         if depth == 0 && matches!(token.role, rc_syntax::Hl::Keyword | rc_syntax::Hl::Field) {
-            if matches!(
-                word.to_ascii_uppercase().as_str(),
-                "INSERT" | "UPDATE" | "DELETE" | "MERGE" | "COPY" | "TRUNCATE"
-            ) {
+            if matches!(word.to_ascii_uppercase().as_str(), "INSERT" | "UPDATE" | "DELETE" | "MERGE" | "COPY" | "TRUNCATE") {
                 return true;
             }
-            if matches!(
-                word.to_ascii_uppercase().as_str(),
-                "SELECT" | "EXPLAIN" | "SHOW" | "VALUES"
-            ) {
+            if matches!(word.to_ascii_uppercase().as_str(), "SELECT" | "EXPLAIN" | "SHOW" | "VALUES") {
                 return false;
             }
         }
@@ -177,13 +148,7 @@ async fn query(client: &Client, sql: &str, max: usize) -> Result<Rows, Error> {
     if columns.len() > 256 {
         return Err(Error::Limit);
     }
-    let mut grid = Grid {
-        columns: columns
-            .iter()
-            .map(|column| column.name().to_string())
-            .collect(),
-        ..Default::default()
-    };
+    let mut grid = Grid { columns: columns.iter().map(|column| column.name().to_string()).collect(), ..Default::default() };
     let stream = client.simple_query_raw(sql).await.map_err(server)?;
     futures_util::pin_mut!(stream);
     let mut raw = Vec::new();
@@ -239,12 +204,7 @@ async fn table(client: &Client, key: &str) -> Result<(Table, i64), Error> {
         return Err(Error::Limit);
     }
     let mut columns = Vec::new();
-    let mut definition = format!(
-        "-- PostgreSQL {} {}.{}\n",
-        kind,
-        quote(&schema)?,
-        quote(&local)?
-    );
+    let mut definition = format!("-- PostgreSQL {} {}.{}\n", kind, quote(&schema)?, quote(&local)?);
     for row in rows {
         let name: String = row.try_get(0).map_err(server)?;
         let declared: String = row.try_get(1).map_err(server)?;
@@ -257,20 +217,8 @@ async fn table(client: &Client, key: &str) -> Result<(Table, i64), Error> {
             return Err(Error::Limit);
         }
         quote(&name)?;
-        definition.push_str(&format!(
-            "{} {} generated={} not_null={} default={}\n",
-            quote(&name)?,
-            declared,
-            generated,
-            required,
-            default
-        ));
-        columns.push(Column {
-            name,
-            declared,
-            primary: usize::try_from(primary.max(0)).map_err(|_| Error::Input)?,
-            generated,
-        });
+        definition.push_str(&format!("{} {} generated={} not_null={} default={}\n", quote(&name)?, declared, generated, required, default));
+        columns.push(Column { name, declared, primary: usize::try_from(primary.max(0)).map_err(|_| Error::Input)?, generated });
     }
     // PostgreSQL int2vector arrays are zero-based: normalize key ordinals to one-based.
     let pk=client.query("SELECT a.attname,k.ordinality::integer FROM pg_catalog.pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum,ordinality) JOIN pg_catalog.pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE i.indrelid=$1::bigint::oid AND i.indisprimary AND k.ordinality<=i.indnkeyatts ORDER BY k.ordinality",&[&oid]).await.map_err(server)?;
@@ -293,17 +241,16 @@ async fn table(client: &Client, key: &str) -> Result<(Table, i64), Error> {
         if length > 8192 {
             return Err(Error::Limit);
         }
-        let item = (
-            row.try_get::<_, String>(0).map_err(server)?,
-            row.try_get::<_, String>(1).map_err(server)?,
-            row.try_get::<_, String>(2).map_err(server)?,
-        );
+        let item = (row.try_get::<_, String>(0).map_err(server)?, row.try_get::<_, String>(1).map_err(server)?, row.try_get::<_, String>(2).map_err(server)?);
         definition.push_str(&item.2);
         definition.push('\n');
         structures.push(item);
     }
     if matches!(kind.as_str(), "v" | "m") {
-        let view=client.query_one("SELECT left(pg_catalog.pg_get_viewdef($1::bigint::oid,true),65536),length(pg_catalog.pg_get_viewdef($1::bigint::oid,true))",&[&oid]).await.map_err(server)?;
+        let view = client
+            .query_one("SELECT left(pg_catalog.pg_get_viewdef($1::bigint::oid,true),65536),length(pg_catalog.pg_get_viewdef($1::bigint::oid,true))", &[&oid])
+            .await
+            .map_err(server)?;
         let size: i32 = view.try_get(1).map_err(server)?;
         if size > 65536 {
             return Err(Error::Limit);
@@ -318,11 +265,7 @@ async fn table(client: &Client, key: &str) -> Result<(Table, i64), Error> {
         Table {
             local_name: Some(local),
             name: key.into(),
-            kind: if matches!(kind.as_str(), "r" | "p") {
-                "table".into()
-            } else {
-                "view".into()
-            },
+            kind: if matches!(kind.as_str(), "r" | "p") { "table".into() } else { "view".into() },
             sql: definition,
             columns,
             structures,
@@ -353,89 +296,23 @@ async fn browse(client: &Client, key: &str, offset: usize) -> Result<Page, Error
         return Err(Error::Limit);
     }
     let (meta, version) = table(client, key).await?;
-    let order = meta
-        .columns
-        .iter()
-        .filter(|column| column.primary > 0)
-        .map(|column| quote(&column.name))
-        .collect::<Result<Vec<_>, _>>()?;
-    let ordering = if order.is_empty() {
-        String::new()
-    } else {
-        format!(" ORDER BY {}", order.join(","))
-    };
-    let rows = query(
-        client,
-        &format!(
-            "SELECT * FROM {}{ordering} LIMIT 501 OFFSET {offset}",
-            meta.name
-        ),
-        500,
-    )
-    .await?;
-    let mut primary: Vec<_> = meta
-        .columns
-        .iter()
-        .enumerate()
-        .filter(|(_, column)| column.primary > 0)
-        .collect();
+    let order = meta.columns.iter().filter(|column| column.primary > 0).map(|column| quote(&column.name)).collect::<Result<Vec<_>, _>>()?;
+    let ordering = if order.is_empty() { String::new() } else { format!(" ORDER BY {}", order.join(",")) };
+    let rows = query(client, &format!("SELECT * FROM {}{ordering} LIMIT 501 OFFSET {offset}", meta.name), 500).await?;
+    let mut primary: Vec<_> = meta.columns.iter().enumerate().filter(|(_, column)| column.primary > 0).collect();
     primary.sort_by_key(|(_, column)| column.primary);
-    let key_names = if meta.kind == "table" {
-        primary
-            .iter()
-            .map(|(_, column)| column.name.clone())
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let keys = rows
-        .grid
-        .rows
-        .iter()
-        .map(|row| {
-            primary
-                .iter()
-                .filter_map(|(index, _)| row.get(*index).cloned())
-                .collect()
-        })
-        .collect();
-    Ok(Page {
-        original_text: Some(rows.raw),
-        table: meta,
-        grid: rows.grid,
-        keys,
-        key_names,
-        offset,
-        schema_version: version,
-    })
+    let key_names = if meta.kind == "table" { primary.iter().map(|(_, column)| column.name.clone()).collect() } else { Vec::new() };
+    let keys = rows.grid.rows.iter().map(|row| primary.iter().filter_map(|(index, _)| row.get(*index).cloned()).collect()).collect();
+    Ok(Page { original_text: Some(rows.raw), table: meta, grid: rows.grid, keys, key_names, offset, schema_version: version })
 }
-async fn update(
-    client: &Client,
-    page: &Page,
-    row: usize,
-    column: usize,
-    value: Cell,
-) -> Result<(), Error> {
+async fn update(client: &Client, page: &Page, row: usize, column: usize, value: Cell) -> Result<(), Error> {
     let (meta, version) = table(client, &page.table.name).await?;
     if meta.sql != page.table.sql || version != page.schema_version || page.key_names.is_empty() {
         return Err(Error::Stale);
     }
-    let target = meta
-        .columns
-        .get(column)
-        .filter(|column| !column.generated)
-        .ok_or(Error::Input)?;
-    let keys = page
-        .keys
-        .get(row)
-        .filter(|keys| keys.len() == page.key_names.len())
-        .ok_or(Error::Input)?;
-    let original = page
-        .original_text
-        .as_ref()
-        .and_then(|rows| rows.get(row))
-        .filter(|row| row.len() == meta.columns.len())
-        .ok_or(Error::Input)?;
+    let target = meta.columns.get(column).filter(|column| !column.generated).ok_or(Error::Input)?;
+    let keys = page.keys.get(row).filter(|keys| keys.len() == page.key_names.len()).ok_or(Error::Input)?;
+    let original = page.original_text.as_ref().and_then(|rows| rows.get(row)).filter(|row| row.len() == meta.columns.len()).ok_or(Error::Input)?;
     if value.size() > 64 * 1024 {
         return Err(Error::Limit);
     }
@@ -443,18 +320,10 @@ async fn update(
     let mut predicates = Vec::new();
     for (name, key) in page.key_names.iter().zip(keys) {
         cells.push(key.clone());
-        predicates.push(format!(
-            "{} IS NOT DISTINCT FROM ${}",
-            quote(name)?,
-            cells.len()
-        ));
+        predicates.push(format!("{} IS NOT DISTINCT FROM ${}", quote(name)?, cells.len()));
     }
     for (column, original) in meta.columns.iter().zip(original) {
-        cells.push(
-            original
-                .as_ref()
-                .map_or(Cell::Null, |text| Cell::Text(text.clone())),
-        );
+        cells.push(original.as_ref().map_or(Cell::Null, |text| Cell::Text(text.clone())));
         predicates.push(format!(
             "({}::text COLLATE \"C\") IS NOT DISTINCT FROM ((${}::{})::text COLLATE \"C\")",
             quote(&column.name)?,
@@ -463,20 +332,9 @@ async fn update(
         ));
     }
     let params = values(&cells)?;
-    let references: Vec<&(dyn ToSql + Sync)> = params
-        .iter()
-        .map(|value| value as &(dyn ToSql + Sync))
-        .collect();
+    let references: Vec<&(dyn ToSql + Sync)> = params.iter().map(|value| value as &(dyn ToSql + Sync)).collect();
     let affected = client
-        .execute(
-            &format!(
-                "UPDATE {} SET {}=$1 WHERE {}",
-                meta.name,
-                quote(&target.name)?,
-                predicates.join(" AND ")
-            ),
-            &references,
-        )
+        .execute(&format!("UPDATE {} SET {}=$1 WHERE {}", meta.name, quote(&target.name)?, predicates.join(" AND ")), &references)
         .await
         .map_err(server)?;
     if affected != 1 {
@@ -484,12 +342,7 @@ async fn update(
     }
     Ok(())
 }
-async fn action(
-    client: &Client,
-    request: Action,
-    write: bool,
-    cancel: &AtomicBool,
-) -> Result<Reply, Error> {
+async fn action(client: &Client, request: Action, write: bool, cancel: &AtomicBool) -> Result<Reply, Error> {
     match request {
         Action::Schema => schema(client).await.map(Reply::Schema),
         Action::Browse { table, offset } => browse(client, &table, offset).await.map(Reply::Page),
@@ -498,30 +351,15 @@ async fn action(
             if first.is_empty() {
                 return Err(Error::Input);
             }
-            if matches!(
-                first.as_str(),
-                "BEGIN" | "COMMIT" | "ROLLBACK" | "SAVEPOINT" | "RELEASE" | "END"
-            ) {
+            if matches!(first.as_str(), "BEGIN" | "COMMIT" | "ROLLBACK" | "SAVEPOINT" | "RELEASE" | "END") {
                 return Err(Error::Input);
             }
-            if !write
-                && !matches!(
-                    first.as_str(),
-                    "SELECT" | "WITH" | "VALUES" | "TABLE" | "SHOW" | "EXPLAIN"
-                )
-            {
+            if !write && !matches!(first.as_str(), "SELECT" | "WITH" | "VALUES" | "TABLE" | "SHOW" | "EXPLAIN") {
                 return Err(Error::ReadOnly);
             }
-            query(client, &sql, 500)
-                .await
-                .map(|result| Reply::Query(result.grid))
+            query(client, &sql, 500).await.map(|result| Reply::Query(result.grid))
         }
-        Action::Update {
-            page,
-            row,
-            column,
-            value,
-        } => {
+        Action::Update { page, row, column, value } => {
             if !write {
                 return Err(Error::ReadOnly);
             }
@@ -530,41 +368,17 @@ async fn action(
         }
         Action::Export { table: key, path } => {
             let (meta, _) = table(client, &key).await?;
-            let columns: Vec<_> = meta
-                .columns
-                .iter()
-                .filter(|column| !column.generated)
-                .map(|column| column.name.clone())
-                .collect();
+            let columns: Vec<_> = meta.columns.iter().filter(|column| !column.generated).map(|column| column.name.clone()).collect();
             if columns.is_empty() {
                 return Err(Error::Input);
             }
-            let result = query(
-                client,
-                &format!(
-                    "SELECT {} FROM {}",
-                    columns
-                        .iter()
-                        .map(|name| quote(name))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .join(","),
-                    meta.name
-                ),
-                5000,
-            )
-            .await?;
+            let result =
+                query(client, &format!("SELECT {} FROM {}", columns.iter().map(|name| quote(name)).collect::<Result<Vec<_>, _>>()?.join(","), meta.name), 5000)
+                    .await?;
             if result.grid.truncated {
                 return Err(Error::Limit);
             }
-            let count = db::save_transfer(
-                &path,
-                &Transfer {
-                    format: "crabcraft.postgresql.rows.v1".into(),
-                    columns,
-                    rows: result.grid.rows,
-                },
-                cancel,
-            )?;
+            let count = db::save_transfer(&path, &Transfer { format: "crabcraft.postgresql.rows.v1".into(), columns, rows: result.grid.rows }, cancel)?;
             Ok(Reply::Exported(count))
         }
         Action::Import { table: key, path } => {
@@ -572,20 +386,11 @@ async fn action(
                 return Err(Error::ReadOnly);
             }
             let transfer = db::load_transfer(&path, cancel)?;
-            if !matches!(
-                transfer.format.as_str(),
-                "crabcraft.postgresql.rows.v1" | "crabcraft.csv.rows.v1"
-            ) || transfer.rows.len() > 5000
-            {
+            if !matches!(transfer.format.as_str(), "crabcraft.postgresql.rows.v1" | "crabcraft.csv.rows.v1") || transfer.rows.len() > 5000 {
                 return Err(Error::Input);
             }
             let (meta, _) = table(client, &key).await?;
-            let columns: Vec<_> = meta
-                .columns
-                .iter()
-                .filter(|column| !column.generated)
-                .map(|column| column.name.clone())
-                .collect();
+            let columns: Vec<_> = meta.columns.iter().filter(|column| !column.generated).map(|column| column.name.clone()).collect();
             if columns.is_empty() || columns != transfer.columns {
                 return Err(Error::Input);
             }
@@ -593,15 +398,8 @@ async fn action(
                 .prepare(&format!(
                     "INSERT INTO {} ({}) VALUES ({})",
                     meta.name,
-                    columns
-                        .iter()
-                        .map(|name| quote(name))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .join(","),
-                    (1..=columns.len())
-                        .map(|index| format!("${index}"))
-                        .collect::<Vec<_>>()
-                        .join(",")
+                    columns.iter().map(|name| quote(name)).collect::<Result<Vec<_>, _>>()?.join(","),
+                    (1..=columns.len()).map(|index| format!("${index}")).collect::<Vec<_>>().join(",")
                 ))
                 .await
                 .map_err(server)?;
@@ -618,14 +416,8 @@ async fn action(
                     return Err(Error::Limit);
                 }
                 let params = values(row)?;
-                let references: Vec<&(dyn ToSql + Sync)> = params
-                    .iter()
-                    .map(|value| value as &(dyn ToSql + Sync))
-                    .collect();
-                client
-                    .execute(&statement, &references)
-                    .await
-                    .map_err(server)?;
+                let references: Vec<&(dyn ToSql + Sync)> = params.iter().map(|value| value as &(dyn ToSql + Sync)).collect();
+                client.execute(&statement, &references).await.map_err(server)?;
             }
             Ok(Reply::Imported(transfer.rows.len()))
         }
@@ -644,9 +436,7 @@ pub fn run(config: &Config, request: Action, cancel: Arc<AtomicBool>) -> Result<
     if cancel.load(Ordering::Relaxed) {
         return Err(Error::Cancelled);
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     runtime.block_on(async{
         let limited=Arc::new(AtomicBool::new(false));let setup=async{let stream=wire::Wire::open(config,limited.clone()).await?;let mut pg=tokio_postgres::Config::new();pg.user(&config.user).dbname(&config.database).password(&config.password).application_name("CrabCraft").ssl_mode(tokio_postgres::config::SslMode::Disable).options("-c statement_timeout=10000 -c lock_timeout=150 -c idle_in_transaction_session_timeout=10000 -c search_path=pg_catalog,public -c bytea_output=hex -c DateStyle=ISO -c TimeZone=UTC");pg.connect_raw(stream,NoTls).await.map_err(server)};
         let startup_cancel=async{loop{if cancel.load(Ordering::Relaxed){return;}tokio::time::sleep(Duration::from_millis(20)).await;}};let(client,connection)=tokio::select!{result=tokio::time::timeout(Duration::from_secs(3),setup)=>result.map_err(|_|Error::Timeout)??,()=startup_cancel=>return Err(Error::Cancelled)};let driver=tokio::spawn(async move{let _=connection.await;});let token=client.cancel_token();
@@ -672,8 +462,7 @@ mod tests {
         }
     }
     fn request(config: &Config, action: Action) -> Reply {
-        run(config, action, Arc::new(AtomicBool::new(false)))
-            .unwrap_or_else(|error| panic!("PostgreSQL: {error:?}"))
+        run(config, action, Arc::new(AtomicBool::new(false))).unwrap_or_else(|error| panic!("PostgreSQL: {error:?}"))
     }
     fn sql(config: &Config, sql: &str) -> Grid {
         match request(config, Action::Query(sql.into())) {
@@ -682,13 +471,7 @@ mod tests {
         }
     }
     fn page(config: &Config, table: &str) -> Page {
-        match request(
-            config,
-            Action::Browse {
-                table: table.into(),
-                offset: 0,
-            },
-        ) {
+        match request(config, Action::Browse { table: table.into(), offset: 0 }) {
             Reply::Page(page) => page,
             _ => panic!("page result"),
         }
@@ -706,154 +489,51 @@ mod tests {
     fn real_postgres_schema_edit_stale_readonly_transfer_rollback_and_cancel() {
         let _guard = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let config = config();
-        let name = format!(
-            "crabcraft_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
+        let name = format!("crabcraft_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
         sql(&config, &format!("CREATE SCHEMA {name}"));
         let people = format!("{name}.people");
         let copy = format!("{name}.copy");
-        sql(
-            &config,
-            &format!(
-                "CREATE TABLE {people}(id bigint PRIMARY KEY,name text,amount numeric(30,10),payload bytea,missing text,enabled boolean)"
-            ),
-        );
-        sql(
-            &config,
-            &format!("CREATE TABLE {copy}(LIKE {people} INCLUDING ALL)"),
-        );
-        sql(
-            &config,
-            &format!(
-                "INSERT INTO {people} VALUES(1,'O''Brien🦀',12345678901234567890.1234567890,'\\x00ff',NULL,true)"
-            ),
-        );
+        sql(&config, &format!("CREATE TABLE {people}(id bigint PRIMARY KEY,name text,amount numeric(30,10),payload bytea,missing text,enabled boolean)"));
+        sql(&config, &format!("CREATE TABLE {copy}(LIKE {people} INCLUDING ALL)"));
+        sql(&config, &format!("INSERT INTO {people} VALUES(1,'O''Brien🦀',12345678901234567890.1234567890,'\\x00ff',NULL,true)"));
         let before = page(&config, &people);
         assert_eq!(before.grid.rows[0][0], Cell::Integer(1));
         assert_eq!(before.grid.rows[0][1], Cell::Text("O'Brien🦀".into()));
-        assert_eq!(
-            before.grid.rows[0][2],
-            Cell::Text("12345678901234567890.1234567890".into())
-        );
+        assert_eq!(before.grid.rows[0][2], Cell::Text("12345678901234567890.1234567890".into()));
         assert_eq!(before.grid.rows[0][3], Cell::Blob(vec![0, 255]));
         assert_eq!(before.grid.rows[0][4], Cell::Null);
-        request(
-            &config,
-            Action::Update {
-                page: before.clone(),
-                row: 0,
-                column: 1,
-                value: Cell::Text("edited 🦀".into()),
-            },
-        );
-        assert_eq!(
-            page(&config, &people).grid.rows[0][1],
-            Cell::Text("edited 🦀".into())
-        );
+        request(&config, Action::Update { page: before.clone(), row: 0, column: 1, value: Cell::Text("edited 🦀".into()) });
+        assert_eq!(page(&config, &people).grid.rows[0][1], Cell::Text("edited 🦀".into()));
         assert!(matches!(
-            run(
-                &config,
-                Action::Update {
-                    page: before,
-                    row: 0,
-                    column: 1,
-                    value: Cell::Text("stale".into())
-                },
-                Arc::new(AtomicBool::new(false))
-            ),
+            run(&config, Action::Update { page: before, row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
             Err(Error::Stale)
         ));
         let mut readonly = config.clone();
         readonly.write = false;
-        assert!(matches!(
-            run(
-                &readonly,
-                Action::Query(format!("DELETE FROM {people}")),
-                Arc::new(AtomicBool::new(false))
-            ),
-            Err(Error::ReadOnly)
-        ));
+        assert!(matches!(run(&readonly, Action::Query(format!("DELETE FROM {people}")), Arc::new(AtomicBool::new(false))), Err(Error::ReadOnly)));
         assert_eq!(page(&readonly, &people).grid.rows.len(), 1);
         let files = tempfile::tempdir().unwrap();
         let path = files.path().join("postgres.json");
-        request(
-            &config,
-            Action::Export {
-                table: people.clone(),
-                path: path.clone(),
-            },
-        );
-        request(
-            &config,
-            Action::Import {
-                table: copy.clone(),
-                path: path.clone(),
-            },
-        );
-        assert_eq!(
-            page(&config, &people).grid.rows,
-            page(&config, &copy).grid.rows
-        );
-        assert!(
-            run(
-                &config,
-                Action::Import {
-                    table: copy.clone(),
-                    path
-                },
-                Arc::new(AtomicBool::new(false))
-            )
-            .is_err()
-        );
+        request(&config, Action::Export { table: people.clone(), path: path.clone() });
+        request(&config, Action::Import { table: copy.clone(), path: path.clone() });
+        assert_eq!(page(&config, &people).grid.rows, page(&config, &copy).grid.rows);
+        assert!(run(&config, Action::Import { table: copy.clone(), path }, Arc::new(AtomicBool::new(false))).is_err());
         assert_eq!(page(&config, &copy).grid.rows.len(), 1);
         sql(&config, &format!("DELETE FROM {copy}"));
         let csv = files.path().join("postgres.csv");
-        request(
-            &config,
-            Action::Export {
-                table: people.clone(),
-                path: csv.clone(),
-            },
-        );
-        request(
-            &config,
-            Action::Import {
-                table: copy.clone(),
-                path: csv,
-            },
-        );
-        assert_eq!(
-            page(&config, &people).grid.rows,
-            page(&config, &copy).grid.rows
-        );
+        request(&config, Action::Export { table: people.clone(), path: csv.clone() });
+        request(&config, Action::Import { table: copy.clone(), path: csv });
+        assert_eq!(page(&config, &people).grid.rows, page(&config, &copy).grid.rows);
         let cancel = Arc::new(AtomicBool::new(false));
         let stop = cancel.clone();
         let query_config = config.clone();
         let start = std::time::Instant::now();
-        let worker = std::thread::spawn(move || {
-            run(
-                &query_config,
-                Action::Query("SELECT pg_sleep(20)".into()),
-                cancel,
-            )
-        });
+        let worker = std::thread::spawn(move || run(&query_config, Action::Query("SELECT pg_sleep(20)".into()), cancel));
         std::thread::sleep(Duration::from_millis(100));
         stop.store(true, Ordering::Relaxed);
         assert!(matches!(worker.join().unwrap(), Err(Error::Cancelled)));
         assert!(start.elapsed() < Duration::from_secs(3));
-        assert!(matches!(
-            run(
-                &config,
-                Action::Query("SELECT repeat('x',3000000)".into()),
-                Arc::new(AtomicBool::new(false))
-            ),
-            Err(Error::Limit)
-        ));
+        assert!(matches!(run(&config, Action::Query("SELECT repeat('x',3000000)".into()), Arc::new(AtomicBool::new(false))), Err(Error::Limit)));
         sql(&config, &format!("DROP SCHEMA {name} CASCADE"));
     }
     #[test]
@@ -868,15 +548,10 @@ mod tests {
         assert_eq!(grid.rows[0][0], Cell::Text("crabcraft".into()));
         assert_eq!(grid.affected, 0);
         config.password = "invalid-private-test-password".into();
-        let error = run(&config, Action::Schema, Arc::new(AtomicBool::new(false)))
-            .err()
-            .unwrap();
+        let error = run(&config, Action::Schema, Arc::new(AtomicBool::new(false))).err().unwrap();
         let message = format!("{error:?}");
         assert!(!message.contains(&config.password));
         config.host = "203.0.113.1".into();
-        assert!(matches!(
-            run(&config, Action::Schema, Arc::new(AtomicBool::new(false))),
-            Err(Error::Input)
-        ));
+        assert!(matches!(run(&config, Action::Schema, Arc::new(AtomicBool::new(false))), Err(Error::Input)));
     }
 }

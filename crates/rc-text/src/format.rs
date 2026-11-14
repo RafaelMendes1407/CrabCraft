@@ -200,6 +200,9 @@ mod tests {
     fn xml_is_reindented_by_depth() {
         let src = "<Project Sdk=\"Microsoft.NET.Sdk\">\n<PropertyGroup>\n<TargetFramework>net8.0</TargetFramework>\n</PropertyGroup>\n<ItemGroup>\n    <PackageReference Include=\"A\" Version=\"1\" />\n<!-- a\ncomment -->\n</ItemGroup>\n</Project>\n";
         let out = xml(src, "  ").unwrap();
-        assert_eq!(out, "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"A\" Version=\"1\" />\n    <!-- a\ncomment -->\n  </ItemGroup>\n</Project>\n");
+        assert_eq!(
+            out,
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net8.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"A\" Version=\"1\" />\n    <!-- a\ncomment -->\n  </ItemGroup>\n</Project>\n"
+        );
     }
 }

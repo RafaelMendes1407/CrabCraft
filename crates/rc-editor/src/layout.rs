@@ -162,13 +162,8 @@ pub fn layout_line(input: &LineInput, scheme: &Scheme, font: &EditorFont, layout
     let mut virtuals = Vec::new();
     let mut nchars = 0usize;
     let mut visual = 0usize;
-    let hint_fmt = TextFormat {
-        font_id: mono(size - 1.0),
-        color: scheme.hint_fg,
-        background: scheme.hint_bg,
-        valign: egui::Align::Center,
-        ..Default::default()
-    };
+    let hint_fmt =
+        TextFormat { font_id: mono(size - 1.0), color: scheme.hint_fg, background: scheme.hint_bg, valign: egui::Align::Center, ..Default::default() };
     let fold_fmt = TextFormat { font_id: mono(size), color: scheme.folded_fg, ..Default::default() };
     let note_fmt = TextFormat { font_id: mono(size), color: scheme.error, ..Default::default() };
     let end_fmt = TextFormat { font_id: mono(size - 1.0), color: scheme.hint_fg, ..Default::default() };

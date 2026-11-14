@@ -28,7 +28,17 @@ pub struct MacroContext {
 }
 
 /// The macros, with what each one means (for the settings page).
-pub const MACROS: [&str; 9] = ["$FilePath$", "$FileDir$", "$FileName$", "$FileNameWithoutExtension$", "$FileRelativePath$", "$ProjectFileDir$", "$LineNumber$", "$ColumnNumber$", "$SelectedText$"];
+pub const MACROS: [&str; 9] = [
+    "$FilePath$",
+    "$FileDir$",
+    "$FileName$",
+    "$FileNameWithoutExtension$",
+    "$FileRelativePath$",
+    "$ProjectFileDir$",
+    "$LineNumber$",
+    "$ColumnNumber$",
+    "$SelectedText$",
+];
 
 /// Replaces the macros in `text`. A macro that needs something missing (no file open, no
 /// project) is an error naming it, rather than an empty argument the tool would misread.

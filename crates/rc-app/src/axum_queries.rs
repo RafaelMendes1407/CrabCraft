@@ -60,11 +60,7 @@ fn tokens(source: &str, start: usize) -> Option<Vec<Token>> {
             if !closed {
                 return None;
             }
-            out.push(Token {
-                value: rc_syntax::axum::string_value(&source[begin..at], false)?,
-                at: start + begin,
-                string: true,
-            });
+            out.push(Token { value: rc_syntax::axum::string_value(&source[begin..at], false)?, at: start + begin, string: true });
             continue;
         }
         if c == '_' || c.is_alphabetic() {
@@ -80,11 +76,7 @@ fn tokens(source: &str, start: usize) -> Option<Vec<Token>> {
         } else {
             at += c.len_utf8();
         }
-        out.push(Token {
-            value: source[begin..at].into(),
-            at: start + begin,
-            string: false,
-        });
+        out.push(Token { value: source[begin..at].into(), at: start + begin, string: false });
     }
     Some(out)
 }
@@ -144,17 +136,12 @@ pub fn parameters(rope: &Rope, function_at: usize) -> Option<Vec<Parameter>> {
         let base = last_name(ty.child_by_field_name("type")?);
         let arguments = ty.child_by_field_name("type_arguments")?;
         let args = children(arguments);
-        let schema = if args.len() == 1
-            && matches!(args[0].kind(), "type_identifier" | "scoped_type_identifier")
-        {
+        let schema = if args.len() == 1 && matches!(args[0].kind(), "type_identifier" | "scoped_type_identifier") {
             Some(last_name(args[0]).start_byte())
         } else {
             None
         };
-        out.push(Parameter {
-            extractor: base.start_byte(),
-            schema,
-        });
+        out.push(Parameter { extractor: base.start_byte(), schema });
         if out.len() > 32 {
             return None;
         }
@@ -174,10 +161,7 @@ pub fn schema(rope: &Rope, struct_at: usize) -> Option<Schema> {
     let mut derives = Vec::new();
     for attr in attached(node) {
         let values = attribute(attr, &source)?;
-        if values.first()?.value == "derive"
-            && values.get(1)?.value == "("
-            && values.last()?.value == ")"
-        {
+        if values.first()?.value == "derive" && values.get(1)?.value == "(" && values.last()?.value == ")" {
             for token in &values[2..values.len() - 1] {
                 if token.value == "Deserialize" && !token.string {
                     derives.push(token.at);
@@ -210,10 +194,7 @@ pub fn schema(rope: &Rope, struct_at: usize) -> Option<Schema> {
         let mut skip = false;
         for attr in attached(field) {
             let values = attribute(attr, &source)?;
-            if values.first()?.value != "serde"
-                || values.get(1)?.value != "("
-                || values.last()?.value != ")"
-            {
+            if values.first()?.value != "serde" || values.get(1)?.value != "(" || values.last()?.value != ")" {
                 return None;
             }
             let inner = &values[2..values.len() - 1];
@@ -249,12 +230,7 @@ pub fn schema(rope: &Rope, struct_at: usize) -> Option<Schema> {
         if !skip {
             aliases.insert(0, wire);
             for name in aliases {
-                if name.is_empty()
-                    || name.len() > 128
-                    || !name
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-                {
+                if name.is_empty() || name.len() > 128 || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')) {
                     return None;
                 }
                 if !names.contains(&name) {
@@ -277,30 +253,17 @@ mod tests {
         let rope = Rope::from_str(source);
         let shape = schema(&rope, source.find("Search").unwrap()).unwrap();
         assert_eq!(shape.names, ["q", "page_size", "page"]);
-        assert_eq!(
-            &source[shape.derives[0]..shape.derives[0] + 11],
-            "Deserialize"
-        );
+        assert_eq!(&source[shape.derives[0]..shape.derives[0] + 11], "Deserialize");
         let parameters = parameters(&rope, source.find("show").unwrap()).unwrap();
         assert_eq!(parameters.len(), 1);
         assert!(source[parameters[0].extractor..].starts_with("Query"));
         assert!(source[parameters[0].schema.unwrap()..].starts_with("Search"));
-        for attr in [
-            "#[serde(flatten)]",
-            "#[serde(deserialize_with=\"custom\")]",
-            "#[cfg(unix)]",
-        ] {
-            let source =
-                format!("#[derive(serde::Deserialize)] struct Search{{{attr} field: String}}");
+        for attr in ["#[serde(flatten)]", "#[serde(deserialize_with=\"custom\")]", "#[cfg(unix)]"] {
+            let source = format!("#[derive(serde::Deserialize)] struct Search{{{attr} field: String}}");
             assert!(schema(&Rope::from_str(&source), source.find("Search").unwrap()).is_none());
         }
-        let dynamic =
-            "fn show(query: axum::extract::Query<std::collections::HashMap<String,String>>){}";
-        assert!(
-            super::parameters(&Rope::from_str(dynamic), dynamic.find("show").unwrap()).unwrap()[0]
-                .schema
-                .is_none()
-        );
+        let dynamic = "fn show(query: axum::extract::Query<std::collections::HashMap<String,String>>){}";
+        assert!(super::parameters(&Rope::from_str(dynamic), dynamic.find("show").unwrap()).unwrap()[0].schema.is_none());
         let custom = "struct Search{field:String}";
         assert!(schema(&Rope::from_str(custom), custom.find("Search").unwrap()).is_none());
     }

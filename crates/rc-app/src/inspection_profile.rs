@@ -179,16 +179,34 @@ mod tests {
         p.set("dead_code", Some(Level::Error));
         p.set("clippy::*", Some(Level::WeakWarning));
         p.set("E0425", Some(Level::Info));
-        let list = vec![diag("unused_variables", Severity::Warning), diag("unused_variables", Severity::Hint), diag("dead_code", Severity::Hint), diag("dead_code", Severity::Warning), diag("clippy::len_zero", Severity::Warning), diag("E0425", Severity::Error), diag("other", Severity::Warning)];
+        let list = vec![
+            diag("unused_variables", Severity::Warning),
+            diag("unused_variables", Severity::Hint),
+            diag("dead_code", Severity::Hint),
+            diag("dead_code", Severity::Warning),
+            diag("clippy::len_zero", Severity::Warning),
+            diag("E0425", Severity::Error),
+            diag("other", Severity::Warning),
+        ];
         let out: Vec<(String, Severity)> = apply(&p, list).into_iter().map(|d| (d.message, d.severity)).collect();
         assert_eq!(
             out,
-            [("dead_code".to_string(), Severity::Hint), ("dead_code".to_string(), Severity::Error), ("clippy::len_zero".to_string(), Severity::Info), ("E0425".to_string(), Severity::Hint), ("other".to_string(), Severity::Warning)]
+            [
+                ("dead_code".to_string(), Severity::Hint),
+                ("dead_code".to_string(), Severity::Error),
+                ("clippy::len_zero".to_string(), Severity::Info),
+                ("E0425".to_string(), Severity::Hint),
+                ("other".to_string(), Severity::Warning)
+            ]
         );
         // CrabCraft's own findings go by their inspection id, not their code.
         p.set(UNKNOWN_KEY, Some(Level::Off));
         p.set(NO_SOURCE, Some(Level::Error));
-        let own = [(diag("Cargo.toml", Severity::Warning), UNKNOWN_KEY), (diag("Cargo.toml", Severity::Warning), NO_SOURCE), (diag("Cargo.toml", Severity::Warning), EDITION)];
+        let own = [
+            (diag("Cargo.toml", Severity::Warning), UNKNOWN_KEY),
+            (diag("Cargo.toml", Severity::Warning), NO_SOURCE),
+            (diag("Cargo.toml", Severity::Warning), EDITION),
+        ];
         let out: Vec<Severity> = apply_own(&p, &own).into_iter().map(|d| d.severity).collect();
         assert_eq!(out, [Severity::Error, Severity::Warning]);
     }

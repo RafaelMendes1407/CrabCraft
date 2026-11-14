@@ -46,8 +46,24 @@ fn state() -> EditorState {
     let find = |s: &EditorState, t: &str| s.buffer.rope().to_string().find(t).map(|b| s.buffer.rope().byte_to_char(b)).unwrap();
     let unknown = find(&s, "IGreeter");
     s.set_diagnostics(vec![
-        Diagnostic { start: unknown, end: unknown + 8, severity: Severity::Error, message: "The type or namespace name 'IGreeter' could not be found".into(), code: Some("CS0246".into()), unnecessary: false, deprecated: false },
-        Diagnostic { start: find(&s, "using System.Linq"), end: find(&s, "using System.Linq") + 18, severity: Severity::Hint, message: "Unnecessary using".into(), code: None, unnecessary: true, deprecated: false },
+        Diagnostic {
+            start: unknown,
+            end: unknown + 8,
+            severity: Severity::Error,
+            message: "The type or namespace name 'IGreeter' could not be found".into(),
+            code: Some("CS0246".into()),
+            unnecessary: false,
+            deprecated: false,
+        },
+        Diagnostic {
+            start: find(&s, "using System.Linq"),
+            end: find(&s, "using System.Linq") + 18,
+            severity: Severity::Hint,
+            message: "Unnecessary using".into(),
+            code: None,
+            unnecessary: true,
+            deprecated: false,
+        },
     ]);
     let call = find(&s, "count, MaxNames");
     s.inlays = vec![InlayHint { pos: call, label: "val1:".into(), pad_left: false, pad_right: true }];

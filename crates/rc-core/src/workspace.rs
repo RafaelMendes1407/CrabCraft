@@ -56,7 +56,6 @@ impl Workspace {
             _ => None,
         }
     }
-
 }
 
 /// Folders never shown in the explorer.

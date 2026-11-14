@@ -53,9 +53,14 @@ impl Repository {
     }
 
     /// Permit configured helpers and mutations only after explicit project trust.
-    pub fn with_trust(mut self, trusted: bool) -> Self { self.trusted = trusted; self }
+    pub fn with_trust(mut self, trusted: bool) -> Self {
+        self.trusted = trusted;
+        self
+    }
 
-    pub fn is_trusted(&self) -> bool { self.trusted }
+    pub fn is_trusted(&self) -> bool {
+        self.trusted
+    }
 
     /// The work tree root (as git reports it, symlinks resolved).
     pub fn root(&self) -> &Path {
@@ -116,12 +121,18 @@ impl Repository {
 
     /// The full hash `rev` resolves to (`HEAD`, a branch, a short hash…).
     pub async fn resolve(&self, rev: &str) -> Result<String> {
-        Ok(self.cmd().args(["rev-parse", "--verify", "--quiet", "--end-of-options"]).arg(format!("{rev}^{{commit}}")).text().await.map_err(|e| match e {
-            GitError::Failed { .. } => GitError::NotFound(rev.to_string()),
-            e => e,
-        })?
-        .trim()
-        .to_string())
+        Ok(self
+            .cmd()
+            .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
+            .arg(format!("{rev}^{{commit}}"))
+            .text()
+            .await
+            .map_err(|e| match e {
+                GitError::Failed { .. } => GitError::NotFound(rev.to_string()),
+                e => e,
+            })?
+            .trim()
+            .to_string())
     }
 
     /// The current branch name, or `None` when HEAD is detached.

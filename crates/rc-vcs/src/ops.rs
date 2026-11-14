@@ -132,7 +132,8 @@ impl Repository {
             }
             Err(_) => Vec::new(),
         };
-        let (tracked, added): (Vec<String>, Vec<String>) = paths.iter().cloned().partition(|p| in_head.iter().any(|h| h == p || h.starts_with(&format!("{p}/"))));
+        let (tracked, added): (Vec<String>, Vec<String>) =
+            paths.iter().cloned().partition(|p| in_head.iter().any(|h| h == p || h.starts_with(&format!("{p}/"))));
         if !added.is_empty() {
             self.cmd().args(["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--"]).args(&added).output().await?;
         }

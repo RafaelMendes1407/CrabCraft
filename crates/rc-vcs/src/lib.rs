@@ -41,8 +41,8 @@ pub use patch::{MAX_PATCH_BYTES, PatchFile, PatchKind, PatchPreview, check_patch
 pub use remote::{FetchOptions, PullOptions, PushOptions, Remote};
 pub use repo::{RepoState, Repository};
 pub use sequence::{FastForward, MergeOptions, Operation};
-pub use sign::{Signature, SignatureStatus, SigningConfig};
 pub use side_by_side::{Row, RowKind, SideBySide, inline_changes};
+pub use sign::{Signature, SignatureStatus, SigningConfig};
 pub use stash::{Stash, StashOptions};
 pub use status::{BranchStatus, ConflictKind, FileState, Status, StatusEntry, StatusOptions};
 pub use tag::Tag;

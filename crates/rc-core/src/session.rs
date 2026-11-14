@@ -68,7 +68,23 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
     fn default() -> Self {
-        RunOptions { args: String::new(), env: String::new(), working_dir: String::new(), channel: String::new(), cargo_profile: String::new(), wasm_target: String::new(), wasm_dev: false, wasm_out_dir: String::new(), features: String::new(), backtrace: String::new(), stdin_file: String::new(), before_launch: Vec::new(), allow_parallel: false, emulate_terminal: false, in_project: false }
+        RunOptions {
+            args: String::new(),
+            env: String::new(),
+            working_dir: String::new(),
+            channel: String::new(),
+            cargo_profile: String::new(),
+            wasm_target: String::new(),
+            wasm_dev: false,
+            wasm_out_dir: String::new(),
+            features: String::new(),
+            backtrace: String::new(),
+            stdin_file: String::new(),
+            before_launch: Vec::new(),
+            allow_parallel: false,
+            emulate_terminal: false,
+            in_project: false,
+        }
     }
 }
 
@@ -118,7 +134,11 @@ pub struct EditorWindow {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct IssueTrackerConfig { pub provider: String, pub base_url: String, pub project: String }
+pub struct IssueTrackerConfig {
+    pub provider: String,
+    pub base_url: String,
+    pub project: String,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -220,7 +240,12 @@ pub fn clean_scopes(list: &[NamedScope]) -> Vec<NamedScope> {
     let mut out: Vec<NamedScope> = Vec::new();
     for s in list {
         let name = s.name.trim();
-        if name.is_empty() || name.len() > MAX_SCOPE_NAME || name.starts_with(BUILTIN_SCOPE_PREFIX) || s.pattern.len() > MAX_SCOPE_PATTERN || out.iter().any(|o| o.name == name) {
+        if name.is_empty()
+            || name.len() > MAX_SCOPE_NAME
+            || name.starts_with(BUILTIN_SCOPE_PREFIX)
+            || s.pattern.len() > MAX_SCOPE_PATTERN
+            || out.iter().any(|o| o.name == name)
+        {
             continue;
         }
         out.push(NamedScope { name: name.to_string(), pattern: s.pattern.trim().to_string() });
@@ -384,7 +409,14 @@ mod tests {
         let raw = vec![scope(" Sources ", " src/**/*.rs "), scope("", "*"), scope("builtin:tests", "*"), scope("Sources", "other"), scope("Docs", "a[")];
         assert_eq!(clean_scopes(&raw), vec![scope("Sources", "src/**/*.rs"), scope("Docs", "a[")]);
         let color = |scope: &str, color: &str| FileColor { scope: scope.into(), color: color.into() };
-        let raw = vec![color("Sources", "#A0B1C2"), color("Sources", "#000000"), color("Gone", "#ffffff"), color("builtin:tests", "green"), color("builtin:tests", "12345"), color("builtin:tests", "1a2b3c")];
+        let raw = vec![
+            color("Sources", "#A0B1C2"),
+            color("Sources", "#000000"),
+            color("Gone", "#ffffff"),
+            color("builtin:tests", "green"),
+            color("builtin:tests", "12345"),
+            color("builtin:tests", "1a2b3c"),
+        ];
         let known = |k: &str| k == "Sources" || k == "builtin:tests";
         assert_eq!(clean_file_colors(&raw, known), vec![color("Sources", "#a0b1c2"), color("builtin:tests", "#1a2b3c")]);
         assert_eq!(parse_hex_color("#ffé000"), None);

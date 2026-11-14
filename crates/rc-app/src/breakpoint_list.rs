@@ -28,9 +28,7 @@ impl CrabCraftApp {
             .docs
             .all_breakpoints()
             .into_iter()
-            .flat_map(|(path, lines)| {
-                lines.into_iter().map(move |(line, kind)| (path.clone(), line, kind)).collect::<Vec<_>>()
-            })
+            .flat_map(|(path, lines)| lines.into_iter().map(move |(line, kind)| (path.clone(), line, kind)).collect::<Vec<_>>())
             .map(|(path, line, kind)| {
                 let key = (path.clone(), line);
                 BreakpointRow {
@@ -43,7 +41,14 @@ impl CrabCraftApp {
                 }
             })
             .collect();
-        rows.sort_by(|a, b| (a.group.is_none(), a.group.as_ref().map(|g| g.to_lowercase()), &a.path, a.line).cmp(&(b.group.is_none(), b.group.as_ref().map(|g| g.to_lowercase()), &b.path, b.line)));
+        rows.sort_by(|a, b| {
+            (a.group.is_none(), a.group.as_ref().map(|g| g.to_lowercase()), &a.path, a.line).cmp(&(
+                b.group.is_none(),
+                b.group.as_ref().map(|g| g.to_lowercase()),
+                &b.path,
+                b.line,
+            ))
+        });
         rows
     }
 
@@ -120,6 +125,6 @@ impl CrabCraftApp {
 
     /// Opens the file of a breakpoint at its line.
     pub fn go_to_breakpoint(&mut self, path: &Path, line: usize) {
-        self.open_at(path,line,0);
+        self.open_at(path, line, 0);
     }
 }

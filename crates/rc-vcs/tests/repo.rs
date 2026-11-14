@@ -163,7 +163,8 @@ async fn stage_unstage_and_discard_hunks_and_lines() {
     // Discard just the "line THIRTY" replacement (its removed and added lines).
     let d = t.repo.diff(&DiffSpec::WorktreeVsIndex, &DiffOptions::default()).await.unwrap();
     let h = &d[0].hunks[0];
-    let sel: Vec<usize> = h.lines.iter().enumerate().filter(|(_, l)| l.text == "line 30" && l.kind == DiffLineKind::Removed || l.text == "line THIRTY").map(|(i, _)| i).collect();
+    let sel: Vec<usize> =
+        h.lines.iter().enumerate().filter(|(_, l)| l.text == "line 30" && l.kind == DiffLineKind::Removed || l.text == "line THIRTY").map(|(i, _)| i).collect();
     t.repo.discard_lines(&d[0], 0, &sel).await.unwrap();
     assert_eq!(t.read("f.txt"), base.replace("line 30\n", "line 30\nline 30b\n"));
 
@@ -314,7 +315,16 @@ async fn stash_push_list_apply_pop_drop() {
 #[tokio::test]
 async fn stash_selected_literal_paths_and_restore_on_original_base_branch() {
     let t = TempRepo::new().await;
-    t.commit_files(&[("Cargo.toml", "[package]\nname = \"stash_fixture\"\nversion = \"0.1.0\"\n"), ("src/lib.rs", "pub fn original() {}\n"), ("other.rs", "// original\n"), ("a[1].rs", "// original\n"), ("a1.rs", "// original\n")], "init");
+    t.commit_files(
+        &[
+            ("Cargo.toml", "[package]\nname = \"stash_fixture\"\nversion = \"0.1.0\"\n"),
+            ("src/lib.rs", "pub fn original() {}\n"),
+            ("other.rs", "// original\n"),
+            ("a[1].rs", "// original\n"),
+            ("a1.rs", "// original\n"),
+        ],
+        "init",
+    );
     let base = t.repo.resolve("HEAD").await.unwrap();
     t.write("src/lib.rs", "pub fn changed() {}\n");
     t.write("other.rs", "// keep local\n");
@@ -729,7 +739,9 @@ async fn worktrees_are_added_listed_locked_removed_and_pruned() {
         let r = t.repo.add_worktree(&place.join("bad"), &WorktreeCheckout::NewBranch { name: bad.into(), start: None }).await;
         assert!(matches!(r, Err(GitError::InvalidBranchName(_))), "{bad:?}: {r:?}");
     }
-    assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::NewBranch { name: "dev".into(), start: None }).await, Err(GitError::BranchExists(b)) if b == "dev"));
+    assert!(
+        matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::NewBranch { name: "dev".into(), start: None }).await, Err(GitError::BranchExists(b)) if b == "dev")
+    );
     let r = t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("dev".into())).await;
     assert!(matches!(&r, Err(GitError::BranchInUse(b)) if b == "dev"), "{r:?}");
     assert!(matches!(t.repo.add_worktree(&place.join("x"), &WorktreeCheckout::Branch("nope".into())).await, Err(GitError::NotFound(_))));
@@ -791,7 +803,10 @@ async fn fetch_pull_push_with_progress() {
         let lines = lines.clone();
         Arc::new(move |p| lines.lock().unwrap().push(p))
     };
-    a.repo.push(&PushOptions { remote: Some("origin".into()), refspec: Some("main".into()), set_upstream: true, ..Default::default() }, Some(sink.clone()), None).await.unwrap();
+    a.repo
+        .push(&PushOptions { remote: Some("origin".into()), refspec: Some("main".into()), set_upstream: true, ..Default::default() }, Some(sink.clone()), None)
+        .await
+        .unwrap();
     assert!(!lines.lock().unwrap().is_empty());
 
     // A second clone pushes a commit; the first one fetches and pulls it.

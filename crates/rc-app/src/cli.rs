@@ -53,7 +53,9 @@ impl std::fmt::Display for CliError {
             Self::InvalidNumber { option, value } => trf("{option} needs a number from 1 up, not {value}", &[("option", option), ("value", value)]),
             Self::MissingFile => tr("--line and --column must come before a file").to_string(),
             Self::MultipleProjects => tr("Specify one Cargo.toml or project folder").to_string(),
-            Self::UntrustedProject => tr("Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.").to_string(),
+            Self::UntrustedProject => {
+                tr("Inspection may execute build scripts and procedural macros. Pass --trust-project only if you trust this project.").to_string()
+            }
             Self::ComparisonPaths { merge: false } => tr("Use: crabcraft diff LEFT RIGHT").to_string(),
             Self::ComparisonPaths { merge: true } => tr("Use: crabcraft merge LEFT RIGHT BASE OUTPUT").to_string(),
             Self::HttpFile => tr("Specify one HTTP request file").to_string(),
@@ -82,7 +84,9 @@ pub fn usage() -> String {
     let mut out = format!(
         "{} crabcraft [options] [path[:line[:column]]]...\n\n{}\n\n{}\n",
         tr("Usage:"),
-        tr("Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window."),
+        tr(
+            "Opens folders, Cargo projects and files. Files go to the CrabCraft window that is already open, if any; a folder or a Cargo.toml opens in a new window."
+        ),
         tr("Options:")
     );
     for (option, text) in rows {
@@ -190,12 +194,18 @@ impl ToolRequest {
         // Formatting does not build a project. Clippy runs only with explicit CLI trust.
         if self.inspect {
             cmd.args(["--workspace", "--all-targets"]);
-            if self.offline { cmd.arg("--offline"); }
+            if self.offline {
+                cmd.arg("--offline");
+            }
             cmd.args(["--", "-D", "warnings"]);
         } else {
             cmd.arg("--all");
-            if self.check { cmd.arg("--check"); }
-            if self.offline { cmd.env("CARGO_NET_OFFLINE", "true"); }
+            if self.check {
+                cmd.arg("--check");
+            }
+            if self.offline {
+                cmd.env("CARGO_NET_OFFLINE", "true");
+            }
         }
         cmd
     }
@@ -264,9 +274,10 @@ mod tests {
         assert!(run(&["format", "a", "b"], dir.path()).is_err());
         assert!(run(&["format", "missing"], dir.path()).is_err());
         assert_eq!(run(&["inspect", "--help"], dir.path()), Ok(Command::Help));
-        assert_eq!(run(&["format", "--check", "--offline"], dir.path()), Ok(Command::Tool(ToolRequest {
-            manifest: dir.path().join("Cargo.toml"), inspect: false, check: true, offline: true,
-        })));
+        assert_eq!(
+            run(&["format", "--check", "--offline"], dir.path()),
+            Ok(Command::Tool(ToolRequest { manifest: dir.path().join("Cargo.toml"), inspect: false, check: true, offline: true }))
+        );
     }
 
     #[test]

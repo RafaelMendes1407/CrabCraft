@@ -31,9 +31,7 @@ fn benches(c: &mut Criterion) {
         )
     });
 
-    c.bench_function("highlight 80 visible lines", |b| {
-        b.iter(|| black_box(highlight_lines(Lang::Rust, &tree, &rope, 10_000, 80)))
-    });
+    c.bench_function("highlight 80 visible lines", |b| b.iter(|| black_box(highlight_lines(Lang::Rust, &tree, &rope, 10_000, 80))));
     c.bench_function("folding ranges 20k lines", |b| b.iter(|| black_box(rc_syntax::folding_ranges(Lang::Rust, &tree, &rope))));
 }
 

@@ -2,15 +2,8 @@
 use std::ops::Range;
 #[derive(Debug, Clone)]
 pub enum Kind {
-    Path {
-        prefix: String,
-    },
-    Query {
-        path: String,
-        prefix: String,
-        used: Vec<String>,
-        has_equal: bool,
-    },
+    Path { prefix: String },
+    Query { path: String, prefix: String, used: Vec<String>, has_equal: bool },
 }
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -18,11 +11,7 @@ pub struct Context {
     pub kind: Kind,
 }
 pub fn context(value: &str, caret: usize) -> Option<Context> {
-    if value.len() > 8192
-        || caret > value.len()
-        || !value.is_char_boundary(caret)
-        || value.chars().any(char::is_control)
-    {
+    if value.len() > 8192 || caret > value.len() || !value.is_char_boundary(caret) || value.chars().any(char::is_control) {
         return None;
     }
     let start = if value.starts_with('/') || value.is_empty() {
@@ -35,73 +24,40 @@ pub fn context(value: &str, caret: usize) -> Option<Context> {
             return None;
         }
         let authority = scheme + 3;
-        let end = value[authority..]
-            .find(['/', '?', '#'])
-            .map_or(value.len(), |offset| authority + offset);
+        let end = value[authority..].find(['/', '?', '#']).map_or(value.len(), |offset| authority + offset);
         if authority == end {
             return None;
         }
         end
     };
-    let path_end = value[start..]
-        .find(['?', '#'])
-        .map_or(value.len(), |offset| start + offset);
+    let path_end = value[start..].find(['?', '#']).map_or(value.len(), |offset| start + offset);
     if caret >= start && caret <= path_end {
-        return Some(Context {
-            range: start..path_end,
-            kind: Kind::Path {
-                prefix: value[start..caret].into(),
-            },
-        });
+        return Some(Context { range: start..path_end, kind: Kind::Path { prefix: value[start..caret].into() } });
     }
     if value.as_bytes().get(path_end) != Some(&b'?') {
         return None;
     }
     let query_start = path_end + 1;
-    let query_end = value[query_start..]
-        .find('#')
-        .map_or(value.len(), |offset| query_start + offset);
+    let query_end = value[query_start..].find('#').map_or(value.len(), |offset| query_start + offset);
     if caret < query_start || caret > query_end {
         return None;
     }
-    let name_start = value[query_start..caret]
-        .rfind('&')
-        .map_or(query_start, |offset| query_start + offset + 1);
-    let pair_end = value[caret..query_end]
-        .find('&')
-        .map_or(query_end, |offset| caret + offset);
-    let name_end = value[name_start..pair_end]
-        .find('=')
-        .map_or(pair_end, |offset| name_start + offset);
+    let name_start = value[query_start..caret].rfind('&').map_or(query_start, |offset| query_start + offset + 1);
+    let pair_end = value[caret..query_end].find('&').map_or(query_end, |offset| caret + offset);
+    let name_end = value[name_start..pair_end].find('=').map_or(pair_end, |offset| name_start + offset);
     if caret > name_end {
         return None;
     }
     let prefix = &value[name_start..caret];
-    if !prefix
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-    {
+    if !prefix.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')) {
         return None;
     }
-    let other = format!(
-        "{}{}",
-        &value[query_start..name_start],
-        &value[pair_end..query_end]
-    );
+    let other = format!("{}{}", &value[query_start..name_start], &value[pair_end..query_end]);
     let parsed = reqwest::Url::parse(&format!("http://localhost/?{other}")).ok()?;
-    let used = parsed
-        .query_pairs()
-        .map(|(name, _)| name.into_owned())
-        .take(128)
-        .collect();
+    let used = parsed.query_pairs().map(|(name, _)| name.into_owned()).take(128).collect();
     Some(Context {
         range: name_start..name_end,
-        kind: Kind::Query {
-            path: value[start..path_end].into(),
-            prefix: prefix.into(),
-            used,
-            has_equal: name_end < pair_end,
-        },
+        kind: Kind::Query { path: value[start..path_end].into(), prefix: prefix.into(), used, has_equal: name_end < pair_end },
     })
 }
 fn relative_context(value: &str, caret: usize) -> Option<Context> {
@@ -149,24 +105,12 @@ impl Literal {
         if range.start > range.end {
             return None;
         }
-        let start = if range.start == self.value.len() {
-            self.content.end
-        } else {
-            self.map.get(range.start)?.start
-        };
-        let end = if range.start == range.end {
-            start
-        } else {
-            self.map.get(range.end.checked_sub(1)?)?.end
-        };
+        let start = if range.start == self.value.len() { self.content.end } else { self.map.get(range.start)?.start };
+        let end = if range.start == range.end { start } else { self.map.get(range.end.checked_sub(1)?)?.end };
         Some(start..end)
     }
 }
-pub fn literal(
-    rope: &rc_text::Rope,
-    tree: &rc_syntax::tree_sitter::Tree,
-    at: usize,
-) -> Option<Literal> {
+pub fn literal(rope: &rc_text::Rope, tree: &rc_syntax::tree_sitter::Tree, at: usize) -> Option<Literal> {
     if rope.len_bytes() > 2 * 1024 * 1024 || at > rope.len_bytes() {
         return None;
     }
@@ -177,10 +121,7 @@ pub fn literal(
         }
         node = node.parent()?;
     }
-    if !matches!(node.kind(), "string_literal" | "raw_string_literal")
-        || node.has_error()
-        || node.end_byte() - node.start_byte() > 8192
-    {
+    if !matches!(node.kind(), "string_literal" | "raw_string_literal") || node.has_error() || node.end_byte() - node.start_byte() > 8192 {
         return None;
     }
     let source = rope.to_string();
@@ -234,29 +175,16 @@ pub fn literal(
     if !value.starts_with("http://") && !value.starts_with("https://") {
         return None;
     }
-    Some(Literal {
-        value,
-        map,
-        content,
-    })
+    Some(Literal { value, map, content })
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn query_context_refuses_values_fragments_and_keeps_other_parameters() {
-        let c = context(
-            "https://host/users/42?q=hello&pa=9#fragment",
-            "https://host/users/42?q=hello&pa".len(),
-        )
-        .unwrap();
+        let c = context("https://host/users/42?q=hello&pa=9#fragment", "https://host/users/42?q=hello&pa".len()).unwrap();
         match c.kind {
-            Kind::Query {
-                path,
-                prefix,
-                used,
-                has_equal,
-            } => {
+            Kind::Query { path, prefix, used, has_equal } => {
                 assert_eq!(path, "/users/42");
                 assert_eq!(prefix, "pa");
                 assert_eq!(used, ["q"]);

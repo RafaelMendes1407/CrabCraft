@@ -145,7 +145,13 @@ impl CrabCraftApp {
     /// Starts listing the uses of `feature` in the package of `manifest`.
     fn find_feature_uses(&mut self, manifest: &Path, feature: String) {
         let Some(dir) = manifest.parent() else { return };
-        let open = self.docs.list.iter().filter(|d| d.path.extension().is_some_and(|e| e == "rs")).map(|d| (d.path.clone(), d.editor.buffer.rope().to_string())).collect();
+        let open = self
+            .docs
+            .list
+            .iter()
+            .filter(|d| d.path.extension().is_some_and(|e| e == "rs"))
+            .map(|d| (d.path.clone(), d.editor.buffer.rope().to_string()))
+            .collect();
         self.feature_search.start(self.waker.clone(), dir.to_path_buf(), feature, open);
     }
 

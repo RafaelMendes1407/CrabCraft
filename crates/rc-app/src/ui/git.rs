@@ -3,12 +3,12 @@
 
 use crate::app::CrabCraftApp;
 use crate::toolwindow::ToolWindow;
+use crate::ui::dialogs::Dialog;
 use crate::ui::toolwindows::{empty_state, header};
+use crate::vcs::{GitTab, PatchSource};
 use egui::{Align2, Color32, FontId, Rect, Sense, Ui, pos2, vec2};
 use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
-use crate::ui::dialogs::Dialog;
-use crate::vcs::{GitTab, PatchSource};
 use rc_vcs::FileState;
 
 /// IntelliJ's file status colours.
@@ -49,15 +49,30 @@ fn changelists_bar(app: &mut CrabCraftApp, ui: &mut Ui) {
                 app.vcs.changelists.create(&name)
             } else if ui.add_enabled(mutable && !name.is_empty(), egui::Button::new(tr("Rename Changelist"))).clicked() {
                 app.vcs.changelists.rename_active(&name)
-            } else if ui.add_enabled(mutable, egui::Button::new(tr("Delete Changelist"))).on_hover_text(tr("Moves its files to the default changelist without changing their contents.")).clicked() {
+            } else if ui
+                .add_enabled(mutable, egui::Button::new(tr("Delete Changelist")))
+                .on_hover_text(tr("Moves its files to the default changelist without changing their contents."))
+                .clicked()
+            {
                 app.vcs.changelists.delete_active(&mut app.vcs.message)
-            } else { return };
+            } else {
+                return;
+            };
             match result {
-                Ok(()) => { app.session_dirty = true; app.vcs.changelist_name.clear(); ui.close(); }
-                Err(error) => app.vcs.error = Some(match error {
-                    rc_core::changelists::ChangelistError::AlreadyExists => tr("A changelist with this name already exists"),
-                    _ => tr("Choose a unique changelist name of up to 100 characters"),
-                }.to_string()),
+                Ok(()) => {
+                    app.session_dirty = true;
+                    app.vcs.changelist_name.clear();
+                    ui.close();
+                }
+                Err(error) => {
+                    app.vcs.error = Some(
+                        match error {
+                            rc_core::changelists::ChangelistError::AlreadyExists => tr("A changelist with this name already exists"),
+                            _ => tr("Choose a unique changelist name of up to 100 characters"),
+                        }
+                        .to_string(),
+                    )
+                }
             }
         });
     });
@@ -72,7 +87,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if app.runner.require_trust().is_err() {
         empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
-        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        if ui.button(tr("Trust this project")).clicked() {
+            app.trust_project();
+        }
         return;
     }
     if app.vcs.repo.is_none() {
@@ -102,7 +119,9 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         let busy = app.vcs.busy.is_some();
         if ui.add_enabled(!included.is_empty() && !busy, egui::Button::new(tr("Shelve Checked…"))).clicked() {
-            app.shelves.files = included.clone(); app.vcs.tab = GitTab::Shelves; app.dock.show(ToolWindow::Git);
+            app.shelves.files = included.clone();
+            app.vcs.tab = GitTab::Shelves;
+            app.dock.show(ToolWindow::Git);
         }
         if ui.add_enabled_ui(!included.is_empty() && !busy, |ui| theme::secondary_button(ui, tr("Stash Checked…"))).inner.clicked() {
             app.dialog = Some(Dialog::StashChanges { message: String::new(), include_untracked: false, keep_index: false, paths: included.clone() });
@@ -139,7 +158,13 @@ pub fn commit_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                 // Include checkbox.
                 let cb = Rect::from_center_size(pos2(r.left() + 22.0, r.center().y), vec2(14.0, 14.0));
                 let included = !app.vcs.excluded.contains(&c.path);
-                ui.painter().rect(cb, 3.0, if included { p.accent } else { p.control_bg }, egui::Stroke::new(1.0, if included { p.accent } else { p.control_border }), egui::StrokeKind::Inside);
+                ui.painter().rect(
+                    cb,
+                    3.0,
+                    if included { p.accent } else { p.control_bg },
+                    egui::Stroke::new(1.0, if included { p.accent } else { p.control_border }),
+                    egui::StrokeKind::Inside,
+                );
                 if included {
                     let s = egui::Stroke::new(1.6, Color32::WHITE);
                     ui.painter().line_segment([cb.left_center() + vec2(3.0, 0.0), cb.center_bottom() + vec2(-1.0, -3.5)], s);
@@ -284,7 +309,9 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     if app.runner.require_trust().is_err() {
         empty_state(ui, ico::WARNING, tr("Restricted mode"), tr("Trust this project before running project tools or code"));
-        if ui.button(tr("Trust this project")).clicked() { app.trust_project(); }
+        if ui.button(tr("Trust this project")).clicked() {
+            app.trust_project();
+        }
         return;
     }
     if app.vcs.repo.is_none() {
@@ -305,10 +332,18 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         if theme::tab(ui, app.vcs.tab == GitTab::Stashes, Some(ico::HISTORY), &stashes, false).0.clicked() {
             app.vcs.tab = GitTab::Stashes;
         }
-        if theme::tab(ui, app.vcs.tab == GitTab::Shelves, Some(ico::HISTORY), tr("Shelves"), false).0.clicked() { app.vcs.tab = GitTab::Shelves; }
-        if theme::tab(ui, app.vcs.tab == GitTab::HistoryEdit, Some(ico::HISTORY), tr("Edit History"), false).0.clicked() { app.vcs.tab = GitTab::HistoryEdit; }
-        if theme::tab(ui, app.vcs.tab == GitTab::Issues, Some(ico::HISTORY), tr("Issues"), false).0.clicked() { app.vcs.tab = GitTab::Issues; }
-        if theme::tab(ui, app.vcs.tab == GitTab::Hosting, Some(ico::VCS), tr("Hosting"), false).0.clicked() { app.vcs.tab = GitTab::Hosting; }
+        if theme::tab(ui, app.vcs.tab == GitTab::Shelves, Some(ico::HISTORY), tr("Shelves"), false).0.clicked() {
+            app.vcs.tab = GitTab::Shelves;
+        }
+        if theme::tab(ui, app.vcs.tab == GitTab::HistoryEdit, Some(ico::HISTORY), tr("Edit History"), false).0.clicked() {
+            app.vcs.tab = GitTab::HistoryEdit;
+        }
+        if theme::tab(ui, app.vcs.tab == GitTab::Issues, Some(ico::HISTORY), tr("Issues"), false).0.clicked() {
+            app.vcs.tab = GitTab::Issues;
+        }
+        if theme::tab(ui, app.vcs.tab == GitTab::Hosting, Some(ico::VCS), tr("Hosting"), false).0.clicked() {
+            app.vcs.tab = GitTab::Hosting;
+        }
         let worktrees = trf("Worktrees ({n})", &[("n", &app.vcs.worktrees.len())]);
         if theme::tab(ui, app.vcs.tab == GitTab::Worktrees, Some(ico::FOLDER), &worktrees, false).0.clicked() {
             app.vcs.tab = GitTab::Worktrees;
@@ -336,10 +371,65 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
         GitTab::Tags => tags_view(app, ui),
         GitTab::Stashes => stashes_view(app, ui),
         GitTab::Worktrees => worktrees_view(app, ui),
-        GitTab::Hosting => { let trusted=app.runner.require_trust().is_ok();let(action,changed)=app.hosting.show(ui,trusted);if changed{app.session_dirty=true;}match action{Some(crate::hosting::UiAction::UseFile)=>{if let Some(doc)=app.docs.active_doc(){let name=doc.path.file_name().and_then(|name|name.to_str()).unwrap_or("main.rs").to_string();let content=doc.editor.buffer.rope().to_string();app.hosting.use_file(name,content);}},Some(crate::hosting::UiAction::Login{program,args})=>{if trusted&&app.terminal_starting.is_none(){let spec=rc_term::SpawnSpec::command(program,args,None).env("GH_DEBUG","").env("GLAB_DEBUG_HTTP","");match crate::repl::Starting::new(spec,app.waker.clone()){Ok(starting)=>{app.terminal_starting=Some(starting);app.dock.show(ToolWindow::Terminal);},Err(error)=>app.notify(error.to_string(),true)}}},None=>{}} },
-        GitTab::Issues => { let (action,changed)=app.issue_tracker.show(ui);if changed{app.session_dirty=true;}match action{Some(crate::issue_tracker::UiAction::Commit(text))=>{if !app.vcs.message.is_empty(){app.vcs.message.push('\n');}app.vcs.message.push_str(&text);app.dock.show(ToolWindow::Commit);},Some(crate::issue_tracker::UiAction::Branch(name))=>app.dialog=Some(Dialog::NewBranch{name}),None=>{}} },
-        GitTab::HistoryEdit => { if let Some(repo) = app.vcs.repo.clone() { let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.history_edit.show(ui, repo, app.vcs.busy.is_some(), unsaved); } },
-        GitTab::Shelves => { if let Some(repo) = app.vcs.repo.clone() { let checked = app.vcs.included(); let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty(); app.shelves.show(ui, repo, checked, app.vcs.busy.is_some(), unsaved); } },
+        GitTab::Hosting => {
+            let trusted = app.runner.require_trust().is_ok();
+            let (action, changed) = app.hosting.show(ui, trusted);
+            if changed {
+                app.session_dirty = true;
+            }
+            match action {
+                Some(crate::hosting::UiAction::UseFile) => {
+                    if let Some(doc) = app.docs.active_doc() {
+                        let name = doc.path.file_name().and_then(|name| name.to_str()).unwrap_or("main.rs").to_string();
+                        let content = doc.editor.buffer.rope().to_string();
+                        app.hosting.use_file(name, content);
+                    }
+                }
+                Some(crate::hosting::UiAction::Login { program, args }) => {
+                    if trusted && app.terminal_starting.is_none() {
+                        let spec = rc_term::SpawnSpec::command(program, args, None).env("GH_DEBUG", "").env("GLAB_DEBUG_HTTP", "");
+                        match crate::repl::Starting::new(spec, app.waker.clone()) {
+                            Ok(starting) => {
+                                app.terminal_starting = Some(starting);
+                                app.dock.show(ToolWindow::Terminal);
+                            }
+                            Err(error) => app.notify(error.to_string(), true),
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+        GitTab::Issues => {
+            let (action, changed) = app.issue_tracker.show(ui);
+            if changed {
+                app.session_dirty = true;
+            }
+            match action {
+                Some(crate::issue_tracker::UiAction::Commit(text)) => {
+                    if !app.vcs.message.is_empty() {
+                        app.vcs.message.push('\n');
+                    }
+                    app.vcs.message.push_str(&text);
+                    app.dock.show(ToolWindow::Commit);
+                }
+                Some(crate::issue_tracker::UiAction::Branch(name)) => app.dialog = Some(Dialog::NewBranch { name }),
+                None => {}
+            }
+        }
+        GitTab::HistoryEdit => {
+            if let Some(repo) = app.vcs.repo.clone() {
+                let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty();
+                app.history_edit.show(ui, repo, app.vcs.busy.is_some(), unsaved);
+            }
+        }
+        GitTab::Shelves => {
+            if let Some(repo) = app.vcs.repo.clone() {
+                let checked = app.vcs.included();
+                let unsaved = app.docs.list.iter().any(|doc| doc.is_modified() && doc.path.starts_with(repo.root())) || !app.rustfmt_jobs.is_empty();
+                app.shelves.show(ui, repo, checked, app.vcs.busy.is_some(), unsaved);
+            }
+        }
     }
     // Git refused to remove a worktree with local changes: offer to force it.
     if let Some(path) = app.vcs.force_remove.take()
@@ -468,7 +558,8 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
             resp.context_menu(|ui| {
                 if theme::menu_item(ui, Some(ico::ADD), tr("New Tag…"), false).clicked() {
-                    app.dialog = Some(Dialog::NewTag { name: String::new(), target: Some((c.hash.clone(), c.short_hash().to_string())), message: String::new() });
+                    app.dialog =
+                        Some(Dialog::NewTag { name: String::new(), target: Some((c.hash.clone(), c.short_hash().to_string())), message: String::new() });
                     ui.close();
                 }
                 ui.separator();
@@ -533,7 +624,11 @@ fn log_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         if !c.body.trim().is_empty() {
             ru.label(egui::RichText::new(c.body.trim()).size(12.5));
         }
-        ru.label(egui::RichText::new(format!("{}  {} <{}>  {}", c.short_hash(), c.author_name, c.author_email, crate::vcs::format_date(c.author_time))).size(12.0).color(p.muted));
+        ru.label(
+            egui::RichText::new(format!("{}  {} <{}>  {}", c.short_hash(), c.author_name, c.author_email, crate::vcs::format_date(c.author_time)))
+                .size(12.0)
+                .color(p.muted),
+        );
         if let Some((_, sig)) = app.vcs.signature.as_ref().filter(|(s, _)| *s == h)
             && let Some((text, good)) = signature_text(sig)
         {
@@ -741,7 +836,13 @@ fn worktrees_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         if ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Add Worktree…"))).inner.clicked() {
-            action = Some(WorktreeAction::Dialog(Dialog::AddWorktree { path: String::new(), new_branch: true, name: String::new(), existing: String::new(), path_edited: false }));
+            action = Some(WorktreeAction::Dialog(Dialog::AddWorktree {
+                path: String::new(),
+                new_branch: true,
+                name: String::new(),
+                existing: String::new(),
+                path_edited: false,
+            }));
         }
         let prune = ui.add_enabled_ui(!busy && !prunable.is_empty(), |ui| theme::secondary_button(ui, tr("Prune…"))).inner;
         if prune.clicked() {
@@ -784,7 +885,8 @@ fn worktrees_view(app: &mut CrabCraftApp, ui: &mut Ui) {
                 x = theme::paint_badge(ui, pos2(x, top), badge).right() + 6.0;
             }
             ui.painter().text(pos2(r.right() - 10.0, top), Align2::RIGHT_CENTER, w.short_head(), FontId::monospace(11.5), p.muted);
-            let mut job = egui::text::LayoutJob::simple_singleline(format!("{}  ·  {}", worktree_checkout(w), w.path.display()), FontId::proportional(12.0), p.muted);
+            let mut job =
+                egui::text::LayoutJob::simple_singleline(format!("{}  ·  {}", worktree_checkout(w), w.path.display()), FontId::proportional(12.0), p.muted);
             job.wrap.max_width = (r.width() - 48.0).max(40.0);
             job.wrap.max_rows = 1;
             job.wrap.break_anywhere = true;
@@ -1017,7 +1119,11 @@ fn stashes_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     match app.vcs.selected_stash.as_ref().and_then(|h| stashes.iter().find(|s| &s.hash == h)) {
         Some(st) => {
             ru.label(egui::RichText::new(stash_summary(&st.message)).font(theme::bold(13.5)));
-            ru.label(egui::RichText::new(format!("stash@{{{}}}  ·  {}  ·  {}", st.index, &st.hash[..st.hash.len().min(8)], crate::vcs::format_date(st.time))).size(12.0).color(p.muted));
+            ru.label(
+                egui::RichText::new(format!("stash@{{{}}}  ·  {}  ·  {}", st.index, &st.hash[..st.hash.len().min(8)], crate::vcs::format_date(st.time)))
+                    .size(12.0)
+                    .color(p.muted),
+            );
             ru.add_space(6.0);
             ru.horizontal_wrapped(|ui| {
                 ui.add_enabled_ui(!busy, |ui| {
@@ -1316,7 +1422,9 @@ pub fn operation_text(vcs: &crate::vcs::Vcs) -> String {
     match op.state {
         Some(rc_vcs::RepoState::Merging) => trf("Merging {rev} into {branch}", &[("rev", &target), ("branch", &branch)]),
         Some(rc_vcs::RepoState::Rebasing) => match op.step {
-            Some((n, total)) => trf("Rebasing {branch} onto {rev} (commit {n} of {total})", &[("branch", &branch), ("rev", &target), ("n", &n), ("total", &total)]),
+            Some((n, total)) => {
+                trf("Rebasing {branch} onto {rev} (commit {n} of {total})", &[("branch", &branch), ("rev", &target), ("n", &n), ("total", &total)])
+            }
             None => trf("Rebasing {branch} onto {rev}", &[("branch", &branch), ("rev", &target)]),
         },
         Some(rc_vcs::RepoState::CherryPicking) => trf("Cherry-picking {rev} {subject}", &[("rev", &short), ("subject", &subject)]),
@@ -1367,7 +1475,11 @@ pub fn operation_banner(app: &mut CrabCraftApp, ui: &mut Ui) {
                     app.vcs.continue_operation();
                 }
                 if state != rc_vcs::RepoState::Merging
-                    && ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Skip Commit"))).inner.on_hover_text(tr("Leave this commit out and go on")).clicked()
+                    && ui
+                        .add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Skip Commit")))
+                        .inner
+                        .on_hover_text(tr("Leave this commit out and go on"))
+                        .clicked()
                 {
                     app.vcs.skip_operation();
                 }
@@ -1415,7 +1527,9 @@ pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
             let theirs = op.target.as_deref().map(|h| rev_name(vcs, h)).unwrap_or_default();
             (trf("Yours ({branch})", &[("branch", &branch)]), trf("Theirs ({rev})", &[("rev", &theirs)]))
         }
-        Some(rc_vcs::RepoState::CherryPicking | rc_vcs::RepoState::Reverting) => (trf("Yours ({branch})", &[("branch", &branch)]), trf("Commit {rev}", &[("rev", &short(&op.target))])),
+        Some(rc_vcs::RepoState::CherryPicking | rc_vcs::RepoState::Reverting) => {
+            (trf("Yours ({branch})", &[("branch", &branch)]), trf("Commit {rev}", &[("rev", &short(&op.target))]))
+        }
         _ => (tr("Yours").to_string(), tr("Theirs").to_string()),
     }
 }
@@ -1426,18 +1540,31 @@ pub fn side_names(vcs: &crate::vcs::Vcs) -> (String, String) {
 pub fn merge_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     let Some(tool) = &mut app.vcs.merge_tool else { return };
     match merge_editor(tool, ui, &app.editor_config, &app.keymap, tr("Save and Mark Resolved")) {
-        MergeAction::None => {},
-        MergeAction::Close => { app.vcs.merge_tool = None; app.focus_editor = true; },
+        MergeAction::None => {}
+        MergeAction::Close => {
+            app.vcs.merge_tool = None;
+            app.focus_editor = true;
+        }
         MergeAction::Save => app.vcs.save_merge_tool(),
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MergeAction { None, Close, Save }
+pub enum MergeAction {
+    None,
+    Close,
+    Save,
+}
 
 /// Shared native merge editor; the caller decides whether saving stages a Git file or writes
 /// an explicitly requested standalone output.
-pub fn merge_editor(tool: &mut crate::merge_tool::MergeTool, ui: &mut Ui, editor_config: &rc_editor::EditorConfig, keymap: &rc_editor::Keymap, save_label: &str) -> MergeAction {
+pub fn merge_editor(
+    tool: &mut crate::merge_tool::MergeTool,
+    ui: &mut Ui,
+    editor_config: &rc_editor::EditorConfig,
+    keymap: &rc_editor::Keymap,
+    save_label: &str,
+) -> MergeAction {
     use rc_vcs::{Pane, Take};
     let p = rc_kit::pal(ui);
     let full = ui.max_rect();
@@ -1596,8 +1723,11 @@ pub fn merge_editor(tool: &mut crate::merge_tool::MergeTool, ui: &mut Ui, editor
     for (g, gx) in [(0usize, rects[0].right()), (1, rects[1].right())] {
         let strip = Rect::from_min_max(pos2(gx, body.top()), pos2(gx + gap, body.bottom()));
         ui.painter().rect_filled(strip, 0.0, p.header_bg);
-        let (state, pane, take, glyph, tip) =
-            if g == 0 { (&tool.left, Pane::Ours, Take::Ours, "»", tool.names.0.as_str()) } else { (&tool.right, Pane::Theirs, Take::Theirs, "«", tool.names.1.as_str()) };
+        let (state, pane, take, glyph, tip) = if g == 0 {
+            (&tool.left, Pane::Ours, Take::Ours, "»", tool.names.0.as_str())
+        } else {
+            (&tool.right, Pane::Theirs, Take::Theirs, "«", tool.names.1.as_str())
+        };
         let rh = state.row_height();
         if rh <= 0.0 {
             continue;

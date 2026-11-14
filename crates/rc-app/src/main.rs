@@ -1,118 +1,118 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod complete_statement;
-mod terminal_attach;
-mod database_core;
-mod database_csv;
-mod database;
-mod remote;
-mod remote_transfer;
-mod deployment;
-mod deployment_ui;
-mod deploy_sftp;
-mod deploy_ftps;
-mod remote_development_transport;
-mod remote_development;
-mod wsl_workspace;
-mod container_workspace;
-mod database_postgres;
-mod sql_injection;
-mod cli;
-mod endpoints;
-mod axum_semantic;
+mod auto_attach;
 mod axum_queries;
-mod endpoint_url;
+mod axum_semantic;
+mod borrow_errors;
+mod breakpoint_list;
+mod call_tree;
+mod cargo_dependencies;
+mod cli;
 mod clone_project;
 mod compare_cli;
-mod cargo_dependencies;
-mod missing_crates;
-mod borrow_errors;
-mod repl;
-mod repl_variables;
-mod macro_tester;
-#[cfg(test)]
-mod macro_actions_audit;
-mod macro_step_engine;
-mod signature_model;
-mod signature_backend;
-mod signature_change;
-mod macro_step;
-mod local_ai;
-mod local_ai_client;
-mod local_ai_proposal;
-mod type_hierarchy;
-mod doctest_completion;
-mod settings_backup;
-mod settings_migration;
-mod instance;
-mod auto_attach;
-mod breakpoint_list;
+mod complete_statement;
+mod container_workspace;
 mod convert;
 mod copyright;
 mod coverage;
+mod database;
+mod database_core;
+mod database_csv;
+mod database_postgres;
 mod debugger;
-mod parallel_stacks;
 mod dep_versions;
+mod deploy_ftps;
+mod deploy_sftp;
+mod deployment;
+mod deployment_ui;
+mod disassembly_view;
+mod disk_open;
+mod disk_revert;
+mod disk_save;
+mod disk_watch;
+mod docs;
+mod doctest_completion;
+#[cfg(test)]
+mod editor_rust_audit;
+mod endpoint_url;
+mod endpoints;
 mod feature_fix;
 mod feature_nav;
-mod http_client;
-mod http_cli;
-mod disassembly_view;
-mod disk_revert;
-mod disk_open;
-mod workspace_open;
 mod file_edit;
-mod disk_watch;
-mod disk_save;
+mod file_ops;
+mod file_rename;
+mod http_cli;
+mod http_client;
+#[cfg(test)]
+mod inherited_ui_audit;
 mod insight;
-mod web_languages;
-mod move_items_core;
-mod move_items;
 mod inspection_profile;
+mod instance;
 mod intention_preview;
-mod call_tree;
 mod item_templates;
 mod layout;
+mod local_ai;
+mod local_ai_client;
+mod local_ai_proposal;
 mod local_history;
+#[cfg(test)]
+mod macro_actions_audit;
+mod macro_step;
+mod macro_step_engine;
+mod macro_tester;
 mod manifest_completion;
 mod manifest_inspect;
 mod memory_view;
 mod merge_tool;
+mod missing_crates;
+mod move_items;
+mod move_items_core;
+mod native_menu;
+mod open_files;
+mod parallel_stacks;
 mod playground;
 mod profiler;
 mod refactor_conflicts;
 mod refactor_preview;
+mod remote;
+mod remote_development;
+mod remote_development_transport;
+mod remote_transfer;
+mod repl;
+mod repl_variables;
+mod replace_files;
 mod run_anything;
 mod runner;
-mod rustfmt;
-mod rustup_installer;
-mod search;
-mod replace_files;
-mod scopes;
-mod sync_log;
-mod vcs;
-#[cfg(test)]
-mod vcs_tests;
 #[cfg(test)]
 #[cfg(test)]
 #[cfg(test)]
 #[cfg(test)]
 mod rust_tests;
+mod rustfmt;
+mod rustup_installer;
+mod scopes;
 #[cfg(test)]
 mod screens;
-#[cfg(test)]
-mod editor_rust_audit;
-mod docs;
-mod file_ops;
-mod file_rename;
-mod native_menu;
-mod open_files;
-mod toolwindow;
+mod search;
+mod settings_backup;
+mod settings_migration;
+mod signature_backend;
+mod signature_change;
+mod signature_model;
+mod sql_injection;
+mod sync_log;
+mod terminal_attach;
 mod terminal_tools;
+mod toolwindow;
+mod type_hierarchy;
 mod ui;
+mod vcs;
 #[cfg(test)]
-mod inherited_ui_audit;
+mod vcs_tests;
+mod web_languages;
+mod workspace_open;
+mod wsl_workspace;
 
 /// Opened from Finder, the app gets a bare PATH (/usr/bin:/bin:…) without what Terminal adds
 /// from /etc/paths and /etc/paths.d: Cargo and rust-analyzer may otherwise be unavailable.
@@ -148,10 +148,18 @@ fn i18n_from_settings() {
 }
 
 fn main() -> eframe::Result {
-    if let Some(code) = macro_step_engine::internal() { std::process::exit(code); }
-    if let Some(code) = privileged_run::internal() { std::process::exit(code); }
-    if let Some(code) = privileged_debug_backend::internal() { std::process::exit(code); }
-    if let Some(code) = history_edit::internal() { std::process::exit(code); }
+    if let Some(code) = macro_step_engine::internal() {
+        std::process::exit(code);
+    }
+    if let Some(code) = privileged_run::internal() {
+        std::process::exit(code);
+    }
+    if let Some(code) = privileged_debug_backend::internal() {
+        std::process::exit(code);
+    }
+    if let Some(code) = history_edit::internal() {
+        std::process::exit(code);
+    }
     #[cfg(target_os = "macos")]
     system_path();
     let mut options = eframe::NativeOptions { viewport: rc_kit::window_chrome::viewport(), ..Default::default() };
@@ -167,21 +175,20 @@ fn main() -> eframe::Result {
             let code = compare_cli::run(request, options)?;
             std::process::exit(code);
         }
-        Ok(cli::Command::Http(request)) => {
-            match request.run() {
-                Ok(code) => std::process::exit(code),
-                Err(error) => { eprintln!("crabcraft: {error}"); std::process::exit(1); }
+        Ok(cli::Command::Http(request)) => match request.run() {
+            Ok(code) => std::process::exit(code),
+            Err(error) => {
+                eprintln!("crabcraft: {error}");
+                std::process::exit(1);
             }
-        }
-        Ok(cli::Command::Tool(request)) => {
-            match request.run() {
-                Ok(code) => std::process::exit(code),
-                Err(error) => {
-                    eprintln!("crabcraft: {}: {error}", rc_kit::i18n::tr("Could not start Cargo"));
-                    std::process::exit(1);
-                }
+        },
+        Ok(cli::Command::Tool(request)) => match request.run() {
+            Ok(code) => std::process::exit(code),
+            Err(error) => {
+                eprintln!("crabcraft: {}: {error}", rc_kit::i18n::tr("Could not start Cargo"));
+                std::process::exit(1);
             }
-        }
+        },
         Ok(cli::Command::Help) => {
             println!("{}", cli::usage());
             return Ok(());
@@ -209,8 +216,8 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod project_trust;
 
-mod remote_debug;
 mod debug_sessions;
+mod remote_debug;
 mod settings_sync;
 
 #[cfg(test)]
@@ -220,9 +227,9 @@ mod large_file_audit;
 mod terminal_completion_audit;
 
 #[cfg(test)]
-mod key_sequence_audit;
-#[cfg(test)]
 mod accessibility_audit;
+#[cfg(test)]
+mod key_sequence_audit;
 
 mod shelves;
 
@@ -233,12 +240,12 @@ mod issue_tracker;
 mod hosting;
 
 mod acp;
+mod containers;
+mod criticalup_provider;
+mod dev_containers;
 mod plugins;
+mod privileged_debug;
+mod privileged_debug_backend;
+mod privileged_run;
 mod proofreader;
 mod proofreader_core;
-mod containers;
-mod dev_containers;
-mod privileged_run;
-mod privileged_debug_backend;
-mod privileged_debug;
-mod criticalup_provider;

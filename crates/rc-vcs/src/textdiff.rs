@@ -111,7 +111,18 @@ impl std::ops::IndexMut<isize> for V {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn conquer(a: &[u32], mut alo: usize, mut ahi: usize, b: &[u32], mut blo: usize, mut bhi: usize, vf: &mut V, vb: &mut V, limit: usize, out: &mut Vec<(usize, usize)>) {
+fn conquer(
+    a: &[u32],
+    mut alo: usize,
+    mut ahi: usize,
+    b: &[u32],
+    mut blo: usize,
+    mut bhi: usize,
+    vf: &mut V,
+    vb: &mut V,
+    limit: usize,
+    out: &mut Vec<(usize, usize)>,
+) {
     while alo < ahi && blo < bhi && a[alo] == b[blo] {
         out.push((alo, blo));
         alo += 1;

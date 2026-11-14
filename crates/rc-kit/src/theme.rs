@@ -3,10 +3,7 @@
 //! editor schemes), Inter + JetBrains Mono fonts and common painting helpers.
 
 use crate::icons::{self, Ico, ico};
-use egui::{
-    Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Margin, Rect, Response, Sense, Shadow,
-    Stroke, TextStyle, Ui, Vec2, vec2,
-};
+use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Margin, Rect, Response, Sense, Shadow, Stroke, TextStyle, Ui, Vec2, vec2};
 use std::sync::Arc;
 
 const fn hex(rgb: u32) -> Color32 {
@@ -553,9 +550,7 @@ pub fn icon_button_sized(ui: &mut Ui, ico: Ico, enabled: bool, tooltip: &str, si
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), sense);
     if !tooltip.is_empty() {
-        resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::Role::Button, enabled, false, tooltip)
-        });
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, false, tooltip));
     }
     if enabled && (resp.hovered() || resp.is_pointer_button_down_on()) {
         let fill = if resp.is_pointer_button_down_on() { p.pressed } else { p.hover };
@@ -605,7 +600,13 @@ pub fn add_button(ui: &mut Ui, icon: Ico, text: &str) -> Response {
 
 fn text_tool_button(ui: &mut Ui, icon: Ico, text: &str, selected: bool, accented: bool) -> Response {
     let p = pal(ui);
-    let text_color = if !ui.is_enabled() { p.disabled } else if accented { p.accent } else { p.text };
+    let text_color = if !ui.is_enabled() {
+        p.disabled
+    } else if accented {
+        p.accent
+    } else {
+        p.text
+    };
     let galley = ui.painter().layout_no_wrap(text.to_owned(), FontId::proportional(12.5), text_color);
     let (rect, response) = ui.allocate_exact_size(vec2(galley.size().x + 32.0, 24.0), Sense::click());
     response.widget_info(|| {
@@ -617,7 +618,13 @@ fn text_tool_button(ui: &mut Ui, icon: Ico, text: &str, selected: bool, accented
     if selected {
         ui.painter().rect(rect, 4.0, p.tab_selected_bg, Stroke::new(1.0, p.tab_selected_border), egui::StrokeKind::Inside);
     } else if accented {
-        ui.painter().rect(rect, 4.0, blend(p.island_bg, p.accent.gamma_multiply(if response.hovered() { 0.22 } else { 0.12 })), Stroke::new(1.0, p.accent.gamma_multiply(0.5)), egui::StrokeKind::Inside);
+        ui.painter().rect(
+            rect,
+            4.0,
+            blend(p.island_bg, p.accent.gamma_multiply(if response.hovered() { 0.22 } else { 0.12 })),
+            Stroke::new(1.0, p.accent.gamma_multiply(0.5)),
+            egui::StrokeKind::Inside,
+        );
     } else if response.hovered() {
         ui.painter().rect_filled(rect, 4.0, p.hover);
     }
@@ -725,10 +732,7 @@ pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
 pub fn paint_badge(ui: &Ui, left_center: egui::Pos2, text: &str) -> Rect {
     let p = pal(ui);
     let galley = ui.painter().layout_no_wrap(text.to_owned(), FontId::proportional(11.0), p.badge_fg);
-    let rect = Rect::from_min_size(
-        egui::pos2(left_center.x, left_center.y - 9.0),
-        vec2(galley.size().x + 12.0, 18.0),
-    );
+    let rect = Rect::from_min_size(egui::pos2(left_center.x, left_center.y - 9.0), vec2(galley.size().x + 12.0, 18.0));
     ui.painter().rect_filled(rect, 5.0, p.badge_bg);
     ui.painter().galley(egui::pos2(rect.left() + 6.0, rect.center().y - galley.size().y / 2.0), galley, p.badge_fg);
     rect
@@ -755,8 +759,7 @@ pub fn fixed_island<R>(ui: &mut Ui, p: &Palette, add_contents: impl FnOnce(&mut 
 /// Fixed-height row that cannot widen its parent: whatever does not fit is clipped.
 pub fn clipped_row<R>(ui: &mut Ui, height: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
     let rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width().max(0.0), height));
-    let mut child =
-        ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
     child.set_clip_rect(rect.intersect(ui.clip_rect()));
     let r = add_contents(&mut child);
     ui.advance_cursor_after_rect(rect);
@@ -776,15 +779,13 @@ pub enum Side {
 pub fn split_row(ui: &mut Ui, mut add: impl FnMut(&mut Ui, Side)) {
     let rect = ui.available_rect_before_wrap();
     let clip = ui.clip_rect();
-    let mut right =
-        ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::right_to_left(egui::Align::Center)));
+    let mut right = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::right_to_left(egui::Align::Center)));
     right.set_clip_rect(rect.intersect(clip));
     add(&mut right, Side::Right);
     let right_w = right.min_rect().width();
     let left_right = (rect.right() - right_w - 8.0).max(rect.left());
     let left_rect = Rect::from_min_max(rect.min, egui::pos2(left_right, rect.bottom()));
-    let mut left =
-        ui.new_child(egui::UiBuilder::new().max_rect(left_rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
+    let mut left = ui.new_child(egui::UiBuilder::new().max_rect(left_rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
     left.set_clip_rect(left_rect.intersect(clip));
     add(&mut left, Side::Left);
     ui.advance_cursor_after_rect(rect);
@@ -877,7 +878,13 @@ mod tests {
         install_fonts(&ctx);
         let mut out = ctx.run_ui(Default::default(), |_| {});
         out.textures_delta.clear();
-        for family in [FontFamily::Proportional, FontFamily::Monospace, FontFamily::Name(FONT_BOLD.into()), FontFamily::Name(FONT_MONO_BOLD.into()), FontFamily::Name(FONT_MONO_ITALIC.into())] {
+        for family in [
+            FontFamily::Proportional,
+            FontFamily::Monospace,
+            FontFamily::Name(FONT_BOLD.into()),
+            FontFamily::Name(FONT_MONO_BOLD.into()),
+            FontFamily::Name(FONT_MONO_ITALIC.into()),
+        ] {
             let font = FontId::new(13.0, family);
             for text in ["Configurações Código", "Español Français Deutsch", "Zażółć gęślą jaźń", "简体中文设置", "日本語の設定"] {
                 assert!(ctx.fonts_mut(|fonts| fonts.has_glyphs(&font, text)), "missing glyphs for {text} in {font:?}");

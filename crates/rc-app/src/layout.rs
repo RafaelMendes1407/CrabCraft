@@ -20,7 +20,12 @@ pub struct Group {
 pub enum Node {
     Group(Group),
     /// `vertical`: side by side (else one above the other); `ratio`: the size of `a` (0..1).
-    Split { vertical: bool, ratio: f32, a: Box<Node>, b: Box<Node> },
+    Split {
+        vertical: bool,
+        ratio: f32,
+        a: Box<Node>,
+        b: Box<Node>,
+    },
 }
 
 /// Side of a group a dragged tab splits it on.
@@ -271,10 +276,7 @@ impl Layout {
         if let Some(m) = main.pruned() {
             self.main = m;
         }
-        self.windows = std::mem::take(&mut self.windows)
-            .into_iter()
-            .filter_map(|w| w.root.pruned().map(|root| Window { root, ..w }))
-            .collect();
+        self.windows = std::mem::take(&mut self.windows).into_iter().filter_map(|w| w.root.pruned().map(|root| Window { root, ..w })).collect();
         if self.group(self.focused).is_none() {
             self.focused = self.main.first_group().id;
         }
@@ -433,7 +435,9 @@ impl Layout {
         fn node(n: &Node, index_of: &dyn Fn(DocId) -> Option<usize>) -> EditorNode {
             match n {
                 Node::Group(g) => EditorNode::Group { tabs: g.tabs.iter().filter_map(|&d| index_of(d)).collect(), active: g.active.and_then(index_of) },
-                Node::Split { vertical, ratio, a, b } => EditorNode::Split { vertical: *vertical, ratio: *ratio, a: Box::new(node(a, index_of)), b: Box::new(node(b, index_of)) },
+                Node::Split { vertical, ratio, a, b } => {
+                    EditorNode::Split { vertical: *vertical, ratio: *ratio, a: Box::new(node(a, index_of)), b: Box::new(node(b, index_of)) }
+                }
             }
         }
         let windows = self
@@ -478,7 +482,10 @@ impl Layout {
         }
         for w in windows {
             let root = node(&w.root, &mut layout, &mut seen, &id_of);
-            let rect = w.rect.filter(|r| r.iter().all(|v| v.is_finite()) && r[2] >= 200.0 && r[3] >= 150.0).map(|[x, y, w, h]| Rect::from_min_size(egui::pos2(x, y), egui::vec2(w.min(8000.0), h.min(8000.0))));
+            let rect = w
+                .rect
+                .filter(|r| r.iter().all(|v| v.is_finite()) && r[2] >= 200.0 && r[3] >= 150.0)
+                .map(|[x, y, w, h]| Rect::from_min_size(egui::pos2(x, y), egui::vec2(w.min(8000.0), h.min(8000.0))));
             let id = layout.next;
             layout.next += 1;
             layout.windows.push(Window { id, root, initial: rect, rect });

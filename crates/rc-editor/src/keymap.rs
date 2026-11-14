@@ -320,10 +320,22 @@ pub struct Keymap {
 }
 
 #[derive(Clone, Copy)]
-struct PendingSequence { first: Chord, time: f64, focus: Option<egui::Id> }
+struct PendingSequence {
+    first: Chord,
+    time: f64,
+    focus: Option<egui::Id>,
+}
 #[derive(Clone)]
-struct SequenceText { key: Key, text: String, time: f64 }
-pub enum SequenceKey { Pass, Waiting, Action(Action) }
+struct SequenceText {
+    key: Key,
+    text: String,
+    time: f64,
+}
+pub enum SequenceKey {
+    Pass,
+    Waiting,
+    Action(Action),
+}
 fn same_chord(a: Chord, b: Chord) -> bool {
     a.key == b.key && (a.mods.alt, a.mods.ctrl, a.mods.shift, a.mods.mac_cmd) == (b.mods.alt, b.mods.ctrl, b.mods.shift, b.mods.mac_cmd)
 }
@@ -332,7 +344,9 @@ pub fn parse_sequence(text: &str) -> Option<(Chord, Chord)> {
     let mut words = text.split_whitespace();
     let first = parse_chord(words.next()?)?;
     let second = parse_chord(words.next()?)?;
-    if words.next().is_some() || !(first.mods.ctrl || first.mods.mac_cmd) { return None; }
+    if words.next().is_some() || !(first.mods.ctrl || first.mods.mac_cmd) {
+        return None;
+    }
     Some((first, second))
 }
 
@@ -354,7 +368,9 @@ impl Keymap {
     /// which another action then loses.
     pub fn with_overrides(kind: KeymapKind, overrides: &[(Action, Option<Chord>)]) -> Self {
         let mut keymap = Keymap::new(kind);
-        let same = |a: &Chord, b: &Chord| a.key == b.key && (a.mods.alt, a.mods.ctrl, a.mods.shift, a.mods.mac_cmd) == (b.mods.alt, b.mods.ctrl, b.mods.shift, b.mods.mac_cmd);
+        let same = |a: &Chord, b: &Chord| {
+            a.key == b.key && (a.mods.alt, a.mods.ctrl, a.mods.shift, a.mods.mac_cmd) == (b.mods.alt, b.mods.ctrl, b.mods.shift, b.mods.mac_cmd)
+        };
         for (action, chord) in overrides {
             keymap.bindings.retain(|(c, a)| a != action && !chord.as_ref().is_some_and(|n| same(c, n)));
             if let Some(c) = chord {
@@ -369,9 +385,11 @@ impl Keymap {
     /// one custom shortcut, and identical sequences belong to the last configured action.
     pub fn with_sequences(mut self, sequences: &[(Action, Chord, Chord)]) -> Self {
         for &(action, first, second) in sequences {
-            if !(first.mods.ctrl || first.mods.mac_cmd) { continue; }
+            if !(first.mods.ctrl || first.mods.mac_cmd) {
+                continue;
+            }
             self.bindings.retain(|(chord, a)| *a != action && !same_chord(*chord, first));
-            self.sequences.retain(|(a,b,c)| *c != action && !(same_chord(*a,first) && same_chord(*b,second)));
+            self.sequences.retain(|(a, b, c)| *c != action && !(same_chord(*a, first) && same_chord(*b, second)));
             self.sequences.push((first, second, action));
         }
         self
@@ -383,19 +401,29 @@ impl Keymap {
         ctx.data_mut(|data| data.remove::<SequenceText>(id));
         let now = ctx.input(|input| input.time);
         let focus = ctx.memory(|memory| memory.focused());
-        let pending = ctx.data_mut(|data| { let pending = data.get_temp::<PendingSequence>(id); data.remove::<PendingSequence>(id); pending });
+        let pending = ctx.data_mut(|data| {
+            let pending = data.get_temp::<PendingSequence>(id);
+            data.remove::<PendingSequence>(id);
+            pending
+        });
         let chord = Chord { key, mods };
         if let Some(pending) = pending.filter(|p| p.focus == focus && (0.0..=2.0).contains(&(now - p.time))) {
-            if key == Key::Escape { return SequenceKey::Waiting; }
-            if let Some((_,_, action)) = self.sequences.iter().find(|(first,second,a)| same_chord(*first,pending.first) && same_chord(*second,chord) && (editor || a.is_ide())) {
+            if key == Key::Escape {
+                return SequenceKey::Waiting;
+            }
+            if let Some((_, _, action)) =
+                self.sequences.iter().find(|(first, second, a)| same_chord(*first, pending.first) && same_chord(*second, chord) && (editor || a.is_ide()))
+            {
                 if !mods.ctrl && !mods.mac_cmd && !mods.alt {
                     let name = if key == Key::Space { " " } else { key.name() };
-                    if name.chars().count() == 1 { ctx.data_mut(|data| data.insert_temp(id, SequenceText { key, text: name.into(), time: now })); }
+                    if name.chars().count() == 1 {
+                        ctx.data_mut(|data| data.insert_temp(id, SequenceText { key, text: name.into(), time: now }));
+                    }
                 }
                 return SequenceKey::Action(*action);
             }
         }
-        if self.sequences.iter().any(|(first,_,a)| same_chord(*first,chord) && (editor || a.is_ide())) {
+        if self.sequences.iter().any(|(first, _, a)| same_chord(*first, chord) && (editor || a.is_ide())) {
             ctx.data_mut(|data| data.insert_temp(id, PendingSequence { first: chord, time: now, focus }));
             return SequenceKey::Waiting;
         }
@@ -408,19 +436,34 @@ impl Keymap {
         let now = ctx.input(|input| input.time);
         ctx.data_mut(|data| {
             let state = data.get_temp::<SequenceText>(id);
-            if state.is_some_and(|state| (0.0..=0.25).contains(&(now-state.time)) && state.text.eq_ignore_ascii_case(text)) { true }
-            else { data.remove::<SequenceText>(id); false }
+            if state.is_some_and(|state| (0.0..=0.25).contains(&(now - state.time)) && state.text.eq_ignore_ascii_case(text)) {
+                true
+            } else {
+                data.remove::<SequenceText>(id);
+                false
+            }
         })
     }
     pub fn sequence_repeat(ctx: &egui::Context, id: egui::Id, key: Key) -> bool {
         let now = ctx.input(|input| input.time);
         ctx.data_mut(|data| {
-            if let Some(mut state) = data.get_temp::<SequenceText>(id) && state.key == key {
-                state.time = now; data.insert_temp(id,state); true
-            } else { false }
+            if let Some(mut state) = data.get_temp::<SequenceText>(id)
+                && state.key == key
+            {
+                state.time = now;
+                data.insert_temp(id, state);
+                true
+            } else {
+                false
+            }
         })
     }
-    pub fn cancel_sequence(ctx: &egui::Context, id: egui::Id) { ctx.data_mut(|data| { data.remove::<PendingSequence>(id); data.remove::<SequenceText>(id); }); }
+    pub fn cancel_sequence(ctx: &egui::Context, id: egui::Id) {
+        ctx.data_mut(|data| {
+            data.remove::<PendingSequence>(id);
+            data.remove::<SequenceText>(id);
+        });
+    }
 
     /// The action a shortcut runs, if any.
     pub fn action_of(&self, chord: Chord) -> Option<Action> {
@@ -435,8 +478,8 @@ impl Keymap {
 
     /// The first shortcut of `action`, formatted for menus and tooltips (⌘⇧F, Ctrl+Shift+F).
     pub fn shortcut_text(&self, action: Action) -> Option<String> {
-        if let Some((first,second,_)) = self.sequences.iter().find(|(_,_,a)| *a == action) {
-            return Some(format!("{}, {}", format_chord(*first,self.kind.is_mac()),format_chord(*second,self.kind.is_mac())));
+        if let Some((first, second, _)) = self.sequences.iter().find(|(_, _, a)| *a == action) {
+            return Some(format!("{}, {}", format_chord(*first, self.kind.is_mac()), format_chord(*second, self.kind.is_mac())));
         }
         let (chord, _) = self.bindings.iter().find(|(_, a)| *a == action)?;
         Some(format_chord(*chord, self.kind.is_mac()))
@@ -523,11 +566,41 @@ fn key_name(key: Key, mac: bool) -> String {
         Key::ArrowDown => "↓".into(),
         Key::ArrowLeft => "←".into(),
         Key::ArrowRight => "→".into(),
-        Key::Enter => if mac { "↩".into() } else { "Enter".into() },
-        Key::Backspace => if mac { "⌫".into() } else { "Backspace".into() },
-        Key::Delete => if mac { "⌦".into() } else { "Delete".into() },
-        Key::Escape => if mac { "⎋".into() } else { "Esc".into() },
-        Key::Tab => if mac { "⇥".into() } else { "Tab".into() },
+        Key::Enter => {
+            if mac {
+                "↩".into()
+            } else {
+                "Enter".into()
+            }
+        }
+        Key::Backspace => {
+            if mac {
+                "⌫".into()
+            } else {
+                "Backspace".into()
+            }
+        }
+        Key::Delete => {
+            if mac {
+                "⌦".into()
+            } else {
+                "Delete".into()
+            }
+        }
+        Key::Escape => {
+            if mac {
+                "⎋".into()
+            } else {
+                "Esc".into()
+            }
+        }
+        Key::Tab => {
+            if mac {
+                "⇥".into()
+            } else {
+                "Tab".into()
+            }
+        }
         Key::Space => "Space".into(),
         Key::Home => "Home".into(),
         Key::End => "End".into(),
@@ -719,19 +792,19 @@ fn mac_bindings() -> Vec<(Chord, Action)> {
 fn rustrover_mac_bindings() -> Vec<(Chord, Action)> {
     use Action::*;
     let mut bindings = mac_bindings();
-    let command = m(false,false,false,true);
-    let command_alt = m(true,false,false,true);
+    let command = m(false, false, false, true);
+    let command_alt = m(true, false, false, true);
     let overrides = [
-        (Chord { key: Key::Enter, mods: m(false,false,true,true) }, CompleteStatement),
+        (Chord { key: Key::Enter, mods: m(false, false, true, true) }, CompleteStatement),
         (Chord { key: Key::P, mods: command }, ParameterInfo),
         (Chord { key: Key::N, mods: command }, Generate),
-        (Chord { key: Key::T, mods: m(false,true,false,false) }, RefactorThis),
+        (Chord { key: Key::T, mods: m(false, true, false, false) }, RefactorThis),
         (Chord { key: Key::O, mods: command_alt }, GotoSymbol),
-        (Chord { key: Key::F3, mods: m(false,false,false,false) }, ToggleBookmark),
+        (Chord { key: Key::F3, mods: m(false, false, false, false) }, ToggleBookmark),
         (Chord { key: Key::F3, mods: command }, ShowBookmarks),
-        (Chord { key: Key::F5, mods: m(true,false,true,false) }, AttachToProcess),
+        (Chord { key: Key::F5, mods: m(true, false, true, false) }, AttachToProcess),
     ];
-    bindings.retain(|(chord,action)| *action != SearchEverywhere && !overrides.iter().any(|(new,a)| same_chord(*chord,*new) || action == a));
+    bindings.retain(|(chord, action)| *action != SearchEverywhere && !overrides.iter().any(|(new, a)| same_chord(*chord, *new) || action == a));
     bindings.extend(overrides);
     bindings
 }
@@ -1166,19 +1239,35 @@ mod tests {
         assert!(map.kind.is_mac());
         assert_eq!(map.shortcut_text(Action::CompleteStatement).as_deref(), Some("⇧⌘↩"));
         for (action, text) in [
-            (Action::ParameterInfo,"⌘P"), (Action::Generate,"⌘N"),
-            (Action::RefactorThis,"⌃T"), (Action::GotoSymbol,"⌥⌘O"),
-            (Action::GotoFile,"⇧⌘O"), (Action::FindAction,"⇧⌘A"),
-            (Action::SaveAll,"⌘S"), (Action::RecentFiles,"⌘E"),
-            (Action::Reformat,"⌥⌘L"), (Action::FindUsages,"⌥F7"),
-            (Action::Rename,"⇧F6"), (Action::ToggleBookmark,"F3"),
-            (Action::ShowBookmarks,"⌘F3"), (Action::AttachToProcess,"⌥⇧F5"),
-            (Action::Run,"⌃R"), (Action::Debug,"⌃D"), (Action::StopRun,"⌘F2"),
-            (Action::Resume,"⌥⌘R"), (Action::StepOver,"F8"), (Action::StepInto,"F7"),
-            (Action::StepOut,"⇧F8"), (Action::RunToCursor,"⌥F9"),
-            (Action::ForceRunToCursor,"⌥⌘F9"), (Action::ToggleBreakpoint,"⌘F8"),
-            (Action::Evaluate,"⌥F8"), (Action::ViewBreakpoints,"⇧⌘F8"),
-        ] { assert_eq!(map.shortcut_text(action).as_deref(),Some(text),"{action:?}"); }
+            (Action::ParameterInfo, "⌘P"),
+            (Action::Generate, "⌘N"),
+            (Action::RefactorThis, "⌃T"),
+            (Action::GotoSymbol, "⌥⌘O"),
+            (Action::GotoFile, "⇧⌘O"),
+            (Action::FindAction, "⇧⌘A"),
+            (Action::SaveAll, "⌘S"),
+            (Action::RecentFiles, "⌘E"),
+            (Action::Reformat, "⌥⌘L"),
+            (Action::FindUsages, "⌥F7"),
+            (Action::Rename, "⇧F6"),
+            (Action::ToggleBookmark, "F3"),
+            (Action::ShowBookmarks, "⌘F3"),
+            (Action::AttachToProcess, "⌥⇧F5"),
+            (Action::Run, "⌃R"),
+            (Action::Debug, "⌃D"),
+            (Action::StopRun, "⌘F2"),
+            (Action::Resume, "⌥⌘R"),
+            (Action::StepOver, "F8"),
+            (Action::StepInto, "F7"),
+            (Action::StepOut, "⇧F8"),
+            (Action::RunToCursor, "⌥F9"),
+            (Action::ForceRunToCursor, "⌥⌘F9"),
+            (Action::ToggleBreakpoint, "⌘F8"),
+            (Action::Evaluate, "⌥F8"),
+            (Action::ViewBreakpoints, "⇧⌘F8"),
+        ] {
+            assert_eq!(map.shortcut_text(action).as_deref(), Some(text), "{action:?}");
+        }
     }
 
     #[test]
@@ -1186,19 +1275,32 @@ mod tests {
         let map = Keymap::new(KeymapKind::RustRover);
         assert_eq!(map.shortcut_text(Action::CompleteStatement).as_deref(), Some("Ctrl+Shift+Enter"));
         for (action, shortcut) in [
-            (Action::FindAction, "Ctrl+Shift+A"), (Action::ShowIntentions, "Alt+Enter"),
-            (Action::NextError, "F2"), (Action::PreviousError, "Shift+F2"),
-            (Action::RecentFiles, "Ctrl+E"), (Action::Reformat, "Ctrl+Alt+L"),
-            (Action::RefactorThis, "Ctrl+Alt+Shift+T"), (Action::ExtendSelection, "Ctrl+W"),
-            (Action::ShrinkSelection, "Ctrl+Shift+W"), (Action::CommentLine, "Ctrl+/"),
-            (Action::CommentBlock, "Ctrl+Shift+/"), (Action::GotoDeclaration, "Ctrl+B"),
-            (Action::FindUsages, "Alt+F7"), (Action::ParameterInfo, "Ctrl+P"),
-            (Action::ReplaceInFiles, "Ctrl+Shift+R"), (Action::Rename, "Shift+F6"),
-            (Action::Run, "Shift+F10"), (Action::Debug, "Shift+F9"),
-            (Action::StopRun, "Ctrl+F2"), (Action::Resume, "F9"),
-            (Action::ToggleBreakpoint, "Ctrl+F8"), (Action::StepOver, "F8"),
-            (Action::StepInto, "F7"), (Action::StepOut, "Shift+F8"),
-            (Action::RunToCursor, "Alt+F9"), (Action::ForceRunToCursor, "Ctrl+Alt+F9"),
+            (Action::FindAction, "Ctrl+Shift+A"),
+            (Action::ShowIntentions, "Alt+Enter"),
+            (Action::NextError, "F2"),
+            (Action::PreviousError, "Shift+F2"),
+            (Action::RecentFiles, "Ctrl+E"),
+            (Action::Reformat, "Ctrl+Alt+L"),
+            (Action::RefactorThis, "Ctrl+Alt+Shift+T"),
+            (Action::ExtendSelection, "Ctrl+W"),
+            (Action::ShrinkSelection, "Ctrl+Shift+W"),
+            (Action::CommentLine, "Ctrl+/"),
+            (Action::CommentBlock, "Ctrl+Shift+/"),
+            (Action::GotoDeclaration, "Ctrl+B"),
+            (Action::FindUsages, "Alt+F7"),
+            (Action::ParameterInfo, "Ctrl+P"),
+            (Action::ReplaceInFiles, "Ctrl+Shift+R"),
+            (Action::Rename, "Shift+F6"),
+            (Action::Run, "Shift+F10"),
+            (Action::Debug, "Shift+F9"),
+            (Action::StopRun, "Ctrl+F2"),
+            (Action::Resume, "F9"),
+            (Action::ToggleBreakpoint, "Ctrl+F8"),
+            (Action::StepOver, "F8"),
+            (Action::StepInto, "F7"),
+            (Action::StepOut, "Shift+F8"),
+            (Action::RunToCursor, "Alt+F9"),
+            (Action::ForceRunToCursor, "Ctrl+Alt+F9"),
         ] {
             assert_eq!(map.shortcut_text(action).as_deref(), Some(shortcut), "{action:?}");
         }
@@ -1216,7 +1318,15 @@ mod tests {
 
     #[test]
     fn no_chord_is_bound_twice() {
-        for kind in [KeymapKind::RiderMac, KeymapKind::Rider, KeymapKind::RustRover, KeymapKind::RustRoverMac, KeymapKind::VisualStudio, KeymapKind::VsCodeMac, KeymapKind::VsCode] {
+        for kind in [
+            KeymapKind::RiderMac,
+            KeymapKind::Rider,
+            KeymapKind::RustRover,
+            KeymapKind::RustRoverMac,
+            KeymapKind::VisualStudio,
+            KeymapKind::VsCodeMac,
+            KeymapKind::VsCode,
+        ] {
             let k = Keymap::new(kind);
             for (i, (a, _)) in k.bindings.iter().enumerate() {
                 for (b, act) in &k.bindings[i + 1..] {
@@ -1305,12 +1415,12 @@ mod tests {
         assert!(parse_sequence("K ctrl+S").is_none());
         assert!(parse_sequence("alt+K ctrl+S").is_none());
         assert!(parse_sequence("ctrl+K ctrl+S ctrl+T").is_none());
-        let (first,second) = parse_sequence("ctrl+K ctrl+S").unwrap();
-        let map = Keymap::new(KeymapKind::Rider).with_sequences(&[(Action::ShowSettings,first,second)]);
+        let (first, second) = parse_sequence("ctrl+K ctrl+S").unwrap();
+        let map = Keymap::new(KeymapKind::Rider).with_sequences(&[(Action::ShowSettings, first, second)]);
         assert!(map.lookup(Key::K, first.mods).is_none(), "the prefix must not commit before the second key");
         assert!(map.chord(Action::ShowSettings).is_none(), "OS accelerators must not consume sequence prefixes");
         assert_eq!(map.shortcut_text(Action::ShowSettings).as_deref(), Some("Ctrl+K, Ctrl+S"));
-        let map = map.with_sequences(&[(Action::SaveAll,first,second)]);
-        assert!(map.sequences.iter().all(|(_,_,a)| *a != Action::ShowSettings));
+        let map = map.with_sequences(&[(Action::SaveAll, first, second)]);
+        assert!(map.sequences.iter().all(|(_, _, a)| *a != Action::ShowSettings));
     }
 }

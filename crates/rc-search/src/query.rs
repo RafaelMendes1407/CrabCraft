@@ -141,17 +141,31 @@ impl Query {
     /// template itself. Unlike Captures::expand, repeated large groups cannot allocate freely.
     pub(crate) fn expand_bounded(&self, caps: &Captures<'_>, replacement: &str, limit: usize, cancel: &std::sync::atomic::AtomicBool) -> Option<String> {
         let template = if self.options.regex { unescape_replacement(replacement) } else { replacement.to_string() };
-        if !self.options.regex { return (template.len() <= limit).then_some(template); }
+        if !self.options.regex {
+            return (template.len() <= limit).then_some(template);
+        }
         let mut output = Vec::new();
         let mut exceeded = false;
-        regex_automata::util::interpolate::bytes(template.as_bytes(), |index, out| {
-            if exceeded || cancel.load(std::sync::atomic::Ordering::Relaxed) { return; }
-            if let Some(value) = caps.get(index) {
-                if out.len().saturating_add(value.len()) > limit { exceeded = true; }
-                else { out.extend_from_slice(value.as_bytes()); }
-            }
-        }, |name| if cancel.load(std::sync::atomic::Ordering::Relaxed) { None } else { self.re.capture_names().position(|candidate| candidate == Some(name)) }, &mut output);
-        if exceeded || output.len() > limit { return None; }
+        regex_automata::util::interpolate::bytes(
+            template.as_bytes(),
+            |index, out| {
+                if exceeded || cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                if let Some(value) = caps.get(index) {
+                    if out.len().saturating_add(value.len()) > limit {
+                        exceeded = true;
+                    } else {
+                        out.extend_from_slice(value.as_bytes());
+                    }
+                }
+            },
+            |name| if cancel.load(std::sync::atomic::Ordering::Relaxed) { None } else { self.re.capture_names().position(|candidate| candidate == Some(name)) },
+            &mut output,
+        );
+        if exceeded || output.len() > limit {
+            return None;
+        }
         String::from_utf8(output).ok()
     }
 

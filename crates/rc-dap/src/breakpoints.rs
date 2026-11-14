@@ -327,7 +327,12 @@ mod tests {
     fn log_messages_split_into_parts() {
         assert_eq!(
             parse_log_message("total={subtotal + 1}, {{literal}} {order.Customer}"),
-            vec![LogPart::Text("total=".into()), LogPart::Expr("subtotal + 1".into()), LogPart::Text(", {literal} ".into()), LogPart::Expr("order.Customer".into())]
+            vec![
+                LogPart::Text("total=".into()),
+                LogPart::Expr("subtotal + 1".into()),
+                LogPart::Text(", {literal} ".into()),
+                LogPart::Expr("order.Customer".into())
+            ]
         );
         assert_eq!(parse_log_message("{new { A = 1 }.A}"), vec![LogPart::Expr("new { A = 1 }.A".into())]);
     }

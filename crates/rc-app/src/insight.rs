@@ -50,22 +50,38 @@ pub enum InsightOutput {
     /// A web page to open.
     OpenUrl(String),
     /// The edits of a refactoring, to review before they are applied.
-    RefactorPreview { title: String, edit: lsp::WorkspaceEdit },
+    RefactorPreview {
+        title: String,
+        edit: lsp::WorkspaceEdit,
+    },
     /// A rename with conflicts, for the user to continue or cancel.
     RefactorConflicts(Box<crate::refactor_conflicts::Review>),
     /// The expansion of the macro call under the caret.
-    MacroExpansion { name: String, text: String },
-    MacroStepExpansion { name: String, text: String },
+    MacroExpansion {
+        name: String,
+        text: String,
+    },
+    MacroStepExpansion {
+        name: String,
+        text: String,
+    },
     /// The call tree is ready to show.
     ShowCallTree,
     /// Jump to this place (single result of go to declaration / implementation…).
     Navigate(Target),
     /// Several results: show them in a chooser / the Find window.
-    Usages { title: String, targets: Vec<Target> },
+    Usages {
+        title: String,
+        targets: Vec<Target>,
+    },
     /// Context actions (Alt+Enter) for the active editor.
     Actions(Vec<lsp::CodeActionOrCommand>),
     /// Rename: the symbol's current name (from prepareRename), to ask for the new one.
-    AskRename { doc: u64, pos: usize, name: String },
+    AskRename {
+        doc: u64,
+        pos: usize,
+        name: String,
+    },
     Message(String),
     /// Reformatting on save changed a document, which must be written again.
     SaveFormatted,
@@ -113,7 +129,9 @@ pub const MANIFEST_FIX_COMMAND: &str = "crabcraft.manifest-fix";
 /// The Refactor This popup: Rename first, then the server's refactorings.
 fn refactorings(list: Vec<lsp::CodeActionOrCommand>) -> Vec<lsp::CodeActionOrCommand> {
     let rename = lsp::Command { title: tr("Rename…").to_string(), command: RENAME_COMMAND.to_string(), arguments: None };
-    let found = list.into_iter().filter(|a| matches!(a, lsp::CodeActionOrCommand::CodeAction(c) if c.kind.as_ref().is_some_and(|k| k.as_str().starts_with("refactor"))));
+    let found = list
+        .into_iter()
+        .filter(|a| matches!(a, lsp::CodeActionOrCommand::CodeAction(c) if c.kind.as_ref().is_some_and(|k| k.as_str().starts_with("refactor"))));
     std::iter::once(lsp::CodeActionOrCommand::Command(rename)).chain(found).collect()
 }
 
@@ -159,8 +177,8 @@ pub struct Insight {
     /// Whether the current server is rust-analyzer.
     rust: bool,
     web: Option<rc_lsp::web::Settings>,
-    web_synced: HashMap<PathBuf,u64>,
-    web_rename_snapshot: HashMap<PathBuf,u64>,
+    web_synced: HashMap<PathBuf, u64>,
+    web_rename_snapshot: HashMap<PathBuf, u64>,
     /// Only explicit start after the application trust check may launch subprocesses.
     execution_allowed: bool,
     clippy: bool,
@@ -207,7 +225,7 @@ pub struct Insight {
     /// Callers (`true`) or callees of what is under the caret, in two requests.
     external_docs: Option<Pending<Value>>,
     expand_macro: Option<Pending<Value>>,
-    macro_step_request: Option<(u64,u64,usize)>,
+    macro_step_request: Option<(u64, u64, usize)>,
     macro_step: Option<crate::macro_step::Job>,
     types: Option<(Target, Pending<Value>)>,
     trait_request: Option<(Target, u64, u64)>,
@@ -263,7 +281,6 @@ pub struct Insight {
     pub last_completion_ms: Option<u128>,
     pending_apply: Vec<(Value, lsp::WorkspaceEdit)>,
 }
-
 
 /// A request made for one version of a document.
 type Versioned<T> = (u64, Pending<T>);
@@ -364,10 +381,17 @@ impl Insight {
         self.launch();
     }
 
-    pub fn start_web(&mut self, root:&Path, settings:rc_lsp::web::Settings) {
-        self.stop();self.execution_allowed=true;self.rust=false;self.root=Some(root.to_path_buf());self.web=Some(settings);self.launch();
+    pub fn start_web(&mut self, root: &Path, settings: rc_lsp::web::Settings) {
+        self.stop();
+        self.execution_allowed = true;
+        self.rust = false;
+        self.root = Some(root.to_path_buf());
+        self.web = Some(settings);
+        self.launch();
     }
-    fn supports(&self, doc:&Doc)->bool{has_insight_for(doc,self.web.as_ref().map(|settings|settings.kind))}
+    fn supports(&self, doc: &Doc) -> bool {
+        has_insight_for(doc, self.web.as_ref().map(|settings| settings.kind))
+    }
 
     /// Sets the project's environment; a running rust-analyzer restarts to take it.
     pub fn set_env(&mut self, env: Vec<(String, String)>) {
@@ -391,7 +415,9 @@ impl Insight {
     /// A local SQL completion owns the popup; pending language-server results must not
     /// replace it or resolve its opaque local item indices.
     pub fn cancel_local_completion_requests(&mut self) {
-        self.completion=None;self.resolve=None;self.raw_items.clear();
+        self.completion = None;
+        self.resolve = None;
+        self.raw_items.clear();
     }
 
     /// Paths completion never imports (Settings › Editor); applied to a running server.
@@ -473,20 +499,34 @@ impl Insight {
     }
 
     fn launch(&mut self) {
-        if !self.execution_allowed { return; }
+        if !self.execution_allowed {
+            return;
+        }
         let Some(root) = self.root.clone() else { return };
-        if let Some(settings)=self.web.clone(){
-            match LanguageSession::start_web(settings,&root,self.waker.clone()){
-                Ok(session)=>{self.session=Some(session);self.status=InsightStatus::Starting;},
-                Err(error)=>self.status=InsightStatus::Failed(error.to_string()),
-            }return;
+        if let Some(settings) = self.web.clone() {
+            match LanguageSession::start_web(settings, &root, self.waker.clone()) {
+                Ok(session) => {
+                    self.session = Some(session);
+                    self.status = InsightStatus::Starting;
+                }
+                Err(error) => self.status = InsightStatus::Failed(error.to_string()),
+            }
+            return;
         }
         if self.rust {
             let Some(program) = rc_cargo::toolchain::locate_rust_analyzer(self.configured.as_deref()) else {
                 self.status = InsightStatus::RustAnalyzerMissing;
                 return;
             };
-            let ra = rc_lsp::rust_analyzer::RaSettings { isolated_projection: false, clippy: self.clippy, exclude: self.exclude.clone(), linked: self.linked.clone(), autoimport_exclude: self.autoimport_exclude.clone(), features: self.features.clone(), target: self.target.clone() };
+            let ra = rc_lsp::rust_analyzer::RaSettings {
+                isolated_projection: false,
+                clippy: self.clippy,
+                exclude: self.exclude.clone(),
+                linked: self.linked.clone(),
+                autoimport_exclude: self.autoimport_exclude.clone(),
+                features: self.features.clone(),
+                target: self.target.clone(),
+            };
             match LanguageSession::start_rust(&program, &root, ra, &self.env, self.waker.clone()) {
                 Ok(s) => {
                     self.session = Some(s);
@@ -537,7 +577,8 @@ impl Insight {
         self.nav_retry = None;
         self.rename_prepare = None;
         self.rename = None;
-        self.web_synced.clear();self.web_rename_snapshot.clear();
+        self.web_synced.clear();
+        self.web_rename_snapshot.clear();
         self.rename_check = None;
         self.actions = None;
         self.action_resolve = None;
@@ -565,8 +606,12 @@ impl Insight {
         let mut out = Vec::new();
         let Some(session) = &mut self.session else { return out };
         let mut retry = None;
-        let web_client=session.client.clone();
-        let web_versions:HashMap<PathBuf,i32>=if self.web.is_some(){session.docs.paths().into_iter().filter_map(|path|session.docs.version(&path).map(|version|(path,version))).collect()}else{HashMap::new()};
+        let web_client = session.client.clone();
+        let web_versions: HashMap<PathBuf, i32> = if self.web.is_some() {
+            session.docs.paths().into_iter().filter_map(|path| session.docs.version(&path).map(|version| (path, version))).collect()
+        } else {
+            HashMap::new()
+        };
         for ev in session.pump() {
             match ev {
                 LspEvent::StateChanged(ServerState::LoadingProjects) => self.status = InsightStatus::Loading(tr("Loading projects…").into()),
@@ -590,7 +635,19 @@ impl Insight {
                     }
                 }
                 LspEvent::Diagnostics { path, version, mut diagnostics } => {
-                    if let Some(web)=self.web.as_ref().map(|settings|settings.kind){if version.is_some_and(|version|web_versions.get(&path)!=Some(&version))||!docs.list.iter().any(|doc|doc.path==path&&has_insight_for(doc,Some(web))&&self.web_synced.get(&path)==Some(&doc.editor.buffer.version())){continue;}diagnostics.truncate(1000);for diagnostic in &mut diagnostics{diagnostic.message=diagnostic.message.chars().take(4096).collect();}}
+                    if let Some(web) = self.web.as_ref().map(|settings| settings.kind) {
+                        if version.is_some_and(|version| web_versions.get(&path) != Some(&version))
+                            || !docs.list.iter().any(|doc| {
+                                doc.path == path && has_insight_for(doc, Some(web)) && self.web_synced.get(&path) == Some(&doc.editor.buffer.version())
+                            })
+                        {
+                            continue;
+                        }
+                        diagnostics.truncate(1000);
+                        for diagnostic in &mut diagnostics {
+                            diagnostic.message = diagnostic.message.chars().take(4096).collect();
+                        }
+                    }
                     let gates: Vec<(String, Vec<rc_cargo::feature_fix::FeatureGate>)> = diagnostics
                         .iter()
                         .filter_map(|x| {
@@ -606,7 +663,13 @@ impl Insight {
                     }
                     self.publish(docs, path, diagnostics, true);
                 }
-                LspEvent::ApplyEdit { id, edit } => {if self.web.is_some(){web_client.reply(id,Ok(json!({"applied":false,"failureReason":"Unsolicited web edits are not supported"})));}else{self.pending_apply.push((id, edit));}},
+                LspEvent::ApplyEdit { id, edit } => {
+                    if self.web.is_some() {
+                        web_client.reply(id, Ok(json!({"applied":false,"failureReason":"Unsolicited web edits are not supported"})));
+                    } else {
+                        self.pending_apply.push((id, edit));
+                    }
+                }
                 LspEvent::Refresh(_) => self.refreshed.clear(),
                 LspEvent::ShowMessage { error: true, text } => out.push(InsightOutput::Message(text)),
                 _ => {}
@@ -699,21 +762,28 @@ impl Insight {
     }
 
     fn sync_documents(&mut self, docs: &mut Docs) {
-        let web=self.web.as_ref().map(|settings|settings.kind);
+        let web = self.web.as_ref().map(|settings| settings.kind);
         let Some(session) = &mut self.session else { return };
         let now = Instant::now();
-        let open: Vec<PathBuf> = docs.list.iter().filter(|d| has_insight_for(d,web)).map(|d| d.path.clone()).collect();
+        let open: Vec<PathBuf> = docs.list.iter().filter(|d| has_insight_for(d, web)).map(|d| d.path.clone()).collect();
         for path in session.docs.paths() {
             if !open.contains(&path) {
                 session.did_close(&path);
             }
         }
-        self.web_synced.retain(|path,_|open.contains(path));
-        for d in docs.list.iter_mut().filter(|d| has_insight_for(d,web)) {
-            if web.is_some(){self.web_synced.insert(d.path.clone(),d.editor.buffer.version());}
+        self.web_synced.retain(|path, _| open.contains(path));
+        for d in docs.list.iter_mut().filter(|d| has_insight_for(d, web)) {
+            if web.is_some() {
+                self.web_synced.insert(d.path.clone(), d.editor.buffer.version());
+            }
             if !session.docs.is_open(&d.path) {
                 d.editor.take_edits();
-                let language = if d.editor.lang()==rc_syntax::Lang::JavaScript&&d.path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("jsx")){"javascriptreact"}else{crate::web_languages::language_id(d.editor.lang()).unwrap_or(if d.editor.lang() == rc_syntax::Lang::Rust { "rust" } else { "csharp" })};
+                let language =
+                    if d.editor.lang() == rc_syntax::Lang::JavaScript && d.path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("jsx")) {
+                        "javascriptreact"
+                    } else {
+                        crate::web_languages::language_id(d.editor.lang()).unwrap_or(if d.editor.lang() == rc_syntax::Lang::Rust { "rust" } else { "csharp" })
+                    };
                 session.did_open(&d.path, language, &d.editor.buffer.rope().to_string());
                 self.dirty.insert(d.editor.id, now - REFRESH_DELAY);
                 continue;
@@ -751,7 +821,15 @@ impl Insight {
         self.symbols.insert(id, (version, session.client.request_raw("textDocument/documentSymbol", json!({ "textDocument": td }))));
         if show_inlays {
             let end = convert::lsp_position(doc.editor.buffer.rope(), doc.editor.buffer.len_chars());
-            self.inlay.insert(id, (version, session.client.request_raw("textDocument/inlayHint", json!({ "textDocument": td, "range": { "start": { "line": 0, "character": 0 }, "end": end } }))));
+            self.inlay.insert(
+                id,
+                (
+                    version,
+                    session
+                        .client
+                        .request_raw("textDocument/inlayHint", json!({ "textDocument": td, "range": { "start": { "line": 0, "character": 0 }, "end": end } })),
+                ),
+            );
         }
         self.refreshed.insert(id, version);
     }
@@ -880,24 +958,41 @@ impl Insight {
     }
 
     fn poll_doctest(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
-        let Some(job) = &self.doctest_completion else { return; };
-        let valid = self.execution_allowed && self.root.as_ref() == Some(&job.root) && self.features == job.features && self.target == job.target && self.env == job.env && job.buffers_match(docs)
+        let Some(job) = &self.doctest_completion else {
+            return;
+        };
+        let valid = self.execution_allowed
+            && self.root.as_ref() == Some(&job.root)
+            && self.features == job.features
+            && self.target == job.target
+            && self.env == job.env
+            && job.buffers_match(docs)
             && docs.active_doc().is_some_and(|doc| {
-            doc.editor.id == job.doc && doc.path == job.path && doc.editor.buffer.version() == job.version && doc.editor.caret() == job.caret
-                && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading)
-        });
+                doc.editor.id == job.doc
+                    && doc.path == job.path
+                    && doc.editor.buffer.version() == job.version
+                    && doc.editor.caret() == job.caret
+                    && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading)
+            });
         if !valid {
             let id = job.doc;
             self.doctest_completion = None;
             if let Some(doc) = docs.list.iter_mut().find(|doc| doc.editor.id == id)
-                && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading) { doc.editor.popups.completion = None; }
+                && doc.editor.popups.completion.as_ref().is_some_and(|completion| completion.loading)
+            {
+                doc.editor.popups.completion = None;
+            }
             return;
         }
-        let Some(result) = job.poll() else { return; };
+        let Some(result) = job.poll() else {
+            return;
+        };
         let anchor = job.anchor;
         self.last_completion_ms = Some(job.started.elapsed().as_millis());
         self.doctest_completion = None;
-        let Some(doc) = docs.active_doc_mut() else { return; };
+        let Some(doc) = docs.active_doc_mut() else {
+            return;
+        };
         let mut items = match result {
             Ok(items) => items,
             Err(error) => {
@@ -906,7 +1001,7 @@ impl Insight {
                     out.push(InsightOutput::Message(error.to_string()));
                 }
                 return;
-            },
+            }
         };
         items.sort_by(|a, b| a.sort_text.as_deref().unwrap_or(&a.label).cmp(b.sort_text.as_deref().unwrap_or(&b.label)));
         let rope = doc.editor.buffer.rope();
@@ -914,7 +1009,10 @@ impl Insight {
         let mut completion = Completion::new(anchor, editor_items, false);
         completion.filter(&rope.slice(anchor..doc.editor.caret()).to_string());
         doc.editor.popups.completion = (!completion.filtered.is_empty()).then_some(completion);
-        self.raw_items = items; self.completion_anchor = anchor; self.doctest_items = true; self.resolve = None;
+        self.raw_items = items;
+        self.completion_anchor = anchor;
+        self.doctest_items = true;
+        self.resolve = None;
     }
 
     fn poll_completion(&mut self, docs: &mut Docs, out: &mut Vec<InsightOutput>) {
@@ -949,30 +1047,52 @@ impl Insight {
             let overlay_limit = docs.list.len() > 256;
             let overlays = if req.manual { crate::doctest_completion::overlays(docs) } else { Vec::new() };
             let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == req.doc) else { return };
-            if d.path != req.path { d.editor.popups.completion = None; return; }
+            if d.path != req.path {
+                d.editor.popups.completion = None;
+                return;
+            }
             let (items, default_range) = parse_completion(r.unwrap_or(Value::Null));
-            if items.is_empty() && req.manual && self.rust && self.execution_allowed
-                && d.editor.buffer.version() == req.version && d.editor.caret() == req.caret && crate::doctest_completion::candidate(d)
+            if items.is_empty()
+                && req.manual
+                && self.rust
+                && self.execution_allowed
+                && d.editor.buffer.version() == req.version
+                && d.editor.caret() == req.caret
+                && crate::doctest_completion::candidate(d)
                 && let Some(root) = self.root.clone()
             {
-                if overlay_limit || self.env.len() > 256 || self.env.iter().any(|(key, value)| key.len() > 256 || value.len() > 16 * 1024)
-                    || self.features.len() > 256 || self.features.iter().any(|feature| feature.len() > 256)
+                if overlay_limit
+                    || self.env.len() > 256
+                    || self.env.iter().any(|(key, value)| key.len() > 256 || value.len() > 16 * 1024)
+                    || self.features.len() > 256
+                    || self.features.iter().any(|feature| feature.len() > 256)
                 {
                     d.editor.popups.completion = None;
                     out.push(InsightOutput::Message(crate::doctest_completion::Error::Limit.to_string()));
                     return;
                 }
                 let context = crate::doctest_completion::Context {
-                    root, path: d.path.clone(), rope: d.editor.buffer.rope().clone(), caret: d.editor.caret(),
-                    overlays, analyzer: self.configured.clone(), env: self.env.clone(), features: self.features.clone(), target: self.target.clone(),
+                    root,
+                    path: d.path.clone(),
+                    rope: d.editor.buffer.rope().clone(),
+                    caret: d.editor.caret(),
+                    overlays,
+                    analyzer: self.configured.clone(),
+                    env: self.env.clone(),
+                    features: self.features.clone(),
+                    target: self.target.clone(),
                 };
-                self.raw_items.clear(); self.resolve = None;
+                self.raw_items.clear();
+                self.resolve = None;
                 match crate::doctest_completion::Job::start(context, req.doc, req.version, req.anchor, self.waker.clone()) {
                     Ok(job) => {
                         self.doctest_completion = Some(job);
                         d.editor.popups.completion = Some(Completion::new(req.anchor, Vec::new(), true));
-                    },
-                    Err(error) => { d.editor.popups.completion = None; out.push(InsightOutput::Message(error.to_string())); },
+                    }
+                    Err(error) => {
+                        d.editor.popups.completion = None;
+                        out.push(InsightOutput::Message(error.to_string()));
+                    }
                 }
                 return;
             }
@@ -1002,9 +1122,17 @@ impl Insight {
             }
         }
         // Documentation of the selected item.
-        let fence = if self.rust { "rust" } else if self.web.is_some(){"typescript"}else { "csharp" };
+        let fence = if self.rust {
+            "rust"
+        } else if self.web.is_some() {
+            "typescript"
+        } else {
+            "csharp"
+        };
         let Some(i) = docs.active else { return };
-        if !self.supports(&docs.list[i]){return;}
+        if !self.supports(&docs.list[i]) {
+            return;
+        }
         let Some(c) = docs.list[i].editor.popups.completion.as_ref() else { return };
         let Some(&idx) = c.filtered.get(c.selected) else { return };
         if self.doctest_items {
@@ -1135,26 +1263,40 @@ impl Insight {
         }
     }
 
-    pub fn expand_macro_step(&mut self, doc:&Doc, pos:usize) {
-        if !self.rust || !self.execution_allowed { return; }
-        self.macro_step=None;self.macro_step_request=Some((doc.editor.id,doc.editor.buffer.version(),pos));
-    }
-    pub fn macro_step_pending(&self)->bool {self.macro_step_request.is_some()||self.macro_step.is_some()}
-    pub fn cancel_macro_step(&mut self){self.macro_step_request=None;self.macro_step=None;}
-    fn poll_expand_macro(&mut self, docs:&Docs, out: &mut Vec<InsightOutput>) {
-        if let Some((id,version,pos))=self.macro_step_request.take() {
-            if let (Some(session),Some(doc))=(&self.session,docs.list.iter().find(|doc|doc.editor.id==id&&doc.editor.buffer.version()==version)) {
-                match crate::macro_step::Job::start(session.client.clone(),doc,pos,docs,self.waker.clone()) {
-                    Ok(job)=>self.macro_step=Some(job), Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
-                }
-            } else {out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
+    pub fn expand_macro_step(&mut self, doc: &Doc, pos: usize) {
+        if !self.rust || !self.execution_allowed {
+            return;
         }
-        if self.macro_step.as_ref().is_some_and(|job|!job.current(docs)){self.macro_step=None;out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));}
-        if let Some(result)=self.macro_step.as_ref().and_then(|job|job.poll()) {
-            self.macro_step=None;
+        self.macro_step = None;
+        self.macro_step_request = Some((doc.editor.id, doc.editor.buffer.version(), pos));
+    }
+    pub fn macro_step_pending(&self) -> bool {
+        self.macro_step_request.is_some() || self.macro_step.is_some()
+    }
+    pub fn cancel_macro_step(&mut self) {
+        self.macro_step_request = None;
+        self.macro_step = None;
+    }
+    fn poll_expand_macro(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
+        if let Some((id, version, pos)) = self.macro_step_request.take() {
+            if let (Some(session), Some(doc)) = (&self.session, docs.list.iter().find(|doc| doc.editor.id == id && doc.editor.buffer.version() == version)) {
+                match crate::macro_step::Job::start(session.client.clone(), doc, pos, docs, self.waker.clone()) {
+                    Ok(job) => self.macro_step = Some(job),
+                    Err(error) => out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into())),
+                }
+            } else {
+                out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));
+            }
+        }
+        if self.macro_step.as_ref().is_some_and(|job| !job.current(docs)) {
+            self.macro_step = None;
+            out.push(InsightOutput::Message(crate::macro_step::error_text(&crate::macro_step_engine::Error::Stale).into()));
+        }
+        if let Some(result) = self.macro_step.as_ref().and_then(|job| job.poll()) {
+            self.macro_step = None;
             match result {
-                Ok(expansion)=>out.push(InsightOutput::MacroStepExpansion{name:expansion.name,text:expansion.text}),
-                Err(error)=>out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into()))
+                Ok(expansion) => out.push(InsightOutput::MacroStepExpansion { name: expansion.name, text: expansion.text }),
+                Err(error) => out.push(InsightOutput::Message(crate::macro_step::error_text(&error).into())),
             }
         }
         if let Some(p) = &mut self.expand_macro
@@ -1216,33 +1358,60 @@ impl Insight {
         let (line, col) = doc.editor.buffer.line_col(pos);
         let root = Target { path: doc.path.clone(), line, col, preview: word_at(&doc.editor.buffer.line_text(line), col) };
         if self.rust && self.execution_allowed {
-            self.trait_request = Some((root,doc.editor.id,doc.editor.buffer.version())); self.trait_hierarchy = None; self.types = None; self.call_tree = None;
-        } else { self.types = Some((root, session.client.request_raw("textDocument/implementation", params))); }
+            self.trait_request = Some((root, doc.editor.id, doc.editor.buffer.version()));
+            self.trait_hierarchy = None;
+            self.types = None;
+            self.call_tree = None;
+        } else {
+            self.types = Some((root, session.client.request_raw("textDocument/implementation", params)));
+        }
     }
 
-    pub fn type_hierarchy_pending(&self) -> bool { self.trait_request.is_some() || self.trait_hierarchy.is_some() || self.types.is_some() }
-    pub fn cancel_type_hierarchy(&mut self) { self.trait_request = None; self.trait_hierarchy = None; self.types = None; }
+    pub fn type_hierarchy_pending(&self) -> bool {
+        self.trait_request.is_some() || self.trait_hierarchy.is_some() || self.types.is_some()
+    }
+    pub fn cancel_type_hierarchy(&mut self) {
+        self.trait_request = None;
+        self.trait_hierarchy = None;
+        self.types = None;
+    }
     fn poll_types(&mut self, docs: &Docs, out: &mut Vec<InsightOutput>) {
         use crate::call_tree::{CallNode, CallTree};
-        if let Some((origin,id,version)) = self.trait_request.take() {
-            if !docs.list.iter().any(|d| d.editor.id==id && d.editor.buffer.version()==version && d.path==origin.path) { out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())); return; }
+        if let Some((origin, id, version)) = self.trait_request.take() {
+            if !docs.list.iter().any(|d| d.editor.id == id && d.editor.buffer.version() == version && d.path == origin.path) {
+                out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into()));
+                return;
+            }
             if let (Some(root), Some(session)) = (&self.root, &self.session) {
                 match crate::type_hierarchy::Job::start(root.clone(), origin.clone(), session.client.clone(), docs, self.waker.clone()) {
-                    Ok(job) => { self.trait_hierarchy = Some((origin, job)); out.push(InsightOutput::ShowCallTree); },
-                    Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy exceeds its source limits or could not be started.").into()))
+                    Ok(job) => {
+                        self.trait_hierarchy = Some((origin, job));
+                        out.push(InsightOutput::ShowCallTree);
+                    }
+                    Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy exceeds its source limits or could not be started.").into())),
                 }
             }
         }
-        if self.trait_hierarchy.as_ref().is_some_and(|(_,job)| !job.current(docs)) {
+        if self.trait_hierarchy.as_ref().is_some_and(|(_, job)| !job.current(docs)) {
             self.trait_hierarchy = None;
             out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into()));
         }
-        if let Some(result) = self.trait_hierarchy.as_ref().and_then(|(_,job)| job.poll()) {
-            let Some((_origin,_)) = self.trait_hierarchy.take() else { return; };
+        if let Some(result) = self.trait_hierarchy.as_ref().and_then(|(_, job)| job.poll()) {
+            let Some((_origin, _)) = self.trait_hierarchy.take() else {
+                return;
+            };
             match result {
-                Ok(tree) => { self.call_generation += 1; self.call_tree = Some(crate::type_hierarchy::into_call_tree(tree)); out.push(InsightOutput::ShowCallTree); },
-                Err(crate::type_hierarchy::Error::Changed) => out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into())),
-                Err(_) => out.push(InsightOutput::Message(tr("The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.").into()))
+                Ok(tree) => {
+                    self.call_generation += 1;
+                    self.call_tree = Some(crate::type_hierarchy::into_call_tree(tree));
+                    out.push(InsightOutput::ShowCallTree);
+                }
+                Err(crate::type_hierarchy::Error::Changed) => {
+                    out.push(InsightOutput::Message(tr("Rust source changed while collecting the hierarchy. Request it again.").into()))
+                }
+                Err(_) => out.push(InsightOutput::Message(
+                    tr("The trait hierarchy could not be resolved within its source and time limits. Check rust-analyzer and try again.").into(),
+                )),
             }
         }
         let Some((_, p)) = &mut self.types else { return };
@@ -1337,7 +1506,7 @@ impl Insight {
         self.poll_calls(docs, out);
         self.poll_types(docs, out);
         self.poll_external_docs(out);
-        self.poll_expand_macro(docs,out);
+        self.poll_expand_macro(docs, out);
         if let Some((doc, pos, p)) = &mut self.rename_prepare
             && let Some(r) = p.poll()
         {
@@ -1371,9 +1540,13 @@ impl Insight {
                     let open = docs.list.iter().map(|d| (d.path.clone(), d.editor.buffer.rope().clone())).collect();
                     self.rename_check = Some(crate::refactor_conflicts::Check::start(name, edit, preview, self.root.clone(), open, self.waker.clone()));
                 }
-                Ok(Some(edit)) if self.web.is_some()=>{
-                    if crate::web_languages::valid_edit(&edit,docs,&self.web_rename_snapshot,self.root.as_deref()) {finish_rename(docs,edit,preview,out);}else{out.push(InsightOutput::Message(tr("Web edits require unchanged open workspace files; load the affected files and retry").into()));}
-                },
+                Ok(Some(edit)) if self.web.is_some() => {
+                    if crate::web_languages::valid_edit(&edit, docs, &self.web_rename_snapshot, self.root.as_deref()) {
+                        finish_rename(docs, edit, preview, out);
+                    } else {
+                        out.push(InsightOutput::Message(tr("Web edits require unchanged open workspace files; load the affected files and retry").into()));
+                    }
+                }
                 Ok(Some(edit)) => finish_rename(docs, edit, preview, out),
                 Ok(None) => out.push(InsightOutput::Message(tr("Nothing to rename").into())),
                 Err(e) if self.rust => {
@@ -1389,7 +1562,12 @@ impl Insight {
             if conflicts.is_empty() {
                 finish_rename(docs, c.edit, c.preview, out);
             } else {
-                out.push(InsightOutput::RefactorConflicts(Box::new(crate::refactor_conflicts::Review { name: c.name, conflicts, edit: Some(c.edit), preview: c.preview })));
+                out.push(InsightOutput::RefactorConflicts(Box::new(crate::refactor_conflicts::Review {
+                    name: c.name,
+                    conflicts,
+                    edit: Some(c.edit),
+                    preview: c.preview,
+                })));
             }
         }
         if let Some(p) = &mut self.actions
@@ -1406,7 +1584,10 @@ impl Insight {
                 self.optimize_found(docs, list, out);
             } else if std::mem::take(&mut self.refactor_only) {
                 out.push(InsightOutput::Actions(refactorings(list)));
-            } else if list.is_empty() && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some())) && (self.generate_only || docs.active_doc().is_none_or(|d| suppress_commands(d).is_empty())) {
+            } else if list.is_empty()
+                && !(self.generate_only && docs.active_doc().is_some_and(|d| derive_target_of(d).is_some()))
+                && (self.generate_only || docs.active_doc().is_none_or(|d| suppress_commands(d).is_empty()))
+            {
                 self.generate_only = false;
                 out.push(InsightOutput::Message(tr("No context actions here").into()));
             } else {
@@ -1414,7 +1595,10 @@ impl Insight {
                     let mut list: Vec<_> = list.into_iter().filter(|a| generates_code(action_title(a))).collect();
                     // On a Rust type: its derive list, written by the IDE.
                     if docs.active_doc().is_some_and(|d| derive_target_of(d).is_some()) {
-                        list.insert(0, lsp::CodeActionOrCommand::Command(lsp::Command { title: tr("Derive…").into(), command: DERIVE_COMMAND.into(), arguments: None }));
+                        list.insert(
+                            0,
+                            lsp::CodeActionOrCommand::Command(lsp::Command { title: tr("Derive…").into(), command: DERIVE_COMMAND.into(), arguments: None }),
+                        );
                     }
                     out.push(if list.is_empty() { InsightOutput::Message(tr("Nothing to generate here").into()) } else { InsightOutput::Actions(list) });
                 } else {
@@ -1494,7 +1678,9 @@ impl Insight {
         }
         let edits = doc.editor.take_edits();
         if !edits.is_empty() {
-            if self.web.is_some(){self.web_synced.insert(doc.path.clone(),doc.editor.buffer.version());}
+            if self.web.is_some() {
+                self.web_synced.insert(doc.path.clone(), doc.editor.buffer.version());
+            }
             session.did_change(&doc.path, &edits);
             self.dirty.insert(doc.editor.id, Instant::now());
         }
@@ -1544,7 +1730,9 @@ impl Insight {
                 self.complete(doc, Some(c));
             }
         }
-        if c == ';' || c == '}' { self.request_type_format(doc, c); }
+        if c == ';' || c == '}' {
+            self.request_type_format(doc, c);
+        }
         if c == '(' || c == ',' {
             if let Some(anchor) = call_open_paren(doc.editor.buffer.rope(), doc.editor.caret()) {
                 self.request_signature(doc, anchor);
@@ -1584,7 +1772,8 @@ impl Insight {
             asked.push((name, pending));
         }
         if !asked.is_empty() {
-            self.paste_imports = Some(PasteImports { doc: doc.editor.id, version: doc.editor.buffer.version(), asked, paths: Vec::new(), ambiguous: Vec::new() });
+            self.paste_imports =
+                Some(PasteImports { doc: doc.editor.id, version: doc.editor.buffer.version(), asked, paths: Vec::new(), ambiguous: Vec::new() });
         }
     }
 
@@ -1596,7 +1785,14 @@ impl Insight {
             match p.asked[i].1.poll() {
                 Some(r) => {
                     let (name, _) = p.asked.remove(i);
-                    let mut paths: Vec<String> = r.ok().as_ref().and_then(Value::as_array).into_iter().flatten().filter_map(|a| a.get("title")?.as_str()?.strip_prefix("Import `")?.strip_suffix('`').map(str::to_string)).collect();
+                    let mut paths: Vec<String> = r
+                        .ok()
+                        .as_ref()
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|a| a.get("title")?.as_str()?.strip_prefix("Import `")?.strip_suffix('`').map(str::to_string))
+                        .collect();
                     paths.dedup();
                     match paths.len() {
                         0 => {}
@@ -1624,7 +1820,8 @@ impl Insight {
 
     /// Code completion at the caret (⌃Space, or typing).
     pub fn complete(&mut self, doc: &mut Doc, trigger: Option<char>) {
-        self.doctest_completion = None; self.doctest_items = false;
+        self.doctest_completion = None;
+        self.doctest_items = false;
         let Some(session) = &self.session else { return };
         let caret = doc.editor.caret();
         let rope = doc.editor.buffer.rope();
@@ -1638,7 +1835,15 @@ impl Insight {
             "textDocument/completion",
             json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(rope, caret), "context": context }),
         );
-        self.completion = Some(CompletionRequest { doc: doc.editor.id, anchor, version: doc.editor.buffer.version(), pending, manual: trigger.is_none(), caret, path: doc.path.clone() });
+        self.completion = Some(CompletionRequest {
+            doc: doc.editor.id,
+            anchor,
+            version: doc.editor.buffer.version(),
+            pending,
+            manual: trigger.is_none(),
+            caret,
+            path: doc.path.clone(),
+        });
         if trigger.is_none() {
             doc.editor.popups.completion = Some(Completion::new(anchor, Vec::new(), true));
         }
@@ -1646,7 +1851,9 @@ impl Insight {
 
     /// After the editor inserted the chosen item: additional edits (usings) and commands.
     pub fn completion_accepted(&mut self, doc: &mut Doc, index_in_items: usize) {
-        if self.doctest_items { return; }
+        if self.doctest_items {
+            return;
+        }
         let Some(item) = self.raw_items.get(index_in_items).cloned() else { return };
         // Not resolved yet. The server has not seen the insertion, so it can still resolve the item.
         if self.rust
@@ -1714,7 +1921,8 @@ impl Insight {
             NavKind::Super => "textDocument/declaration",
             NavKind::Usages => "textDocument/references",
         };
-        let mut params = json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
+        let mut params =
+            json!({ "textDocument": { "uri": path_to_uri(&doc.path).as_str() }, "position": convert::lsp_position(doc.editor.buffer.rope(), pos) });
         if kind == NavKind::Usages {
             params["context"] = json!({ "includeDeclaration": false });
         }
@@ -1738,7 +1946,9 @@ impl Insight {
     /// Renames the symbol at `pos`; with `preview` (the preview's title) the edits are shown
     /// for review instead of applied.
     pub fn rename(&mut self, doc: &Doc, pos: usize, new_name: &str, preview: Option<String>) {
-        if self.web.is_some(){self.web_rename_snapshot=self.web_synced.clone();}
+        if self.web.is_some() {
+            self.web_rename_snapshot = self.web_synced.clone();
+        }
         let Some(session) = &self.session else { return };
         let p = session.client.request_raw(
             "textDocument/rename",
@@ -1890,15 +2100,22 @@ impl Insight {
         let session = self.session.as_ref().filter(|s| s.is_initialized())?;
         let ops = session.capabilities.as_ref()?.workspace.as_ref()?.file_operations.as_ref()?;
         ops.will_rename.as_ref()?;
-        Some(session.client.request_raw("workspace/willRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] })))
+        Some(
+            session
+                .client
+                .request_raw("workspace/willRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] })),
+        )
     }
 
     /// Tells the server a file or folder was renamed, when it asked to know.
     pub fn did_rename_files(&self, from: &Path, to: &Path) {
         let Some(session) = self.session.as_ref().filter(|s| s.is_initialized()) else { return };
-        let wanted = session.capabilities.as_ref().and_then(|c| c.workspace.as_ref()).and_then(|w| w.file_operations.as_ref()).is_some_and(|o| o.did_rename.is_some());
+        let wanted =
+            session.capabilities.as_ref().and_then(|c| c.workspace.as_ref()).and_then(|w| w.file_operations.as_ref()).is_some_and(|o| o.did_rename.is_some());
         if wanted {
-            session.client.notify_raw("workspace/didRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] }));
+            session
+                .client
+                .notify_raw("workspace/didRenameFiles", json!({ "files": [{ "oldUri": path_to_uri(from).as_str(), "newUri": path_to_uri(to).as_str() }] }));
         }
     }
 
@@ -1924,7 +2141,11 @@ pub(crate) fn parse_completion(v: Value) -> (Vec<lsp::CompletionItem>, Option<ls
         _ => (Vec::new(), Value::Null),
     };
     let range = defaults.get("editRange").and_then(|r| {
-        if r.get("start").is_some() { serde_json::from_value::<lsp::Range>(r.clone()).ok() } else { r.get("replace").and_then(|x| serde_json::from_value(x.clone()).ok()) }
+        if r.get("start").is_some() {
+            serde_json::from_value::<lsp::Range>(r.clone()).ok()
+        } else {
+            r.get("replace").and_then(|x| serde_json::from_value(x.clone()).ok())
+        }
     });
     let items = items
         .into_iter()
@@ -1964,7 +2185,9 @@ pub fn suppress_commands(d: &Doc) -> Vec<lsp::CodeActionOrCommand> {
     lints.sort();
     lints.dedup();
     let target = d.editor.syntax.tree().and_then(|t| rc_syntax::allow_target(t, buffer.rope(), d.editor.caret()));
-    let command = |title: String, lint: &str, scope: &str| lsp::CodeActionOrCommand::Command(lsp::Command { title, command: SUPPRESS_COMMAND.into(), arguments: Some(vec![json!(lint), json!(scope)]) });
+    let command = |title: String, lint: &str, scope: &str| {
+        lsp::CodeActionOrCommand::Command(lsp::Command { title, command: SUPPRESS_COMMAND.into(), arguments: Some(vec![json!(lint), json!(scope)]) })
+    };
     let mut out = Vec::new();
     for lint in &lints {
         match &target {
@@ -1996,8 +2219,13 @@ pub fn derive_target_of(d: &Doc) -> Option<rc_syntax::DeriveTarget> {
     rc_syntax::derive_target(d.editor.syntax.tree()?, d.editor.buffer.rope(), d.editor.caret())
 }
 
-fn has_insight_for(d:&Doc,web:Option<rc_lsp::web::Kind>)->bool{
-    match web{None=>has_insight(d),Some(kind)=>!d.generated&&!d.scratch&&d.editor.buffer.rope().len_bytes()<=2*1024*1024&&crate::web_languages::kind(d.editor.lang())==Some(kind)}
+fn has_insight_for(d: &Doc, web: Option<rc_lsp::web::Kind>) -> bool {
+    match web {
+        None => has_insight(d),
+        Some(kind) => {
+            !d.generated && !d.scratch && d.editor.buffer.rope().len_bytes() <= 2 * 1024 * 1024 && crate::web_languages::kind(d.editor.lang()) == Some(kind)
+        }
+    }
 }
 pub fn has_insight(d: &Doc) -> bool {
     // Rust scratches are analysed on their own (linked as detached files).
@@ -2138,7 +2366,15 @@ fn symbols(rope: &rc_text::Rope, resp: lsp::DocumentSymbolResponse) -> Vec<Symbo
             .map(|s| {
                 let pos = convert::char_of(rope, s.location.range.start);
                 let line = rope.char_to_line(pos);
-                SymbolNode { name: s.name, detail: s.container_name.unwrap_or_default(), kind: s.kind, line, col: pos - rope.line_to_char(line), lines: line..=line, children: Vec::new() }
+                SymbolNode {
+                    name: s.name,
+                    detail: s.container_name.unwrap_or_default(),
+                    kind: s.kind,
+                    line,
+                    col: pos - rope.line_to_char(line),
+                    lines: line..=line,
+                    children: Vec::new(),
+                }
             })
             .collect(),
     }
@@ -2355,10 +2591,13 @@ pub fn insert_rust_uses(d: &mut Doc, paths: &[String]) -> Vec<String> {
     let after_use = lines.iter().rposition(|l| l.starts_with("use ") && l.trim_end().ends_with(';'));
     let line = match after_use {
         Some(l) => l + 1,
-        None => lines.iter().position(|l| {
-            let t = l.trim();
-            !(t.starts_with("//") || t.starts_with("#![") || t.is_empty())
-        }).unwrap_or(lines.len()),
+        None => lines
+            .iter()
+            .position(|l| {
+                let t = l.trim();
+                !(t.starts_with("//") || t.starts_with("#![") || t.is_empty())
+            })
+            .unwrap_or(lines.len()),
     };
     let mut text: String = add.iter().map(|p| format!("use {p};\n")).collect();
     // A blank line between the imports and the code that follows them.
@@ -2373,10 +2612,17 @@ pub fn insert_rust_uses(d: &mut Doc, paths: &[String]) -> Vec<String> {
 /// rust-analyzer identifies an auto-import candidate in its structured label detail. Local
 /// symbols and other servers are preserved; only exact paths or module descendants match.
 fn excluded_autoimport(item: &lsp::CompletionItem, excluded: &[String]) -> bool {
-    let Some(detail) = item.label_details.as_ref().and_then(|details| details.detail.as_deref()) else { return false; };
-    let Some(path) = detail.trim().strip_prefix("(use ").and_then(|text| text.strip_suffix(')')) else { return false; };
+    let Some(detail) = item.label_details.as_ref().and_then(|details| details.detail.as_deref()) else {
+        return false;
+    };
+    let Some(path) = detail.trim().strip_prefix("(use ").and_then(|text| text.strip_suffix(')')) else {
+        return false;
+    };
     let path = path.trim().trim_end_matches(';').trim_start_matches("::");
-    excluded.iter().map(|path| path.trim().trim_start_matches("::")).filter(|path| !path.is_empty())
+    excluded
+        .iter()
+        .map(|path| path.trim().trim_start_matches("::"))
+        .filter(|path| !path.is_empty())
         .any(|excluded| path == excluded || path.strip_prefix(excluded).is_some_and(|rest| rest.starts_with("::")))
 }
 

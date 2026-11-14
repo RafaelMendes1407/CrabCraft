@@ -37,35 +37,18 @@ pub struct MoveItems {
     epoch: u64,
 }
 fn frozen(app: &CrabCraftApp) -> Result<Vec<Frozen>, Error> {
-    let root = app
-        .workspace
-        .as_ref()
-        .map(|workspace| &workspace.ws.root)
-        .ok_or(Error::Unsupported)?;
+    let root = app.workspace.as_ref().map(|workspace| &workspace.ws.root).ok_or(Error::Unsupported)?;
     let mut total = 0;
     let mut result = Vec::new();
-    for doc in app
-        .docs
-        .list
-        .iter()
-        .filter(|doc| !doc.generated && !doc.scratch && doc.path.starts_with(root))
-    {
-        if doc
-            .path
-            .file_name()
-            .is_some_and(|name| name == "Cargo.toml")
-            && doc.is_modified()
-        {
+    for doc in app.docs.list.iter().filter(|doc| !doc.generated && !doc.scratch && doc.path.starts_with(root)) {
+        if doc.path.file_name().is_some_and(|name| name == "Cargo.toml") && doc.is_modified() {
             return Err(Error::Changed);
         }
         if doc.editor.lang() != rc_syntax::Lang::Rust {
             continue;
         }
         total += doc.editor.buffer.rope().len_bytes();
-        if doc.editor.buffer.rope().len_bytes() > 1024 * 1024
-            || total > 8 * 1024 * 1024
-            || result.len() >= 128
-        {
+        if doc.editor.buffer.rope().len_bytes() > 1024 * 1024 || total > 8 * 1024 * 1024 || result.len() >= 128 {
             return Err(Error::Limit);
         }
         result.push(Frozen {
@@ -80,12 +63,10 @@ fn frozen(app: &CrabCraftApp) -> Result<Vec<Frozen>, Error> {
 }
 fn current(plan: &Plan, app: &CrabCraftApp) -> bool {
     plan.frozen.iter().all(|old| {
-        app.docs.list.iter().any(|doc| {
-            doc.editor.id == old.id
-                && doc.path == old.path
-                && doc.editor.buffer.version() == old.version
-                && doc.editor.read_only == old.readonly
-        })
+        app.docs
+            .list
+            .iter()
+            .any(|doc| doc.editor.id == old.id && doc.path == old.path && doc.editor.buffer.version() == old.version && doc.editor.read_only == old.readonly)
     })
 }
 impl MoveItems {
@@ -112,21 +93,14 @@ impl MoveItems {
                 self.error = Some(error_text(Error::Changed));
                 return;
             }
-            std::thread::Builder::new()
-                .name("rc-move-item-verify".into())
-                .spawn(move || {
-                    let budget = Budget {
-                        cancel: token,
-                        deadline: Instant::now() + Duration::from_secs(15),
-                    };
-                    sender.send(core::verify(&plan, &budget).map(|_| plan));
-                })
+            std::thread::Builder::new().name("rc-move-item-verify".into()).spawn(move || {
+                let budget = Budget { cancel: token, deadline: Instant::now() + Duration::from_secs(15) };
+                sender.send(core::verify(&plan, &budget).map(|_| plan));
+            })
         } else {
-            let Some(source) = app.docs.list.iter().find(|doc| {
-                doc.editor.id == self.origin
-                    && doc.editor.buffer.version() == self.version
-                    && doc.path == self.source
-            }) else {
+            let Some(source) =
+                app.docs.list.iter().find(|doc| doc.editor.id == self.origin && doc.editor.buffer.version() == self.version && doc.path == self.source)
+            else {
                 self.error = Some(error_text(Error::Changed));
                 return;
             };
@@ -148,12 +122,7 @@ impl MoveItems {
             let Some(package) = model
                 .packages
                 .iter()
-                .filter(|package| {
-                    package
-                        .manifest
-                        .parent()
-                        .is_some_and(|dir| source.path.starts_with(dir))
-                })
+                .filter(|package| package.manifest.parent().is_some_and(|dir| source.path.starts_with(dir)))
                 .max_by_key(|package| package.manifest.components().count())
             else {
                 self.error = Some(error_text(Error::Graph));
@@ -175,12 +144,7 @@ impl MoveItems {
                     targets: package
                         .targets
                         .iter()
-                        .map(|target| rc_cargo::Target {
-                            name: target.name.clone(),
-                            kind: target.kind,
-                            src: target.src.clone(),
-                            required_features: Vec::new(),
-                        })
+                        .map(|target| rc_cargo::Target { name: target.name.clone(), kind: target.kind, src: target.src.clone(), required_features: Vec::new() })
                         .collect(),
                     features: Default::default(),
                 }],
@@ -194,43 +158,20 @@ impl MoveItems {
             let caret = self.caret;
             let target = self.target.clone();
             self.preview = None;
-            std::thread::Builder::new()
-                .name("rc-move-item-plan".into())
-                .spawn(move || {
-                    let budget = Budget {
-                        cancel: token,
-                        deadline: Instant::now() + Duration::from_secs(20),
-                    };
-                    sender.send(
-                        core::plan(
-                            origin, caret, target, snapshots, workspace, &client, &budget,
-                        )
-                        .map(Arc::new),
-                    );
-                })
+            std::thread::Builder::new().name("rc-move-item-plan".into()).spawn(move || {
+                let budget = Budget { cancel: token, deadline: Instant::now() + Duration::from_secs(20) };
+                sender.send(core::plan(origin, caret, target, snapshots, workspace, &client, &budget).map(Arc::new));
+            })
         };
         match job {
-            Ok(_) => {
-                self.job = Some(Job {
-                    cancel,
-                    inbox,
-                    applying,
-                })
-            }
+            Ok(_) => self.job = Some(Job { cancel, inbox, applying }),
             Err(_) => self.error = Some(error_text(Error::Io)),
         }
     }
     fn client_changed(&self, app: &CrabCraftApp) -> bool {
         self.epoch != app.cfg_epoch
-            || !app
-                .workspace
-                .as_ref()
-                .is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root))
-            || !app
-                .insight
-                .session
-                .as_ref()
-                .is_some_and(|session| session.client.same_connection(&self.client))
+            || !app.workspace.as_ref().is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root))
+            || !app.insight.session.as_ref().is_some_and(|session| session.client.same_connection(&self.client))
     }
     fn poll(&mut self, app: &mut CrabCraftApp) -> bool {
         if self.client_changed(app) {
@@ -239,51 +180,30 @@ impl MoveItems {
             self.error = Some(error_text(Error::Changed));
             return false;
         }
-        if self
-            .preview
-            .as_ref()
-            .is_some_and(|plan| !current(plan, app))
-        {
+        if self.preview.as_ref().is_some_and(|plan| !current(plan, app)) {
             self.preview = None;
             self.error = Some(error_text(Error::Changed));
         }
-        let result = self
-            .job
-            .as_ref()
-            .and_then(|job| job.inbox.drain().into_iter().next());
+        let result = self.job.as_ref().and_then(|job| job.inbox.drain().into_iter().next());
         if let Some(result) = result {
             let applying = self.job.take().is_some_and(|job| job.applying);
             match result {
                 Ok(plan) if current(&plan, app) => {
                     if applying {
-                        let valid = plan.edits.iter().all(|edit| {
-                            app.docs.list.iter().any(|doc| {
-                                doc.editor.id == edit.id
-                                    && doc.path == edit.path
-                                    && !doc.editor.read_only
-                            })
-                        });
+                        let valid = plan
+                            .edits
+                            .iter()
+                            .all(|edit| app.docs.list.iter().any(|doc| doc.editor.id == edit.id && doc.path == edit.path && !doc.editor.read_only));
                         if !valid {
                             self.error = Some(error_text(Error::Changed));
                             return false;
                         }
                         for edit in &plan.edits {
-                            if let Some(doc) = app
-                                .docs
-                                .list
-                                .iter_mut()
-                                .find(|doc| doc.editor.id == edit.id)
-                            {
+                            if let Some(doc) = app.docs.list.iter_mut().find(|doc| doc.editor.id == edit.id) {
                                 doc.editor.replace(edit.start, edit.end, &edit.text);
                             }
                         }
-                        app.notify(
-                            trf(
-                                "Moved {name} in two buffers; save or undo each file explicitly",
-                                &[("name", &plan.name)],
-                            ),
-                            false,
-                        );
+                        app.notify(trf("Moved {name} in two buffers; save or undo each file explicitly", &[("name", &plan.name)]), false);
                         return true;
                     }
                     self.preview = Some(plan);
@@ -299,10 +219,7 @@ impl MoveItems {
     }
 }
 pub fn open(app: &mut CrabCraftApp) {
-    let error = || {
-        tr("Trust the Rust project, wait for rust-analyzer, and place one caret in a public item")
-            .to_string()
-    };
+    let error = || tr("Trust the Rust project, wait for rust-analyzer, and place one caret in a public item").to_string();
     let Some(doc) = app.docs.active_doc().filter(|doc| {
         !doc.generated
             && !doc.scratch
@@ -314,22 +231,14 @@ pub fn open(app: &mut CrabCraftApp) {
         app.notify(error(), false);
         return;
     };
-    if !app
-        .workspace
-        .as_ref()
-        .is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root))
+    if !app.workspace.as_ref().is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root))
         || !app.insight.ready()
         || app.runner.cargo_workspace.is_none()
     {
         app.notify(error(), false);
         return;
     }
-    let Some(client) = app
-        .insight
-        .session
-        .as_ref()
-        .map(|session| session.client.clone())
-    else {
+    let Some(client) = app.insight.session.as_ref().map(|session| session.client.clone()) else {
         return;
     };
     let target = app
@@ -341,10 +250,7 @@ pub fn open(app: &mut CrabCraftApp) {
                 && !candidate.editor.read_only
                 && candidate.path.parent() == doc.path.parent()
                 && candidate.editor.lang() == rc_syntax::Lang::Rust
-                && !matches!(
-                    candidate.path.file_name().and_then(|name| name.to_str()),
-                    Some("main.rs" | "lib.rs")
-                )
+                && !matches!(candidate.path.file_name().and_then(|name| name.to_str()), Some("main.rs" | "lib.rs"))
         })
         .map(|doc| doc.path.clone())
         .unwrap_or_default();
@@ -393,7 +299,20 @@ pub fn show(app: &mut CrabCraftApp, ctx: &egui::Context) {
     app.move_items = Some(state);
 }
 fn error_text(error: Error) -> String {
-    tr(match error{Error::Unsupported=>"This item is outside the supported move scope; no changes were made",Error::Context=>"The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused",Error::Visibility=>"Only pub or pub(crate) items with equally public struct fields can move",Error::Collision=>"The destination already contains the item name or a reference that could be captured",Error::Graph=>"Open sibling module files and their saved crate root in a single-target Cargo package",Error::Changed=>"Sources, metadata, trust or the Rust server changed; reopen and preview the move",Error::Server=>"rust-analyzer could not establish an unambiguous item identity",Error::Cancelled=>"Cancelled",Error::Timeout=>"The Rust item move exceeded its time limit",Error::Limit=>"The Rust item move exceeded its file, text or identity-request limit",Error::Io=>"Could not read the regular Rust source files for the move"}).into()
+    tr(match error {
+        Error::Unsupported => "This item is outside the supported move scope; no changes were made",
+        Error::Context => "The move cannot prove independent names or namespace stability; macros, attributes, doc comments and glob imports are refused",
+        Error::Visibility => "Only pub or pub(crate) items with equally public struct fields can move",
+        Error::Collision => "The destination already contains the item name or a reference that could be captured",
+        Error::Graph => "Open sibling module files and their saved crate root in a single-target Cargo package",
+        Error::Changed => "Sources, metadata, trust or the Rust server changed; reopen and preview the move",
+        Error::Server => "rust-analyzer could not establish an unambiguous item identity",
+        Error::Cancelled => "Cancelled",
+        Error::Timeout => "The Rust item move exceeded its time limit",
+        Error::Limit => "The Rust item move exceeded its file, text or identity-request limit",
+        Error::Io => "Could not read the regular Rust source files for the move",
+    })
+    .into()
 }
 
 #[cfg(test)]
@@ -403,10 +322,7 @@ mod tests {
     use egui_kittest::kittest::Queryable;
     use rc_text::Selection;
     #[track_caller]
-    fn pump(
-        h: &mut egui_kittest::Harness<'static, CrabCraftApp>,
-        done: impl Fn(&CrabCraftApp) -> bool,
-    ) {
+    fn pump(h: &mut egui_kittest::Harness<'static, CrabCraftApp>, done: impl Fn(&CrabCraftApp) -> bool) {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(25) {
             h.run_steps(2);
@@ -417,20 +333,9 @@ mod tests {
         }
         panic!(
             "move timeout: error={:?}; preview={:?}; job={:?}; RA={:?}",
-            h.state()
-                .move_items
-                .as_ref()
-                .and_then(|state| state.error.as_ref()),
-            h.state()
-                .move_items
-                .as_ref()
-                .and_then(|state| state.preview.as_ref())
-                .map(|plan| &plan.name),
-            h.state()
-                .move_items
-                .as_ref()
-                .and_then(|state| state.job.as_ref())
-                .map(|job| job.applying),
+            h.state().move_items.as_ref().and_then(|state| state.error.as_ref()),
+            h.state().move_items.as_ref().and_then(|state| state.preview.as_ref()).map(|plan| &plan.name),
+            h.state().move_items.as_ref().and_then(|state| state.job.as_ref()).map(|job| job.applying),
             h.state().insight.status
         );
     }
@@ -439,26 +344,20 @@ mod tests {
         let doc = app.docs.active_doc_mut().unwrap();
         let source = doc.editor.buffer.rope().to_string();
         let byte = source.find(needle).unwrap() + needle.rfind(' ').map_or(0, |space| space + 1);
-        doc.editor
-            .set_selection(Selection::point(source[..byte].chars().count()));
+        doc.editor.set_selection(Selection::point(source[..byte].chars().count()));
     }
     fn window(app: &mut CrabCraftApp, target: &std::path::Path) {
         open(app);
         app.move_items.as_mut().unwrap().target = target.to_path_buf();
     }
     #[test]
-    fn native_real_rust_item_moves_keep_aliases_types_impls_and_disk_unchanged_until_explicit_save()
-    {
+    fn native_real_rust_item_moves_keep_aliases_types_impls_and_disk_unchanged_until_explicit_save() {
         let _lock = HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"item_move_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"item_move_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n").unwrap();
         let main = root.join("src/main.rs");
         let from = root.join("src/source.rs");
         let to = root.join("src/destination.rs");
@@ -479,10 +378,7 @@ mod tests {
         app.trust_project_tools_for_test();
         app.insight.start_rust(&root, None, false);
         let mut h = harness(app, egui::vec2(1800.0, 1500.0));
-        pump(&mut h, |app| {
-            app.runner.cargo_workspace.is_some()
-                && app.insight.status == crate::insight::InsightStatus::Ready
-        });
+        pump(&mut h, |app| app.runner.cargo_workspace.is_some() && app.insight.status == crate::insight::InsightStatus::Ready);
         // Cancelling a real identity job does not apply any buffered edits.
         window(h.state_mut(), &to);
         h.run_steps(2);
@@ -491,93 +387,32 @@ mod tests {
         h.get_by_label(tr("Cancel")).click();
         h.run_steps(3);
         assert!(h.state().move_items.is_none());
-        assert_eq!(
-            h.state()
-                .docs
-                .list
-                .iter()
-                .find(|doc| doc.path == from)
-                .unwrap()
-                .editor
-                .buffer
-                .rope(),
-            source
-        );
+        assert_eq!(h.state().docs.list.iter().find(|doc| doc.path == from).unwrap().editor.buffer.rope(), source);
         // A stale buffer invalidates the complete multi-buffer preview before any edit.
         window(h.state_mut(), &to);
         h.run_steps(2);
         h.get_by_label(tr("Preview item move")).click();
         h.run_steps(2);
-        pump(&mut h, |app| {
-            app.move_items
-                .as_ref()
-                .is_some_and(|state| state.preview.is_some() || state.error.is_some())
-        });
-        assert!(
-            h.state().move_items.as_ref().unwrap().error.is_none(),
-            "{:?}",
-            h.state().move_items.as_ref().unwrap().error
-        );
-        let captured = h
-            .state()
-            .move_items
-            .as_ref()
-            .unwrap()
-            .preview
-            .clone()
-            .unwrap();
+        pump(&mut h, |app| app.move_items.as_ref().is_some_and(|state| state.preview.is_some() || state.error.is_some()));
+        assert!(h.state().move_items.as_ref().unwrap().error.is_none(), "{:?}", h.state().move_items.as_ref().unwrap().error);
+        let captured = h.state().move_items.as_ref().unwrap().preview.clone().unwrap();
         std::fs::write(&to, "// external disk edit\n").unwrap();
         let checked = std::thread::spawn(move || {
-            core::verify(
-                &captured,
-                &Budget {
-                    cancel: Arc::new(AtomicBool::new(false)),
-                    deadline: Instant::now() + Duration::from_secs(5),
-                },
-            )
+            core::verify(&captured, &Budget { cancel: Arc::new(AtomicBool::new(false)), deadline: Instant::now() + Duration::from_secs(5) })
         })
         .join()
         .unwrap();
         assert_eq!(checked, Err(Error::Changed));
-        assert_eq!(
-            std::fs::read_to_string(&to).unwrap(),
-            "// external disk edit\n"
-        );
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), "// external disk edit\n");
         std::fs::write(&to, "").unwrap();
-        h.state_mut()
-            .docs
-            .list
-            .iter_mut()
-            .find(|doc| doc.path == from)
-            .unwrap()
-            .editor
-            .replace(0, 0, "// changed\n");
+        h.state_mut().docs.list.iter_mut().find(|doc| doc.path == from).unwrap().editor.replace(0, 0, "// changed\n");
         h.run_steps(2);
         assert!(h.state().move_items.as_ref().unwrap().preview.is_none());
         assert!(h.state().move_items.as_ref().unwrap().error.is_some());
-        assert!(
-            h.state()
-                .docs
-                .list
-                .iter()
-                .find(|doc| doc.path == to)
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .len_chars()
-                == 0
-        );
+        assert!(h.state().docs.list.iter().find(|doc| doc.path == to).unwrap().editor.buffer.rope().len_chars() == 0);
         h.get_by_label(tr("Cancel")).click();
         h.run_steps(2);
-        h.state_mut()
-            .docs
-            .list
-            .iter_mut()
-            .find(|doc| doc.path == from)
-            .unwrap()
-            .editor
-            .undo();
+        h.state_mut().docs.list.iter_mut().find(|doc| doc.path == from).unwrap().editor.undo();
         h.run_steps(2);
         for (needle, name, visibility) in [
             ("fn score", "score", "pub"),
@@ -592,11 +427,7 @@ mod tests {
             h.run_steps(2);
             h.get_by_label(tr("Preview item move")).click();
             h.run_steps(2);
-            pump(&mut h, |app| {
-                app.move_items
-                    .as_ref()
-                    .is_some_and(|state| state.preview.is_some() || state.error.is_some())
-            });
+            pump(&mut h, |app| app.move_items.as_ref().is_some_and(|state| state.preview.is_some() || state.error.is_some()));
             let state = h.state().move_items.as_ref().unwrap();
             assert!(state.error.is_none(), "{name}: {:?}", state.error);
             assert_eq!(state.preview.as_ref().unwrap().name, name);
@@ -623,38 +454,14 @@ mod tests {
         }
         // Each buffer has one undo record for the last accepted move; the earlier moves remain.
         for path in [&from, &to] {
-            h.state_mut()
-                .docs
-                .list
-                .iter_mut()
-                .find(|doc| doc.path == *path)
-                .unwrap()
-                .editor
-                .undo();
+            h.state_mut().docs.list.iter_mut().find(|doc| doc.path == *path).unwrap().editor.undo();
         }
         h.run_steps(2);
-        let changed = h
-            .state()
-            .docs
-            .list
-            .iter()
-            .find(|doc| doc.path == from)
-            .unwrap()
-            .editor
-            .buffer
-            .rope()
-            .to_string();
+        let changed = h.state().docs.list.iter().find(|doc| doc.path == from).unwrap().editor.buffer.rope().to_string();
         assert!(changed.contains("pub type Count=i32;"));
         assert!(changed.contains("pub use super::destination::score;"));
         for path in [&from, &to] {
-            h.state_mut()
-                .docs
-                .list
-                .iter_mut()
-                .find(|doc| doc.path == *path)
-                .unwrap()
-                .editor
-                .redo();
+            h.state_mut().docs.list.iter_mut().find(|doc| doc.path == *path).unwrap().editor.redo();
         }
         h.run_steps(2);
         // An outer constant is a real RA identity outside the function and is refused.
@@ -663,34 +470,19 @@ mod tests {
         h.run_steps(2);
         h.get_by_label(tr("Preview item move")).click();
         h.run_steps(2);
-        pump(&mut h, |app| {
-            app.move_items
-                .as_ref()
-                .is_some_and(|state| state.error.is_some())
-        });
+        pump(&mut h, |app| app.move_items.as_ref().is_some_and(|state| state.error.is_some()));
         assert!(h.state().move_items.as_ref().unwrap().preview.is_none());
         h.get_by_label(tr("Cancel")).click();
         h.run_steps(2);
         assert!(!root.join("project-ran").exists());
         assert_eq!(std::fs::read_to_string(&main).unwrap(), caller);
         assert!(h.state_mut().docs.save_all().is_empty());
-        let result = std::process::Command::new("cargo")
-            .args(["run", "--offline", "--quiet"])
-            .current_dir(&root)
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
+        let result = std::process::Command::new("cargo").args(["run", "--offline", "--quiet"]).current_dir(&root).output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
         assert!(root.join("project-ran").exists());
         select(h.state_mut(), &main, "compute_score(4)");
         h.run_steps(3);
-        h.state_mut()
-            .run_insight_action(rc_editor::Action::GotoDeclaration, egui::Pos2::ZERO);
-        pump(&mut h, |app| {
-            app.docs.active_doc().is_some_and(|doc| doc.path == to)
-        });
+        h.state_mut().run_insight_action(rc_editor::Action::GotoDeclaration, egui::Pos2::ZERO);
+        pump(&mut h, |app| app.docs.active_doc().is_some_and(|doc| doc.path == to));
     }
 }

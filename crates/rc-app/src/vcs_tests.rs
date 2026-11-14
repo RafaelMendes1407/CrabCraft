@@ -93,7 +93,9 @@ fn repo_with_remote() -> (tempfile::TempDir, tempfile::TempDir, std::path::PathB
     let root = repo.path().canonicalize().unwrap();
     git(remote.path(), &["init", "-q", "--bare", "-b", "main"]);
     git(&root, &["init", "-q", "-b", "main"]);
-    for (k, v) in [("user.name", "Test"), ("user.email", "test@example.com"), ("tag.gpgsign", "false"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
+    for (k, v) in
+        [("user.name", "Test"), ("user.email", "test@example.com"), ("tag.gpgsign", "false"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")]
+    {
         git(&root, &["config", k, v]);
     }
     git(&root, &["remote", "add", "origin", &format!("file://{}", remote.path().display())]);
@@ -525,7 +527,13 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap();
     git(&root, &["init", "-q", "-b", "main"]);
-    for (k, v) in [("user.name", "Signer"), ("user.email", "signer@example.com"), ("core.hooksPath", "no-hooks"), ("gpg.program", &wrapper.display().to_string()), ("commit.gpgsign", "true")] {
+    for (k, v) in [
+        ("user.name", "Signer"),
+        ("user.email", "signer@example.com"),
+        ("core.hooksPath", "no-hooks"),
+        ("gpg.program", &wrapper.display().to_string()),
+        ("commit.gpgsign", "true"),
+    ] {
         git(&root, &["config", k, v]);
     }
     std::fs::write(root.join("a.txt"), "a\n").unwrap();
@@ -712,7 +720,9 @@ fn merge_rebase_and_cherry_pick_stop_on_conflicts_and_go_on() {
     // Rebase main onto side stops at its only commit; abort puts main back.
     app.vcs.rebase("side", false);
     // A status read while git was still writing its state may lack the step: wait for the next.
-    pump(&mut app, "rebase conflict", |a| a.vcs.busy.is_none() && state(a) == Some(rc_vcs::RepoState::Rebasing) && a.vcs.operation.step.is_some() && !a.vcs.conflicts().is_empty());
+    pump(&mut app, "rebase conflict", |a| {
+        a.vcs.busy.is_none() && state(a) == Some(rc_vcs::RepoState::Rebasing) && a.vcs.operation.step.is_some() && !a.vcs.conflicts().is_empty()
+    });
     assert_eq!(app.vcs.operation.step, Some((1, 1)));
     assert_eq!(app.vcs.operation.commit.as_deref(), Some(main_head.as_str()));
     assert!(crate::ui::git::operation_text(&app.vcs).starts_with("Rebasing main onto side"), "{}", crate::ui::git::operation_text(&app.vcs));
@@ -806,7 +816,10 @@ fn the_merge_tool_resolves_a_conflicted_file() {
     assert_eq!(kinds, [(Conflict, false), (Ours, true), (Conflict, false), (Theirs, true)]);
     assert_eq!(tool.center.buffer.rope().to_string(), "fn a() {}\n\nfn b() { ours }\n\nfn c() {}\n\nfn d() { theirs }\n");
     assert_eq!(tool.current, Some(0));
-    assert_eq!(tool.left.buffer.rope().to_string(), std::fs::read_to_string(root.join("lib.rs")).ok().map(|_| "fn a() { ours }\n\nfn b() { ours }\n\nfn c() { ours }\n\nfn d() {}\n".to_string()).unwrap());
+    assert_eq!(
+        tool.left.buffer.rope().to_string(),
+        std::fs::read_to_string(root.join("lib.rs")).ok().map(|_| "fn a() { ours }\n\nfn b() { ours }\n\nfn c() { ours }\n\nfn d() {}\n".to_string()).unwrap()
+    );
 
     // Both sides for the first conflict; then the second is typed by hand.
     tool.take(0, rc_vcs::Take::Both);
@@ -838,7 +851,6 @@ fn the_merge_tool_resolves_a_conflicted_file() {
     assert_eq!(git_out(&root, &["show", "HEAD:lib.rs"]), expected);
 }
 
-
 #[test]
 fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() {
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -846,7 +858,8 @@ fn rust_git_changes_commit_branches_blame_and_remote_operations_work_together() 
     // SAFETY: serialized by HOME_LOCK.
     unsafe { std::env::set_var("CRABCRAFT_HOME", home.path()) };
     let (_repo, remote, root) = repo_with_remote();
-    std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"git_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[lib]\npath=\"lib.rs\"\n[workspace]\n").unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"git_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[lib]\npath=\"lib.rs\"\n[workspace]\n")
+        .unwrap();
     std::fs::write(root.join("lib.rs"), "pub fn answer() -> u32 {\n    1\n}\n").unwrap();
     git(&root, &["add", "."]);
     git(&root, &["commit", "-qm", "Rust project"]);

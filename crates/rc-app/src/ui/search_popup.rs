@@ -11,7 +11,13 @@ use std::path::PathBuf;
 /// One row of results.
 #[derive(Clone)]
 enum Hit {
-    File { path: PathBuf, rel: String, indices: Vec<u32>, line: Option<u32>, col: Option<u32> },
+    File {
+        path: PathBuf,
+        rel: String,
+        indices: Vec<u32>,
+        line: Option<u32>,
+        col: Option<u32>,
+    },
     Symbol(crate::search::SymbolHit),
     Action(&'static str, rc_editor::Action),
     /// An external tool of the settings, by name.
@@ -37,7 +43,12 @@ fn collect(app: &CrabCraftApp, se: &SearchEverywhere) -> Vec<(Option<&'static st
         let mut more = false;
         if text.is_empty() {
             for p in app.docs.recent.iter() {
-                let rel = app.workspace.as_ref().and_then(|w| p.strip_prefix(&w.ws.root).ok()).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_else(|| p.display().to_string());
+                let rel = app
+                    .workspace
+                    .as_ref()
+                    .and_then(|w| p.strip_prefix(&w.ws.root).ok())
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_else(|| p.display().to_string());
                 if files.len() < limit && se.in_scope(&rel) {
                     files.push(Hit::File { path: p.clone(), rel, indices: Vec::new(), line: None, col: None });
                 }
@@ -181,12 +192,17 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 ui.horizontal(|ui| {
                     for t in SeTab::ALL {
                         let selected = se.tab == t;
-                        let g = ui.painter().layout_no_wrap(t.title().to_string(), if selected { theme::bold(13.0) } else { FontId::proportional(13.0) }, p.text);
+                        let g =
+                            ui.painter().layout_no_wrap(t.title().to_string(), if selected { theme::bold(13.0) } else { FontId::proportional(13.0) }, p.text);
                         let (r, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 28.0), Sense::click());
                         if resp.hovered() && !selected {
                             ui.painter().rect_filled(r, 6.0, p.hover);
                         }
-                        ui.painter().galley(pos2(r.center().x - g.size().x / 2.0, r.center().y - g.size().y / 2.0), g, if selected { p.text } else { p.text_muted });
+                        ui.painter().galley(
+                            pos2(r.center().x - g.size().x / 2.0, r.center().y - g.size().y / 2.0),
+                            g,
+                            if selected { p.text } else { p.text_muted },
+                        );
                         if selected {
                             ui.painter().hline(r.x_range().shrink(6.0), r.bottom() - 1.0, egui::Stroke::new(2.0, p.accent));
                         }
@@ -210,13 +226,16 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let scopes = se.scopes();
                         let mut chosen = None;
-                        let resp = egui::ComboBox::from_id_salt("search_everywhere_scope").selected_text(se.scope.title()).show_ui(ui, |ui| {
-                            for s in scopes {
-                                if ui.selectable_label(s == se.scope, s.title()).clicked() {
-                                    chosen = Some(s);
+                        let resp = egui::ComboBox::from_id_salt("search_everywhere_scope")
+                            .selected_text(se.scope.title())
+                            .show_ui(ui, |ui| {
+                                for s in scopes {
+                                    if ui.selectable_label(s == se.scope, s.title()).clicked() {
+                                        chosen = Some(s);
+                                    }
                                 }
-                            }
-                        }).response;
+                            })
+                            .response;
                         let title = se.scope.title();
                         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &title));
                         resp.on_hover_text(tr("Search scope"));
@@ -233,7 +252,9 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 let ir = Rect::from_min_size(ui.cursor().min, vec2(width, 34.0));
                 ui.painter().rect(ir, 6.0, p.control_bg, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
                 icons::paint(ui.painter(), Rect::from_center_size(pos2(ir.left() + 18.0, ir.center().y), vec2(16.0, 16.0)), ico::SEARCH, &p, true);
-                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(ir.left() + 34.0, ir.top() + 4.0), pos2(ir.right() - 8.0, ir.bottom() - 4.0))));
+                let mut child = ui.new_child(
+                    egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(ir.left() + 34.0, ir.top() + 4.0), pos2(ir.right() - 8.0, ir.bottom() - 4.0))),
+                );
                 let hint = match se.tab {
                     SeTab::Files => tr("Type a file name, path or name:line"),
                     SeTab::Classes => tr("Type a struct, enum or trait name"),
@@ -242,7 +263,14 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                     SeTab::Actions => tr("Type an action name"),
                     SeTab::All => tr("Search classes, files, symbols and actions"),
                 };
-                let te = child.add(egui::TextEdit::singleline(&mut se.text).frame(egui::Frame::NONE).hint_text(hint).font(FontId::proportional(14.0)).desired_width(f32::INFINITY).lock_focus(true));
+                let te = child.add(
+                    egui::TextEdit::singleline(&mut se.text)
+                        .frame(egui::Frame::NONE)
+                        .hint_text(hint)
+                        .font(FontId::proportional(14.0))
+                        .desired_width(f32::INFINITY)
+                        .lock_focus(true),
+                );
                 if std::mem::take(&mut se.focus) {
                     te.request_focus();
                 }
@@ -271,71 +299,99 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
                 // wheel scroll stays where it is left.
                 let max_h = (screen.bottom() - ui.cursor().top() - 60.0).max(ROW_H * 4.0);
                 let reveal = std::mem::take(&mut se.reveal);
-                egui::ScrollArea::vertical().id_salt("search_everywhere_results").max_height(max_h).min_scrolled_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for (i, (group, hit)) in hits.iter().enumerate() {
-                        if let Some(g) = group {
-                            let (r, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
-                            ui.painter().text(pos2(r.left() + 8.0, r.center().y + 2.0), Align2::LEFT_CENTER, *g, FontId::proportional(11.5), p.muted);
-                        }
-                        let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
-                        if i == se.selected {
-                            ui.painter().rect_filled(r, 6.0, p.selection);
-                            if reveal {
-                                ui.scroll_to_rect(r, None);
+                egui::ScrollArea::vertical().id_salt("search_everywhere_results").max_height(max_h).min_scrolled_height(max_h).auto_shrink([false, true]).show(
+                    ui,
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for (i, (group, hit)) in hits.iter().enumerate() {
+                            if let Some(g) = group {
+                                let (r, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
+                                ui.painter().text(pos2(r.left() + 8.0, r.center().y + 2.0), Align2::LEFT_CENTER, *g, FontId::proportional(11.5), p.muted);
                             }
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(r, 6.0, p.row_hover);
-                        }
-                        if let Hit::More(_) = hit {
-                            let more = tr("… more");
-                            ui.painter().text(pos2(r.left() + 34.0, r.center().y), Align2::LEFT_CENTER, more, FontId::proportional(12.5), p.muted);
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, more));
+                            let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());
+                            if i == se.selected {
+                                ui.painter().rect_filled(r, 6.0, p.selection);
+                                if reveal {
+                                    ui.scroll_to_rect(r, None);
+                                }
+                            } else if resp.hovered() {
+                                ui.painter().rect_filled(r, 6.0, p.row_hover);
+                            }
+                            if let Hit::More(_) = hit {
+                                let more = tr("… more");
+                                ui.painter().text(pos2(r.left() + 34.0, r.center().y), Align2::LEFT_CENTER, more, FontId::proportional(12.5), p.muted);
+                                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, more));
+                                if resp.clicked() {
+                                    choose = Some(hit.clone());
+                                }
+                                continue;
+                            }
+                            let (icon, name, secondary, shortcut, highlight): (Ico, String, String, String, Vec<usize>) = match hit {
+                                Hit::File { rel, indices, .. } => {
+                                    let name = rel.rsplit('/').next().unwrap_or(rel).to_string();
+                                    let off = rel.chars().count() - name.chars().count();
+                                    let hl = indices.iter().filter_map(|&k| (k as usize).checked_sub(off)).collect();
+                                    (icons::for_file(&name), name, rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default(), String::new(), hl)
+                                }
+                                Hit::Symbol(s) => (
+                                    crate::convert::symbol_icon(s.kind),
+                                    s.name.clone(),
+                                    s.container.clone(),
+                                    s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                                    Vec::new(),
+                                ),
+                                Hit::Action(l, a) => (
+                                    crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING),
+                                    l.to_string(),
+                                    String::new(),
+                                    app.keymap.shortcut_text(*a).unwrap_or_default(),
+                                    Vec::new(),
+                                ),
+                                Hit::Tool(name) => (ico::RUN_ANYTHING, name.clone(), tr("External Tools").to_string(), String::new(), Vec::new()),
+                                Hit::Text(t) => {
+                                    let file = t.rel.rsplit('/').next().unwrap_or(&t.rel);
+                                    (icons::for_file(file), t.preview.clone(), String::new(), format!("{file}:{}", t.line + 1), t.highlight.clone())
+                                }
+                                Hit::More(_) => continue,
+                            };
+                            // Rows scrolled out of view are laid out but not painted.
+                            if ui.is_rect_visible(r) {
+                                icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
+                                // Name with the matched chars in bold accent.
+                                let mut job = egui::text::LayoutJob::default();
+                                for (k, ch) in name.chars().enumerate() {
+                                    let (font, color) =
+                                        if highlight.contains(&k) { (theme::bold(13.0), p.accent) } else { (FontId::proportional(13.0), p.text) };
+                                    job.append(&ch.to_string(), 0.0, egui::TextFormat { font_id: font, color, ..Default::default() });
+                                }
+                                let g = ui.painter().layout_job(job);
+                                ui.painter().galley(pos2(r.left() + 34.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
+                                if !secondary.is_empty() {
+                                    ui.painter().text(
+                                        pos2(r.left() + 42.0 + g.size().x, r.center().y),
+                                        Align2::LEFT_CENTER,
+                                        &secondary,
+                                        FontId::proportional(12.0),
+                                        p.muted,
+                                    );
+                                }
+                                if !shortcut.is_empty() {
+                                    ui.painter().text(
+                                        pos2(r.right() - 10.0, r.center().y),
+                                        Align2::RIGHT_CENTER,
+                                        &shortcut,
+                                        FontId::proportional(12.0),
+                                        p.muted,
+                                    );
+                                }
+                            }
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
                             if resp.clicked() {
                                 choose = Some(hit.clone());
                             }
-                            continue;
                         }
-                        let (icon, name, secondary, shortcut, highlight): (Ico, String, String, String, Vec<usize>) = match hit {
-                            Hit::File { rel, indices, .. } => {
-                                let name = rel.rsplit('/').next().unwrap_or(rel).to_string();
-                                let off = rel.chars().count() - name.chars().count();
-                                let hl = indices.iter().filter_map(|&k| (k as usize).checked_sub(off)).collect();
-                                (icons::for_file(&name), name, rel.rsplit_once('/').map(|(d, _)| d.to_string()).unwrap_or_default(), String::new(), hl)
-                            }
-                            Hit::Symbol(s) => (crate::convert::symbol_icon(s.kind), s.name.clone(), s.container.clone(), s.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), Vec::new()),
-                            Hit::Action(l, a) => (crate::search::action_icon(*a).unwrap_or(ico::RUN_ANYTHING), l.to_string(), String::new(), app.keymap.shortcut_text(*a).unwrap_or_default(), Vec::new()),
-                            Hit::Tool(name) => (ico::RUN_ANYTHING, name.clone(), tr("External Tools").to_string(), String::new(), Vec::new()),
-                            Hit::Text(t) => {
-                                let file = t.rel.rsplit('/').next().unwrap_or(&t.rel);
-                                (icons::for_file(file), t.preview.clone(), String::new(), format!("{file}:{}", t.line + 1), t.highlight.clone())
-                            }
-                            Hit::More(_) => continue,
-                        };
-                        // Rows scrolled out of view are laid out but not painted.
-                        if ui.is_rect_visible(r) {
-                            icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 18.0, r.center().y), vec2(16.0, 16.0)), icon, &p, true);
-                            // Name with the matched chars in bold accent.
-                            let mut job = egui::text::LayoutJob::default();
-                            for (k, ch) in name.chars().enumerate() {
-                                let (font, color) = if highlight.contains(&k) { (theme::bold(13.0), p.accent) } else { (FontId::proportional(13.0), p.text) };
-                                job.append(&ch.to_string(), 0.0, egui::TextFormat { font_id: font, color, ..Default::default() });
-                            }
-                            let g = ui.painter().layout_job(job);
-                            ui.painter().galley(pos2(r.left() + 34.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
-                            if !secondary.is_empty() {
-                                ui.painter().text(pos2(r.left() + 42.0 + g.size().x, r.center().y), Align2::LEFT_CENTER, &secondary, FontId::proportional(12.0), p.muted);
-                            }
-                            if !shortcut.is_empty() {
-                                ui.painter().text(pos2(r.right() - 10.0, r.center().y), Align2::RIGHT_CENTER, &shortcut, FontId::proportional(12.0), p.muted);
-                            }
-                        }
-                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
-                        if resp.clicked() {
-                            choose = Some(hit.clone());
-                        }
-                    }
-                });
+                    },
+                );
             });
     });
     // A click in the open scope list is not a click outside.
@@ -415,7 +471,9 @@ pub fn find_bar(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
                 close = true;
             }
         }
-        for (flag, icon, tip) in [(&mut bar.case, ico::MATCH_CASE, tr("Match Case")), (&mut bar.word, ico::WHOLE_WORDS, tr("Words")), (&mut bar.regex, ico::REGEX, tr("Regex"))] {
+        for (flag, icon, tip) in
+            [(&mut bar.case, ico::MATCH_CASE, tr("Match Case")), (&mut bar.word, ico::WHOLE_WORDS, tr("Words")), (&mut bar.regex, ico::REGEX, tr("Regex"))]
+        {
             if theme::icon_tab(ui, icon, tip, *flag).clicked() {
                 *flag = !*flag;
             }
@@ -469,7 +527,8 @@ pub fn find_bar(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
                     let text = doc.editor.buffer.rope().to_string();
                     doc.editor.search_matches = q.find_all(&text).into_iter().map(|r| (r.start, r.end)).collect();
                     let caret = doc.editor.caret();
-                    doc.editor.current_match = doc.editor.search_matches.iter().position(|&(s, _)| s >= caret).or((!doc.editor.search_matches.is_empty()).then_some(0));
+                    doc.editor.current_match =
+                        doc.editor.search_matches.iter().position(|&(s, _)| s >= caret).or((!doc.editor.search_matches.is_empty()).then_some(0));
                 }
                 Err(e) => bar.error = Some(format!("{e:?}")),
             }
@@ -501,7 +560,12 @@ pub fn find_bar(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) -> f32 {
             let count = chosen.len();
             doc.editor.apply_text_edits(chosen.into_iter().map(|e| rc_text::Change::new(e.range.start, e.range.end, e.text)).collect());
             if replace_all {
-                app.notices.push(crate::app::Notice { text: rc_kit::i18n::trf("{n} occurrences replaced", &[("n", &count)]), error: false, at: 0.0, url: None });
+                app.notices.push(crate::app::Notice {
+                    text: rc_kit::i18n::trf("{n} occurrences replaced", &[("n", &count)]),
+                    error: false,
+                    at: 0.0,
+                    url: None,
+                });
             }
         }
     }

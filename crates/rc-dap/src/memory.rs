@@ -105,7 +105,8 @@ pub fn address_in(value: &str) -> Option<u64> {
 
 /// Standard base64, with or without its `=` padding.
 pub fn decode_base64(text: &str) -> Result<Vec<u8>, MemoryError> {
-    const ENGINE: GeneralPurpose = GeneralPurpose::new(&base64::alphabet::STANDARD, GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent));
+    const ENGINE: GeneralPurpose =
+        GeneralPurpose::new(&base64::alphabet::STANDARD, GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent));
     let clean: String = text.chars().filter(|c| !c.is_ascii_whitespace()).collect();
     ENGINE.decode(clean).map_err(|e| MemoryError::BadData(e.to_string()))
 }

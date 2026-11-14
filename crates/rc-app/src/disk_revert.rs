@@ -3,7 +3,10 @@ use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::SystemTime;
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -20,7 +23,13 @@ impl Ticket {
         Self { id: doc.editor.id, path: doc.path.clone(), version: doc.editor.buffer.version(), disk_epoch: doc.disk_epoch }
     }
     pub fn index(&self, docs: &crate::docs::Docs) -> Option<usize> {
-        docs.list.iter().position(|doc| doc.editor.id == self.id && doc.path == self.path && doc.editor.buffer.version() == self.version && doc.disk_epoch == self.disk_epoch && !doc.generated)
+        docs.list.iter().position(|doc| {
+            doc.editor.id == self.id
+                && doc.path == self.path
+                && doc.editor.buffer.version() == self.version
+                && doc.disk_epoch == self.disk_epoch
+                && !doc.generated
+        })
     }
 }
 
@@ -48,52 +57,97 @@ impl std::fmt::Display for Error {
     }
 }
 impl std::error::Error for Error {}
-impl From<std::io::Error> for Error { fn from(error: std::io::Error) -> Self { Self::Io(error) } }
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
 
 #[derive(PartialEq, Eq)]
 struct Stamp {
     length: u64,
     modified: SystemTime,
-    #[cfg(unix)] device: u64,
-    #[cfg(unix)] inode: u64,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
 }
 impl Stamp {
     fn of(metadata: &std::fs::Metadata) -> Result<Self, Error> {
-        #[cfg(unix)] use std::os::unix::fs::MetadataExt;
-        Ok(Self { length: metadata.len(), modified: metadata.modified()?, #[cfg(unix)] device: metadata.dev(), #[cfg(unix)] inode: metadata.ino() })
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        Ok(Self {
+            length: metadata.len(),
+            modified: metadata.modified()?,
+            #[cfg(unix)]
+            device: metadata.dev(),
+            #[cfg(unix)]
+            inode: metadata.ino(),
+        })
     }
 }
 
-pub struct Snapshot { pub text: String, pub bom: bool, pub modified: SystemTime }
+pub struct Snapshot {
+    pub text: String,
+    pub bom: bool,
+    pub modified: SystemTime,
+}
 
 pub(crate) fn read(path: &Path, cancel: &AtomicBool) -> Result<Snapshot, Error> {
-    if cancel.load(Ordering::Acquire) { return Err(Error::Cancelled); }
-    if !std::fs::metadata(path)?.is_file() { return Err(Error::NotRegular); }
-    let mut options = std::fs::OpenOptions::new(); options.read(true);
-    #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    if cancel.load(Ordering::Acquire) {
+        return Err(Error::Cancelled);
+    }
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(Error::NotRegular);
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     let mut file = options.open(path)?;
     let metadata = file.metadata()?;
-    if !metadata.is_file() { return Err(Error::NotRegular); }
+    if !metadata.is_file() {
+        return Err(Error::NotRegular);
+    }
     let before = Stamp::of(&metadata)?;
-    if before.length > MAX_BYTES as u64 { return Err(Error::TooLarge); }
+    if before.length > MAX_BYTES as u64 {
+        return Err(Error::TooLarge);
+    }
     let mut bytes = Vec::new();
     let mut chunk = [0u8; 64 * 1024];
     loop {
-        if cancel.load(Ordering::Acquire) { return Err(Error::Cancelled); }
+        if cancel.load(Ordering::Acquire) {
+            return Err(Error::Cancelled);
+        }
         let count = match file.read(&mut chunk) {
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
         };
-        if count == 0 { break; }
-        if bytes.len() + count > MAX_BYTES { return Err(Error::TooLarge); }
+        if count == 0 {
+            break;
+        }
+        if bytes.len() + count > MAX_BYTES {
+            return Err(Error::TooLarge);
+        }
         bytes.extend_from_slice(&chunk[..count]);
     }
     let current_path = std::fs::metadata(path)?;
-    if !current_path.is_file() || before != Stamp::of(&file.metadata()?)? || before != Stamp::of(&current_path)? { return Err(Error::ChangedOnDisk); }
-    if cancel.load(Ordering::Acquire) { return Err(Error::Cancelled); }
-    if bytes.contains(&0) { return Err(Error::InvalidText); }
+    if !current_path.is_file() || before != Stamp::of(&file.metadata()?)? || before != Stamp::of(&current_path)? {
+        return Err(Error::ChangedOnDisk);
+    }
+    if cancel.load(Ordering::Acquire) {
+        return Err(Error::Cancelled);
+    }
+    if bytes.contains(&0) {
+        return Err(Error::InvalidText);
+    }
     let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
-    if bom { bytes.drain(..3); }
+    if bom {
+        bytes.drain(..3);
+    }
     let text = String::from_utf8(bytes).map_err(|_| Error::InvalidText)?;
     Ok(Snapshot { text, bom, modified: before.modified })
 }
@@ -110,12 +164,20 @@ impl Job {
         let cancel = Arc::new(AtomicBool::new(false));
         let token = cancel.clone();
         let path = ticket.path.clone();
-        std::thread::Builder::new().name("rc-revert-disk".into()).spawn(move || { out.send(read(&path, &token)); })?;
+        std::thread::Builder::new().name("rc-revert-disk".into()).spawn(move || {
+            out.send(read(&path, &token));
+        })?;
         Ok(Self { ticket, inbox, cancel })
     }
-    pub fn poll(&self) -> Option<Result<Snapshot, Error>> { self.inbox.drain().into_iter().next() }
+    pub fn poll(&self) -> Option<Result<Snapshot, Error>> {
+        self.inbox.drain().into_iter().next()
+    }
 }
-impl Drop for Job { fn drop(&mut self) { self.cancel.store(true, Ordering::Release); } }
+impl Drop for Job {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Release);
+    }
+}
 
 pub fn apply(docs: &mut crate::docs::Docs, ticket: &Ticket, snapshot: Snapshot) -> Result<usize, Error> {
     let index = ticket.index(docs).ok_or(Error::Stale)?;
@@ -153,11 +215,15 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
-    fn snapshot(path: &Path) -> Snapshot { read(path, &AtomicBool::new(false)).unwrap() }
+    fn snapshot(path: &Path) -> Snapshot {
+        read(path, &AtomicBool::new(false)).unwrap()
+    }
     fn wait(job: &Job) -> Result<Snapshot, Error> {
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
-            if let Some(result) = job.poll() { return result; }
+            if let Some(result) = job.poll() {
+                return result;
+            }
             assert!(Instant::now() < deadline, "disk worker did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
@@ -215,8 +281,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fifo_is_rejected_without_waiting_for_a_writer() {
-        use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
         use std::io::Write;
+        use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
         let root = fixture();
         let path = root.path().join("fifo.rs");
         let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
@@ -224,10 +290,14 @@ mod tests {
         assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
         let (send, receive) = std::sync::mpsc::channel();
         let fifo = path.clone();
-        std::thread::spawn(move || { let _ = send.send((read(&fifo, &AtomicBool::new(false)), crate::docs::read_text_checked(&fifo))); });
+        std::thread::spawn(move || {
+            let _ = send.send((read(&fifo, &AtomicBool::new(false)), crate::docs::read_text_checked(&fifo)));
+        });
         let result = receive.recv_timeout(Duration::from_secs(1));
         if result.is_err() {
-            if let Ok(mut writer) = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&path) { let _ = writer.write_all(b"text\n"); }
+            if let Ok(mut writer) = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&path) {
+                let _ = writer.write_all(b"text\n");
+            }
         }
         assert!(matches!(result, Ok((Err(Error::NotRegular), Err(crate::docs::TextReadError::NotRegular)))));
     }
@@ -272,13 +342,17 @@ mod tests {
         std::fs::write(&path, disk).unwrap();
         let mut harness = crate::screens::harness(app, egui::vec2(1280.0, 800.0));
         frames(&mut harness, "external disk change", |app| app.docs.list[0].conflict);
-        harness.state_mut().request_disk_revert(0); harness.run_steps(2);
-        harness.get_by_label(tr("Cancel")).click(); harness.run_steps(2);
+        harness.state_mut().request_disk_revert(0);
+        harness.run_steps(2);
+        harness.get_by_label(tr("Cancel")).click();
+        harness.run_steps(2);
         assert!(harness.state().disk_revert.is_none());
         assert_eq!(harness.state().docs.list[0].editor.buffer.rope().to_string(), dirty_text);
         assert_eq!(std::fs::read(&path).unwrap(), disk);
-        harness.state_mut().request_disk_revert(0); harness.run_steps(2);
-        harness.get_by_label(tr("Discard and Reload")).click(); harness.run_steps(2);
+        harness.state_mut().request_disk_revert(0);
+        harness.run_steps(2);
+        harness.get_by_label(tr("Discard and Reload")).click();
+        harness.run_steps(2);
         frames(&mut harness, "disk snapshot", |app| app.disk_revert.is_none() && !app.docs.list[0].is_modified());
         let doc = &harness.state().docs.list[0];
         assert!(doc.bom);

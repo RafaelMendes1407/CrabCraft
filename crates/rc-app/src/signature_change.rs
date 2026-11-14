@@ -18,63 +18,32 @@ struct Guard {
 }
 impl Guard {
     fn capture(app: &mut CrabCraftApp) -> Result<(Self, backend::Key), backend::Error> {
-        app.runner
-            .require_trust()
-            .map_err(|_| backend::Error::Unsupported)?;
+        app.runner.require_trust().map_err(|_| backend::Error::Unsupported)?;
         if app.cargo_features.len() > 128 || app.runner.project_env.len() > 64 * 1024 {
             return Err(backend::Error::Limit);
         }
         for index in 0..app.docs.list.len() {
-            if app.docs.list[index].editor.lang() == rc_syntax::Lang::Rust
-                && !app.docs.list[index].generated
-                && !app.docs.list[index].scratch
-            {
+            if app.docs.list[index].editor.lang() == rc_syntax::Lang::Rust && !app.docs.list[index].generated && !app.docs.list[index].scratch {
                 app.insight.flush(&mut app.docs.list[index]);
             }
         }
-        let workspace = app
-            .runner
-            .cargo_workspace
-            .as_ref()
-            .ok_or(backend::Error::Analysis)?;
-        let session = app
-            .insight
-            .session
-            .as_ref()
-            .ok_or(backend::Error::Analysis)?;
+        let workspace = app.runner.cargo_workspace.as_ref().ok_or(backend::Error::Analysis)?;
+        let session = app.insight.session.as_ref().ok_or(backend::Error::Analysis)?;
         let doc = app
             .docs
             .active_doc()
-            .filter(|doc| {
-                doc.editor.lang() == rc_syntax::Lang::Rust
-                    && !doc.editor.read_only
-                    && !doc.generated
-                    && !doc.scratch
-                    && !doc.conflict
-            })
+            .filter(|doc| doc.editor.lang() == rc_syntax::Lang::Rust && !doc.editor.read_only && !doc.generated && !doc.scratch && !doc.conflict)
             .ok_or(backend::Error::Unsupported)?;
         let position = crate::convert::lsp_position(doc.editor.buffer.rope(), doc.editor.caret());
-        let origin = backend::Key {
-            path: doc.path.clone(),
-            line: position.line,
-            column: position.character,
-        };
+        let origin = backend::Key { path: doc.path.clone(), line: position.line, column: position.character };
         let mut overlays = Vec::new();
         let mut bytes = 0;
-        for doc in app.docs.list.iter().filter(|doc| {
-            doc.editor.lang() == rc_syntax::Lang::Rust
-                && !doc.editor.read_only
-                && !doc.generated
-                && !doc.scratch
-        }) {
+        for doc in app.docs.list.iter().filter(|doc| doc.editor.lang() == rc_syntax::Lang::Rust && !doc.editor.read_only && !doc.generated && !doc.scratch) {
             if doc.conflict {
                 return Err(backend::Error::Stale);
             }
             bytes += doc.editor.buffer.rope().len_bytes();
-            if overlays.len() >= 64
-                || bytes > 16 * 1024 * 1024
-                || doc.editor.buffer.rope().len_bytes() > 2 * 1024 * 1024
-            {
+            if overlays.len() >= 64 || bytes > 16 * 1024 * 1024 || doc.editor.buffer.rope().len_bytes() > 2 * 1024 * 1024 {
                 return Err(backend::Error::Limit);
             }
             overlays.push(backend::Overlay {
@@ -87,19 +56,10 @@ impl Guard {
                 server_version: session.docs.version(&doc.path),
             });
         }
-        let members = workspace
-            .packages
-            .iter()
-            .filter_map(|package| package.manifest.parent().map(std::path::Path::to_path_buf))
-            .collect();
+        let members = workspace.packages.iter().filter_map(|package| package.manifest.parent().map(std::path::Path::to_path_buf)).collect();
         Ok((
             Self {
-                capture: backend::Capture {
-                    root: workspace.root.clone(),
-                    members,
-                    overlays,
-                    client: session.client.clone(),
-                },
+                capture: backend::Capture { root: workspace.root.clone(), members, overlays, client: session.client.clone() },
                 features: app.cargo_features.clone(),
                 target: app.cargo_target.clone(),
                 env: app.runner.project_env.clone(),
@@ -109,36 +69,16 @@ impl Guard {
     }
     fn current(&self, app: &CrabCraftApp) -> bool {
         app.runner.require_trust().is_ok()
-            && app
-                .insight
-                .session
-                .as_ref()
-                .is_some_and(|session| session.client.same_connection(&self.capture.client))
-            && app
-                .runner
-                .cargo_workspace
-                .as_ref()
-                .is_some_and(|workspace| {
-                    workspace.root == self.capture.root
-                        && workspace.packages.len() == self.capture.members.len()
-                        && workspace.packages.iter().zip(&self.capture.members).all(
-                            |(package, root)| package.manifest.parent() == Some(root.as_path()),
-                        )
-                })
+            && app.insight.session.as_ref().is_some_and(|session| session.client.same_connection(&self.capture.client))
+            && app.runner.cargo_workspace.as_ref().is_some_and(|workspace| {
+                workspace.root == self.capture.root
+                    && workspace.packages.len() == self.capture.members.len()
+                    && workspace.packages.iter().zip(&self.capture.members).all(|(package, root)| package.manifest.parent() == Some(root.as_path()))
+            })
             && self.features == app.cargo_features
             && self.target == app.cargo_target
             && self.env == app.runner.project_env
-            && app
-                .docs
-                .list
-                .iter()
-                .filter(|doc| {
-                    doc.editor.lang() == rc_syntax::Lang::Rust
-                        && !doc.editor.read_only
-                        && !doc.generated
-                        && !doc.scratch
-                })
-                .count()
+            && app.docs.list.iter().filter(|doc| doc.editor.lang() == rc_syntax::Lang::Rust && !doc.editor.read_only && !doc.generated && !doc.scratch).count()
                 == self.capture.overlays.len()
             && self.capture.overlays.iter().all(|overlay| {
                 overlay.ticket.index(&app.docs).is_some_and(|index| {
@@ -207,29 +147,17 @@ impl State {
             Request::Preview(prepared, _) => prepared.project.capture.client.clone(),
             Request::Verify(plan) => plan.prepared.project.capture.client.clone(),
         };
-        let result = std::thread::Builder::new()
-            .name("rc-change-signature".into())
-            .spawn(move || {
-                let context = backend::Context::new(client, token.clone());
-                let result = match request {
-                    Request::Load(guard, origin) => {
-                        backend::prepare(guard.capture, origin, &context)
-                            .map(|prepared| Reply::Loaded(Arc::new(prepared)))
-                    }
-                    Request::Preview(prepared, input) => {
-                        backend::preview(prepared, input, &context)
-                            .map(|plan| Reply::Preview(Arc::new(plan)))
-                    }
-                    Request::Verify(plan) => plan
-                        .prepared
-                        .project
-                        .validate(&context)
-                        .map(|()| Reply::Verified(plan)),
-                };
-                if !token.load(Ordering::Acquire) {
-                    output.send(result);
-                }
-            });
+        let result = std::thread::Builder::new().name("rc-change-signature".into()).spawn(move || {
+            let context = backend::Context::new(client, token.clone());
+            let result = match request {
+                Request::Load(guard, origin) => backend::prepare(guard.capture, origin, &context).map(|prepared| Reply::Loaded(Arc::new(prepared))),
+                Request::Preview(prepared, input) => backend::preview(prepared, input, &context).map(|plan| Reply::Preview(Arc::new(plan))),
+                Request::Verify(plan) => plan.prepared.project.validate(&context).map(|()| Reply::Verified(plan)),
+            };
+            if !token.load(Ordering::Acquire) {
+                output.send(result);
+            }
+        });
         match result {
             Ok(_) => self.job = Some(Job { inbox, cancel }),
             Err(_) => self.error = Some(backend::Error::Io),
@@ -260,24 +188,12 @@ impl State {
             self.guard = None;
             self.error = Some(backend::Error::Stale);
         }
-        if let Some(result) = self
-            .job
-            .as_ref()
-            .and_then(|job| job.inbox.drain().into_iter().next())
-        {
+        if let Some(result) = self.job.as_ref().and_then(|job| job.inbox.drain().into_iter().next()) {
             self.job = None;
             match result {
                 Ok(Reply::Loaded(prepared)) => {
                     let input = prepared.function.input();
-                    self.rows = input
-                        .parameters
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, value)| Row {
-                            id: index as u64,
-                            value,
-                        })
-                        .collect();
+                    self.rows = input.parameters.into_iter().enumerate().map(|(index, value)| Row { id: index as u64, value }).collect();
                     self.next_row = self.rows.len() as u64;
                     self.return_type = input.return_type;
                     self.prepared = Some(prepared);
@@ -286,9 +202,7 @@ impl State {
                     self.plan = Some(plan);
                     self.selected = 0;
                 }
-                Ok(Reply::Verified(plan)) if plan.input == self.input() => {
-                    self.verified = Some(plan)
-                }
+                Ok(Reply::Verified(plan)) if plan.input == self.input() => self.verified = Some(plan),
                 Ok(Reply::Preview(_) | Reply::Verified(_)) => {
                     self.error = Some(backend::Error::Stale);
                 }
@@ -309,59 +223,32 @@ impl State {
                     value
                 })
                 .collect(),
-            return_type: if self.return_type.trim().is_empty() {
-                "()".into()
-            } else {
-                self.return_type.trim().into()
-            },
+            return_type: if self.return_type.trim().is_empty() { "()".into() } else { self.return_type.trim().into() },
         }
     }
     fn reset(&mut self) {
         if let Some(prepared) = &self.prepared {
             let input = prepared.function.input();
-            self.rows = input
-                .parameters
-                .into_iter()
-                .enumerate()
-                .map(|(index, value)| Row {
-                    id: index as u64,
-                    value,
-                })
-                .collect();
+            self.rows = input.parameters.into_iter().enumerate().map(|(index, value)| Row { id: index as u64, value }).collect();
             self.next_row = self.rows.len() as u64;
             self.return_type = input.return_type;
             self.plan = None;
             self.error = None;
         }
     }
-    fn apply(
-        &mut self,
-        app: &mut CrabCraftApp,
-        plan: Arc<backend::Plan>,
-    ) -> Result<(), backend::Error> {
+    fn apply(&mut self, app: &mut CrabCraftApp, plan: Arc<backend::Plan>) -> Result<(), backend::Error> {
         if !self.guard.as_ref().is_some_and(|guard| guard.current(app)) {
             return Err(backend::Error::Stale);
         }
         let mut changes = Vec::new();
         for changed in &plan.files {
-            let file = plan
-                .prepared
-                .project
-                .files
-                .get(&changed.path)
-                .ok_or(backend::Error::Analysis)?;
+            let file = plan.prepared.project.files.get(&changed.path).ok_or(backend::Error::Analysis)?;
             if let Some(open) = &file.open {
                 let index = open.ticket.index(&app.docs).ok_or(backend::Error::Stale)?;
                 if app.docs.list[index].editor.read_only {
                     return Err(backend::Error::Stale);
                 }
-            } else if app.docs.index_of(&changed.path).is_some()
-                || app
-                    .docs
-                    .read_only_roots
-                    .iter()
-                    .any(|root| changed.path.starts_with(root))
-            {
+            } else if app.docs.index_of(&changed.path).is_some() || app.docs.read_only_roots.iter().any(|root| changed.path.starts_with(root)) {
                 return Err(backend::Error::Stale);
             }
             let mut edits = Vec::new();
@@ -369,11 +256,7 @@ impl State {
                 if file.normal.get(edit.range.clone()).is_none() {
                     return Err(backend::Error::Analysis);
                 }
-                edits.push(rc_text::Change::new(
-                    file.rope.byte_to_char(edit.range.start),
-                    file.rope.byte_to_char(edit.range.end),
-                    edit.text.clone(),
-                ));
+                edits.push(rc_text::Change::new(file.rope.byte_to_char(edit.range.start), file.rope.byte_to_char(edit.range.end), edit.text.clone()));
             }
             changes.push((file, edits));
         }
@@ -382,21 +265,13 @@ impl State {
         for (file, edits) in changes {
             let index = match app.docs.index_of(&file.path) {
                 Some(index) => index,
-                None => app.docs.insert_compiler_source(
-                    file.path.clone(),
-                    &file.raw,
-                    file.bom,
-                    Some(file.modified),
-                    Default::default(),
-                ),
+                None => app.docs.insert_compiler_source(file.path.clone(), &file.raw, file.bom, Some(file.modified), Default::default()),
             };
             let doc = &mut app.docs.list[index];
             doc.editor.apply_text_edits(edits);
             tickets.push(crate::disk_revert::Ticket::capture(doc));
         }
-        if let Some(active) =
-            active.and_then(|id| app.docs.list.iter().position(|doc| doc.editor.id == id))
-        {
+        if let Some(active) = active.and_then(|id| app.docs.list.iter().position(|doc| doc.editor.id == id)) {
             app.docs.activate(active);
         }
         self.undo = tickets;
@@ -411,12 +286,7 @@ impl State {
         let indices = self
             .undo
             .iter()
-            .map(|ticket| {
-                ticket
-                    .index(&app.docs)
-                    .filter(|index| !app.docs.list[*index].editor.read_only)
-                    .ok_or(backend::Error::Stale)
-            })
+            .map(|ticket| ticket.index(&app.docs).filter(|index| !app.docs.list[*index].editor.read_only).ok_or(backend::Error::Stale))
             .collect::<Result<Vec<_>, _>>()?;
         if indices.is_empty() {
             return Err(backend::Error::NoChanges);
@@ -494,30 +364,18 @@ impl State {
 }
 fn error_text(error: &backend::Error) -> &'static str {
     match error {
-        backend::Error::Io => {
-            tr("The workspace snapshot could not be read. Check the files and try again.")
-        }
-        backend::Error::Limit | backend::Error::Model(model::Error::Limit) => {
-            tr("The signature change exceeds its source, reference, edit or time limits.")
-        }
-        backend::Error::Stale => {
-            tr("Source or analysis changed. Reload the signature; your edits were kept.")
-        }
+        backend::Error::Io => tr("The workspace snapshot could not be read. Check the files and try again."),
+        backend::Error::Limit | backend::Error::Model(model::Error::Limit) => tr("The signature change exceeds its source, reference, edit or time limits."),
+        backend::Error::Stale => tr("Source or analysis changed. Reload the signature; your edits were kept."),
         backend::Error::UsedParameter => tr("The removed parameter is used in the function body."),
         backend::Error::NameConflict | backend::Error::Model(model::Error::Conflict) => {
             tr("Parameter names must be distinct and must not capture existing body names.")
         }
-        backend::Error::FunctionValue => tr(
-            "This function is used as a value or in an unsupported call context. Its signature was not changed.",
-        ),
-        backend::Error::Analysis => tr(
-            "rust-analyzer could not resolve every required definition or edit. Try again after indexing.",
-        ),
+        backend::Error::FunctionValue => tr("This function is used as a value or in an unsupported call context. Its signature was not changed."),
+        backend::Error::Analysis => tr("rust-analyzer could not resolve every required definition or edit. Try again after indexing."),
         backend::Error::Cancelled => tr("Signature change cancelled."),
         backend::Error::NoChanges => tr("There are no signature changes to apply."),
-        backend::Error::Model(model::Error::Input | model::Error::Syntax) => {
-            tr("Enter valid Rust parameter names, types and literal caller arguments.")
-        }
+        backend::Error::Model(model::Error::Input | model::Error::Syntax) => tr("Enter valid Rust parameter names, types and literal caller arguments."),
         backend::Error::Unsupported | backend::Error::Model(_) => tr(
             "Only ordinary free functions with analyzable Rust usages are supported. Methods, generated code, unknown contexts and unsafe argument changes are refused.",
         ),
@@ -528,10 +386,7 @@ pub fn open(app: &mut CrabCraftApp) {
     state.open = true;
     if app.runner.require_trust().is_err() {
         state.error = Some(backend::Error::Unsupported);
-        app.notify(
-            tr("Trust this project before changing Rust signatures."),
-            false,
-        );
+        app.notify(tr("Trust this project before changing Rust signatures."), false);
     } else {
         state.load(app);
     }
@@ -552,9 +407,7 @@ mod tests {
     use egui_kittest::kittest::Queryable;
     #[test]
     fn native_preview_apply_and_undo_preserve_real_rust_files() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
@@ -563,11 +416,7 @@ mod tests {
         let main = root.join("src/main.rs");
         const LIB: &str = "pub fn answer(left:i32,right:i32)->i32{left+right}\n";
         const MAIN: &str = "use demo::answer as alias;\nfn main(){assert_eq!(alias(40,2),42);}\n";
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[workspace]\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[workspace]\n").unwrap();
         std::fs::write(root.join("Cargo.lock"),"# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n").unwrap();
         std::fs::write(&lib, LIB).unwrap();
         let disk_main = format!("\u{feff}{}", MAIN.replace("\n", "\r\n"));
@@ -577,41 +426,21 @@ mod tests {
         app.open_workspace_and_wait(&root);
         app.open_file_and_wait(&lib);
         let mut h = crate::screens::harness(app, egui::vec2(1400., 1000.));
-        let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>,
-                    ready: &dyn Fn(&CrabCraftApp) -> bool| {
+        let wait = |h: &mut egui_kittest::Harness<'static, CrabCraftApp>, ready: &dyn Fn(&CrabCraftApp) -> bool| {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
             while !ready(h.state()) {
-                assert!(
-                    h.state().signature_change.error.is_none(),
-                    "signature error: {:?}",
-                    h.state().signature_change.error
-                );
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "timed out: {:?}",
-                    h.state().signature_change.error
-                );
+                assert!(h.state().signature_change.error.is_none(), "signature error: {:?}", h.state().signature_change.error);
+                assert!(std::time::Instant::now() < deadline, "timed out: {:?}", h.state().signature_change.error);
                 h.run_steps(1);
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
         };
         wait(&mut h, &|app| {
             app.insight.status == crate::insight::InsightStatus::Ready
-                && app
-                    .docs
-                    .active_doc()
-                    .is_some_and(|d| app.insight.runnables.contains_key(&d.editor.id))
+                && app.docs.active_doc().is_some_and(|d| app.insight.runnables.contains_key(&d.editor.id))
         });
-        h.state_mut()
-            .docs
-            .active_doc_mut()
-            .unwrap()
-            .editor
-            .goto(0, 9);
-        h.state_mut().run_ide_action(
-            &egui::Context::default(),
-            rc_editor::Action::ChangeSignature,
-        );
+        h.state_mut().docs.active_doc_mut().unwrap().editor.goto(0, 9);
+        h.state_mut().run_ide_action(&egui::Context::default(), rc_editor::Action::ChangeSignature);
         h.run_steps(2);
         wait(&mut h, &|a| a.signature_change.prepared.is_some());
         h.state_mut().signature_change.rows.swap(0, 1);
@@ -625,16 +454,7 @@ mod tests {
         h.get_by_label(tr("Preview signature changes")).click();
         h.run_steps(2);
         wait(&mut h, &|a| a.signature_change.plan.is_some());
-        assert_eq!(
-            h.state()
-                .signature_change
-                .plan
-                .as_ref()
-                .unwrap()
-                .files
-                .len(),
-            2
-        );
+        assert_eq!(h.state().signature_change.plan.as_ref().unwrap().files.len(), 2);
         assert_eq!(std::fs::read_to_string(&lib).unwrap(), LIB);
         assert_eq!(std::fs::read_to_string(&main).unwrap(), disk_main);
         h.get_by_label(tr("Apply signature changes")).click();
@@ -643,22 +463,8 @@ mod tests {
         let app = h.state();
         let library = &app.docs.list[app.docs.index_of(&lib).unwrap()];
         let caller = &app.docs.list[app.docs.index_of(&main).unwrap()];
-        assert!(
-            library
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("rhs:i64,lhs:i64")
-        );
-        assert!(
-            caller
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("alias(2,40)")
-        );
+        assert!(library.editor.buffer.rope().to_string().contains("rhs:i64,lhs:i64"));
+        assert!(caller.editor.buffer.rope().to_string().contains("alias(2,40)"));
         assert!(library.is_modified() && caller.is_modified());
         let proof = tempfile::tempdir().unwrap();
         let proof_lib = proof.path().join("lib.rs");
@@ -667,23 +473,13 @@ mod tests {
         std::fs::write(&proof_main, caller.editor.buffer.rope().to_string()).unwrap();
         let artifact = proof.path().join("libdemo.rlib");
         let result = std::process::Command::new("rustc")
-            .args([
-                "--crate-name",
-                "demo",
-                "--crate-type",
-                "rlib",
-                "--edition=2021",
-            ])
+            .args(["--crate-name", "demo", "--crate-type", "rlib", "--edition=2021"])
             .arg(&proof_lib)
             .arg("-o")
             .arg(&artifact)
             .output()
             .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
         let binary = proof.path().join("proof");
         let result = std::process::Command::new("rustc")
             .args(["--edition=2021", "--extern"])
@@ -693,43 +489,17 @@ mod tests {
             .arg(&binary)
             .output()
             .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        assert!(
-            std::process::Command::new(&binary)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
         assert!(caller.bom);
-        assert_eq!(
-            caller.editor.buffer.line_ending(),
-            rc_text::LineEnding::CrLf
-        );
+        assert_eq!(caller.editor.buffer.line_ending(), rc_text::LineEnding::CrLf);
         assert_eq!(std::fs::read_to_string(&lib).unwrap(), LIB);
         assert_eq!(std::fs::read_to_string(&main).unwrap(), disk_main);
         h.run_steps(2);
         h.get_by_label(tr("Undo signature change")).click();
         h.run_steps(2);
-        assert_eq!(
-            h.state().docs.list[h.state().docs.index_of(&lib).unwrap()]
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            LIB
-        );
-        assert_eq!(
-            h.state().docs.list[h.state().docs.index_of(&main).unwrap()]
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            MAIN
-        );
+        assert_eq!(h.state().docs.list[h.state().docs.index_of(&lib).unwrap()].editor.buffer.rope().to_string(), LIB);
+        assert_eq!(h.state().docs.list[h.state().docs.index_of(&main).unwrap()].editor.buffer.rope().to_string(), MAIN);
         // A buffer edit after preview invalidates the entire proposal before applying.
         h.get_by_label(tr("Reload function at caret")).click();
         h.run_steps(2);
@@ -740,23 +510,11 @@ mod tests {
         h.run_steps(2);
         wait(&mut h, &|a| a.signature_change.plan.is_some());
         let index = h.state().docs.index_of(&main).unwrap();
-        h.state_mut().docs.list[index]
-            .editor
-            .replace(0, 0, "// user edit\n");
+        h.state_mut().docs.list[index].editor.replace(0, 0, "// user edit\n");
         h.run_steps(2);
         assert!(h.state().signature_change.plan.is_none());
-        assert!(matches!(
-            h.state().signature_change.error,
-            Some(backend::Error::Stale)
-        ));
-        assert!(
-            h.state().docs.list[index]
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .starts_with("// user edit")
-        );
+        assert!(matches!(h.state().signature_change.error, Some(backend::Error::Stale)));
+        assert!(h.state().docs.list[index].editor.buffer.rope().to_string().starts_with("// user edit"));
         assert_eq!(std::fs::read_to_string(&main).unwrap(), disk_main);
         h.state_mut().insight.stop();
     }

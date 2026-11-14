@@ -130,8 +130,9 @@ pub fn name_problem(name: &str) -> Option<String> {
 /// Strict and reserved keywords of Rust 2021 and 2024.
 fn is_keyword(w: &str) -> bool {
     const KEYWORDS: &[&str] = &[
-        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait",
-        "true", "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final", "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let",
+        "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use",
+        "where", "while", "abstract", "become", "box", "do", "final", "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
     ];
     KEYWORDS.contains(&w)
 }
@@ -230,7 +231,11 @@ pub fn uses_of(text: &str, word: &str) -> Vec<(usize, usize)> {
             i = j + 1;
         } else if c == '\'' {
             // A character literal ('x', '\n'); a lifetime ('a) has no closing quote nearby.
-            let close = if next == Some('\\') { (i + 2..chars.len().min(i + 12)).find(|&k| chars[k] == '\'') } else { (chars.get(i + 2) == Some(&'\'')).then_some(i + 2) };
+            let close = if next == Some('\\') {
+                (i + 2..chars.len().min(i + 12)).find(|&k| chars[k] == '\'')
+            } else {
+                (chars.get(i + 2) == Some(&'\'')).then_some(i + 2)
+            };
             i = close.map_or(i + 1, |k| k + 1);
         } else if is_ident(c) {
             let start = i;

@@ -11,7 +11,25 @@ use rc_kit::{Ico, icons, theme};
 pub const HEADER_H: f32 = 36.0;
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
-    egui::Frame::new().inner_margin(if matches!(tw, ToolWindow::Agents | ToolWindow::DevContainers | ToolWindow::Containers | ToolWindow::Remote | ToolWindow::Plugins | ToolWindow::PrivilegedRun | ToolWindow::RustProvider | ToolWindow::Proofreading) { 12 } else { 0 }).show(ui, |ui| show_content(app, ui, tw));
+    egui::Frame::new()
+        .inner_margin(
+            if matches!(
+                tw,
+                ToolWindow::Agents
+                    | ToolWindow::DevContainers
+                    | ToolWindow::Containers
+                    | ToolWindow::Remote
+                    | ToolWindow::Plugins
+                    | ToolWindow::PrivilegedRun
+                    | ToolWindow::RustProvider
+                    | ToolWindow::Proofreading
+            ) {
+                12
+            } else {
+                0
+            },
+        )
+        .show(ui, |ui| show_content(app, ui, tw));
 }
 
 fn show_content(app: &mut CrabCraftApp, ui: &mut Ui, tw: ToolWindow) {
@@ -120,7 +138,11 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
         if ui.selectable_label(!app.problems_tab_inspection, tr("Current Files")).clicked() {
             app.problems_tab_inspection = false;
         }
-        if ui.selectable_label(app.problems_tab_inspection, tr("Inspection")).on_hover_text(tr("Inspect Code: Clippy over every member and target of the Cargo project")).clicked() {
+        if ui
+            .selectable_label(app.problems_tab_inspection, tr("Inspection"))
+            .on_hover_text(tr("Inspect Code: Clippy over every member and target of the Cargo project"))
+            .clicked()
+        {
             app.problems_tab_inspection = true;
         }
     });
@@ -160,7 +182,7 @@ fn problems(app: &mut CrabCraftApp, ui: &mut Ui) {
         app.explain_error(&code);
     }
     if let Some((path, pos)) = open {
-        app.request_open_offset(&path,pos);
+        app.request_open_offset(&path, pos);
     }
 }
 
@@ -278,7 +300,13 @@ fn structure(app: &mut CrabCraftApp, ui: &mut Ui) {
 
 fn call_hierarchy(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.insight.type_hierarchy_pending() {
-        ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Resolving type relationships…")); if ui.button(tr("Cancel")).clicked() { app.insight.cancel_type_hierarchy(); } });
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Resolving type relationships…"));
+            if ui.button(tr("Cancel")).clicked() {
+                app.insight.cancel_type_hierarchy();
+            }
+        });
         return;
     }
     let Some(tree) = &app.insight.call_tree else {
@@ -379,70 +407,92 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
     }
     let mut rerun = false;
     let mut replace_all = false;
-    ui.add_enabled_ui(!f.replacements.running(), |ui| { ui.horizontal(|ui| {
-        ui.add_space(10.0);
-        let te = ui.add(egui::TextEdit::singleline(&mut f.query).hint_text(tr("Text to find")).desired_width(280.0));
-        if std::mem::take(&mut f.focus) {
-            te.request_focus();
-        }
-        rerun |= te.changed();
-        for (flag, icon, tip) in [(&mut f.case, rc_kit::ico::MATCH_CASE, tr("Match Case")), (&mut f.word, rc_kit::ico::WHOLE_WORDS, tr("Words")), (&mut f.regex, rc_kit::ico::REGEX, tr("Regex"))] {
-            if theme::icon_tab(ui, icon, tip, *flag).clicked() {
-                *flag = !*flag;
-                rerun = true;
+    ui.add_enabled_ui(!f.replacements.running(), |ui| {
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            let te = ui.add(egui::TextEdit::singleline(&mut f.query).hint_text(tr("Text to find")).desired_width(280.0));
+            if std::mem::take(&mut f.focus) {
+                te.request_focus();
             }
-        }
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new(tr("File mask:")).size(12.5).color(p.text_muted));
-        rerun |= ui.add(egui::TextEdit::singleline(&mut f.mask).hint_text("*.rs").desired_width(120.0)).changed();
-        ui.add_space(8.0);
-        ui.label(egui::RichText::new(tr("Scope:")).size(12.5).color(p.text_muted));
-        let scopes = &app.explorer.scopes;
-        egui::ComboBox::from_id_salt("fif_scope").selected_text(scopes.label(&f.scope)).width(140.0).show_ui(ui, |ui| {
-            for (key, name) in scopes.list() {
-                if ui.selectable_label(f.scope == key, name).clicked() {
-                    f.scope = key;
+            rerun |= te.changed();
+            for (flag, icon, tip) in [
+                (&mut f.case, rc_kit::ico::MATCH_CASE, tr("Match Case")),
+                (&mut f.word, rc_kit::ico::WHOLE_WORDS, tr("Words")),
+                (&mut f.regex, rc_kit::ico::REGEX, tr("Regex")),
+            ] {
+                if theme::icon_tab(ui, icon, tip, *flag).clicked() {
+                    *flag = !*flag;
                     rerun = true;
                 }
             }
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(tr("File mask:")).size(12.5).color(p.text_muted));
+            rerun |= ui.add(egui::TextEdit::singleline(&mut f.mask).hint_text("*.rs").desired_width(120.0)).changed();
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(tr("Scope:")).size(12.5).color(p.text_muted));
+            let scopes = &app.explorer.scopes;
+            egui::ComboBox::from_id_salt("fif_scope").selected_text(scopes.label(&f.scope)).width(140.0).show_ui(ui, |ui| {
+                for (key, name) in scopes.list() {
+                    if ui.selectable_label(f.scope == key, name).clicked() {
+                        f.scope = key;
+                        rerun = true;
+                    }
+                }
+            });
+            if ui.add(egui::Button::selectable(f.show_replace, tr("Replace"))).clicked() {
+                f.show_replace = !f.show_replace;
+            }
         });
-        if ui.add(egui::Button::selectable(f.show_replace, tr("Replace"))).clicked() {
-            f.show_replace = !f.show_replace;
-        }
-    }); });
+    });
     if f.show_replace {
         ui.horizontal(|ui| {
             ui.add_space(10.0);
             ui.add_enabled(!f.replacements.running(), egui::TextEdit::singleline(&mut f.replace).hint_text(tr("Replace with")).desired_width(280.0));
-            replace_all = ui.add_enabled(!f.replacements.running() && f.match_count() > 0 && f.summary.as_ref().is_some_and(|summary| !summary.truncated && !summary.cancelled), egui::Button::new(tr("Replace All"))).clicked();
-            if f.summary.as_ref().is_some_and(|summary| summary.truncated) { ui.label(tr("Narrow the search before replacing truncated results")); }
+            replace_all = ui
+                .add_enabled(
+                    !f.replacements.running() && f.match_count() > 0 && f.summary.as_ref().is_some_and(|summary| !summary.truncated && !summary.cancelled),
+                    egui::Button::new(tr("Replace All")),
+                )
+                .clicked();
+            if f.summary.as_ref().is_some_and(|summary| summary.truncated) {
+                ui.label(tr("Narrow the search before replacing truncated results"));
+            }
         });
     }
     let report = &f.replacements.report;
     if report.total > 0 {
         ui.horizontal(|ui| {
             ui.add_space(12.0);
-            ui.label(rc_kit::i18n::trf("Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})", &[("matches", &report.matches), ("files", &report.files), ("skipped", &report.skipped), ("done", &report.processed), ("total", &report.total)]));
+            ui.label(rc_kit::i18n::trf(
+                "Replaced {matches} matches in {files} files; {skipped} skipped ({done}/{total})",
+                &[("matches", &report.matches), ("files", &report.files), ("skipped", &report.skipped), ("done", &report.processed), ("total", &report.total)],
+            ));
             if f.replacements.running() {
                 ui.spinner();
-                if ui.add_enabled(!f.replacements.cancelling(), egui::Button::new(tr("Cancel"))).clicked() { f.replacements.cancel(); }
+                if ui.add_enabled(!f.replacements.cancelling(), egui::Button::new(tr("Cancel"))).clicked() {
+                    f.replacements.cancel();
+                }
             }
-            if report.cancelled { ui.label(tr("Replacement cancelled; completed changes are kept")); }
+            if report.cancelled {
+                ui.label(tr("Replacement cancelled; completed changes are kept"));
+            }
         });
         if !report.errors.is_empty() {
             egui::CollapsingHeader::new(tr("Replacement errors (first 100)")).id_salt("replace_errors").default_open(true).show(ui, |ui| {
                 egui::ScrollArea::vertical().id_salt("replace_error_list").max_height(120.0).show(ui, |ui| {
-                for (path, error) in &report.errors {
-                    let path: String = path.to_string_lossy().chars().take(512).map(|ch| if ch.is_control() { '�' } else { ch }).collect();
-                    ui.colored_label(p.error, format!("{path}: {error}"));
-                }
+                    for (path, error) in &report.errors {
+                        let path: String = path.to_string_lossy().chars().take(512).map(|ch| if ch.is_control() { '�' } else { ch }).collect();
+                        ui.colored_label(p.error, format!("{path}: {error}"));
+                    }
                 });
             });
         }
     }
     let status = match (&f.error, &f.summary) {
         (Some(e), _) => e.clone(),
-        (None, Some(s)) => rc_kit::i18n::trf("{n} matches in {files} files", &[("n", &s.matches), ("files", &s.files_matched)]) + if s.truncated { " +" } else { "" },
+        (None, Some(s)) => {
+            rc_kit::i18n::trf("{n} matches in {files} files", &[("n", &s.matches), ("files", &s.files_matched)]) + if s.truncated { " +" } else { "" }
+        }
         (None, None) if f.query.is_empty() => String::new(),
         (None, None) => tr("Searching…").to_string(),
     };
@@ -476,15 +526,32 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
                     let (a, b) = ((rg.start.saturating_sub(lead_chars)) as usize, (rg.end.saturating_sub(lead_chars)) as usize);
                     let (a, b) = (a.min(chars.len()), b.min(chars.len()));
                     if a > k {
-                        job.append(&chars[k..a].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() });
+                        job.append(
+                            &chars[k..a].iter().collect::<String>(),
+                            0.0,
+                            egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() },
+                        );
                     }
                     if b > a {
-                        job.append(&chars[a..b].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, background: rc_kit::theme::scheme(p.dark).search_result, ..Default::default() });
+                        job.append(
+                            &chars[a..b].iter().collect::<String>(),
+                            0.0,
+                            egui::TextFormat {
+                                font_id: FontId::monospace(12.5),
+                                color: p.text,
+                                background: rc_kit::theme::scheme(p.dark).search_result,
+                                ..Default::default()
+                            },
+                        );
                     }
                     k = b.max(k);
                 }
                 if k < chars.len() {
-                    job.append(&chars[k..].iter().collect::<String>(), 0.0, egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() });
+                    job.append(
+                        &chars[k..].iter().collect::<String>(),
+                        0.0,
+                        egui::TextFormat { font_id: FontId::monospace(12.5), color: p.text, ..Default::default() },
+                    );
                 }
                 let g = ui.painter().layout_job(job);
                 ui.painter().galley(pos2(x + 44.0, r.center().y - g.size().y / 2.0), g, p.text);
@@ -505,7 +572,9 @@ fn find_in_files(app: &mut CrabCraftApp, ui: &mut Ui) {
         match &f.only {
             Err(error) => f.error = Some(error.clone()),
             Ok(only) => {
-                if let Err(error) = f.replacements.start(&root, &f.results, &app.docs, f.options(), f.replace.clone(), f.mask.clone(), f.excluded.clone(), only.clone()) {
+                if let Err(error) =
+                    f.replacements.start(&root, &f.results, &app.docs, f.options(), f.replace.clone(), f.mask.clone(), f.excluded.clone(), only.clone())
+                {
                     f.error = Some(tr(error).to_string());
                 }
             }

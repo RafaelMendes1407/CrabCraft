@@ -162,7 +162,10 @@ mod tests {
                 req.extend_from_slice(&buf[..n]);
                 let text = String::from_utf8_lossy(&req);
                 if let Some(end) = text.find("\r\n\r\n") {
-                    let len = text[..end].lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                    let len = text[..end]
+                        .lines()
+                        .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                        .unwrap_or(0);
                     if req.len() >= end + 4 + len {
                         break;
                     }
@@ -202,7 +205,10 @@ mod tests {
         assert_eq!(upload_gist("http://127.0.0.1:9/", &"x".repeat(MAX_CODE_BYTES + 1), Duration::from_secs(1)), Err(PlaygroundError::TooLarge));
         // Nothing listens on a port that was just freed.
         let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        assert!(matches!(upload_gist(&format!("http://127.0.0.1:{port}/"), "x", Duration::from_secs(5)), Err(PlaygroundError::Network(_) | PlaygroundError::TimedOut)));
+        assert!(matches!(
+            upload_gist(&format!("http://127.0.0.1:{port}/"), "x", Duration::from_secs(5)),
+            Err(PlaygroundError::Network(_) | PlaygroundError::TimedOut)
+        ));
     }
 
     /// Publishes a real public gist: never run by default.

@@ -108,25 +108,11 @@ pub struct Page {
 #[derive(Clone)]
 pub enum Action {
     Schema,
-    Browse {
-        table: String,
-        offset: usize,
-    },
+    Browse { table: String, offset: usize },
     Query(String),
-    Update {
-        page: Page,
-        row: usize,
-        column: usize,
-        value: Cell,
-    },
-    Export {
-        table: String,
-        path: PathBuf,
-    },
-    Import {
-        table: String,
-        path: PathBuf,
-    },
+    Update { page: Page, row: usize, column: usize, value: Cell },
+    Export { table: String, path: PathBuf },
+    Import { table: String, path: PathBuf },
 }
 pub enum Reply {
     Schema(Vec<Table>),
@@ -166,11 +152,7 @@ fn ident(value: &str) -> Result<String, Error> {
     Ok(format!("\"{}\"", value.replace('"', "\"\"")))
 }
 fn check(cancel: &AtomicBool) -> Result<(), Error> {
-    if cancel.load(Ordering::Relaxed) {
-        Err(Error::Cancelled)
-    } else {
-        Ok(())
-    }
+    if cancel.load(Ordering::Relaxed) { Err(Error::Cancelled) } else { Ok(()) }
 }
 fn open(config: &Config, cancel: Arc<AtomicBool>) -> Result<Connection, Error> {
     check(&cancel)?;
@@ -181,10 +163,7 @@ fn open(config: &Config, cancel: Arc<AtomicBool>) -> Result<Connection, Error> {
         if !config.write {
             return Err(Error::ReadOnly);
         }
-        let result = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&config.path);
+        let result = std::fs::OpenOptions::new().write(true).create_new(true).open(&config.path);
         match result {
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -197,11 +176,8 @@ fn open(config: &Config, cancel: Arc<AtomicBool>) -> Result<Connection, Error> {
     if !metadata.is_file() {
         return Err(Error::Path);
     }
-    let flags = if config.write {
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-    } else {
-        OpenFlags::SQLITE_OPEN_READ_ONLY
-    } | OpenFlags::SQLITE_OPEN_NO_MUTEX
+    let flags = if config.write { OpenFlags::SQLITE_OPEN_READ_WRITE } else { OpenFlags::SQLITE_OPEN_READ_ONLY }
+        | OpenFlags::SQLITE_OPEN_NO_MUTEX
         | OpenFlags::SQLITE_OPEN_NOFOLLOW;
     let mut connection = Connection::open_with_flags(&config.path, flags)?;
     connection.busy_timeout(Duration::from_millis(150))?;
@@ -225,10 +201,7 @@ fn open(config: &Config, cancel: Arc<AtomicBool>) -> Result<Connection, Error> {
         connection.set_limit(limit, value)?;
     }
     let deadline = Instant::now() + Duration::from_secs(10);
-    connection.progress_handler(
-        1000,
-        Some(move || cancel.load(Ordering::Relaxed) || Instant::now() >= deadline),
-    )?;
+    connection.progress_handler(1000, Some(move || cancel.load(Ordering::Relaxed) || Instant::now() >= deadline))?;
     connection.authorizer(Some(authorize))?;
     Ok(connection)
 }
@@ -239,19 +212,10 @@ fn authorize(context: rusqlite::hooks::AuthContext<'_>) -> Authorization {
         | AuthAction::Unknown { .. }
         | AuthAction::CreateVtable { .. }
         | AuthAction::DropVtable { .. } => Authorization::Deny,
-        AuthAction::Function { function_name }
-            if function_name.eq_ignore_ascii_case("load_extension") =>
-        {
-            Authorization::Deny
-        }
-        AuthAction::Pragma {
-            pragma_name,
-            pragma_value,
-        } if pragma_value.is_some()
-            && !matches!(
-                pragma_name.to_ascii_lowercase().as_str(),
-                "table_info" | "table_xinfo" | "index_list" | "index_info" | "foreign_key_list"
-            ) =>
+        AuthAction::Function { function_name } if function_name.eq_ignore_ascii_case("load_extension") => Authorization::Deny,
+        AuthAction::Pragma { pragma_name, pragma_value }
+            if pragma_value.is_some()
+                && !matches!(pragma_name.to_ascii_lowercase().as_str(), "table_info" | "table_xinfo" | "index_list" | "index_info" | "foreign_key_list") =>
         {
             Authorization::Deny
         }
@@ -286,9 +250,7 @@ fn cells(row: &rusqlite::Row<'_>, count: usize, bytes: &mut usize) -> Result<Vec
             ValueRef::Null => Cell::Null,
             ValueRef::Integer(value) => Cell::Integer(value),
             ValueRef::Real(value) => Cell::Real(value),
-            ValueRef::Text(value) => {
-                Cell::Text(std::str::from_utf8(value).map_err(|_| Error::Input)?.into())
-            }
+            ValueRef::Text(value) => Cell::Text(std::str::from_utf8(value).map_err(|_| Error::Input)?.into()),
             ValueRef::Blob(value) => Cell::Blob(value.into()),
         };
         *bytes = bytes.saturating_add(value.size());
@@ -299,12 +261,7 @@ fn cells(row: &rusqlite::Row<'_>, count: usize, bytes: &mut usize) -> Result<Vec
     }
     Ok(result)
 }
-fn query(
-    connection: &Connection,
-    sql: &str,
-    max_rows: usize,
-    cancel: &AtomicBool,
-) -> Result<Grid, Error> {
+fn query(connection: &Connection, sql: &str, max_rows: usize, cancel: &AtomicBool) -> Result<Grid, Error> {
     if sql.len() > 64 * 1024 {
         return Err(Error::Limit);
     }
@@ -319,13 +276,7 @@ fn query(
     if count > 256 {
         return Err(Error::Limit);
     }
-    let mut result = Grid {
-        columns: statement
-            .column_names()
-            .map(|name| name.to_string())
-            .collect(),
-        ..Default::default()
-    };
+    let mut result = Grid { columns: statement.column_names().map(|name| name.to_string()).collect(), ..Default::default() };
     if count == 0 {
         result.affected = statement.execute([])?;
         return Ok(result);
@@ -350,12 +301,14 @@ fn query(
 }
 fn table(connection: &Connection, name: &str) -> Result<Table, Error> {
     ident(name)?;
-    let(kind,sql):(String,String)=connection.query_row("SELECT type,coalesce(sql,'') FROM sqlite_schema WHERE name=?1 AND type IN ('table','view')",[name],|row|Ok((row.get(0)?,row.get(1)?)))?;
+    let (kind, sql): (String, String) =
+        connection.query_row("SELECT type,coalesce(sql,'') FROM sqlite_schema WHERE name=?1 AND type IN ('table','view')", [name], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
     if sql.len() > 64 * 1024 {
         return Err(Error::Limit);
     }
-    let mut statement = connection
-        .prepare("SELECT name,type,pk,hidden FROM pragma_table_xinfo(?1) ORDER BY cid")?;
+    let mut statement = connection.prepare("SELECT name,type,pk,hidden FROM pragma_table_xinfo(?1) ORDER BY cid")?;
     let mut rows = statement.query([name])?;
     let mut columns = Vec::new();
     while let Some(row) = rows.next()? {
@@ -368,146 +321,70 @@ fn table(connection: &Connection, name: &str) -> Result<Table, Error> {
         if hidden == 1 {
             continue;
         }
-        columns.push(Column {
-            name,
-            declared: row.get(1)?,
-            primary: row.get::<_, i64>(2)?.max(0) as usize,
-            generated: hidden != 0,
-        });
+        columns.push(Column { name, declared: row.get(1)?, primary: row.get::<_, i64>(2)?.max(0) as usize, generated: hidden != 0 });
     }
-    let mut statement=connection.prepare("SELECT type,name,coalesce(sql,'') FROM sqlite_schema WHERE tbl_name=?1 AND type IN ('index','trigger') ORDER BY type,name LIMIT 129")?;
+    let mut statement = connection
+        .prepare("SELECT type,name,coalesce(sql,'') FROM sqlite_schema WHERE tbl_name=?1 AND type IN ('index','trigger') ORDER BY type,name LIMIT 129")?;
     let structures = statement
-        .query_map([name], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })?
+        .query_map([name], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
         .collect::<Result<Vec<_>, _>>()?;
-    if structures.len() > 128
-        || structures.iter().map(|item| item.2.len()).sum::<usize>() > 256 * 1024
-    {
+    if structures.len() > 128 || structures.iter().map(|item| item.2.len()).sum::<usize>() > 256 * 1024 {
         return Err(Error::Limit);
     }
-    Ok(Table {
-        local_name: None,
-        name: name.into(),
-        kind,
-        sql,
-        columns,
-        structures,
-    })
+    Ok(Table { local_name: None, name: name.into(), kind, sql, columns, structures })
 }
 fn schema(connection: &Connection) -> Result<Vec<Table>, Error> {
-    let mut statement=connection.prepare("SELECT name FROM sqlite_schema WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 201")?;
-    let names = statement
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut statement =
+        connection.prepare("SELECT name FROM sqlite_schema WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 201")?;
+    let names = statement.query_map([], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
     if names.len() > 200 {
         return Err(Error::Limit);
     }
-    names
-        .into_iter()
-        .map(|name| table(connection, &name))
-        .collect()
+    names.into_iter().map(|name| table(connection, &name)).collect()
 }
-fn browse(
-    connection: &mut Connection,
-    name: &str,
-    offset: usize,
-    cancel: &AtomicBool,
-) -> Result<Page, Error> {
+fn browse(connection: &mut Connection, name: &str, offset: usize, cancel: &AtomicBool) -> Result<Page, Error> {
     if offset > 1_000_000 {
         return Err(Error::Limit);
     }
     let transaction = connection.transaction()?;
     let connection = &*transaction;
-    let schema_version =
-        connection.query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))?;
+    let schema_version = connection.query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))?;
     let table = table(connection, name)?;
-    let (without_rowid, kind): (i64, String) = connection.query_row(
-        "SELECT wr,type FROM pragma_table_list WHERE schema='main' AND name=?1",
-        [name],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?;
+    let (without_rowid, kind): (i64, String) =
+        connection.query_row("SELECT wr,type FROM pragma_table_list WHERE schema='main' AND name=?1", [name], |row| Ok((row.get(0)?, row.get(1)?)))?;
     let key_names = if kind != "table" {
         Vec::new()
     } else if without_rowid != 0 {
-        let mut columns: Vec<_> = table
-            .columns
-            .iter()
-            .filter(|column| column.primary > 0)
-            .collect();
+        let mut columns: Vec<_> = table.columns.iter().filter(|column| column.primary > 0).collect();
         columns.sort_by_key(|column| column.primary);
-        columns
-            .into_iter()
-            .map(|column| column.name.clone())
-            .collect()
+        columns.into_iter().map(|column| column.name.clone()).collect()
     } else {
         ["_rowid_", "rowid", "oid"]
             .iter()
-            .find(|alias| {
-                !table
-                    .columns
-                    .iter()
-                    .any(|column| column.name.eq_ignore_ascii_case(alias))
-            })
+            .find(|alias| !table.columns.iter().any(|column| column.name.eq_ignore_ascii_case(alias)))
             .map(|alias| vec![alias.to_string()])
             .unwrap_or_default()
     };
     let rowid = without_rowid == 0 && !key_names.is_empty();
-    let prefix = if rowid {
-        format!("{},", ident(&key_names[0])?)
-    } else {
-        String::new()
-    };
-    let sql = format!(
-        "SELECT {prefix}* FROM {} LIMIT {} OFFSET {offset}",
-        ident(name)?,
-        MAX_ROWS + 1
-    );
+    let prefix = if rowid { format!("{},", ident(&key_names[0])?) } else { String::new() };
+    let sql = format!("SELECT {prefix}* FROM {} LIMIT {} OFFSET {offset}", ident(name)?, MAX_ROWS + 1);
     let mut grid = query(connection, &sql, MAX_ROWS, cancel)?;
     let mut keys = Vec::new();
     for row in &mut grid.rows {
         let key = if rowid {
             vec![row.remove(0)]
         } else {
-            key_names
-                .iter()
-                .filter_map(|name| {
-                    table
-                        .columns
-                        .iter()
-                        .position(|column| &column.name == name)
-                        .and_then(|index| row.get(index).cloned())
-                })
-                .collect()
+            key_names.iter().filter_map(|name| table.columns.iter().position(|column| &column.name == name).and_then(|index| row.get(index).cloned())).collect()
         };
         keys.push(key);
     }
     if rowid {
         grid.columns.remove(0);
     }
-    Ok(Page {
-        original_text: None,
-        table,
-        grid,
-        keys,
-        key_names,
-        offset,
-        schema_version,
-    })
+    Ok(Page { original_text: None, table, grid, keys, key_names, offset, schema_version })
 }
-fn update(
-    connection: &mut Connection,
-    page: &Page,
-    row: usize,
-    column: usize,
-    value: &Cell,
-) -> Result<(), Error> {
-    let transaction =
-        connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+fn update(connection: &mut Connection, page: &Page, row: usize, column: usize, value: &Cell) -> Result<(), Error> {
+    let transaction = connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let connection = &*transaction;
     let version = connection.query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))?;
     if version != page.schema_version {
@@ -517,17 +394,9 @@ fn update(
     if current.sql != page.table.sql || page.key_names.is_empty() {
         return Err(Error::Stale);
     }
-    let target = current
-        .columns
-        .get(column)
-        .filter(|column| !column.generated)
-        .ok_or(Error::Input)?;
+    let target = current.columns.get(column).filter(|column| !column.generated).ok_or(Error::Input)?;
     let before = page.grid.rows.get(row).ok_or(Error::Input)?;
-    let keys = page
-        .keys
-        .get(row)
-        .filter(|keys| keys.len() == page.key_names.len())
-        .ok_or(Error::Input)?;
+    let keys = page.keys.get(row).filter(|keys| keys.len() == page.key_names.len()).ok_or(Error::Input)?;
     if before.len() != current.columns.len() || value.size() > 64 * 1024 {
         return Err(Error::Limit);
     }
@@ -538,20 +407,11 @@ fn update(
         values.push(key.sql()?);
     }
     for (column, value) in current.columns.iter().zip(before) {
-        predicates.push(format!(
-            "({} COLLATE BINARY IS ? AND typeof({})=?)",
-            ident(&column.name)?,
-            ident(&column.name)?
-        ));
+        predicates.push(format!("({} COLLATE BINARY IS ? AND typeof({})=?)", ident(&column.name)?, ident(&column.name)?));
         values.push(value.sql()?);
         values.push(Value::Text(value.kind().into()));
     }
-    let sql = format!(
-        "UPDATE {} SET {}=? WHERE {}",
-        ident(&current.name)?,
-        ident(&target.name)?,
-        predicates.join(" AND ")
-    );
+    let sql = format!("UPDATE {} SET {}=? WHERE {}", ident(&current.name)?, ident(&target.name)?, predicates.join(" AND "));
     if connection.execute(&sql, params_from_iter(values))? != 1 {
         return Err(Error::Stale);
     }
@@ -564,67 +424,45 @@ pub(super) struct Transfer {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Cell>>,
 }
-fn export(
-    connection: &Connection,
-    name: &str,
-    path: &Path,
-    cancel: &AtomicBool,
-) -> Result<usize, Error> {
+fn export(connection: &Connection, name: &str, path: &Path, cancel: &AtomicBool) -> Result<usize, Error> {
     let table = table(connection, name)?;
-    let columns: Vec<_> = table
-        .columns
-        .iter()
-        .filter(|column| !column.generated)
-        .map(|column| column.name.clone())
-        .collect();
+    let columns: Vec<_> = table.columns.iter().filter(|column| !column.generated).map(|column| column.name.clone()).collect();
     if columns.is_empty() {
         return Err(Error::Input);
     }
     let mut grid = query(
         connection,
-        &format!(
-            "SELECT {} FROM {}",
-            columns
-                .iter()
-                .map(|name| ident(name))
-                .collect::<Result<Vec<_>, _>>()?
-                .join(","),
-            ident(name)?
-        ),
+        &format!("SELECT {} FROM {}", columns.iter().map(|name| ident(name)).collect::<Result<Vec<_>, _>>()?.join(","), ident(name)?),
         5000,
         cancel,
     )?;
     if grid.truncated {
         return Err(Error::Limit);
     }
-    save_transfer(path,&Transfer {format:"crabcraft.sqlite.rows.v1".into(),columns,rows:std::mem::take(&mut grid.rows)},cancel)
+    save_transfer(path, &Transfer { format: "crabcraft.sqlite.rows.v1".into(), columns, rows: std::mem::take(&mut grid.rows) }, cancel)
 }
-pub(super) fn save_transfer(path:&Path,transfer:&Transfer,cancel:&AtomicBool)->Result<usize,Error>{
-    let count=transfer.rows.len();
-    let data=if path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("csv")){crate::database_csv::encode(transfer)?}else{serde_json::to_vec_pretty(transfer).map_err(|_|Error::Input)?};
+pub(super) fn save_transfer(path: &Path, transfer: &Transfer, cancel: &AtomicBool) -> Result<usize, Error> {
+    let count = transfer.rows.len();
+    let data = if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("csv")) {
+        crate::database_csv::encode(transfer)?
+    } else {
+        serde_json::to_vec_pretty(transfer).map_err(|_| Error::Input)?
+    };
     if data.len() > MAX_TRANSFER {
         return Err(Error::Limit);
     }
     check(cancel)?;
     use std::io::Write;
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .ok_or(Error::Path)?;
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).ok_or(Error::Path)?;
     let mut temp = tempfile::NamedTempFile::new_in(parent)?;
     temp.write_all(&data)?;
     temp.as_file().sync_all()?;
     check(cancel)?;
-    temp.persist_noclobber(path).map_err(|error| {
-        if error.error.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::Exists
-        } else {
-            Error::Io(error.error.to_string())
-        }
-    })?;
+    temp.persist_noclobber(path)
+        .map_err(|error| if error.error.kind() == std::io::ErrorKind::AlreadyExists { Error::Exists } else { Error::Io(error.error.to_string()) })?;
     Ok(count)
 }
-pub(super) fn load_transfer(path:&Path,cancel:&AtomicBool)->Result<Transfer,Error>{
+pub(super) fn load_transfer(path: &Path, cancel: &AtomicBool) -> Result<Transfer, Error> {
     let metadata = std::fs::symlink_metadata(path).map_err(|_| Error::Path)?;
     if !metadata.is_file() || metadata.len() > MAX_TRANSFER as u64 {
         return Err(Error::Limit);
@@ -647,37 +485,27 @@ pub(super) fn load_transfer(path:&Path,cancel:&AtomicBool)->Result<Transfer,Erro
         return Err(Error::Limit);
     }
     check(cancel)?;
-    let transfer: Transfer = if path.extension().is_some_and(|extension|extension.eq_ignore_ascii_case("csv")){crate::database_csv::decode(&data)?}else{serde_json::from_slice(&data).map_err(|_|Error::Input)?};
+    let transfer: Transfer = if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("csv")) {
+        crate::database_csv::decode(&data)?
+    } else {
+        serde_json::from_slice(&data).map_err(|_| Error::Input)?
+    };
     Ok(transfer)
 }
-fn import(
-    connection: &mut Connection,
-    name: &str,
-    path: &Path,
-    cancel: &AtomicBool,
-) -> Result<usize, Error> {
-    let transfer=load_transfer(path,cancel)?;
-    if !matches!(transfer.format.as_str(),"crabcraft.sqlite.rows.v1"|"crabcraft.csv.rows.v1") || transfer.rows.len() > 5000 {
+fn import(connection: &mut Connection, name: &str, path: &Path, cancel: &AtomicBool) -> Result<usize, Error> {
+    let transfer = load_transfer(path, cancel)?;
+    if !matches!(transfer.format.as_str(), "crabcraft.sqlite.rows.v1" | "crabcraft.csv.rows.v1") || transfer.rows.len() > 5000 {
         return Err(Error::Input);
     }
     let current = table(connection, name)?;
-    let columns: Vec<_> = current
-        .columns
-        .iter()
-        .filter(|column| !column.generated)
-        .map(|column| column.name.clone())
-        .collect();
+    let columns: Vec<_> = current.columns.iter().filter(|column| !column.generated).map(|column| column.name.clone()).collect();
     if columns != transfer.columns || columns.is_empty() {
         return Err(Error::Input);
     }
     let sql = format!(
         "INSERT INTO {} ({}) VALUES ({})",
         ident(name)?,
-        columns
-            .iter()
-            .map(|name| ident(name))
-            .collect::<Result<Vec<_>, _>>()?
-            .join(","),
+        columns.iter().map(|name| ident(name)).collect::<Result<Vec<_>, _>>()?.join(","),
         vec!["?"; columns.len()].join(",")
     );
     let transaction = connection.transaction()?;
@@ -709,38 +537,19 @@ pub fn run(config: &Config, action: Action, cancel: Arc<AtomicBool>) -> Result<R
     let mut connection = open(config, cancel.clone())?;
     let result = match action {
         Action::Schema => schema(&connection).map(Reply::Schema),
-        Action::Browse { table, offset } => {
-            browse(&mut connection, &table, offset, &cancel).map(Reply::Page)
-        }
+        Action::Browse { table, offset } => browse(&mut connection, &table, offset, &cancel).map(Reply::Page),
         Action::Query(sql) => {
-            connection.authorizer(Some(
-                |context: rusqlite::hooks::AuthContext<'_>| match context.action {
-                    AuthAction::Transaction { .. } | AuthAction::Savepoint { .. } => {
-                        Authorization::Deny
-                    }
-                    _ => authorize(context),
-                },
-            ))?;
+            connection.authorizer(Some(|context: rusqlite::hooks::AuthContext<'_>| match context.action {
+                AuthAction::Transaction { .. } | AuthAction::Savepoint { .. } => Authorization::Deny,
+                _ => authorize(context),
+            }))?;
             query(&connection, &sql, MAX_ROWS, &cancel).map(Reply::Query)
         }
-        Action::Update {
-            page,
-            row,
-            column,
-            value,
-        } => update(&mut connection, &page, row, column, &value).map(|()| Reply::Updated),
-        Action::Export { table, path } => {
-            export(&connection, &table, &path, &cancel).map(Reply::Exported)
-        }
-        Action::Import { table, path } => {
-            import(&mut connection, &table, &path, &cancel).map(Reply::Imported)
-        }
+        Action::Update { page, row, column, value } => update(&mut connection, &page, row, column, &value).map(|()| Reply::Updated),
+        Action::Export { table, path } => export(&connection, &table, &path, &cancel).map(Reply::Exported),
+        Action::Import { table, path } => import(&mut connection, &table, &path, &cancel).map(Reply::Imported),
     };
-    if cancel.load(Ordering::Relaxed) {
-        Err(Error::Cancelled)
-    } else {
-        result
-    }
+    if cancel.load(Ordering::Relaxed) { Err(Error::Cancelled) } else { result }
 }
 
 #[cfg(test)]
@@ -749,44 +558,21 @@ mod tests {
     fn fixture() -> (tempfile::TempDir, Config) {
         let temp = tempfile::tempdir().unwrap();
         std::fs::create_dir(temp.path().join("src")).unwrap();
-        std::fs::write(
-            temp.path().join("Cargo.toml"),
-            "[package]\nname=\"sqlite_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n",
-        )
-        .unwrap();
+        std::fs::write(temp.path().join("Cargo.toml"), "[package]\nname=\"sqlite_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n").unwrap();
         std::fs::write(temp.path().join("src/main.rs"), "fn main() {}\n").unwrap();
-        let mut config = Config {
-            path: temp.path().join("project.sqlite"),
-            write: true,
-            create: true,
-        };
+        let mut config = Config { path: temp.path().join("project.sqlite"), write: true, create: true };
         run(&config, Action::Schema, Arc::new(AtomicBool::new(false))).unwrap();
         config.create = false;
         (temp, config)
     }
     fn sql(config: &Config, sql: &str) -> Grid {
-        match run(
-            config,
-            Action::Query(sql.into()),
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap()
-        {
+        match run(config, Action::Query(sql.into()), Arc::new(AtomicBool::new(false))).unwrap() {
             Reply::Query(grid) => grid,
             _ => panic!("query response"),
         }
     }
     fn page(config: &Config, name: &str) -> Page {
-        match run(
-            config,
-            Action::Browse {
-                table: name.into(),
-                offset: 0,
-            },
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap()
-        {
+        match run(config, Action::Browse { table: name.into(), offset: 0 }, Arc::new(AtomicBool::new(false))).unwrap() {
             Reply::Page(page) => page,
             _ => panic!("page response"),
         }
@@ -798,163 +584,63 @@ mod tests {
             &config,
             "CREATE TABLE \"user records\"(id INTEGER PRIMARY KEY,name TEXT COLLATE NOCASE,score REAL,data BLOB,missing TEXT,derived TEXT GENERATED ALWAYS AS (name||'!') VIRTUAL)",
         );
-        sql(
-            &config,
-            "INSERT INTO \"user records\"(name,score,data) VALUES('O''Brien🦀',1.25,X'0001ff')",
-        );
+        sql(&config, "INSERT INTO \"user records\"(name,score,data) VALUES('O''Brien🦀',1.25,X'0001ff')");
         let before = page(&config, "user records");
         assert_eq!(before.grid.rows.len(), 1);
         assert_eq!(before.grid.rows[0][1], Cell::Text("O'Brien🦀".into()));
         assert_eq!(before.grid.rows[0][3], Cell::Blob(vec![0, 1, 255]));
         assert_eq!(before.grid.rows[0][4], Cell::Null);
         assert!(before.table.columns[5].generated);
-        run(
-            &config,
-            Action::Update {
-                page: before.clone(),
-                row: 0,
-                column: 1,
-                value: Cell::Text("edited'🦀".into()),
-            },
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap();
-        assert_eq!(
-            page(&config, "user records").grid.rows[0][1],
-            Cell::Text("edited'🦀".into())
-        );
+        run(&config, Action::Update { page: before.clone(), row: 0, column: 1, value: Cell::Text("edited'🦀".into()) }, Arc::new(AtomicBool::new(false)))
+            .unwrap();
+        assert_eq!(page(&config, "user records").grid.rows[0][1], Cell::Text("edited'🦀".into()));
         assert!(matches!(
-            run(
-                &config,
-                Action::Update {
-                    page: before,
-                    row: 0,
-                    column: 1,
-                    value: Cell::Text("stale".into())
-                },
-                Arc::new(AtomicBool::new(false))
-            ),
+            run(&config, Action::Update { page: before, row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
             Err(Error::Stale)
         ));
         let versioned = page(&config, "user records");
-        sql(
-            &config,
-            "CREATE INDEX user_name_idx ON \"user records\"(name)",
-        );
+        sql(&config, "CREATE INDEX user_name_idx ON \"user records\"(name)");
         assert!(matches!(
-            run(
-                &config,
-                Action::Update {
-                    page: versioned,
-                    row: 0,
-                    column: 1,
-                    value: Cell::Text("schema stale".into())
-                },
-                Arc::new(AtomicBool::new(false))
-            ),
+            run(&config, Action::Update { page: versioned, row: 0, column: 1, value: Cell::Text("schema stale".into()) }, Arc::new(AtomicBool::new(false))),
             Err(Error::Stale)
         ));
         let mut readonly = config.clone();
         readonly.write = false;
-        assert!(
-            run(
-                &readonly,
-                Action::Query("DELETE FROM \"user records\"".into()),
-                Arc::new(AtomicBool::new(false))
-            )
-            .is_err()
-        );
+        assert!(run(&readonly, Action::Query("DELETE FROM \"user records\"".into()), Arc::new(AtomicBool::new(false))).is_err());
         assert_eq!(page(&config, "user records").grid.rows.len(), 1);
-        sql(
-            &config,
-            "CREATE TABLE composite(a TEXT,b INTEGER,value TEXT,PRIMARY KEY(a,b)) WITHOUT ROWID",
-        );
+        sql(&config, "CREATE TABLE composite(a TEXT,b INTEGER,value TEXT,PRIMARY KEY(a,b)) WITHOUT ROWID");
         sql(&config, "INSERT INTO composite VALUES('a',2,'before')");
         let composite = page(&config, "composite");
         assert_eq!(composite.key_names, ["a", "b"]);
-        run(
-            &config,
-            Action::Update {
-                page: composite,
-                row: 0,
-                column: 2,
-                value: Cell::Text("after".into()),
-            },
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap();
-        assert_eq!(
-            page(&config, "composite").grid.rows[0][2],
-            Cell::Text("after".into())
-        );
+        run(&config, Action::Update { page: composite, row: 0, column: 2, value: Cell::Text("after".into()) }, Arc::new(AtomicBool::new(false))).unwrap();
+        assert_eq!(page(&config, "composite").grid.rows[0][2], Cell::Text("after".into()));
     }
     #[test]
     fn typed_json_round_trip_is_noclobber_and_import_rolls_back_on_constraint_failure() {
         let (temp, config) = fixture();
-        sql(
-            &config,
-            "CREATE TABLE source(id INTEGER PRIMARY KEY,t TEXT,r REAL,b BLOB,n INTEGER)",
-        );
-        sql(
-            &config,
-            "INSERT INTO source VALUES(1,'comma, newline'||char(10)||'🦀',1.5,X'00ff',NULL)",
-        );
+        sql(&config, "CREATE TABLE source(id INTEGER PRIMARY KEY,t TEXT,r REAL,b BLOB,n INTEGER)");
+        sql(&config, "INSERT INTO source VALUES(1,'comma, newline'||char(10)||'🦀',1.5,X'00ff',NULL)");
         sql(&config, "INSERT INTO source VALUES(2,'second',2.25,X'',42)");
-        sql(
-            &config,
-            "CREATE TABLE destination(id INTEGER PRIMARY KEY,t TEXT,r REAL,b BLOB,n INTEGER)",
-        );
+        sql(&config, "CREATE TABLE destination(id INTEGER PRIMARY KEY,t TEXT,r REAL,b BLOB,n INTEGER)");
         let path = temp.path().join("rows.json");
-        run(
-            &config,
-            Action::Export {
-                table: "source".into(),
-                path: path.clone(),
-            },
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap();
-        assert!(matches!(
-            run(
-                &config,
-                Action::Export {
-                    table: "source".into(),
-                    path: path.clone()
-                },
-                Arc::new(AtomicBool::new(false))
-            ),
-            Err(Error::Exists)
-        ));
-        run(
-            &config,
-            Action::Import {
-                table: "destination".into(),
-                path: path.clone(),
-            },
-            Arc::new(AtomicBool::new(false)),
-        )
-        .unwrap();
-        assert_eq!(
-            page(&config, "source").grid.rows,
-            page(&config, "destination").grid.rows
-        );
+        run(&config, Action::Export { table: "source".into(), path: path.clone() }, Arc::new(AtomicBool::new(false))).unwrap();
+        assert!(matches!(run(&config, Action::Export { table: "source".into(), path: path.clone() }, Arc::new(AtomicBool::new(false))), Err(Error::Exists)));
+        run(&config, Action::Import { table: "destination".into(), path: path.clone() }, Arc::new(AtomicBool::new(false))).unwrap();
+        assert_eq!(page(&config, "source").grid.rows, page(&config, "destination").grid.rows);
         sql(&config, "DELETE FROM destination WHERE id=1");
-        assert!(
-            run(
-                &config,
-                Action::Import {
-                    table: "destination".into(),
-                    path
-                },
-                Arc::new(AtomicBool::new(false))
-            )
-            .is_err()
-        );
+        assert!(run(&config, Action::Import { table: "destination".into(), path }, Arc::new(AtomicBool::new(false))).is_err());
         assert_eq!(page(&config, "destination").grid.rows.len(), 1);
     }
     #[test]
-    fn sqlite_csv_round_trip_preserves_schema_affinity_null_blob_and_quoted_unicode(){
-        let(temp,config)=fixture();sql(&config,"CREATE TABLE source(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");sql(&config,"CREATE TABLE target(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");sql(&config,"INSERT INTO source VALUES(1,'=formula, quote'||char(34)||'🦀'||char(10),1.25,X'00ff',NULL)");let path=temp.path().join("rows.csv");run(&config,Action::Export{table:"source".into(),path:path.clone()},Arc::new(AtomicBool::new(false))).unwrap();run(&config,Action::Import{table:"target".into(),path},Arc::new(AtomicBool::new(false))).unwrap();assert_eq!(page(&config,"source").grid.rows,page(&config,"target").grid.rows);
+    fn sqlite_csv_round_trip_preserves_schema_affinity_null_blob_and_quoted_unicode() {
+        let (temp, config) = fixture();
+        sql(&config, "CREATE TABLE source(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");
+        sql(&config, "CREATE TABLE target(id INTEGER PRIMARY KEY,name TEXT,real_value REAL,data BLOB,n TEXT)");
+        sql(&config, "INSERT INTO source VALUES(1,'=formula, quote'||char(34)||'🦀'||char(10),1.25,X'00ff',NULL)");
+        let path = temp.path().join("rows.csv");
+        run(&config, Action::Export { table: "source".into(), path: path.clone() }, Arc::new(AtomicBool::new(false))).unwrap();
+        run(&config, Action::Import { table: "target".into(), path }, Arc::new(AtomicBool::new(false))).unwrap();
+        assert_eq!(page(&config, "source").grid.rows, page(&config, "target").grid.rows);
     }
     #[test]
     fn unsafe_sql_multiple_statements_and_long_queries_are_bounded_or_cancelled() {
@@ -969,29 +655,14 @@ mod tests {
             "PRAGMA journal_mode=OFF",
             "SELECT 1; SELECT 2",
         ] {
-            assert!(
-                run(
-                    &config,
-                    Action::Query(statement.into()),
-                    Arc::new(AtomicBool::new(false))
-                )
-                .is_err(),
-                "{statement}"
-            );
+            assert!(run(&config, Action::Query(statement.into()), Arc::new(AtomicBool::new(false))).is_err(), "{statement}");
         }
         assert!(!temp.path().join("extra.sqlite").exists());
-        assert!(
-            run(
-                &config,
-                Action::Query("SELECT randomblob(2000000)".into()),
-                Arc::new(AtomicBool::new(false))
-            )
-            .is_err()
-        );
+        assert!(run(&config, Action::Query("SELECT randomblob(2000000)".into()), Arc::new(AtomicBool::new(false))).is_err());
         let cancel = Arc::new(AtomicBool::new(false));
         let stop = cancel.clone();
         let worker = std::thread::spawn(move || {
-            run(&config,Action::Query("WITH RECURSIVE loop(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM loop) SELECT sum(x) FROM loop".into()),cancel)
+            run(&config, Action::Query("WITH RECURSIVE loop(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM loop) SELECT sum(x) FROM loop".into()), cancel)
         });
         std::thread::sleep(Duration::from_millis(20));
         stop.store(true, Ordering::Relaxed);

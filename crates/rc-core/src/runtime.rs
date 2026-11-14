@@ -11,12 +11,7 @@ impl Runtime {
     pub fn handle() -> &'static tokio::runtime::Runtime {
         static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
         RT.get_or_init(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(4)
-                .thread_name("crabcraft-io")
-                .enable_all()
-                .build()
-                .expect("tokio runtime")
+            tokio::runtime::Builder::new_multi_thread().worker_threads(4).thread_name("crabcraft-io").enable_all().build().expect("tokio runtime")
         })
     }
 

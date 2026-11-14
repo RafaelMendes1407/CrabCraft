@@ -48,11 +48,7 @@ struct Work {
     waker: Waker,
 }
 fn check(cancel: &AtomicBool) -> Result<(), Error> {
-    if cancel.load(Ordering::Acquire) {
-        Err(Error::Cancelled)
-    } else {
-        Ok(())
-    }
+    if cancel.load(Ordering::Acquire) { Err(Error::Cancelled) } else { Ok(()) }
 }
 fn io(error: std::io::Error) -> Error {
     Error::Io(error.kind())
@@ -79,11 +75,7 @@ fn load(key: &Key, cancel: &AtomicBool) -> Result<Value, Error> {
                 if rows.len() >= 5000 || bytes > 8 * 1024 * 1024 {
                     return Err(Error::Limit);
                 }
-                rows.push(FileNode {
-                    path: entry.path(),
-                    name,
-                    is_dir: kind.is_dir(),
-                });
+                rows.push(FileNode { path: entry.path(), name, is_dir: kind.is_dir() });
             }
             check(cancel)?;
             rows.sort_by_cached_key(|node| (!node.is_dir, node.name.to_lowercase()));
@@ -92,7 +84,6 @@ fn load(key: &Key, cancel: &AtomicBool) -> Result<Value, Error> {
             }
             Ok(Value::Directory(rows))
         }
-
     }
 }
 fn pool() -> Option<&'static SyncSender<Work>> {
@@ -115,11 +106,7 @@ fn pool() -> Option<&'static SyncSender<Work>> {
                             Err(_) => break,
                         };
                         let result = load(&work.key, &work.cancel);
-                        let _ = work.out.send(Reply {
-                            key: work.key,
-                            id: work.id,
-                            result,
-                        });
+                        let _ = work.out.send(Reply { key: work.key, id: work.id, result });
                         work.waker.wake();
                     }
                 })
@@ -155,16 +142,7 @@ impl Default for Io {
     fn default() -> Self {
         let waker = Waker::noop();
         let (tx, rx) = mpsc::channel();
-        Self {
-            tx,
-            rx,
-            overloaded: false,
-            pending: HashMap::new(),
-            errors: HashMap::new(),
-            next: 0,
-            root: None,
-            waker,
-        }
+        Self { tx, rx, overloaded: false, pending: HashMap::new(), errors: HashMap::new(), next: 0, root: None, waker }
     }
 }
 impl Io {
@@ -220,13 +198,7 @@ impl Io {
         self.next = self.next.wrapping_add(1);
         let cancel = Arc::new(AtomicBool::new(false));
         let id = self.next;
-        let work = Work {
-            key: key.clone(),
-            id,
-            cancel: cancel.clone(),
-            out: self.tx.clone(),
-            waker: self.waker.clone(),
-        };
+        let work = Work { key: key.clone(), id, cancel: cancel.clone(), out: self.tx.clone(), waker: self.waker.clone() };
         let sent = pool().is_some_and(|pool| pool.try_send(work).is_ok());
         if sent {
             self.pending.insert(key, Job { id, cancel });
@@ -240,11 +212,7 @@ impl Io {
             let Ok(reply) = self.rx.try_recv() else {
                 break;
             };
-            if self
-                .pending
-                .get(&reply.key)
-                .is_none_or(|job| job.id != reply.id)
-            {
+            if self.pending.get(&reply.key).is_none_or(|job| job.id != reply.id) {
                 continue;
             }
             self.pending.remove(&reply.key);

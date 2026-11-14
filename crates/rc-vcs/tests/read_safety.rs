@@ -20,23 +20,14 @@ fn clear(repo: &TempRepo, names: &[&str]) {
 }
 fn absent(repo: &TempRepo, names: &[&str]) {
     for name in names {
-        assert!(
-            !repo.path(name).exists(),
-            "unexpected helper execution: {name}"
-        );
+        assert!(!repo.path(name).exists(), "unexpected helper execution: {name}");
     }
 }
 #[tokio::test]
 async fn static_hostile_rust_repository_reads_do_not_execute_configured_helpers() {
     let repo = TempRepo::new().await;
     repo.commit_files(
-        &[
-            (
-                "Cargo.toml",
-                "[package]\nname=\"git_safety\"\nversion=\"0.1.0\"\nedition=\"2021\"\n",
-            ),
-            ("src/lib.rs", "pub fn value()->u32 {1}\n"),
-        ],
+        &[("Cargo.toml", "[package]\nname=\"git_safety\"\nversion=\"0.1.0\"\nedition=\"2021\"\n"), ("src/lib.rs", "pub fn value()->u32 {1}\n")],
         "Rust fixture",
     );
     let fsmonitor = helper(&repo, "monitor", "printf x > marker-fsmonitor\nexit 1");
@@ -76,52 +67,24 @@ async fn static_hostile_rust_repository_reads_do_not_execute_configured_helpers(
     assert!(repo.path("marker-smudge").exists());
     let process = helper(&repo, "processor", "printf x > marker-process\nexit 1");
     repo.git(&["config", "filter.hostile.process", &process]);
-    let control = std::process::Command::new("git")
-        .current_dir(repo.repo.root())
-        .args(["diff", "--no-ext-diff", "--no-textconv"])
-        .output()
-        .unwrap();
+    let control = std::process::Command::new("git").current_dir(repo.repo.root()).args(["diff", "--no-ext-diff", "--no-textconv"]).output().unwrap();
     assert!(!control.status.success());
     assert!(repo.path("marker-process").exists());
-    let markers = [
-        "marker-fsmonitor",
-        "marker-hook",
-        "marker-clean",
-        "marker-smudge",
-        "marker-textconv",
-        "marker-external",
-        "marker-process",
-    ];
+    let markers = ["marker-fsmonitor", "marker-hook", "marker-clean", "marker-smudge", "marker-textconv", "marker-external", "marker-process"];
     clear(&repo, &markers);
     let safe = Repository::discover(repo.repo.root()).await.unwrap();
-    assert!(
-        !safe
-            .status(&StatusOptions::default())
-            .await
-            .unwrap()
-            .entries
-            .is_empty()
-    );
+    assert!(!safe.status(&StatusOptions::default()).await.unwrap().entries.is_empty());
     safe.log(&LogOptions::default()).await.unwrap();
     safe.blame("src/lib.rs", None, None, None).await.unwrap();
-    safe.diff(&DiffSpec::WorktreeVsHead, &DiffOptions::default())
-        .await
-        .unwrap();
-    let content = safe
-        .show_file(&Revision::Head, "src/lib.rs")
-        .await
-        .unwrap()
-        .unwrap();
+    safe.diff(&DiffSpec::WorktreeVsHead, &DiffOptions::default()).await.unwrap();
+    let content = safe.show_file(&Revision::Head, "src/lib.rs").await.unwrap().unwrap();
     assert_eq!(content.text(), "pub fn value()->u32 {1}\n");
     safe.branches().await.unwrap();
     safe.stashes().await.unwrap();
     safe.tags().await.unwrap();
     safe.worktrees().await.unwrap();
     absent(&repo, &markers);
-    assert!(matches!(
-        safe.stage_all().await,
-        Err(GitError::TrustRequired)
-    ));
+    assert!(matches!(safe.stage_all().await, Err(GitError::TrustRequired)));
     absent(&repo, &markers);
     // Explicit trust restores the intended helper/hook workflow, never silently suppressing it.
     repo.git(&["config", "--unset", "filter.hostile.process"]);
@@ -135,10 +98,7 @@ async fn safe_history_never_verifies_with_repository_gpg_or_fetches_missing_obje
     use std::io::Write;
     use std::process::{Command, Stdio};
     let repo = TempRepo::new().await;
-    repo.commit_files(
-        &[("src/lib.rs", "pub fn value()->u32{1}\n")],
-        "Rust fixture",
-    );
+    repo.commit_files(&[("src/lib.rs", "pub fn value()->u32{1}\n")], "Rust fixture");
     let tree = repo.git(&["rev-parse", "HEAD^{tree}"]);
     let parent = repo.git(&["rev-parse", "HEAD"]);
     let commit = format!(
@@ -153,12 +113,7 @@ async fn safe_history_never_verifies_with_repository_gpg_or_fetches_missing_obje
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(commit.as_bytes())
-        .unwrap();
+    child.stdin.take().unwrap().write_all(commit.as_bytes()).unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
     let hash = String::from_utf8(output.stdout).unwrap();
@@ -170,12 +125,7 @@ async fn safe_history_never_verifies_with_repository_gpg_or_fetches_missing_obje
     assert!(repo.path("marker-gpg").exists());
     clear(&repo, &["marker-gpg"]);
     let safe = Repository::discover(repo.repo.root()).await.unwrap();
-    safe.log(&LogOptions {
-        revs: vec!["signed-control".into()],
-        ..Default::default()
-    })
-    .await
-    .unwrap();
+    safe.log(&LogOptions { revs: vec!["signed-control".into()], ..Default::default() }).await.unwrap();
     safe.signature("signed-control").await.unwrap();
     absent(&repo, &["marker-gpg"]);
     let transport = helper(&repo, "transport", "printf x > marker-transport\nexit 1");
@@ -184,21 +134,11 @@ async fn safe_history_never_verifies_with_repository_gpg_or_fetches_missing_obje
     repo.git(&["config", "remote.origin.url", &format!("ext::{transport}")]);
     repo.git(&["config", "protocol.ext.allow", "always"]);
     let missing = "1111111111111111111111111111111111111111";
-    let output = Command::new("git")
-        .current_dir(repo.repo.root())
-        .args(["cat-file", "blob", missing])
-        .output()
-        .unwrap();
+    let output = Command::new("git").current_dir(repo.repo.root()).args(["cat-file", "blob", missing]).output().unwrap();
     assert!(!output.status.success());
     assert!(repo.path("marker-transport").exists());
     clear(&repo, &["marker-transport"]);
-    assert!(
-        safe.cmd()
-            .args(["cat-file", "blob", missing])
-            .output()
-            .await
-            .is_err()
-    );
+    assert!(safe.cmd().args(["cat-file", "blob", missing]).output().await.is_err());
     absent(&repo, &["marker-gpg", "marker-transport"]);
 }
 
@@ -211,38 +151,18 @@ async fn unsafe_config_reads_cancel_and_oversized_blob_output_is_bounded() {
     repo.commit_files(&[("src/lib.rs", &text)], "Large Rust source");
     drop(text);
     let safe = Repository::discover(repo.repo.root()).await.unwrap();
-    let error = tokio::time::timeout(
-        Duration::from_secs(5),
-        safe.show_file(&Revision::Head, "src/lib.rs"),
-    )
-    .await
-    .unwrap()
-    .unwrap_err();
+    let error = tokio::time::timeout(Duration::from_secs(5), safe.show_file(&Revision::Head, "src/lib.rs")).await.unwrap().unwrap_err();
     assert!(matches!(error, GitError::OutputLimit));
     let config = repo.path(".git/config");
     std::fs::remove_file(&config).unwrap();
-    assert!(
-        std::process::Command::new("mkfifo")
-            .arg(&config)
-            .status()
-            .unwrap()
-            .success()
-    );
+    assert!(std::process::Command::new("mkfifo").arg(&config).status().unwrap().success());
     let cancel = CancelToken::new();
     let stop = cancel.clone();
-    let operation = safe
-        .cmd()
-        .args(["status", "--porcelain"])
-        .cancel(Some(&cancel))
-        .output();
+    let operation = safe.cmd().args(["status", "--porcelain"]).cancel(Some(&cancel)).output();
     let trigger = async move {
         tokio::time::sleep(Duration::from_millis(30)).await;
         stop.cancel();
     };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(2), async {
-        tokio::join!(operation, trigger)
-    })
-    .await
-    .unwrap();
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(2), async { tokio::join!(operation, trigger) }).await.unwrap();
     assert!(matches!(result, Err(GitError::Cancelled)));
 }

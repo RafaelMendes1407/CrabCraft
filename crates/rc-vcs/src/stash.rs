@@ -42,7 +42,9 @@ impl Repository {
 
     pub async fn stash_push_cancellable(&self, opts: &StashOptions, cancel: Option<&crate::CancelToken>) -> Result<()> {
         let mut cmd = self.cmd().cancel(cancel);
-        if !opts.paths.is_empty() { cmd = cmd.arg("--literal-pathspecs"); }
+        if !opts.paths.is_empty() {
+            cmd = cmd.arg("--literal-pathspecs");
+        }
         let mut cmd = cmd.args(["stash", "push"]);
         if let Some(m) = &opts.message {
             cmd = cmd.arg("--message").arg(m);
@@ -94,11 +96,21 @@ impl Repository {
     /// untracked files it holds (status `?`, from `--include-untracked`).
     pub async fn stash_files(&self, hash: &str) -> Result<Vec<ChangedFile>> {
         // A stash is a merge of HEAD and the index; its tree against HEAD is the work tree's changes.
-        let out = self.cmd().args(["diff-tree", "--no-commit-id", "-r", "--find-renames", "--name-status", "-z", "--end-of-options"]).arg(format!("{hash}^1")).arg(hash).output().await?;
+        let out = self
+            .cmd()
+            .args(["diff-tree", "--no-commit-id", "-r", "--find-renames", "--name-status", "-z", "--end-of-options"])
+            .arg(format!("{hash}^1"))
+            .arg(hash)
+            .output()
+            .await?;
         let mut files = crate::log::parse_name_status(&out.stdout)?;
         if let Ok(untracked) = self.resolve(&format!("{hash}^3")).await {
             let out = self.cmd().args(["ls-tree", "-r", "-z", "--name-only", "--end-of-options", &untracked]).output().await?;
-            files.extend(out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| ChangedFile { status: '?', path: String::from_utf8_lossy(s).into_owned(), orig_path: None }));
+            files.extend(out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| ChangedFile {
+                status: '?',
+                path: String::from_utf8_lossy(s).into_owned(),
+                orig_path: None,
+            }));
         }
         Ok(files)
     }

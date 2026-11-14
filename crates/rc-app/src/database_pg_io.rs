@@ -22,20 +22,14 @@ pub struct Wire {
     pub limited: Arc<AtomicBool>,
 }
 impl Wire {
-    pub async fn open(
-        config: &super::Config,
-        limited: Arc<AtomicBool>,
-    ) -> Result<Self, super::Error> {
+    pub async fn open(config: &super::Config, limited: Arc<AtomicBool>) -> Result<Self, super::Error> {
         let inner: Box<dyn Io> = if config.host.starts_with('/') {
             #[cfg(unix)]
             {
                 Box::new(
-                    tokio::net::UnixStream::connect(
-                        std::path::Path::new(&config.host)
-                            .join(format!(".s.PGSQL.{}", config.port)),
-                    )
-                    .await
-                    .map_err(super::Error::from)?,
+                    tokio::net::UnixStream::connect(std::path::Path::new(&config.host).join(format!(".s.PGSQL.{}", config.port)))
+                        .await
+                        .map_err(super::Error::from)?,
                 )
             }
             #[cfg(not(unix))]
@@ -46,44 +40,22 @@ impl Wire {
             let address = if config.host == "localhost" {
                 std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
             } else {
-                config
-                    .host
-                    .parse::<std::net::IpAddr>()
-                    .map_err(|_| super::Error::Input)?
+                config.host.parse::<std::net::IpAddr>().map_err(|_| super::Error::Input)?
             };
             if !address.is_loopback() {
                 return Err(super::Error::Input);
             }
-            Box::new(
-                tokio::net::TcpStream::connect((address, config.port))
-                    .await
-                    .map_err(super::Error::from)?,
-            )
+            Box::new(tokio::net::TcpStream::connect((address, config.port)).await.map_err(super::Error::from)?)
         };
-        Ok(Self {
-            inner,
-            header: [0; 5],
-            read: 0,
-            sent: 0,
-            body: 0,
-            total: 0,
-            limited,
-        })
+        Ok(Self { inner, header: [0; 5], read: 0, sent: 0, body: 0, total: 0, limited })
     }
     fn limit(&self) -> io::Error {
         self.limited.store(true, Ordering::Relaxed);
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "PostgreSQL response exceeded the wire limit",
-        )
+        io::Error::new(io::ErrorKind::InvalidData, "PostgreSQL response exceeded the wire limit")
     }
 }
 impl AsyncRead for Wire {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        out: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, out: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         if out.remaining() == 0 {
             return Poll::Ready(Ok(()));
         }
@@ -103,11 +75,7 @@ impl AsyncRead for Wire {
                 }
                 let count = buffer.filled().len();
                 if count == 0 {
-                    return if at == 0 {
-                        Poll::Ready(Ok(()))
-                    } else {
-                        Poll::Ready(Err(io::Error::from(io::ErrorKind::UnexpectedEof)))
-                    };
+                    return if at == 0 { Poll::Ready(Ok(())) } else { Poll::Ready(Err(io::Error::from(io::ErrorKind::UnexpectedEof))) };
                 }
                 self.header[at..at + count].copy_from_slice(buffer.filled());
                 self.read += count;
@@ -117,12 +85,7 @@ impl AsyncRead for Wire {
                 }
             }
             if self.sent == 0 {
-                let length = u32::from_be_bytes([
-                    self.header[1],
-                    self.header[2],
-                    self.header[3],
-                    self.header[4],
-                ]) as usize;
+                let length = u32::from_be_bytes([self.header[1], self.header[2], self.header[3], self.header[4]]) as usize;
                 if !(4..=2 * 1024 * 1024).contains(&length) {
                     return Poll::Ready(Err(self.limit()));
                 }
@@ -138,11 +101,7 @@ impl AsyncRead for Wire {
                 if self.total >= 8 * 1024 * 1024 {
                     return Poll::Ready(Err(self.limit()));
                 }
-                let count = out
-                    .remaining()
-                    .min(self.body)
-                    .min(8192)
-                    .min(8 * 1024 * 1024 - self.total);
+                let count = out.remaining().min(self.body).min(8192).min(8 * 1024 * 1024 - self.total);
                 let mut bytes = [0u8; 8192];
                 let mut buffer = ReadBuf::new(&mut bytes[..count]);
                 match Pin::new(&mut *self.inner).poll_read(cx, &mut buffer) {
@@ -163,11 +122,7 @@ impl AsyncRead for Wire {
     }
 }
 impl AsyncWrite for Wire {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        bytes: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, bytes: &[u8]) -> Poll<io::Result<usize>> {
         Pin::new(&mut *self.inner).poll_write(cx, bytes)
     }
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -184,28 +139,14 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     #[test]
     fn postgres_wire_checks_frame_length_before_exposing_a_header_to_driver() {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         runtime.block_on(async {
             let (writer, reader) = tokio::io::duplex(64);
             let limited = Arc::new(AtomicBool::new(false));
-            let mut wire = Wire {
-                inner: Box::new(reader),
-                header: [0; 5],
-                read: 0,
-                sent: 0,
-                body: 0,
-                total: 0,
-                limited: limited.clone(),
-            };
+            let mut wire = Wire { inner: Box::new(reader), header: [0; 5], read: 0, sent: 0, body: 0, total: 0, limited: limited.clone() };
             let task = tokio::spawn(async move {
                 let mut writer = writer;
-                writer
-                    .write_all(&[b'D', 0x7f, 0xff, 0xff, 0xff])
-                    .await
-                    .unwrap();
+                writer.write_all(&[b'D', 0x7f, 0xff, 0xff, 0xff]).await.unwrap();
             });
             let mut bytes = Vec::new();
             assert!(wire.read_to_end(&mut bytes).await.is_err());
@@ -214,15 +155,7 @@ mod tests {
             task.await.unwrap();
             let (writer, reader) = tokio::io::duplex(64);
             let limited = Arc::new(AtomicBool::new(false));
-            let mut wire = Wire {
-                inner: Box::new(reader),
-                header: [0; 5],
-                read: 0,
-                sent: 0,
-                body: 0,
-                total: 0,
-                limited: limited.clone(),
-            };
+            let mut wire = Wire { inner: Box::new(reader), header: [0; 5], read: 0, sent: 0, body: 0, total: 0, limited: limited.clone() };
             let task = tokio::spawn(async move {
                 let mut writer = writer;
                 writer.write_all(&[b'Z', 0, 0, 0, 5, b'I']).await.unwrap();

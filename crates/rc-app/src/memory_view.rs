@@ -135,7 +135,8 @@ impl MemoryView {
                 let expression = self.eval.take().map(|(_, e)| e).unwrap_or_default();
                 match result {
                     Ok(v) => {
-                        let reference = v.memory_reference.clone().filter(|r| !r.trim().is_empty()).or_else(|| address_in(&v.result).map(|a| format!("{a:#x}")));
+                        let reference =
+                            v.memory_reference.clone().filter(|r| !r.trim().is_empty()).or_else(|| address_in(&v.result).map(|a| format!("{a:#x}")));
                         match reference {
                             Some(r) => {
                                 self.open_reference(session, r);

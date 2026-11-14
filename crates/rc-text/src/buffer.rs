@@ -124,15 +124,7 @@ impl Buffer {
     pub fn new(text: &str) -> Self {
         let line_ending = LineEnding::detect(text);
         let normalized = if text.contains('\r') { text.replace("\r\n", "\n").replace('\r', "\n") } else { text.to_owned() };
-        Buffer {
-            rope: Rope::from_str(&normalized),
-            version: 0,
-            line_ending,
-            undo: Vec::new(),
-            redo: Vec::new(),
-            saved_version: 0,
-            saved_undo_depth: Some(0),
-        }
+        Buffer { rope: Rope::from_str(&normalized), version: 0, line_ending, undo: Vec::new(), redo: Vec::new(), saved_version: 0, saved_undo_depth: Some(0) }
     }
 
     pub fn rope(&self) -> &Rope {

@@ -145,18 +145,35 @@ impl Output {
 
 /// A live command owns its descendants until normal completion. Cancellation, future
 /// drop and I/O failures kill the process group, including editors and hook children.
-struct ProcessGroup { pid: Option<u32> }
+struct ProcessGroup {
+    pid: Option<u32>,
+}
 impl ProcessGroup {
-    fn new(child: &tokio::process::Child) -> Self { Self { pid: child.id() } }
-    fn disarm(&mut self) { self.pid = None; }
+    fn new(child: &tokio::process::Child) -> Self {
+        Self { pid: child.id() }
+    }
+    fn disarm(&mut self) {
+        self.pid = None;
+    }
 }
 impl Drop for ProcessGroup {
     fn drop(&mut self) {
         let Some(pid) = self.pid else { return };
-        #[cfg(unix)] { unsafe { libc::killpg(pid as libc::pid_t, libc::SIGKILL); } }
-        #[cfg(windows)] {
+        #[cfg(unix)]
+        {
+            unsafe {
+                libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+            }
+        }
+        #[cfg(windows)]
+        {
             use std::os::windows::process::CommandExt;
-            let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).creation_flags(0x0800_0000).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            let _ = std::process::Command::new("taskkill")
+                .args(["/T", "/F", "/PID", &pid.to_string()])
+                .creation_flags(0x0800_0000)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
         }
     }
 }
@@ -180,7 +197,10 @@ impl GitCommand<'_> {
     }
 
     /// Explicitly allow configured helpers and writes after the caller obtains project trust.
-    pub fn trusted(mut self, trusted: bool) -> Self { self.trusted = trusted; self }
+    pub fn trusted(mut self, trusted: bool) -> Self {
+        self.trusted = trusted;
+        self
+    }
 
     pub fn args<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(mut self, args: I) -> Self {
         self.args.extend(args.into_iter().map(|a| a.as_ref().to_owned()));
@@ -207,8 +227,42 @@ impl GitCommand<'_> {
     fn build(&self, overrides: &[OsString]) -> tokio::process::Command {
         let mut cmd = tokio::process::Command::new(&self.git.path);
         if !self.trusted {
-            cmd.arg("--no-pager").args(["-c","core.fsmonitor=","-c","core.hooksPath=/dev/null","-c","log.showSignature=false","-c","submodule.recurse=false","-c","diff.ignoreSubmodules=all","-c","status.submoduleSummary=false","-c","maintenance.auto=false","-c","gc.auto=0","-c","core.alternateRefsCommand=","-c","diff.external=","-c","gpg.program=/dev/null","-c","gpg.openpgp.program=/dev/null","-c","gpg.ssh.program=/dev/null","-c","gpg.x509.program=/dev/null"])
-                .args(overrides).env("GIT_ALLOW_PROTOCOL", "").env("GIT_NO_LAZY_FETCH", "1").env_remove("GIT_EXTERNAL_DIFF").env_remove("GIT_DIFF_OPTS");
+            cmd.arg("--no-pager")
+                .args([
+                    "-c",
+                    "core.fsmonitor=",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "-c",
+                    "log.showSignature=false",
+                    "-c",
+                    "submodule.recurse=false",
+                    "-c",
+                    "diff.ignoreSubmodules=all",
+                    "-c",
+                    "status.submoduleSummary=false",
+                    "-c",
+                    "maintenance.auto=false",
+                    "-c",
+                    "gc.auto=0",
+                    "-c",
+                    "core.alternateRefsCommand=",
+                    "-c",
+                    "diff.external=",
+                    "-c",
+                    "gpg.program=/dev/null",
+                    "-c",
+                    "gpg.openpgp.program=/dev/null",
+                    "-c",
+                    "gpg.ssh.program=/dev/null",
+                    "-c",
+                    "gpg.x509.program=/dev/null",
+                ])
+                .args(overrides)
+                .env("GIT_ALLOW_PROTOCOL", "")
+                .env("GIT_NO_LAZY_FETCH", "1")
+                .env_remove("GIT_EXTERNAL_DIFF")
+                .env_remove("GIT_DIFF_OPTS");
         }
         cmd.current_dir(&self.cwd)
             .args(["-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "core.pager=cat", "-c", "advice.detachedHead=false"])
@@ -231,28 +285,57 @@ impl GitCommand<'_> {
     }
 
     fn safe_args(&self) -> Vec<OsString> {
-        let mut args=self.args.clone(); if self.trusted {return args;}
-        let options: &[&str]=match args.first().and_then(|arg|arg.to_str()) {
-            Some("diff"|"diff-tree"|"log"|"show")=>&["--no-ext-diff","--no-textconv"],
-            Some("blame")=>&["--no-textconv"], Some("status")=>&["--ignore-submodules=all"], _=>&[],
+        let mut args = self.args.clone();
+        if self.trusted {
+            return args;
+        }
+        let options: &[&str] = match args.first().and_then(|arg| arg.to_str()) {
+            Some("diff" | "diff-tree" | "log" | "show") => &["--no-ext-diff", "--no-textconv"],
+            Some("blame") => &["--no-textconv"],
+            Some("status") => &["--ignore-submodules=all"],
+            _ => &[],
         };
-        args.splice(1..1,options.iter().map(OsString::from));args
+        args.splice(1..1, options.iter().map(OsString::from));
+        args
     }
 
     fn read_only(&self) -> bool {
         let Some(command) = self.args.first().and_then(|arg| arg.to_str()) else { return false };
         // Read-looking subcommands can still redirect output to disk. Refuse output and
         // write switches before spawning anything (including abbreviated long options).
-        if self.args.iter().any(|arg| arg.to_str().is_some_and(|arg| arg.starts_with("--out") || arg.starts_with("--write") || arg.starts_with("--save") || arg.starts_with("-o"))) { return false; }
+        if self.args.iter().any(|arg| {
+            arg.to_str().is_some_and(|arg| arg.starts_with("--out") || arg.starts_with("--write") || arg.starts_with("--save") || arg.starts_with("-o"))
+        }) {
+            return false;
+        }
 
-        if self.args.iter().any(|arg| arg.to_str().is_some_and(|arg| ["--ext-diff","--textconv","--filters","--recurse-submodules","--show-signature"].iter().any(|bad| arg==*bad || arg.starts_with(&format!("{bad}="))))) { return false; }
+        if self.args.iter().any(|arg| {
+            arg.to_str().is_some_and(|arg| {
+                ["--ext-diff", "--textconv", "--filters", "--recurse-submodules", "--show-signature"]
+                    .iter()
+                    .any(|bad| arg == *bad || arg.starts_with(&format!("{bad}=")))
+            })
+        }) {
+            return false;
+        }
         match command {
-            "status" | "log" | "show" | "diff" | "diff-tree" | "rev-parse" | "rev-list" | "cat-file" | "ls-tree" | "ls-files" | "blame" | "for-each-ref" | "check-ref-format" => true,
-            "config" => self.args.iter().any(|arg| arg=="--list") && self.args.iter().skip(1).all(|arg| ["--list","--null","-z","--name-only","--includes"].iter().any(|allowed| arg==*allowed)),
-            "remote" => self.args.len()==2 && self.args[1]=="-v",
-            "worktree" | "stash" => self.args.get(1).is_some_and(|arg| arg=="list"),
-            "symbolic-ref" => self.args.len()==4 && self.args[1]=="--quiet" && self.args[2]=="--short" && self.args[3]=="HEAD",
-            "apply" => self.args.iter().any(|arg| arg=="--numstat" || arg=="--summary" || arg=="--check") && self.args.iter().skip(1).all(|arg| ["--numstat","-z","--summary","--check","--whitespace=nowarn","--3way","-"].iter().any(|allowed| arg==*allowed)),
+            "status" | "log" | "show" | "diff" | "diff-tree" | "rev-parse" | "rev-list" | "cat-file" | "ls-tree" | "ls-files" | "blame" | "for-each-ref"
+            | "check-ref-format" => true,
+            "config" => {
+                self.args.iter().any(|arg| arg == "--list")
+                    && self.args.iter().skip(1).all(|arg| ["--list", "--null", "-z", "--name-only", "--includes"].iter().any(|allowed| arg == *allowed))
+            }
+            "remote" => self.args.len() == 2 && self.args[1] == "-v",
+            "worktree" | "stash" => self.args.get(1).is_some_and(|arg| arg == "list"),
+            "symbolic-ref" => self.args.len() == 4 && self.args[1] == "--quiet" && self.args[2] == "--short" && self.args[3] == "HEAD",
+            "apply" => {
+                self.args.iter().any(|arg| arg == "--numstat" || arg == "--summary" || arg == "--check")
+                    && self
+                        .args
+                        .iter()
+                        .skip(1)
+                        .all(|arg| ["--numstat", "-z", "--summary", "--check", "--whitespace=nowarn", "--3way", "-"].iter().any(|allowed| arg == *allowed))
+            }
             _ => false,
         }
     }
@@ -260,32 +343,81 @@ impl GitCommand<'_> {
     /// Config parsing itself invokes no configured helpers. Enumerate arbitrary driver names
     /// before the real read, then override every clean/smudge/process driver. No values leak.
     async fn read_overrides(&self) -> Result<Vec<OsString>> {
-        let mut query=self.clone(); query.args=["config","--null","--name-only","--list"].map(OsString::from).to_vec(); query.stdin=None;
-        let mut child=query.build(&[]).spawn().map_err(GitError::Io)?;
-        let mut group=ProcessGroup::new(&child);
-        let stdout=child.stdout.take().ok_or(GitError::UnsafeReadConfig)?; let stderr=child.stderr.take().ok_or(GitError::UnsafeReadConfig)?;
-        let work=async {
-            let read=async { let mut names=Vec::new(); stdout.take(1024*1024+1).read_to_end(&mut names).await.map_err(|_|GitError::UnsafeReadConfig)?; if names.len()>1024*1024 {return Err(GitError::UnsafeReadConfig);} Ok(names) };
-            let errors=async {let mut bytes=Vec::new();stderr.take(64*1024+1).read_to_end(&mut bytes).await.map_err(|_|GitError::UnsafeReadConfig)?;if bytes.len()>64*1024 {return Err(GitError::UnsafeReadConfig);}Ok(())};
-            let wait=async {let status=child.wait().await.map_err(|_|GitError::UnsafeReadConfig)?;if !status.success(){return Err(GitError::UnsafeReadConfig);}Ok(())};
-            let(names,(),())=tokio::try_join!(read,errors,wait)?;Ok::<_,GitError>(names)
+        let mut query = self.clone();
+        query.args = ["config", "--null", "--name-only", "--list"].map(OsString::from).to_vec();
+        query.stdin = None;
+        let mut child = query.build(&[]).spawn().map_err(GitError::Io)?;
+        let mut group = ProcessGroup::new(&child);
+        let stdout = child.stdout.take().ok_or(GitError::UnsafeReadConfig)?;
+        let stderr = child.stderr.take().ok_or(GitError::UnsafeReadConfig)?;
+        let work = async {
+            let read = async {
+                let mut names = Vec::new();
+                stdout.take(1024 * 1024 + 1).read_to_end(&mut names).await.map_err(|_| GitError::UnsafeReadConfig)?;
+                if names.len() > 1024 * 1024 {
+                    return Err(GitError::UnsafeReadConfig);
+                }
+                Ok(names)
+            };
+            let errors = async {
+                let mut bytes = Vec::new();
+                stderr.take(64 * 1024 + 1).read_to_end(&mut bytes).await.map_err(|_| GitError::UnsafeReadConfig)?;
+                if bytes.len() > 64 * 1024 {
+                    return Err(GitError::UnsafeReadConfig);
+                }
+                Ok(())
+            };
+            let wait = async {
+                let status = child.wait().await.map_err(|_| GitError::UnsafeReadConfig)?;
+                if !status.success() {
+                    return Err(GitError::UnsafeReadConfig);
+                }
+                Ok(())
+            };
+            let (names, (), ()) = tokio::try_join!(read, errors, wait)?;
+            Ok::<_, GitError>(names)
         };
-        let names=match &self.cancel {
-            Some(token)=>tokio::select! {result=tokio::time::timeout(std::time::Duration::from_secs(5),work)=>result.map_err(|_|GitError::UnsafeReadConfig)??,()=token.cancelled()=>return Err(GitError::Cancelled)},
-            None=>tokio::time::timeout(std::time::Duration::from_secs(5),work).await.map_err(|_|GitError::UnsafeReadConfig)??,
+        let names = match &self.cancel {
+            Some(token) => {
+                tokio::select! {result=tokio::time::timeout(std::time::Duration::from_secs(5),work)=>result.map_err(|_|GitError::UnsafeReadConfig)??,()=token.cancelled()=>return Err(GitError::Cancelled)}
+            }
+            None => tokio::time::timeout(std::time::Duration::from_secs(5), work).await.map_err(|_| GitError::UnsafeReadConfig)??,
         };
         group.disarm();
-        let mut filters=std::collections::BTreeSet::new(); let mut diffs=std::collections::BTreeSet::new();
-        for name in names.split(|byte|*byte==0) {
-            let name=std::str::from_utf8(name).map_err(|_|GitError::UnsafeReadConfig)?;
-            if name.len()>8192 {return Err(GitError::UnsafeReadConfig);}
-            if let Some(rest)=name.strip_prefix("filter.") && let Some((driver,_))=rest.rsplit_once('.') {filters.insert(driver.to_string());}
-            if let Some(rest)=name.strip_prefix("diff.") && let Some((driver,_))=rest.rsplit_once('.') {diffs.insert(driver.to_string());}
+        let mut filters = std::collections::BTreeSet::new();
+        let mut diffs = std::collections::BTreeSet::new();
+        for name in names.split(|byte| *byte == 0) {
+            let name = std::str::from_utf8(name).map_err(|_| GitError::UnsafeReadConfig)?;
+            if name.len() > 8192 {
+                return Err(GitError::UnsafeReadConfig);
+            }
+            if let Some(rest) = name.strip_prefix("filter.")
+                && let Some((driver, _)) = rest.rsplit_once('.')
+            {
+                filters.insert(driver.to_string());
+            }
+            if let Some(rest) = name.strip_prefix("diff.")
+                && let Some((driver, _)) = rest.rsplit_once('.')
+            {
+                diffs.insert(driver.to_string());
+            }
         }
-        if filters.len()+diffs.len()>256 {return Err(GitError::UnsafeReadConfig);}
-        let mut overrides=Vec::new();
-        for driver in filters {for property in ["clean=","smudge=","process=","required=false"] {overrides.push(OsString::from("-c"));overrides.push(OsString::from(format!("filter.{driver}.{property}")));}}
-        for driver in diffs {for property in ["command=","textconv="] {overrides.push(OsString::from("-c"));overrides.push(OsString::from(format!("diff.{driver}.{property}")));}}
+        if filters.len() + diffs.len() > 256 {
+            return Err(GitError::UnsafeReadConfig);
+        }
+        let mut overrides = Vec::new();
+        for driver in filters {
+            for property in ["clean=", "smudge=", "process=", "required=false"] {
+                overrides.push(OsString::from("-c"));
+                overrides.push(OsString::from(format!("filter.{driver}.{property}")));
+            }
+        }
+        for driver in diffs {
+            for property in ["command=", "textconv="] {
+                overrides.push(OsString::from("-c"));
+                overrides.push(OsString::from(format!("diff.{driver}.{property}")));
+            }
+        }
         Ok(overrides)
     }
 
@@ -316,11 +448,16 @@ impl GitCommand<'_> {
         if self.cancel.as_ref().is_some_and(CancelToken::is_cancelled) {
             return Err(GitError::Cancelled);
         }
-        let overrides = if self.trusted { Vec::new() } else {
-            if !self.read_only() { return Err(GitError::TrustRequired); }
+        let overrides = if self.trusted {
+            Vec::new()
+        } else {
+            if !self.read_only() {
+                return Err(GitError::TrustRequired);
+            }
             self.read_overrides().await?
         };
-        let mut child = self.build(&overrides).spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { GitError::GitNotFound } else { GitError::Io(e) })?;
+        let mut child =
+            self.build(&overrides).spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { GitError::GitNotFound } else { GitError::Io(e) })?;
         let mut group = ProcessGroup::new(&child);
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().expect("piped stdout");
@@ -337,7 +474,9 @@ impl GitCommand<'_> {
             let read_out = async {
                 let mut buf = Vec::new();
                 stdout.take(32 * 1024 * 1024 + 1).read_to_end(&mut buf).await.map_err(GitError::Io)?;
-                if buf.len() > 32 * 1024 * 1024 { return Err(GitError::OutputLimit); }
+                if buf.len() > 32 * 1024 * 1024 {
+                    return Err(GitError::OutputLimit);
+                }
                 Ok::<_, GitError>(buf)
             };
             let read_err = async {
@@ -349,7 +488,9 @@ impl GitCommand<'_> {
                     if n == 0 {
                         break;
                     }
-                    if all.len() + n > 4 * 1024 * 1024 { return Err(GitError::OutputLimit); }
+                    if all.len() + n > 4 * 1024 * 1024 {
+                        return Err(GitError::OutputLimit);
+                    }
                     all.extend_from_slice(&chunk[..n]);
                     if let Some(sink) = &progress {
                         for &b in &chunk[..n] {
@@ -371,7 +512,14 @@ impl GitCommand<'_> {
                 }
                 Ok::<_, GitError>(all)
             };
-            let ((), out, err) = tokio::try_join!(async { write.await; Ok::<_, GitError>(()) }, read_out, read_err)?;
+            let ((), out, err) = tokio::try_join!(
+                async {
+                    write.await;
+                    Ok::<_, GitError>(())
+                },
+                read_out,
+                read_err
+            )?;
             let status = child.wait().await.map_err(GitError::Io)?;
             Ok::<_, GitError>(Output { stdout: out, stderr: String::from_utf8_lossy(&err).into_owned(), code: status.code() })
         };

@@ -24,16 +24,25 @@ fn editor(path: &Path, source: &str) -> Harness<'static, EditorState> {
     let keymap = Keymap::new(KeymapKind::VsCode);
     let state = EditorState::new(1, Some(path.into()), source);
     let mut first = true;
-    let mut harness = Harness::builder().with_size(egui::vec2(1100.0, 650.0)).build_ui_state(move |ui, state: &mut EditorState| {
-        if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); return; }
-        EditorView::new(state, &config, &keymap).focus(true).show(ui);
-    }, state);
+    let mut harness = Harness::builder().with_size(egui::vec2(1100.0, 650.0)).build_ui_state(
+        move |ui, state: &mut EditorState| {
+            if std::mem::take(&mut first) {
+                rc_kit::theme::install_fonts(ui.ctx());
+                return;
+            }
+            EditorView::new(state, &config, &keymap).focus(true).show(ui);
+        },
+        state,
+    );
     harness.run_steps(3);
     harness
 }
 
 fn typed(harness: &mut Harness<'static, EditorState>, text: &str) {
-    for ch in text.chars() { harness.event(egui::Event::Text(ch.to_string())); harness.run_steps(1); }
+    for ch in text.chars() {
+        harness.event(egui::Event::Text(ch.to_string()));
+        harness.run_steps(1);
+    }
 }
 
 fn caret(harness: &mut Harness<'static, EditorState>, needle: &str, after: usize) {
@@ -52,7 +61,8 @@ fn rust_lifetimes_labels_characters_and_closure_pipes_survive_native_typing() {
     typed(&mut h, "'a");
     assert!(h.state().buffer.rope().to_string().contains("borrow<'a>"));
     let text = h.state().buffer.rope().to_string();
-    let positions = [text.find("value: ").unwrap() + "value: ".len(), text.find("-> ").unwrap() + "-> ".len()].map(|byte| Range::point(text[..byte].chars().count()));
+    let positions =
+        [text.find("value: ").unwrap() + "value: ".len(), text.find("-> ").unwrap() + "-> ".len()].map(|byte| Range::point(text[..byte].chars().count()));
     h.state_mut().selection = Selection::new(positions, 0);
     typed(&mut h, "&'a str");
     caret(&mut h, "increment = ", "increment = ".len());
@@ -78,7 +88,10 @@ fn native_multicursor_occurrences_type_undo_redo_and_collapse_on_rust() {
     let (_dir, path) = project(source);
     let mut h = editor(&path, source);
     caret(&mut h, "let value", "let ".len());
-    for _ in 0..3 { h.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::D); h.run_steps(1); }
+    for _ in 0..3 {
+        h.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::D);
+        h.run_steps(1);
+    }
     assert_eq!(h.state().selection.len(), 3);
     typed(&mut h, "renamed");
     let changed = h.state().buffer.rope().to_string();
@@ -178,8 +191,8 @@ fn native_rust_brackets_quotes_type_over_and_match_the_parser() {
 
 #[test]
 fn markdown_preview_updates_and_switches_views_inside_a_rust_project() {
-    use egui_kittest::kittest::Queryable;
     use crate::docs::MdView;
+    use egui_kittest::kittest::Queryable;
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let (dir, _) = project("fn main() {}\n");
     let home = tempfile::tempdir().unwrap();
@@ -217,7 +230,9 @@ fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
     let source = "fn main() { assert!(include_str!(\"config.json\").contains(\"answer\")); assert!(include_str!(\"config.xml\").contains(\"project\")); }\n";
     let (dir, path) = project(source);
     let home = tempfile::tempdir().unwrap();
-    for (name, text) in [("config.json", "{\"answer\":42,\"nested\":{\"enabled\":true}}\n"), ("config.xml", "<project>\n<item enabled=\"true\">Rust</item>\n</project>\n")] {
+    for (name, text) in
+        [("config.json", "{\"answer\":42,\"nested\":{\"enabled\":true}}\n"), ("config.xml", "<project>\n<item enabled=\"true\">Rust</item>\n</project>\n")]
+    {
         std::fs::write(dir.path().join("src").join(name), text).unwrap();
     }
     let mut app = crate::screens::test_app(home.path(), true);
@@ -248,12 +263,11 @@ fn json_and_xml_assets_format_parse_and_undo_in_a_real_rust_project() {
     assert!(h.state().insight.session.is_none());
 }
 
-
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn rust_reference_keymap_is_selected_and_routes_native_actions_in_a_cargo_project() {
-    use egui_kittest::kittest::Queryable;
     use crate::ui::dialogs::SettingsPage;
+    use egui_kittest::kittest::Queryable;
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let source = "fn main() {\n    let answer = 42;\n    assert_eq!(answer, 42);\n}\n";
     let (dir, path) = project(source);
@@ -299,7 +313,9 @@ fn interface_languages_render_native_settings_for_a_rust_project() {
             for code in ["es", "fr", "pt-BR", "de", "pl", "zh-Hans", "ja"] {
                 let output = std::process::Command::new(std::env::current_exe().unwrap())
                     .args(["--exact", "editor_rust_audit::interface_languages_render_native_settings_for_a_rust_project", "--nocapture"])
-                    .env("CRABCRAFT_LANGUAGE_AUDIT", code).output().unwrap();
+                    .env("CRABCRAFT_LANGUAGE_AUDIT", code)
+                    .output()
+                    .unwrap();
                 assert!(output.status.success(), "{code}: {}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
             }
             return;

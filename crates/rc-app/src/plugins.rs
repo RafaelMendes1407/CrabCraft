@@ -30,13 +30,9 @@ impl Error {
         match self {
             Self::Trust => tr("Trust the project and this local process plugin before running it"),
             Self::Manifest => tr("Invalid or unsupported CrabCraft plugin v1 manifest"),
-            Self::UnsafePath => {
-                tr("Plugin paths must be regular files without symlinks or traversal")
-            }
+            Self::UnsafePath => tr("Plugin paths must be regular files without symlinks or traversal"),
             Self::Hash => tr("Plugin executable SHA-256 does not match its manifest"),
-            Self::Exists => {
-                tr("This plugin is already installed; remove it before installing another version")
-            }
+            Self::Exists => tr("This plugin is already installed; remove it before installing another version"),
             Self::Io => tr("Could not read, install or run the local plugin"),
             Self::Limit => tr("Plugin input, output, executable or time limit exceeded"),
             Self::Protocol => tr("Plugin returned an invalid CrabCraft plugin v1 response"),
@@ -64,16 +60,10 @@ pub struct Command {
     pub title: String,
 }
 fn ident(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 64
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 fn basename(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 128
-        && !matches!(s, "." | "..")
-        && !s.contains(['/', '\\', ':', '\0'])
+    !s.is_empty() && s.len() <= 128 && !matches!(s, "." | "..") && !s.contains(['/', '\\', ':', '\0'])
 }
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -96,11 +86,7 @@ impl Manifest {
         }
         let mut ids = std::collections::HashSet::new();
         for command in &self.commands {
-            if !ident(&command.id)
-                || !ids.insert(&command.id)
-                || command.title.is_empty()
-                || command.title.len() > 256
-            {
+            if !ident(&command.id) || !ids.insert(&command.id) || command.title.is_empty() || command.title.len() > 256 {
                 return Err(Error::Manifest);
             }
         }
@@ -109,20 +95,12 @@ impl Manifest {
 }
 // O_NONBLOCK prevents a user-selected FIFO/device from blocking a worker before type checking.
 fn check(stop: Option<&rc_dotnet::CancelToken>) -> Result<(), Error> {
-    if stop.is_some_and(|stop| stop.is_cancelled()) {
-        Err(Error::Cancelled)
-    } else {
-        Ok(())
-    }
+    if stop.is_some_and(|stop| stop.is_cancelled()) { Err(Error::Cancelled) } else { Ok(()) }
 }
 fn regular(path: &Path, max: usize) -> Result<Vec<u8>, Error> {
     regular_cancel(path, max, None)
 }
-fn regular_cancel(
-    path: &Path,
-    max: usize,
-    stop: Option<&rc_dotnet::CancelToken>,
-) -> Result<Vec<u8>, Error> {
+fn regular_cancel(path: &Path, max: usize, stop: Option<&rc_dotnet::CancelToken>) -> Result<Vec<u8>, Error> {
     check(stop)?;
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
@@ -131,11 +109,7 @@ fn regular_cancel(
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    if !std::fs::symlink_metadata(path)
-        .map_err(|_| Error::Io)?
-        .file_type()
-        .is_file()
-    {
+    if !std::fs::symlink_metadata(path).map_err(|_| Error::Io)?.file_type().is_file() {
         return Err(Error::UnsafePath);
     }
     let mut file = options.open(path).map_err(|_| Error::UnsafePath)?;
@@ -177,17 +151,13 @@ fn inspect_cancel(path: &Path, stop: Option<&rc_dotnet::CancelToken>) -> Result<
     if !path.is_absolute() || parent.canonicalize().map_err(|_| Error::Io)? != parent {
         return Err(Error::UnsafePath);
     }
-    let manifest: Manifest = serde_json::from_slice(&regular_cancel(path, 64 * 1024, stop)?)
-        .map_err(|_| Error::Manifest)?;
+    let manifest: Manifest = serde_json::from_slice(&regular_cancel(path, 64 * 1024, stop)?).map_err(|_| Error::Manifest)?;
     manifest.validate()?;
     let bytes = regular_cancel(&parent.join(&manifest.executable), BINARY, stop)?;
     if hash(&bytes) != manifest.sha256.to_ascii_lowercase() {
         return Err(Error::Hash);
     }
-    Ok(Package {
-        manifest,
-        bytes: std::sync::Arc::new(bytes),
-    })
+    Ok(Package { manifest, bytes: std::sync::Arc::new(bytes) })
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -197,28 +167,17 @@ struct Installed {
 }
 fn private_dir(path: &Path) -> Result<(), Error> {
     std::fs::create_dir_all(path).map_err(|_| Error::Io)?;
-    if std::fs::symlink_metadata(path)
-        .map_err(|_| Error::Io)?
-        .file_type()
-        .is_symlink()
-        || path.canonicalize().map_err(|_| Error::Io)? != path
-    {
+    if std::fs::symlink_metadata(path).map_err(|_| Error::Io)?.file_type().is_symlink() || path.canonicalize().map_err(|_| Error::Io)? != path {
         return Err(Error::UnsafePath);
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
-            .map_err(|_| Error::Io)?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).map_err(|_| Error::Io)?;
     }
     Ok(())
 }
-fn write_cancel(
-    path: &Path,
-    bytes: &[u8],
-    executable: bool,
-    stop: Option<&rc_dotnet::CancelToken>,
-) -> Result<(), Error> {
+fn write_cancel(path: &Path, bytes: &[u8], executable: bool, stop: Option<&rc_dotnet::CancelToken>) -> Result<(), Error> {
     check(stop)?;
     use std::io::Write;
     let mut options = std::fs::OpenOptions::new();
@@ -226,9 +185,7 @@ fn write_cancel(
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options
-            .mode(if executable { 0o500 } else { 0o600 })
-            .custom_flags(libc::O_NOFOLLOW);
+        options.mode(if executable { 0o500 } else { 0o600 }).custom_flags(libc::O_NOFOLLOW);
     }
     let mut file = options.open(path).map_err(|_| Error::Io)?;
     for chunk in bytes.chunks(65536) {
@@ -242,12 +199,7 @@ fn write_cancel(
 fn install(store: &Path, package: Package, trusted: bool) -> Result<(), Error> {
     install_cancel(store, package, trusted, None)
 }
-fn install_cancel(
-    store: &Path,
-    package: Package,
-    trusted: bool,
-    stop: Option<&rc_dotnet::CancelToken>,
-) -> Result<(), Error> {
+fn install_cancel(store: &Path, package: Package, trusted: bool, stop: Option<&rc_dotnet::CancelToken>) -> Result<(), Error> {
     check(stop)?;
     if !trusted {
         return Err(Error::Trust);
@@ -261,27 +213,10 @@ fn install_cancel(
     if target.try_exists().map_err(|_| Error::Io)? || std::fs::symlink_metadata(&target).is_ok() {
         return Err(Error::Exists);
     }
-    let staging = tempfile::Builder::new()
-        .prefix(".install-")
-        .tempdir_in(store)
-        .map_err(|_| Error::Io)?;
-    write_cancel(
-        &staging.path().join(&package.manifest.executable),
-        &package.bytes,
-        true,
-        stop,
-    )?;
-    let metadata = serde_json::to_vec(&Installed {
-        manifest: package.manifest,
-        enabled: false,
-    })
-    .map_err(|_| Error::Manifest)?;
-    write_cancel(
-        &staging.path().join("installed.json"),
-        &metadata,
-        false,
-        stop,
-    )?;
+    let staging = tempfile::Builder::new().prefix(".install-").tempdir_in(store).map_err(|_| Error::Io)?;
+    write_cancel(&staging.path().join(&package.manifest.executable), &package.bytes, true, stop)?;
+    let metadata = serde_json::to_vec(&Installed { manifest: package.manifest, enabled: false }).map_err(|_| Error::Manifest)?;
+    write_cancel(&staging.path().join("installed.json"), &metadata, false, stop)?;
     check(stop)?;
     std::fs::rename(staging.path(), target).map_err(|_| Error::Io)?;
     Ok(())
@@ -294,8 +229,7 @@ fn load(store: &Path, id: &str) -> Result<Installed, Error> {
     if dir.canonicalize().map_err(|_| Error::Io)? != dir {
         return Err(Error::UnsafePath);
     }
-    let item: Installed = serde_json::from_slice(&regular(&dir.join("installed.json"), 64 * 1024)?)
-        .map_err(|_| Error::Manifest)?;
+    let item: Installed = serde_json::from_slice(&regular(&dir.join("installed.json"), 64 * 1024)?).map_err(|_| Error::Manifest)?;
     item.manifest.validate()?;
     if item.manifest.id != id {
         return Err(Error::Manifest);
@@ -337,8 +271,7 @@ fn enable(store: &Path, id: &str, enabled: bool) -> Result<(), Error> {
     let target = store.join(id).join("installed.json");
     let mut temp = tempfile::NamedTempFile::new_in(store.join(id)).map_err(|_| Error::Io)?;
     use std::io::Write;
-    temp.write_all(&serde_json::to_vec(&item).map_err(|_| Error::Manifest)?)
-        .map_err(|_| Error::Io)?;
+    temp.write_all(&serde_json::to_vec(&item).map_err(|_| Error::Manifest)?).map_err(|_| Error::Io)?;
     temp.persist(target).map_err(|_| Error::Io)?;
     Ok(())
 }
@@ -390,24 +323,13 @@ impl Drop for Group {
 }
 async fn limited<R: tokio::io::AsyncRead + Unpin>(reader: R, max: usize) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
-    reader
-        .take(max as u64 + 1)
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(|_| Error::Io)?;
+    reader.take(max as u64 + 1).read_to_end(&mut bytes).await.map_err(|_| Error::Io)?;
     if bytes.len() > max {
         return Err(Error::Limit);
     }
     Ok(bytes)
 }
-async fn run(
-    store: PathBuf,
-    id: String,
-    command: String,
-    snapshot: Snapshot,
-    trusted: bool,
-    stop: rc_dotnet::CancelToken,
-) -> Result<Preview, Error> {
+async fn run(store: PathBuf, id: String, command: String, snapshot: Snapshot, trusted: bool, stop: rc_dotnet::CancelToken) -> Result<Preview, Error> {
     if !trusted {
         return Err(Error::Trust);
     }
@@ -418,30 +340,22 @@ async fn run(
     if !item.manifest.commands.iter().any(|c| c.id == command) {
         return Err(Error::Manifest);
     }
-    let bytes = regular_cancel(
-        &store.join(&id).join(&item.manifest.executable),
-        BINARY,
-        Some(&stop),
-    )?;
+    let bytes = regular_cancel(&store.join(&id).join(&item.manifest.executable), BINARY, Some(&stop))?;
     if hash(&bytes) != item.manifest.sha256.to_ascii_lowercase() {
         return Err(Error::Hash);
     }
     if stop.is_cancelled() {
         return Err(Error::Cancelled);
     }
-    let dir = tempfile::Builder::new()
-        .prefix("crabcraft-plugin-")
-        .tempdir()
-        .map_err(|_| Error::Io)?;
+    let dir = tempfile::Builder::new().prefix("crabcraft-plugin-").tempdir().map_err(|_| Error::Io)?;
     let executable = dir.path().join(&item.manifest.executable);
     write_cancel(&executable, &bytes, true, Some(&stop))?;
-    let input=serde_json::to_vec(&serde_json::json!({"protocol":1,"command":command,"document":{"path":snapshot.path,"text":snapshot.text,"sha256":snapshot.digest}})).map_err(|_|Error::Protocol)?;
+    let input = serde_json::to_vec(
+        &serde_json::json!({"protocol":1,"command":command,"document":{"path":snapshot.path,"text":snapshot.text,"sha256":snapshot.digest}}),
+    )
+    .map_err(|_| Error::Protocol)?;
     let mut cmd = tokio::process::Command::new(executable);
-    cmd.current_dir(dir.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
+    cmd.current_dir(dir.path()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     #[cfg(unix)]
     cmd.process_group(0);
     #[cfg(windows)]
@@ -458,8 +372,7 @@ async fn run(
             drop(stdin);
             Ok(())
         };
-        let (_, output, _) =
-            tokio::try_join!(write, limited(stdout, 2 * TEXT), limited(stderr, 64 * 1024))?;
+        let (_, output, _) = tokio::try_join!(write, limited(stdout, 2 * TEXT), limited(stderr, 64 * 1024))?;
         let status = child.wait().await.map_err(|_| Error::Io)?;
         if !status.success() {
             return Err(Error::Protocol);
@@ -474,7 +387,8 @@ async fn run(
         }
         Ok(Preview { snapshot, reply })
     };
-    let result = tokio::select! {result=tokio::time::timeout(Duration::from_secs(30),work)=>result.map_err(|_|Error::Limit)?,()=stop.cancelled()=>Err(Error::Cancelled)};
+    let result =
+        tokio::select! {result=tokio::time::timeout(Duration::from_secs(30),work)=>result.map_err(|_|Error::Limit)?,()=stop.cancelled()=>Err(Error::Cancelled)};
     drop(group);
     let _ = child.start_kill();
     let _ = child.wait().await;
@@ -531,16 +445,11 @@ impl Plugins {
         self.trust = false;
         self.error = None;
         rc_core::Runtime::spawn(async move {
-            let result = tokio::task::spawn_blocking(move || inspect_cancel(&path, Some(&stop)))
-                .await
-                .unwrap_or(Err(Error::Io));
+            let result = tokio::task::spawn_blocking(move || inspect_cancel(&path, Some(&stop))).await.unwrap_or(Err(Error::Io));
             out.send(Event::Inspected(result));
         });
     }
-    fn change(
-        &mut self,
-        operation: impl FnOnce(&Path, &rc_dotnet::CancelToken) -> Result<(), Error> + Send + 'static,
-    ) {
+    fn change(&mut self, operation: impl FnOnce(&Path, &rc_dotnet::CancelToken) -> Result<(), Error> + Send + 'static) {
         let store = self.store.clone();
         let stop = rc_dotnet::CancelToken::new();
         self.stop = Some(stop.clone());
@@ -558,11 +467,7 @@ impl Plugins {
         });
     }
     fn start(&mut self, snapshot: Snapshot, trusted: bool) {
-        let (store, id, command) = (
-            self.store.clone(),
-            self.selected.clone(),
-            self.command.clone(),
-        );
+        let (store, id, command) = (self.store.clone(), self.selected.clone(), self.command.clone());
         let stop = rc_dotnet::CancelToken::new();
         self.stop = Some(stop.clone());
         self.busy = true;
@@ -572,9 +477,7 @@ impl Plugins {
         self.error = None;
         let out = self.inbox.sender();
         rc_core::Runtime::spawn(async move {
-            out.send(Event::Finished(
-                run(store, id, command, snapshot, trusted, stop).await,
-            ));
+            out.send(Event::Finished(run(store, id, command, snapshot, trusted, stop).await));
         });
     }
     pub fn poll(&mut self, trusted: bool) {
@@ -630,12 +533,7 @@ impl Plugins {
         self.confirm = false;
         Ok(preview.reply.replacement)
     }
-    fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        snapshot: Option<Snapshot>,
-        trusted: bool,
-    ) -> Option<String> {
+    fn show(&mut self, ui: &mut egui::Ui, snapshot: Option<Snapshot>, trusted: bool) -> Option<String> {
         let mut apply = None;
         egui::ScrollArea::vertical().id_salt("plugins_body").show(ui,|ui|{
         ui.label(tr("Local process plugins run with your operating-system permissions. This is not an OS sandbox: only install binaries from sources you trust."));
@@ -664,10 +562,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     if crate::ui::toolwindows::header(ui, tr("Local Plugins")) {
         app.toggle_tool(crate::toolwindow::ToolWindow::Plugins);
     }
-    let trusted = app
-        .workspace
-        .as_ref()
-        .is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root));
+    let trusted = app.workspace.as_ref().is_some_and(|workspace| app.settings.trusted_projects.contains(&workspace.ws.root));
     let snapshot = app
         .docs
         .active_doc()
@@ -684,23 +579,13 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const BEFORE: &str =
-        "pub fn answer()->u32 {1}\n#[test] fn answer_is_two(){assert_eq!(answer(),2);}\n";
-    const AFTER: &str =
-        "pub fn answer()->u32 {2}\n#[test] fn answer_is_two(){assert_eq!(answer(),2);}\n";
+    const BEFORE: &str = "pub fn answer()->u32 {1}\n#[test] fn answer_is_two(){assert_eq!(answer(),2);}\n";
+    const AFTER: &str = "pub fn answer()->u32 {2}\n#[test] fn answer_is_two(){assert_eq!(answer(),2);}\n";
     fn fixture(root: &Path) -> PathBuf {
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"plugin_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"plugin_rust_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n").unwrap();
         std::fs::write(root.join("src/lib.rs"), BEFORE).unwrap();
-        std::fs::write(
-            root.join("build.rs"),
-            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
-        )
-        .unwrap();
+        std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         let package = root.join("package");
         std::fs::create_dir(&package).unwrap();
         let source = format!(
@@ -709,23 +594,10 @@ mod tests {
             replacement = serde_json::to_string(AFTER).unwrap()
         );
         std::fs::write(package.join("plugin.rs"), source).unwrap();
-        let executable = package.join(if cfg!(windows) {
-            "transform.exe"
-        } else {
-            "transform"
-        });
-        let output = std::process::Command::new("rustc")
-            .arg(package.join("plugin.rs"))
-            .arg("-o")
-            .arg(&executable)
-            .current_dir(std::env::temp_dir())
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let executable = package.join(if cfg!(windows) { "transform.exe" } else { "transform" });
+        let output =
+            std::process::Command::new("rustc").arg(package.join("plugin.rs")).arg("-o").arg(&executable).current_dir(std::env::temp_dir()).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let manifest = Manifest {
             protocol: 1,
             id: "rust-transform".into(),
@@ -734,14 +606,8 @@ mod tests {
             executable: executable.file_name().unwrap().to_string_lossy().into(),
             sha256: hash(&std::fs::read(executable).unwrap()),
             commands: vec![
-                Command {
-                    id: "replace".into(),
-                    title: "Replace Rust answer".into(),
-                },
-                Command {
-                    id: "sleep".into(),
-                    title: "Cancellation fixture".into(),
-                },
+                Command { id: "replace".into(), title: "Replace Rust answer".into() },
+                Command { id: "sleep".into(), title: "Cancellation fixture".into() },
             ],
         };
         let path = package.join("plugin.json");
@@ -761,70 +627,27 @@ mod tests {
         assert!(!root.join("plugin-ran").exists());
         let snap = Snapshot::new(root.join("src/lib.rs"), BEFORE.into()).unwrap();
         assert!(matches!(
-            run(
-                store.clone(),
-                "rust-transform".into(),
-                "replace".into(),
-                snap.clone(),
-                true,
-                rc_dotnet::CancelToken::new()
-            )
-            .await,
+            run(store.clone(), "rust-transform".into(), "replace".into(), snap.clone(), true, rc_dotnet::CancelToken::new()).await,
             Err(Error::Trust)
         ));
         enable(&store, "rust-transform", true).unwrap();
         assert!(matches!(
-            run(
-                store.clone(),
-                "rust-transform".into(),
-                "replace".into(),
-                snap.clone(),
-                false,
-                rc_dotnet::CancelToken::new()
-            )
-            .await,
+            run(store.clone(), "rust-transform".into(), "replace".into(), snap.clone(), false, rc_dotnet::CancelToken::new()).await,
             Err(Error::Trust)
         ));
         assert!(!root.join("plugin-ran").exists());
-        let preview = run(
-            store.clone(),
-            "rust-transform".into(),
-            "replace".into(),
-            snap,
-            true,
-            rc_dotnet::CancelToken::new(),
-        )
-        .await
-        .unwrap();
+        let preview = run(store.clone(), "rust-transform".into(), "replace".into(), snap, true, rc_dotnet::CancelToken::new()).await.unwrap();
         assert_eq!(preview.reply.replacement, AFTER);
-        assert_eq!(
-            std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
-            BEFORE
-        );
+        assert_eq!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap(), BEFORE);
         assert!(!root.join("build-ran").exists());
-        let executable = store.join("rust-transform").join(if cfg!(windows) {
-            "transform.exe"
-        } else {
-            "transform"
-        });
+        let executable = store.join("rust-transform").join(if cfg!(windows) { "transform.exe" } else { "transform" });
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
         std::fs::write(executable, "tamper").unwrap();
-        assert!(matches!(
-            run(
-                store,
-                "rust-transform".into(),
-                "replace".into(),
-                preview.snapshot,
-                true,
-                rc_dotnet::CancelToken::new()
-            )
-            .await,
-            Err(Error::Hash)
-        ));
+        assert!(matches!(run(store, "rust-transform".into(), "replace".into(), preview.snapshot, true, rc_dotnet::CancelToken::new()).await, Err(Error::Hash)));
     }
     #[test]
     fn manifest_rejects_traversal_symlinks_reserved_names_and_modified_executables() {
@@ -834,32 +657,12 @@ mod tests {
         let package = inspect(&path).unwrap();
         let stop = rc_dotnet::CancelToken::new();
         stop.cancel();
-        assert!(matches!(
-            inspect_cancel(&path, Some(&stop)),
-            Err(Error::Cancelled)
-        ));
-        assert_eq!(
-            install_cancel(
-                &root.join("cancelled-store"),
-                package.clone(),
-                true,
-                Some(&stop)
-            ),
-            Err(Error::Cancelled)
-        );
+        assert!(matches!(inspect_cancel(&path, Some(&stop)), Err(Error::Cancelled)));
+        assert_eq!(install_cancel(&root.join("cancelled-store"), package.clone(), true, Some(&stop)), Err(Error::Cancelled));
         assert!(!root.join("cancelled-store").exists());
-        assert_eq!(
-            write_cancel(&root.join("cancelled-copy"), b"data", false, Some(&stop)),
-            Err(Error::Cancelled)
-        );
+        assert_eq!(write_cancel(&root.join("cancelled-copy"), b"data", false, Some(&stop)), Err(Error::Cancelled));
         assert!(!root.join("cancelled-copy").exists());
-        for name in [
-            "../transform",
-            "/tmp/transform",
-            "a/b",
-            "a\\b",
-            "installed.json",
-        ] {
+        for name in ["../transform", "/tmp/transform", "a/b", "a\\b", "installed.json"] {
             let mut bad = package.manifest.clone();
             bad.executable = name.into();
             assert_eq!(bad.validate(), Err(Error::Manifest));
@@ -901,24 +704,13 @@ mod tests {
         }
         assert!(root.join("plugin-ran").exists());
         stop.cancel();
-        assert!(matches!(
-            tokio::time::timeout(Duration::from_secs(3), task)
-                .await
-                .unwrap()
-                .unwrap(),
-            Err(Error::Cancelled)
-        ));
-        assert_eq!(
-            std::fs::read_to_string(root.join("src/lib.rs")).unwrap(),
-            BEFORE
-        );
+        assert!(matches!(tokio::time::timeout(Duration::from_secs(3), task).await.unwrap().unwrap(), Err(Error::Cancelled)));
+        assert_eq!(std::fs::read_to_string(root.join("src/lib.rs")).unwrap(), BEFORE);
     }
     #[test]
     fn native_plugin_preview_applies_to_real_rust_with_stale_guard_and_undo() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
@@ -928,9 +720,7 @@ mod tests {
         app.open_workspace_and_wait(&root);
         app.open_file_and_wait(&file);
         app.plugins.source = path.to_string_lossy().into();
-        app.dock
-            .sizes
-            .insert(crate::toolwindow::ToolWindow::Plugins, 850.0);
+        app.dock.sizes.insert(crate::toolwindow::ToolWindow::Plugins, 850.0);
         let mut h = crate::screens::harness(app, egui::vec2(1900.0, 1500.0));
         h.get_by_label(tr("Local Plugins")).click();
         h.run_steps(2);
@@ -943,18 +733,11 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(10));
             }
             assert!(!h.state().plugins.busy, "{:?}", h.state().plugins.error);
-            assert!(
-                h.state().plugins.error.is_none(),
-                "{:?}",
-                h.state().plugins.error
-            );
+            assert!(h.state().plugins.error.is_none(), "{:?}", h.state().plugins.error);
         };
         wait(&mut h);
         assert!(!root.join("plugin-ran").exists());
-        h.get_by_label(tr(
-            "I trust this local executable to run with my user permissions",
-        ))
-        .click();
+        h.get_by_label(tr("I trust this local executable to run with my user permissions")).click();
         h.run_steps(2);
         h.get_by_label(tr("Install Verified Plugin")).click();
         h.run_steps(2);
@@ -977,65 +760,21 @@ mod tests {
         h.run_steps(2);
         wait(&mut h);
         assert!(h.state().plugins.preview.is_some());
-        assert_eq!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            BEFORE
-        );
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), BEFORE);
         h.state_mut().plugins.confirm = true;
-        assert_eq!(
-            h.state_mut().plugins.apply(&file, "changed", true),
-            Err(Error::Stale)
-        );
+        assert_eq!(h.state_mut().plugins.apply(&file, "changed", true), Err(Error::Stale));
         h.state_mut().plugins.confirm = false;
-        h.get_by_label(tr(
-            "I reviewed this plugin replacement; apply it to the unsaved editor",
-        ))
-        .click();
+        h.get_by_label(tr("I reviewed this plugin replacement; apply it to the unsaved editor")).click();
         h.run_steps(2);
         h.get_by_label(tr("Apply Plugin Replacement")).click();
         h.run_steps(2);
-        assert_eq!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            AFTER
-        );
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), AFTER);
         assert_eq!(std::fs::read_to_string(&file).unwrap(), BEFORE);
         h.state_mut().docs.active_doc_mut().unwrap().editor.undo();
-        assert_eq!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string(),
-            BEFORE
-        );
+        assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), BEFORE);
         std::fs::write(&file, AFTER).unwrap();
-        let output = std::process::Command::new("cargo")
-            .args(["test", "--offline"])
-            .current_dir(&root)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = std::process::Command::new("cargo").args(["test", "--offline"]).current_dir(&root).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert!(root.join("build-ran").exists());
     }
 }

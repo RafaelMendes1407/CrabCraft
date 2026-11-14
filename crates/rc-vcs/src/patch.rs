@@ -135,14 +135,36 @@ impl Repository {
             return Err(GitError::NothingToCommit);
         }
         let base = self.resolve("HEAD").await.unwrap_or_else(|_| EMPTY_TREE.to_string());
-        let out = self.cmd().args(["diff", "--binary", "--find-renames", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--end-of-options", &base, "--"]).args(paths).output().await?;
+        let out = self
+            .cmd()
+            .args([
+                "diff",
+                "--binary",
+                "--find-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+                "--end-of-options",
+                &base,
+                "--",
+            ])
+            .args(paths)
+            .output()
+            .await?;
         let mut patch = out.stdout;
         let untracked = self.cmd().args(["ls-files", "--others", "--exclude-standard", "-z", "--"]).args(paths).output().await?;
         for path in untracked.stdout.split(|b| *b == 0).filter(|p| !p.is_empty()) {
             check_patch_size(patch.len() as u64)?;
             let path = String::from_utf8_lossy(path).into_owned();
             // `--no-index` exits 1 when the files differ, which they always do here.
-            let out = self.cmd().args(["diff", "--no-index", "--binary", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--", "/dev/null"]).arg(&path).ok_code(1).output().await?;
+            let out = self
+                .cmd()
+                .args(["diff", "--no-index", "--binary", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--", "/dev/null"])
+                .arg(&path)
+                .ok_code(1)
+                .output()
+                .await?;
             patch.extend_from_slice(&out.stdout);
         }
         if patch.is_empty() {
@@ -166,7 +188,8 @@ impl Repository {
         }
         let mut patch = Vec::new();
         for h in hashes.iter().rev() {
-            let out = self.cmd().args(["format-patch", "--stdout", "--binary", "--no-signature", "--no-ext-diff", "-1", "--end-of-options", h]).output().await?;
+            let out =
+                self.cmd().args(["format-patch", "--stdout", "--binary", "--no-signature", "--no-ext-diff", "-1", "--end-of-options", h]).output().await?;
             patch.extend_from_slice(&out.stdout);
             check_patch_size(patch.len() as u64)?;
         }
@@ -184,7 +207,16 @@ impl Repository {
         if files.is_empty() {
             return Err(GitError::PatchFailed(String::new()));
         }
-        let check = self.cmd().args(["apply", "--check", "--whitespace=nowarn"]).args(three_way.then_some("--3way")).arg("-").stdin(patch.to_vec()).ok_code(1).ok_code(128).output().await?;
+        let check = self
+            .cmd()
+            .args(["apply", "--check", "--whitespace=nowarn"])
+            .args(three_way.then_some("--3way"))
+            .arg("-")
+            .stdin(patch.to_vec())
+            .ok_code(1)
+            .ok_code(128)
+            .output()
+            .await?;
         let problem = (check.code != Some(0)).then(|| {
             let text = check.stderr.trim();
             if text.is_empty() { check.stdout_text().trim().to_string() } else { text.to_string() }
@@ -211,7 +243,16 @@ impl Repository {
         };
         match patch_kind(patch) {
             PatchKind::Diff => {
-                let out = self.cmd().args(["apply", "--whitespace=nowarn", "--verbose"]).args(three_way.then_some("--3way")).arg("-").stdin(patch.to_vec()).ok_code(1).ok_code(128).output().await?;
+                let out = self
+                    .cmd()
+                    .args(["apply", "--whitespace=nowarn", "--verbose"])
+                    .args(three_way.then_some("--3way"))
+                    .arg("-")
+                    .stdin(patch.to_vec())
+                    .ok_code(1)
+                    .ok_code(128)
+                    .output()
+                    .await?;
                 match out.code {
                     Some(0) => Ok(report(out)),
                     _ if three_way && out.stderr.contains("with conflicts") => Err(GitError::Conflicts(report(out))),
@@ -261,7 +302,10 @@ mod tests {
         let summary = " rename src/{a.rs => b.rs} (66%)\n create mode 100644 new.txt\n create mode 100644 img.png\n delete mode 100644 old.txt\n";
         let f = parse_patch_files(numstat, summary);
         let short: Vec<_> = f.iter().map(|f| (f.path.as_str(), f.status, f.added, f.removed)).collect();
-        assert_eq!(short, [("src/b.rs", 'R', Some(1), Some(1)), ("new.txt", 'A', Some(3), Some(0)), ("img.png", 'A', None, None), ("old.txt", 'D', Some(0), Some(2))]);
+        assert_eq!(
+            short,
+            [("src/b.rs", 'R', Some(1), Some(1)), ("new.txt", 'A', Some(3), Some(0)), ("img.png", 'A', None, None), ("old.txt", 'D', Some(0), Some(2))]
+        );
         assert!(parse_patch_files(b"garbage\x00", "").is_empty());
     }
 

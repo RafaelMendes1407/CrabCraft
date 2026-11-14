@@ -109,7 +109,9 @@ impl GitError {
             OutputLimit => ("Git output exceeded the safety limit", vec![]),
             UnsafeReadConfig => ("Git configuration cannot be read safely", vec![]),
             GitNotFound => ("Git executable not found", vec![]),
-            UnsupportedVersion { found, required } => ("Git {found} is too old (CrabCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())]),
+            UnsupportedVersion { found, required } => {
+                ("Git {found} is too old (CrabCraft needs {required} or newer)", vec![("found", found.clone()), ("required", required.clone())])
+            }
             NotARepository(p) => ("{path} is not inside a Git repository", vec![("path", p.display().to_string())]),
             NothingToCommit => ("Nothing to commit", vec![]),
             BeforeCommit(m) => ("{message}", vec![("message", m.clone())]),
@@ -153,7 +155,16 @@ impl GitError {
     pub fn details(&self) -> Option<String> {
         use GitError::*;
         match self {
-            Conflicts(s) | UncommittedChanges(s) | EmptyCommit(s) | SigningFailed(s) | AuthenticationRequired(s) | PushRejected(s) | PatchFailed(s) | Locked(s) | Network(s) | Parse(s) => Some(s.clone()),
+            Conflicts(s)
+            | UncommittedChanges(s)
+            | EmptyCommit(s)
+            | SigningFailed(s)
+            | AuthenticationRequired(s)
+            | PushRejected(s)
+            | PatchFailed(s)
+            | Locked(s)
+            | Network(s)
+            | Parse(s) => Some(s.clone()),
             LocalChangesWouldBeOverwritten(files) => Some(files.join("\n")),
             Io(e) => Some(e.to_string()),
             Failed { stderr, .. } => Some(stderr.clone()),
@@ -185,7 +196,11 @@ impl GitError {
         if has("is now empty") || has("did you forget to use 'git add'") {
             return GitError::EmptyCommit(all.trim().to_string());
         }
-        if has("There is no merge to abort") || has("There is no merge in progress") || has("No rebase in progress") || has("no cherry-pick or revert in progress") {
+        if has("There is no merge to abort")
+            || has("There is no merge in progress")
+            || has("No rebase in progress")
+            || has("no cherry-pick or revert in progress")
+        {
             return GitError::NoOperation;
         }
         if has("refusing to merge unrelated histories") {
@@ -310,13 +325,21 @@ mod tests {
         assert!(matches!(c("error: something odd"), GitError::Failed { .. }));
         assert!(matches!(c("error: cannot rebase: You have unstaged changes.\nerror: Please commit or stash them."), GitError::UncommittedChanges(_)));
         assert!(matches!(
-            GitError::classify(&[], Some(1), "nothing to commit, working tree clean", "The previous cherry-pick is now empty, possibly due to conflict resolution."),
+            GitError::classify(
+                &[],
+                Some(1),
+                "nothing to commit, working tree clean",
+                "The previous cherry-pick is now empty, possibly due to conflict resolution."
+            ),
             GitError::EmptyCommit(_)
         ));
         assert!(matches!(c("fatal: No rebase in progress?"), GitError::NoOperation));
         assert!(matches!(c("fatal: There is no merge to abort (MERGE_HEAD missing)."), GitError::NoOperation));
         assert!(matches!(c("fatal: refusing to merge unrelated histories"), GitError::UnrelatedHistories));
         assert!(matches!(c("fatal: Not possible to fast-forward, aborting."), GitError::NotFastForward));
-        assert!(matches!(GitError::classify(&[], Some(1), "CONFLICT (content): Merge conflict in f", "error: could not apply 2ffe2a8... side1"), GitError::Conflicts(_)));
+        assert!(matches!(
+            GitError::classify(&[], Some(1), "CONFLICT (content): Merge conflict in f", "error: could not apply 2ffe2a8... side1"),
+            GitError::Conflicts(_)
+        ));
     }
 }

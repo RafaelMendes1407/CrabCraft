@@ -43,15 +43,8 @@ struct Source {
 }
 #[derive(Clone)]
 enum Call {
-    Function {
-        key: Key,
-        name: String,
-    },
-    Method {
-        receiver: usize,
-        key: Key,
-        name: String,
-    },
+    Function { key: Key, name: String },
+    Method { receiver: usize, key: Key, name: String },
 }
 #[derive(Clone)]
 enum ExprKind {
@@ -115,9 +108,7 @@ impl Budget {
     }
 }
 pub fn hash(text: &str) -> u64 {
-    text.bytes().fold(0xcbf29ce484222325, |hash, byte| {
-        (hash ^ byte as u64).wrapping_mul(0x100000001b3)
-    })
+    text.bytes().fold(0xcbf29ce484222325, |hash, byte| (hash ^ byte as u64).wrapping_mul(0x100000001b3))
 }
 fn read(path: &Path, max: usize) -> Result<String, Error> {
     let mut options = std::fs::OpenOptions::new();
@@ -132,9 +123,7 @@ fn read(path: &Path, max: usize) -> Result<String, Error> {
         return Err(Error::Io);
     }
     let mut bytes = Vec::new();
-    file.take(max as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| Error::Io)?;
+    file.take(max as u64 + 1).read_to_end(&mut bytes).map_err(|_| Error::Io)?;
     if bytes.len() > max {
         return Err(Error::Limit);
     }
@@ -162,21 +151,10 @@ fn name_node(mut node: Node<'_>) -> Node<'_> {
     node
 }
 fn key(source: &Source, node: Node<'_>) -> Key {
-    Key {
-        file: source.path.clone(),
-        position: crate::convert::lsp_position(
-            &source.rope,
-            source.rope.byte_to_char(node.start_byte()),
-        ),
-    }
+    Key { file: source.path.clone(), position: crate::convert::lsp_position(&source.rope, source.rope.byte_to_char(node.start_byte())) }
 }
 impl Program {
-    fn expression(
-        &mut self,
-        source: &Source,
-        node: Node<'_>,
-        depth: usize,
-    ) -> Result<usize, Error> {
+    fn expression(&mut self, source: &Source, node: Node<'_>, depth: usize) -> Result<usize, Error> {
         if depth > 64 || self.expressions.len() >= 50_000 {
             return Err(Error::Limit);
         }
@@ -186,11 +164,7 @@ impl Program {
         }
         let kind = match node.kind() {
             "block" | "expression_statement" | "return_expression" | "parenthesized_expression" => {
-                if let Some(tail) = children(node)
-                    .into_iter()
-                    .filter(|node| !matches!(node.kind(), "line_comment" | "block_comment"))
-                    .last()
-                {
+                if let Some(tail) = children(node).into_iter().filter(|node| !matches!(node.kind(), "line_comment" | "block_comment")).last() {
                     let id = self.expression(source, tail, depth + 1)?;
                     self.memo.insert(address, id);
                     return Ok(id);
@@ -198,20 +172,14 @@ impl Program {
                 ExprKind::Unknown
             }
             "identifier" | "scoped_identifier" => ExprKind::Reference(key(source, name_node(node))),
-            "string_literal" | "raw_string_literal" => rc_syntax::axum::string_value(
-                text(node, &source.text),
-                node.kind() == "raw_string_literal",
-            )
-            .map(ExprKind::String)
-            .unwrap_or(ExprKind::Unknown),
+            "string_literal" | "raw_string_literal" => {
+                rc_syntax::axum::string_value(text(node, &source.text), node.kind() == "raw_string_literal").map(ExprKind::String).unwrap_or(ExprKind::Unknown)
+            }
             "call_expression" => {
                 let Some(function) = node.child_by_field_name("function") else {
                     return self.unknown(source, node, address);
                 };
-                let arguments = node
-                    .child_by_field_name("arguments")
-                    .map(children)
-                    .unwrap_or_default();
+                let arguments = node.child_by_field_name("arguments").map(children).unwrap_or_default();
                 if arguments.len() > 32 {
                     return Err(Error::Limit);
                 }
@@ -219,11 +187,7 @@ impl Program {
                 for argument in arguments {
                     args.push(self.expression(source, argument, depth + 1)?);
                 }
-                let function = if function.kind() == "generic_function" {
-                    function.child_by_field_name("function").unwrap_or(function)
-                } else {
-                    function
-                };
+                let function = if function.kind() == "generic_function" { function.child_by_field_name("function").unwrap_or(function) } else { function };
                 let call = if function.kind() == "field_expression" {
                     let Some(field) = function.child_by_field_name("field") else {
                         return self.unknown(source, node, address);
@@ -231,49 +195,28 @@ impl Program {
                     let Some(receiver) = function.child_by_field_name("value") else {
                         return self.unknown(source, node, address);
                     };
-                    Call::Method {
-                        receiver: self.expression(source, receiver, depth + 1)?,
-                        key: key(source, field),
-                        name: text(field, &source.text).into(),
-                    }
+                    Call::Method { receiver: self.expression(source, receiver, depth + 1)?, key: key(source, field), name: text(field, &source.text).into() }
                 } else {
                     let name = name_node(function);
-                    Call::Function {
-                        key: key(source, name),
-                        name: text(name, &source.text).into(),
-                    }
+                    Call::Function { key: key(source, name), name: text(name, &source.text).into() }
                 };
                 ExprKind::Call(call, args)
             }
             _ => ExprKind::Unknown,
         };
         let id = self.expressions.len();
-        self.expressions.push(Expr {
-            key: key(source, node),
-            kind,
-            display: text(node, &source.text).chars().take(160).collect(),
-        });
+        self.expressions.push(Expr { key: key(source, node), kind, display: text(node, &source.text).chars().take(160).collect() });
         self.memo.insert(address, id);
         Ok(id)
     }
-    fn unknown(
-        &mut self,
-        source: &Source,
-        node: Node<'_>,
-        address: (PathBuf, usize, usize),
-    ) -> Result<usize, Error> {
+    fn unknown(&mut self, source: &Source, node: Node<'_>, address: (PathBuf, usize, usize)) -> Result<usize, Error> {
         let id = self.expressions.len();
-        self.expressions.push(Expr {
-            key: key(source, node),
-            kind: ExprKind::Unknown,
-            display: String::new(),
-        });
+        self.expressions.push(Expr { key: key(source, node), kind: ExprKind::Unknown, display: String::new() });
         self.memo.insert(address, id);
         Ok(id)
     }
     fn collect(&mut self, source: Source, budget: &Budget) -> Result<(), Error> {
-        let tree =
-            rc_syntax::parse_now(rc_syntax::Lang::Rust, &source.rope, None).ok_or(Error::Io)?;
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::Rust, &source.rope, None).ok_or(Error::Io)?;
         let mut stack = vec![tree.root_node()];
         let mut nodes = 0;
         while let Some(node) = stack.pop() {
@@ -285,37 +228,20 @@ impl Program {
                 budget.check()?;
             }
             if node.kind() == "function_item" {
-                if let (Some(name), Some(body)) = (
-                    node.child_by_field_name("name"),
-                    node.child_by_field_name("body"),
-                ) {
-                    let parameters =
-                        node.child_by_field_name("parameters")
-                            .map(children)
-                            .map_or(0, |nodes| {
-                                nodes
-                                    .into_iter()
-                                    .filter(|node| {
-                                        !matches!(node.kind(), "line_comment" | "block_comment")
-                                    })
-                                    .count()
-                            });
+                if let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body")) {
+                    let parameters = node
+                        .child_by_field_name("parameters")
+                        .map(children)
+                        .map_or(0, |nodes| nodes.into_iter().filter(|node| !matches!(node.kind(), "line_comment" | "block_comment")).count());
                     let body = self.expression(&source, body, 0)?;
-                    self.functions
-                        .insert(key(&source, name), Function { body, parameters });
+                    self.functions.insert(key(&source, name), Function { body, parameters });
                 }
             }
             if matches!(node.kind(), "let_declaration" | "const_item") {
-                if let (Some(pattern), Some(value)) = (
-                    node.child_by_field_name("pattern")
-                        .or_else(|| node.child_by_field_name("name")),
-                    node.child_by_field_name("value"),
-                ) {
-                    if pattern.kind() == "identifier"
-                        && !children(node)
-                            .iter()
-                            .any(|node| node.kind() == "mutable_specifier")
-                    {
+                if let (Some(pattern), Some(value)) =
+                    (node.child_by_field_name("pattern").or_else(|| node.child_by_field_name("name")), node.child_by_field_name("value"))
+                {
+                    if pattern.kind() == "identifier" && !children(node).iter().any(|node| node.kind() == "mutable_specifier") {
                         let value = self.expression(&source, value, 0)?;
                         self.bindings.insert(key(&source, pattern), value);
                     }
@@ -323,10 +249,7 @@ impl Program {
             }
             if node.kind() == "call_expression"
                 && !node.parent().is_some_and(|parent| {
-                    parent.kind() == "field_expression"
-                        && parent
-                            .child_by_field_name("value")
-                            .is_some_and(|value| value.id() == node.id())
+                    parent.kind() == "field_expression" && parent.child_by_field_name("value").is_some_and(|value| value.id() == node.id())
                 })
             {
                 let id = self.expression(&source, node, 0)?;
@@ -360,11 +283,7 @@ impl Resolver<'_> {
         if self.loaded > 32 * 1024 * 1024 {
             return Err(Error::Limit);
         }
-        let source = Source {
-            path: path.into(),
-            rope: Rope::from_str(&value),
-            text: Arc::from(value),
-        };
+        let source = Source { path: path.into(), rope: Rope::from_str(&value), text: Arc::from(value) };
         self.sources.insert(path.into(), source.clone());
         Ok(source)
     }
@@ -376,11 +295,7 @@ impl Resolver<'_> {
             let manifest = directory.join("Cargo.toml");
             if let Ok(value) = read(&manifest, 256 * 1024) {
                 let value = toml::from_str::<toml::Value>(&value).map_err(|_| Error::Io)?;
-                let name = value
-                    .get("package")
-                    .and_then(|package| package.get("name"))
-                    .and_then(toml::Value::as_str)
-                    .map(str::to_string);
+                let name = value.get("package").and_then(|package| package.get("name")).and_then(toml::Value::as_str).map(str::to_string);
                 self.packages.insert(directory.into(), name.clone());
                 return Ok(name);
             }
@@ -398,7 +313,9 @@ impl Resolver<'_> {
             if self.requests > 1024 {
                 return Err(Error::Limit);
             }
-            let mut pending=self.client.request_raw::<Value>("textDocument/definition",json!({"textDocument":{"uri":path_to_uri(&origin.file).as_str()},"position":origin.position}));
+            let mut pending = self
+                .client
+                .request_raw::<Value>("textDocument/definition", json!({"textDocument":{"uri":path_to_uri(&origin.file).as_str()},"position":origin.position}));
             let response = loop {
                 self.budget.check()?;
                 if let Some(response) = pending.poll() {
@@ -407,18 +324,13 @@ impl Resolver<'_> {
                 std::thread::sleep(Duration::from_millis(5));
             };
             match response {
-                Ok(value)
-                    if Instant::now() < retry_until
-                        && (value.is_null() || value.as_array().is_some_and(Vec::is_empty)) =>
-                {
+                Ok(value) if Instant::now() < retry_until && (value.is_null() || value.as_array().is_some_and(Vec::is_empty)) => {
                     std::thread::sleep(Duration::from_millis(50));
                 }
                 Ok(value) => break value,
                 Err(error)
                     if Instant::now() < retry_until
-                        && (matches!(error.code, -32801 | -32800)
-                            || (error.code == -32603
-                                && error.message.starts_with("file not found:"))) =>
+                        && (matches!(error.code, -32801 | -32800) || (error.code == -32603 && error.message.starts_with("file not found:"))) =>
                 {
                     std::thread::sleep(Duration::from_millis(50));
                 }
@@ -435,19 +347,12 @@ impl Resolver<'_> {
             return Ok(None);
         }
         let value = &values[0];
-        let uri = value
-            .get("targetUri")
-            .or_else(|| value.get("uri"))
-            .and_then(Value::as_str);
-        let range = value
-            .get("targetSelectionRange")
-            .or_else(|| value.get("range"));
-        let Some((path, range)) =
-            uri.and_then(|uri| uri.parse().ok())
-                .and_then(|uri| uri_to_path(&uri))
-                .zip(range.cloned().and_then(|range| {
-                    serde_json::from_value::<rc_lsp::lsp_types::Range>(range).ok()
-                }))
+        let uri = value.get("targetUri").or_else(|| value.get("uri")).and_then(Value::as_str);
+        let range = value.get("targetSelectionRange").or_else(|| value.get("range"));
+        let Some((path, range)) = uri
+            .and_then(|uri| uri.parse().ok())
+            .and_then(|uri| uri_to_path(&uri))
+            .zip(range.cloned().and_then(|range| serde_json::from_value::<rc_lsp::lsp_types::Range>(range).ok()))
         else {
             self.cache.insert(origin.clone(), None);
             return Ok(None);
@@ -463,34 +368,21 @@ impl Resolver<'_> {
             return Err(Error::Server);
         }
         let name = source.rope.slice(start..end).to_string();
-        let tree =
-            rc_syntax::parse_now(rc_syntax::Lang::Rust, &source.rope, None).ok_or(Error::Io)?;
+        let tree = rc_syntax::parse_now(rc_syntax::Lang::Rust, &source.rope, None).ok_or(Error::Io)?;
         let byte = source.rope.char_to_byte(start);
         let mut node = tree.root_node().descendant_for_byte_range(byte, byte);
         let mut owner = None;
         while let Some(current) = node {
             if current.kind() == "impl_item" {
                 if let Some(ty) = current.child_by_field_name("type") {
-                    let ty = if ty.kind() == "generic_type" {
-                        ty.child_by_field_name("type").unwrap_or(ty)
-                    } else {
-                        ty
-                    };
+                    let ty = if ty.kind() == "generic_type" { ty.child_by_field_name("type").unwrap_or(ty) } else { ty };
                     owner = Some(text(ty, &source.text).into());
                 }
                 break;
             }
             node = current.parent();
         }
-        let symbol = Symbol {
-            key: Key {
-                file: path.clone(),
-                position: range.start,
-            },
-            name,
-            package: self.package(&path)?,
-            owner,
-        };
+        let symbol = Symbol { key: Key { file: path.clone(), position: range.start }, name, package: self.package(&path)?, owner };
         self.cache.insert(origin.clone(), Some(symbol.clone()));
         Ok(Some(symbol))
     }
@@ -511,11 +403,7 @@ fn method(name: &str) -> Option<&'static str> {
     }
 }
 fn join(prefix: &str, path: &str) -> Option<String> {
-    let value = if prefix.is_empty() {
-        path.into()
-    } else {
-        format!("{}{path}", prefix.trim_end_matches('/'))
-    };
+    let value = if prefix.is_empty() { path.into() } else { format!("{}{path}", prefix.trim_end_matches('/')) };
     (value.len() <= 4096).then_some(value)
 }
 struct Graph<'a> {
@@ -567,22 +455,13 @@ impl Graph<'_> {
         if symbol.package.as_deref() != Some("axum") {
             return Ok(Vec::new());
         }
-        let mut methods = if let Some(receiver) = receiver {
-            self.methods(receiver, depth + 1)?
-        } else {
-            Vec::new()
-        };
+        let mut methods = if let Some(receiver) = receiver { self.methods(receiver, depth + 1)? } else { Vec::new() };
         if let (Some(method), Some(handler)) = (method(&symbol.name), args.first()) {
             methods.push((method.into(), *handler));
         }
         Ok(methods)
     }
-    fn evaluate(
-        &mut self,
-        id: usize,
-        prefix: &str,
-        depth: usize,
-    ) -> Result<Option<Vec<Route>>, Error> {
+    fn evaluate(&mut self, id: usize, prefix: &str, depth: usize) -> Result<Option<Vec<Route>>, Error> {
         self.resolver.budget.check()?;
         self.steps += 1;
         if self.steps > 20_000 || depth > 64 {
@@ -596,12 +475,7 @@ impl Graph<'_> {
         self.active.remove(&id);
         result
     }
-    fn inner(
-        &mut self,
-        id: usize,
-        prefix: &str,
-        depth: usize,
-    ) -> Result<Option<Vec<Route>>, Error> {
+    fn inner(&mut self, id: usize, prefix: &str, depth: usize) -> Result<Option<Vec<Route>>, Error> {
         let Some(expression) = self.program.expressions.get(id).cloned() else {
             return Ok(None);
         };
@@ -620,40 +494,21 @@ impl Graph<'_> {
                 let Some(symbol) = self.resolver.definition(&origin)? else {
                     return Ok(None);
                 };
-                if symbol.package.as_deref() == Some("axum")
-                    && symbol.owner.as_deref() == Some("Router")
-                    && symbol.name == "new"
-                    && args.is_empty()
-                {
+                if symbol.package.as_deref() == Some("axum") && symbol.owner.as_deref() == Some("Router") && symbol.name == "new" && args.is_empty() {
                     return Ok(Some(Vec::new()));
                 }
-                if let Some(function) = self
-                    .program
-                    .functions
-                    .get(&symbol.key)
-                    .filter(|function| function.parameters == 0 && args.is_empty())
-                {
+                if let Some(function) = self.program.functions.get(&symbol.key).filter(|function| function.parameters == 0 && args.is_empty()) {
                     let body = function.body;
                     self.used.insert(body);
                     return self.evaluate(body, prefix, depth + 1);
                 }
                 Ok(None)
             }
-            ExprKind::Call(
-                Call::Method {
-                    receiver,
-                    key: origin,
-                    name,
-                },
-                args,
-            ) => {
+            ExprKind::Call(Call::Method { receiver, key: origin, name }, args) => {
                 let Some(symbol) = self.resolver.definition(&origin)? else {
                     return Ok(None);
                 };
-                if symbol.package.as_deref() != Some("axum")
-                    || symbol.owner.as_deref() != Some("Router")
-                    || symbol.name != name
-                {
+                if symbol.package.as_deref() != Some("axum") || symbol.owner.as_deref() != Some("Router") || symbol.name != name {
                     return Ok(None);
                 }
                 let mut routes = match self.evaluate(receiver, prefix, depth + 1)? {
@@ -665,9 +520,7 @@ impl Graph<'_> {
                 };
                 match name.as_str() {
                     "route" if args.len() == 2 => {
-                        let path = self.literal(args[0], 0)?.filter(|path| {
-                            path.starts_with('/') && !path.chars().any(char::is_control)
-                        });
+                        let path = self.literal(args[0], 0)?.filter(|path| path.starts_with('/') && !path.chars().any(char::is_control));
                         let Some(path) = path.and_then(|path| join(prefix, &path)) else {
                             self.unresolved += 1;
                             return Ok(Some(routes));
@@ -682,19 +535,10 @@ impl Graph<'_> {
                                 ExprKind::Reference(key) => Some(key.clone()),
                                 _ => None,
                             };
-                            let symbol = if let Some(key) = handler_key {
-                                self.resolver.definition(&key)?
-                            } else {
-                                None
-                            };
-                            let target = symbol
-                                .filter(|symbol| self.program.functions.contains_key(&symbol.key))
-                                .map(|symbol| symbol.key);
+                            let symbol = if let Some(key) = handler_key { self.resolver.definition(&key)? } else { None };
+                            let target = symbol.filter(|symbol| self.program.functions.contains_key(&symbol.key)).map(|symbol| symbol.key);
                             let at = self.location(&origin);
-                            let handler_at = target
-                                .as_ref()
-                                .map(|key| self.location(key))
-                                .unwrap_or_else(|| self.location(&handler_expr.key));
+                            let handler_at = target.as_ref().map(|key| self.location(key)).unwrap_or_else(|| self.location(&handler_expr.key));
                             let query = self.query(target.as_ref())?;
                             routes.push(Route {
                                 file: origin.file.clone(),
@@ -715,9 +559,7 @@ impl Graph<'_> {
                     "nest" if args.len() == 2 => {
                         if let Some(path) = self
                             .literal(args[0], 0)?
-                            .filter(|path| {
-                                path.starts_with('/') && !path.chars().any(char::is_control)
-                            })
+                            .filter(|path| path.starts_with('/') && !path.chars().any(char::is_control))
                             .and_then(|path| join(prefix, &path))
                         {
                             self.used.insert(args[1]);
@@ -738,8 +580,7 @@ impl Graph<'_> {
                             self.unresolved += 1;
                         }
                     }
-                    "with_state" | "layer" | "route_layer" | "fallback" | "fallback_service"
-                    | "without_v07_checks" => {}
+                    "with_state" | "layer" | "route_layer" | "fallback" | "fallback_service" | "without_v07_checks" => {}
                     _ => self.unresolved += 1,
                 }
                 if routes.len() > 5000 {
@@ -757,21 +598,13 @@ impl Graph<'_> {
         let Some(source) = self.program.sources.get(&target.file) else {
             return Ok(None);
         };
-        let at = source
-            .rope
-            .char_to_byte(crate::convert::char_of(&source.rope, target.position));
+        let at = source.rope.char_to_byte(crate::convert::char_of(&source.rope, target.position));
         let Some(parameters) = crate::axum_queries::parameters(&source.rope, at) else {
             return Ok(None);
         };
         let mut names = Vec::new();
         for parameter in parameters {
-            let origin = Key {
-                file: source.path.clone(),
-                position: crate::convert::lsp_position(
-                    &source.rope,
-                    source.rope.byte_to_char(parameter.extractor),
-                ),
-            };
+            let origin = Key { file: source.path.clone(), position: crate::convert::lsp_position(&source.rope, source.rope.byte_to_char(parameter.extractor)) };
             let Some(extractor) = self.resolver.definition(&origin)? else {
                 continue;
             };
@@ -781,23 +614,14 @@ impl Graph<'_> {
             let Some(schema_at) = parameter.schema else {
                 return Ok(None);
             };
-            let origin = Key {
-                file: source.path.clone(),
-                position: crate::convert::lsp_position(
-                    &source.rope,
-                    source.rope.byte_to_char(schema_at),
-                ),
-            };
+            let origin = Key { file: source.path.clone(), position: crate::convert::lsp_position(&source.rope, source.rope.byte_to_char(schema_at)) };
             let Some(schema) = self.resolver.definition(&origin)? else {
                 return Ok(None);
             };
             let Some(schema_source) = self.program.sources.get(&schema.key.file) else {
                 return Ok(None);
             };
-            let at = schema_source.rope.char_to_byte(crate::convert::char_of(
-                &schema_source.rope,
-                schema.key.position,
-            ));
+            let at = schema_source.rope.char_to_byte(crate::convert::char_of(&schema_source.rope, schema.key.position));
             let Some(shape) = crate::axum_queries::schema(&schema_source.rope, at) else {
                 return Ok(None);
             };
@@ -805,15 +629,10 @@ impl Graph<'_> {
             for derive in shape.derives {
                 let origin = Key {
                     file: schema_source.path.clone(),
-                    position: crate::convert::lsp_position(
-                        &schema_source.rope,
-                        schema_source.rope.byte_to_char(derive),
-                    ),
+                    position: crate::convert::lsp_position(&schema_source.rope, schema_source.rope.byte_to_char(derive)),
                 };
                 if let Some(symbol) = self.resolver.definition(&origin)? {
-                    if symbol.package.as_deref() == Some("serde_derive")
-                        && matches!(symbol.name.as_str(), "Deserialize" | "derive_deserialize")
-                    {
+                    if symbol.package.as_deref() == Some("serde_derive") && matches!(symbol.name.as_str(), "Deserialize" | "derive_deserialize") {
                         confirmed = true;
                     }
                 }
@@ -841,14 +660,7 @@ impl Graph<'_> {
         (line, at - source.rope.line_to_char(line))
     }
 }
-pub fn scan(
-    roots: Vec<PathBuf>,
-    workspace: &Path,
-    excluded: &[String],
-    overlays: &[Overlay],
-    client: &Client,
-    budget: &Budget,
-) -> Result<Report, Error> {
+pub fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], overlays: &[Overlay], client: &Client, budget: &Budget) -> Result<Report, Error> {
     let mut dirs = roots;
     let mut files = BTreeMap::new();
     let mut seen = HashSet::new();
@@ -874,16 +686,11 @@ pub fn scan(
             if ty.is_symlink() {
                 continue;
             }
-            if rc_core::workspace::relative_path(workspace, &path)
-                .is_some_and(|path| rc_core::workspace::is_excluded(&path, excluded))
-            {
+            if rc_core::workspace::relative_path(workspace, &path).is_some_and(|path| rc_core::workspace::is_excluded(&path, excluded)) {
                 continue;
             }
             if ty.is_dir() {
-                if !matches!(
-                    entry.file_name().to_str(),
-                    Some("target" | ".git" | "node_modules" | ".crabcraft")
-                ) {
+                if !matches!(entry.file_name().to_str(), Some("target" | ".git" | "node_modules" | ".crabcraft")) {
                     dirs.push(path);
                 }
                 continue;
@@ -896,23 +703,12 @@ pub fn scan(
             }
             let saved = read(&path, 2 * 1024 * 1024)?;
             disk.insert(path.clone(), hash(&saved));
-            let value = overlays
-                .iter()
-                .find(|overlay| overlay.path == path)
-                .map(|overlay| overlay.rope.to_string())
-                .unwrap_or(saved);
+            let value = overlays.iter().find(|overlay| overlay.path == path).map(|overlay| overlay.rope.to_string()).unwrap_or(saved);
             total += value.len();
             if total > 16 * 1024 * 1024 {
                 return Err(Error::Limit);
             }
-            files.insert(
-                path.clone(),
-                Source {
-                    path,
-                    rope: Rope::from_str(&value),
-                    text: Arc::from(value),
-                },
-            );
+            files.insert(path.clone(), Source { path, rope: Rope::from_str(&value), text: Arc::from(value) });
         }
     }
     let mut program = Program::default();
@@ -927,45 +723,22 @@ pub fn scan(
         cache: HashMap::new(),
         packages: HashMap::new(),
         requests: 0,
-        loaded: program
-            .sources
-            .values()
-            .map(|source| source.text.len())
-            .sum(),
+        loaded: program.sources.values().map(|source| source.text.len()).sum(),
     };
-    let mut graph = Graph {
-        program: &program,
-        resolver,
-        used: HashSet::new(),
-        unresolved: 0,
-        steps: 0,
-        active: HashSet::new(),
-    };
+    let mut graph = Graph { program: &program, resolver, used: HashSet::new(), unresolved: 0, steps: 0, active: HashSet::new() };
     let mut groups = Vec::new();
     for id in &program.roots {
         let candidate = match &program.expressions[*id].kind {
             ExprKind::Call(Call::Method { name, .. }, _) => matches!(
                 name.as_str(),
-                "route"
-                    | "nest"
-                    | "merge"
-                    | "with_state"
-                    | "layer"
-                    | "route_layer"
-                    | "fallback"
-                    | "fallback_service"
-                    | "without_v07_checks"
+                "route" | "nest" | "merge" | "with_state" | "layer" | "route_layer" | "fallback" | "fallback_service" | "without_v07_checks"
             ),
             ExprKind::Call(Call::Function { name, .. }, _) => {
                 name == "new"
                     || program.functions.keys().any(|key| {
                         graph.program.sources.get(&key.file).is_some_and(|source| {
                             let at = crate::convert::char_of(&source.rope, key.position);
-                            source
-                                .rope
-                                .slice(at..source.rope.len_chars().min(at + name.chars().count()))
-                                .to_string()
-                                == *name
+                            source.rope.slice(at..source.rope.len_chars().min(at + name.chars().count())).to_string() == *name
                         })
                     })
             }
@@ -990,14 +763,7 @@ pub fn scan(
             }
         }
     }
-    routes.sort_by(|a, b| {
-        (&a.route.path, &a.route.method, &a.file, a.route.line).cmp(&(
-            &b.route.path,
-            &b.route.method,
-            &b.file,
-            b.route.line,
-        ))
-    });
+    routes.sort_by(|a, b| (&a.route.path, &a.route.method, &a.file, a.route.line).cmp(&(&b.route.path, &b.route.method, &b.file, b.route.line)));
     for (path, old) in disk {
         budget.check()?;
         if hash(&read(&path, 2 * 1024 * 1024)?) != old {
@@ -1005,11 +771,7 @@ pub fn scan(
         }
     }
     Ok(Report {
-        hashes: program
-            .sources
-            .iter()
-            .map(|(path, source)| (path.clone(), hash(&source.text)))
-            .collect(),
+        hashes: program.sources.iter().map(|(path, source)| (path.clone(), hash(&source.text))).collect(),
         routes,
         unresolved: graph.unresolved,
         limited: false,
@@ -1023,21 +785,9 @@ pub(crate) mod tests {
     fn parser_preserves_cross_file_identity_sites_and_budget_cancels() {
         let source = "pub fn routes()->Router { Router::new().route(\"/test\", get(handler)) }";
         let cancel = Arc::new(AtomicBool::new(false));
-        let budget = Budget {
-            cancel: cancel.clone(),
-            deadline: Instant::now() + Duration::from_secs(1),
-        };
+        let budget = Budget { cancel: cancel.clone(), deadline: Instant::now() + Duration::from_secs(1) };
         let mut program = Program::default();
-        program
-            .collect(
-                Source {
-                    path: PathBuf::from("/workspace/src/api.rs"),
-                    text: Arc::from(source),
-                    rope: Rope::from_str(source),
-                },
-                &budget,
-            )
-            .unwrap();
+        program.collect(Source { path: PathBuf::from("/workspace/src/api.rs"), text: Arc::from(source), rope: Rope::from_str(source) }, &budget).unwrap();
         assert_eq!(program.functions.len(), 1);
         assert!(program.expressions.iter().any(|expression| matches!(&expression.kind,ExprKind::Call(Call::Method{name,..},_) if name=="route")));
         assert!(program.expressions.iter().any(|expression| matches!(&expression.kind,ExprKind::Reference(origin) if origin.file.ends_with("api.rs"))));
@@ -1055,16 +805,8 @@ pub(crate) mod tests {
         let mut code = std::fs::read_to_string(&main).unwrap();
         code.push_str("struct Router;impl Router{fn new()->Self{Self}fn route(self,_path:&str,_handler:fn())->Self{self}}fn unrelated(){}fn fake_router(){let _=Router::new().route(\"/not-axum\",unrelated);}");
         std::fs::write(main, code).unwrap();
-        let output = std::process::Command::new("cargo")
-            .args(["generate-lockfile", "--offline"])
-            .current_dir(root.path())
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = std::process::Command::new("cargo").args(["generate-lockfile", "--offline"]).current_dir(root.path()).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         root
     }
     #[test]
@@ -1077,34 +819,25 @@ pub(crate) mod tests {
 #[test] fn query_fields_match_wire_names(){let query=axum::extract::Query::<Search>::try_from_uri(&"http://localhost/users/42?q=hello&page_size=3".parse().unwrap()).unwrap();assert_eq!(query.q.as_deref(),Some("hello"));assert_eq!(query.page,Some(3));}
 "#);
         std::fs::write(path, source).unwrap();
-        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/RustAxum/target");
+        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/RustAxum/target");
         let output = std::process::Command::new("cargo")
             .args(["test", "--offline", "query_fields_match_wire_names"])
             .env("CARGO_TARGET_DIR", target)
             .current_dir(root.path())
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     }
     #[test]
     #[ignore = "Requires cached Axum dependencies and a real rust-analyzer"]
     fn real_axum_semantic_routes_compose_factories_aliases_and_handlers_between_files() {
-        let _home = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = fixture();
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace_and_wait(root.path());
         app.trust_project_tools_for_test();
-        app.insight
-            .set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
+        app.insight.set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
         app.insight.start_rust(root.path(), None, false);
         for name in ["main.rs"] {
             app.open_file_and_wait(&root.path().join("src").join(name));
@@ -1113,17 +846,12 @@ pub(crate) mod tests {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(60) {
             h.run_steps(2);
-            if h.state().insight.status == crate::insight::InsightStatus::Ready
-                && h.state().runner.cargo_workspace.is_some()
-            {
+            if h.state().insight.status == crate::insight::InsightStatus::Ready && h.state().runner.cargo_workspace.is_some() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        assert_eq!(
-            h.state().insight.status,
-            crate::insight::InsightStatus::Ready
-        );
+        assert_eq!(h.state().insight.status, crate::insight::InsightStatus::Ready);
         let client = h.state().insight.session.as_ref().unwrap().client.clone();
         let root_path = root.path().to_path_buf();
         let (send, recv) = std::sync::mpsc::channel();
@@ -1134,10 +862,7 @@ pub(crate) mod tests {
                 &[],
                 &[],
                 &client,
-                &Budget {
-                    cancel: Arc::new(AtomicBool::new(false)),
-                    deadline: Instant::now() + Duration::from_secs(45),
-                },
+                &Budget { cancel: Arc::new(AtomicBool::new(false)), deadline: Instant::now() + Duration::from_secs(45) },
             );
             let _ = send.send(result);
         });
@@ -1151,44 +876,18 @@ pub(crate) mod tests {
             std::thread::sleep(Duration::from_millis(10));
         };
         for route in &report.routes {
-            eprintln!(
-                "{} {} {} {:?}",
-                route.route.method, route.route.path, route.route.handler, route.handler_file
-            );
+            eprintln!("{} {} {} {:?}", route.route.method, route.route.path, route.route.handler, route.handler_file);
         }
-        assert!(
-            !report
-                .routes
-                .iter()
-                .any(|route| route.route.path == "/not-axum")
-        );
+        assert!(!report.routes.iter().any(|route| route.route.path == "/not-axum"));
         assert!(report.routes.iter().any(|route| {
-            route.route.path == "/v1/users/{id}"
-                && route.route.method == "GET"
-                && route
-                    .query
-                    .as_ref()
-                    .is_some_and(|keys| keys == &["q", "page_size"])
+            route.route.path == "/v1/users/{id}" && route.route.method == "GET" && route.query.as_ref().is_some_and(|keys| keys == &["q", "page_size"])
         }));
         assert!(report.routes.iter().any(|route| {
             route.route.path == "/v1/users/{id}"
                 && route.route.method == "GET"
-                && route
-                    .handler_file
-                    .as_ref()
-                    .is_some_and(|path| path.ends_with("src/handlers.rs"))
+                && route.handler_file.as_ref().is_some_and(|path| path.ends_with("src/handlers.rs"))
         }));
-        assert!(
-            report
-                .routes
-                .iter()
-                .any(|route| route.route.path == "/v1/users/{id}" && route.route.method == "POST")
-        );
-        assert!(
-            report
-                .routes
-                .iter()
-                .any(|route| route.route.path == "/health")
-        );
+        assert!(report.routes.iter().any(|route| route.route.path == "/v1/users/{id}" && route.route.method == "POST"));
+        assert!(report.routes.iter().any(|route| route.route.path == "/health"));
     }
 }

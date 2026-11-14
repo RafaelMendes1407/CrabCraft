@@ -15,7 +15,16 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
     }
     // Messages stay 8 s (errors 15 s, those with a link 30 s).
-    app.notices.retain(|n| now - n.at < if n.url.is_some() { 30.0 } else if n.error { 15.0 } else { 8.0 });
+    app.notices.retain(|n| {
+        now - n.at
+            < if n.url.is_some() {
+                30.0
+            } else if n.error {
+                15.0
+            } else {
+                8.0
+            }
+    });
     if !app.notices.is_empty() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
     }
@@ -25,7 +34,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                 ui.add_space(12.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
                 if app.workspace.is_none() && !app.docs.list.is_empty() {
-                    ui.label(egui::RichText::new(tr("LightEdit")).strong().size(12.5)).on_hover_text(tr("Files open without a project: only editing, no code insight"));
+                    ui.label(egui::RichText::new(tr("LightEdit")).strong().size(12.5))
+                        .on_hover_text(tr("Files open without a project: only editing, no code insight"));
                     ui.add_space(10.0);
                 }
                 breadcrumbs(app, ui);
@@ -35,13 +45,21 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     icons::image(ui, if n.error { ico::ERROR } else { ico::INFO }, 16.0);
                     // The link's button first: a long message must not push it out of view.
                     if let Some(url) = &n.url {
-                        if theme::flat_button(ui, Some(ico::EXTERNAL_LINK), tr("Open in Browser"), FontId::proportional(12.5), false, true).on_hover_text(url.as_str()).clicked() {
+                        if theme::flat_button(ui, Some(ico::EXTERNAL_LINK), tr("Open in Browser"), FontId::proportional(12.5), false, true)
+                            .on_hover_text(url.as_str())
+                            .clicked()
+                        {
                             open = Some(url.clone());
                         }
                         ui.add_space(4.0);
                     }
-                    let notice=ui.label(egui::RichText::new(&n.text).color(if n.error { p.error } else { p.text_muted }).size(12.5));
-                    ui.ctx().accesskit_node_builder(notice.id,|node|{node.set_role(if n.error{egui::accesskit::Role::Alert}else{egui::accesskit::Role::Status});node.set_label(n.text.chars().take(2048).collect::<String>());node.set_live(if n.error{egui::accesskit::Live::Assertive}else{egui::accesskit::Live::Polite});node.set_live_atomic();});
+                    let notice = ui.label(egui::RichText::new(&n.text).color(if n.error { p.error } else { p.text_muted }).size(12.5));
+                    ui.ctx().accesskit_node_builder(notice.id, |node| {
+                        node.set_role(if n.error { egui::accesskit::Role::Alert } else { egui::accesskit::Role::Status });
+                        node.set_label(n.text.chars().take(2048).collect::<String>());
+                        node.set_live(if n.error { egui::accesskit::Live::Assertive } else { egui::accesskit::Live::Polite });
+                        node.set_live_atomic();
+                    });
                 }
                 if let Some(url) = open {
                     app.open_notice_url(url);
@@ -50,9 +68,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             theme::Side::Right => {
                 ui.add_space(10.0);
                 ui.spacing_mut().item_spacing.x = 0.0;
-                if app.workspace.as_ref().is_some_and(|w|w.ws.cargo_manifest().is_some()){
-                    let label=app.criticalup_provider.label();
-                    if theme::flat_button(ui,None,&label,FontId::proportional(12.5),false,true).on_hover_text(tr("Rust Toolchain Provider")).clicked(){app.toggle_tool(crate::toolwindow::ToolWindow::RustProvider);}
+                if app.workspace.as_ref().is_some_and(|w| w.ws.cargo_manifest().is_some()) {
+                    let label = app.criticalup_provider.label();
+                    if theme::flat_button(ui, None, &label, FontId::proportional(12.5), false, true).on_hover_text(tr("Rust Toolchain Provider")).clicked() {
+                        app.toggle_tool(crate::toolwindow::ToolWindow::RustProvider);
+                    }
                 }
                 insight_widget(app, ui);
                 debugger_widget(app, ui);
@@ -69,10 +89,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                 }
                 let indent = if e.indent.unit == "\t" { tr("Tab").to_string() } else { trf("{n} spaces", &[("n", &e.indent.unit.len())]) };
-                let tip = match doc.style.sources.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect::<Vec<_>>() {
-                    files if files.is_empty() => tr("Indentation").to_string(),
-                    files => trf("Indentation, from the project's code style: {files}", &[("files", &files.join(", "))]),
-                };
+                let tip =
+                    match doc.style.sources.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect::<Vec<_>>() {
+                        files if files.is_empty() => tr("Indentation").to_string(),
+                        files => trf("Indentation, from the project's code style: {files}", &[("files", &files.join(", "))]),
+                    };
                 widget(ui, indent, &tip);
                 widget(ui, if doc.bom { "UTF-8 BOM".into() } else { "UTF-8".into() }, tr("File encoding"));
                 widget(ui, e.buffer.line_ending().label().into(), tr("Line separator"));
@@ -108,7 +129,8 @@ fn target_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
         return;
     }
     let Some(triple) = app.analysis_triple().map(str::to_string) else { return };
-    let resp = theme::flat_button(ui, None, &triple, FontId::proportional(12.5), false, true).on_hover_text(tr("Target the code is analysed for. Click to pick another one."));
+    let resp = theme::flat_button(ui, None, &triple, FontId::proportional(12.5), false, true)
+        .on_hover_text(tr("Target the code is analysed for. Click to pick another one."));
     egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).align(egui::RectAlign::TOP_END).show(|ui| target_menu(app, ui));
     ui.add_space(4.0);
 }
@@ -153,8 +175,19 @@ pub fn target_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
                 marks.push(tr("not installed"));
             }
             let marks = marks.join(", ");
-            let resp = theme::menu_entry(ui, None, &c.triple, Some(&marks).filter(|m| !m.is_empty()).map(String::as_str), current.as_deref() == Some(c.triple.as_str()), true);
-            let resp = if c.installed { resp } else { resp.on_hover_text(tr("The standard library of this target is not installed: rust-analyzer may not resolve std")) };
+            let resp = theme::menu_entry(
+                ui,
+                None,
+                &c.triple,
+                Some(&marks).filter(|m| !m.is_empty()).map(String::as_str),
+                current.as_deref() == Some(c.triple.as_str()),
+                true,
+            );
+            let resp = if c.installed {
+                resp
+            } else {
+                resp.on_hover_text(tr("The standard library of this target is not installed: rust-analyzer may not resolve std"))
+            };
             if resp.clicked() {
                 chosen = Some(c.triple.clone());
             }
@@ -187,7 +220,13 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
     if app.runner.require_trust().is_err() {
         ui.label(tr("Restricted mode"));
         if theme::flat_button(ui, Some(ico::WARNING), tr("Trust this project"), FontId::proportional(12.5), false, true)
-            .on_hover_text(tr("Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.")).clicked() { app.trust_project(); }
+            .on_hover_text(tr(
+                "Restricted mode: project tools are disabled. Trust allows Cargo configuration, toolchains, build scripts and procedural macros to execute.",
+            ))
+            .clicked()
+        {
+            app.trust_project();
+        }
         return;
     }
     match app.insight.status.clone() {
@@ -211,10 +250,14 @@ fn insight_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         S::Untrusted => {}
         S::RustAnalyzerMissing => {
-            theme::flat_button(ui, Some(ico::WARNING), tr("rust-analyzer not found"), FontId::proportional(12.5), false, true).on_hover_text(tr("Install it with: rustup component add rust-analyzer"));
+            theme::flat_button(ui, Some(ico::WARNING), tr("rust-analyzer not found"), FontId::proportional(12.5), false, true)
+                .on_hover_text(tr("Install it with: rustup component add rust-analyzer"));
         }
         S::Failed(why) => {
-            if theme::flat_button(ui, Some(ico::ERROR), tr("Rust server stopped — Restart"), FontId::proportional(12.5), false, true).on_hover_text(why).clicked() {
+            if theme::flat_button(ui, Some(ico::ERROR), tr("Rust server stopped — Restart"), FontId::proportional(12.5), false, true)
+                .on_hover_text(why)
+                .clicked()
+            {
                 app.insight.restart();
             }
         }

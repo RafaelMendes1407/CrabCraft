@@ -333,7 +333,9 @@ impl TermSession {
 
         // Reader thread: parse output into the term and wake the UI.
         let (done_tx, done_rx) = mpsc::channel::<()>();
-        if spec.capture_output { *session.capture.lock() = Some(Default::default()); }
+        if spec.capture_output {
+            *session.capture.lock() = Some(Default::default());
+        }
         let capture = session.capture.clone();
         let state = session.state.clone();
         let wake = waker.clone();
@@ -343,7 +345,9 @@ impl TermSession {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        if let Some(capture) = capture.lock().as_mut() { capture.push(&buf[..n]); }
+                        if let Some(capture) = capture.lock().as_mut() {
+                            capture.push(&buf[..n]);
+                        }
                         state.lock().advance(&buf[..n]);
                         wake.wake();
                     }
@@ -459,13 +463,21 @@ impl TermSession {
     }
 
     /// Raw output is available only when explicitly enabled before process startup.
-    pub fn output_cursor(&self) -> Option<u64> { self.capture.lock().as_ref().map(|capture| capture.end()) }
-    pub fn output_tail(&self) -> Option<Vec<u8>> { self.capture.lock().as_ref().map(|capture| capture.tail()) }
+    pub fn output_cursor(&self) -> Option<u64> {
+        self.capture.lock().as_ref().map(|capture| capture.end())
+    }
+    pub fn output_tail(&self) -> Option<Vec<u8>> {
+        self.capture.lock().as_ref().map(|capture| capture.tail())
+    }
     pub fn output_since(&self, cursor: u64) -> Result<Vec<u8>, crate::capture::OutputGap> {
         self.capture.lock().as_ref().ok_or(crate::capture::OutputGap)?.since(cursor)
     }
-    pub fn input_epoch(&self) -> u64 { self.input_epoch.load(Ordering::Acquire) }
-    pub fn input_output_cursor(&self) -> u64 { self.input_output_cursor.load(Ordering::Acquire) }
+    pub fn input_epoch(&self) -> u64 {
+        self.input_epoch.load(Ordering::Acquire)
+    }
+    pub fn input_output_cursor(&self) -> u64 {
+        self.input_output_cursor.load(Ordering::Acquire)
+    }
 
     /// Pastes text (bracketed when the application asked for it).
     pub fn paste(&self, text: &str) {
@@ -577,8 +589,14 @@ impl TermSession {
     pub fn reveal_search_match(&self, hit: crate::search::Match, generation: u64) -> bool {
         let mut state = self.lock();
         let grid = state.term.grid();
-        if state.generation != generation || hit.line < grid.topmost_line().0 || hit.line > grid.bottommost_line().0
-            || hit.start_column > hit.end_column || hit.end_column >= grid.columns() { return false; }
+        if state.generation != generation
+            || hit.line < grid.topmost_line().0
+            || hit.line > grid.bottommost_line().0
+            || hit.start_column > hit.end_column
+            || hit.end_column >= grid.columns()
+        {
+            return false;
+        }
         let start = Point::new(Line(hit.line), Column(hit.start_column));
         let end = Point::new(Line(hit.line), Column(hit.end_column));
         let mut selection = Selection::new(SelectionType::Simple, start, Side::Left);
