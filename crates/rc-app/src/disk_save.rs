@@ -92,6 +92,7 @@ impl Saves {
             j.cancel.store(true, Ordering::Release);
         }
     }
+    #[cfg(test)]
     pub fn queue(&mut self, doc: &Doc) -> Result<(), Error> {
         self.queue_with_force(doc, false)
     }
@@ -354,6 +355,7 @@ impl crate::app::CrabCraftApp {
             self.disk_save.transition_prepared = true;
         }
     }
+    #[cfg(test)]
     pub fn pending_workspace_target(&self) -> Option<&std::path::Path> {
         self.disk_save.pending_workspace.as_deref()
     }

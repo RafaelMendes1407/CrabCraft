@@ -11,6 +11,8 @@
 //! When the kernel does not let unprivileged users record (`kernel.perf_event_paranoid` above
 //! 2, the default on some distributions), the error says so and how to allow it.
 
+type OutputCallback = Box<dyn FnMut(&str) + Send>;
+
 use rc_core::inbox::Outbox;
 use rc_core::{Inbox, Waker};
 use rc_dotnet::LaunchPlan;
@@ -392,7 +394,7 @@ impl Control {
 fn spawn(
     mut cmd: Command,
     control: &Control,
-    stdout_to: Option<Box<dyn FnMut(&str) + Send>>,
+    stdout_to: Option<OutputCallback>,
 ) -> std::io::Result<(std::process::Child, Vec<std::thread::JoinHandle<String>>)> {
     #[cfg(unix)]
     {

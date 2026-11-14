@@ -305,12 +305,12 @@ fn accessibility_ancestor(
     ui: &mut Ui,
     rows: &[Row],
     parents: &[Option<usize>],
-    index: usize,
+    position: (usize, usize),
     tree: Id,
     visible: &std::ops::Range<usize>,
     created: &mut HashSet<usize>,
-    depth: usize,
 ) -> Id {
+    let (index, depth) = position;
     if depth >= 64 {
         return tree;
     }
@@ -318,7 +318,7 @@ fn accessibility_ancestor(
     if visible.contains(&index) || created.contains(&index) {
         return id;
     }
-    let parent = parents[index].map(|parent| accessibility_ancestor(ui, rows, parents, parent, tree, visible, created, depth + 1)).unwrap_or(tree);
+    let parent = parents[index].map(|parent| accessibility_ancestor(ui, rows, parents, (parent, depth + 1), tree, visible, created)).unwrap_or(tree);
     let rect = Rect::from_min_size(ui.max_rect().min, egui::Vec2::ZERO);
     let ancestor = ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_ancestor", &rows[index].key)).accessibility_parent(parent).max_rect(rect));
     ancestor.interact(rect, id, Sense::hover());
@@ -420,15 +420,15 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
         .is_some();
     ui.scope_builder(egui::UiBuilder::new().accessibility_parent(tree_id), |ui| {
         let mut scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
-        if state.reveal {
-            if let Some(index) = selected_index {
-                let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll")).map_or(0.0, |state| state.clamped_offset().y);
+        if state.reveal
+            && let Some(index) = selected_index
+        {
+            let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll")).map_or(0.0, |state| state.clamped_offset().y);
 
-                let height = ui.available_height().max(ROW_H);
-                let top = index as f32 * ROW_H;
-                if top < offset || top + ROW_H > offset + height {
-                    scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
-                }
+            let height = ui.available_height().max(ROW_H);
+            let top = index as f32 * ROW_H;
+            if top < offset || top + ROW_H > offset + height {
+                scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
             }
         }
         scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
@@ -452,7 +452,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
                 let (rect, _) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::hover());
                 let resp = if accessibility {
                     let parent = parents[i]
-                        .map(|parent| accessibility_ancestor(ui, &rows, &parents, parent, tree_id, &visible_rows, &mut accessible_ancestors, 0))
+                        .map(|parent| accessibility_ancestor(ui, &rows, &parents, (parent, 0), tree_id, &visible_rows, &mut accessible_ancestors))
                         .unwrap_or(tree_id);
                     let row_ui =
                         ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_row", &row.key)).accessibility_parent(parent).max_rect(rect));
@@ -582,9 +582,9 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
                 let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
                 if !in_library {
                     resp.context_menu(|ui| {
-                        let rust = state.dir_cache.get(root).is_some_and(|nodes| has_cargo_toml(nodes));
+                        let _rust = state.dir_cache.get(root).is_some_and(|nodes| has_cargo_toml(nodes));
                         let git = state.git;
-                        context_menu(ui, &rows[i], root, rust, git, exclusion, &attached, &mut actions);
+                        context_menu(ui, &rows[i], root, git, exclusion, &attached, &mut actions);
                     });
                 }
             }
@@ -682,16 +682,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(
-    ui: &mut Ui,
-    row: &Row,
-    root: &Path,
-    rust: bool,
-    git: bool,
-    exclusion: Exclusion,
-    state_attached: &[PathBuf],
-    actions: &mut Vec<ExplorerAction>,
-) {
+fn context_menu(ui: &mut Ui, row: &Row, root: &Path, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };
@@ -705,9 +696,7 @@ fn context_menu(
             return;
         }
     };
-    let target_dir = match &row.kind {
-        _ => dir_of(&path, is_dir),
-    };
+    let target_dir = dir_of(&path, is_dir);
     if let NodeKind::File(p) = &row.kind
         && theme::menu_item(ui, Some(ico::OPEN), tr("Open"), false).clicked()
     {
@@ -746,11 +735,9 @@ fn context_menu(
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
     }
-    if git {
-        if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
-            actions.push(ExplorerAction::ShowHistory(path.clone()));
-            ui.close();
-        }
+    if git && theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
+        actions.push(ExplorerAction::ShowHistory(path.clone()));
+        ui.close();
     }
     // A Cargo.toml other than the workspace's: its project can be analysed with it.
     if matches!(row.kind, NodeKind::File(_)) && path.file_name().is_some_and(|n| n == "Cargo.toml") && path.parent() != Some(root) {
@@ -872,7 +859,7 @@ mod tests {
             expandable: true,
         };
         let mut h =
-            Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, root, true, false, exclusion, &[], actions), Vec::new());
+            Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, root, false, exclusion, &[], actions), Vec::new());
         h.run();
         assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
         h.get_by_label(label).click();

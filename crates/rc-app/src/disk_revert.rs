@@ -294,10 +294,10 @@ mod tests {
             let _ = send.send((read(&fifo, &AtomicBool::new(false)), crate::docs::read_text_checked(&fifo)));
         });
         let result = receive.recv_timeout(Duration::from_secs(1));
-        if result.is_err() {
-            if let Ok(mut writer) = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&path) {
-                let _ = writer.write_all(b"text\n");
-            }
+        if result.is_err()
+            && let Ok(mut writer) = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&path)
+        {
+            let _ = writer.write_all(b"text\n");
         }
         assert!(matches!(result, Ok((Err(Error::NotRegular), Err(crate::docs::TextReadError::NotRegular)))));
     }

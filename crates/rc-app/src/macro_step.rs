@@ -94,7 +94,7 @@ impl Job {
 fn helper_executable() -> Result<PathBuf, Error> {
     #[cfg(test)]
     {
-        return std::env::var_os("CRABCRAFT_MACRO_WORKER").map(PathBuf::from).ok_or(Error::Unsupported);
+        std::env::var_os("CRABCRAFT_MACRO_WORKER").map(PathBuf::from).ok_or(Error::Unsupported)
     }
     #[cfg(not(test))]
     {

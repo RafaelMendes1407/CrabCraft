@@ -31,7 +31,7 @@ pub struct SavedTestConfig {
 }
 
 /// What the user changed in an application run configuration (Run › Edit Configuration).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunOptions {
     /// Program arguments.
@@ -64,28 +64,6 @@ pub struct RunOptions {
     pub emulate_terminal: bool,
     /// Kept in the project (`.crabcraft/runConfigurations`) to be shared, not in the session.
     pub in_project: bool,
-}
-
-impl Default for RunOptions {
-    fn default() -> Self {
-        RunOptions {
-            args: String::new(),
-            env: String::new(),
-            working_dir: String::new(),
-            channel: String::new(),
-            cargo_profile: String::new(),
-            wasm_target: String::new(),
-            wasm_dev: false,
-            wasm_out_dir: String::new(),
-            features: String::new(),
-            backtrace: String::new(),
-            stdin_file: String::new(),
-            before_launch: Vec::new(),
-            allow_parallel: false,
-            emulate_terminal: false,
-            in_project: false,
-        }
-    }
 }
 
 impl RunOptions {

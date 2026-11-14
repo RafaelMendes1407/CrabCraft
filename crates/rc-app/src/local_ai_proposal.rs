@@ -91,7 +91,7 @@ impl Proposal {
             return Err(Error::Invalid);
         }
         let rope = doc.editor.buffer.rope();
-        if self.end > rope.len_chars() || rope.slice(self.start..self.end).to_string() != self.before {
+        if self.end > rope.len_chars() || rope.slice(self.start..self.end) != self.before {
             return Err(Error::Invalid);
         }
         doc.editor.replace(self.start, self.end, &self.after);

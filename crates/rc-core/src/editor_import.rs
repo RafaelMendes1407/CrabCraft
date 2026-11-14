@@ -160,15 +160,15 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                                 }
                             }
                         }
-                        if name == "scheme" {
-                            if let Some(parent) = attrs.get("parent_scheme") {
-                                theme(parent, &mut changes, &mut ignored);
-                            }
+                        if name == "scheme"
+                            && let Some(parent) = attrs.get("parent_scheme")
+                        {
+                            theme(parent, &mut changes, &mut ignored);
                         }
-                        if name == "global_color_scheme" {
-                            if let Some(name) = attrs.get("name") {
-                                theme(name, &mut changes, &mut ignored);
-                            }
+                        if name == "global_color_scheme"
+                            && let Some(name) = attrs.get("name")
+                        {
+                            theme(name, &mut changes, &mut ignored);
                         }
                         if matches!(event, Event::Start(_)) {
                             depth += 1;
@@ -202,74 +202,6 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
         return Err(Error::Limit);
     }
     Ok(Preview { changes, ignored: ignored.into_iter().collect() })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn jsonc_strings_rust_overrides_and_safe_allowlist_survive_import() {
-        let preview = parse(
-            Source::VsCode,
-            r#"{
-          // Rust preferences override the general ones.
-          "editor.fontSize": 12, "editor.lineHeight": 24,
-          "workbench.colorTheme": "Default Light Modern",
-          "terminal.integrated.defaultProfile.linux":"danger // literal",
-          "rust-analyzer.server.path":"./malicious",
-          "[rust]": {"editor.fontSize":16,"editor.rulers":[100,],},
-        }"#,
-            &AtomicBool::new(false),
-        )
-        .unwrap();
-        let mut old = Settings::default();
-        old.trusted_projects.push("/kept".into());
-        let new = preview.apply(&old).unwrap();
-        assert_eq!(new.editor_font_size, 16.0);
-        assert_eq!(new.editor_line_spacing, 1.5);
-        assert_eq!(new.right_margin, 100);
-        assert_eq!(new.theme, crate::settings::ThemeChoice::Light);
-        assert_eq!(new.keymap, crate::settings::KeymapChoice::VsCode);
-        assert_eq!(new.trusted_projects, old.trusted_projects);
-        assert_eq!(new.rust_analyzer_path, None);
-        assert!(preview.ignored.iter().any(|key| key == "rust-analyzer.server.path"));
-        assert!(jsonc(r#"{"url":"https://example.test/*literal*/",}"#).unwrap().contains("https://example.test/*literal*/"));
-    }
-    #[test]
-    fn rust_editor_xml_imports_only_recognized_preferences() {
-        let text = r#"<application><component name="DefaultFont"><option name="FONT_SIZE" value="18"/><option name="LINE_SPACING" value="1.4"/></component><component name="EditorSettings"><option name="RIGHT_MARGIN" value="110"/><option name="IS_INDENT_GUIDES_SHOWN" value="false"/></component><component name="Unknown"><option name="FONT_SIZE" value="500"/></component></application>"#;
-        let preview = parse(Source::RustRover, text, &AtomicBool::new(false)).unwrap();
-        let settings = preview.apply(&Settings::default()).unwrap();
-        assert_eq!(settings.editor_font_size, 18.0);
-        assert_eq!(settings.right_margin, 110);
-        assert!(!settings.show_indent_guides);
-        assert_eq!(settings.keymap, crate::settings::KeymapChoice::RustRover);
-        assert_eq!(preview.ignored, vec!["FONT_SIZE"]);
-        assert!(matches!(
-            parse(Source::RustRover, r#"<!DOCTYPE application [<!ENTITY x SYSTEM "file:///etc/passwd">]><application/>"#, &AtomicBool::new(false)),
-            Err(Error::Format)
-        ));
-        assert!(matches!(parse(Source::RustRover, "<application><component></application>", &AtomicBool::new(false)), Err(Error::Format)));
-    }
-    #[test]
-    fn invalid_limits_and_cancelled_input_never_produce_an_import() {
-        assert!(matches!(parse(Source::VsCode, r#"{"editor.fontSize":9999}"#, &AtomicBool::new(false)), Err(Error::Value)));
-        assert!(matches!(parse(Source::VsCode, "/* unfinished", &AtomicBool::new(false)), Err(Error::Format)));
-        assert!(matches!(parse(Source::VsCode, "{}", &AtomicBool::new(true)), Err(Error::Cancelled)));
-        let dir = tempfile::tempdir().unwrap();
-        assert!(matches!(read(Source::VsCode, dir.path(), &AtomicBool::new(false)), Err(Error::Format | Error::Io(_))));
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn special_files_are_rejected_without_waiting_for_a_writer() {
-        let dir = tempfile::tempdir().unwrap();
-        let fifo = dir.path().join("preferences.json");
-        assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
-        let start = std::time::Instant::now();
-        assert!(matches!(read(Source::VsCode, &fifo, &AtomicBool::new(false)), Err(Error::Format)));
-        assert!(start.elapsed() < std::time::Duration::from_secs(1));
-    }
 }
 fn number(key: &str, n: f64, min: f64, max: f64, out: &mut Map<String, Value>) -> Result<(), Error> {
     if !n.is_finite() || !(min..=max).contains(&n) {
@@ -443,4 +375,72 @@ fn jsonc(text: &str) -> Result<String, Error> {
         i += 1;
     }
     String::from_utf8(bytes).map_err(|_| Error::Format)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn jsonc_strings_rust_overrides_and_safe_allowlist_survive_import() {
+        let preview = parse(
+            Source::VsCode,
+            r#"{
+          // Rust preferences override the general ones.
+          "editor.fontSize": 12, "editor.lineHeight": 24,
+          "workbench.colorTheme": "Default Light Modern",
+          "terminal.integrated.defaultProfile.linux":"danger // literal",
+          "rust-analyzer.server.path":"./malicious",
+          "[rust]": {"editor.fontSize":16,"editor.rulers":[100,],},
+        }"#,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let mut old = Settings::default();
+        old.trusted_projects.push("/kept".into());
+        let new = preview.apply(&old).unwrap();
+        assert_eq!(new.editor_font_size, 16.0);
+        assert_eq!(new.editor_line_spacing, 1.5);
+        assert_eq!(new.right_margin, 100);
+        assert_eq!(new.theme, crate::settings::ThemeChoice::Light);
+        assert_eq!(new.keymap, crate::settings::KeymapChoice::VsCode);
+        assert_eq!(new.trusted_projects, old.trusted_projects);
+        assert_eq!(new.rust_analyzer_path, None);
+        assert!(preview.ignored.iter().any(|key| key == "rust-analyzer.server.path"));
+        assert!(jsonc(r#"{"url":"https://example.test/*literal*/",}"#).unwrap().contains("https://example.test/*literal*/"));
+    }
+    #[test]
+    fn rust_editor_xml_imports_only_recognized_preferences() {
+        let text = r#"<application><component name="DefaultFont"><option name="FONT_SIZE" value="18"/><option name="LINE_SPACING" value="1.4"/></component><component name="EditorSettings"><option name="RIGHT_MARGIN" value="110"/><option name="IS_INDENT_GUIDES_SHOWN" value="false"/></component><component name="Unknown"><option name="FONT_SIZE" value="500"/></component></application>"#;
+        let preview = parse(Source::RustRover, text, &AtomicBool::new(false)).unwrap();
+        let settings = preview.apply(&Settings::default()).unwrap();
+        assert_eq!(settings.editor_font_size, 18.0);
+        assert_eq!(settings.right_margin, 110);
+        assert!(!settings.show_indent_guides);
+        assert_eq!(settings.keymap, crate::settings::KeymapChoice::RustRover);
+        assert_eq!(preview.ignored, vec!["FONT_SIZE"]);
+        assert!(matches!(
+            parse(Source::RustRover, r#"<!DOCTYPE application [<!ENTITY x SYSTEM "file:///etc/passwd">]><application/>"#, &AtomicBool::new(false)),
+            Err(Error::Format)
+        ));
+        assert!(matches!(parse(Source::RustRover, "<application><component></application>", &AtomicBool::new(false)), Err(Error::Format)));
+    }
+    #[test]
+    fn invalid_limits_and_cancelled_input_never_produce_an_import() {
+        assert!(matches!(parse(Source::VsCode, r#"{"editor.fontSize":9999}"#, &AtomicBool::new(false)), Err(Error::Value)));
+        assert!(matches!(parse(Source::VsCode, "/* unfinished", &AtomicBool::new(false)), Err(Error::Format)));
+        assert!(matches!(parse(Source::VsCode, "{}", &AtomicBool::new(true)), Err(Error::Cancelled)));
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(read(Source::VsCode, dir.path(), &AtomicBool::new(false)), Err(Error::Format | Error::Io(_))));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn special_files_are_rejected_without_waiting_for_a_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("preferences.json");
+        assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+        let start = std::time::Instant::now();
+        assert!(matches!(read(Source::VsCode, &fifo, &AtomicBool::new(false)), Err(Error::Format)));
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
 }

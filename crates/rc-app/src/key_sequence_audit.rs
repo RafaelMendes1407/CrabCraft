@@ -107,7 +107,7 @@ mod tests {
             app,
         );
         h.run_steps(8);
-        h.ctx.data_mut(|data| data.insert_temp(egui::Id::new("shortcut_filter"), "Settings".to_string()));
+        h.ctx.data_mut(|data| data.insert_temp(egui::Id::unique("shortcut_filter"), "Settings".to_string()));
         h.run_steps(3);
         h.get_by_label(tr("Record two-step shortcuts")).click();
         h.run_steps(2);
@@ -165,7 +165,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_label(tr("Cancel")).click();
         h.run_steps(2);
-        assert!(h.ctx.data(|data| data.get_temp::<String>(egui::Id::new("recording_shortcut"))).is_none());
+        assert!(h.ctx.data(|data| data.get_temp::<String>(egui::Id::unique("recording_shortcut"))).is_none());
         h.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::K);
         h.run_steps(1);
         h.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::S);

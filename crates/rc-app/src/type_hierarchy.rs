@@ -224,10 +224,10 @@ fn parse(path: &Path, text: &str, budget: &Budget) -> Result<Vec<Declaration>, E
             for child in node.named_children(&mut cursor).filter(|n| n.kind() == "where_clause") {
                 let mut cursor = child.walk();
                 for predicate in child.named_children(&mut cursor) {
-                    if predicate.child_by_field_name("left").and_then(|n| text.get(n.byte_range())) == Some("Self") {
-                        if let Some(bound) = predicate.child_by_field_name("bounds") {
-                            bound_positions(bound, &rope, &mut bounds);
-                        }
+                    if predicate.child_by_field_name("left").and_then(|n| text.get(n.byte_range())) == Some("Self")
+                        && let Some(bound) = predicate.child_by_field_name("bounds")
+                    {
+                        bound_positions(bound, &rope, &mut bounds);
                     }
                 }
             }
@@ -256,20 +256,20 @@ fn bound_positions(node: rc_syntax::tree_sitter::Node<'_>, rope: &rc_text::Rope,
     let mut cursor = node.walk();
     for bound in node.named_children(&mut cursor) {
         let mut ty = bound;
-        if ty.kind() == "higher_ranked_trait_bound" {
-            if let Some(inner) = ty.child_by_field_name("type") {
-                ty = inner;
-            }
+        if ty.kind() == "higher_ranked_trait_bound"
+            && let Some(inner) = ty.child_by_field_name("type")
+        {
+            ty = inner;
         }
-        if ty.kind() == "generic_type" {
-            if let Some(inner) = ty.child_by_field_name("type") {
-                ty = inner;
-            }
+        if ty.kind() == "generic_type"
+            && let Some(inner) = ty.child_by_field_name("type")
+        {
+            ty = inner;
         }
-        if ty.kind() == "scoped_type_identifier" {
-            if let Some(inner) = ty.child_by_field_name("name") {
-                ty = inner;
-            }
+        if ty.kind() == "scoped_type_identifier"
+            && let Some(inner) = ty.child_by_field_name("name")
+        {
+            ty = inner;
         }
         if matches!(ty.kind(), "type_identifier" | "identifier") {
             positions.push(rope.byte_to_char(ty.start_byte()));
@@ -477,7 +477,7 @@ fn validate_closed(sources: &BTreeMap<PathBuf, rc_text::Rope>, overlays: &[Overl
     let open_paths: BTreeSet<_> = overlays.iter().map(|overlay| &overlay.path).collect();
     for (path, source) in sources {
         budget.check()?;
-        if !open_paths.contains(path) && read(path, budget)? != source.to_string() {
+        if !open_paths.contains(path) && read(path, budget)? != *source {
             return Err(Error::Changed);
         }
     }

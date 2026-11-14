@@ -1635,7 +1635,7 @@ fn ctrl_click_goes_to_the_definition_of_a_method_a_type_and_a_std_item() {
 
     // Back returns to the click.
     h.state_mut().run_ide_action(&egui::Context::default(), rc_editor::Action::NavigateBack);
-    assert_eq!(at(h.state()).map(|(p, l)| (p, l)), Some((main.clone(), 3)));
+    assert_eq!(at(h.state()), Some((main.clone(), 3)));
     h.state_mut().insight.stop();
 }
 
@@ -1780,7 +1780,7 @@ fn invalidate_caches_rebuilds_what_the_ide_derived_and_keeps_the_tabs() {
     assert_eq!(app.docs.list.len(), 2);
     assert_eq!(app.docs.active_doc().map(|d| d.name()), Some("main.rs".to_string()));
     let lib = app.docs.index_of(&root.join("src/lib.rs")).unwrap();
-    pump(&mut app, "the asynchronous external reload", |app| app.docs.list[lib].editor.buffer.rope().to_string() == "pub fn changed() {}\n");
+    pump(&mut app, "the asynchronous external reload", |app| app.docs.list[lib].editor.buffer.rope() == "pub fn changed() {}\n");
     assert_eq!(app.docs.list[lib].editor.buffer.rope().to_string(), "pub fn changed() {}\n");
     let cleaned = |a: &CrabCraftApp| a.runner.build.as_ref().is_some_and(|b| b.title == "cargo clean" && b.result.as_ref().is_some_and(|r| r.success));
     pump(&mut app, "everything again", |a| a.insight.status == InsightStatus::Ready && a.runner.cargo_workspace.is_some() && cleaned(a));
@@ -3826,7 +3826,7 @@ fn reformat_with_a_selection_changes_only_those_lines() {
     let start = text.find("fn other").unwrap();
     app.docs.list[i].editor.selection = rc_text::Selection::single(rc_text::Range::new(start, text.len() - 1));
     app.run_insight_action(rc_editor::Action::Reformat, egui::Pos2::ZERO);
-    pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope().to_string() != text);
+    pump(&mut app, "rustfmt", |a| a.docs.list[i].editor.buffer.rope() != text);
     assert_eq!(app.docs.list[i].editor.buffer.rope().to_string(), "fn main(){println!(\"a\");}\n\nfn other() {\n    let x = 1;\n    let _y = x;\n}\n");
 }
 
@@ -4328,7 +4328,7 @@ fn a_name_behind_a_feature_gets_a_fix_that_turns_the_feature_on() {
     // Saved, `cargo check` with both features finds neither error.
     app.save_all_and_wait();
     app.insight.did_save(&main);
-    pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && a.insight.feature_gates.get(&main).is_none());
+    pump(&mut app, "the errors to go", |a| !has(a, "E0432") && !has(a, "E0425") && !a.insight.feature_gates.contains_key(&main));
     app.insight.stop();
 }
 
@@ -4802,7 +4802,7 @@ fn a_fix_that_renames_a_module_file_renames_it() {
     app.insight.run_code_action(&mut app.docs, list.swap_remove(fix), &mut out);
     app.handle_insight(out);
     let renamed = root.join("src/my_mod.rs");
-    pump(&mut app, "the renamed file", |a| renamed.is_file() && !module.exists());
+    pump(&mut app, "the renamed file", |_a| renamed.is_file() && !module.exists());
     assert_eq!(std::fs::read_to_string(&renamed).unwrap(), "pub fn hello() {}\n");
     // The editor of the module follows it, and the `mod` line names the new file.
     assert!(app.docs.index_of(&renamed).is_some());

@@ -146,6 +146,13 @@ pub fn locate_rustc() -> Option<PathBuf> {
     crate::Cargo::locate().map(|c| rustc_path(&c)).filter(|p| p.is_file())
 }
 
+struct ExplainGroup(u32);
+impl Drop for ExplainGroup {
+    fn drop(&mut self) {
+        rc_dotnet::kill_tree(self.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,12 +225,5 @@ mod tests {
         // E0308 is the "mismatched types" error.
         assert!(text.contains("Expected type did not match the received type"), "{text}");
         assert_eq!(e.explain("E9999"), Ok(None));
-    }
-}
-
-struct ExplainGroup(u32);
-impl Drop for ExplainGroup {
-    fn drop(&mut self) {
-        rc_dotnet::kill_tree(self.0);
     }
 }

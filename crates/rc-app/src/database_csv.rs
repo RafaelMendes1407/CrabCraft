@@ -69,7 +69,9 @@ fn value(field: String) -> Result<Cell, Error> {
         }
         let bytes = hex
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| std::str::from_utf8(pair).ok().and_then(|text| u8::from_str_radix(text, 16).ok()).ok_or(Error::Input))
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(Cell::Blob(bytes));

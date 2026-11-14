@@ -94,7 +94,7 @@ regex = "1"
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
 "#;
-        let names = dependency_names(&member, Some(&workspace)).unwrap();
+        let names = dependency_names(member, Some(workspace)).unwrap();
         assert!(names.normal.roots.contains("serde_alias") && !names.normal.roots.contains("serde"));
         assert!(names.normal.packages["serde"].contains("serde_alias"));
         assert!(names.normal.roots.contains("tokio") && names.normal.roots.contains("winapi"));

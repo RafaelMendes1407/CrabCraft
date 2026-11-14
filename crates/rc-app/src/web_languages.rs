@@ -92,10 +92,12 @@ impl WebLanguages {
                 session.stop();
                 self.configured[index] = configs[index].clone();
             }
-            if needed && session.session.is_none() && matches!(session.status, crate::insight::InsightStatus::Idle) {
-                if let Some(config) = configs[index].clone() {
-                    session.start_web(root, config);
-                }
+            if needed
+                && session.session.is_none()
+                && matches!(session.status, crate::insight::InsightStatus::Idle)
+                && let Some(config) = configs[index].clone()
+            {
+                session.start_web(root, config);
             }
             if session.session.as_ref().is_some_and(|session| !session.is_initialized() && session.started.elapsed() > std::time::Duration::from_secs(20)) {
                 session.stop();

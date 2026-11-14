@@ -95,7 +95,7 @@ pub fn update(ui: &mut Ui, response: &Response, session: &TermSession, state: &T
         node.set_live(accesskit::Live::Polite);
         node.set_description(tr("Accessible terminal text is limited to the visible context; text actions never send commands"));
         if let Some(caret) = caret {
-            node.set_text_selection(TextSelection { anchor: caret.clone(), focus: caret });
+            node.set_text_selection(TextSelection { anchor: caret, focus: caret });
         }
     });
 }

@@ -1,7 +1,7 @@
 //! Explicit per-project CriticalUp selection. Failed selection never falls back to rustup.
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 type Error = rc_cargo::criticalup::Error;
 fn message(error: &Error) -> String {
     match error {
@@ -120,10 +120,11 @@ impl Provider {
         });
     }
     pub fn poll(&mut self, trusted: bool) -> Vec<Change> {
-        if self.activating && !trusted {
-            if let Some(stop) = &self.stop {
-                stop.cancel();
-            }
+        if self.activating
+            && !trusted
+            && let Some(stop) = &self.stop
+        {
+            stop.cancel();
         }
         let mut changes = Vec::new();
         for Event(epoch, event) in self.inbox.drain() {
@@ -153,9 +154,12 @@ impl Provider {
         egui::ScrollArea::vertical().id_salt("criticalup_body").show(ui,|ui|{
 ui.label(tr("Choose the Rust provider explicitly. CriticalUp activation never authenticates, installs a toolchain or downloads a compiler."));ui.label(tr("CriticalUp uses a private snapshot of the validated workspace-root criticalup.toml. Inspect again and select after editing it; selection is not restored automatically after restarting the IDE."));ui.label(tr("Cargo and rustc use the same strict manifest snapshot. Rustup/compiler/wrapper environment overrides are ignored; failed selection blocks Cargo until you explicitly choose another provider."));ui.label(tr("Rust language services, doctest completion, REPL, wasm-pack, coverage and third-party Cargo extensions are unsupported in CriticalUp mode. No Ferrocene compiler or qualification claim is made without an installed toolchain."));ui.label(tr("Selection affects IDE Cargo actions only; terminals, plugins and external agents keep their own tool environments."));ui.label(tr("Selecting a provider stops build, run, test and language services, and discards stale metadata results."));ui.label(self.label());
 ui.add_enabled_ui(self.stop.is_none(),|ui|{ui.label(tr("CriticalUp manager executable (absolute path)"));ui.add(egui::TextEdit::singleline(&mut self.program).char_limit(4096));});
-ui.horizontal_wrapped(|ui|{if ui.add_enabled(self.stop.is_none()&&root.is_some(),egui::Button::new(tr("Inspect criticalup.toml"))).clicked(){if let Some(root)=root.clone(){self.inspect(root);}}if ui.add_enabled(self.selected,egui::Button::new(tr("Use Rustup / PATH"))).clicked(){if let Some(stop)=&self.stop{stop.cancel();}self.epoch=self.epoch.saturating_add(1);self.stop=None;self.selected=false;self.cargo=None;self.error=None;changes.push(Change::Default);}});
+ui.horizontal_wrapped(|ui|{if ui.add_enabled(self.stop.is_none()&&root.is_some(),egui::Button::new(tr("Inspect criticalup.toml"))).clicked()&& let Some(root)=root.clone(){self.inspect(root);}
+if ui.add_enabled(self.selected,egui::Button::new(tr("Use Rustup / PATH"))).clicked(){if let Some(stop)=&self.stop{stop.cancel();}self.epoch=self.epoch.saturating_add(1);self.stop=None;self.selected=false;self.cargo=None;self.error=None;changes.push(Change::Default);}});
 if let Some(snapshot)=&self.snapshot{ui.label(trf("Ferrocene manifest release: {release}",&[("release",&snapshot.release())]));ui.monospace(format!("SHA-256: {}",snapshot.digest()));for package in snapshot.packages(){ui.label(package);}if ui.add_enabled(trusted&&self.stop.is_none()&&!self.program.is_empty(),egui::Button::new(tr("Select CriticalUp Provider"))).clicked(){self.activate(trusted);changes.push(Change::Blocked);}}
-if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust this project before running project tools or code"));}if self.stop.is_some(){ui.spinner();if ui.button(tr("Cancel CriticalUp Selection")).clicked(){if let Some(stop)=&self.stop{stop.cancel();}}}if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error);}ui.label(tr("Authenticate and install licensed Ferrocene toolchains with CriticalUp outside the IDE when required. Missing tools are reported without invoking rustup."));});
+if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust this project before running project tools or code"));}
+if self.stop.is_some(){ui.spinner();if ui.button(tr("Cancel CriticalUp Selection")).clicked()&& let Some(stop)=&self.stop{stop.cancel();}}
+if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error);}ui.label(tr("Authenticate and install licensed Ferrocene toolchains with CriticalUp outside the IDE when required. Missing tools are reported without invoking rustup."));});
         changes
     }
 }
@@ -186,6 +190,7 @@ pub fn unsupported() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     #[cfg(unix)]
     fn fixture(root: &Path, missing: bool, gate: bool) -> PathBuf {
         use std::os::unix::fs::PermissionsExt;

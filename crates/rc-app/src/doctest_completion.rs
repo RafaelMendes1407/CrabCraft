@@ -220,9 +220,7 @@ fn project(rope: &Rope, caret: usize) -> Result<Projection, Error> {
         let visible = &content[indent..];
         let removed = if visible.starts_with("# ") {
             indent + 2
-        } else if visible == "#" {
-            indent + 1
-        } else if visible.starts_with("##") {
+        } else if visible == "#" || visible.starts_with("##") {
             indent + 1
         } else {
             0
@@ -406,14 +404,13 @@ pub struct Context {
 }
 fn graph(
     metadata: Value,
-    path: &Path,
-    snippet: &Path,
-    sysroot: &Path,
+    paths: (&Path, &Path, &Path),
     cfg: &[String],
     edition: Option<&str>,
     selected: &[String],
     target: Option<&str>,
 ) -> Result<Value, Error> {
+    let (path, snippet, sysroot) = paths;
     let packages = metadata.get("packages").and_then(Value::as_array).ok_or(Error::Metadata)?;
     if packages.len() > 512 {
         return Err(Error::Limit);
@@ -618,7 +615,7 @@ fn run(context: Context, token: &CancelToken) -> Result<Vec<lsp::CompletionItem>
     let file = dir.path().join("example.rs");
     std::fs::write(&file, &projection.source)?;
     let project_file = dir.path().join("rust-project.json");
-    let graph = graph(metadata, &context.path, &file, &sysroot, &cfg, projection.edition.as_deref(), &context.features, context.target.as_deref())?;
+    let graph = graph(metadata, (&context.path, &file, &sysroot), &cfg, projection.edition.as_deref(), &context.features, context.target.as_deref())?;
     std::fs::write(&project_file, serde_json::to_vec(&graph).map_err(|_| Error::Metadata)?)?;
     let executable = if cfg!(windows) { "rust-analyzer.exe" } else { "rust-analyzer" };
     let program = context

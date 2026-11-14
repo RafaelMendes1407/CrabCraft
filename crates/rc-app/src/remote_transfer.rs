@@ -38,8 +38,16 @@ pub struct Preview {
 }
 pub enum Action {
     Read(String),
-    PreviewEdit { remote: String, before: String, after: String },
-    PreviewDeploy { remote: String, local: PathBuf },
+    PreviewEdit {
+        remote: String,
+        before: String,
+        after: String,
+    },
+    #[cfg(test)]
+    PreviewDeploy {
+        remote: String,
+        local: PathBuf,
+    },
     Apply(Preview),
     Terminal,
 }
@@ -169,7 +177,8 @@ async fn batch(config: &Config, dir: &Path, commands: &str, watched: Option<&Pat
         let start = std::time::Instant::now();
         let mut stop = None;
         let result = loop {
-            tokio::select! {result=&mut process=>break result?,()=tokio::time::sleep(Duration::from_millis(10))=>{if stop.is_none(){if cancel.is_cancelled(){stop=Some(Error::Cancelled);}else if start.elapsed()>Duration::from_secs(15){stop=Some(Error::Timeout);}else if watched.and_then(|path|std::fs::metadata(path).ok()).is_some_and(|meta|meta.len()>MAX as u64){stop=Some(Error::Limit);}if stop.is_some(){child_cancel.cancel();}}}}
+            tokio::select! {result=&mut process=>break result?,()=tokio::time::sleep(Duration::from_millis(10))=>{if stop.is_none(){if cancel.is_cancelled(){stop=Some(Error::Cancelled);}else if start.elapsed()>Duration::from_secs(15){stop=Some(Error::Timeout);}else if watched.and_then(|path|std::fs::metadata(path).ok()).is_some_and(|meta|meta.len()>MAX as u64){stop=Some(Error::Limit);}
+            if stop.is_some(){child_cancel.cancel();}}}}
         };
         (result, stop)
     };
@@ -212,6 +221,7 @@ pub fn run(config: Config, action: Action, cancel: CancelToken) -> Result<Reply,
                 }
                 Ok(Reply::Preview(Preview { config, remote, before, after, local: None }))
             }
+            #[cfg(test)]
             Action::PreviewDeploy { remote, local } => {
                 let bytes = bounded_file(&local)?;
                 let after = utf8(bytes.clone())?;
@@ -222,10 +232,10 @@ pub fn run(config: Config, action: Action, cancel: CancelToken) -> Result<Reply,
                 if preview.config != config || preview.before.len() > MAX || preview.after.len() > MAX {
                     return Err(Error::Input);
                 }
-                if let Some((path, bytes)) = &preview.local {
-                    if bounded_file(path)? != *bytes {
-                        return Err(Error::Stale);
-                    }
+                if let Some((path, bytes)) = &preview.local
+                    && bounded_file(path)? != *bytes
+                {
+                    return Err(Error::Stale);
                 }
                 let current = read(&config, &preview.remote, dir.path(), &cancel).await?;
                 if current != preview.before {

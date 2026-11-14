@@ -79,10 +79,10 @@ fn caret(rope: &rc_text::Rope, location: Location, closed_bom: bool) -> Option<u
     }
 }
 enum Reply {
-    Started(Session),
+    Started(Box<Session>),
     Distributions(Vec<String>),
     Read { path: String, text: String, origin: Option<Ticket>, location: Option<Location> },
-    Preview { ticket: Ticket, preview: transport::Preview },
+    Preview { ticket: Ticket, preview: Box<transport::Preview> },
     Uploaded { ticket: Ticket, text: String },
     Reload { ticket: Ticket, text: String },
     CargoLine(String),
@@ -288,7 +288,7 @@ impl RemoteDevelopment {
                 self.diagnostics.clear();
                 self.output.clear();
                 let waker = self.waker.clone();
-                self.spawn(move |token| transport::start(settings, waker, token).map(Reply::Started));
+                self.spawn(move |token| transport::start(settings, waker, token).map(|session| Reply::Started(Box::new(session))));
             }
             Err(e) => self.error = Some(e),
         }
@@ -352,7 +352,9 @@ impl RemoteDevelopment {
         let ticket = tab.ticket();
         let before = tab.baseline.clone();
         let after = tab.text();
-        self.spawn(move |cancel| transport::preview(&settings, &path, before, after, cancel).map(|preview| Reply::Preview { ticket, preview }));
+        self.spawn(move |cancel| {
+            transport::preview(&settings, &path, before, after, cancel).map(|preview| Reply::Preview { ticket, preview: Box::new(preview) })
+        });
     }
     fn apply_upload(&mut self) {
         let Some((ticket, preview)) = self.preview.take() else {
@@ -461,7 +463,7 @@ impl RemoteDevelopment {
                         tab.lsp_version = 1;
                         session.client.notify_raw("textDocument/didOpen",json!({"textDocument":{"uri":rc_lsp::path_to_uri(Path::new(&tab.path)).as_str(),"languageId":if tab.path.ends_with(".rs"){"rust"}else{"toml"},"version":1,"text":tab.editor.buffer.rope().to_string()}}));
                     }
-                    self.session = Some(session);
+                    self.session = Some(*session);
                     self.status = if self.container {
                         tr("Container analyzer connected; indexing inside the container…")
                     } else if self.wsl {
@@ -519,7 +521,7 @@ impl RemoteDevelopment {
                 }
                 Ok(Reply::Preview { ticket, preview }) => {
                     if self.current(&ticket) {
-                        self.preview = Some((ticket, preview));
+                        self.preview = Some((ticket, *preview));
                     } else {
                         self.error = Some(Error::Stale);
                     }
@@ -545,12 +547,11 @@ impl RemoteDevelopment {
                     .into();
                 }
                 Ok(Reply::CargoLine(line)) => {
-                    if let Some(session) = &self.session {
-                        if let Some(diagnostic) = transport::cargo_diagnostic(&session.settings, &line) {
-                            if self.diagnostics.len() < 1000 {
-                                self.diagnostics.push(diagnostic);
-                            }
-                        }
+                    if let Some(session) = &self.session
+                        && let Some(diagnostic) = transport::cargo_diagnostic(&session.settings, &line)
+                        && self.diagnostics.len() < 1000
+                    {
+                        self.diagnostics.push(diagnostic);
                     }
                     if self.output.len() < 4096 {
                         self.output.push(line.chars().take(4096).collect());
@@ -589,10 +590,8 @@ impl RemoteDevelopment {
                     self.disconnect();
                     self.error = Some(Error::Analysis);
                 }
-                Incoming::Stderr(line) => {
-                    if self.output.len() < 4096 {
-                        self.output.push(line.chars().take(4096).collect());
-                    }
+                Incoming::Stderr(line) if self.output.len() < 4096 => {
+                    self.output.push(line.chars().take(4096).collect());
                 }
                 _ => {}
             }
@@ -758,32 +757,59 @@ impl RemoteDevelopment {
             self.analyzer.clone(),
         );
         egui::Modal::new(egui::Id::unique("remote_development_workspace")).show(ctx,|ui|{ui.set_width((ctx.content_rect().width()-80.).clamp(500.,1500.));ui.set_max_height((ctx.content_rect().height()-80.).max(300.));
- ui.horizontal(|ui|{ui.heading(if self.container{tr("Running container Rust workspace")}else if self.wsl{tr("WSL Rust workspace")}else{tr("Remote Rust workspace")});if ui.button(if self.wsl{tr("Close WSL workspace")}else{tr("Close remote workspace")}).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
+ ui.horizontal(|ui|{ui.heading(if self.container{tr("Running container Rust workspace")}else if self.wsl{tr("WSL Rust workspace")}else{tr("Remote Rust workspace")});
+if ui.button(if self.wsl{tr("Close WSL workspace")}else{tr("Close remote workspace")}).clicked(){if self.tabs.iter().any(Tab::dirty){self.discard=true;}else{self.disconnect();self.open=false;}}});
  ui.small(if self.container{tr("Explicit connection to an already-running Linux container. Start executes Cargo and rust-analyzer inside it. No container is created, started or pulled.")}else if self.wsl{tr("Explicit Windows-to-WSL session. Start may execute Linux Cargo metadata, build scripts and procedural macros. Windows files are not used as aliases.")}else{tr("Explicit SSH session on a Linux host. Start may execute remote Cargo metadata, build scripts and procedural macros. Local projects are not used.")});
- if self.session.is_none(){ui.add_enabled_ui(!busy,|ui|{if self.wsl {ui.small(tr("WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed."));if !crate::wsl_workspace::available(){ui.colored_label(rc_kit::pal(ui).warn,tr("WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution."));}}
- if !self.wsl {let old=self.container;ui.add_enabled(!self.tabs.iter().any(Tab::dirty),egui::Checkbox::new(&mut self.container,tr("Use an already-running Docker container")));if old!=self.container{self.trusted=false;self.buffer_settings=None;}}
+ if self.session.is_none(){ui.add_enabled_ui(!busy,|ui|{if self.wsl {ui.small(tr("WSL is not yet validated on a real Windows/WSL host. Existing distributions only; no installation is performed."));
+if !crate::wsl_workspace::available(){ui.colored_label(rc_kit::pal(ui).warn,tr("WSL workspaces are unavailable on this platform. Use Windows with an existing WSL distribution."));}}
+ if !self.wsl {let old=self.container;ui.add_enabled(!self.tabs.iter().any(Tab::dirty),egui::Checkbox::new(&mut self.container,tr("Use an already-running Docker container")));
+if old!=self.container{self.trusted=false;self.buffer_settings=None;}}
  egui::Grid::new("remote_workspace_settings").num_columns(4).show(ui,|ui|{
  if self.container {field(ui,tr("Docker CLI executable"),&mut self.docker_cli,4096);field(ui,tr("Local Docker socket URI"),&mut self.docker_socket,4096);ui.end_row();field(ui,tr("Running container ID"),&mut self.container_id,64);field(ui,tr("Container user or UID:GID"),&mut self.user,64);ui.end_row();ui.small(tr("Docker runtime validation is pending. Only local Unix sockets and existing Linux containers are supported."));ui.end_row();}
- else if self.wsl {field(ui,tr("WSL distribution"),&mut self.distribution,256);field(ui,tr("User"),&mut self.user,64);ui.end_row();if ui.add_enabled(crate::wsl_workspace::available(),egui::Button::new(tr("List installed WSL distributions"))).clicked(){self.list_distributions();}ui.end_row();let mut choice=None;for name in &self.distributions {if ui.selectable_label(self.distribution==*name,name).clicked(){choice=Some(name.clone());}}if let Some(name)=choice{self.distribution=name;}ui.end_row();}
+ else if self.wsl {field(ui,tr("WSL distribution"),&mut self.distribution,256);field(ui,tr("User"),&mut self.user,64);ui.end_row();
+if ui.add_enabled(crate::wsl_workspace::available(),egui::Button::new(tr("List installed WSL distributions"))).clicked(){self.list_distributions();}ui.end_row();let mut choice=None;for name in &self.distributions {if ui.selectable_label(self.distribution==*name,name).clicked(){choice=Some(name.clone());}}
+if let Some(name)=choice{self.distribution=name;}ui.end_row();}
  else{field(ui,tr("Host"),&mut self.host,253);field(ui,tr("Port"),&mut self.port,5);ui.end_row();field(ui,tr("User"),&mut self.user,253);field(ui,tr("SSH private key"),&mut self.identity,8192);ui.end_row();field(ui,tr("Verified known_hosts file"),&mut self.known_hosts,8192);ui.end_row();}
  field(ui,if self.wsl{tr("Linux workspace root")}else{tr("Remote workspace root")},&mut self.root,4096);ui.end_row();field(ui,if self.wsl{tr("Linux Cargo executable")}else{tr("Remote Cargo executable")},&mut self.cargo,4096);field(ui,if self.wsl{tr("Linux rust-analyzer executable")}else{tr("Remote rust-analyzer executable")},&mut self.analyzer,4096);ui.end_row();});
  if before!=(self.host.clone(),self.port.clone(),self.user.clone(),self.identity.clone(),self.known_hosts.clone(),self.root.clone(),self.cargo.clone(),self.analyzer.clone())||distribution_before!=self.distribution||container_before!=(self.container,self.docker_cli.clone(),self.docker_socket.clone(),self.container_id.clone()){self.trusted=false;}
- ui.add_enabled(!self.wsl||crate::wsl_workspace::available(),egui::Checkbox::new(&mut self.trusted,if self.container{tr("I trust this Docker daemon, container and workspace to execute project tools")}else if self.wsl{tr("I trust this WSL distribution and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")}));if ui.add_enabled(self.trusted&&(!self.wsl||crate::wsl_workspace::available()),egui::Button::new(if self.container{tr("Start container workspace")}else if self.wsl{tr("Start WSL workspace")}else{tr("Start remote workspace")})).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(if self.container{format!("{} / {} {}",self.container_id,self.user,self.root)}else if self.wsl{format!("WSL: {} / {} {}",self.distribution,self.user,self.root)}else{format!("{}@{}:{} {}",self.user,self.host,self.port,self.root)});if ui.button(if self.wsl{tr("Disconnect WSL workspace")}else{tr("Disconnect remote workspace")} ).clicked(){self.disconnect();}});}
- if busy||self.query.is_some(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Remote operation in progress…"));if ui.button(tr("Cancel remote operation")).clicked(){self.cancel();}});}
- if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,if self.container{match error{Error::Input=>tr("Invalid container settings or Linux source path").into(),Error::Timeout=>tr("Container operation timed out").into(),Error::Io(e)|Error::Process(e)=>trf(tr("Container error: {error}"),&[("error",e)]),_=>error_text(error,false)}}else{error_text(error,self.wsl)});}if !self.status.is_empty(){ui.label(&self.status);}
- if connected{ui.horizontal(|ui|{field(ui,tr("Remote source path"),&mut self.path,4096);if ui.add_enabled(!busy,egui::Button::new(tr("Open remote source"))).clicked(){self.load(self.path.clone(),None,None);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo check"))).clicked(){self.run(Task::Check);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo build"))).clicked(){self.run(Task::Build);}if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo test"))).clicked(){self.run(Task::Test);}});
- ui.collapsing(tr("Remote source files"),|ui|{let sources=self.session.as_ref().map(|s|s.sources.clone()).unwrap_or_default();let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_source_files").max_height(90.).show_rows(ui,22.,sources.len(),|ui,rows|{for row in rows{if let Some(path)=sources.get(row){if ui.selectable_label(false,path).clicked(){selected=Some(path.clone());}}}});if let Some(path)=selected{self.path=path.clone();self.load(path,None,None);}});}
- ui.horizontal_wrapped(|ui|{for(index,tab)in self.tabs.iter().enumerate(){let relative=tab.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&tab.path);let label=format!("{relative}{}",if tab.dirty(){" *"}else{""});if ui.selectable_label(index==self.active,label).clicked(){self.active=index;}}});
- if !self.tabs.is_empty(){ui.horizontal(|ui|{if ui.add_enabled(connected&&!busy,egui::Button::new(if self.wsl{tr("Preview WSL write")}else{tr("Preview remote upload")})).clicked(){self.preview_upload();}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Go to remote definition"))).clicked(){self.request(QueryKind::Definition);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Complete remote symbol"))).clicked(){self.request(QueryKind::Completion);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Remote symbol documentation"))).clicked(){self.request(QueryKind::Hover);}if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Reload remote source"))).clicked(){if let Some(tab)=self.tabs.get(self.active){if tab.dirty(){self.reload=Some(tab.ticket());}else{self.reload_active();}}}});
- if let Some(tab)=self.tabs.get_mut(self.active){tab.editor.read_only=!connected||tab.baseline.len()>64*1024;if tab.editor.read_only{ui.small(tr("Remote source is read-only while disconnected or above the 64 KiB editing limit."));}let version=tab.editor.buffer.version();let height=(ctx.content_rect().height()*0.33).clamp(140.,400.);let(size,rect)=ui.allocate_space(egui::vec2(ui.available_width(),height));let _=size;let mut editor_ui=ui.new_child(egui::UiBuilder::new().max_rect(rect));editor_ui.set_clip_rect(rect.intersect(ui.clip_rect()));let out=EditorView::new(&mut tab.editor,&app.editor_config,&app.keymap).show(&mut editor_ui);if tab.editor.buffer.version()!=version{tab.last_edit=Instant::now();tab.editor.set_diagnostics(Vec::new());tab.editor.request_parse(&self.pool);self.preview=None;self.completions.clear();self.hover.clear();self.diagnostics.clear();edited=true;}for action in out.actions{self.action(action);}}
+ ui.add_enabled(!self.wsl||crate::wsl_workspace::available(),egui::Checkbox::new(&mut self.trusted,if self.container{tr("I trust this Docker daemon, container and workspace to execute project tools")}else if self.wsl{tr("I trust this WSL distribution and workspace to execute project tools")}else{tr("I trust this SSH host and remote workspace to execute project tools")}));
+if ui.add_enabled(self.trusted&&(!self.wsl||crate::wsl_workspace::available()),egui::Button::new(if self.container{tr("Start container workspace")}else if self.wsl{tr("Start WSL workspace")}else{tr("Start remote workspace")})).clicked(){self.start();}});}else{ui.horizontal(|ui|{ui.label(if self.container{format!("{} / {} {}",self.container_id,self.user,self.root)}else if self.wsl{format!("WSL: {} / {} {}",self.distribution,self.user,self.root)}else{format!("{}@{}:{} {}",self.user,self.host,self.port,self.root)});
+if ui.button(if self.wsl{tr("Disconnect WSL workspace")}else{tr("Disconnect remote workspace")} ).clicked(){self.disconnect();}});}
+ if busy||self.query.is_some(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Remote operation in progress…"));
+if ui.button(tr("Cancel remote operation")).clicked(){self.cancel();}});}
+ if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,if self.container{match error{Error::Input=>tr("Invalid container settings or Linux source path").into(),Error::Timeout=>tr("Container operation timed out").into(),Error::Io(e)|Error::Process(e)=>trf(tr("Container error: {error}"),&[("error",e)]),_=>error_text(error,false)}}else{error_text(error,self.wsl)});}
+if !self.status.is_empty(){ui.label(&self.status);}
+ if connected{ui.horizontal(|ui|{field(ui,tr("Remote source path"),&mut self.path,4096);
+if ui.add_enabled(!busy,egui::Button::new(tr("Open remote source"))).clicked(){self.load(self.path.clone(),None,None);}
+if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo check"))).clicked(){self.run(Task::Check);}
+if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo build"))).clicked(){self.run(Task::Build);}
+if ui.add_enabled(!busy,egui::Button::new(tr("Remote Cargo test"))).clicked(){self.run(Task::Test);}});
+ ui.collapsing(tr("Remote source files"),|ui|{let sources=self.session.as_ref().map(|s|s.sources.clone()).unwrap_or_default();let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_source_files").max_height(90.).show_rows(ui,22.,sources.len(),|ui,rows|{for row in rows{if let Some(path)=sources.get(row)&& ui.selectable_label(false,path).clicked(){selected=Some(path.clone());}}});
+if let Some(path)=selected{self.path=path.clone();self.load(path,None,None);}});}
+ ui.horizontal_wrapped(|ui|{for(index,tab)in self.tabs.iter().enumerate(){let relative=tab.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&tab.path);let label=format!("{relative}{}",if tab.dirty(){" *"}else{""});
+if ui.selectable_label(index==self.active,label).clicked(){self.active=index;}}});
+ if !self.tabs.is_empty(){ui.horizontal(|ui|{if ui.add_enabled(connected&&!busy,egui::Button::new(if self.wsl{tr("Preview WSL write")}else{tr("Preview remote upload")})).clicked(){self.preview_upload();}
+if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Go to remote definition"))).clicked(){self.request(QueryKind::Definition);}
+if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Complete remote symbol"))).clicked(){self.request(QueryKind::Completion);}
+if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Remote symbol documentation"))).clicked(){self.request(QueryKind::Hover);}
+if ui.add_enabled(connected&&!busy,egui::Button::new(tr("Reload remote source"))).clicked()&& let Some(tab)=self.tabs.get(self.active){if tab.dirty(){self.reload=Some(tab.ticket());}else{self.reload_active();}}});
+ if let Some(tab)=self.tabs.get_mut(self.active){tab.editor.read_only=!connected||tab.baseline.len()>64*1024;
+if tab.editor.read_only{ui.small(tr("Remote source is read-only while disconnected or above the 64 KiB editing limit."));}let version=tab.editor.buffer.version();let height=(ctx.content_rect().height()*0.33).clamp(140.,400.);let(size,rect)=ui.allocate_space(egui::vec2(ui.available_width(),height));let _=size;let mut editor_ui=ui.new_child(egui::UiBuilder::new().max_rect(rect));editor_ui.set_clip_rect(rect.intersect(ui.clip_rect()));let out=EditorView::new(&mut tab.editor,&app.editor_config,&app.keymap).show(&mut editor_ui);
+if tab.editor.buffer.version()!=version{tab.last_edit=Instant::now();tab.editor.set_diagnostics(Vec::new());tab.editor.request_parse(&self.pool);self.preview=None;self.completions.clear();self.hover.clear();self.diagnostics.clear();edited=true;}for action in out.actions{self.action(action);}}
  }
- if !self.completions.is_empty(){let mut choice=None;egui::ScrollArea::vertical().id_salt("remote_completions").max_height(100.).show_rows(ui,22.,self.completions.len(),|ui,rows|{for index in rows{if let Some(item)=self.completions.get(index){if ui.button(&item.label).clicked(){choice=Some(index);}}}});if let Some(index)=choice{self.apply_completion(index);}}
+ if !self.completions.is_empty(){let mut choice=None;egui::ScrollArea::vertical().id_salt("remote_completions").max_height(100.).show_rows(ui,22.,self.completions.len(),|ui,rows|{for index in rows{if let Some(item)=self.completions.get(index)&& ui.button(&item.label).clicked(){choice=Some(index);}}});
+if let Some(index)=choice{self.apply_completion(index);}}
  if !self.hover.is_empty(){egui::ScrollArea::vertical().id_salt("remote_hover").max_height(100.).show(ui,|ui|{ui.label(&self.hover);});}
- if let Some((_,preview))=&self.preview{ui.separator();ui.label(if self.wsl{tr("Review WSL overwrite")}else{tr("Review remote overwrite")});ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(if self.wsl||self.container{tr("Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.")}else{tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.")});if ui.button(if self.wsl{tr("Confirm WSL overwrite")}else{tr("Confirm remote overwrite")}).clicked(){self.apply_upload();}}
- if !self.diagnostics.is_empty(){ui.label(tr("Remote Cargo diagnostics"));let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_cargo_diagnostics").max_height(100.).show_rows(ui,22.,self.diagnostics.len(),|ui,rows|{for index in rows{if let Some(d)=self.diagnostics.get(index){let label=format!("{}:{}:{} {}",d.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&d.path),d.line+1,d.column+1,d.message);if ui.selectable_label(false,label).clicked(){selected=Some((d.path.clone(),d.line,d.column));}}}});if let Some((path,line,column))=selected{self.load(path,None,Some(Location::Cargo{line,column}));}}
+ if let Some((_,preview))=&self.preview{ui.separator();ui.label(if self.wsl{tr("Review WSL overwrite")}else{tr("Review remote overwrite")});ui.columns(2,|cols|{cols[0].label(tr("Before"));let mut before=preview.before.as_str();cols[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));cols[1].label(tr("After"));let mut after=preview.after.as_str();cols[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));});ui.small(if self.wsl||self.container{tr("Linux content is checked again before overwrite. Concurrent writers can still race the final check; cancellation may leave a completed write.")}else{tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload.")});
+if ui.button(if self.wsl{tr("Confirm WSL overwrite")}else{tr("Confirm remote overwrite")}).clicked(){self.apply_upload();}}
+ if !self.diagnostics.is_empty(){ui.label(tr("Remote Cargo diagnostics"));let mut selected=None;egui::ScrollArea::vertical().id_salt("remote_cargo_diagnostics").max_height(100.).show_rows(ui,22.,self.diagnostics.len(),|ui,rows|{for index in rows{if let Some(d)=self.diagnostics.get(index){let label=format!("{}:{}:{} {}",d.path.strip_prefix(&format!("{}/",self.root)).unwrap_or(&d.path),d.line+1,d.column+1,d.message);
+if ui.selectable_label(false,egui::RichText::new(label).color(if d.error {rc_kit::pal(ui).error} else {rc_kit::pal(ui).warn})).clicked(){selected=Some((d.path.clone(),d.line,d.column));}}}});
+if let Some((path,line,column))=selected{self.load(path,None,Some(Location::Cargo{line,column}));}}
  ui.collapsing(tr("Remote process output"),|ui|{egui::ScrollArea::vertical().id_salt("remote_output").max_height(120.).show_rows(ui,20.,self.output.len(),|ui,rows|{for index in rows{if let Some(line)=self.output.get(index){ui.monospace(line);}}});});
- if let Some(ticket)=self.reload.clone(){ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Discard edits and reload this remote source?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.reload=None;}if ui.button(tr("Discard edits and reload")).clicked(){if self.current(&ticket){self.reload_active();}else{self.error=Some(Error::Stale);self.reload=None;}}});}
- if self.discard{ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Disconnect and discard unsaved remote buffers?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.discard=false;}if ui.button(tr("Discard remote buffers and close")).clicked(){self.disconnect();self.tabs.clear();self.open=false;self.discard=false;}});}
+ if let Some(ticket)=self.reload.clone(){ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Discard edits and reload this remote source?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.reload=None;}
+if ui.button(tr("Discard edits and reload")).clicked(){if self.current(&ticket){self.reload_active();}else{self.error=Some(Error::Stale);self.reload=None;}}});}
+ if self.discard{ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("Disconnect and discard unsaved remote buffers?"));ui.horizontal(|ui|{if ui.button(tr("Keep remote buffers")).clicked(){self.discard=false;}
+if ui.button(tr("Discard remote buffers and close")).clicked(){self.disconnect();self.tabs.clear();self.open=false;self.discard=false;}});}
  });
         let after = (&self.host, &self.port, &self.user, &self.identity, &self.known_hosts, &self.root, &self.cargo, &self.analyzer);
         if before != (after.0.clone(), after.1.clone(), after.2.clone(), after.3.clone(), after.4.clone(), after.5.clone(), after.6.clone(), after.7.clone()) {
@@ -820,16 +846,16 @@ pub fn open_wsl(app: &mut CrabCraftApp) {
     open_mode(app, true);
 }
 fn open_mode(app: &mut CrabCraftApp, wsl: bool) {
-    if let Some(state) = &mut app.remote_development {
-        if state.wsl != wsl || state.container {
-            if state.tabs.iter().any(Tab::dirty) {
-                state.error = Some(Error::Stale);
-                state.open = true;
-                return;
-            }
-            state.disconnect();
-            app.remote_development = None;
+    if let Some(state) = &mut app.remote_development
+        && (state.wsl != wsl || state.container)
+    {
+        if state.tabs.iter().any(Tab::dirty) {
+            state.error = Some(Error::Stale);
+            state.open = true;
+            return;
         }
+        state.disconnect();
+        app.remote_development = None;
     }
     if app.remote_development.is_none() {
         let mut state = RemoteDevelopment::new(app.waker.clone());

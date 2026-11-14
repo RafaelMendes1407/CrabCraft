@@ -385,19 +385,17 @@ pub fn git_window(app: &mut CrabCraftApp, ui: &mut Ui) {
                         app.hosting.use_file(name, content);
                     }
                 }
-                Some(crate::hosting::UiAction::Login { program, args }) => {
-                    if trusted && app.terminal_starting.is_none() {
-                        let spec = rc_term::SpawnSpec::command(program, args, None).env("GH_DEBUG", "").env("GLAB_DEBUG_HTTP", "");
-                        match crate::repl::Starting::new(spec, app.waker.clone()) {
-                            Ok(starting) => {
-                                app.terminal_starting = Some(starting);
-                                app.dock.show(ToolWindow::Terminal);
-                            }
-                            Err(error) => app.notify(error.to_string(), true),
+                Some(crate::hosting::UiAction::Login { program, args }) if trusted && app.terminal_starting.is_none() => {
+                    let spec = rc_term::SpawnSpec::command(program, args, None).env("GH_DEBUG", "").env("GLAB_DEBUG_HTTP", "");
+                    match crate::repl::Starting::new(spec, app.waker.clone()) {
+                        Ok(starting) => {
+                            app.terminal_starting = Some(starting);
+                            app.dock.show(ToolWindow::Terminal);
                         }
+                        Err(error) => app.notify(error.to_string(), true),
                     }
                 }
-                None => {}
+                Some(crate::hosting::UiAction::Login { .. }) | None => {}
             }
         }
         GitTab::Issues => {
@@ -821,7 +819,7 @@ enum WorktreeAction {
     Open(std::path::PathBuf),
     OpenInNewWindow(std::path::PathBuf),
     Unlock(std::path::PathBuf),
-    Dialog(Dialog),
+    Dialog(Box<Dialog>),
 }
 
 /// The Worktrees view of the Git window: every worktree of the repository (`git worktree
@@ -836,17 +834,17 @@ fn worktrees_view(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         if ui.add_enabled_ui(!busy, |ui| theme::secondary_button(ui, tr("Add Worktree…"))).inner.clicked() {
-            action = Some(WorktreeAction::Dialog(Dialog::AddWorktree {
+            action = Some(WorktreeAction::Dialog(Box::new(Dialog::AddWorktree {
                 path: String::new(),
                 new_branch: true,
                 name: String::new(),
                 existing: String::new(),
                 path_edited: false,
-            }));
+            })));
         }
         let prune = ui.add_enabled_ui(!busy && !prunable.is_empty(), |ui| theme::secondary_button(ui, tr("Prune…"))).inner;
         if prune.clicked() {
-            action = Some(WorktreeAction::Dialog(Dialog::PruneWorktrees { paths: prunable.clone() }));
+            action = Some(WorktreeAction::Dialog(Box::new(Dialog::PruneWorktrees { paths: prunable.clone() })));
         }
         if prunable.is_empty() {
             prune.on_disabled_hover_text(tr("No worktree has lost its folder"));
@@ -947,7 +945,7 @@ fn worktrees_view(app: &mut CrabCraftApp, ui: &mut Ui) {
         Some(WorktreeAction::Open(path)) => app.open_workspace(&path),
         Some(WorktreeAction::OpenInNewWindow(path)) => app.open_in_new_window(&path),
         Some(WorktreeAction::Unlock(path)) => app.vcs.unlock_worktree(&path),
-        Some(WorktreeAction::Dialog(d)) => app.dialog = Some(d),
+        Some(WorktreeAction::Dialog(d)) => app.dialog = Some(*d),
         None => {}
     }
 }
@@ -1006,8 +1004,8 @@ fn worktree_actions(ui: &mut Ui, w: &rc_vcs::Worktree, current: bool, busy: bool
         if item(ui, tr("Unlock"), !busy, None) {
             out = Some(WorktreeAction::Unlock(w.path.clone()));
         }
-    } else if item(ui, tr("Lock…"), !busy && !w.main, Some(tr("The main worktree cannot be locked")).filter(|_| !busy)) {
-        out = Some(WorktreeAction::Dialog(Dialog::LockWorktree { path: w.path.clone(), reason: String::new() }));
+    } else if item(ui, tr("Lock…"), !busy && !w.main, (!busy).then(|| tr("The main worktree cannot be locked"))) {
+        out = Some(WorktreeAction::Dialog(Box::new(Dialog::LockWorktree { path: w.path.clone(), reason: String::new() })));
     }
     let removable = !w.main && !current && w.locked.is_none();
     let why = if w.main {
@@ -1017,8 +1015,8 @@ fn worktree_actions(ui: &mut Ui, w: &rc_vcs::Worktree, current: bool, busy: bool
     } else {
         tr("Unlock the worktree first")
     };
-    if item(ui, tr("Remove…"), !busy && removable, Some(why).filter(|_| !busy)) {
-        out = Some(WorktreeAction::Dialog(Dialog::RemoveWorktree { path: w.path.clone(), force: false }));
+    if item(ui, tr("Remove…"), !busy && removable, (!busy).then_some(why)) {
+        out = Some(WorktreeAction::Dialog(Box::new(Dialog::RemoveWorktree { path: w.path.clone(), force: false })));
     }
     out
 }

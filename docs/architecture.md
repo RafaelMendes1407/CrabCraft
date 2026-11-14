@@ -25,7 +25,7 @@ or on the shared tokio runtime and reports back through channels that wake the U
 - **Repository formatting.** `rustfmt.toml` sets a 160-column maximum and
   `use_small_heuristics = "Max"` (issue #181). Run `cargo fmt --all` for an intentional
   formatting pass; avoid mixing repository-wide formatting with behavioral changes.
-  Existing formatting debt is tracked by the security audit rather than claimed as fixed.
+  CI requires formatting and strict Clippy checks to pass without a static baseline exception.
 - **Project scope.** Issue #173 proposes a shared multi-language IDE and add-ons.
   CrabCraft currently remains a native Rust/Cargo product. Shared improvements can be
   exchanged with DotCraft through the retained Git history, licenses and `rc-*` crate

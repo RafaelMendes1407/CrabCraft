@@ -370,10 +370,10 @@ fn build_commands(app: &mut CrabCraftApp, ui: &mut Ui) {
         (tr("Clean Project"), rc_dotnet::BuildAction::Clean, ico::DELETE),
         (tr("Fetch Dependencies"), rc_dotnet::BuildAction::Restore, ico::DOWNLOAD),
     ] {
-        if command(ui, label, Some(icon), app.workspace.is_some()) {
-            if let Some(target) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf()) {
-                app.build_project_after_save(&target, action);
-            }
+        if command(ui, label, Some(icon), app.workspace.is_some())
+            && let Some(target) = app.workspace.as_ref().map(|w| w.ws.key_path().to_path_buf())
+        {
+            app.build_project_after_save(&target, action);
         }
     }
 }

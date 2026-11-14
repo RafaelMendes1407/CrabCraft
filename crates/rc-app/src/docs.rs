@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 /// Files bigger than this open read-only (no syntax tree).
+#[cfg(test)]
 const LARGE_FILE: u64 = 8 * 1024 * 1024;
 /// Files bigger than this do not open at all.
 const HUGE_FILE: u64 = 128 * 1024 * 1024;
@@ -336,6 +337,7 @@ impl Docs {
     }
 
     /// Opens `path` (or switches to it) and makes it active.
+    #[cfg(test)]
     pub fn open(&mut self, path: &Path) -> Result<usize, String> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         if let Some(i) = self.index_of(&path) {
@@ -493,6 +495,7 @@ impl Docs {
     }
 
     /// Single-click open: shows `path` in the preview tab, replacing the previous preview.
+    #[cfg(test)]
     pub fn open_preview(&mut self, path: &Path) -> Result<usize, String> {
         let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         if let Some(i) = self.index_of(&canon) {
@@ -663,6 +666,7 @@ impl Docs {
     }
 
     /// A file changed on disk: unmodified documents reload, modified ones are flagged.
+    #[cfg(test)]
     pub fn on_disk_change(&mut self, path: &Path) {
         let Some(i) = self.index_of(path) else { return };
         let doc = &mut self.list[i];
@@ -694,21 +698,6 @@ impl Docs {
         }
         self.reloaded(i, &text, bom, mtime);
         self.list[i].editor.request_parse(&self.pool);
-    }
-
-    /// Reads every document from disk again (the unmodified ones change; the modified ones are
-    /// flagged when the file differs) and parses them all afresh.
-    pub fn reload_all(&mut self) {
-        let paths: Vec<PathBuf> = self.list.iter().map(|d| d.path.clone()).collect();
-        for path in paths {
-            if let Some(i) = self.index_of(&path) {
-                self.list[i].mtime = None;
-            }
-            self.on_disk_change(&path);
-        }
-        for d in &mut self.list {
-            d.editor.request_parse(&self.pool);
-        }
     }
 
     /// Takes finished background parses; returns whether any arrived (repaint).

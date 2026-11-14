@@ -195,10 +195,8 @@ pub fn build(app: &mut CrabCraftApp, ui: &mut Ui) {
                 {
                     open = Some((f.clone(), d.line.unwrap_or(1).saturating_sub(1) as usize, d.column.unwrap_or(1).saturating_sub(1) as usize));
                 }
-                if d.borrow.is_some() {
-                    if ui.small_button(trf("Visualize {code} source ranges…", &[("code", &d.code)])).clicked() {
-                        borrow = Some(d.clone());
-                    }
+                if d.borrow.is_some() && ui.small_button(trf("Visualize {code} source ranges…", &[("code", &d.code)])).clicked() {
+                    borrow = Some(d.clone());
                 }
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{} {}", d.code, d.message)));
                 crate::ui::toolwindows::explain_menu(&resp, &d.code, &mut explain);
@@ -641,11 +639,12 @@ pub fn terminal(app: &mut CrabCraftApp, ui: &mut Ui) {
     if !cfg!(target_os = "linux") {
         ui.label(tr("Debugging terminal processes is currently supported on Linux"));
     }
-    if let Some(process) = app.terminal_attach.show(ui, &app.terminals, app.waker.clone()) {
-        if app.runner.trusted_project.is_some() && app.runner.cargo_workspace.is_some() {
-            let outputs = app.debugger.attach_gdb(process.process.pid, &process.process.name, &app.docs);
-            app.handle_debug(outputs);
-        }
+    if let Some(process) = app.terminal_attach.show(ui, &app.terminals, app.waker.clone())
+        && app.runner.trusted_project.is_some()
+        && app.runner.cargo_workspace.is_some()
+    {
+        let outputs = app.debugger.attach_gdb(process.process.pid, &process.process.name, &app.docs);
+        app.handle_debug(outputs);
     }
     let mut cancel_startup = false;
     if app.terminal_starting.is_some() {

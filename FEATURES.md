@@ -7,7 +7,7 @@ verification evidence and remaining work; it is not a claim of parity with anoth
 PR review (2026-11-13): Actions #175–#177 merged; the egui 0.37 migration
 from #180 was completed with mouse-wheel events in the tests. Issue #181:
 repository rustfmt uses width 160 and Max heuristics; this does not eliminate
-existing formatting debt. Issue #173: the unified IDE proposal is documented in
+the formatting debt is addressed by the later CI maintenance. Issue #173: the unified IDE proposal is documented in
 `docs/architecture.md`, without implementing or promising a shared product/add-on.
 The broad update #178 remains pending because of quick-xml compilation errors.
 Source changes invalidate the previous static exception; it was not automatically renewed.
@@ -15,9 +15,10 @@ Source changes invalidate the previous static exception; it was not automaticall
 Security self-assessment infrastructure: dedicated workflow, local execution
 through `scripts/security-audit.sh`, JSON/Markdown reports, per-crate SBOM,
 `unsafe` inventory, Gitleaks and bounded fuzzing on scheduled/manual runs.
-Preexisting formatting and Clippy failures remain visible. The earlier temporary
-exception was tied to the exact source hash and Rust version and is now invalidated; the audit
-does not certify legal compliance or change Rust feature statuses.
+CI maintenance: repository-wide rustfmt and strict Clippy findings corrected;
+the expired exact-source static baseline and downgrade logic are removed. Static
+analysis now requires both commands to succeed. This changes no feature readiness
+status and does not certify legal compliance or platform parity.
 
 Dependency audit (2026-11-12): `libsqlite3-sys` 0.39.1,
 `pulldown-cmark` 0.13.6 and `rustix` 1.1.6 fix the RustSec advisories
@@ -458,7 +459,7 @@ An item becomes ✅ only with evidence that it works in a real Rust project.
 | Y-05 | SFTP/FTP deployment | ✅ | M6 | [#117](https://github.com/RafaelMendes1407/CrabCraft/issues/117): reviewed native deployment of existing/new files and binaries up to 32 MiB; separate trust, source/destination/size/SHA-256 and confirmation, local/remote snapshots and cancellation. SFTPv3 through OpenSSH uses CREATE EXCL/rename without overwrite for new files and posix-rename for replacement; supported FTP is **explicit TLS FTPS** with CA/hostname/pin, EPSV/MLSD and uniquely named STOU. Real Rust source/binary, TLS/hostkey/stale/concurrency/cancellation and UI passed. Plain/implicit FTP and directory sync unavailable; replacements lack CAS; scope in `docs/deployment.md`. |
 | Y-06 | Compare and edit remote files | ✅ | M6 | Side-by-side text comparison and native editing of an existing SFTP file: read-only remote snapshot, editable proposal up to 64 KB, preview/confirm, external-change check and stale-content rejection. Bounded previews and explicit rename/CAS limitations; native controls + real Rust on an OpenSSH server tested; [scope](docs/remote-files.md). |
 | Y-07 | SSH settings and SSH terminal | ✅ | M6 | Explicit host/port/user/key/known_hosts in memory, mandatory hostkey, -F none without inherited SSH configuration/proxy/forwarding/agent; SSH terminal in the native PTY only after trust and explicit action. Real OpenSSH fixture verifies authentication/unknown-host rejection, cancellation and a command typed in the terminal. No persisted profiles/password prompts/aliases; [scope](docs/remote-files.md). |
-| Y-08 | Remote development | ✅ | M6 | Explicit Linux SSH session with verified trust/key/hostkey, native Rust editor and separate remote namespace. Remote RA provides definition/plain completion/hover/versioned diagnostics; reviewed SFTP upload, Cargo check/build/test with navigable diagnostics and remote-group cancellation. Real SSH + Cargo/RA and UI proved editing/upload/test, type error/navigation, local switch/close and reconnect/reload without silent loss and termination of Cargo/RA build.rs. No file creation/broad refactoring/integrated debugger/persisted session; limits and SFTP race risk in `docs/remote-development.md`. |
+| Y-08 | Remote development | ✅ | M6 | Explicit Linux SSH session with verified trust/key/hostkey, native Rust editor and separate remote namespace. Remote RA provides definition/plain completion/hover/versioned diagnostics; reviewed SFTP upload, Cargo check/build/test with navigable diagnostics and remote-group cancellation. Real SSH + Cargo/RA and UI proved editing/upload/test, type error/navigation, local switch/close and reconnect/reload without silent loss and termination of Cargo/RA build.rs. No file creation/broad refactoring/integrated debugger/persisted session; limits and SFTP race risk in `docs/remote-development.md`. Remote diagnostic rows distinguish errors from warnings with the corresponding theme color. |
 | Y-09 | Dev Containers | 🚧 | M6 | Reference CLI with Version/ReadConfiguration/Build/Up/Exec, trust, preview/confirmation and bounded workers; official CLI read Rust JSONC without hooks. New native mode for an already running Linux container: explicit Docker CLI/Unix socket/ID/user/root/Cargo/RA, trust+Start, separate editor, definition/completion/hover/versioned diagnostics, write review and Cargo check/build/test through exec without PTY. Linux Docker-argv fixture with real Cargo/RA proved UI, noexec/trust, namespace, editing/review/test/diagnostics, dirty/stale checks and build.rs cancellation; not proof of real Docker. Runtime blocked by AppArmor on this host: Up/Exec, IDE and EOF/cancellation inside a real container remain pending; no automatic attach/install/integrated debugging. [CLI](docs/dev-containers.md), [IDE/limits](docs/container-workspace.md). |
 | Y-10 | Real-time collaboration | 🚫 | - | Requires a dedicated service |
 

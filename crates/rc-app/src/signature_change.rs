@@ -319,7 +319,8 @@ impl State {
      });});}
     });
     ui.horizontal(|ui|{if ui.add_enabled(self.rows.len()<32,egui::Button::new(tr("Add parameter"))).clicked(){self.rows.push(Row{id:self.next_row,value:model::Parameter{original:None,name:format!("parameter{}",self.next_row.saturating_add(1)),ty:"i32".into(),argument:"0".into()}});self.next_row=self.next_row.saturating_add(1);changed=true;}let label=ui.label(tr("Return type"));changed|=ui.add(egui::TextEdit::singleline(&mut self.return_type).desired_width(220.0).char_limit(2048)).labelled_by(label.id).changed();});
-    ui.horizontal(|ui|{if ui.button(tr("Reset signature")).clicked(){self.reset();}if ui.button(tr("Preview signature changes")).clicked(){if let Some(prepared)=self.prepared.clone(){self.start(Request::Preview(prepared,self.input()),app.waker.clone());}}});
+    ui.horizontal(|ui|{if ui.button(tr("Reset signature")).clicked(){self.reset();}
+if ui.button(tr("Preview signature changes")).clicked()&& let Some(prepared)=self.prepared.clone(){self.start(Request::Preview(prepared,self.input()),app.waker.clone());}});
    });
    if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error_text(error));}
    if busy{ui.horizontal(|ui|{ui.spinner();ui.label(tr("Resolving and checking signature changes…"));if ui.button(tr("Cancel signature operation")).clicked(){self.job=None;self.verified=None;}});}
@@ -329,19 +330,21 @@ impl State {
     if let Some((file,edit))=entries.get(self.selected) && let Some(source)=plan.prepared.project.files.get(&file.path){ui.label(tr("Before"));let mut before=source.normal.get(edit.range.clone()).unwrap_or("");ui.add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(2).desired_width(f32::INFINITY));ui.label(tr("After"));let mut after=edit.text.as_str();ui.add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(2).desired_width(f32::INFINITY));}
     if ui.add_enabled(!busy,egui::Button::new(tr("Apply signature changes"))).clicked(){self.start(Request::Verify(plan),app.waker.clone());}
    }
-   ui.horizontal(|ui|{if ui.add_enabled(!busy,egui::Button::new(tr("Reload function at caret"))).clicked(){self.load(app);}if !self.undo.is_empty()&&ui.button(tr("Undo signature change")).clicked(){if let Err(error)=self.undo(app){self.error=Some(error);}}});
+   ui.horizontal(|ui|{if ui.add_enabled(!busy,egui::Button::new(tr("Reload function at caret"))).clicked(){self.load(app);}
+if !self.undo.is_empty()&&ui.button(tr("Undo signature change")).clicked()&& let Err(error)=self.undo(app){self.error=Some(error);}});
   });
-        if let Some(index) = remove {
-            if index < self.rows.len() {
-                self.rows.remove(index);
-                changed = true;
-            }
+        if let Some(index) = remove
+            && index < self.rows.len()
+        {
+            self.rows.remove(index);
+            changed = true;
         }
-        if let Some((a, b)) = move_row {
-            if a < self.rows.len() && b < self.rows.len() {
-                self.rows.swap(a, b);
-                changed = true;
-            }
+        if let Some((a, b)) = move_row
+            && a < self.rows.len()
+            && b < self.rows.len()
+        {
+            self.rows.swap(a, b);
+            changed = true;
         }
         if changed {
             self.plan = None;
@@ -353,12 +356,11 @@ impl State {
             self.verified = None;
             self.open = false;
         }
-        if self.open {
-            if let Some(plan) = self.verified.take() {
-                if let Err(error) = self.apply(app, plan) {
-                    self.error = Some(error);
-                }
-            }
+        if self.open
+            && let Some(plan) = self.verified.take()
+            && let Err(error) = self.apply(app, plan)
+        {
+            self.error = Some(error);
         }
     }
 }

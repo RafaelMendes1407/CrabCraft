@@ -279,8 +279,13 @@ impl Debugger {
         self.memory.reset();
         self.disassembly.reset();
         let watches: Vec<String> = self.session.as_ref().map(|s| s.watches().iter().map(|w| w.expression.clone()).collect()).unwrap_or_default();
-        let mut session =
-            DebugSession::start(adapter, DebugTarget::Cargo { cargo, target }, DebugOptions::default(), self.breakpoints(docs), self.waker.clone());
+        let mut session = DebugSession::start(
+            adapter,
+            DebugTarget::Cargo { cargo, target: Box::new(target) },
+            DebugOptions::default(),
+            self.breakpoints(docs),
+            self.waker.clone(),
+        );
         session.set_hex(self.hex);
         for w in watches {
             session.add_watch(w);
@@ -305,7 +310,7 @@ impl Debugger {
         self.memory.reset();
         self.disassembly.reset();
         let console = crate::runner::Console::new(&self.waker);
-        console.note(&tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));
+        console.note(tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));
         self.console = Some(console);
         self.session = Some(DebugSession::start(adapter, DebugTarget::Launch(launch), DebugOptions::default(), self.breakpoints(docs), self.waker.clone()));
         vec![DebugOutput::ShowDebugWindow]

@@ -54,12 +54,11 @@ impl SearchUi {
         }
     }
     fn reveal(&mut self, session: &rc_term::TermSession) {
-        if let Some(result) = &mut self.result {
-            if let Some(hit) = result.hits.get(self.current) {
-                if !session.reveal_search_match(*hit, result.generation) {
-                    result.stale = true;
-                }
-            }
+        if let Some(result) = &mut self.result
+            && let Some(hit) = result.hits.get(self.current)
+            && !session.reveal_search_match(*hit, result.generation)
+        {
+            result.stale = true;
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, session: &rc_term::TermSession, waker: Waker) {
@@ -75,10 +74,10 @@ impl SearchUi {
             self.result = Some(result);
             self.reveal(session);
         }
-        if let Some(result) = &mut self.result {
-            if result.generation != session.lock().generation {
-                result.stale = true;
-            }
+        if let Some(result) = &mut self.result
+            && result.generation != session.lock().generation
+        {
+            result.stale = true;
         }
         ui.horizontal(|ui| {
             let label = ui.label(tr("Terminal search"));

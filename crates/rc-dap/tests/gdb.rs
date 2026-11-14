@@ -86,7 +86,13 @@ fn debugs_a_rust_program() {
     let mut bps = Breakpoints::default();
     bps.set(BreakpointSpec::new(main.clone(), line_of("let total")));
     bps.set(BreakpointSpec::new(main.clone(), line_of("let sum")));
-    let s = DebugSession::start(adapter, DebugTarget::Cargo { cargo: Cargo::locate().unwrap(), target }, DebugOptions::default(), bps, Waker::noop());
+    let s = DebugSession::start(
+        adapter,
+        DebugTarget::Cargo { cargo: Cargo::locate().unwrap(), target: Box::new(target) },
+        DebugOptions::default(),
+        bps,
+        Waker::noop(),
+    );
     let mut run = Run { s, events: Vec::new() };
 
     // Stops at the breakpoint, past the first println.

@@ -127,10 +127,8 @@ fn plan_with_indent(rope: &Rope, caret: usize, cancel: &AtomicBool, indent_unit:
         match byte {
             b'(' => stack.push(b')'),
             b'[' => stack.push(b']'),
-            b')' | b']' => {
-                if stack.pop() != Some(byte) {
-                    return Err(Error::Unsupported);
-                }
+            b')' | b']' if stack.pop() != Some(byte) => {
+                return Err(Error::Unsupported);
             }
             _ => (),
         }

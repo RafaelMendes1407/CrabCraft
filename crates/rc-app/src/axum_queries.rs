@@ -51,11 +51,7 @@ fn tokens(source: &str, start: usize) -> Option<Vec<Token>> {
                     closed = true;
                     break;
                 }
-                if !escaped && next == '\\' {
-                    escaped = true;
-                } else {
-                    escaped = false;
-                }
+                escaped = !escaped && next == '\\';
             }
             if !closed {
                 return None;

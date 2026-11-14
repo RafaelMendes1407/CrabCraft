@@ -820,7 +820,7 @@ fn search_everywhere_results_grow_and_keep_their_wheel_scroll() {
     // The Files tab lists them all, and the popup grows to most of the window.
     assert!(h.query_by_label("item_000.rs").is_some(), "item_000.rs is not listed");
     assert!(h.query_by_label("item_149.rs").is_some(), "the Files tab stops before 150 files");
-    let popup = h.ctx.memory(|m| m.area_rect(egui::Id::new("search_everywhere"))).unwrap();
+    let popup = h.ctx.memory(|m| m.area_rect(egui::Id::unique("search_everywhere"))).unwrap();
     assert!(popup.height() > 600.0, "the popup does not grow: {popup:?}");
 
     // A wheel scroll stays where it is left: the first row moves up and does not snap back.
@@ -937,7 +937,7 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     let size = vec2(900.0, 500.0);
     let mut h = harness(app, size);
     run_frames(&mut h, "the branches", |a| a.vcs.branch_name().as_deref() == Some("trunk") && a.vcs.branches.len() >= 61);
-    let last = h.state().vcs.branches.iter().filter(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).last().map(|b| b.name.clone()).unwrap();
+    let last = h.state().vcs.branches.iter().rfind(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).map(|b| b.name.clone()).unwrap();
     h.get_by_label("trunk").click();
     h.run_steps(3);
     h.render().unwrap().save(out.join("branches-popup-top.png")).unwrap();
@@ -1442,9 +1442,7 @@ fn refactor_preview_capture() {
     let file = root.join("beta/src/lib.rs");
     let uri = rc_lsp::path_to_uri(&file);
     let edit = |line, a, b| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: "NEEDLE_NAME".into() };
-    let mut changes = std::collections::HashMap::new();
-    changes.insert(uri, vec![edit(3, 10, 16), edit(0, 7, 11)]);
-    let ws_edit = lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() };
+    let ws_edit = lsp::WorkspaceEdit { changes: Some(std::collections::HashMap::from([(uri, vec![edit(3, 10, 16), edit(0, 7, 11)])])), ..Default::default() };
     let preview = crate::refactor_preview::RefactorPreview::start("Rename 'NEEDLE' to 'NEEDLE_NAME'".into(), &ws_edit, Vec::new(), rc_core::Waker::noop());
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorPreview(Box::new(preview)));
     run_frames(&mut h, "the listing", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::RefactorPreview(p)) if !p.loading()));
@@ -1467,13 +1465,14 @@ fn intention_preview_capture() {
         h.run_steps(3);
         let edit =
             |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
-        let mut changes = std::collections::HashMap::new();
-        changes.insert(rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]);
-        changes.insert(rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]);
+        let changes = [
+            (rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]),
+            (rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]),
+        ];
         let action = lsp::CodeAction {
             title: "Rename and import".into(),
             kind: Some(lsp::CodeActionKind::QUICKFIX),
-            edit: Some(lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() }),
+            edit: Some(lsp::WorkspaceEdit { changes: Some(std::collections::HashMap::from(changes)), ..Default::default() }),
             ..Default::default()
         };
         let other = lsp::Command { title: "Run a server command".into(), command: "server.command".into(), arguments: None };
@@ -1580,7 +1579,7 @@ fn shortcuts_are_recorded_in_the_settings() {
     h.state().keymap.chord(rc_editor::Action::Commit).expect("Commit has a shortcut");
     // As the Record button of the Commit row does.
     let ctx = h.ctx.clone();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("recording_shortcut"), commit.clone()));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("recording_shortcut"), commit.clone()));
     h.run_steps(1);
     h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::K);
     h.run_steps(3);
@@ -1991,7 +1990,7 @@ fn cargo_toml_inspections_flag_mistakes_and_fix_them() {
     assert!(text.contains("\ndescription = \"A demo\"\n"), "{text}");
     assert!(text.contains("serde = { version = \"1\", features = [\"derive\"], optional = true }") || text.contains("optional = true"), "{text}");
     run_frames(&mut h, "the diagnostics to go", |a| ours(a).is_empty());
-    assert_eq!(std::fs::read_to_string(&path).unwrap().contains("descripton"), false, "nothing was saved for the user");
+    assert!(!std::fs::read_to_string(&path).unwrap().contains("descripton"), "nothing was saved for the user");
 }
 
 #[test]
@@ -3499,7 +3498,7 @@ fn settings_pages_capture() {
     ] {
         h.state_mut().open_settings(page);
         h.run_steps(4);
-        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("settings"))).unwrap_or(egui::Rect::NOTHING);
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::unique("settings"))).unwrap_or(egui::Rect::NOTHING);
         sizes.push((name, rect.size()));
         h.render().unwrap().save(out.join(format!("settings-page-{name}.png"))).unwrap();
         h.state_mut().dialog = None;
@@ -3603,14 +3602,14 @@ fn settings_keep_the_same_width_when_switching_pages() {
     ] {
         h.state_mut().open_settings(page);
         h.run_steps(4);
-        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap().height();
+        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap().height();
         for _ in 0..30 {
             h.run_steps(1);
-            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
             assert!((rect.height() - initial_height).abs() < 1.0, "settings height must remain stable: {page:?}: {initial_height} -> {}", rect.height());
             assert!(rect.height() <= 760.0, "settings must stay inside the viewport: {page:?}: {rect:?}");
         }
-        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
         widths.push(rect.width());
     }
     assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "settings widths: {widths:?}");
@@ -3758,7 +3757,7 @@ fn tools_settings_fields_fit_the_fixed_page_width() {
     let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
     h.state_mut().open_settings(SettingsPage::Tools);
     h.run_steps(5);
-    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
     assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
     let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
     assert!(fields.len() >= 10);
@@ -3814,7 +3813,7 @@ fn completed_interface_theme_and_size_capture() {
         h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
         run_frames(&mut h, "installed toolchain versions", |app| app.toolchain.is_some());
         h.run_steps(5);
-        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
         assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(modal), "{label}: {modal:?}");
         h.render().unwrap().save(out.join(format!("completed-settings-{label}.png"))).unwrap();
         h.state_mut().dialog = None;

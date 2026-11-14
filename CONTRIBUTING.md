@@ -20,8 +20,8 @@ state their prerequisites individually; do not run every ignored test indiscrimi
 See [security audit](docs/SECURITY_AUDIT.md) for independent audit commands and existing debt.
 
 The repository's rustfmt.toml uses `max_width = 160` and `use_small_heuristics = "Max"`.
-Keep broad formatting separate from behavior changes. Formatting/Clippy debt remains visible;
-do not hide new failures by automatically renewing a static-audit exception.
+Keep broad formatting separate from behavior changes. Formatting and strict Clippy must pass;
+the previous static-audit exception has been removed. Do not downgrade failures to warnings.
 
 ## Implementation rules
 

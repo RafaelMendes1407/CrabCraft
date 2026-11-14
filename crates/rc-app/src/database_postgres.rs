@@ -97,7 +97,9 @@ fn cell(text: Option<&str>, kind: &Type) -> Result<Cell, Error> {
             }
             let value = bytes
                 .as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| std::str::from_utf8(pair).ok().and_then(|pair| u8::from_str_radix(pair, 16).ok()).ok_or(Error::Input))
                 .collect::<Result<Vec<_>, _>>()?;
             Cell::Blob(value)
@@ -179,10 +181,8 @@ async fn query(client: &Client, sql: &str, max: usize) -> Result<Rows, Error> {
                 grid.rows.push(data);
                 raw.push(original);
             }
-            SimpleQueryMessage::CommandComplete(count) => {
-                if mutating {
-                    grid.affected = usize::try_from(count).map_err(|_| Error::Limit)?;
-                }
+            SimpleQueryMessage::CommandComplete(count) if mutating => {
+                grid.affected = usize::try_from(count).map_err(|_| Error::Limit)?;
             }
             _ => {}
         }
@@ -345,7 +345,7 @@ async fn update(client: &Client, page: &Page, row: usize, column: usize, value: 
 async fn action(client: &Client, request: Action, write: bool, cancel: &AtomicBool) -> Result<Reply, Error> {
     match request {
         Action::Schema => schema(client).await.map(Reply::Schema),
-        Action::Browse { table, offset } => browse(client, &table, offset).await.map(Reply::Page),
+        Action::Browse { table, offset } => browse(client, &table, offset).await.map(|page| Reply::Page(Box::new(page))),
         Action::Query(sql) => {
             let first = command(&sql);
             if first.is_empty() {
@@ -443,7 +443,7 @@ pub fn run(config: &Config, request: Action, cancel: Arc<AtomicBool>) -> Result<
         let work=async{client.batch_execute(if config.write{"BEGIN ISOLATION LEVEL REPEATABLE READ"}else{"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"}).await.map_err(server)?;let reply=action(&client,request,config.write,&cancel).await?;if cancel.load(Ordering::Relaxed){return Err(Error::Cancelled);}client.batch_execute("COMMIT").await.map_err(server)?;Ok::<_,Error>(reply)};
         let stopped=async{loop{if cancel.load(Ordering::Relaxed){break;}tokio::time::sleep(Duration::from_millis(20)).await;}};
         let result=tokio::select!{result=work=>result,()=stopped=>Err(Error::Cancelled),()=tokio::time::sleep(Duration::from_secs(12))=>Err(Error::Timeout)};
-        if result.is_err(){if let Ok(Ok(stream))=tokio::time::timeout(Duration::from_millis(500),wire::Wire::open(config,Arc::new(AtomicBool::new(false)))).await{let _=tokio::time::timeout(Duration::from_secs(1),token.cancel_query_raw(stream,NoTls)).await;}}
+        if result.is_err()&& let Ok(Ok(stream))=tokio::time::timeout(Duration::from_millis(500),wire::Wire::open(config,Arc::new(AtomicBool::new(false)))).await{let _=tokio::time::timeout(Duration::from_secs(1),token.cancel_query_raw(stream,NoTls)).await;}
         driver.abort();if limited.load(Ordering::Relaxed){Err(Error::Limit)}else{result}
     })
 }
@@ -472,7 +472,7 @@ mod tests {
     }
     fn page(config: &Config, table: &str) -> Page {
         match request(config, Action::Browse { table: table.into(), offset: 0 }) {
-            Reply::Page(page) => page,
+            Reply::Page(page) => *page,
             _ => panic!("page result"),
         }
     }
@@ -502,10 +502,10 @@ mod tests {
         assert_eq!(before.grid.rows[0][2], Cell::Text("12345678901234567890.1234567890".into()));
         assert_eq!(before.grid.rows[0][3], Cell::Blob(vec![0, 255]));
         assert_eq!(before.grid.rows[0][4], Cell::Null);
-        request(&config, Action::Update { page: before.clone(), row: 0, column: 1, value: Cell::Text("edited 🦀".into()) });
+        request(&config, Action::Update { page: Box::new(before.clone()), row: 0, column: 1, value: Cell::Text("edited 🦀".into()) });
         assert_eq!(page(&config, &people).grid.rows[0][1], Cell::Text("edited 🦀".into()));
         assert!(matches!(
-            run(&config, Action::Update { page: before, row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
+            run(&config, Action::Update { page: Box::new(before), row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
             Err(Error::Stale)
         ));
         let mut readonly = config.clone();

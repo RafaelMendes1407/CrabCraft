@@ -23,7 +23,7 @@ pub enum BuildEvent {
     /// Output of a task run before the build (a run configuration's "before launch" tool):
     /// shown even where the build's own output is hidden.
     Task(OutputLine),
-    Diagnostic(Diagnostic),
+    Diagnostic(Box<Diagnostic>),
     /// Always the last event (also when cancelled).
     Finished(BuildResult),
     /// The process could not be started; also the last event.

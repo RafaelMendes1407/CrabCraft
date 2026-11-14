@@ -164,7 +164,7 @@ impl Program {
         }
         let kind = match node.kind() {
             "block" | "expression_statement" | "return_expression" | "parenthesized_expression" => {
-                if let Some(tail) = children(node).into_iter().filter(|node| !matches!(node.kind(), "line_comment" | "block_comment")).last() {
+                if let Some(tail) = children(node).into_iter().rfind(|node| !matches!(node.kind(), "line_comment" | "block_comment")) {
                     let id = self.expression(source, tail, depth + 1)?;
                     self.memo.insert(address, id);
                     return Ok(id);
@@ -227,25 +227,24 @@ impl Program {
             if nodes % 500 == 0 {
                 budget.check()?;
             }
-            if node.kind() == "function_item" {
-                if let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body")) {
-                    let parameters = node
-                        .child_by_field_name("parameters")
-                        .map(children)
-                        .map_or(0, |nodes| nodes.into_iter().filter(|node| !matches!(node.kind(), "line_comment" | "block_comment")).count());
-                    let body = self.expression(&source, body, 0)?;
-                    self.functions.insert(key(&source, name), Function { body, parameters });
-                }
+            if node.kind() == "function_item"
+                && let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body"))
+            {
+                let parameters = node
+                    .child_by_field_name("parameters")
+                    .map(children)
+                    .map_or(0, |nodes| nodes.into_iter().filter(|node| !matches!(node.kind(), "line_comment" | "block_comment")).count());
+                let body = self.expression(&source, body, 0)?;
+                self.functions.insert(key(&source, name), Function { body, parameters });
             }
-            if matches!(node.kind(), "let_declaration" | "const_item") {
-                if let (Some(pattern), Some(value)) =
+            if matches!(node.kind(), "let_declaration" | "const_item")
+                && let (Some(pattern), Some(value)) =
                     (node.child_by_field_name("pattern").or_else(|| node.child_by_field_name("name")), node.child_by_field_name("value"))
-                {
-                    if pattern.kind() == "identifier" && !children(node).iter().any(|node| node.kind() == "mutable_specifier") {
-                        let value = self.expression(&source, value, 0)?;
-                        self.bindings.insert(key(&source, pattern), value);
-                    }
-                }
+                && pattern.kind() == "identifier"
+                && !children(node).iter().any(|node| node.kind() == "mutable_specifier")
+            {
+                let value = self.expression(&source, value, 0)?;
+                self.bindings.insert(key(&source, pattern), value);
             }
             if node.kind() == "call_expression"
                 && !node.parent().is_some_and(|parent| {
@@ -425,10 +424,10 @@ impl Graph<'_> {
         match expression.kind {
             ExprKind::String(value) => Ok(Some(value)),
             ExprKind::Reference(origin) => {
-                if let Some(symbol) = self.resolver.definition(&origin)? {
-                    if let Some(value) = self.program.bindings.get(&symbol.key) {
-                        return self.literal(*value, depth + 1);
-                    }
+                if let Some(symbol) = self.resolver.definition(&origin)?
+                    && let Some(value) = self.program.bindings.get(&symbol.key)
+                {
+                    return self.literal(*value, depth + 1);
                 }
                 Ok(None)
             }
@@ -481,12 +480,12 @@ impl Graph<'_> {
         };
         match expression.kind {
             ExprKind::Reference(origin) => {
-                if let Some(symbol) = self.resolver.definition(&origin)? {
-                    if let Some(value) = self.program.bindings.get(&symbol.key) {
-                        let value = *value;
-                        self.used.insert(value);
-                        return self.evaluate(value, prefix, depth + 1);
-                    }
+                if let Some(symbol) = self.resolver.definition(&origin)?
+                    && let Some(value) = self.program.bindings.get(&symbol.key)
+                {
+                    let value = *value;
+                    self.used.insert(value);
+                    return self.evaluate(value, prefix, depth + 1);
                 }
                 Ok(None)
             }
@@ -631,10 +630,11 @@ impl Graph<'_> {
                     file: schema_source.path.clone(),
                     position: crate::convert::lsp_position(&schema_source.rope, schema_source.rope.byte_to_char(derive)),
                 };
-                if let Some(symbol) = self.resolver.definition(&origin)? {
-                    if symbol.package.as_deref() == Some("serde_derive") && matches!(symbol.name.as_str(), "Deserialize" | "derive_deserialize") {
-                        confirmed = true;
-                    }
+                if let Some(symbol) = self.resolver.definition(&origin)?
+                    && symbol.package.as_deref() == Some("serde_derive")
+                    && matches!(symbol.name.as_str(), "Deserialize" | "derive_deserialize")
+                {
+                    confirmed = true;
                 }
             }
             if !confirmed {
@@ -738,16 +738,14 @@ pub fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], overlays
                     || program.functions.keys().any(|key| {
                         graph.program.sources.get(&key.file).is_some_and(|source| {
                             let at = crate::convert::char_of(&source.rope, key.position);
-                            source.rope.slice(at..source.rope.len_chars().min(at + name.chars().count())).to_string() == *name
+                            source.rope.slice(at..source.rope.len_chars().min(at + name.chars().count())).chars().eq(name.chars())
                         })
                     })
             }
             _ => false,
         };
-        if candidate {
-            if let Some(routes) = graph.evaluate(*id, "", 0)? {
-                groups.push((*id, routes));
-            }
+        if candidate && let Some(routes) = graph.evaluate(*id, "", 0)? {
+            groups.push((*id, routes));
         }
     }
     let mut routes = Vec::new();
@@ -839,7 +837,8 @@ pub(crate) mod tests {
         app.trust_project_tools_for_test();
         app.insight.set_env(vec![("CARGO_NET_OFFLINE".into(), "true".into())]);
         app.insight.start_rust(root.path(), None, false);
-        for name in ["main.rs"] {
+        {
+            let name = "main.rs";
             app.open_file_and_wait(&root.path().join("src").join(name));
         }
         let mut h = crate::screens::harness(app, egui::vec2(1500.0, 1000.0));

@@ -164,7 +164,7 @@ impl Database {
                 }
                 Ok(Reply::Page(page)) => {
                     self.selected = page.table.name.clone();
-                    self.page = Some(page);
+                    self.page = Some(*page);
                     self.grid = None;
                 }
                 Ok(Reply::Query(grid)) => {
@@ -408,7 +408,7 @@ impl Database {
                 let value = parse_cell(edit.kind, &edit.text);
                 if let (Ok(value), Some(page)) = (value, self.page.clone()) {
                     let (row, column) = (edit.row, edit.column);
-                    self.action(Action::Update { page, row, column, value }, trusted);
+                    self.action(Action::Update { page: Box::new(page), row, column, value }, trusted);
                 } else {
                     self.error = Some(tr("Enter a valid value for the selected data type; BLOB uses hexadecimal").into());
                 }
@@ -469,11 +469,13 @@ fn parse_cell(kind: usize, text: &str) -> Result<Cell, ()> {
         2 => text.parse::<f64>().ok().filter(|value| value.is_finite()).map(Cell::Real).ok_or(()),
         3 => Ok(Cell::Text(text.into())),
         4 => {
-            if text.len() % 2 != 0 || !text.is_ascii() {
+            if !text.len().is_multiple_of(2) || !text.is_ascii() {
                 return Err(());
             }
             text.as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| std::str::from_utf8(pair).ok().and_then(|pair| u8::from_str_radix(pair, 16).ok()).ok_or(()))
                 .collect::<Result<Vec<_>, _>>()
                 .map(Cell::Blob)

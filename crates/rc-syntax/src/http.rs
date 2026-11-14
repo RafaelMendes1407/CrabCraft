@@ -388,13 +388,14 @@ fn variables(line: &str, start: usize, out: &mut Vec<Unsupported>) {
     let chars: Vec<char> = line.chars().collect();
     let mut i = 0;
     while i + 1 < chars.len() {
-        if chars[i] == '{' && chars[i + 1] == '{' {
-            if let Some(len) = (i + 2..chars.len().saturating_sub(1)).find(|&j| chars[j] == '}' && chars[j + 1] == '}') {
-                let name: String = chars[i + 2..len].iter().collect::<String>().trim().to_string();
-                out.push(Unsupported { kind: UnsupportedKind::Variable(name), start: start + i, end: start + len + 2 });
-                i = len + 2;
-                continue;
-            }
+        if chars[i] == '{'
+            && chars[i + 1] == '{'
+            && let Some(len) = (i + 2..chars.len().saturating_sub(1)).find(|&j| chars[j] == '}' && chars[j + 1] == '}')
+        {
+            let name: String = chars[i + 2..len].iter().collect::<String>().trim().to_string();
+            out.push(Unsupported { kind: UnsupportedKind::Variable(name), start: start + i, end: start + len + 2 });
+            i = len + 2;
+            continue;
         }
         i += 1;
     }
@@ -609,9 +610,9 @@ mod tests {
         assert_eq!(part[0], spans[9]);
         let rope = rc_text::Rope::from_str(FILE);
         assert_eq!(crate::Lang::from_path(std::path::Path::new("api.rest")), crate::Lang::Http);
-        for first in 0..lines.len() {
+        for (first, expected) in spans.iter().enumerate().take(lines.len()) {
             let got = crate::highlight_lexical(crate::Lang::Http, &rope, first, 3).unwrap();
-            assert_eq!(got[0], spans[first], "line {first}");
+            assert_eq!(&got[0], expected, "line {first}");
         }
         let var: Vec<String> = vec!["GET http://{{host}}/a\n".into()];
         let s = highlight(&var, 0, 1);

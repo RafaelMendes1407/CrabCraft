@@ -877,11 +877,11 @@ fn paint_scrollbars(
             state.scroll.y = (state.scroll.y + dy / (track.height() - thumb_h) * max_scroll).clamp(0.0, max_scroll);
         } else if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
+            && !jump_to_problem_mark(state, m, text_rect, &marks, p.y)
+            && !thumb.contains(p)
         {
-            if !jump_to_problem_mark(state, m, text_rect, &marks, p.y) && !thumb.contains(p) {
-                let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
-                state.scroll.y = t * max_scroll;
-            }
+            let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
+            state.scroll.y = t * max_scroll;
         }
         let active = resp.hovered() || resp.dragged();
         let alpha = if active { 0.5 } else { 0.28 };

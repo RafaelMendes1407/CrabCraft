@@ -1,6 +1,9 @@
 //! The application: workspace, open documents, tool window layout, settings and session, and
 //! the frame loop that ties them together.
 
+type CargoLoadResult = (Result<(rc_cargo::CargoWorkspace, rc_cargo::Cargo), String>, Option<rc_cargo::LoadLog>);
+type AttachedCargoLoadResult = Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>;
+
 use crate::docs::Docs;
 use crate::insight::{Insight, InsightOutput, NavKind, Target};
 use crate::native_menu::{MenuCommand, NativeMenu};
@@ -192,14 +195,14 @@ pub struct CrabCraftApp {
     statement_completion: Option<crate::complete_statement::Job>,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
-    cargo_load: Option<Inbox<(Result<(rc_cargo::CargoWorkspace, rc_cargo::Cargo), String>, Option<rc_cargo::LoadLog>)>>,
+    cargo_load: Option<Inbox<CargoLoadResult>>,
     /// Every load of the Cargo model, newest last (the Build window's Sync tab).
     pub sync_log: crate::sync_log::SyncLog,
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
     libraries_load: Option<Inbox<(Vec<rc_cargo::Library>, Option<rc_cargo::LoadLog>)>>,
     /// The attached Cargo projects being read.
-    attached_load: Option<Inbox<Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>>>,
+    attached_load: Option<Inbox<AttachedCargoLoadResult>>,
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
@@ -557,7 +560,6 @@ impl CrabCraftApp {
                     || !self.disk_save.format_pending.is_empty() =>
             {
                 self.workspace_open.ready = Some(prepared);
-                return;
             }
             Ok(prepared) if prepared.fingerprint == crate::workspace_open::Fingerprint::capture(&self.docs) => {
                 if self.session_dirty && self.workspace.is_some() {
@@ -741,10 +743,10 @@ impl CrabCraftApp {
         if matches!(change, crate::criticalup_provider::Change::Default) {
             self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
         }
-        if !matches!(change, crate::criticalup_provider::Change::Blocked) {
-            if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf) {
-                self.load_cargo_workspace(manifest);
-            }
+        if !matches!(change, crate::criticalup_provider::Change::Blocked)
+            && let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf)
+        {
+            self.load_cargo_workspace(manifest);
         }
     }
 
@@ -796,7 +798,7 @@ impl CrabCraftApp {
             self.cfg_epoch += 1;
         }
         let Some(inbox) = &self.cargo_load else { return };
-        for (result, log) in inbox.drain() {
+        if let Some((result, log)) = inbox.drain().into_iter().next() {
             if let Some(log) = log {
                 self.sync_log.push(crate::sync_log::SyncKind::Project, log);
             }
@@ -814,7 +816,6 @@ impl CrabCraftApp {
                 Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
             }
             self.cargo_load = None;
-            return;
         }
     }
 
@@ -2161,10 +2162,12 @@ impl CrabCraftApp {
             return;
         }
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
-        if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
-            if self.rustfmt_document(i, false) {
-                return;
-            }
+        if action == Action::Reformat
+            && self.runner.cargo_workspace.is_some()
+            && self.docs.list[i].path.extension().is_some_and(|e| e == "rs")
+            && self.rustfmt_document(i, false)
+        {
+            return;
         }
         if action == Action::Complete && crate::sql_injection::complete(&mut self.docs.list[i], &self.database.tables) {
             self.insight.cancel_local_completion_requests();
@@ -3180,10 +3183,10 @@ impl CrabCraftApp {
         match result {
             Ok(session) => {
                 let second = self.terminals.push(session);
-                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take() {
-                    if self.terminals.get(first).is_some() {
-                        self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
-                    }
+                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take()
+                    && self.terminals.get(first).is_some()
+                {
+                    self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
                 }
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
@@ -3243,7 +3246,6 @@ impl CrabCraftApp {
                 doc.editor.failure_notes = notes.cloned().unwrap_or_default();
             }
             self.update_rust_markers(i);
-            return;
         }
     }
 
@@ -3600,10 +3602,6 @@ impl CrabCraftApp {
         }
     }
 
-    /// Opens what the command line or the system asked for, at its line and column (1-based).
-    pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
-        self.open_requests(vec![request.clone()]);
-    }
     /// Preserve every file and caret in one CLI/system delivery, including a pending workspace.
     pub fn open_requests(&mut self, requests: Vec<crate::cli::OpenRequest>) {
         if requests.len() > 257 {
@@ -4432,6 +4430,15 @@ fn group_lines<T: Ord>(entries: impl Iterator<Item = (PathBuf, T)>) -> std::coll
     map
 }
 
+/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
+/// `version`: chars `start..end` and the new requirement.
+pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
+    let version = semver::Version::parse(version).ok()?;
+    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
+    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
+    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
+}
+
 #[cfg(test)]
 mod double_tap_tests {
     use super::{double_tap, interrupts_tap};
@@ -4462,13 +4469,4 @@ mod double_tap_tests {
         // Ctrl+click, then Ctrl alone.
         assert!(!run(&[(true, false, 1.0), (true, true, 1.05), (false, false, 1.1), (true, false, 1.2)]).contains(&true));
     }
-}
-
-/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
-/// `version`: chars `start..end` and the new requirement.
-pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
-    let version = semver::Version::parse(version).ok()?;
-    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
-    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
-    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
 }

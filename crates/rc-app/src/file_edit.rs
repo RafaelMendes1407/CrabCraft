@@ -189,11 +189,11 @@ impl Plan {
                 app.docs.list[index].editor.set_selection(rc_text::Selection::point(caret));
             }
         }
-        if let Intent::Build(fix) = self.intent {
-            if let Some(build) = &mut app.runner.build {
-                for diagnostic in build.diagnostics.iter_mut().filter(|d| d.fix.as_ref() == Some(&fix)) {
-                    diagnostic.fix = None;
-                }
+        if let Intent::Build(fix) = self.intent
+            && let Some(build) = &mut app.runner.build
+        {
+            for diagnostic in build.diagnostics.iter_mut().filter(|d| d.fix.as_ref() == Some(&fix)) {
+                diagnostic.fix = None;
             }
         }
         app.focus_editor = true;

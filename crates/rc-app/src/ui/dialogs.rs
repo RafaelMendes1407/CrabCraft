@@ -334,7 +334,7 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::Conflicts { selected } => conflicts_dialog(app, ctx, selected),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
         Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => {
-            breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus)
+            breakpoint_properties(app, ctx, path, *line, condition, log, (once, enabled, focus))
         }
         Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
@@ -415,7 +415,7 @@ struct SettingsLayout {
 }
 impl SettingsLayout {
     fn for_viewport(viewport: egui::Vec2) -> Self {
-        let width = (viewport.x - 32.0).max(1.0).min(SETTINGS_NAV_W + 29.0 + SETTINGS_PAGE_W);
+        let width = (viewport.x - 32.0).clamp(1.0, SETTINGS_NAV_W + 29.0 + SETTINGS_PAGE_W);
         let compact = width < 620.0;
         let nav = if compact { 0.0 } else { (width * 0.24).min(SETTINGS_NAV_W) };
         let page = if compact { width } else { (width - nav - 29.0).max(1.0) };
@@ -2117,10 +2117,9 @@ fn breakpoint_properties(
     line: usize,
     condition: &mut String,
     log: &mut String,
-    once: &mut bool,
-    enabled: &mut bool,
-    focus: &mut bool,
+    flags: (&mut bool, &mut bool, &mut bool),
 ) -> Outcome {
+    let (once, enabled, focus) = flags;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
         title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
@@ -2974,7 +2973,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     if let (Some(start), Some(end), Some(old), Some(new), Some(doc)) = (num(0), num(1), text(2), text(3), app.docs.active_doc_mut()) {
                         let rope = doc.editor.buffer.rope();
                         // Only when the text there is still what the fix was made for.
-                        if start <= end && end <= rope.len_chars() && rope.slice(start..end).to_string() == old {
+                        if start <= end && end <= rope.len_chars() && rope.slice(start..end) == old {
                             doc.editor.replace(start, end, new);
                         }
                     }
@@ -3165,7 +3164,8 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
 fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
     // Character positions remain meaningful when a file was closed; do not invent line 1
     // or discard the column merely because its preview buffer is no longer open.
-    let items: Vec<(PathBuf, usize, Option<(usize, usize)>, String)> = app
+    type HistoryItem = (PathBuf, usize, Option<(usize, usize)>, String);
+    let items: Vec<HistoryItem> = app
         .nav_back
         .iter()
         .rev()
@@ -4307,7 +4307,7 @@ mod responsive_settings_tests {
             for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Tools] {
                 harness.state_mut().open_settings(page);
                 harness.run_steps(5);
-                let modal = harness.ctx.memory(|memory| memory.area_rect(Id::new("settings"))).unwrap();
+                let modal = harness.ctx.memory(|memory| memory.area_rect(Id::unique("settings"))).unwrap();
                 let ok = harness.get_by_label(tr("OK")).rect();
                 let cancel = harness.get_by_label(tr("Cancel")).rect();
                 let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);

@@ -244,10 +244,12 @@ impl Tracker {
     }
     pub fn restore(&mut self, config: Option<Config>) {
         self.token.clear();
-        if let Some(config) = config {
-            if matches!(config.provider.as_str(), "github" | "gitlab") && config.base_url.len() <= 2048 && config.project.len() <= 512 {
-                self.config = config;
-            }
+        if let Some(config) = config
+            && matches!(config.provider.as_str(), "github" | "gitlab")
+            && config.base_url.len() <= 2048
+            && config.project.len() <= 512
+        {
+            self.config = config;
         }
     }
     pub fn cancel(&self) {
@@ -556,7 +558,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (mut stream, _) = source.accept().unwrap();
             let mut bytes = [0u8; 4096];
-            stream.read(&mut bytes).unwrap();
+            assert!(stream.read(&mut bytes).unwrap() > 0);
             write!(stream, "HTTP/1.1 302 Found\r\nLocation: http://{target_addr}/steal\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
         });
         assert!(matches!(fetch(&cfg, "secret", "open", 1, &rc_dotnet::CancelToken::new()).await, Err(Error::Status(302))));
@@ -592,7 +594,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
             let mut bytes = [0u8; 4096];
-            stream.read(&mut bytes).unwrap();
+            assert!(stream.read(&mut bytes).unwrap() > 0);
             write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: 2097153\r\nConnection: close\r\n\r\n").unwrap();
         });
         assert!(matches!(fetch(&cfg, "", "open", 1, &rc_dotnet::CancelToken::new()).await, Err(Error::Limit)));

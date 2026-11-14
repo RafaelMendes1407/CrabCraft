@@ -2053,15 +2053,6 @@ impl Insight {
         }
     }
 
-    /// ⌥⌘L: formats the document, or the selection.
-    /// Reformats a Rust file that was just saved.
-    pub fn format_saved(&mut self, doc: &Doc) {
-        if self.rust && self.session.is_some() && doc.editor.selection.primary().is_empty() {
-            self.format_on_save = Some(doc.editor.id);
-            self.format(doc);
-        }
-    }
-
     pub fn format(&mut self, doc: &Doc) {
         let Some(session) = &self.session else { return };
         let rope = doc.editor.buffer.rope();
@@ -2642,7 +2633,7 @@ mod tests {
         assert!(!excluded_autoimport(&item("(use std::cmp::Ordering)"), &paths));
         assert!(!excluded_autoimport(&item("(use std::synchronization::Ordering)"), &paths));
         assert!(!excluded_autoimport(&item("Ordering"), &paths));
-        assert!(excluded_autoimport(&item("(use ::std::sync::Ordering)"), &vec!["std::sync::Ordering".into()]));
+        assert!(excluded_autoimport(&item("(use ::std::sync::Ordering)"), &["std::sync::Ordering".into()]));
     }
 
     #[test]

@@ -1,8 +1,9 @@
 """Guard the severity policy against accidental promotion of unknown data."""
 
 import unittest
+from unittest.mock import patch
 
-from scripts.security_audit import advisory_severity, static_source_files
+from scripts.security_audit import advisory_severity, static
 
 
 class SeverityTests(unittest.TestCase):
@@ -19,10 +20,13 @@ class SeverityTests(unittest.TestCase):
             with self.subTest(score=score):
                 self.assertEqual(advisory_severity({"cvss": score}), "UNSPECIFIED")
 
-    def test_static_baseline_excludes_generated_rust_files(self):
-        paths = [str(path) for path in static_source_files()]
-        self.assertTrue(any(path.endswith("fuzz_targets/session_input.rs") for path in paths))
-        self.assertFalse(any("/target/" in path for path in paths))
+    def test_static_failures_are_never_downgraded(self):
+        for fmt, clippy in ((1, 0), (0, 101), (1, 101)):
+            checks = [{"name": name, "status": "FAIL" if code else "PASS", "exit_code": code}
+                      for name, code in (("cargo-fmt", fmt), ("cargo-clippy", clippy))]
+            with self.subTest(fmt=fmt, clippy=clippy), patch(
+                    "scripts.security_audit.command_result", side_effect=checks):
+                self.assertEqual(static()["status"], "FAIL")
 
 
 if __name__ == "__main__":

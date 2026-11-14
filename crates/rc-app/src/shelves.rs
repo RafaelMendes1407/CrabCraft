@@ -268,18 +268,19 @@ pub async fn restore(repo: &rc_vcs::Repository, base: &Path, shelf: &Shelf, canc
         return Err(Error::Invalid);
     }
     for line in patch.split(|b| *b == b'\n') {
-        if line.starts_with(b"index ") {
-            if let Some(mode) = line.split(|b| *b == b' ').nth(2) {
-                if mode != b"100644" && mode != b"100755" {
-                    return Err(Error::Unsupported);
-                }
-            }
+        if line.starts_with(b"index ")
+            && let Some(mode) = line.split(|b| *b == b' ').nth(2)
+            && mode != b"100644"
+            && mode != b"100755"
+        {
+            return Err(Error::Unsupported);
         }
         for prefix in [b"new file mode ".as_slice(), b"deleted file mode ", b"old mode ", b"new mode "] {
-            if let Some(mode) = line.strip_prefix(prefix) {
-                if mode != b"100644" && mode != b"100755" {
-                    return Err(Error::Unsupported);
-                }
+            if let Some(mode) = line.strip_prefix(prefix)
+                && mode != b"100644"
+                && mode != b"100755"
+            {
+                return Err(Error::Unsupported);
             }
         }
     }
@@ -364,7 +365,7 @@ impl Shelves {
             // with a fresh token so that backup remains visible after cancellation/errors.
             let (result, shelves) = match list(repo.root(), &base, &rc_vcs::CancelToken::new()) {
                 Ok(shelves) => (result, Some(shelves)),
-                Err(error) => (result.and_then(|_| Err(error)), None),
+                Err(error) => (result.and(Err(error)), None),
             };
             out.send(Event { result, shelves, changed });
         });

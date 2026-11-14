@@ -48,7 +48,7 @@ pub enum Plan {
     /// Text edits, plus notes about what else it does (file operations, a server command).
     Edits(Vec<FileJob>, Vec<String>),
     /// A server action whose edit must be resolved first.
-    Resolve(lsp::CodeAction),
+    Resolve(Box<lsp::CodeAction>),
     /// Nothing to diff: why.
     Note(String),
 }
@@ -83,6 +83,7 @@ pub enum State {
 
 /// Identifies what is previewed: row, title, and the document and text version it was asked in.
 type Key = (usize, String, u64, u64);
+type PreviewJob = (Arc<AtomicBool>, Inbox<Vec<FilePreview>>, Vec<String>);
 
 pub struct IntentionPreview {
     key: Option<Key>,
@@ -90,7 +91,7 @@ pub struct IntentionPreview {
     resolve: Option<Pending<lsp::CodeAction>>,
     /// The open texts when the preview started, for a resolved edit.
     open: Vec<(PathBuf, Rope)>,
-    job: Option<(Arc<AtomicBool>, Inbox<Vec<FilePreview>>, Vec<String>)>,
+    job: Option<PreviewJob>,
     resolved: Option<lsp::CodeAction>,
     waker: Waker,
 }
@@ -295,7 +296,7 @@ impl CrabCraftApp {
                     }
                     return Plan::Edits(jobs, notes);
                 }
-                (None, None) => return Plan::Resolve(a.clone()),
+                (None, None) => return Plan::Resolve(Box::new(a.clone())),
                 (None, Some(c)) => c,
             },
             lsp::CodeActionOrCommand::Command(c) => c,
@@ -323,7 +324,7 @@ impl CrabCraftApp {
                 };
                 active_job(Box::new(move |t| {
                     let rope = Rope::from_str(t);
-                    (start <= end && end <= rope.len_chars() && rope.slice(start..end).to_string() == old).then(|| (start, end, new))
+                    (start <= end && end <= rope.len_chars() && rope.slice(start..end) == old).then_some((start, end, new))
                 }))
             }
             crate::feature_fix::ENABLE_FEATURE_COMMAND => {
@@ -453,7 +454,7 @@ mod tests {
     #[test]
     fn a_new_selection_drops_the_previous_preview() {
         let mut p = IntentionPreview::new(Waker::noop());
-        p.start((0, "A".into(), 1, 1), Plan::Resolve(lsp::CodeAction { title: "A".into(), ..Default::default() }), Vec::new(), |_| None);
+        p.start((0, "A".into(), 1, 1), Plan::Resolve(Box::new(lsp::CodeAction { title: "A".into(), ..Default::default() })), Vec::new(), |_| None);
         assert!(matches!(p.state, State::Note(_)));
         p.start(
             (1, "B".into(), 1, 1),

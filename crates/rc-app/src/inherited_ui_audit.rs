@@ -177,12 +177,12 @@ fn native_dock_stripes_move_show_hide_and_restore_the_cargo_layout() {
     harness.run_steps(4);
     let mut visible = Vec::new();
     for window in ToolWindow::ALL {
-        if matches!(harness.state().dock.side_of(window), Side::Left | Side::Bottom) {
-            if let Some(node) = harness.query_by_label(window.title()) {
-                let rect = node.rect();
-                if rect.intersects(harness.ctx.content_rect()) {
-                    visible.push((window, rect));
-                }
+        if matches!(harness.state().dock.side_of(window), Side::Left | Side::Bottom)
+            && let Some(node) = harness.query_by_label(window.title())
+        {
+            let rect = node.rect();
+            if rect.intersects(harness.ctx.content_rect()) {
+                visible.push((window, rect));
             }
         }
     }

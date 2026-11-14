@@ -372,11 +372,7 @@ fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, c
             Some(Edge::Bottom) => Rect::from_min_max(pos2(glyph.left(), glyph.center().y), glyph.max),
             None => glyph,
         };
-        painter.rect_filled(
-            half.shrink(half.width().min(half.height()).max(0.0).min(2.0) * 0.5),
-            0.0,
-            p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }),
-        );
+        painter.rect_filled(half.shrink(half.width().min(half.height()).clamp(0.0, 2.0) * 0.5), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
     }
 }
 
@@ -1328,8 +1324,7 @@ mod docking_tests {
             over_window: true,
             released: false,
         });
-        let mut input = egui::RawInput::default();
-        input.viewport_id = egui::ViewportId::from_hash_of("destination");
+        let mut input = egui::RawInput { viewport_id: egui::ViewportId::from_hash_of("destination"), ..Default::default() };
         input.viewports.insert(input.viewport_id, Default::default());
         input.events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
         let context = egui::Context::default();

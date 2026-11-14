@@ -11,6 +11,8 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+type ProcessInvocation = (std::path::PathBuf, Vec<String>, Vec<(String, String)>);
+
 const OUTPUT: usize = 2 * 1024 * 1024;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -107,7 +109,7 @@ impl Settings {
         Ok(format!("cd -- {} && export PATH={} && {compiler}", quote(&self.root)?, quote(&path)?))
     }
 }
-fn execution(settings: &Settings, dir: &Path, script: String) -> Result<(std::path::PathBuf, Vec<String>, Vec<(String, String)>), Error> {
+fn execution(settings: &Settings, dir: &Path, script: String) -> Result<ProcessInvocation, Error> {
     settings.validate()?;
     if let Some(container) = &settings.container {
         let spec = container.script(script)?;
@@ -189,7 +191,8 @@ async fn collect(
     let mut pending = [Vec::new(), Vec::new()];
     let mut bytes = 0usize;
     let mut status = None;
-    let result=async {loop{tokio::select!{exit=child.wait(),if status.is_none()=>{status=Some(exit?);},chunk=rx.recv()=>{match chunk{Some((stream,data))=>{bytes=bytes.saturating_add(data.len());if bytes>OUTPUT{return Err(Error::Limit);}pending[stream].extend(data);while let Some(end)=pending[stream].iter().position(|b|*b==b'\n'){let raw:Vec<u8>=pending[stream].drain(..=end).collect();let line=String::from_utf8_lossy(&raw);let line=line.trim_end_matches(['\r','\n']);on_line(if stream==0{Stream::Stdout}else{Stream::Stderr},line);if stream==0{out.push_str(line);out.push('\n');}}if pending[stream].len()>128*1024{return Err(Error::Limit);}},None=>{let exit=if let Some(status)=status{status}else{child.wait().await?};for(stream,raw)in pending.iter().enumerate(){if !raw.is_empty(){let line=String::from_utf8_lossy(raw);on_line(if stream==0{Stream::Stdout}else{Stream::Stderr},&line);if stream==0{out.push_str(&line);}}}return Ok((exit.code().unwrap_or(-1),out));}}},()=tokio::time::sleep(Duration::from_millis(10))=>{if cancel.is_cancelled(){return Err(Error::Cancelled);}if start.elapsed()>timeout{return Err(Error::Timeout);}}}}}.await;
+    let result=async {loop{tokio::select!{exit=child.wait(),if status.is_none()=>{status=Some(exit?);},chunk=rx.recv()=>{match chunk{Some((stream,data))=>{bytes=bytes.saturating_add(data.len());if bytes>OUTPUT{return Err(Error::Limit);}pending[stream].extend(data);while let Some(end)=pending[stream].iter().position(|b|*b==b'\n'){let raw:Vec<u8>=pending[stream].drain(..=end).collect();let line=String::from_utf8_lossy(&raw);let line=line.trim_end_matches(['\r','\n']);on_line(if stream==0{Stream::Stdout}else{Stream::Stderr},line);if stream==0{out.push_str(line);out.push('\n');}}if pending[stream].len()>128*1024{return Err(Error::Limit);}},None=>{let exit=if let Some(status)=status{status}else{child.wait().await?};for(stream,raw)in pending.iter().enumerate(){if !raw.is_empty(){let line=String::from_utf8_lossy(raw);on_line(if stream==0{Stream::Stdout}else{Stream::Stderr},&line);if stream==0{out.push_str(&line);}}}return Ok((exit.code().unwrap_or(-1),out));}}},()=tokio::time::sleep(Duration::from_millis(10))=>{if cancel.is_cancelled(){return Err(Error::Cancelled);}
+if start.elapsed()>timeout{return Err(Error::Timeout);}}}}}.await;
     if result.is_err() {
         rc_dotnet::process::kill_tree(pid);
         let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;

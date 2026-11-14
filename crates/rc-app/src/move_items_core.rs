@@ -384,10 +384,10 @@ fn resolve(client: &Client, requests: &[(PathBuf, Rope, usize)], budget: &Budget
     while result.iter().any(Option::is_none) {
         budget.check()?;
         for (index, request) in pending.iter_mut().enumerate() {
-            if result[index].is_none() {
-                if let Some(value) = request.poll() {
-                    result[index] = Some(definitions(value.map_err(|_| Error::Server)?)?.into_iter().next().ok_or(Error::Server)?);
-                }
+            if result[index].is_none()
+                && let Some(value) = request.poll()
+            {
+                result[index] = Some(definitions(value.map_err(|_| Error::Server)?)?.into_iter().next().ok_or(Error::Server)?);
             }
         }
         if result.iter().any(Option::is_none) {

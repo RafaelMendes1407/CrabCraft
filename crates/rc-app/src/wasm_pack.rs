@@ -69,7 +69,7 @@ mod tests {
             p.args,
             ["build", ".", "--target", "web", "--mode", "no-install", "--no-opt", "--dev", "--out-dir", "web assets", "--features", "small,fast"]
         );
-        assert_eq!(p.env.iter().filter(|(key, _)| key == "MODE").last().unwrap().1, "test");
+        assert_eq!(p.env.iter().rfind(|(key, _)| key == "MODE").unwrap().1, "test");
         assert!(p.env.contains(&("RUSTUP_AUTO_INSTALL".into(), "0".into())));
         assert_eq!(plan(manifest, &RunOptions { wasm_target: "--publish".into(), ..Default::default() }, Vec::new()).unwrap_err(), PlanError::Target);
         assert_eq!(plan(manifest, &RunOptions { features: "foo; rm".into(), ..Default::default() }, Vec::new()).unwrap_err(), PlanError::Features);

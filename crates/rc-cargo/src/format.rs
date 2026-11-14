@@ -278,6 +278,15 @@ fn replace(path: &Path, text: &str) -> std::io::Result<()> {
     written
 }
 
+struct FormatGroup(Option<u32>);
+impl Drop for FormatGroup {
+    fn drop(&mut self) {
+        if let Some(pid) = self.0 {
+            rc_dotnet::kill_tree(pid);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,14 +391,5 @@ mod tests {
     fn a_toolchain_without_rustfmt_is_reported() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(run(&Cargo::new(dir.path().join("cargo")), &[]), Err(FormatError::Missing));
-    }
-}
-
-struct FormatGroup(Option<u32>);
-impl Drop for FormatGroup {
-    fn drop(&mut self) {
-        if let Some(pid) = self.0 {
-            rc_dotnet::kill_tree(pid);
-        }
     }
 }

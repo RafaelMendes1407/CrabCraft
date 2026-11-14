@@ -330,13 +330,13 @@ impl Engine {
                 } else {
                     self.update(&params, out)?;
                 }
-            } else if method == "$/cancel_request" {
-                if let Some(id) = params.get("id") {
-                    let key = request_id(id)?;
-                    if let Some(permission) = self.permissions.remove(&key) {
-                        send(stdin, json!({"jsonrpc":"2.0","id":permission.id,"result":{"outcome":{"outcome":"cancelled"}}}), stop).await?;
-                        out.send(Event::Gone(permission.id));
-                    }
+            } else if method == "$/cancel_request"
+                && let Some(id) = params.get("id")
+            {
+                let key = request_id(id)?;
+                if let Some(permission) = self.permissions.remove(&key) {
+                    send(stdin, json!({"jsonrpc":"2.0","id":permission.id,"result":{"outcome":{"outcome":"cancelled"}}}), stop).await?;
+                    out.send(Event::Gone(permission.id));
                 }
             }
             return Ok(());
@@ -513,7 +513,7 @@ async fn worker(
         }.await;
         // Resolve outstanding permissions as cancelled before stopping the process tree.
         let mut cleanup=Vec::new();for permission in engine.permissions.values(){if let Ok(mut bytes)=serde_json::to_vec(&json!({"jsonrpc":"2.0","id":permission.id,"result":{"outcome":{"outcome":"cancelled"}}})){cleanup.append(&mut bytes);cleanup.push(b'\n');}}
-        if let Some(session)=&engine.session{if let Ok(mut bytes)=serde_json::to_vec(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session}})){cleanup.append(&mut bytes);cleanup.push(b'\n');}}
+        if let Some(session)=&engine.session&& let Ok(mut bytes)=serde_json::to_vec(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session}})){cleanup.append(&mut bytes);cleanup.push(b'\n');}
         let _=tokio::time::timeout(Duration::from_millis(250),stdin.write_all(&cleanup)).await;out.send(Event::ClearPermissions);if let Some(pid)=group.0.take(){rc_dotnet::kill_tree(pid);}let _=child.start_kill();let _=tokio::time::timeout(Duration::from_secs(1),child.wait()).await;log.abort();run
     }.await;
     if let Err(error) = work {
@@ -691,14 +691,21 @@ impl Acp {
             ui.label(tr("No agent starts on project open. Client filesystem and terminal delegation, attachments, persistent permissions and session replay are unsupported."));
             if !trusted{ui.colored_label(rc_kit::pal(ui).warn,tr("Trust this project before running project tools or code"));}
             ui.add_enabled_ui(self.handle.is_none(),|ui|{ui.label(tr("ACP agent executable"));ui.add(egui::TextEdit::singleline(&mut self.program).char_limit(4096));ui.label(tr("Agent arguments (one per line; no shell parsing)"));ui.add(egui::TextEdit::multiline(&mut self.args).char_limit(32*4096).desired_rows(3));});
-            ui.horizontal_wrapped(|ui|{if ui.add_enabled(trusted&&root.is_some()&&self.handle.is_none()&&!self.program.is_empty(),egui::Button::new(tr("Start ACP Agent"))).clicked(){if let Some(root)=root.clone(){self.start(root,trusted);}}if ui.add_enabled(self.handle.is_some(),egui::Button::new(tr("Stop ACP Agent"))).clicked(){self.stop();}if ui.add_enabled(self.handle.is_some()&&!self.busy&&!self.agent.is_empty(),egui::Button::new(tr("New Agent Session"))).clicked(){self.busy=true;self.command(Command::NewSession);}if ui.add_enabled(!self.running,egui::Button::new(tr("Clear ACP Display"))).clicked(){self.transcript.clear();self.tools.clear();self.logs.clear();}});
-            if !self.agent.is_empty(){ui.label(format!("{}: {}",tr("ACP agent"),self.agent));}if let Some(session)=&self.session{ui.label(format!("{}: {session}",tr("Session")));}
-            for auth in self.auth.clone(){ui.horizontal_wrapped(|ui|{ui.label(&auth.name);if ui.add_enabled(auth.supported&&!self.busy&&self.handle.is_some(),egui::Button::new(tr("Authenticate Agent"))).clicked(){self.busy=true;self.command(Command::Authenticate(auth.id));}if !auth.supported{ui.label(tr("Terminal agent authentication is unsupported; configure the agent externally"));}});}
+            ui.horizontal_wrapped(|ui|{if ui.add_enabled(trusted&&root.is_some()&&self.handle.is_none()&&!self.program.is_empty(),egui::Button::new(tr("Start ACP Agent"))).clicked()&& let Some(root)=root.clone(){self.start(root,trusted);}
+if ui.add_enabled(self.handle.is_some(),egui::Button::new(tr("Stop ACP Agent"))).clicked(){self.stop();}
+if ui.add_enabled(self.handle.is_some()&&!self.busy&&!self.agent.is_empty(),egui::Button::new(tr("New Agent Session"))).clicked(){self.busy=true;self.command(Command::NewSession);}
+if ui.add_enabled(!self.running,egui::Button::new(tr("Clear ACP Display"))).clicked(){self.transcript.clear();self.tools.clear();self.logs.clear();}});
+            if !self.agent.is_empty(){ui.label(format!("{}: {}",tr("ACP agent"),self.agent));}
+if let Some(session)=&self.session{ui.label(format!("{}: {session}",tr("Session")));}
+            for auth in self.auth.clone(){ui.horizontal_wrapped(|ui|{ui.label(&auth.name);if ui.add_enabled(auth.supported&&!self.busy&&self.handle.is_some(),egui::Button::new(tr("Authenticate Agent"))).clicked(){self.busy=true;self.command(Command::Authenticate(auth.id));}
+if !auth.supported{ui.label(tr("Terminal agent authentication is unsupported; configure the agent externally"));}});}
             if let Some(error)=&self.error{ui.colored_label(rc_kit::pal(ui).error,error);}
             for permission in self.permissions.clone(){ui.separator();ui.colored_label(rc_kit::pal(ui).warn,tr("ACP permission request: inspect the complete agent-supplied tool data before choosing"));let mut details=permission.details.clone();egui::ScrollArea::both().id_salt(("acp_permission",request_id(&permission.id).unwrap_or_default())).max_height(200.0).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut details).font(egui::TextStyle::Monospace).interactive(false).desired_width(f32::INFINITY));});for option in permission.options{ui.horizontal_wrapped(|ui|{ui.label(&option.name);let label=match option.kind.as_str(){"allow_once"=>tr("Allow this call once"),"reject_once"=>tr("Reject this call once"),_=>tr("Persistent ACP permissions are unsupported")};if ui.add_enabled(!self.cancelling&&matches!(option.kind.as_str(),"allow_once"|"reject_once"),egui::Button::new(label)).clicked(){self.command(Command::Choose{id:permission.id.clone(),option:option.id});self.permissions.retain(|pending|pending.id!=permission.id);}});}}
             ui.separator();ui.label(tr("ACP conversation"));egui::ScrollArea::vertical().id_salt("acp_conversation").max_height(260.0).stick_to_bottom(true).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut self.transcript).font(egui::TextStyle::Monospace).interactive(false).desired_rows(8));});
             ui.add_enabled_ui(!self.busy,|ui|{ui.add(egui::TextEdit::multiline(&mut self.input).char_limit(64*1024).desired_rows(3).hint_text(tr("Message to the ACP agent")));});
-            ui.horizontal_wrapped(|ui|{if ui.add_enabled(trusted&&self.session.is_some()&&!self.busy&&!self.input.trim().is_empty(),egui::Button::new(tr("Send ACP Prompt"))).clicked(){let input=std::mem::take(&mut self.input);if Self::append(&mut self.transcript,&format!("\n{}: {input}\n",tr("You")),1024*1024).is_err(){self.error=Some(Error::Limit.message());}else{self.error=None;self.busy=true;self.running=true;self.command(Command::Prompt(input));}}if ui.add_enabled(self.running&&!self.cancelling,egui::Button::new(tr("Cancel ACP Prompt"))).clicked(){self.cancelling=true;self.permissions.clear();self.command(Command::CancelPrompt);}if self.busy{ui.spinner();}});
+            ui.horizontal_wrapped(|ui|{if ui.add_enabled(trusted&&self.session.is_some()&&!self.busy&&!self.input.trim().is_empty(),egui::Button::new(tr("Send ACP Prompt"))).clicked(){let input=std::mem::take(&mut self.input);if Self::append(&mut self.transcript,&format!("\n{}: {input}\n",tr("You")),1024*1024).is_err(){self.error=Some(Error::Limit.message());}else{self.error=None;self.busy=true;self.running=true;self.command(Command::Prompt(input));}}
+if ui.add_enabled(self.running&&!self.cancelling,egui::Button::new(tr("Cancel ACP Prompt"))).clicked(){self.cancelling=true;self.permissions.clear();self.command(Command::CancelPrompt);}
+if self.busy{ui.spinner();}});
             egui::CollapsingHeader::new(tr("ACP tool updates")).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut self.tools).font(egui::TextStyle::Monospace).interactive(false).desired_rows(4));});egui::CollapsingHeader::new(tr("ACP agent log")).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut self.logs).font(egui::TextStyle::Monospace).interactive(false).desired_rows(4));});
         });
     }

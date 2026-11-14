@@ -45,8 +45,13 @@ fn llvm_dap_debugs_a_real_rust_project() {
     };
     let mut bps = Breakpoints::default();
     bps.set(BreakpointSpec::new(&source, 3));
-    let mut session =
-        DebugSession::start(adapter, DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target }, DebugOptions::default(), bps, Waker::noop());
+    let mut session = DebugSession::start(
+        adapter,
+        DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target: Box::new(target) },
+        DebugOptions::default(),
+        bps,
+        Waker::noop(),
+    );
     wait(&mut session, |s| s.state().is_stopped());
     wait(&mut session, |s| !s.threads().is_empty());
     let thread = session.threads()[0].id;

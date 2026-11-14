@@ -181,6 +181,7 @@ impl Io {
         }
         self.errors.insert(key, error);
     }
+    #[cfg(test)]
     pub fn error(&self, key: &Key) -> Option<Error> {
         self.errors.get(key).copied()
     }

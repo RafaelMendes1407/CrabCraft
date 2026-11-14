@@ -619,12 +619,12 @@ impl HistoryEdit {
                     self.selected = to;
                     self.confirmed = false;
                 }
-                if let Some(row) = plan.rows.get_mut(self.selected) {
-                    if row.action == Action::Reword {
-                        ui.label(tr("New commit message"));
-                        if ui.add_enabled(!running, egui::TextEdit::multiline(&mut row.message).char_limit(4096).desired_rows(4)).changed() {
-                            self.confirmed = false;
-                        }
+                if let Some(row) = plan.rows.get_mut(self.selected)
+                    && row.action == Action::Reword
+                {
+                    ui.label(tr("New commit message"));
+                    if ui.add_enabled(!running, egui::TextEdit::multiline(&mut row.message).char_limit(4096).desired_rows(4)).changed() {
+                        self.confirmed = false;
                     }
                 }
                 ui.add_enabled_ui(!running, |ui| {
@@ -710,47 +710,49 @@ mod tests {
         assert!(matches!(todo(&copied, Path::new("/exe"), Path::new("/plan")), Err(Error::Invalid)));
         assert!(rewrite(&repo.clone().with_trust(false), &plan, Path::new("/unused"), &cancel, &mut |_| {}, &mut |_| {}).await.is_err());
     }
-    #[tokio::test]
+    #[test]
     #[ignore = "Builds the real native editor helper and rewrites a real Rust project's history"]
-    async fn real_native_helper_reorders_rewords_fixes_up_and_drops_with_a_recovery_ref() {
+    fn real_native_helper_reorders_rewords_fixes_up_and_drops_with_a_recovery_ref() {
         let _home_lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let home = tempfile::tempdir().unwrap();
-        unsafe {
-            std::env::set_var("CRABCRAFT_HOME", home.path());
-        }
-        let exe = executable();
-        let project = tempfile::tempdir().unwrap();
-        let root = project.path().canonicalize().unwrap();
-        fixture(&root);
-        let mut settings = rc_core::Settings::default();
-        settings.trusted_projects.push(root.clone());
-        settings.save().unwrap();
-        let repo = rc_vcs::Repository::discover(&root).await.unwrap().with_trust(true);
-        let cancel = Cancel::default();
-        let mut plan = preview(&repo, 3, &cancel).await.unwrap();
-        let old = plan.head.clone();
-        plan.rows.swap(0, 1);
-        plan.rows[0].action = Action::Reword;
-        plan.rows[0].message = "Native message with 'quotes' and $(touch never)\n\nPreserved body".into();
-        plan.rows[1].action = Action::Fixup;
-        plan.rows[2].action = Action::Drop;
-        let mut recovery = None;
-        let mut lines = Vec::new();
-        rewrite(&repo, &plan, &exe, &cancel, &mut |reference| recovery = Some(reference), &mut |line| lines.push(line))
-            .await
-            .unwrap_or_else(|error| panic!("{}\n{lines:?}", error.message()));
-        let new = git(&root, &["rev-parse", "HEAD"]);
-        assert_ne!(new, old);
-        assert_eq!(git(&root, &["rev-parse", recovery.as_ref().unwrap()]), old);
-        assert_eq!(git(&root, &["rev-list", "--count", "HEAD"]), "2");
-        assert!(git(&root, &["log", "-1", "--format=%B"]).contains("$(touch never)"));
-        assert!(!root.join("never").exists());
-        assert!(root.join("src/a.rs").is_file() && root.join("src/b.rs").is_file());
-        assert!(!root.join("src/c.rs").exists());
-        assert!(git(&root, &["status", "--porcelain"]).is_empty());
-        let output = rc_cargo::Cargo::locate().unwrap().std_command().args(["test", "--offline"]).current_dir(&root).output().unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        assert!(matches!(rewrite(&repo, &plan, &exe, &cancel, &mut |_| {}, &mut |_| {}).await, Err(Error::Stale)));
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let home = tempfile::tempdir().unwrap();
+            unsafe {
+                std::env::set_var("CRABCRAFT_HOME", home.path());
+            }
+            let exe = executable();
+            let project = tempfile::tempdir().unwrap();
+            let root = project.path().canonicalize().unwrap();
+            fixture(&root);
+            let mut settings = rc_core::Settings::default();
+            settings.trusted_projects.push(root.clone());
+            settings.save().unwrap();
+            let repo = rc_vcs::Repository::discover(&root).await.unwrap().with_trust(true);
+            let cancel = Cancel::default();
+            let mut plan = preview(&repo, 3, &cancel).await.unwrap();
+            let old = plan.head.clone();
+            plan.rows.swap(0, 1);
+            plan.rows[0].action = Action::Reword;
+            plan.rows[0].message = "Native message with 'quotes' and $(touch never)\n\nPreserved body".into();
+            plan.rows[1].action = Action::Fixup;
+            plan.rows[2].action = Action::Drop;
+            let mut recovery = None;
+            let mut lines = Vec::new();
+            rewrite(&repo, &plan, &exe, &cancel, &mut |reference| recovery = Some(reference), &mut |line| lines.push(line))
+                .await
+                .unwrap_or_else(|error| panic!("{}\n{lines:?}", error.message()));
+            let new = git(&root, &["rev-parse", "HEAD"]);
+            assert_ne!(new, old);
+            assert_eq!(git(&root, &["rev-parse", recovery.as_ref().unwrap()]), old);
+            assert_eq!(git(&root, &["rev-list", "--count", "HEAD"]), "2");
+            assert!(git(&root, &["log", "-1", "--format=%B"]).contains("$(touch never)"));
+            assert!(!root.join("never").exists());
+            assert!(root.join("src/a.rs").is_file() && root.join("src/b.rs").is_file());
+            assert!(!root.join("src/c.rs").exists());
+            assert!(git(&root, &["status", "--porcelain"]).is_empty());
+            let output = rc_cargo::Cargo::locate().unwrap().std_command().args(["test", "--offline"]).current_dir(&root).output().unwrap();
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert!(matches!(rewrite(&repo, &plan, &exe, &cancel, &mut |_| {}, &mut |_| {}).await, Err(Error::Stale)));
+        });
     }
     #[test]
     #[ignore = "Builds the real private helper and exercises native history controls on a Rust crate"]

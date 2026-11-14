@@ -110,13 +110,13 @@ pub enum Action {
     Schema,
     Browse { table: String, offset: usize },
     Query(String),
-    Update { page: Page, row: usize, column: usize, value: Cell },
+    Update { page: Box<Page>, row: usize, column: usize, value: Cell },
     Export { table: String, path: PathBuf },
     Import { table: String, path: PathBuf },
 }
 pub enum Reply {
     Schema(Vec<Table>),
-    Page(Page),
+    Page(Box<Page>),
     Query(Grid),
     Updated,
     Exported(usize),
@@ -537,7 +537,7 @@ pub fn run(config: &Config, action: Action, cancel: Arc<AtomicBool>) -> Result<R
     let mut connection = open(config, cancel.clone())?;
     let result = match action {
         Action::Schema => schema(&connection).map(Reply::Schema),
-        Action::Browse { table, offset } => browse(&mut connection, &table, offset, &cancel).map(Reply::Page),
+        Action::Browse { table, offset } => browse(&mut connection, &table, offset, &cancel).map(|page| Reply::Page(Box::new(page))),
         Action::Query(sql) => {
             connection.authorizer(Some(|context: rusqlite::hooks::AuthContext<'_>| match context.action {
                 AuthAction::Transaction { .. } | AuthAction::Savepoint { .. } => Authorization::Deny,
@@ -573,7 +573,7 @@ mod tests {
     }
     fn page(config: &Config, name: &str) -> Page {
         match run(config, Action::Browse { table: name.into(), offset: 0 }, Arc::new(AtomicBool::new(false))).unwrap() {
-            Reply::Page(page) => page,
+            Reply::Page(page) => *page,
             _ => panic!("page response"),
         }
     }
@@ -591,17 +591,25 @@ mod tests {
         assert_eq!(before.grid.rows[0][3], Cell::Blob(vec![0, 1, 255]));
         assert_eq!(before.grid.rows[0][4], Cell::Null);
         assert!(before.table.columns[5].generated);
-        run(&config, Action::Update { page: before.clone(), row: 0, column: 1, value: Cell::Text("edited'🦀".into()) }, Arc::new(AtomicBool::new(false)))
-            .unwrap();
+        run(
+            &config,
+            Action::Update { page: Box::new(before.clone()), row: 0, column: 1, value: Cell::Text("edited'🦀".into()) },
+            Arc::new(AtomicBool::new(false)),
+        )
+        .unwrap();
         assert_eq!(page(&config, "user records").grid.rows[0][1], Cell::Text("edited'🦀".into()));
         assert!(matches!(
-            run(&config, Action::Update { page: before, row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
+            run(&config, Action::Update { page: Box::new(before), row: 0, column: 1, value: Cell::Text("stale".into()) }, Arc::new(AtomicBool::new(false))),
             Err(Error::Stale)
         ));
         let versioned = page(&config, "user records");
         sql(&config, "CREATE INDEX user_name_idx ON \"user records\"(name)");
         assert!(matches!(
-            run(&config, Action::Update { page: versioned, row: 0, column: 1, value: Cell::Text("schema stale".into()) }, Arc::new(AtomicBool::new(false))),
+            run(
+                &config,
+                Action::Update { page: Box::new(versioned), row: 0, column: 1, value: Cell::Text("schema stale".into()) },
+                Arc::new(AtomicBool::new(false))
+            ),
             Err(Error::Stale)
         ));
         let mut readonly = config.clone();
@@ -612,7 +620,8 @@ mod tests {
         sql(&config, "INSERT INTO composite VALUES('a',2,'before')");
         let composite = page(&config, "composite");
         assert_eq!(composite.key_names, ["a", "b"]);
-        run(&config, Action::Update { page: composite, row: 0, column: 2, value: Cell::Text("after".into()) }, Arc::new(AtomicBool::new(false))).unwrap();
+        run(&config, Action::Update { page: Box::new(composite), row: 0, column: 2, value: Cell::Text("after".into()) }, Arc::new(AtomicBool::new(false)))
+            .unwrap();
         assert_eq!(page(&config, "composite").grid.rows[0][2], Cell::Text("after".into()));
     }
     #[test]

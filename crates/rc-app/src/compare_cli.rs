@@ -130,8 +130,8 @@ fn output_snapshot(path: &Path, cancel: &AtomicBool) -> Result<Option<Vec<u8>>, 
 }
 
 enum View {
-    Diff(crate::vcs::DiffView),
-    Merge { tool: crate::merge_tool::MergeTool, previous: Option<Vec<u8>> },
+    Diff(Box<crate::vcs::DiffView>),
+    Merge { tool: Box<crate::merge_tool::MergeTool>, previous: Option<Vec<u8>> },
 }
 
 fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<View, CompareError> {
@@ -141,7 +141,7 @@ fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<Vie
             let (a, b) = (text(left)?, text(right)?);
             let mut vcs = crate::vcs::Vcs::new(Waker::noop());
             vcs.show_diff(format!("{} ↔ {}", left.display(), right.display()), right.clone(), &a, &b, dark);
-            vcs.diff.take().map(View::Diff).ok_or(CompareError::Cancelled)
+            vcs.diff.take().map(|diff| View::Diff(Box::new(diff))).ok_or(CompareError::Cancelled)
         }
         CompareRequest::Merge { left, right, base, result } => {
             let (a, b, common) = (text(left)?, text(right)?, text(base)?);
@@ -156,7 +156,7 @@ fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<Vie
                 (left.display().to_string(), right.display().to_string()),
                 dark,
             );
-            Ok(View::Merge { tool, previous })
+            Ok(View::Merge { tool: Box::new(tool), previous })
         }
     }
 }

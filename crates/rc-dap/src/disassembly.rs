@@ -70,7 +70,7 @@ fn clean(text: &str) -> String {
 /// `894c240c` → `89 4c 24 0c`; anything that is not an even run of hex digits is dropped.
 pub fn format_bytes(hex: &str) -> Option<String> {
     let hex: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
-    if hex.is_empty() || hex.len() % 2 != 0 || hex.len() > 2 * 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) || hex.len() > 2 * 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
     let pairs: Vec<&str> = (0..hex.len()).step_by(2).filter_map(|i| hex.get(i..i + 2)).collect();

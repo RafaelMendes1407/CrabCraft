@@ -79,7 +79,7 @@ impl Collected {
                     && !self.diagnostics.contains(&d)
                 {
                     self.diagnostics.push(d.clone());
-                    on_event(BuildEvent::Diagnostic(d));
+                    on_event(BuildEvent::Diagnostic(Box::new(d)));
                 }
             }
             Some(Message::Artifact { executable }) => self.executables.extend(executable),

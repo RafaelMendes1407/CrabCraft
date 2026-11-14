@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+type LoadedPatch = Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>;
+
 enum VcsEvent {
     Repo(Option<Repository>),
     Status(Result<Status, String>),
@@ -39,7 +41,7 @@ enum VcsEvent {
     /// A created patch to put on the clipboard.
     PatchClipboard(String),
     /// A patch read for applying (generation, file, text and its preview, or why it failed).
-    PatchLoaded(u64, Option<PathBuf>, Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>),
+    PatchLoaded(u64, Option<PathBuf>, LoadedPatch),
     /// A new preview of the loaded patch (generation, preview).
     PatchPreview(u64, Result<PatchPreview, String>),
     /// What applying the loaded patch printed (generation, output).
@@ -1575,15 +1577,6 @@ pub fn format_date(secs: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn dates() {
-        assert_eq!(super::format_date(0), "1970-01-01");
-        assert_eq!(super::format_date(1_700_000_000), "2023-11-14");
-    }
-}
-
 fn format_failure(error: rc_cargo::FormatError) -> String {
     match error {
         rc_cargo::FormatError::File { path, message } => {
@@ -1615,5 +1608,14 @@ pub fn rustfmt_failure(error: rc_cargo::FormatError) -> String {
             let first = message.lines().next().unwrap_or_default().to_string();
             trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn dates() {
+        assert_eq!(super::format_date(0), "1970-01-01");
+        assert_eq!(super::format_date(1_700_000_000), "2023-11-14");
     }
 }

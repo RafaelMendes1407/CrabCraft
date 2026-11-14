@@ -490,6 +490,12 @@ pub fn size_text(n: usize) -> String {
     }
 }
 
+impl Drop for HttpClient {
+    fn drop(&mut self) {
+        self.cancel_all();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -676,11 +682,5 @@ mod tests {
         let e = &client.history[0];
         assert!(matches!(&e.outcome, Outcome::Failed(HttpError::Variable(rc_syntax::http::vars::VariableError::Undefined(name))) if name == "path"));
         assert_eq!(e.notes.len(), 1, "the handler is noted: {:?}", e.notes);
-    }
-}
-
-impl Drop for HttpClient {
-    fn drop(&mut self) {
-        self.cancel_all();
     }
 }

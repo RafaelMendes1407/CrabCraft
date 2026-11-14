@@ -133,10 +133,9 @@ impl BorrowErrors {
                     let index = docs.insert_compiler_source(source.path, &source.text, source.bom, source.mtime, source.style);
                     if let Some((id, _, start, end)) = self.highlight.take()
                         && let Some(doc) = docs.list.iter_mut().find(|doc| doc.editor.id == id)
+                        && doc.editor.highlights == vec![(start, end, true)]
                     {
-                        if doc.editor.highlights == vec![(start, end, true)] {
-                            doc.editor.highlights.clear();
-                        }
+                        doc.editor.highlights.clear();
                     }
                     let doc = &mut docs.list[index];
                     doc.editor.set_selection(rc_text::Selection::single(rc_text::Range::new(source.start, source.end)));
@@ -228,10 +227,9 @@ impl BorrowErrors {
             self.selected = None;
             if let Some((id, _, start, end)) = self.highlight.take()
                 && let Some(doc) = docs.list.iter_mut().find(|doc| doc.editor.id == id)
+                && doc.editor.highlights == vec![(start, end, true)]
             {
-                if doc.editor.highlights == vec![(start, end, true)] {
-                    doc.editor.highlights.clear();
-                }
+                doc.editor.highlights.clear();
             }
         } else if let Some(index) = navigate {
             self.request(index, docs);
@@ -310,7 +308,7 @@ fn source(
     let text = raw.strip_prefix('\u{feff}').unwrap_or(&raw).replace("\r\n", "\n");
     let positions = validate(&raw, &text, span)?;
     let stamp = if let Some(snapshot) = snapshot {
-        if snapshot.rope.to_string() != text {
+        if snapshot.rope != text {
             return Err(SourceError::Stale);
         }
         Some((snapshot.id, snapshot.version, snapshot.epoch))

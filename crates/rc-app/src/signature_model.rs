@@ -1,4 +1,6 @@
 //! Pure Rust syntax and byte-range operations for guarded signature changes.
+type ParameterSlots = (Vec<Range<usize>>, bool, String, String);
+
 use rc_syntax::tree_sitter::Node;
 use std::{collections::BTreeSet, ops::Range};
 #[derive(Clone, Debug)]
@@ -106,7 +108,7 @@ fn attributes(mut node: Node<'_>) -> bool {
         }
     }
 }
-fn slots(source: &str, node: Node<'_>, entries: &[Node<'_>]) -> Result<(Vec<Range<usize>>, bool, String, String), Error> {
+fn slots(source: &str, node: Node<'_>, entries: &[Node<'_>]) -> Result<ParameterSlots, Error> {
     if node.end_byte() < node.start_byte() + 2 {
         return Err(Error::Input);
     }

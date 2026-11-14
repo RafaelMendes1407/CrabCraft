@@ -326,18 +326,16 @@ pub fn routes(source: &str) -> Routes {
         }
         if node.kind() == "let_declaration"
             && let (Some(name), Some(value)) = (node.child_by_field_name("pattern"), node.child_by_field_name("value"))
+            && name.kind() == "identifier"
+            && let Some(scope) = node.parent()
         {
-            if name.kind() == "identifier"
-                && let Some(scope) = node.parent()
-            {
-                model.bindings.push(Binding {
-                    name: text(name, source).to_string(),
-                    value,
-                    start: scope.start_byte(),
-                    end: scope.end_byte(),
-                    declared: node.start_byte(),
-                });
-            }
+            model.bindings.push(Binding {
+                name: text(name, source).to_string(),
+                value,
+                start: scope.start_byte(),
+                end: scope.end_byte(),
+                declared: node.start_byte(),
+            });
         }
         if node.kind() == "function_item"
             && let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body"))

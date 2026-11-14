@@ -380,6 +380,7 @@ pub fn current_year() -> i32 {
 }
 
 /// The project's profile, the author git knows for it and the draft Settings edits.
+#[derive(Default)]
 pub struct Copyright {
     pub profile: CopyrightProfile,
     pub root: Option<PathBuf>,
@@ -388,12 +389,6 @@ pub struct Copyright {
     author_load: Option<Inbox<Option<String>>>,
     /// The profile being edited in Settings.
     pub draft: Option<CopyrightProfile>,
-}
-
-impl Default for Copyright {
-    fn default() -> Self {
-        Copyright { profile: CopyrightProfile::default(), root: None, author: None, author_load: None, draft: None }
-    }
 }
 
 impl Copyright {

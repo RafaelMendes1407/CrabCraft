@@ -197,7 +197,7 @@ mod tests {
     fn rust_paths_use_trees_and_nested_imports_do_not_become_external_roots() {
         let source = r#"use serde::{Serialize, de::DeserializeOwned}; use std::{fmt::Debug, io}; use crate::serde as local; use foo::{serde as renamed}; fn f<T>() { let _ = serde_json::json!({}); } // tokio::spawn
 const TEXT: &str = "reqwest::Client";"#;
-        let result = references(&source, &AtomicBool::new(false));
+        let result = references(source, &AtomicBool::new(false));
         assert!(result.references.iter().any(|item| item.root == "serde"));
         assert!(result.references.iter().any(|item| item.root == "serde_json"));
         assert!(!result.references.iter().any(|item| { ["de", "std", "fmt", "io", "reqwest", "tokio"].contains(&item.root.as_str()) }));

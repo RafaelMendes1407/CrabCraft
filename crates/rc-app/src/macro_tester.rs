@@ -113,8 +113,8 @@ fn source(definition: &str, invocation: &str) -> Result<Source, Error> {
     let node = calls[0];
     let macro_name = node.child_by_field_name("macro").and_then(|node| text.get(node.byte_range())).ok_or(Error::Input)?;
     if !names.iter().any(|name| name == macro_name)
-        || text[definition.len()..node.start_byte()].trim().len() != 0
-        || text[node.end_byte()..].trim().trim_matches(';').trim().len() != 0
+        || !text[definition.len()..node.start_byte()].trim().is_empty()
+        || !text[node.end_byte()..].trim().trim_matches(';').trim().is_empty()
     {
         return Err(Error::Input);
     }

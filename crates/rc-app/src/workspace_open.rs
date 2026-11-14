@@ -380,12 +380,11 @@ impl State {
     }
     pub fn poll(&mut self, waker: Waker) -> Option<Result<Prepared, Error>> {
         let mut result = None;
-        if let Some(done) = self.active.as_ref().and_then(|j| j.inbox.drain().into_iter().next()) {
-            if let Some(job) = self.active.take() {
-                if !job.cancel.load(Ordering::Acquire) {
-                    result = Some(done);
-                }
-            }
+        if let Some(done) = self.active.as_ref().and_then(|j| j.inbox.drain().into_iter().next())
+            && let Some(job) = self.active.take()
+            && !job.cancel.load(Ordering::Acquire)
+        {
+            result = Some(done);
         }
         if self.active.is_none()
             && let Some(request) = self.pending.take()
@@ -435,21 +434,6 @@ impl State {
 }
 
 #[cfg(test)]
-impl crate::app::CrabCraftApp {
-    pub(crate) fn save_session_and_wait(&mut self) {
-        self.wait_workspace_open();
-        self.save_session();
-        let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        while self.disk_save.auxiliary.busy() || self.disk_save.saves.busy() {
-            self.poll_disk_save();
-            assert!(std::time::Instant::now() < end, "session saving timed out");
-            std::thread::sleep(std::time::Duration::from_millis(2));
-        }
-        assert!(!self.disk_save.failed, "session saving failed");
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
@@ -488,7 +472,7 @@ mod tests {
         let session = Session {
             files: vec![
                 OpenFile { path: root.path().join("missing.rs"), ..Default::default() },
-                OpenFile { path: source.clone(), line: 0, col: 3, scroll_y: 24.0, pinned: true, folded: vec![0], ..Default::default() },
+                OpenFile { path: source.clone(), line: 0, col: 3, scroll_y: 24.0, pinned: true, folded: vec![0] },
                 OpenFile { path: asset.clone(), ..Default::default() },
             ],
             active: Some(1),

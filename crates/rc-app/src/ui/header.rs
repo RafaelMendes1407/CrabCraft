@@ -130,10 +130,10 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
             }
             theme::Side::Right => {
                 // Close, maximize and minimize sit right after Settings, one gap apart.
-                if rc_kit::window_chrome::CUSTOM_CAPTION {
-                    if let Some(command) = rc_kit::window_chrome::controls(ui) {
-                        ui.ctx().send_viewport_cmd(command);
-                    }
+                if rc_kit::window_chrome::CUSTOM_CAPTION
+                    && let Some(command) = rc_kit::window_chrome::controls(ui)
+                {
+                    ui.ctx().send_viewport_cmd(command);
                 }
                 ui.add_space(8.0);
                 ui.spacing_mut().item_spacing.x = 2.0;

@@ -14,7 +14,7 @@ pub enum Protocol {
     Ftps,
 }
 enum Reply {
-    Preview(Preview),
+    Preview(Box<Preview>),
     Applied(Receipt),
 }
 struct Job {
@@ -87,7 +87,7 @@ impl Deployments {
             self.job = None;
             match result {
                 Ok(Reply::Preview(preview)) => {
-                    self.preview = Some(preview);
+                    self.preview = Some(*preview);
                     self.acknowledged = false;
                 }
                 Ok(Reply::Applied(receipt)) => {
@@ -136,7 +136,7 @@ impl Deployments {
         let remote = self.remote.clone();
         let create = self.create;
         self.preview = None;
-        self.spawn(move |cancel| deployment::preview(config, &local, remote, create, trusted, cancel).map(Reply::Preview));
+        self.spawn(move |cancel| deployment::preview(config, &local, remote, create, trusted, cancel).map(|preview| Reply::Preview(Box::new(preview))));
     }
     fn apply(&mut self, config: Config, trusted: bool) {
         if !trusted {

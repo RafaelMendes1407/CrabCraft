@@ -193,6 +193,7 @@ impl RunTab {
     }
 
     /// Whether the console takes keyboard input itself (a pseudo-terminal).
+    #[cfg(test)]
     pub fn is_terminal(&self) -> bool {
         self.pty.as_ref().is_some_and(|p| p.started)
     }
@@ -338,6 +339,7 @@ impl Runner {
     }
 
     /// Builds the run configurations of a Rust workspace: its binaries, then all its tests.
+    #[cfg(test)]
     pub fn set_cargo_workspace(&mut self, workspace: rc_cargo::CargoWorkspace, remembered: Option<&str>) {
         self.set_cargo_workspace_with_tool(workspace, rc_cargo::Cargo::locate(), remembered);
     }
@@ -1018,7 +1020,7 @@ impl Runner {
                 match ev {
                     BuildEvent::Started { command } => b.console.note(&command),
                     BuildEvent::Output(line) | BuildEvent::Task(line) => b.console.line(&line),
-                    BuildEvent::Diagnostic(d) => b.diagnostics.push(d),
+                    BuildEvent::Diagnostic(d) => b.diagnostics.push(*d),
                     BuildEvent::Finished(r) => {
                         b.handle = None;
                         let msg = if b.command { command_summary(&b.title, &r) } else { build_summary(&r) };

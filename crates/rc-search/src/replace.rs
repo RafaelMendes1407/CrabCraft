@@ -143,7 +143,7 @@ pub fn prepare_replacement(text: &str, query: &Query, replacement: &str, cancel:
         if crlf && expanded.contains('\n') {
             expanded = expanded.replace("\r\n", "\n").replace('\n', "\r\n");
         }
-        if &text[found.range()] == expanded {
+        if text[found.range()] == expanded {
             continue;
         }
         if edits.len() >= limits.edits {

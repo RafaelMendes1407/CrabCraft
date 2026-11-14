@@ -126,7 +126,7 @@ fn scan(roots: Vec<PathBuf>, workspace: &Path, excluded: &[String], cancel: &Ato
             }
             bytes = bytes.saturating_add(text.len());
             snapshot.hashes.insert(path.clone(), hash(&text.replace("\r\n", "\n")));
-            let report = rc_syntax::axum::routes(&text);
+            let report = rc_syntax::axum::routes(text);
             snapshot.unresolved = snapshot.unresolved.saturating_add(report.unresolved);
             snapshot.limited |= report.limited;
             if snapshot.routes.len().saturating_add(report.routes.len()) > 10_000 {
@@ -626,13 +626,13 @@ impl Endpoints {
             return false;
         }
         let Some(context) = http_context(doc) else {
-            if let Some((method, url, base, caret)) = http_url(doc) {
-                if let Some(context) = crate::endpoint_url::context(&url, caret) {
-                    let anchor = base + url[..context.range.start].chars().count();
-                    let end = base + url[..context.range.end].chars().count();
-                    if self.complete_query(doc, Some(&method), context.kind, anchor, end) {
-                        return true;
-                    }
+            if let Some((method, url, base, caret)) = http_url(doc)
+                && let Some(context) = crate::endpoint_url::context(&url, caret)
+            {
+                let anchor = base + url[..context.range.start].chars().count();
+                let end = base + url[..context.range.end].chars().count();
+                if self.complete_query(doc, Some(&method), context.kind, anchor, end) {
+                    return true;
                 }
             }
             doc.editor.popups.completion = None;

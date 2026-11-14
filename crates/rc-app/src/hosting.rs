@@ -135,7 +135,7 @@ pub fn plan(config: &Config, program: &Path, operation: Operation, account: Opti
         return Err(Error::Missing);
     }
     let gh = github(config);
-    let mut endpoint = String::new();
+    let endpoint;
     let mut body = None;
     let mut kind = Kind::Write;
     let mut method = "GET";
@@ -542,11 +542,12 @@ impl Hosting {
         }
     }
     pub fn restore(&mut self, config: Option<Config>) {
-        if let Some(config) = config {
-            if host(&config).is_ok() && config.project.len() <= 512 {
-                self.executable = if github(&config) { "gh" } else { "glab" }.into();
-                self.config = config;
-            }
+        if let Some(config) = config
+            && host(&config).is_ok()
+            && config.project.len() <= 512
+        {
+            self.executable = if github(&config) { "gh" } else { "glab" }.into();
+            self.config = config;
         }
     }
     pub fn cancel(&self) {

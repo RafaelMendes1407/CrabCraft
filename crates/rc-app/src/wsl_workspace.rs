@@ -160,10 +160,10 @@ fn decode_console(bytes: &[u8]) -> Result<String, Error> {
     }
     Ok(if bytes.starts_with(&[0xff, 0xfe]) || bytes.contains(&0) {
         let bytes = bytes.strip_prefix(&[0xff, 0xfe]).unwrap_or(bytes);
-        if bytes.len() % 2 != 0 {
+        if !bytes.len().is_multiple_of(2) {
             return Err(Error::Input);
         }
-        let words: Vec<_> = bytes.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
+        let words: Vec<_> = bytes.as_chunks::<2>().0.iter().map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
         String::from_utf16(&words).map_err(|_| Error::Input)?
     } else {
         std::str::from_utf8(bytes).map_err(|_| Error::Input)?.trim_start_matches('\u{feff}').to_owned()

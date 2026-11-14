@@ -143,7 +143,7 @@ impl Proofreader {
         let value = issue.replacements.get(self.replacement).ok_or(Error::Invalid)?;
         if issue.range.end > doc.editor.buffer.len_chars()
             || issue.range.start > issue.range.end
-            || doc.editor.buffer.rope().slice(issue.range.clone()).to_string() != issue.original
+            || doc.editor.buffer.rope().slice(issue.range.clone()) != issue.original
         {
             return Err(Error::Stale);
         }
@@ -173,10 +173,10 @@ impl Proofreader {
             self.cancel();
         }
         ui.horizontal(|ui| {
-            if ui.add_enabled(trusted && self.job.is_none(), egui::Button::new(tr("Check Comments"))).clicked() {
-                if let Err(error) = self.start(docs, trusted, waker) {
-                    self.error = Some(error);
-                }
+            if ui.add_enabled(trusted && self.job.is_none(), egui::Button::new(tr("Check Comments"))).clicked()
+                && let Err(error) = self.start(docs, trusted, waker)
+            {
+                self.error = Some(error);
             }
             if self.job.is_some() {
                 ui.spinner();
@@ -227,10 +227,8 @@ impl Proofreader {
                 });
             apply = ui.add_enabled(!issue.replacements.is_empty(), egui::Button::new(tr("Apply Comment Correction"))).clicked();
         }
-        if apply {
-            if let Err(error) = self.apply(docs, trusted) {
-                self.error = Some(error);
-            }
+        if apply && let Err(error) = self.apply(docs, trusted) {
+            self.error = Some(error);
         }
     }
 }

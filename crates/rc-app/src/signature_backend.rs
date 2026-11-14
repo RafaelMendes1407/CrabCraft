@@ -403,9 +403,10 @@ pub struct Prepared {
 }
 #[derive(Clone)]
 pub struct FileChange {
+    #[cfg(test)]
+    pub after: Arc<str>,
     pub path: PathBuf,
     pub edits: Vec<model::Edit>,
-    pub after: Arc<str>,
 }
 #[derive(Clone)]
 pub struct Plan {
@@ -465,11 +466,12 @@ fn canonical_definition(project: &Project, key: &Key, context: &Context) -> Resu
                 None => break,
             }
         }
-        if let Some(alias) = alias {
-            if alias != target && alias != current {
-                current = alias;
-                continue;
-            }
+        if let Some(alias) = alias
+            && alias != target
+            && alias != current
+        {
+            current = alias;
+            continue;
         }
         return Ok(Some(target));
     }
@@ -654,10 +656,8 @@ pub fn prepare(capture: Capture, origin: Key, context: &Context) -> Result<Prepa
                             }
                         }
                     }
-                    None => {
-                        if known.contains(name(file.normal.get(path.byte_range()).ok_or(Error::Analysis)?)) {
-                            return Err(Error::Unsupported);
-                        }
+                    None if known.contains(name(file.normal.get(path.byte_range()).ok_or(Error::Analysis)?)) => {
+                        return Err(Error::Unsupported);
                     }
                     _ => {}
                 }
@@ -881,11 +881,12 @@ pub fn preview(prepared: Arc<Prepared>, input: model::Input, context: &Context) 
     }
     let mut changes: BTreeMap<PathBuf, Vec<model::Edit>> = BTreeMap::new();
     for row in &input.parameters {
-        if let Some(index) = row.original {
-            if prepared.function.parameters[index].name != row.name && prepared.function.parameters[index].name != "_" {
-                for edit in parameter_rename(&prepared, index, &row.name, context)? {
-                    insert(changes.entry(prepared.key.path.clone()).or_default(), edit)?;
-                }
+        if let Some(index) = row.original
+            && prepared.function.parameters[index].name != row.name
+            && prepared.function.parameters[index].name != "_"
+        {
+            for edit in parameter_rename(&prepared, index, &row.name, context)? {
+                insert(changes.entry(prepared.key.path.clone()).or_default(), edit)?;
             }
         }
     }
@@ -929,7 +930,12 @@ pub fn preview(prepared: Arc<Prepared>, input: model::Input, context: &Context) 
         if after.len() > FILE_BYTES {
             return Err(Error::Limit);
         }
-        files.push(FileChange { path, edits, after: after.into() });
+        files.push(FileChange {
+            path,
+            edits,
+            #[cfg(test)]
+            after: after.into(),
+        });
     }
     if files.is_empty() {
         return Err(Error::NoChanges);

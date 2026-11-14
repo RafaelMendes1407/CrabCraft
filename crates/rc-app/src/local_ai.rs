@@ -250,12 +250,11 @@ pub fn editor_keys(assistant: &mut Assistant, doc: &mut crate::docs::Doc, ui: &e
         return;
     }
     // Tab is an explicit acceptance of the visible suggestion. No autosave or command runs.
-    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-        if let Some(proposal) = assistant.proposal.take() {
-            if let Err(error) = proposal.apply(doc) {
-                assistant.error = Some(error);
-            }
-        }
+    if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab))
+        && let Some(proposal) = assistant.proposal.take()
+        && let Err(error) = proposal.apply(doc)
+    {
+        assistant.error = Some(error);
     }
 }
 pub fn paint_inline(assistant: &Assistant, doc: &crate::docs::Doc, ui: &egui::Ui, caret: Option<egui::Rect>, font_size: f32) {

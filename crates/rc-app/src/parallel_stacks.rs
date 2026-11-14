@@ -250,8 +250,7 @@ mod tests {
     }
     #[test]
     fn grouping_uses_locations_and_functions_instead_of_adapter_frame_ids() {
-        let mut model = ParallelStacks::default();
-        model.generation = Some(1);
+        let mut model = ParallelStacks { generation: Some(1), ..Default::default() };
         for (id, line) in [(1, 10), (2, 10), (3, 20)] {
             let index = model.rows.len();
             model.rows.push(ThreadStack { id, name: format!("worker{id}"), state: StackState::Loading });
@@ -263,8 +262,7 @@ mod tests {
     }
     #[test]
     fn late_or_unknown_replies_do_not_replace_the_snapshot() {
-        let mut model = ParallelStacks::default();
-        model.generation = Some(5);
+        let mut model = ParallelStacks { generation: Some(5), ..Default::default() };
         model.rows.push(ThreadStack { id: 1, name: "worker".into(), state: StackState::Loading });
         model.pending.insert(10, (0, Instant::now()));
         model.on_event(&DebugEvent::ParallelStackLoaded { id: 10, generation: 4, thread_id: 1, result: Ok(stack(1, 10)) });
@@ -365,7 +363,7 @@ fn main() {
         };
         let session = DebugSession::start(
             adapter,
-            DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target },
+            DebugTarget::Cargo { cargo: rc_cargo::Cargo::locate().unwrap(), target: Box::new(target) },
             DebugOptions::default(),
             breakpoints,
             Waker::noop(),
