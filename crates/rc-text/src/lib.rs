@@ -12,5 +12,5 @@ pub mod selection;
 pub use buffer::{Buffer, BytePoint, Edit, EditKind, LineEnding, Utf16Pos};
 pub use change::{Assoc, Change, ChangeSet};
 pub use commands::{Edited, Indent, Motion};
-pub use selection::{Range, Selection};
 pub use ropey::{Rope, RopeSlice};
+pub use selection::{Range, Selection};

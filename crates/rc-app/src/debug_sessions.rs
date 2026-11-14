@@ -1,20 +1,37 @@
 //! Independent debugger state, consoles and watches; only the selected session paints editors.
-use crate::{app::CrabCraftApp, debugger::{Debugger, DebugOutput}, runner::RunConfig};
+use crate::{
+    app::CrabCraftApp,
+    debugger::{DebugOutput, Debugger},
+    runner::RunConfig,
+};
 use rc_kit::i18n::{tr, trf};
 
 struct Parked {
-    id: u64, debugger: Debugger,
+    id: u64,
+    debugger: Debugger,
     test: Option<(RunConfig, rc_cargo::RunTarget)>,
 }
-pub struct Sessions { parked: Vec<Parked>, current: u64, next: u64 }
-impl Default for Sessions { fn default() -> Self { Self { parked: Vec::new(), current: 1, next: 2 } } }
+pub struct Sessions {
+    parked: Vec<Parked>,
+    current: u64,
+    next: u64,
+}
+impl Default for Sessions {
+    fn default() -> Self {
+        Self { parked: Vec::new(), current: 1, next: 2 }
+    }
+}
 
 impl CrabCraftApp {
     /// Explicitly start another session; ordinary Debug/Restart keeps its existing meaning.
     pub fn debug_in_new_session(&mut self) {
-        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        if let Err(error) = self.runner.require_trust() {
+            self.notify(error.to_string(), true);
+            return;
+        }
         if self.debug_sessions.parked.len() >= 7 {
-            self.notify(tr("Close a debug session before starting another (limit: 8)"), true); return;
+            self.notify(tr("Close a debug session before starting another (limit: 8)"), true);
+            return;
         }
         if self.debugger.session.is_some() {
             let mut fresh = Debugger::new(self.debugger.waker());
@@ -37,12 +54,16 @@ impl CrabCraftApp {
     }
 
     pub fn select_debug_session(&mut self, id: u64) {
-        let Some(parked) = self.debug_sessions.parked.iter_mut().find(|s| s.id == id) else { return; };
+        let Some(parked) = self.debug_sessions.parked.iter_mut().find(|s| s.id == id) else {
+            return;
+        };
         std::mem::swap(&mut parked.id, &mut self.debug_sessions.current);
         std::mem::swap(&mut parked.debugger, &mut self.debugger);
         std::mem::swap(&mut parked.test, &mut self.debug_test);
         self.debugger.became_selected();
-        if let Some(index) = self.runner.configs.iter().position(|c| c.name == self.debugger.name) { self.runner.selected = index; }
+        if let Some(index) = self.runner.configs.iter().position(|c| c.name == self.debugger.name) {
+            self.runner.selected = index;
+        }
         let outputs = self.debugger.update(&mut self.docs);
         self.handle_debug(outputs);
         if let Some((path, line)) = self.debugger.session.as_ref().filter(|s| s.state().is_stopped()).and_then(|s| s.execution_point()) {
@@ -52,7 +73,9 @@ impl CrabCraftApp {
 
     pub fn stop_all_debug_sessions(&mut self) {
         self.debugger.stop();
-        for parked in &mut self.debug_sessions.parked { parked.debugger.stop(); }
+        for parked in &mut self.debug_sessions.parked {
+            parked.debugger.stop();
+        }
     }
 
     pub fn poll_background_debug_sessions(&mut self) {
@@ -60,9 +83,11 @@ impl CrabCraftApp {
         for parked in &mut self.debug_sessions.parked {
             for output in parked.debugger.update_background(&mut self.docs) {
                 match output {
-                    DebugOutput::Notify(message, error) => notifications.push(DebugOutput::Notify(trf("Session {number}: {message}", &[("number", &parked.id), ("message", &message)]), error)),
+                    DebugOutput::Notify(message, error) => {
+                        notifications.push(DebugOutput::Notify(trf("Session {number}: {message}", &[("number", &parked.id), ("message", &message)]), error))
+                    }
                     DebugOutput::BreakpointsChanged => notifications.push(DebugOutput::BreakpointsChanged),
-                    DebugOutput::ShowLine(..) | DebugOutput::ShowDebugWindow => {},
+                    DebugOutput::ShowLine(..) | DebugOutput::ShowDebugWindow => {}
                 }
             }
         }
@@ -78,11 +103,21 @@ pub fn selector(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
         let selector = egui::ComboBox::from_id_salt("debug-session-selector").selected_text(&text).show_ui(ui, |ui| {
             ui.selectable_value(&mut selected, current, trf("Session {number}: {name}", &[("number", &current), ("name", &app.debugger.name)]));
             for parked in &app.debug_sessions.parked {
-                ui.selectable_value(&mut selected, parked.id, format!("{} — {}", trf("Session {number}: {name}", &[("number", &parked.id), ("name", &parked.debugger.name)]), parked.debugger.state_label()));
+                ui.selectable_value(
+                    &mut selected,
+                    parked.id,
+                    format!(
+                        "{} — {}",
+                        trf("Session {number}: {name}", &[("number", &parked.id), ("name", &parked.debugger.name)]),
+                        parked.debugger.state_label()
+                    ),
+                );
             }
         });
         selector.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), &text));
-        if ui.button(tr("Debug in New Session")).clicked() { app.debug_in_new_session(); }
+        if ui.button(tr("Debug in New Session")).clicked() {
+            app.debug_in_new_session();
+        }
         if ui.add_enabled(!app.debugger.active(), egui::Button::new(tr("Close Debug Session"))).clicked() {
             app.debugger.stop();
             app.debugger.session = None;
@@ -92,9 +127,13 @@ pub fn selector(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
                 app.debug_sessions.parked.retain(|s| s.debugger.session.is_some());
             }
         }
-        if ui.button(tr("Stop All Debug Sessions")).clicked() { app.stop_all_debug_sessions(); }
+        if ui.button(tr("Stop All Debug Sessions")).clicked() {
+            app.stop_all_debug_sessions();
+        }
     });
-    if selected != current { app.select_debug_session(selected); }
+    if selected != current {
+        app.select_debug_session(selected);
+    }
 }
 
 #[cfg(test)]
@@ -107,7 +146,9 @@ mod tests {
         while !done(h.state()) {
             h.run_steps(1);
             assert!(Instant::now() < deadline, "session did not settle: {}", h.state().debugger.state_label());
-            if let Some(session) = &h.state().debugger.session { assert!(!matches!(session.state(), rc_dap::SessionState::Failed(_)), "{:?}", session.state()); }
+            if let Some(session) = &h.state().debugger.session {
+                assert!(!matches!(session.state(), rc_dap::SessionState::Failed(_)), "{:?}", session.state());
+            }
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -122,7 +163,8 @@ mod tests {
         let first = project.path().join("src/main.rs");
         let second = project.path().join("src/bin/second.rs");
         for (path, value, marker) in [(&first, 42, "first.done"), (&second, 84, "second.done")] {
-            std::fs::write(path, format!("fn main() {{\n    let value: u32 = {value};\n    std::fs::write(\"{marker}\", value.to_string()).unwrap();\n}}\n")).unwrap();
+            std::fs::write(path, format!("fn main() {{\n    let value: u32 = {value};\n    std::fs::write(\"{marker}\", value.to_string()).unwrap();\n}}\n"))
+                .unwrap();
         }
         let mut app = crate::screens::test_app(home.path(), true);
         app.open_workspace_and_wait(project.path());
@@ -138,18 +180,24 @@ mod tests {
         wait(&mut harness, |a| a.debugger.stopped());
         harness.state_mut().runner.selected = harness.state().runner.configs.iter().position(|c| c.name == "second").unwrap();
         harness.run_steps(2);
-        harness.get_by_label(tr("Debug in New Session")).click(); harness.run_steps(2);
+        harness.get_by_label(tr("Debug in New Session")).click();
+        harness.run_steps(2);
         wait(&mut harness, |a| a.debugger.stopped());
         assert_eq!(harness.state().debug_sessions.parked.len(), 1);
         assert!(harness.state().debug_sessions.parked[0].debugger.stopped());
         assert_eq!(harness.state().debugger.name, "second");
         assert!(!project.path().join("first.done").exists() && !project.path().join("second.done").exists());
         let watch = harness.state_mut().debugger.session.as_mut().unwrap().add_watch("value");
-        wait(&mut harness, |a| a.debugger.session.as_ref().unwrap().watches().iter().any(|w| w.id == watch && matches!(&w.value, rc_dap::WatchValue::Value(v) if v.result == "84")));
+        wait(&mut harness, |a| {
+            a.debugger.session.as_ref().unwrap().watches().iter().any(|w| w.id == watch && matches!(&w.value, rc_dap::WatchValue::Value(v) if v.result == "84"))
+        });
         let parked = &harness.state().debug_sessions.parked[0];
-        let option = format!("{} — {}", trf("Session {number}: {name}", &[("number", &parked.id), ("name", &parked.debugger.name)]), parked.debugger.state_label());
-        harness.get_by_value(&trf("Session {number}: {name}", &[("number", &2), ("name", &"second")])).click(); harness.run_steps(2);
-        harness.get_by_label(&option).click(); harness.run_steps(2);
+        let option =
+            format!("{} — {}", trf("Session {number}: {name}", &[("number", &parked.id), ("name", &parked.debugger.name)]), parked.debugger.state_label());
+        harness.get_by_value(&trf("Session {number}: {name}", &[("number", &2), ("name", &"second")])).click();
+        harness.run_steps(2);
+        harness.get_by_label(&option).click();
+        harness.run_steps(2);
         assert_eq!(harness.state().debugger.name, "parallel-audit");
         assert!(harness.state().debugger.session.as_ref().unwrap().watches().is_empty());
         harness.state_mut().debugger.session.as_mut().unwrap().continue_();
@@ -171,9 +219,11 @@ mod tests {
         harness.state_mut().debugger.stop();
         assert!(harness.state().debug_sessions.parked.iter().any(|s| s.debugger.name == "parallel-audit" && s.debugger.stopped()));
         harness.run_steps(2);
-        harness.get_by_label(tr("Stop All Debug Sessions")).click(); harness.run_steps(2);
+        harness.get_by_label(tr("Stop All Debug Sessions")).click();
+        harness.run_steps(2);
         assert!(harness.state().debug_sessions.parked.iter().all(|s| !s.debugger.active()));
-        harness.get_by_label(tr("Close Debug Session")).click(); harness.run_steps(2);
+        harness.get_by_label(tr("Close Debug Session")).click();
+        harness.run_steps(2);
         harness.state_mut().close_workspace();
         harness.state_mut().save_all_and_wait();
         assert!(harness.state().debug_sessions.parked.is_empty());

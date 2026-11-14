@@ -33,90 +33,231 @@ pub enum Dialog {
     CloneRepository,
     CargoDependencies,
     /// Picks a running process for the debugger.
-    Attach { filter: String, processes: Vec<rc_core::processes::Process> },
-    Settings { draft: Box<Settings>, page: SettingsPage, browse: SettingsBrowse },
+    Attach {
+        filter: String,
+        processes: Vec<rc_core::processes::Process>,
+    },
+    Settings {
+        draft: Box<Settings>,
+        page: SettingsPage,
+        browse: SettingsBrowse,
+    },
     About,
-    GotoLine { text: String, focus: bool },
-    Bookmarks { list: Vec<crate::insight::Target>, selected: usize },
-    RunAnything { text: String, selected: usize },
-    NewFile { dir: PathBuf, name: String, kind: crate::item_templates::ItemKind, attach: bool, public: bool, error: Option<String> },
-    Rename { path: PathBuf, name: String, error: Option<String> },
+    GotoLine {
+        text: String,
+        focus: bool,
+    },
+    Bookmarks {
+        list: Vec<crate::insight::Target>,
+        selected: usize,
+    },
+    RunAnything {
+        text: String,
+        selected: usize,
+    },
+    NewFile {
+        dir: PathBuf,
+        name: String,
+        kind: crate::item_templates::ItemKind,
+        attach: bool,
+        public: bool,
+        error: Option<String>,
+    },
+    Rename {
+        path: PathBuf,
+        name: String,
+        error: Option<String>,
+    },
     /// After the new name of a file: the other changes the rename brings.
     RenameFile(Box<crate::file_rename::FileRename>),
     /// The edits of a refactoring, to review before applying them.
     RefactorPreview(Box<crate::refactor_preview::RefactorPreview>),
     /// The conflicts of a refactoring, to continue anyway or cancel.
     RefactorConflicts(Box<crate::refactor_conflicts::Review>),
-    ConfirmDelete { path: PathBuf },
+    ConfirmDelete {
+        path: PathBuf,
+    },
     /// Invalidate Caches: what is rebuilt, and whether `cargo clean` runs too.
-    InvalidateCaches { clean: bool },
-    RecentFiles { selected: usize, filter: String },
+    InvalidateCaches {
+        clean: bool,
+    },
+    RecentFiles {
+        selected: usize,
+        filter: String,
+    },
     /// New Scratch File: the kinds to create, then the scratch files there are.
-    Scratches { selected: usize, filter: String, files: Vec<PathBuf> },
+    Scratches {
+        selected: usize,
+        filter: String,
+        files: Vec<PathBuf>,
+    },
     /// ⌥⏎ context actions for the active editor.
-    CodeActions { list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>, selected: usize },
+    CodeActions {
+        list: Vec<rc_lsp::lsp_types::CodeActionOrCommand>,
+        selected: usize,
+    },
     /// Generate › Derive: the traits a Rust type derives (checked) and others typed in.
-    Derive { doc: u64, name: String, traits: Vec<(String, bool)>, other: String },
+    Derive {
+        doc: u64,
+        name: String,
+        traits: Vec<(String, bool)>,
+        other: String,
+    },
     /// Shift+F6 on a symbol.
-    RenameSymbol { doc: u64, pos: usize, original: String, name: String, focus: bool },
+    RenameSymbol {
+        doc: u64,
+        pos: usize,
+        original: String,
+        name: String,
+        focus: bool,
+    },
     /// Confirm rolling back files to HEAD.
-    Rollback { paths: Vec<String> },
-    NewBranch { name: String },
+    Rollback {
+        paths: Vec<String>,
+    },
+    NewBranch {
+        name: String,
+    },
     /// A new tag on HEAD or on a commit (hash, short hash); a message makes it annotated.
-    NewTag { name: String, target: Option<(String, String)>, message: String },
+    NewTag {
+        name: String,
+        target: Option<(String, String)>,
+        message: String,
+    },
     /// Confirm deleting a local tag.
-    DeleteTag { name: String },
+    DeleteTag {
+        name: String,
+    },
     /// Warn before checking out a tag (detached HEAD).
-    CheckoutTag { name: String },
+    CheckoutTag {
+        name: String,
+    },
     /// Confirm pushing one tag, or every tag (`None`), and pick the remote.
-    PushTags { name: Option<String>, remote: String },
+    PushTags {
+        name: Option<String>,
+        remote: String,
+    },
     /// Stash the work tree's changes with an optional message.
-    StashChanges { message: String, include_untracked: bool, keep_index: bool, paths: Vec<String> },
+    StashChanges {
+        message: String,
+        include_untracked: bool,
+        keep_index: bool,
+        paths: Vec<String>,
+    },
     /// Apply Patch: the file typed or picked, and whether a paste from the clipboard was
     /// requested (the loaded patch and its preview live in `app.vcs.patch`).
-    ApplyPatch { path: String, paste: bool },
+    ApplyPatch {
+        path: String,
+        paste: bool,
+    },
     /// A new folder for the run configuration `config`, or the new name of the folder `rename`
     /// (B-21).
-    ConfigFolder { config: String, rename: Option<String>, folder: String },
+    ConfigFolder {
+        config: String,
+        rename: Option<String>,
+        folder: String,
+    },
     /// Confirm dropping a stash.
-    DropStash { stash: rc_vcs::Stash },
-    StashBranch { stash: rc_vcs::Stash, name: String },
+    DropStash {
+        stash: rc_vcs::Stash,
+    },
+    StashBranch {
+        stash: rc_vcs::Stash,
+        name: String,
+    },
     /// A new worktree at `path`, on a new branch `name` or on the existing branch `existing`.
     /// The path follows the branch until the user edits it.
-    AddWorktree { path: String, new_branch: bool, name: String, existing: String, path_edited: bool },
+    AddWorktree {
+        path: String,
+        new_branch: bool,
+        name: String,
+        existing: String,
+        path_edited: bool,
+    },
     /// Confirm removing a worktree; `force` after git refused because of local changes.
-    RemoveWorktree { path: PathBuf, force: bool },
+    RemoveWorktree {
+        path: PathBuf,
+        force: bool,
+    },
     /// Lock a worktree, with an optional reason.
-    LockWorktree { path: PathBuf, reason: String },
+    LockWorktree {
+        path: PathBuf,
+        reason: String,
+    },
     /// Confirm pruning the worktrees whose folders are gone.
-    PruneWorktrees { paths: Vec<PathBuf> },
+    PruneWorktrees {
+        paths: Vec<PathBuf>,
+    },
     /// Merge a branch or commit into the current branch (V-07).
-    Merge { rev: String, fast_forward: rc_vcs::FastForward, squash: bool, no_commit: bool },
+    Merge {
+        rev: String,
+        fast_forward: rc_vcs::FastForward,
+        squash: bool,
+        no_commit: bool,
+    },
     /// Rebase the current branch onto a branch or commit (V-07).
-    Rebase { onto: String, autostash: bool },
+    Rebase {
+        onto: String,
+        autostash: bool,
+    },
     /// Confirm abandoning the merge, rebase or cherry-pick in progress.
     AbortOperation,
     /// The conflicted files; the selected ones are acted on.
-    Conflicts { selected: std::collections::BTreeSet<String> },
+    Conflicts {
+        selected: std::collections::BTreeSet<String>,
+    },
     /// ⇧⌘E: the places the caret jumped from.
-    RecentLocations { selected: usize },
+    RecentLocations {
+        selected: usize,
+    },
     /// ⌘F12 file structure popup.
-    FileStructure { filter: String, selected: usize },
+    FileStructure {
+        filter: String,
+        selected: usize,
+    },
     /// Right-click on a breakpoint: condition and enabled state (0-based line).
-    BreakpointProperties { path: PathBuf, line: usize, condition: String, log: String, once: bool, enabled: bool, focus: bool },
+    BreakpointProperties {
+        path: PathBuf,
+        line: usize,
+        condition: String,
+        log: String,
+        once: bool,
+        enabled: bool,
+        focus: bool,
+    },
     /// Every breakpoint and its group (D-27): the selected one and the group name being typed.
-    Breakpoints { selected: Option<(PathBuf, usize)>, group: String },
+    Breakpoints {
+        selected: Option<(PathBuf, usize)>,
+        group: String,
+    },
     /// Edit an application run configuration: launch profile, arguments, environment, folder.
-    WasmOptions { name: String, manifest: PathBuf, options: rc_core::session::RunOptions },
-    RunOptions { name: String, project: PathBuf, options: rc_core::session::RunOptions },
+    WasmOptions {
+        name: String,
+        manifest: PathBuf,
+        options: rc_core::session::RunOptions,
+    },
+    RunOptions {
+        name: String,
+        project: PathBuf,
+        options: rc_core::session::RunOptions,
+    },
     /// A compound run configuration: its name and which applications it starts.
-    Compound { old: Option<String>, name: String, members: Vec<(String, bool)> },
+    Compound {
+        old: Option<String>,
+        name: String,
+        members: Vec<(String, bool)>,
+    },
     /// ⌥F8: evaluate an expression in the selected frame.
-    Evaluate { expression: String, focus: bool },
+    Evaluate {
+        expression: String,
+        focus: bool,
+    },
     /// The earlier versions of a file kept by the IDE.
     LocalHistory(Box<LocalHistoryView>),
     /// The variables of every Cargo command and of rust-analyzer, `NAME=value` per line.
-    ProjectEnv { text: String },
+    ProjectEnv {
+        text: String,
+    },
     /// Share in Playground: what is uploaded, to confirm before anything is sent.
     SharePlayground(Box<crate::playground::Share>),
 }
@@ -143,7 +284,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::RevertDisk(ticket) => revert_disk(app, ctx, ticket),
         Dialog::Settings { draft, page, browse } => settings(app, ctx, draft, page, browse),
         Dialog::About => about(ctx),
-        Dialog::CloneRepository => if crate::clone_project::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
+        Dialog::CloneRepository => {
+            if crate::clone_project::show(app, ctx) {
+                Outcome::Close
+            } else {
+                Outcome::Keep
+            }
+        }
         Dialog::GotoLine { text, focus } => goto_line(app, ctx, text, focus),
         Dialog::Bookmarks { list, selected } => bookmarks(app, ctx, list, selected),
         Dialog::RunAnything { text, selected } => run_anything(app, ctx, text, selected),
@@ -168,7 +315,13 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::PushTags { name, remote } => push_tags(app, ctx, name.as_deref(), remote),
         Dialog::StashChanges { message, include_untracked, keep_index, paths } => stash_changes(app, ctx, message, include_untracked, keep_index, paths),
         Dialog::StashBranch { stash, name } => stash_branch(app, ctx, stash, name),
-        Dialog::CargoDependencies => if crate::cargo_dependencies::show(app, ctx) { Outcome::Close } else { Outcome::Keep },
+        Dialog::CargoDependencies => {
+            if crate::cargo_dependencies::show(app, ctx) {
+                Outcome::Close
+            } else {
+                Outcome::Keep
+            }
+        }
         Dialog::ApplyPatch { path, paste } => apply_patch(app, ctx, path, paste),
         Dialog::DropStash { stash } => drop_stash(app, ctx, stash),
         Dialog::AddWorktree { path, new_branch, name, existing, path_edited } => add_worktree(app, ctx, path, new_branch, name, existing, path_edited),
@@ -180,11 +333,19 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context) {
         Dialog::AbortOperation => abort_operation(app, ctx),
         Dialog::Conflicts { selected } => conflicts_dialog(app, ctx, selected),
         Dialog::RecentLocations { selected } => recent_locations(app, ctx, selected),
-        Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => breakpoint_properties(app, ctx, path, *line, condition, log, once, enabled, focus),
+        Dialog::BreakpointProperties { path, line, condition, log, once, enabled, focus } => {
+            breakpoint_properties(app, ctx, path, *line, condition, log, (once, enabled, focus))
+        }
         Dialog::Breakpoints { selected, group } => breakpoints(app, ctx, selected, group),
         Dialog::Evaluate { expression, focus } => evaluate(app, ctx, expression, focus),
         Dialog::Attach { filter, processes } => attach(app, ctx, filter, processes),
-        Dialog::RemoteDebug(draft) => if crate::remote_debug::show(app, ctx, draft) { Outcome::Close } else { Outcome::Keep },
+        Dialog::RemoteDebug(draft) => {
+            if crate::remote_debug::show(app, ctx, draft) {
+                Outcome::Close
+            } else {
+                Outcome::Keep
+            }
+        }
         Dialog::Compound { old, name, members } => compound(app, ctx, old.as_deref(), name, members),
         Dialog::ConfigFolder { config, rename, folder } => config_folder(app, ctx, config, rename.as_deref(), folder),
         Dialog::WasmOptions { name, manifest, options } => wasm_options(app, ctx, name, manifest, options),
@@ -245,10 +406,16 @@ const SETTINGS_NAV_W: f32 = 200.0;
 const SETTINGS_PAGE_W: f32 = 640.0;
 
 #[derive(Clone, Copy, Debug)]
-struct SettingsLayout { width: f32, nav: f32, page: f32, height: f32, compact: bool }
+struct SettingsLayout {
+    width: f32,
+    nav: f32,
+    page: f32,
+    height: f32,
+    compact: bool,
+}
 impl SettingsLayout {
     fn for_viewport(viewport: egui::Vec2) -> Self {
-        let width = (viewport.x - 32.0).max(1.0).min(SETTINGS_NAV_W + 29.0 + SETTINGS_PAGE_W);
+        let width = (viewport.x - 32.0).clamp(1.0, SETTINGS_NAV_W + 29.0 + SETTINGS_PAGE_W);
         let compact = width < 620.0;
         let nav = if compact { 0.0 } else { (width * 0.24).min(SETTINGS_NAV_W) };
         let page = if compact { width } else { (width - nav - 29.0).max(1.0) };
@@ -267,31 +434,51 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
     let ((ok, cancel), esc) = modal(ctx, "settings", layout.width, |ui| {
         title(ui, tr("Settings"));
         if layout.compact {
-            egui::ComboBox::from_id_salt("settings_category").selected_text(settings_pages().into_iter().find(|(candidate, _)| candidate == page).map_or("", |(_, label)| label)).width(layout.width - 8.0).show_ui(ui, |ui| {
-                for (candidate, label) in settings_pages() { ui.selectable_value(page, candidate, label); }
-            });
+            egui::ComboBox::from_id_salt("settings_category")
+                .selected_text(settings_pages().into_iter().find(|(candidate, _)| candidate == page).map_or("", |(_, label)| label))
+                .width(layout.width - 8.0)
+                .show_ui(ui, |ui| {
+                    for (candidate, label) in settings_pages() {
+                        ui.selectable_value(page, candidate, label);
+                    }
+                });
             ui.add_space(8.0);
         }
         ui.horizontal_top(|ui| {
             if !layout.compact {
-                egui::ScrollArea::vertical().id_salt("settings_navigation").max_height(page_h).min_scrolled_height(page_h).auto_shrink([false, false]).max_width(layout.nav).show(ui, |ui| ui.vertical(|ui| {
-                    ui.set_width(layout.nav);
-                    ui.set_height(page_h);
-                    for (pg, label) in settings_pages() {
-                        let (r, resp) = ui.allocate_exact_size(vec2(layout.nav, 28.0), egui::Sense::click());
-                        if *page == pg { ui.painter().rect_filled(r, 6.0, p.selection); }
-                        else if resp.hovered() { ui.painter().rect_filled(r, 6.0, p.row_hover); }
-                        if resp.has_focus() { ui.painter().rect_stroke(r.shrink(1.0), 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside); }
-                        ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
-                        resp.widget_info(|| {
-                            let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, label);
-                            info.selected = Some(*page == pg);
-                            info
-                        });
+                egui::ScrollArea::vertical()
+                    .id_salt("settings_navigation")
+                    .max_height(page_h)
+                    .min_scrolled_height(page_h)
+                    .auto_shrink([false, false])
+                    .max_width(layout.nav)
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(layout.nav);
+                            ui.set_height(page_h);
+                            for (pg, label) in settings_pages() {
+                                let (r, resp) = ui.allocate_exact_size(vec2(layout.nav, 28.0), egui::Sense::click());
+                                if *page == pg {
+                                    ui.painter().rect_filled(r, 6.0, p.selection);
+                                } else if resp.hovered() {
+                                    ui.painter().rect_filled(r, 6.0, p.row_hover);
+                                }
+                                if resp.has_focus() {
+                                    ui.painter().rect_stroke(r.shrink(1.0), 6.0, egui::Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+                                }
+                                ui.painter().text(r.left_center() + vec2(10.0, 0.0), Align2::LEFT_CENTER, label, FontId::proportional(13.0), p.text);
+                                resp.widget_info(|| {
+                                    let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, label);
+                                    info.selected = Some(*page == pg);
+                                    info
+                                });
 
-                        if resp.clicked() { *page = pg; }
-                    }
-                }));
+                                if resp.clicked() {
+                                    *page = pg;
+                                }
+                            }
+                        })
+                    });
                 ui.add_space(12.0);
                 let (line, _) = ui.allocate_exact_size(vec2(1.0, page_h), egui::Sense::hover());
                 ui.painter().rect_filled(line, 0.0, p.control_border);
@@ -299,129 +486,168 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
             }
             // Reserve the floating scrollbar's full width as well as its allocated gutter.
             let content_width = (layout.page - ui.spacing().scroll.allocated_width() - ui.spacing().scroll.bar_width - 12.0).max(40.0);
-            egui::ScrollArea::new([*page != SettingsPage::Tools, true]).max_height(page_h).min_scrolled_height(page_h).id_salt("settings_fixed_page").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded).auto_shrink([false, false]).max_width(layout.page).show(ui, |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                ui.set_width(content_width);
-                ui.set_height(page_h);
-                let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
-                ui.label(egui::RichText::new(name).font(theme::bold(14.0)));
-                ui.add_space(10.0);
-                // Pages that lay out their own lists, sized to the page.
-                match page {
-                    SettingsPage::Tools => return tools_page(ui, app, draft, browse),
-                    SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
-                    SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
-                    SettingsPage::Copyright => {
-                        egui::ScrollArea::vertical().id_salt("copyright_page").auto_shrink([false, false]).show(ui, |ui| copyright_page(ui, app, p.text_muted, p.error));
-                        return;
-                    }
-                    SettingsPage::Scopes => return scopes_page(ui, app, p.text_muted, p.error),
-                    SettingsPage::Inspections => return inspections_page(ui, app, draft, p.text_muted),
-                    SettingsPage::Keymap => return keymap_page(ui, draft),
-                    _ => {}
-                }
-                egui::ScrollArea::vertical().id_salt(("settings_page", format!("{page:?}"))).auto_shrink([false, false]).show(ui, |ui| {
-                egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
-                    SettingsPage::Appearance => {
-                        ui.label(tr("Theme"));
-                        egui::ComboBox::from_id_salt("theme")
-                            .selected_text(match draft.theme {
-                                ThemeChoice::Light => "Islands Light",
-                                ThemeChoice::Dark => "Islands Dark",
-                                ThemeChoice::System => tr("Sync with OS"),
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut draft.theme, ThemeChoice::Light, "Islands Light");
-                                ui.selectable_value(&mut draft.theme, ThemeChoice::Dark, "Islands Dark");
-                                ui.selectable_value(&mut draft.theme, ThemeChoice::System, tr("Sync with OS"));
-                            });
-                        ui.end_row();
-                        ui.label(tr("Language"));
-                        let current = draft.language.as_deref().map(Lang::from_locale);
-                        egui::ComboBox::from_id_salt("lang")
-                            .selected_text(current.map_or(tr("System language"), |l| l.native_name()))
-                            .show_ui(ui, |ui| {
-                                if ui.selectable_label(current.is_none(), tr("System language")).clicked() {
-                                    draft.language = None;
-                                }
-                                for l in Lang::ALL {
-                                    if ui.selectable_label(current == Some(l), l.native_name()).clicked() {
-                                        draft.language = Some(lang_code(l).to_string());
-                                    }
-                                }
-                            });
-                        ui.end_row();
-                        ui.label(tr("Zoom"));
-                        theme::slider(ui, egui::Slider::new(&mut draft.ui_zoom, 0.5..=3.0).step_by(0.1).custom_formatter(|v, _| format!("{:.0}%", v * 100.0)));
-                        ui.end_row();
-                    }
-                    SettingsPage::Editor => {
-                        ui.label(tr("Rust"));
-                        ui.checkbox(&mut draft.format_on_save, tr("Reformat with rustfmt on save"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.use_nextest, tr("Run tests with cargo-nextest")).on_hover_text(tr("Needs cargo-nextest installed. Doctests do not run with it."));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.check_crates_io, tr("Show newer versions of dependencies from crates.io")).on_hover_text(tr("Only crate names are sent to crates.io."));
-                        ui.end_row();
-                        ui.label(tr("Font size"));
-                        ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
-                        ui.end_row();
-                        ui.label(tr("Line height"));
-                        ui.add(egui::DragValue::new(&mut draft.editor_line_spacing).range(1.0..=2.0).speed(0.05));
-                        ui.end_row();
-                        ui.label(tr("Hard wrap guide"));
-                        ui.add(egui::DragValue::new(&mut draft.right_margin).range(0..=400).suffix(tr(" columns")));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.scrollbar_lens, tr("Show a code preview when hovering the scrollbar"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut draft.autosave_idle, tr("Save files automatically after a pause of"));
-                            ui.add_enabled(draft.autosave_idle, egui::DragValue::new(&mut draft.autosave_delay_secs).range(1..=600).suffix(tr(" s")));
-                        });
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.single_click_open, tr("Open files with a single click in the Explorer"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.tabs_multirow, tr("Show tabs in multiple rows"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
-                        ui.end_row();
-                        ui.label("");
-                        ui.checkbox(&mut draft.imports_on_paste, tr("Add the imports pasted Rust code needs (when only one fits)"));
-                        ui.end_row();
-                        ui.label(tr("Never import"));
-                        ui.vertical(|ui| {
-                            let mut text = draft.autoimport_exclude.join("\n");
-                            if ui.add(egui::TextEdit::multiline(&mut text).hint_text("std::sync::atomic::Ordering").font(egui::TextStyle::Monospace).desired_rows(3).desired_width(300.0)).changed() {
-                                draft.autoimport_exclude = text.lines().map(str::to_string).collect();
+            egui::ScrollArea::new([*page != SettingsPage::Tools, true])
+                .max_height(page_h)
+                .min_scrolled_height(page_h)
+                .id_salt("settings_fixed_page")
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+                .auto_shrink([false, false])
+                .max_width(layout.page)
+                .show(ui, |ui| {
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                        ui.set_width(content_width);
+                        ui.set_height(page_h);
+                        let name = settings_pages().into_iter().find(|(pg, _)| pg == page).map_or("", |(_, l)| l);
+                        ui.label(egui::RichText::new(name).font(theme::bold(14.0)));
+                        ui.add_space(10.0);
+                        // Pages that lay out their own lists, sized to the page.
+                        match page {
+                            SettingsPage::Tools => return tools_page(ui, app, draft, browse),
+                            SettingsPage::Backup => return app.settings_backup.ui(ui, draft, app.waker.clone()),
+                            SettingsPage::LiveTemplates => return live_templates_page(ui, &mut draft.live_templates, p.text_muted),
+                            SettingsPage::Copyright => {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("copyright_page")
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| copyright_page(ui, app, p.text_muted, p.error));
+                                return;
                             }
-                            ui.label(egui::RichText::new(tr("Items or modules completion never offers to import, one path per line")).size(12.0).color(p.text_muted));
+                            SettingsPage::Scopes => return scopes_page(ui, app, p.text_muted, p.error),
+                            SettingsPage::Inspections => return inspections_page(ui, app, draft, p.text_muted),
+                            SettingsPage::Keymap => return keymap_page(ui, draft),
+                            _ => {}
+                        }
+                        egui::ScrollArea::vertical().id_salt(("settings_page", format!("{page:?}"))).auto_shrink([false, false]).show(ui, |ui| {
+                            egui::Grid::new("settings_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| match page {
+                                SettingsPage::Appearance => {
+                                    ui.label(tr("Theme"));
+                                    egui::ComboBox::from_id_salt("theme")
+                                        .selected_text(match draft.theme {
+                                            ThemeChoice::Light => "Islands Light",
+                                            ThemeChoice::Dark => "Islands Dark",
+                                            ThemeChoice::System => tr("Sync with OS"),
+                                        })
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut draft.theme, ThemeChoice::Light, "Islands Light");
+                                            ui.selectable_value(&mut draft.theme, ThemeChoice::Dark, "Islands Dark");
+                                            ui.selectable_value(&mut draft.theme, ThemeChoice::System, tr("Sync with OS"));
+                                        });
+                                    ui.end_row();
+                                    ui.label(tr("Language"));
+                                    let current = draft.language.as_deref().map(Lang::from_locale);
+                                    egui::ComboBox::from_id_salt("lang").selected_text(current.map_or(tr("System language"), |l| l.native_name())).show_ui(
+                                        ui,
+                                        |ui| {
+                                            if ui.selectable_label(current.is_none(), tr("System language")).clicked() {
+                                                draft.language = None;
+                                            }
+                                            for l in Lang::ALL {
+                                                if ui.selectable_label(current == Some(l), l.native_name()).clicked() {
+                                                    draft.language = Some(lang_code(l).to_string());
+                                                }
+                                            }
+                                        },
+                                    );
+                                    ui.end_row();
+                                    ui.label(tr("Zoom"));
+                                    theme::slider(
+                                        ui,
+                                        egui::Slider::new(&mut draft.ui_zoom, 0.5..=3.0).step_by(0.1).custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+                                    );
+                                    ui.end_row();
+                                }
+                                SettingsPage::Editor => {
+                                    ui.label(tr("Rust"));
+                                    ui.checkbox(&mut draft.format_on_save, tr("Reformat with rustfmt on save"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.use_nextest, tr("Run tests with cargo-nextest"))
+                                        .on_hover_text(tr("Needs cargo-nextest installed. Doctests do not run with it."));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.check_crates_io, tr("Show newer versions of dependencies from crates.io"))
+                                        .on_hover_text(tr("Only crate names are sent to crates.io."));
+                                    ui.end_row();
+                                    ui.label(tr("Font size"));
+                                    ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
+                                    ui.end_row();
+                                    ui.label(tr("Line height"));
+                                    ui.add(egui::DragValue::new(&mut draft.editor_line_spacing).range(1.0..=2.0).speed(0.05));
+                                    ui.end_row();
+                                    ui.label(tr("Hard wrap guide"));
+                                    ui.add(egui::DragValue::new(&mut draft.right_margin).range(0..=400).suffix(tr(" columns")));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.show_indent_guides, tr("Show indent guides"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.sticky_lines, tr("Show sticky lines while scrolling"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.scrollbar_lens, tr("Show a code preview when hovering the scrollbar"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.autosave, tr("Save files when switching to another application"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.horizontal(|ui| {
+                                        ui.checkbox(&mut draft.autosave_idle, tr("Save files automatically after a pause of"));
+                                        ui.add_enabled(
+                                            draft.autosave_idle,
+                                            egui::DragValue::new(&mut draft.autosave_delay_secs).range(1..=600).suffix(tr(" s")),
+                                        );
+                                    });
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.single_click_open, tr("Open files with a single click in the Explorer"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.tabs_multirow, tr("Show tabs in multiple rows"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.tab_colors, tr("Color tabs by kind of file"));
+                                    ui.end_row();
+                                    ui.label("");
+                                    ui.checkbox(&mut draft.imports_on_paste, tr("Add the imports pasted Rust code needs (when only one fits)"));
+                                    ui.end_row();
+                                    ui.label(tr("Never import"));
+                                    ui.vertical(|ui| {
+                                        let mut text = draft.autoimport_exclude.join("\n");
+                                        if ui
+                                            .add(
+                                                egui::TextEdit::multiline(&mut text)
+                                                    .hint_text("std::sync::atomic::Ordering")
+                                                    .font(egui::TextStyle::Monospace)
+                                                    .desired_rows(3)
+                                                    .desired_width(300.0),
+                                            )
+                                            .changed()
+                                        {
+                                            draft.autoimport_exclude = text.lines().map(str::to_string).collect();
+                                        }
+                                        ui.label(
+                                            egui::RichText::new(tr("Items or modules completion never offers to import, one path per line"))
+                                                .size(12.0)
+                                                .color(p.text_muted),
+                                        );
+                                    });
+                                    ui.end_row();
+                                }
+                                SettingsPage::Tools => {}
+                                SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
+                                SettingsPage::Keymap
+                                | SettingsPage::LiveTemplates
+                                | SettingsPage::Copyright
+                                | SettingsPage::Scopes
+                                | SettingsPage::Inspections
+                                | SettingsPage::Backup => {}
+                            });
                         });
-                        ui.end_row();
-                    }
-                    SettingsPage::Tools => {}
-                    SettingsPage::ExternalTools => external_tools_rows(ui, &mut draft.external_tools, p.text_muted),
-                    SettingsPage::Keymap | SettingsPage::LiveTemplates | SettingsPage::Copyright | SettingsPage::Scopes | SettingsPage::Inspections | SettingsPage::Backup => {}
+                    })
                 });
-                });
-            }));
         });
         buttons(ui, tr("OK"), true)
     });
@@ -473,7 +699,9 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
             }
         });
     } else {
-        ui.label(egui::RichText::new(tr("Open a project to give it a profile of its own. The Default profile applies to every project.")).size(12.0).color(muted));
+        ui.label(
+            egui::RichText::new(tr("Open a project to give it a profile of its own. The Default profile applies to every project.")).size(12.0).color(muted),
+        );
     }
     ui.label(egui::RichText::new(tr("Weak warnings get a thin underline; infos are not highlighted but keep their quick fixes. Neither is listed in Problems or marked on the scroll bar.")).size(12.0).color(muted));
     ui.add_space(6.0);
@@ -486,7 +714,11 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
                 ui.label(egui::RichText::new(group.title()).font(theme::bold(13.0)));
                 ui.end_row();
                 let mut ids: Vec<String> = ip::KNOWN.iter().filter(|(_, g)| *g == group).map(|(id, _)| id.to_string()).collect();
-                let custom: Vec<String> = if group == Group::Rust { editing.levels.keys().filter(|k| !ip::KNOWN.iter().any(|(id, _)| id == k)).cloned().collect() } else { Vec::new() };
+                let custom: Vec<String> = if group == Group::Rust {
+                    editing.levels.keys().filter(|k| !ip::KNOWN.iter().any(|(id, _)| id == k)).cloned().collect()
+                } else {
+                    Vec::new()
+                };
                 ids.extend(custom.iter().cloned());
                 for id in &ids {
                     let level = editing.level(id).filter(|_| editing.levels.contains_key(id.as_str()));
@@ -495,13 +727,16 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
                         editing.set(id, if on { None } else { Some(Level::Off) });
                     }
                     ui.add_enabled_ui(on, |ui| {
-                        egui::ComboBox::from_id_salt(("inspection_level", id.as_str())).selected_text(ip::level_name(level.filter(|l| *l != Level::Off))).width(130.0).show_ui(ui, |ui| {
-                            for choice in [None, Some(Level::Error), Some(Level::Warning), Some(Level::WeakWarning), Some(Level::Info)] {
-                                if ui.selectable_label(level == choice, ip::level_name(choice)).clicked() {
-                                    editing.set(id, choice);
+                        egui::ComboBox::from_id_salt(("inspection_level", id.as_str()))
+                            .selected_text(ip::level_name(level.filter(|l| *l != Level::Off)))
+                            .width(130.0)
+                            .show_ui(ui, |ui| {
+                                for choice in [None, Some(Level::Error), Some(Level::Warning), Some(Level::WeakWarning), Some(Level::Info)] {
+                                    if ui.selectable_label(level == choice, ip::level_name(choice)).clicked() {
+                                        editing.set(id, choice);
+                                    }
                                 }
-                            }
-                        });
+                            });
                     });
                     if custom.contains(id) {
                         if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
@@ -521,10 +756,19 @@ fn inspections_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, m
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         let code = &mut app.inspections.new_code;
-        ui.add(egui::TextEdit::singleline(code).hint_text(tr("Diagnostic code, such as clippy::needless_return")).font(egui::TextStyle::Monospace).desired_width(300.0));
+        ui.add(
+            egui::TextEdit::singleline(code)
+                .hint_text(tr("Diagnostic code, such as clippy::needless_return"))
+                .font(egui::TextStyle::Monospace)
+                .desired_width(300.0),
+        );
         let id = code.trim().to_string();
         let can_add = valid_id(&id) && !editing.levels.contains_key(&id);
-        if ui.add_enabled(can_add, egui::Button::new(tr("Add Code"))).on_hover_text(tr("A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group")).clicked() {
+        if ui
+            .add_enabled(can_add, egui::Button::new(tr("Add Code")))
+            .on_hover_text(tr("A code of rust-analyzer, the compiler or Clippy; prefix::* covers a whole group"))
+            .clicked()
+        {
             editing.set(&id, Some(Level::Warning));
             code.clear();
         }
@@ -544,7 +788,13 @@ fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error:
     let mut draft = app.explorer.scopes.draft.take().unwrap_or_else(|| app.explorer.scopes.draft());
     egui::ScrollArea::vertical().id_salt("scopes_page").max_height(ui.available_height()).auto_shrink([false, true]).show(ui, |ui| {
         ui.label(egui::RichText::new(tr("Scopes")).font(theme::bold(13.0)));
-        ui.label(egui::RichText::new(tr("Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.")).size(12.0).color(muted));
+        ui.label(
+            egui::RichText::new(tr(
+                "Globs separated by commas; ! leaves files out. A glob with / matches the path from the project folder, one without it the file name.",
+            ))
+            .size(12.0)
+            .color(muted),
+        );
         ui.add_space(6.0);
         egui::Grid::new("builtin_scopes").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
             for (name, what) in [
@@ -563,7 +813,12 @@ fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error:
             ui.horizontal(|ui| {
                 let old = draft.user[i].name.clone();
                 ui.add(egui::TextEdit::singleline(&mut draft.user[i].name).hint_text(tr("Name")).desired_width(130.0));
-                ui.add(egui::TextEdit::singleline(&mut draft.user[i].pattern).hint_text("src/**/*.rs, !target/**").font(egui::TextStyle::Monospace).desired_width(290.0));
+                ui.add(
+                    egui::TextEdit::singleline(&mut draft.user[i].pattern)
+                        .hint_text("src/**/*.rs, !target/**")
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(290.0),
+                );
                 if theme::icon_button(ui, rc_kit::ico::REMOVE, true, tr("Remove")).clicked() {
                     remove = Some(i);
                 }
@@ -588,9 +843,14 @@ fn scopes_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, error:
         }
         ui.add_space(14.0);
         ui.label(egui::RichText::new(tr("File Colors")).font(theme::bold(13.0)));
-        ui.label(egui::RichText::new(tr("Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins.")).size(12.0).color(muted));
+        ui.label(
+            egui::RichText::new(tr("Files of a scope get its color in the Explorer and on editor tabs; the first scope that holds a file wins."))
+                .size(12.0)
+                .color(muted),
+        );
         ui.add_space(6.0);
-        let mut choices: Vec<(String, String)> = [scopes::PROJECT, scopes::TESTS, scopes::CHANGED].iter().map(|k| (k.to_string(), app.explorer.scopes.label(k))).collect();
+        let mut choices: Vec<(String, String)> =
+            [scopes::PROJECT, scopes::TESTS, scopes::CHANGED].iter().map(|k| (k.to_string(), app.explorer.scopes.label(k))).collect();
         choices.extend(draft.user.iter().map(|s| s.name.trim().to_string()).filter(|n| !n.is_empty()).map(|n| (n.clone(), n)));
         let mut remove = None;
         let mut swap = None;
@@ -647,7 +907,12 @@ fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, err
         return;
     }
     let mut draft = app.copyright.draft.take().unwrap_or_else(|| app.copyright.profile.clone());
-    ui.add(egui::Label::new(egui::RichText::new(tr("Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).")).color(muted)).wrap());
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(tr("Saved with this project. Variables: $year, $file, $project and $author (the user.name of Git).")).color(muted),
+        )
+        .wrap(),
+    );
     ui.add_space(8.0);
     egui::Grid::new("copyright_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| {
         ui.label(tr("Template"));
@@ -704,11 +969,17 @@ fn store_recorded_shortcut(draft: &mut Settings, id: &str, shortcut: String) {
     let sequence = rc_editor::keymap::parse_sequence(&shortcut);
     let single = rc_editor::keymap::parse_chord(&shortcut);
     for (other, value) in &mut draft.shortcuts {
-        if other == id || value.is_empty() { continue; }
+        if other == id || value.is_empty() {
+            continue;
+        }
         let existing_sequence = rc_editor::keymap::parse_sequence(value);
         let existing_single = rc_editor::keymap::parse_chord(value);
-        if value == &shortcut || sequence.is_some_and(|(first,_)| existing_single == Some(first))
-            || single.is_some_and(|chord| existing_sequence.is_some_and(|(first,_)| first == chord)) { value.clear(); }
+        if value == &shortcut
+            || sequence.is_some_and(|(first, _)| existing_single == Some(first))
+            || single.is_some_and(|chord| existing_sequence.is_some_and(|(first, _)| first == chord))
+        {
+            value.clear();
+        }
     }
     draft.shortcuts.insert(id.to_string(), shortcut);
 }
@@ -717,10 +988,28 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
     ui.horizontal(|ui| {
         ui.label(tr("Keymap"));
         let name = |k: KeymapChoice| match k {
-            KeymapChoice::Rider => if cfg!(target_os = "macos") { "Rider (macOS)" } else { "Rider" },
-            KeymapChoice::RustRover => if cfg!(target_os = "macos") { tr("RustRover (macOS)") } else { tr("RustRover (Windows/Linux)") },
+            KeymapChoice::Rider => {
+                if cfg!(target_os = "macos") {
+                    "Rider (macOS)"
+                } else {
+                    "Rider"
+                }
+            }
+            KeymapChoice::RustRover => {
+                if cfg!(target_os = "macos") {
+                    tr("RustRover (macOS)")
+                } else {
+                    tr("RustRover (Windows/Linux)")
+                }
+            }
             KeymapChoice::VisualStudio => "Visual Studio",
-            KeymapChoice::VsCode => if cfg!(target_os = "macos") { "VS Code (macOS)" } else { "VS Code" },
+            KeymapChoice::VsCode => {
+                if cfg!(target_os = "macos") {
+                    "VS Code (macOS)"
+                } else {
+                    "VS Code"
+                }
+            }
         };
         egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
             for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
@@ -737,28 +1026,50 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
     let filter_id = egui::Id::unique("shortcut_filter");
     let mut two_step = ui.ctx().data(|data| data.get_temp::<bool>(mode_id)).unwrap_or(false);
     if ui.checkbox(&mut two_step, tr("Record two-step shortcuts")).changed() {
-        ui.ctx().data_mut(|data| { data.insert_temp(mode_id, two_step); data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); data.remove::<bool>(error_id); });
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(mode_id, two_step);
+            data.remove::<String>(recording_id);
+            data.remove::<rc_editor::keymap::Chord>(first_id);
+            data.remove::<bool>(error_id);
+        });
     }
     let recording: Option<String> = ui.ctx().data(|data| data.get_temp(recording_id));
     if let Some(id) = &recording {
-        let pressed: Vec<_> = ui.input(|input| input.events.iter().filter_map(|event| match event {
-            egui::Event::Key { key, pressed: true, modifiers, repeat: false, .. } => Some((*key,*modifiers)), _ => None,
-        }).take(2).collect());
-        for (key,mods) in &pressed {
+        let pressed: Vec<_> = ui.input(|input| {
+            input
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    egui::Event::Key { key, pressed: true, modifiers, repeat: false, .. } => Some((*key, *modifiers)),
+                    _ => None,
+                })
+                .take(2)
+                .collect()
+        });
+        for (key, mods) in &pressed {
             if *key == Key::Escape {
-                ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                ui.ctx().data_mut(|data| {
+                    data.remove::<String>(recording_id);
+                    data.remove::<rc_editor::keymap::Chord>(first_id);
+                });
                 break;
             }
             let chord = rc_editor::keymap::Chord { key: *key, mods: egui::Modifiers { command: mods.ctrl || mods.mac_cmd, ..*mods } };
             if two_step {
                 if let Some(first) = ui.ctx().data(|data| data.get_temp::<rc_editor::keymap::Chord>(first_id)) {
                     store_recorded_shortcut(draft, id, format!("{} {}", rc_editor::keymap::chord_id(first), rc_editor::keymap::chord_id(chord)));
-                    ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                    ui.ctx().data_mut(|data| {
+                        data.remove::<String>(recording_id);
+                        data.remove::<rc_editor::keymap::Chord>(first_id);
+                    });
                     break;
                 } else if mods.ctrl || mods.mac_cmd {
                     ui.ctx().data_mut(|data| data.insert_temp(first_id, chord));
                 } else {
-                    ui.ctx().data_mut(|data| { data.insert_temp(error_id, true); data.remove::<String>(recording_id); });
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(error_id, true);
+                        data.remove::<String>(recording_id);
+                    });
                     break;
                 }
             } else {
@@ -768,10 +1079,14 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
             }
         }
         if !pressed.is_empty() {
-            ui.input_mut(|input| input.events.retain(|event| !matches!(event, egui::Event::Key { pressed: true, .. } | egui::Event::Text(_) | egui::Event::Paste(_))));
+            ui.input_mut(|input| {
+                input.events.retain(|event| !matches!(event, egui::Event::Key { pressed: true, .. } | egui::Event::Text(_) | egui::Event::Paste(_)))
+            });
         }
     }
-    if ui.ctx().data(|data| data.get_temp::<bool>(error_id)).unwrap_or(false) { ui.label(tr("The first shortcut must include Ctrl or Command.")); }
+    if ui.ctx().data(|data| data.get_temp::<bool>(error_id)).unwrap_or(false) {
+        ui.label(tr("The first shortcut must include Ctrl or Command."));
+    }
     let mut filter: String = ui.ctx().data(|d| d.get_temp(filter_id)).unwrap_or_default();
     if ui.add(egui::TextEdit::singleline(&mut filter).hint_text(tr("Filter actions")).desired_width(f32::INFINITY)).changed() {
         ui.ctx().data_mut(|d| d.insert_temp(filter_id, filter.clone()));
@@ -799,7 +1114,11 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
                     ui.add(egui::Label::new(label).truncate()).on_hover_text(label);
                 });
                 let text = if recording.as_deref() == Some(id.as_str()) {
-                    if two_step && ui.ctx().data(|data| data.get_temp::<rc_editor::keymap::Chord>(first_id)).is_some() { tr("Press the second shortcut…").to_string() } else { tr("Press a shortcut…").to_string() }
+                    if two_step && ui.ctx().data(|data| data.get_temp::<rc_editor::keymap::Chord>(first_id)).is_some() {
+                        tr("Press the second shortcut…").to_string()
+                    } else {
+                        tr("Press a shortcut…").to_string()
+                    }
                 } else {
                     keymap.shortcut_text(action).unwrap_or_else(|| "—".into())
                 };
@@ -812,14 +1131,24 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
                 ui.horizontal(|ui| {
                     ui.set_width(BUTTONS_W);
                     if ui.small_button(tr("Record Shortcut")).clicked() {
-                        ui.ctx().data_mut(|data| { data.insert_temp(recording_id, id.clone()); data.remove::<rc_editor::keymap::Chord>(first_id); data.remove::<bool>(error_id); });
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(recording_id, id.clone());
+                            data.remove::<rc_editor::keymap::Chord>(first_id);
+                            data.remove::<bool>(error_id);
+                        });
                     }
                     if ui.small_button(tr("Remove")).clicked() {
-                        ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                        ui.ctx().data_mut(|data| {
+                            data.remove::<String>(recording_id);
+                            data.remove::<rc_editor::keymap::Chord>(first_id);
+                        });
                         draft.shortcuts.insert(id.clone(), String::new());
                     }
                     if changed && ui.small_button(tr("Reset")).clicked() {
-                        ui.ctx().data_mut(|data| { data.remove::<String>(recording_id); data.remove::<rc_editor::keymap::Chord>(first_id); });
+                        ui.ctx().data_mut(|data| {
+                            data.remove::<String>(recording_id);
+                            data.remove::<rc_editor::keymap::Chord>(first_id);
+                        });
                         draft.shortcuts.remove(&id);
                     }
                 });
@@ -831,7 +1160,15 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
 
 /// Settings › Live Templates: abbreviation, description and body of each template.
 fn live_templates_page(ui: &mut Ui, templates: &mut Vec<rc_core::live_templates::LiveTemplate>, muted: egui::Color32) {
-    ui.add(egui::Label::new(egui::RichText::new(tr("Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.")).color(muted)).wrap());
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(tr(
+                "Type the abbreviation in a Rust file and press Tab. In the body, $1, ${2:default} are the stops Tab visits and $0 is where the caret ends.",
+            ))
+            .color(muted),
+        )
+        .wrap(),
+    );
     ui.add_space(8.0);
     let mut remove = None;
     egui::ScrollArea::vertical().id_salt("live_templates").max_height((ui.available_height() - 44.0).max(120.0)).auto_shrink([false, true]).show(ui, |ui| {
@@ -892,7 +1229,16 @@ fn external_tools_rows(ui: &mut Ui, tools: &mut Vec<rc_core::external_tools::Ext
     ui.label("");
     ui.scope(|ui| {
         ui.set_max_width(300.0);
-        ui.add(egui::Label::new(egui::RichText::new(trf("Run them from More Actions › External Tools or Find Action. Macros: {list}", &[("list", &rc_core::external_tools::MACROS.join(" "))])).color(muted)).wrap());
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(trf(
+                    "Run them from More Actions › External Tools or Find Action. Macros: {list}",
+                    &[("list", &rc_core::external_tools::MACROS.join(" "))],
+                ))
+                .color(muted),
+            )
+            .wrap(),
+        );
     });
     ui.end_row();
 }
@@ -905,12 +1251,17 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse:
     toolchain_rows(ui, app);
     ui.separator();
     let debugger_label = ui.label(tr("Rust debugger"));
-    egui::ComboBox::from_id_salt("rust-debugger-backend").selected_text(match draft.rust_debugger {
-        rc_core::settings::RustDebugger::Gdb => "GDB", rc_core::settings::RustDebugger::Lldb => "LLDB",
-    }).show_ui(ui, |ui| {
-        ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
-        ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
-    }).response.labelled_by(debugger_label.id);
+    egui::ComboBox::from_id_salt("rust-debugger-backend")
+        .selected_text(match draft.rust_debugger {
+            rc_core::settings::RustDebugger::Gdb => "GDB",
+            rc_core::settings::RustDebugger::Lldb => "LLDB",
+        })
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Gdb, "GDB");
+            ui.selectable_value(&mut draft.rust_debugger, rc_core::settings::RustDebugger::Lldb, "LLDB");
+        })
+        .response
+        .labelled_by(debugger_label.id);
     ui.add_space(8.0);
     for (label, value, target) in [
         (tr("rust-analyzer path"), &mut draft.rust_analyzer_path, ToolPath::Analyzer),
@@ -926,8 +1277,18 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse:
         let field_width = (ui.available_width() - browse_width - ui.spacing().item_spacing.x).max(80.0);
         ui.horizontal(|ui| {
             let mut text = value.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-            let web=label==tr("HTML language server")||label==tr("CSS language server")||label==tr("JavaScript/TypeScript language server")||label==tr("Global tsserver.js path");
-            let resp = ui.add_enabled(!browse.busy(), egui::TextEdit::singleline(&mut text).hint_text(if web{tr("Not configured; install externally")}else{tr("Detect automatically")}).desired_width(field_width)).labelled_by(label_response.id);
+            let web = label == tr("HTML language server")
+                || label == tr("CSS language server")
+                || label == tr("JavaScript/TypeScript language server")
+                || label == tr("Global tsserver.js path");
+            let resp = ui
+                .add_enabled(
+                    !browse.busy(),
+                    egui::TextEdit::singleline(&mut text)
+                        .hint_text(if web { tr("Not configured; install externally") } else { tr("Detect automatically") })
+                        .desired_width(field_width),
+                )
+                .labelled_by(label_response.id);
             if resp.changed() {
                 *value = (!text.trim().is_empty()).then(|| PathBuf::from(text.trim()));
             }
@@ -941,7 +1302,9 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse:
         ui.horizontal(|ui| {
             ui.spinner();
             ui.label(tr("Open File…"));
-            if ui.button(tr("Cancel")).clicked() { browse.cancel(); }
+            if ui.button(tr("Cancel")).clicked() {
+                browse.cancel();
+            }
         });
     }
     rustfmt_rows(ui, &mut draft.rustfmt, p.error, p.text_muted);
@@ -950,13 +1313,21 @@ fn tools_page(ui: &mut Ui, app: &mut CrabCraftApp, draft: &mut Settings, browse:
 /// How rustfmt runs for Reformat Code, on save and at commit.
 fn rustfmt_rows(ui: &mut Ui, rustfmt: &mut rc_core::RustfmtSettings, error: egui::Color32, muted: egui::Color32) {
     let arguments_label = ui.label(tr("rustfmt arguments"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(arguments_label.id);
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.args).hint_text("--config tab_spaces=2").desired_width((ui.available_width() - 8.0).max(80.0)))
+        .labelled_by(arguments_label.id);
     ui.add_space(8.0);
     let channel_label = ui.label(tr("rustfmt channel"));
-    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(channel_label.id);
+    ui.add(egui::TextEdit::singleline(&mut rustfmt.channel).hint_text(tr("Default toolchain")).desired_width((ui.available_width() - 8.0).max(80.0)))
+        .labelled_by(channel_label.id);
     ui.add_space(8.0);
     let environment_label = ui.label(tr("rustfmt environment"));
-    ui.add(egui::TextEdit::multiline(&mut rustfmt.env).hint_text(tr("NAME=value, one per line")).desired_rows(3).desired_width((ui.available_width() - 8.0).max(80.0))).labelled_by(environment_label.id);
+    ui.add(
+        egui::TextEdit::multiline(&mut rustfmt.env)
+            .hint_text(tr("NAME=value, one per line"))
+            .desired_rows(3)
+            .desired_width((ui.available_width() - 8.0).max(80.0)),
+    )
+    .labelled_by(environment_label.id);
     ui.add_space(8.0);
     match rc_cargo::Rustfmt::check(rustfmt) {
         Ok(()) => ui.label(egui::RichText::new(tr("Used by Reformat Code, on save and at commit. The channel runs through rustup.")).color(muted)),
@@ -1139,8 +1510,20 @@ fn bookmarks(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<crate::insigh
                     ui.painter().rect_filled(r, 4.0, p.row_hover);
                 }
                 let file = mark.path.strip_prefix(&root).unwrap_or(&mark.path).display();
-                ui.painter().text(r.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, format!("{file}:{}", mark.line + 1), FontId::proportional(13.0), p.text);
-                ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, mark.preview.chars().take(44).collect::<String>(), FontId::monospace(11.5), p.muted);
+                ui.painter().text(
+                    r.left_center() + vec2(8.0, 0.0),
+                    Align2::LEFT_CENTER,
+                    format!("{file}:{}", mark.line + 1),
+                    FontId::proportional(13.0),
+                    p.text,
+                );
+                ui.painter().text(
+                    r.right_center() - vec2(8.0, 0.0),
+                    Align2::RIGHT_CENTER,
+                    mark.preview.chars().take(44).collect::<String>(),
+                    FontId::monospace(11.5),
+                    p.muted,
+                );
                 if resp.clicked() {
                     open = Some(mark.clone());
                 }
@@ -1240,12 +1623,24 @@ fn project_env(app: &mut CrabCraftApp, ctx: &Context, text: &mut String) -> Outc
     let ((ok, cancel), esc) = modal(ctx, "project_env", 520.0, |ui| {
         title(ui, tr("Project Environment Variables"));
         let p = rc_kit::pal(ui);
-        ui.add(egui::TextEdit::multiline(text).hint_text("RUST_LOG=debug\nDATABASE_URL=postgres://localhost/dev").font(egui::TextStyle::Monospace).desired_rows(8).desired_width(f32::INFINITY));
+        ui.add(
+            egui::TextEdit::multiline(text)
+                .hint_text("RUST_LOG=debug\nDATABASE_URL=postgres://localhost/dev")
+                .font(egui::TextStyle::Monospace)
+                .desired_rows(8)
+                .desired_width(f32::INFINITY),
+        );
         ui.add_space(6.0);
         if let Err(rc_core::session::BadEnvLine(line)) = parsed {
             ui.colored_label(p.error, trf("Line {line} is not NAME=value with a valid name.", &[("line", &line.to_string())]));
         }
-        ui.label(egui::RichText::new(tr("One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.")).size(12.0).color(p.muted));
+        ui.label(
+            egui::RichText::new(tr(
+                "One NAME=value per line. Applied to every Cargo command, to the programs it starts and to rust-analyzer; a run configuration's variables win.",
+            ))
+            .size(12.0)
+            .color(p.muted),
+        );
         buttons(ui, tr("OK"), parsed.is_ok())
     });
     if ok && parsed.is_ok() {
@@ -1284,7 +1679,9 @@ fn wasm_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, manifest: &st
             ui.end_row();
         });
         ui.label(tr("Requires wasm-pack, wasm-bindgen and the wasm32-unknown-unknown target. Tools are never installed automatically; wasm-opt is disabled."));
-        if let Err(error) = &valid { ui.colored_label(rc_kit::pal(ui).error, error.to_string()); }
+        if let Err(error) = &valid {
+            ui.colored_label(rc_kit::pal(ui).error, error.to_string());
+        }
         buttons(ui, tr("OK"), valid.is_ok())
     });
     if ok {
@@ -1304,7 +1701,13 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
             ui.add(egui::TextEdit::singleline(&mut o.args).hint_text("").font(egui::TextStyle::Monospace).desired_width(380.0));
             ui.end_row();
             ui.label(tr("Environment variables"));
-            ui.add(egui::TextEdit::multiline(&mut o.env).hint_text("RUST_LOG=debug\nAPP_MODE=test").font(egui::TextStyle::Monospace).desired_rows(4).desired_width(380.0));
+            ui.add(
+                egui::TextEdit::multiline(&mut o.env)
+                    .hint_text("RUST_LOG=debug\nAPP_MODE=test")
+                    .font(egui::TextStyle::Monospace)
+                    .desired_rows(4)
+                    .desired_width(380.0),
+            );
             ui.end_row();
             ui.label(tr("Working directory"));
             ui.horizontal(|ui| {
@@ -1316,59 +1719,61 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                 }
             });
             ui.end_row();
-                ui.label(tr("Cargo profile"));
-                ui.add(egui::TextEdit::singleline(&mut o.cargo_profile).hint_text("dev, release").desired_width(380.0));
-                ui.end_row();
-                ui.label(tr("Toolchain"));
-                ui.add(egui::TextEdit::singleline(&mut o.channel).hint_text(tr("The default one (stable, nightly…)")).desired_width(380.0));
-                ui.end_row();
-                ui.label(tr("Features"));
-                ui.add(egui::TextEdit::singleline(&mut o.features).hint_text("serde,logging").desired_width(380.0));
-                ui.end_row();
-                ui.label("RUST_BACKTRACE");
-                let shown = if o.backtrace.is_empty() { "short" } else { o.backtrace.as_str() }.to_string();
-                egui::ComboBox::from_id_salt("run_backtrace").selected_text(shown).width(120.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut o.backtrace, String::new(), "short");
-                    ui.selectable_value(&mut o.backtrace, "full".to_string(), "full");
-                    ui.selectable_value(&mut o.backtrace, "0".to_string(), "0");
-                });
-                ui.end_row();
-                ui.label(tr("Input file"));
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut o.stdin_file).hint_text(tr("The console")).desired_width(346.0));
-                    if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a file")).clicked()
-                        && let Some(f) = rfd::FileDialog::new().set_directory(project.parent().unwrap_or(project)).pick_file()
-                    {
-                        o.stdin_file = f.display().to_string();
-                    }
-                });
-                ui.end_row();
-                ui.label("");
-                ui.checkbox(&mut o.emulate_terminal, tr("Emulate terminal in the output console")).on_hover_text(tr("Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal"));
-                ui.end_row();
-                ui.label(tr("Before launch"));
-                ui.vertical(|ui| {
-                    let tools: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
-                    // Tools that no longer exist stay listed, so they can be unchecked.
-                    let gone: Vec<String> = o.before_launch.iter().filter(|n| !tools.contains(n)).cloned().collect();
-                    for name in tools.iter().chain(&gone) {
-                        let mut on = o.before_launch.contains(name);
-                        let label = if gone.contains(name) { trf("{name} (missing)", &[("name", name)]) } else { name.clone() };
-                        if ui.checkbox(&mut on, label).changed() {
-                            if on {
-                                o.before_launch.push(name.clone());
-                            } else {
-                                o.before_launch.retain(|n| n != name);
-                            }
+            ui.label(tr("Cargo profile"));
+            ui.add(egui::TextEdit::singleline(&mut o.cargo_profile).hint_text("dev, release").desired_width(380.0));
+            ui.end_row();
+            ui.label(tr("Toolchain"));
+            ui.add(egui::TextEdit::singleline(&mut o.channel).hint_text(tr("The default one (stable, nightly…)")).desired_width(380.0));
+            ui.end_row();
+            ui.label(tr("Features"));
+            ui.add(egui::TextEdit::singleline(&mut o.features).hint_text("serde,logging").desired_width(380.0));
+            ui.end_row();
+            ui.label("RUST_BACKTRACE");
+            let shown = if o.backtrace.is_empty() { "short" } else { o.backtrace.as_str() }.to_string();
+            egui::ComboBox::from_id_salt("run_backtrace").selected_text(shown).width(120.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut o.backtrace, String::new(), "short");
+                ui.selectable_value(&mut o.backtrace, "full".to_string(), "full");
+                ui.selectable_value(&mut o.backtrace, "0".to_string(), "0");
+            });
+            ui.end_row();
+            ui.label(tr("Input file"));
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut o.stdin_file).hint_text(tr("The console")).desired_width(346.0));
+                if theme::icon_button(ui, rc_kit::ico::OPEN, true, tr("Choose a file")).clicked()
+                    && let Some(f) = rfd::FileDialog::new().set_directory(project.parent().unwrap_or(project)).pick_file()
+                {
+                    o.stdin_file = f.display().to_string();
+                }
+            });
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut o.emulate_terminal, tr("Emulate terminal in the output console"))
+                .on_hover_text(tr("Runs the program in a pseudo-terminal: colours, terminal checks and keyboard input work as in a terminal"));
+            ui.end_row();
+            ui.label(tr("Before launch"));
+            ui.vertical(|ui| {
+                let tools: Vec<String> = app.settings.external_tools.iter().map(|t| t.name.clone()).collect();
+                // Tools that no longer exist stay listed, so they can be unchecked.
+                let gone: Vec<String> = o.before_launch.iter().filter(|n| !tools.contains(n)).cloned().collect();
+                for name in tools.iter().chain(&gone) {
+                    let mut on = o.before_launch.contains(name);
+                    let label = if gone.contains(name) { trf("{name} (missing)", &[("name", name)]) } else { name.clone() };
+                    if ui.checkbox(&mut on, label).changed() {
+                        if on {
+                            o.before_launch.push(name.clone());
+                        } else {
+                            o.before_launch.retain(|n| n != name);
                         }
                     }
-                    if tools.is_empty() && gone.is_empty() {
-                        ui.label(egui::RichText::new(tr("Add external tools in Settings › External Tools to run them before the build")).color(p.muted));
-                    }
-                });
-                ui.end_row();
+                }
+                if tools.is_empty() && gone.is_empty() {
+                    ui.label(egui::RichText::new(tr("Add external tools in Settings › External Tools to run them before the build")).color(p.muted));
+                }
+            });
+            ui.end_row();
             ui.label("");
-            ui.checkbox(&mut o.allow_parallel, tr("Allow multiple instances")).on_hover_text(tr("Running it again starts another instance instead of restarting it"));
+            ui.checkbox(&mut o.allow_parallel, tr("Allow multiple instances"))
+                .on_hover_text(tr("Running it again starts another instance instead of restarting it"));
             ui.end_row();
             ui.label("");
             ui.checkbox(&mut o.in_project, tr("Store as project file")).on_hover_text(tr("Saved in .crabcraft/runConfigurations to be committed and shared"));
@@ -1490,7 +1895,13 @@ fn auto_attach(app: &mut CrabCraftApp, ui: &mut Ui) {
     ui.label(egui::RichText::new(tr("Attach automatically to new processes named")).strong());
     let watching = app.auto_attach.is_some();
     ui.horizontal(|ui| {
-        let edit = ui.add_enabled(!watching, egui::TextEdit::singleline(&mut app.auto_attach_text).hint_text(tr("server*, *-worker")).char_limit(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).desired_width(ui.available_width() - 150.0));
+        let edit = ui.add_enabled(
+            !watching,
+            egui::TextEdit::singleline(&mut app.auto_attach_text)
+                .hint_text(tr("server*, *-worker"))
+                .char_limit(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2))
+                .desired_width(ui.available_width() - 150.0),
+        );
         if edit.changed() {
             app.session_dirty = true;
         }
@@ -1504,7 +1915,10 @@ fn auto_attach(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
     });
     let note = match &app.auto_attach {
-        Some(w) => trf("Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.", &[("patterns", &w.patterns.join(", "))]),
+        Some(w) => trf(
+            "Watching for {patterns}: the debugger attaches to the first one that starts while it is not debugging.",
+            &[("patterns", &w.patterns.join(", "))],
+        ),
         None => tr("Separate names with commas; * is any text and ? one character. Only processes started after the watch begins count.").to_string(),
     };
     ui.label(egui::RichText::new(note).size(12.0).color(if watching { p.accent } else { p.muted }));
@@ -1555,7 +1969,10 @@ fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(Pat
                         let on = members.iter().filter(|r| r.enabled).count();
                         let mut all = on == members.len();
                         let label = section.clone().unwrap_or_else(|| tr("No group").to_string());
-                        let resp = ui.add(egui::Checkbox::new(&mut all, egui::RichText::new(format!("{label} ({})", members.len())).strong()).indeterminate(on > 0 && on < members.len()));
+                        let resp = ui.add(
+                            egui::Checkbox::new(&mut all, egui::RichText::new(format!("{label} ({})", members.len())).strong())
+                                .indeterminate(on > 0 && on < members.len()),
+                        );
                         if resp.changed() {
                             actions.push(BpAction::EnableGroup(section.clone(), all));
                         }
@@ -1591,7 +2008,16 @@ fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(Pat
                         if resp.double_clicked() {
                             actions.push(BpAction::GoTo(r.path.clone(), r.line));
                         }
-                        let folder = r.path.parent().map(|d| root.as_ref().and_then(|root| d.strip_prefix(root).ok()).map(|d| d.display().to_string()).unwrap_or_else(|| d.display().to_string())).unwrap_or_default();
+                        let folder = r
+                            .path
+                            .parent()
+                            .map(|d| {
+                                root.as_ref()
+                                    .and_then(|root| d.strip_prefix(root).ok())
+                                    .map(|d| d.display().to_string())
+                                    .unwrap_or_else(|| d.display().to_string())
+                            })
+                            .unwrap_or_default();
                         ui.label(egui::RichText::new(folder).size(11.5).color(p.muted));
                         let detail = match (&r.log, &r.condition) {
                             (Some(m), _) => Some(trf("logs {message}", &[("message", m)])),
@@ -1684,21 +2110,40 @@ fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(Pat
     if close || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn breakpoint_properties(app: &mut CrabCraftApp, ctx: &Context, path: &std::path::Path, line: usize, condition: &mut String, log: &mut String, once: &mut bool, enabled: &mut bool, focus: &mut bool) -> Outcome {
+fn breakpoint_properties(
+    app: &mut CrabCraftApp,
+    ctx: &Context,
+    path: &std::path::Path,
+    line: usize,
+    condition: &mut String,
+    log: &mut String,
+    flags: (&mut bool, &mut bool, &mut bool),
+) -> Outcome {
+    let (once, enabled, focus) = flags;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let ((ok, cancel, remove), esc) = modal(ctx, "breakpoint_properties", 420.0, |ui| {
         title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
         ui.checkbox(enabled, tr("Enabled"));
         ui.add_space(6.0);
         ui.label(tr("Condition"));
-        let resp = ui.add(egui::TextEdit::singleline(condition).hint_text(tr("Stop only when this expression is true")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        let resp = ui.add(
+            egui::TextEdit::singleline(condition)
+                .hint_text(tr("Stop only when this expression is true"))
+                .font(egui::TextStyle::Monospace)
+                .desired_width(f32::INFINITY),
+        );
         if std::mem::take(focus) {
             resp.request_focus();
         }
         let mut enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
         ui.add_space(6.0);
         ui.label(tr("Log message"));
-        let resp = ui.add(egui::TextEdit::singleline(log).hint_text(tr("Print this instead of stopping; {expression} shows a value")).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+        let resp = ui.add(
+            egui::TextEdit::singleline(log)
+                .hint_text(tr("Print this instead of stopping; {expression} shows a value"))
+                .font(egui::TextStyle::Monospace)
+                .desired_width(f32::INFINITY),
+        );
         enter |= resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
         ui.add_space(6.0);
         // A logpoint never stops, so the IDE cannot see it being hit.
@@ -1821,7 +2266,16 @@ fn evaluate(app: &mut CrabCraftApp, ctx: &Context, expression: &mut String, focu
 
 /// Opens the native file creation dialog.
 #[allow(clippy::too_many_arguments)]
-fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: &mut String, kind: crate::item_templates::ItemKind, attach: &mut bool, public: &mut bool, error: &mut Option<String>) -> Outcome {
+fn new_file(
+    app: &mut CrabCraftApp,
+    ctx: &Context,
+    dir: &std::path::Path,
+    name: &mut String,
+    kind: crate::item_templates::ItemKind,
+    attach: &mut bool,
+    public: &mut bool,
+    error: &mut Option<String>,
+) -> Outcome {
     let heading = trf("New {item}", &[("item", &tr(kind.title()))]);
     let parent = kind.is_rust().then(|| rc_cargo::modules::parent_module(dir)).flatten();
     let ((ok, cancel), esc) = modal(ctx, "new_file", 380.0, |ui| {
@@ -1889,7 +2343,7 @@ fn new_file(app: &mut CrabCraftApp, ctx: &Context, dir: &std::path::Path, name: 
                 if !kind.is_folder() {
                     // Apply the template caret only after its worker-prepared document arrives.
                     match content.find("$0") {
-                        Some(at) => app.request_open_offset(first,content[..at].chars().count()),
+                        Some(at) => app.request_open_offset(first, content[..at].chars().count()),
                         None => app.open_file(first),
                     }
                 }
@@ -1964,7 +2418,10 @@ fn rename_file(app: &mut CrabCraftApp, ctx: &Context, r: &mut crate::file_rename
             let mut files: Vec<&PathBuf> = r.changes.iter().map(|c| &c.path).collect();
             files.dedup();
             let files = files.len();
-            ui.label(trf("{n} changes in {files} files mention the old name. Pick the ones to make with the rename.", &[("n", &r.changes.len()), ("files", &files)]));
+            ui.label(trf(
+                "{n} changes in {files} files mention the old name. Pick the ones to make with the rename.",
+                &[("n", &r.changes.len()), ("files", &files)],
+            ));
             if !r.asked_server {
                 ui.label(egui::RichText::new(tr("No language server checked the code: only text matches are listed.")).size(12.0).color(p.muted));
             }
@@ -2142,10 +2599,15 @@ fn revert_disk(app: &mut CrabCraftApp, ctx: &Context, ticket: &crate::disk_rever
         title(ui, tr("Revert from Disk"));
         ui.label(trf("Discard the unsaved changes to {file} and load its current disk version?", &[("file", &ticket.path.display())]));
         ui.label(tr("Undo can restore the discarded text. Disk contents are not changed."));
-        if !valid { ui.colored_label(rc_kit::pal(ui).error, crate::disk_revert::Error::Stale.to_string()); }
+        if !valid {
+            ui.colored_label(rc_kit::pal(ui).error, crate::disk_revert::Error::Stale.to_string());
+        }
         buttons(ui, tr("Discard and Reload"), valid)
     });
-    if ok { app.start_disk_revert(ticket.clone()); return Outcome::Close; }
+    if ok {
+        app.start_disk_revert(ticket.clone());
+        return Outcome::Close;
+    }
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
@@ -2278,7 +2740,9 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         title(ui, tr("Recent Files"));
         let resp = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Type to filter")).desired_width(f32::INFINITY));
         resp.request_focus();
-        if resp.changed() { *selected = 0; }
+        if resp.changed() {
+            *selected = 0;
+        }
         if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
             *selected = (*selected + 1).min(items.len().saturating_sub(1));
         }
@@ -2294,29 +2758,31 @@ fn recent_files(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, fil
         }
         let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
         egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-        for (i, path) in items.iter().enumerate() {
-            let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
-            if i == *selected {
-                ui.painter().rect_filled(r, 4.0, p.selection);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(r, 4.0, p.row_hover);
-            }
-            icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
-            ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
-            let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
-            ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, dir, FontId::proportional(11.5), p.muted);
-            resp.widget_info(|| {
-                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, path.display().to_string());
-                info.selected = Some(i == *selected);
-                info
-            });
+            for (i, path) in items.iter().enumerate() {
+                let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), egui::Sense::click());
+                if i == *selected {
+                    ui.painter().rect_filled(r, 4.0, p.selection);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(r, 4.0, p.row_hover);
+                }
+                icons::paint(ui.painter(), egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+                ui.painter().text(r.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(13.0), p.text);
+                let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
+                ui.painter().text(r.right_center() - vec2(8.0, 0.0), Align2::RIGHT_CENTER, dir, FontId::proportional(11.5), p.muted);
+                resp.widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, path.display().to_string());
+                    info.selected = Some(i == *selected);
+                    info
+                });
 
-            if move_selection && i == *selected { resp.scroll_to_me(Some(egui::Align::Center)); }
-            if resp.clicked() {
-                open = Some(path.clone());
+                if move_selection && i == *selected {
+                    resp.scroll_to_me(Some(egui::Align::Center));
+                }
+                if resp.clicked() {
+                    open = Some(path.clone());
+                }
             }
-        }
         });
     });
     if let Some(path) = open {
@@ -2346,8 +2812,11 @@ fn scratches(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize, filter
         Open(&'a PathBuf),
     }
     let needle = filter.to_lowercase();
-    let mut rows: Vec<Row> = Kind::ALL.into_iter().filter(|k| needle.is_empty() || scratch_kind_name(*k).to_lowercase().contains(&needle)).map(Row::New).collect();
-    rows.extend(files.iter().filter(|p| needle.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&needle))).map(Row::Open));
+    let mut rows: Vec<Row> =
+        Kind::ALL.into_iter().filter(|k| needle.is_empty() || scratch_kind_name(*k).to_lowercase().contains(&needle)).map(Row::New).collect();
+    rows.extend(
+        files.iter().filter(|p| needle.is_empty() || p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains(&needle))).map(Row::Open),
+    );
     *selected = (*selected).min(rows.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut chosen = None;
@@ -2474,7 +2943,10 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
         // Local commands, also behind a local quick fix (a code action with only a command).
         let local = match &action {
             A::Command(c) => Some(c),
-            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| [crate::insight::UPDATE_DEPENDENCY_COMMAND, crate::insight::MANIFEST_FIX_COMMAND, crate::feature_fix::ENABLE_FEATURE_COMMAND].contains(&c.command.as_str())),
+            A::CodeAction(a) if a.edit.is_none() => a.command.as_ref().filter(|c| {
+                [crate::insight::UPDATE_DEPENDENCY_COMMAND, crate::insight::MANIFEST_FIX_COMMAND, crate::feature_fix::ENABLE_FEATURE_COMMAND]
+                    .contains(&c.command.as_str())
+            }),
             A::CodeAction(_) => None,
         };
         if let Some(c) = local {
@@ -2487,7 +2959,8 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     true
                 }
                 crate::feature_fix::ENABLE_FEATURE_COMMAND => {
-                    let fix = c.arguments.as_ref().and_then(|a| a.first()).and_then(|v| serde_json::from_value::<crate::feature_fix::FeatureFix>(v.clone()).ok());
+                    let fix =
+                        c.arguments.as_ref().and_then(|a| a.first()).and_then(|v| serde_json::from_value::<crate::feature_fix::FeatureFix>(v.clone()).ok());
                     if let Some(fix) = fix {
                         app.apply_feature_fix(fix);
                     }
@@ -2500,7 +2973,7 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     if let (Some(start), Some(end), Some(old), Some(new), Some(doc)) = (num(0), num(1), text(2), text(3), app.docs.active_doc_mut()) {
                         let rope = doc.editor.buffer.rope();
                         // Only when the text there is still what the fix was made for.
-                        if start <= end && end <= rope.len_chars() && rope.slice(start..end).to_string() == old {
+                        if start <= end && end <= rope.len_chars() && rope.slice(start..end) == old {
                             doc.editor.replace(start, end, new);
                         }
                     }
@@ -2518,7 +2991,8 @@ fn code_actions(app: &mut CrabCraftApp, ctx: &Context, list: &mut Vec<rc_lsp::ls
                     if let Some(d) = app.docs.active_doc()
                         && let Some(t) = crate::insight::derive_target_of(d)
                     {
-                        let mut traits: Vec<(String, bool)> = rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
+                        let mut traits: Vec<(String, bool)> =
+                            rc_syntax::COMMON_DERIVES.iter().map(|c| (c.to_string(), t.items.iter().any(|x| x == c))).collect();
                         let other = t.items.iter().filter(|x| !rc_syntax::COMMON_DERIVES.contains(&x.as_str())).cloned().collect::<Vec<_>>().join(", ");
                         traits.sort_by_key(|(_, on)| !on);
                         app.dialog = Some(Dialog::Derive { doc: d.editor.id, name: t.name, traits, other });
@@ -2585,44 +3059,55 @@ fn intention_preview(app: &CrabCraftApp, ctx: &Context, list: egui::Rect) -> egu
                     ui.label(egui::RichText::new(trf("Could not preview this action: {error}", &[("error", e)])).size(12.0).color(p.error));
                 }
                 State::Ready { files, notes } => {
-                    egui::ScrollArea::vertical().id_salt("intention_preview_scroll").max_height(360.0).min_scrolled_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
-                        for note in notes {
-                            muted(ui, note);
-                        }
-                        if files.is_empty() && notes.is_empty() {
-                            muted(ui, tr("This action changes no text"));
-                        }
-                        for f in files {
-                            let shown = root.as_deref().and_then(|r| f.path.strip_prefix(r).ok()).unwrap_or(&f.path);
-                            let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                            ui.horizontal(|ui| {
-                                icons::image(ui, icons::for_file(&name), 16.0);
-                                ui.label(egui::RichText::new(shown.display().to_string()).size(12.5).strong());
-                                if f.error.is_none() {
-                                    ui.label(egui::RichText::new(format!("+{} −{}", f.added, f.removed)).size(12.0).color(p.muted));
+                    egui::ScrollArea::vertical()
+                        .id_salt("intention_preview_scroll")
+                        .max_height(360.0)
+                        .min_scrolled_height(360.0)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for note in notes {
+                                muted(ui, note);
+                            }
+                            if files.is_empty() && notes.is_empty() {
+                                muted(ui, tr("This action changes no text"));
+                            }
+                            for f in files {
+                                let shown = root.as_deref().and_then(|r| f.path.strip_prefix(r).ok()).unwrap_or(&f.path);
+                                let name = f.path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                                ui.horizontal(|ui| {
+                                    icons::image(ui, icons::for_file(&name), 16.0);
+                                    ui.label(egui::RichText::new(shown.display().to_string()).size(12.5).strong());
+                                    if f.error.is_none() {
+                                        ui.label(egui::RichText::new(format!("+{} −{}", f.added, f.removed)).size(12.0).color(p.muted));
+                                    }
+                                });
+                                if let Some(e) = &f.error {
+                                    ui.label(egui::RichText::new(e).size(12.0).color(p.error));
                                 }
-                            });
-                            if let Some(e) = &f.error {
-                                ui.label(egui::RichText::new(e).size(12.0).color(p.error));
+                                for (kind, line) in &f.lines {
+                                    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), egui::Sense::hover());
+                                    let (bg, sign, text) = match kind {
+                                        '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                        '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                        _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                    };
+                                    ui.painter().rect_filled(rect, 0.0, bg);
+                                    let color = if sign.is_empty() { p.muted } else { p.text };
+                                    ui.painter().with_clip_rect(rect).text(
+                                        rect.left_center() + vec2(6.0, 0.0),
+                                        Align2::LEFT_CENTER,
+                                        format!("{sign} {text}"),
+                                        FontId::monospace(12.0),
+                                        color,
+                                    );
+                                }
+                                let shown_lines = f.lines.iter().filter(|(k, _)| *k != '@').count();
+                                if shown_lines < f.added + f.removed {
+                                    muted(ui, &trf("{n} more changed lines", &[("n", &(f.added + f.removed - shown_lines))]));
+                                }
+                                ui.add_space(6.0);
                             }
-                            for (kind, line) in &f.lines {
-                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), egui::Sense::hover());
-                                let (bg, sign, text) = match kind {
-                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
-                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
-                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
-                                };
-                                ui.painter().rect_filled(rect, 0.0, bg);
-                                let color = if sign.is_empty() { p.muted } else { p.text };
-                                ui.painter().with_clip_rect(rect).text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), color);
-                            }
-                            let shown_lines = f.lines.iter().filter(|(k, _)| *k != '@').count();
-                            if shown_lines < f.added + f.removed {
-                                muted(ui, &trf("{n} more changed lines", &[("n", &(f.added + f.removed - shown_lines))]));
-                            }
-                            ui.add_space(6.0);
-                        }
-                    });
+                        });
                 }
             }
         });
@@ -2650,7 +3135,11 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
         let mut res = (false, false, false);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             res.0 = ui.add_enabled_ui(valid, |ui| theme::primary_button(ui, tr("Rename"))).inner.clicked();
-            res.2 = ui.add_enabled_ui(valid, |ui| theme::secondary_button(ui, tr("Preview"))).inner.on_hover_text(tr("List the changes first and pick the ones to make")).clicked();
+            res.2 = ui
+                .add_enabled_ui(valid, |ui| theme::secondary_button(ui, tr("Preview")))
+                .inner
+                .on_hover_text(tr("List the changes first and pick the ones to make"))
+                .clicked();
             res.1 = theme::secondary_button(ui, tr("Cancel")).clicked();
         });
         ((res.0 || enter && valid, res.2), res.1)
@@ -2661,7 +3150,11 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
             && let Some(d) = app.docs.list.iter().find(|d| d.editor.id == doc)
         {
             let title = preview.then(|| trf("Rename '{old}' to '{new}'", &[("old", original), ("new", &name.trim())]));
-            if let Some(insight)=app.web_languages.insight(d){insight.rename(d,pos,name.trim(),title);}else{app.insight.rename(d, pos, name.trim(), title);}
+            if let Some(insight) = app.web_languages.insight(d) {
+                insight.rename(d, pos, name.trim(), title);
+            } else {
+                app.insight.rename(d, pos, name.trim(), title);
+            }
         }
         return Outcome::Close;
     }
@@ -2671,32 +3164,57 @@ fn rename_symbol(app: &mut CrabCraftApp, ctx: &Context, doc: u64, pos: usize, or
 fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize) -> Outcome {
     // Character positions remain meaningful when a file was closed; do not invent line 1
     // or discard the column merely because its preview buffer is no longer open.
-    let items: Vec<(PathBuf, usize, Option<(usize, usize)>, String)> = app.nav_back.iter().rev().take(30).map(|(path, position)| {
-        let preview = app.docs.index_of(path).map(|index| {
-            let editor = &app.docs.list[index].editor;
-            let location = editor.buffer.line_col((*position).min(editor.buffer.len_chars()));
-            (location, editor.buffer.line_text(location.0))
-        });
-        let (location, text) = match preview { Some((location, text)) => (Some(location), text), None => (None, path.display().to_string()) };
-        (path.clone(), *position, location, text)
-    }).collect();
+    type HistoryItem = (PathBuf, usize, Option<(usize, usize)>, String);
+    let items: Vec<HistoryItem> = app
+        .nav_back
+        .iter()
+        .rev()
+        .take(30)
+        .map(|(path, position)| {
+            let preview = app.docs.index_of(path).map(|index| {
+                let editor = &app.docs.list[index].editor;
+                let location = editor.buffer.line_col((*position).min(editor.buffer.len_chars()));
+                (location, editor.buffer.line_text(location.0))
+            });
+            let (location, text) = match preview {
+                Some((location, text)) => (Some(location), text),
+                None => (None, path.display().to_string()),
+            };
+            (path.clone(), *position, location, text)
+        })
+        .collect();
     *selected = (*selected).min(items.len().saturating_sub(1));
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "recent_locations", 620.0, |ui| {
         title(ui, tr("Recent Locations"));
-        if ui.input(|input| input.key_pressed(Key::ArrowDown)) { *selected = (*selected + 1).min(items.len().saturating_sub(1)); }
-        if ui.input(|input| input.key_pressed(Key::ArrowUp)) { *selected = selected.saturating_sub(1); }
-        if ui.input(|input| input.key_pressed(Key::Enter)) { open = items.get(*selected).map(|(path, position, _, _)| (path.clone(), *position)); }
+        if ui.input(|input| input.key_pressed(Key::ArrowDown)) {
+            *selected = (*selected + 1).min(items.len().saturating_sub(1));
+        }
+        if ui.input(|input| input.key_pressed(Key::ArrowUp)) {
+            *selected = selected.saturating_sub(1);
+        }
+        if ui.input(|input| input.key_pressed(Key::Enter)) {
+            open = items.get(*selected).map(|(path, position, _, _)| (path.clone(), *position));
+        }
         let move_selection = ui.input(|input| input.key_pressed(Key::ArrowDown) || input.key_pressed(Key::ArrowUp));
         egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
             for (index, (path, position, location, text)) in items.iter().enumerate() {
                 let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), egui::Sense::click());
-                if index == *selected { ui.painter().rect_filled(rect, 6.0, p.selection); }
-                else if response.hovered() { ui.painter().rect_filled(rect, 6.0, p.row_hover); }
+                if index == *selected {
+                    ui.painter().rect_filled(rect, 6.0, p.selection);
+                } else if response.hovered() {
+                    ui.painter().rect_filled(rect, 6.0, p.row_hover);
+                }
                 let name = path.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned());
                 let caption = location.map_or_else(|| name.clone(), |(line, column)| format!("{name}:{}:{}", line + 1, column + 1));
-                icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)), icons::for_file(&name), &p, true);
+                icons::paint(
+                    ui.painter(),
+                    egui::Rect::from_center_size(rect.left_top() + vec2(14.0, 13.0), vec2(16.0, 16.0)),
+                    icons::for_file(&name),
+                    &p,
+                    true,
+                );
                 ui.painter().text(rect.left_top() + vec2(30.0, 13.0), Align2::LEFT_CENTER, &caption, theme::bold(12.5), p.text);
                 ui.painter().text(rect.left_top() + vec2(30.0, 31.0), Align2::LEFT_CENTER, text.trim(), FontId::monospace(12.0), p.text_muted);
                 response.widget_info(|| {
@@ -2704,13 +3222,17 @@ fn recent_locations(app: &mut CrabCraftApp, ctx: &Context, selected: &mut usize)
                     info.selected = Some(index == *selected);
                     info
                 });
-                if move_selection && index == *selected { response.scroll_to_me(Some(egui::Align::Center)); }
-                if response.clicked() { open = Some((path.clone(), *position)); }
+                if move_selection && index == *selected {
+                    response.scroll_to_me(Some(egui::Align::Center));
+                }
+                if response.clicked() {
+                    open = Some((path.clone(), *position));
+                }
             }
         });
     });
     if let Some((path, position)) = open {
-        app.request_open_offset(&path,position);
+        app.request_open_offset(&path, position);
         return Outcome::Close;
     }
     if esc { Outcome::Close } else { Outcome::Keep }
@@ -2846,13 +3368,22 @@ fn push_tags(app: &mut CrabCraftApp, ctx: &Context, name: Option<&str>, remote: 
     if cancel || esc { Outcome::Close } else { Outcome::Keep }
 }
 
-fn stash_changes(app: &mut CrabCraftApp, ctx: &Context, message: &mut String, include_untracked: &mut bool, keep_index: &mut bool, paths: &[String]) -> Outcome {
+fn stash_changes(
+    app: &mut CrabCraftApp,
+    ctx: &Context,
+    message: &mut String,
+    include_untracked: &mut bool,
+    keep_index: &mut bool,
+    paths: &[String],
+) -> Outcome {
     let ((ok, cancel), esc) = modal(ctx, "stash_changes", 420.0, |ui| {
         title(ui, tr("Stash Changes"));
         if !paths.is_empty() {
             ui.label(trf("Only the {n} checked files will be stashed.", &[("n", &paths.len())]));
             egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                for path in paths { ui.label(path); }
+                for path in paths {
+                    ui.label(path);
+                }
             });
         }
         let resp = ui.add(egui::TextEdit::singleline(message).hint_text(tr("Message (optional)")).desired_width(f32::INFINITY));
@@ -2942,7 +3473,9 @@ fn apply_patch(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, paste: 
                 }
                 Some(Ok(pv)) => {
                     let kind = match pv.kind {
-                        rc_vcs::PatchKind::Mail => trf("{n} commits (git am): each one becomes a commit on the current branch; the repository's hooks run.", &[("n", &pv.commits)]),
+                        rc_vcs::PatchKind::Mail => {
+                            trf("{n} commits (git am): each one becomes a commit on the current branch; the repository's hooks run.", &[("n", &pv.commits)])
+                        }
                         rc_vcs::PatchKind::Diff => tr("Changes to the files of the work tree (git apply); nothing is committed.").to_string(),
                     };
                     ui.label(egui::RichText::new(kind).size(12.5));
@@ -3029,7 +3562,9 @@ fn stash_branch(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash, na
         ui.label(&stash.message);
         ui.label(tr("Switches to a new branch at the stash's original commit and restores its changes. The stash is kept."));
         let response = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
-        if name.is_empty() && !ui.memory(|m| m.focused().is_some()) { response.request_focus(); }
+        if name.is_empty() && !ui.memory(|m| m.focused().is_some()) {
+            response.request_focus();
+        }
         buttons(ui, tr("Create"), valid)
     });
     if ok && valid {
@@ -3067,7 +3602,15 @@ pub fn plausible_branch_name(name: &str) -> bool {
     plausible_tag_name(name) && name != "HEAD"
 }
 
-fn add_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, new_branch: &mut bool, name: &mut String, existing: &mut String, path_edited: &mut bool) -> Outcome {
+fn add_worktree(
+    app: &mut CrabCraftApp,
+    ctx: &Context,
+    path: &mut String,
+    new_branch: &mut bool,
+    name: &mut String,
+    existing: &mut String,
+    path_edited: &mut bool,
+) -> Outcome {
     let main = app.vcs.worktrees.first().map(|w| w.path.clone()).or_else(|| app.vcs.root().map(std::path::Path::to_path_buf)).unwrap_or_default();
     // Local branches that no worktree has checked out.
     let free: Vec<String> = app
@@ -3093,7 +3636,9 @@ fn add_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, new_br
         let p = rc_kit::pal(ui);
         ui.horizontal(|ui| {
             ui.radio_value(new_branch, true, tr("New branch"));
-            ui.add_enabled_ui(!free.is_empty(), |ui| ui.radio_value(new_branch, false, tr("Existing branch"))).response.on_disabled_hover_text(tr("Every local branch is already checked out in a worktree"));
+            ui.add_enabled_ui(!free.is_empty(), |ui| ui.radio_value(new_branch, false, tr("Existing branch")))
+                .response
+                .on_disabled_hover_text(tr("Every local branch is already checked out in a worktree"));
         });
         if *new_branch {
             let resp = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
@@ -3123,7 +3668,9 @@ fn add_worktree(app: &mut CrabCraftApp, ctx: &Context, path: &mut String, new_br
             {
                 // An empty folder is used as it is; inside another one a new folder is made.
                 let empty = std::fs::read_dir(&d).is_ok_and(|mut e| e.next().is_none());
-                *path = if empty || branch.is_empty() { d } else { d.join(suggested_worktree_path(&main, &branch).file_name().unwrap_or_default()) }.display().to_string();
+                *path = if empty || branch.is_empty() { d } else { d.join(suggested_worktree_path(&main, &branch).file_name().unwrap_or_default()) }
+                    .display()
+                    .to_string();
                 *path_edited = true;
             }
         });
@@ -3216,7 +3763,14 @@ fn rev_picker(ui: &mut Ui, id: &str, rev: &mut String, branches: &[String]) {
 }
 
 /// Merge a branch or commit into the current branch (V-07).
-fn merge_dialog(app: &mut CrabCraftApp, ctx: &Context, rev: &mut String, fast_forward: &mut rc_vcs::FastForward, squash: &mut bool, no_commit: &mut bool) -> Outcome {
+fn merge_dialog(
+    app: &mut CrabCraftApp,
+    ctx: &Context,
+    rev: &mut String,
+    fast_forward: &mut rc_vcs::FastForward,
+    squash: &mut bool,
+    no_commit: &mut bool,
+) -> Outcome {
     use rc_vcs::FastForward as Ff;
     let branches = other_branches(app);
     let current = app.vcs.branch_name().unwrap_or_default();
@@ -3278,9 +3832,15 @@ fn abort_operation(app: &mut CrabCraftApp, ctx: &Context) -> Outcome {
         ui.label(crate::ui::git::operation_text(&app.vcs));
         ui.add_space(4.0);
         ui.label(match state {
-            Some(rc_vcs::RepoState::Rebasing) => tr("Abort the rebase? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
-            Some(rc_vcs::RepoState::CherryPicking) => tr("Abort the cherry-pick? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
-            Some(rc_vcs::RepoState::Reverting) => tr("Abort the revert? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
+            Some(rc_vcs::RepoState::Rebasing) => {
+                tr("Abort the rebase? The branch goes back to where it was before it started, and the conflicts resolved so far are lost.")
+            }
+            Some(rc_vcs::RepoState::CherryPicking) => {
+                tr("Abort the cherry-pick? The branch goes back to where it was before it started, and the conflicts resolved so far are lost.")
+            }
+            Some(rc_vcs::RepoState::Reverting) => {
+                tr("Abort the revert? The branch goes back to where it was before it started, and the conflicts resolved so far are lost.")
+            }
             _ => tr("Abort the merge? The branch goes back to where it was before it started, and the conflicts resolved so far are lost."),
         });
         buttons(ui, tr("Abort"), state.is_some())
@@ -3348,10 +3908,16 @@ fn conflicts_dialog(app: &mut CrabCraftApp, ctx: &Context, selected: &mut std::c
                 action = Some(ConflictAction::Take(targets.clone(), true));
             }
             let one = selected.len() == 1 && !busy;
-            if ui.add_enabled_ui(one, |ui| theme::secondary_button(ui, tr("Open"))).inner.on_hover_text(tr("Edit the file with its conflict markers")).clicked() {
+            if ui.add_enabled_ui(one, |ui| theme::secondary_button(ui, tr("Open"))).inner.on_hover_text(tr("Edit the file with its conflict markers")).clicked()
+            {
                 action = Some(ConflictAction::Open(targets[0].clone()));
             }
-            if ui.add_enabled_ui(some, |ui| theme::secondary_button(ui, tr("Mark Resolved"))).inner.on_hover_text(tr("Stage the files as they are now")).clicked() {
+            if ui
+                .add_enabled_ui(some, |ui| theme::secondary_button(ui, tr("Mark Resolved")))
+                .inner
+                .on_hover_text(tr("Stage the files as they are now"))
+                .clicked()
+            {
                 action = Some(ConflictAction::MarkResolved(targets.clone()));
             }
         });
@@ -3456,10 +4022,8 @@ fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, se
         }
     }
     walk(&tree, 0, &mut flat);
-    let items: Vec<(usize, crate::insight::SymbolNode)> = flat
-        .into_iter()
-        .filter(|(_, n)| filter.is_empty() || rc_editor::popup::fuzzy_score(&n.name, filter).is_some())
-        .collect();
+    let items: Vec<(usize, crate::insight::SymbolNode)> =
+        flat.into_iter().filter(|(_, n)| filter.is_empty() || rc_editor::popup::fuzzy_score(&n.name, filter).is_some()).collect();
     let p = rc_kit::theme::palette(ctx.global_style().visuals.dark_mode);
     let mut open = None;
     let (_, esc) = modal(ctx, "file_structure", 460.0, |ui| {
@@ -3485,7 +4049,13 @@ fn file_structure(app: &mut CrabCraftApp, ctx: &Context, filter: &mut String, se
                     ui.painter().rect_filled(r, 4.0, p.row_hover);
                 }
                 let x = r.left() + 8.0 + *depth as f32 * 16.0;
-                icons::paint(ui.painter(), egui::Rect::from_center_size(egui::pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)), crate::convert::symbol_icon(n.kind), &p, true);
+                icons::paint(
+                    ui.painter(),
+                    egui::Rect::from_center_size(egui::pos2(x + 8.0, r.center().y), vec2(16.0, 16.0)),
+                    crate::convert::symbol_icon(n.kind),
+                    &p,
+                    true,
+                );
                 let g = ui.painter().layout_no_wrap(n.name.clone(), FontId::proportional(13.0), p.text);
                 ui.painter().galley(egui::pos2(x + 22.0, r.center().y - g.size().y / 2.0), g.clone(), p.text);
                 if !n.detail.is_empty() {
@@ -3615,8 +4185,20 @@ fn local_history(app: &mut CrabCraftApp, ctx: &Context, v: &mut LocalHistoryView
                         } else if resp.hovered() {
                             ui.painter().rect_filled(rect, 4.0, p.row_hover);
                         }
-                        icons::paint(ui.painter(), egui::Rect::from_center_size(rect.left_top() + vec2(16.0, 13.0), vec2(16.0, 16.0)), rc_kit::ico::HISTORY, &p, true);
-                        ui.painter().text(rect.left_top() + vec2(32.0, 13.0), Align2::LEFT_CENTER, history_age(now_ms, r.time_ms), FontId::proportional(13.0), p.text);
+                        icons::paint(
+                            ui.painter(),
+                            egui::Rect::from_center_size(rect.left_top() + vec2(16.0, 13.0), vec2(16.0, 16.0)),
+                            rc_kit::ico::HISTORY,
+                            &p,
+                            true,
+                        );
+                        ui.painter().text(
+                            rect.left_top() + vec2(32.0, 13.0),
+                            Align2::LEFT_CENTER,
+                            history_age(now_ms, r.time_ms),
+                            FontId::proportional(13.0),
+                            p.text,
+                        );
                         ui.painter().text(rect.left_top() + vec2(32.0, 30.0), Align2::LEFT_CENTER, byte_size(r.len), FontId::proportional(11.5), p.muted);
                         if resp.clicked() {
                             selected = i;
@@ -3635,21 +4217,36 @@ fn local_history(app: &mut CrabCraftApp, ctx: &Context, v: &mut LocalHistoryView
                         ui.label(egui::RichText::new(trf("Could not read this version: {error}", &[("error", e)])).color(p.error));
                     }
                     (_, Some((_, lines, added, removed))) => {
-                        let summary = if added + removed == 0 { tr("Same as the current text").to_string() } else { trf("Changed since this version: +{added} −{removed} lines", &[("added", added), ("removed", removed)]) };
+                        let summary = if added + removed == 0 {
+                            tr("Same as the current text").to_string()
+                        } else {
+                            trf("Changed since this version: +{added} −{removed} lines", &[("added", added), ("removed", removed)])
+                        };
                         ui.label(egui::RichText::new(summary).color(p.muted));
                         ui.add_space(4.0);
-                        egui::ScrollArea::both().id_salt("local_history_preview").max_height(height - 24.0).auto_shrink([false, false]).show_rows(ui, 18.0, lines.len(), |ui, range| {
-                            for (kind, line) in &lines[range] {
-                                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width().max(560.0), 18.0), egui::Sense::hover());
-                                let (bg, sign, text) = match kind {
-                                    '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
-                                    '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
-                                    _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
-                                };
-                                ui.painter().rect_filled(rect, 0.0, bg);
-                                ui.painter().text(rect.left_center() + vec2(6.0, 0.0), Align2::LEFT_CENTER, format!("{sign} {text}"), FontId::monospace(12.0), if sign.is_empty() { p.muted } else { p.text });
-                            }
-                        });
+                        egui::ScrollArea::both().id_salt("local_history_preview").max_height(height - 24.0).auto_shrink([false, false]).show_rows(
+                            ui,
+                            18.0,
+                            lines.len(),
+                            |ui, range| {
+                                for (kind, line) in &lines[range] {
+                                    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width().max(560.0), 18.0), egui::Sense::hover());
+                                    let (bg, sign, text) = match kind {
+                                        '+' => (s.added_lines.gamma_multiply(0.3), "+", line.clone()),
+                                        '-' => (s.deleted_lines.gamma_multiply(0.22), "-", line.clone()),
+                                        _ => (p.header_bg, "", trf("Line {n}", &[("n", line)])),
+                                    };
+                                    ui.painter().rect_filled(rect, 0.0, bg);
+                                    ui.painter().text(
+                                        rect.left_center() + vec2(6.0, 0.0),
+                                        Align2::LEFT_CENTER,
+                                        format!("{sign} {text}"),
+                                        FontId::monospace(12.0),
+                                        if sign.is_empty() { p.muted } else { p.text },
+                                    );
+                                }
+                            },
+                        );
                     }
                     _ if current.is_some() => {
                         ui.label(egui::RichText::new(tr("Loading…")).color(p.muted));
@@ -3710,7 +4307,7 @@ mod responsive_settings_tests {
             for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Tools] {
                 harness.state_mut().open_settings(page);
                 harness.run_steps(5);
-                let modal = harness.ctx.memory(|memory| memory.area_rect(Id::new("settings"))).unwrap();
+                let modal = harness.ctx.memory(|memory| memory.area_rect(Id::unique("settings"))).unwrap();
                 let ok = harness.get_by_label(tr("OK")).rect();
                 let cancel = harness.get_by_label(tr("Cancel")).rect();
                 let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
@@ -3721,5 +4318,4 @@ mod responsive_settings_tests {
             assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "page widths differ at {size:?}: {widths:?}");
         }
     }
-
 }

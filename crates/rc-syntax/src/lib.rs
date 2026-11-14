@@ -6,19 +6,19 @@
 //! for the [`ParserPool`] thread, which only parses the newest version of each document and
 //! sends the tree back; results for older versions are dropped.
 
+pub mod axum;
 mod cfg;
 mod context;
 pub mod crate_refs;
 mod derive;
-mod highlight;
 mod embedded_web;
+mod highlight;
 pub mod http;
-pub mod sql;
-pub mod axum;
 mod lang;
 mod parse;
-mod structure;
 pub mod sample;
+pub mod sql;
+mod structure;
 
 pub use cfg::{CfgSet, Inactive, inactive_ranges};
 pub use context::{ContextHeader, HeaderPiece, context_headers};
@@ -26,8 +26,8 @@ pub use derive::{AttrList, COMMON_DERIVES, DeriveTarget, allow_in_file, allow_ta
 pub use highlight::{Hl, Span, highlight_lexical, highlight_lines};
 pub use lang::Lang;
 pub use parse::{ParseResult, ParserPool, parse_now};
-pub use tree_sitter;
 pub use structure::{FoldKind, FoldRange, folding_ranges, matching_bracket};
+pub use tree_sitter;
 
 use rc_text::{Edit, Rope};
 use tree_sitter::{InputEdit, Point, Tree};
@@ -60,9 +60,13 @@ impl Syntax {
         self.generation
     }
 
-    pub fn highlight(&self,rope:&Rope,first:usize,count:usize)->Vec<Vec<Span>>{
-        let mut lines=match &self.tree{Some(tree)=>highlight_lines(self.lang,tree,rope,first,count),None=>highlight_lexical(self.lang,rope,first,count).unwrap_or_else(||vec![Vec::new();count.min(rope.len_lines().saturating_sub(first))])};
-        embedded_web::overlay(&self.embedded,rope,first,&mut lines);lines
+    pub fn highlight(&self, rope: &Rope, first: usize, count: usize) -> Vec<Vec<Span>> {
+        let mut lines = match &self.tree {
+            Some(tree) => highlight_lines(self.lang, tree, rope, first, count),
+            None => highlight_lexical(self.lang, rope, first, count).unwrap_or_else(|| vec![Vec::new(); count.min(rope.len_lines().saturating_sub(first))]),
+        };
+        embedded_web::overlay(&self.embedded, rope, first, &mut lines);
+        lines
     }
 
     pub fn folds(&self) -> &[FoldRange] {
@@ -119,7 +123,7 @@ impl Syntax {
         self.tree = Some(result.tree);
         self.tree_version = result.version;
         self.folds = result.folds;
-        self.embedded=result.embedded;
+        self.embedded = result.embedded;
         self.generation += 1;
         true
     }
@@ -129,7 +133,7 @@ impl Syntax {
         self.version = version;
         if let Some(tree) = parse_now(self.lang, rope, self.tree.as_ref()) {
             self.folds = folding_ranges(self.lang, &tree, rope);
-            self.embedded=embedded_web::collect(self.lang,&tree,rope);
+            self.embedded = embedded_web::collect(self.lang, &tree, rope);
             self.tree = Some(tree);
             self.tree_version = version;
             self.generation += 1;

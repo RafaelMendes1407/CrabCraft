@@ -12,11 +12,11 @@
 //!
 //! **Language:** labels go through `tr`; call [`NativeMenu::relabel`] after changing it.
 
+use muda::accelerator::{Accelerator, Code, Modifiers};
+use muda::{CheckMenuItem, IconMenuItem, Menu, MenuEvent, PredefinedMenuItem, Submenu};
 use rc_editor::{Action, Keymap};
 use rc_kit::i18n::{tr, tr_ctx};
 use rc_kit::{Ico, ico};
-use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{CheckMenuItem, IconMenuItem, Menu, MenuEvent, PredefinedMenuItem, Submenu};
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc::{Receiver, channel};
 
@@ -287,7 +287,20 @@ fn code_of(key: egui::Key) -> Option<Code> {
 /// keep reaching the editor: arrows, Enter, Tab, ⌥⏎…), plus function keys.
 fn accelerator(keymap: &Keymap, action: Action) -> Option<Accelerator> {
     let chord = keymap.chord(action)?;
-    let is_fn = matches!(chord.key, egui::Key::F1 | egui::Key::F2 | egui::Key::F3 | egui::Key::F5 | egui::Key::F6 | egui::Key::F7 | egui::Key::F8 | egui::Key::F9 | egui::Key::F10 | egui::Key::F11 | egui::Key::F12);
+    let is_fn = matches!(
+        chord.key,
+        egui::Key::F1
+            | egui::Key::F2
+            | egui::Key::F3
+            | egui::Key::F5
+            | egui::Key::F6
+            | egui::Key::F7
+            | egui::Key::F8
+            | egui::Key::F9
+            | egui::Key::F10
+            | egui::Key::F11
+            | egui::Key::F12
+    );
     if !(chord.mods.mac_cmd || chord.mods.ctrl || is_fn) {
         return None;
     }
@@ -486,7 +499,9 @@ fn build(keymap: &Keymap, dark: bool) -> muda::Result<Built> {
             &act(Action::ParameterInfo, || tr("Parameter Info")),
             &act(Action::ExternalDocs, || tr("External Documentation")),
             &act(Action::ExpandMacro, || tr("Expand Macro Recursively")),
-            &act(Action::ExpandMacroStep, || if cfg!(unix) { tr("Expand Declarative Macro One Step") } else { tr("Expand Declarative Macro One Step (unsupported on this platform)") }),
+            &act(Action::ExpandMacroStep, || {
+                if cfg!(unix) { tr("Expand Declarative Macro One Step") } else { tr("Expand Declarative Macro One Step (unsupported on this platform)") }
+            }),
             &act(Action::TestDeclarativeMacro, || tr("Test Declarative Macro…")),
             &act(Action::QuickDoc, || tr("Quick Documentation")),
             &act(Action::ShowIntentions, || tr("Show Context Actions")),
@@ -583,7 +598,9 @@ mod tests {
         if std::env::var_os("CRABCRAFT_DUMP_MENU_ICONS").is_some() {
             let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/snapshots");
             std::fs::create_dir_all(&out).unwrap();
-            for a in [Action::Run, Action::Debug, Action::StopRun, Action::Build, Action::Commit, Action::FindInFiles, Action::StepOver, Action::ToggleBreakpoint] {
+            for a in
+                [Action::Run, Action::Debug, Action::StopRun, Action::Build, Action::Commit, Action::FindInFiles, Action::StepOver, Action::ToggleBreakpoint]
+            {
                 for dark in [false, true] {
                     let (rgba, _, _) = rc_kit::icons::rgba(crate::search::action_icon(a).unwrap(), dark, 32).unwrap();
                     std::fs::write(out.join(format!("menu-{a:?}-{}.rgba", if dark { "dark" } else { "light" })), rgba).unwrap();

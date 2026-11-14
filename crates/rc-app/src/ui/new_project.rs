@@ -84,23 +84,36 @@ impl NewProjectDialog {
         NewProjectDialog::with(1, name, location.display().to_string(), false, true, waker)
     }
 
-    fn generated(&self) -> bool { self.template == TEMPLATES.len() }
+    fn generated(&self) -> bool {
+        self.template == TEMPLATES.len()
+    }
 
     fn generate_request(&self) -> rc_cargo::generate::GenerateProject {
         rc_cargo::generate::GenerateProject {
-            repository: self.repository.trim().to_string(), branch: self.template_branch.trim().to_string(),
-            name: self.name.trim().to_string(), location: PathBuf::from(self.location.trim()), git: self.git, trusted: self.trust_template,
+            repository: self.repository.trim().to_string(),
+            branch: self.template_branch.trim().to_string(),
+            name: self.name.trim().to_string(),
+            location: PathBuf::from(self.location.trim()),
+            git: self.git,
+            trusted: self.trust_template,
         }
     }
 
     fn request(&self) -> NewProject {
-        NewProject { template: TEMPLATES[self.template.min(TEMPLATES.len() - 1)].0, name: self.name.trim().to_string(), location: PathBuf::from(self.location.trim()), git: self.git }
+        NewProject {
+            template: TEMPLATES[self.template.min(TEMPLATES.len() - 1)].0,
+            name: self.name.trim().to_string(),
+            location: PathBuf::from(self.location.trim()),
+            git: self.git,
+        }
     }
 }
 
 impl Drop for NewProjectDialog {
     fn drop(&mut self) {
-        if let Some(cancel) = self.cancel.take() { cancel.cancel(); }
+        if let Some(cancel) = self.cancel.take() {
+            cancel.cancel();
+        }
     }
 }
 
@@ -109,7 +122,9 @@ fn generate_error(error: rc_cargo::generate::GenerateError) -> String {
     match error {
         GenerateError::Invalid(message) => tr(message).to_string(),
         GenerateError::Io(error) => trf("Could not start cargo-generate: {error}", &[("error", &error)]),
-        GenerateError::Failed { code, output } => trf("Template generation failed ({code}): {output}", &[("code", &code.map(|c| c.to_string()).unwrap_or_else(|| "?".into())), ("output", &output)]),
+        GenerateError::Failed { code, output } => {
+            trf("Template generation failed ({code}): {output}", &[("code", &code.map(|c| c.to_string()).unwrap_or_else(|| "?".into())), ("output", &output)])
+        }
         GenerateError::Cancelled => tr("Template generation cancelled").to_string(),
         GenerateError::MissingManifest(path) => trf("The template did not create a Cargo.toml in {path}", &[("path", &path.display())]),
     }

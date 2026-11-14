@@ -98,7 +98,8 @@ impl Scopes {
         self.compiled = self.user.iter().map(|s| (s.name.clone(), parse_pattern(&s.name, &s.pattern))).collect();
         let names: HashSet<&str> = self.user.iter().map(|s| s.name.as_str()).collect();
         self.colors = clean_file_colors(colors, |k| is_builtin(k) || names.contains(k));
-        self.rules = self.colors.iter().filter_map(|c| parse_hex_color(&c.color).map(|[r, g, b]| (c.scope.clone(), egui::Color32::from_rgb(r, g, b)))).collect();
+        self.rules =
+            self.colors.iter().filter_map(|c| parse_hex_color(&c.color).map(|[r, g, b]| (c.scope.clone(), egui::Color32::from_rgb(r, g, b)))).collect();
         self.cache.clear();
     }
 
@@ -203,7 +204,10 @@ pub fn draft_problem(draft: &Draft, i: usize) -> Option<String> {
     if name.is_empty() {
         return Some(tr("The scope needs a name").to_string());
     }
-    if name.starts_with(BUILTIN_SCOPE_PREFIX) || draft.user[..i].iter().any(|o| o.name.trim() == name) || [PROJECT, TESTS, CHANGED].iter().any(|k| builtin_name(k) == name) {
+    if name.starts_with(BUILTIN_SCOPE_PREFIX)
+        || draft.user[..i].iter().any(|o| o.name.trim() == name)
+        || [PROJECT, TESTS, CHANGED].iter().any(|k| builtin_name(k) == name)
+    {
         return Some(tr("Another scope has this name").to_string());
     }
     parse_pattern(name, &s.pattern).err().map(|e| e.text())
@@ -224,7 +228,11 @@ mod tests {
     #[test]
     fn the_first_scope_that_holds_a_file_gives_its_colour() {
         let mut s = Scopes::default();
-        s.open(Path::new("/ws"), &[scope("Sources", "src/**/*.rs, !**/generated/**"), scope("Broken", "a[")], &[color(TESTS, "#00ff00"), color("Sources", "#0000ff"), color("Broken", "#ff0000"), color("Gone", "#ffffff")]);
+        s.open(
+            Path::new("/ws"),
+            &[scope("Sources", "src/**/*.rs, !**/generated/**"), scope("Broken", "a[")],
+            &[color(TESTS, "#00ff00"), color("Sources", "#0000ff"), color("Broken", "#ff0000"), color("Gone", "#ffffff")],
+        );
         assert_eq!(s.colors.len(), 3, "the colour of a scope that is gone is dropped");
         let green = Some(egui::Color32::from_rgb(0, 255, 0));
         let blue = Some(egui::Color32::from_rgb(0, 0, 255));

@@ -8,10 +8,17 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
     /// A compiler message: its position, if it has one, and the text as rustc prints it.
-    Compiler { diagnostic: Option<Box<Diagnostic>>, rendered: String },
+    Compiler {
+        diagnostic: Option<Box<Diagnostic>>,
+        rendered: String,
+    },
     /// A finished target; `executable` for those that can run.
-    Artifact { executable: Option<PathBuf> },
-    BuildFinished { success: bool },
+    Artifact {
+        executable: Option<PathBuf>,
+    },
+    BuildFinished {
+        success: bool,
+    },
     /// Any other Cargo message (build script output, for instance).
     Other,
 }
@@ -79,37 +86,104 @@ pub fn borrow_code(code: &str) -> bool {
     matches!(code, "E0499" | "E0500" | "E0501" | "E0502" | "E0503" | "E0505" | "E0506" | "E0507" | "E0515" | "E0597" | "E0621" | "E0623" | "E0716")
 }
 fn borrow_diagnostic(message: &Value, root: &Path, code: &str) -> Option<rc_dotnet::diagnostics::BorrowDiagnostic> {
-    use rc_dotnet::diagnostics::{BorrowDiagnostic, BorrowSpan, BorrowLine};
-    if !borrow_code(code) { return None; }
+    use rc_dotnet::diagnostics::{BorrowDiagnostic, BorrowLine, BorrowSpan};
+    if !borrow_code(code) {
+        return None;
+    }
     let mut result = BorrowDiagnostic { root: root.to_path_buf(), spans: Vec::new(), notes: Vec::new(), limited: false };
-    let mut todo = vec![(message,0)]; let mut remaining = 64 * 1024_usize; let mut nodes = 0; let mut span_budget = 128_usize;
-    while let Some((node,depth)) = todo.pop() {
-        nodes += 1; if nodes > 32 { result.limited = true; break; }
-        if depth > 0 && let Some(note) = node.get("message").and_then(Value::as_str) {
-            if result.notes.len()<16 && note.len()<=2048 && note.len()<=remaining { result.notes.push(note.to_string()); remaining-=note.len(); } else { result.limited=true; }
+    let mut todo = vec![(message, 0)];
+    let mut remaining = 64 * 1024_usize;
+    let mut nodes = 0;
+    let mut span_budget = 128_usize;
+    while let Some((node, depth)) = todo.pop() {
+        nodes += 1;
+        if nodes > 32 {
+            result.limited = true;
+            break;
+        }
+        if depth > 0
+            && let Some(note) = node.get("message").and_then(Value::as_str)
+        {
+            if result.notes.len() < 16 && note.len() <= 2048 && note.len() <= remaining {
+                result.notes.push(note.to_string());
+                remaining -= note.len();
+            } else {
+                result.limited = true;
+            }
         }
         for span in node.get("spans").and_then(Value::as_array).into_iter().flatten() {
-            if span_budget == 0 { result.limited=true; break; } span_budget -= 1;
-            if result.spans.len()>=32 { result.limited=true; break; }
-            let Some(file)=span.get("file_name").and_then(Value::as_str).filter(|name| !name.is_empty() && name.len()<=8192) else { result.limited=true; continue };
-            let Some(start)=span.get("byte_start").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()) else { continue };
-            let Some(end)=span.get("byte_end").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).filter(|end| *end>=start) else { continue };
-            let (Some(line),Some(column),Some(end_line),Some(end_column))=(line_of(span,"line_start"),line_of(span,"column_start"),line_of(span,"line_end"),line_of(span,"column_end")) else { continue };
-            if line==0 || column==0 || end_line<line || end_column==0 { continue; }
-            let label=span.get("label").and_then(Value::as_str).unwrap_or("");
-            if label.len()>2048 || label.len()+file.len()>remaining { result.limited=true; continue; } remaining-=label.len()+file.len();
-            let mut text=Vec::new();
-            for (index,item) in span.get("text").and_then(Value::as_array).into_iter().flatten().enumerate() {
-                let Some(source)=item.get("text").and_then(Value::as_str) else { continue };
-                if index>=8 || source.len()>4096 || source.len()>remaining { result.limited=true; break; } remaining-=source.len();
-                let Some(number)=line.checked_add(index as u32) else { break };
-                text.push(BorrowLine { line:number,text:source.into(),start:line_of(item,"highlight_start").unwrap_or(1),end:line_of(item,"highlight_end").unwrap_or(1) });
+            if span_budget == 0 {
+                result.limited = true;
+                break;
             }
-            let range=BorrowSpan { file:root.join(file),start,end,line,column,end_line,end_column,primary:span.get("is_primary").and_then(Value::as_bool).unwrap_or(false),label:label.into(),text };
-            if !result.spans.contains(&range) { result.spans.push(range); }
+            span_budget -= 1;
+            if result.spans.len() >= 32 {
+                result.limited = true;
+                break;
+            }
+            let Some(file) = span.get("file_name").and_then(Value::as_str).filter(|name| !name.is_empty() && name.len() <= 8192) else {
+                result.limited = true;
+                continue;
+            };
+            let Some(start) = span.get("byte_start").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()) else { continue };
+            let Some(end) = span.get("byte_end").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).filter(|end| *end >= start) else { continue };
+            let (Some(line), Some(column), Some(end_line), Some(end_column)) =
+                (line_of(span, "line_start"), line_of(span, "column_start"), line_of(span, "line_end"), line_of(span, "column_end"))
+            else {
+                continue;
+            };
+            if line == 0 || column == 0 || end_line < line || end_column == 0 {
+                continue;
+            }
+            let label = span.get("label").and_then(Value::as_str).unwrap_or("");
+            if label.len() > 2048 || label.len() + file.len() > remaining {
+                result.limited = true;
+                continue;
+            }
+            remaining -= label.len() + file.len();
+            let mut text = Vec::new();
+            for (index, item) in span.get("text").and_then(Value::as_array).into_iter().flatten().enumerate() {
+                let Some(source) = item.get("text").and_then(Value::as_str) else { continue };
+                if index >= 8 || source.len() > 4096 || source.len() > remaining {
+                    result.limited = true;
+                    break;
+                }
+                remaining -= source.len();
+                let Some(number) = line.checked_add(index as u32) else { break };
+                text.push(BorrowLine {
+                    line: number,
+                    text: source.into(),
+                    start: line_of(item, "highlight_start").unwrap_or(1),
+                    end: line_of(item, "highlight_end").unwrap_or(1),
+                });
+            }
+            let range = BorrowSpan {
+                file: root.join(file),
+                start,
+                end,
+                line,
+                column,
+                end_line,
+                end_column,
+                primary: span.get("is_primary").and_then(Value::as_bool).unwrap_or(false),
+                label: label.into(),
+                text,
+            };
+            if !result.spans.contains(&range) {
+                result.spans.push(range);
+            }
         }
-        if let Some(children)=node.get("children").and_then(Value::as_array) {
-            if depth>=4 { if !children.is_empty() { result.limited=true; } } else { if children.len()>16 { result.limited=true; } todo.extend(children.iter().take(16).rev().map(|child| (child,depth+1))); }
+        if let Some(children) = node.get("children").and_then(Value::as_array) {
+            if depth >= 4 {
+                if !children.is_empty() {
+                    result.limited = true;
+                }
+            } else {
+                if children.len() > 16 {
+                    result.limited = true;
+                }
+                todo.extend(children.iter().take(16).rev().map(|child| (child, depth + 1)));
+            }
         }
     }
     (!result.spans.is_empty()).then_some(result)
@@ -150,8 +224,11 @@ mod tests {
     fn compiler_ranges_preserve_child_context_and_reject_malformed_positions() {
         let value: Value = serde_json::from_str(r#"{"spans":[{"file_name":"src/lib.rs","byte_start":4,"byte_end":5,"line_start":1,"line_end":1,"column_start":5,"column_end":6,"is_primary":true,"label":null,"text":[{"text":"let x = y;","highlight_start":5,"highlight_end":6}]}],"children":[{"message":"compiler note","spans":[{"file_name":"src/lib.rs","byte_start":0,"byte_end":3,"line_start":1,"line_end":1,"column_start":1,"column_end":4,"is_primary":false,"label":"borrow begins here","text":[{"text":"let x = y;","highlight_start":1,"highlight_end":4}]},{"file_name":"src/lib.rs","byte_start":10,"byte_end":1}]}]}"#).unwrap();
         let details = borrow_diagnostic(&value, Path::new("/workspace"), "E0502").unwrap();
-        assert_eq!(details.spans.len(), 2); assert!(details.spans[0].primary); assert!(!details.spans[1].primary);
-        assert_eq!(details.spans[1].label, "borrow begins here"); assert_eq!(details.notes, ["compiler note"]);
+        assert_eq!(details.spans.len(), 2);
+        assert!(details.spans[0].primary);
+        assert!(!details.spans[1].primary);
+        assert_eq!(details.spans[1].label, "borrow begins here");
+        assert_eq!(details.notes, ["compiler note"]);
         assert!(borrow_diagnostic(&value, Path::new("/workspace"), "E0308").is_none());
     }
 
@@ -161,7 +238,9 @@ mod tests {
     }
 
     fn child(file: &str, kind: &str) -> String {
-        format!(r#"{{"message":"use this","spans":[{{"file_name":"{file}","byte_start":4,"byte_end":5,"suggested_replacement":"x","suggestion_applicability":"{kind}"}}]}}"#)
+        format!(
+            r#"{{"message":"use this","spans":[{{"file_name":"{file}","byte_start":4,"byte_end":5,"suggested_replacement":"x","suggestion_applicability":"{kind}"}}]}}"#
+        )
     }
 
     #[test]
@@ -190,8 +269,12 @@ mod tests {
     #[test]
     fn reads_the_primary_span_of_an_error() {
         let spans = r#"[{"file_name":"src/other.rs","is_primary":false,"line_start":1,"column_start":1,"line_end":1,"column_end":2},
-                        {"file_name":"src/main.rs","is_primary":true,"line_start":3,"column_start":5,"line_end":3,"column_end":9}]"#.replace('\n', " ");
-        let Some(Message::Compiler { diagnostic: Some(d), rendered }) = parse_message(&compiler("error", &spans, r#"{"code":"E0308"}"#), Path::new("/w")) else { panic!() };
+                        {"file_name":"src/main.rs","is_primary":true,"line_start":3,"column_start":5,"line_end":3,"column_end":9}]"#
+            .replace('\n', " ");
+        let Some(Message::Compiler { diagnostic: Some(d), rendered }) = parse_message(&compiler("error", &spans, r#"{"code":"E0308"}"#), Path::new("/w"))
+        else {
+            panic!()
+        };
         assert_eq!(d.file.as_deref(), Some(Path::new("/w/src/main.rs")));
         assert_eq!((d.line, d.column, d.end_line, d.end_column), (Some(3), Some(5), Some(3), Some(9)));
         assert_eq!((d.severity, d.code.as_str(), d.message.as_str()), (Severity::Error, "E0308", "boom"));
@@ -209,7 +292,10 @@ mod tests {
 
     #[test]
     fn other_messages_and_plain_output() {
-        assert_eq!(parse_message(r#"{"reason":"compiler-artifact","executable":"/t/app"}"#, Path::new("/")), Some(Message::Artifact { executable: Some("/t/app".into()) }));
+        assert_eq!(
+            parse_message(r#"{"reason":"compiler-artifact","executable":"/t/app"}"#, Path::new("/")),
+            Some(Message::Artifact { executable: Some("/t/app".into()) })
+        );
         assert_eq!(parse_message(r#"{"reason":"compiler-artifact","executable":null}"#, Path::new("/")), Some(Message::Artifact { executable: None }));
         assert_eq!(parse_message(r#"{"reason":"build-finished","success":false}"#, Path::new("/")), Some(Message::BuildFinished { success: false }));
         assert_eq!(parse_message(r#"{"reason":"build-script-executed"}"#, Path::new("/")), Some(Message::Other));

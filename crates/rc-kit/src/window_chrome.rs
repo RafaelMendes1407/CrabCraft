@@ -23,11 +23,7 @@ pub fn viewport() -> egui::ViewportBuilder {
 }
 
 pub fn leading_space(macos: bool, fullscreen: bool, zoom: f32) -> f32 {
-    if macos && !fullscreen {
-        80.0 / zoom.max(0.1)
-    } else {
-        10.0
-    }
+    if macos && !fullscreen { 80.0 / zoom.max(0.1) } else { 10.0 }
 }
 
 pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
@@ -37,25 +33,9 @@ pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         // The header's right group is laid out right to left.
-        for (index, label) in [
-            (0, tr("Close window")),
-            (
-                1,
-                if maximized {
-                    tr("Restore window")
-                } else {
-                    tr("Maximize")
-                },
-            ),
-            (2, tr("Minimize")),
-        ] {
-            let (rect, response) = ui.allocate_exact_size(
-                vec2(44.0, ui.available_height().clamp(28.0, 40.0)),
-                Sense::click(),
-            );
-            response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label)
-            });
+        for (index, label) in [(0, tr("Close window")), (1, if maximized { tr("Restore window") } else { tr("Maximize") }), (2, tr("Minimize"))] {
+            let (rect, response) = ui.allocate_exact_size(vec2(44.0, ui.available_height().clamp(28.0, 40.0)), Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
             let fill = if index == 0 && response.hovered() {
                 Color32::from_rgb(196, 43, 28)
             } else if response.hovered() {
@@ -64,45 +44,24 @@ pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
                 Color32::TRANSPARENT
             };
             ui.painter().rect_filled(rect, 0.0, fill);
-            let color = if index == 0 && response.hovered() {
-                Color32::WHITE
-            } else {
-                p.text
-            };
+            let color = if index == 0 && response.hovered() { Color32::WHITE } else { p.text };
             let stroke = Stroke::new(1.0, color);
             let center = rect.center();
             match index {
                 0 => {
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, -5.0), center + vec2(5.0, 5.0)], stroke);
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, 5.0), center + vec2(5.0, -5.0)], stroke);
+                    ui.painter().line_segment([center + vec2(-5.0, -5.0), center + vec2(5.0, 5.0)], stroke);
+                    ui.painter().line_segment([center + vec2(-5.0, 5.0), center + vec2(5.0, -5.0)], stroke);
                 }
                 1 => {
                     let square = Rect::from_center_size(center, Vec2::splat(10.0));
                     if maximized {
-                        ui.painter().rect_stroke(
-                            square.translate(vec2(2.0, -2.0)),
-                            0.0,
-                            stroke,
-                            egui::StrokeKind::Inside,
-                        );
-                        ui.painter().rect_filled(
-                            square,
-                            0.0,
-                            if response.hovered() {
-                                p.hover
-                            } else {
-                                p.main_bg
-                            },
-                        );
+                        ui.painter().rect_stroke(square.translate(vec2(2.0, -2.0)), 0.0, stroke, egui::StrokeKind::Inside);
+                        ui.painter().rect_filled(square, 0.0, if response.hovered() { p.hover } else { p.main_bg });
                     }
-                    ui.painter()
-                        .rect_stroke(square, 0.0, stroke, egui::StrokeKind::Inside);
+                    ui.painter().rect_stroke(square, 0.0, stroke, egui::StrokeKind::Inside);
                 }
                 _ => {
-                    ui.painter()
-                        .line_segment([center + vec2(-5.0, 1.0), center + vec2(5.0, 1.0)], stroke);
+                    ui.painter().line_segment([center + vec2(-5.0, 1.0), center + vec2(5.0, 1.0)], stroke);
                 }
             }
             if response.on_hover_text(label).clicked() {
@@ -118,88 +77,36 @@ pub fn controls(ui: &mut Ui) -> Option<ViewportCommand> {
 }
 
 fn resize_regions(r: Rect) -> [(ResizeDirection, Rect, CursorIcon); 8] {
-    use CursorIcon::{
-        ResizeHorizontal as H, ResizeNeSw as NE, ResizeNwSe as NW, ResizeVertical as V,
-    };
+    use CursorIcon::{ResizeHorizontal as H, ResizeNeSw as NE, ResizeNwSe as NW, ResizeVertical as V};
     use ResizeDirection::*;
     let corner = 16.0;
     let edge = 8.0;
     [
-        (
-            NorthWest,
-            Rect::from_min_size(r.left_top(), Vec2::splat(corner)),
-            NW,
-        ),
-        (
-            NorthEast,
-            Rect::from_min_size(r.right_top() - vec2(corner, 0.0), Vec2::splat(corner)),
-            NE,
-        ),
-        (
-            SouthWest,
-            Rect::from_min_size(r.left_bottom() - vec2(0.0, corner), Vec2::splat(corner)),
-            NE,
-        ),
-        (
-            SouthEast,
-            Rect::from_min_size(r.right_bottom() - Vec2::splat(corner), Vec2::splat(corner)),
-            NW,
-        ),
-        (
-            North,
-            Rect::from_min_size(
-                r.left_top() + vec2(corner, 0.0),
-                vec2(r.width() - 2.0 * corner, edge),
-            ),
-            V,
-        ),
-        (
-            South,
-            Rect::from_min_size(
-                pos2(r.left() + corner, r.bottom() - edge),
-                vec2(r.width() - 2.0 * corner, edge),
-            ),
-            V,
-        ),
-        (
-            West,
-            Rect::from_min_size(
-                r.left_top() + vec2(0.0, corner),
-                vec2(edge, r.height() - 2.0 * corner),
-            ),
-            H,
-        ),
-        (
-            East,
-            Rect::from_min_size(
-                pos2(r.right() - edge, r.top() + corner),
-                vec2(edge, r.height() - 2.0 * corner),
-            ),
-            H,
-        ),
+        (NorthWest, Rect::from_min_size(r.left_top(), Vec2::splat(corner)), NW),
+        (NorthEast, Rect::from_min_size(r.right_top() - vec2(corner, 0.0), Vec2::splat(corner)), NE),
+        (SouthWest, Rect::from_min_size(r.left_bottom() - vec2(0.0, corner), Vec2::splat(corner)), NE),
+        (SouthEast, Rect::from_min_size(r.right_bottom() - Vec2::splat(corner), Vec2::splat(corner)), NW),
+        (North, Rect::from_min_size(r.left_top() + vec2(corner, 0.0), vec2(r.width() - 2.0 * corner, edge)), V),
+        (South, Rect::from_min_size(pos2(r.left() + corner, r.bottom() - edge), vec2(r.width() - 2.0 * corner, edge)), V),
+        (West, Rect::from_min_size(r.left_top() + vec2(0.0, corner), vec2(edge, r.height() - 2.0 * corner)), H),
+        (East, Rect::from_min_size(pos2(r.right() - edge, r.top() + corner), vec2(edge, r.height() - 2.0 * corner)), H),
     ]
 }
 
 pub fn resize_edges(ctx: &egui::Context) {
-    if ctx.input(|i| {
-        i.viewport().maximized.unwrap_or(false) || i.viewport().fullscreen.unwrap_or(false)
-    }) {
+    if ctx.input(|i| i.viewport().maximized.unwrap_or(false) || i.viewport().fullscreen.unwrap_or(false)) {
         return;
     }
     let pointer = ctx.input(|i| i.pointer.hover_pos());
     let pressed = ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary));
     let mut resize = None;
-    for (index, (direction, rect, cursor)) in
-        resize_regions(ctx.content_rect()).into_iter().enumerate()
-    {
-        egui::Area::new(Id::unique(("window_resize", index)))
-            .order(egui::Order::Foreground)
-            .fixed_pos(rect.min)
-            .movable(false)
-            .constrain(false)
-            .show(ctx, |ui| {
+    for (index, (direction, rect, cursor)) in resize_regions(ctx.content_rect()).into_iter().enumerate() {
+        egui::Area::new(Id::unique(("window_resize", index))).order(egui::Order::Foreground).fixed_pos(rect.min).movable(false).constrain(false).show(
+            ctx,
+            |ui| {
                 ui.allocate_exact_size(rect.size(), Sense::hover());
-            });
+            },
+        );
         if pointer.is_some_and(|pos| rect.contains(pos)) {
             ctx.set_cursor_icon(cursor);
             if pressed {
@@ -242,23 +149,17 @@ mod tests {
             ("Maximize", false, ViewportCommand::Maximized(true)),
             ("Restore window", true, ViewportCommand::Maximized(false)),
         ] {
-            let mut h = egui_kittest::Harness::builder()
-                .with_size(vec2(300.0, 44.0))
-                .build_ui_state(
-                    |ui, commands: &mut Vec<ViewportCommand>| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if let Some(command) = controls(ui) {
-                                commands.push(command);
-                            }
-                        });
-                    },
-                    Vec::new(),
-                );
-            h.input_mut()
-                .viewports
-                .get_mut(&egui::ViewportId::ROOT)
-                .unwrap()
-                .maximized = Some(maximized);
+            let mut h = egui_kittest::Harness::builder().with_size(vec2(300.0, 44.0)).build_ui_state(
+                |ui, commands: &mut Vec<ViewportCommand>| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(command) = controls(ui) {
+                            commands.push(command);
+                        }
+                    });
+                },
+                Vec::new(),
+            );
+            h.input_mut().viewports.get_mut(&egui::ViewportId::ROOT).unwrap().maximized = Some(maximized);
             h.run_steps(2);
             h.get_by_label(label).click();
             h.run_steps(2);
@@ -284,17 +185,13 @@ mod tests {
             output.drop_without_applying_deltas();
 
             let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
-            input.events.push(egui::Event::PointerButton {
-                pos: point, button: egui::PointerButton::Primary, pressed: true,
-                modifiers: egui::Modifiers::NONE,
-            });
+            input.events.push(egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
             ctx.begin_pass(input);
             resize_edges(&ctx);
             assert!(!ctx.input(|i| i.pointer.any_down()));
             assert_eq!(ctx.dragged_id(), None);
             let output = ctx.end_pass();
-            assert!(output.viewport_output[&egui::ViewportId::ROOT].commands
-                .contains(&ViewportCommand::BeginResize(expected)));
+            assert!(output.viewport_output[&egui::ViewportId::ROOT].commands.contains(&ViewportCommand::BeginResize(expected)));
             output.drop_without_applying_deltas();
             // Deliberately omit PointerButton { pressed: false }: KWin owns it.
         }
@@ -303,27 +200,16 @@ mod tests {
     #[test]
     fn native_resize_ignores_content_presses_and_maximized_or_fullscreen_windows() {
         let ctx = egui::Context::default();
-        for (point, maximized, fullscreen) in [
-            (pos2(450.0, 200.0), false, false),
-            (pos2(4.0, 200.0), true, false),
-            (pos2(4.0, 200.0), false, true),
-        ] {
-            let mut input = egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0))),
-                ..Default::default()
-            };
+        for (point, maximized, fullscreen) in [(pos2(450.0, 200.0), false, false), (pos2(4.0, 200.0), true, false), (pos2(4.0, 200.0), false, true)] {
+            let mut input = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0))), ..Default::default() };
             let viewport = input.viewports.entry(egui::ViewportId::ROOT).or_default();
             viewport.maximized = Some(maximized);
             viewport.fullscreen = Some(fullscreen);
-            input.events.push(egui::Event::PointerButton {
-                pos: point, button: egui::PointerButton::Primary, pressed: true,
-                modifiers: egui::Modifiers::NONE,
-            });
+            input.events.push(egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
             ctx.begin_pass(input);
             resize_edges(&ctx);
             let output = ctx.end_pass();
-            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter()
-                .any(|command| matches!(command, ViewportCommand::BeginResize(_))));
+            assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter().any(|command| matches!(command, ViewportCommand::BeginResize(_))));
             output.drop_without_applying_deltas();
         }
     }
@@ -334,8 +220,10 @@ mod tests {
         let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(900.0, 560.0));
         let mut input = egui::RawInput { screen_rect: Some(bounds), ..Default::default() };
         input.events.push(egui::Event::PointerButton {
-            pos: pos2(450.0, 200.0), button: egui::PointerButton::Primary,
-            pressed: true, modifiers: egui::Modifiers::NONE,
+            pos: pos2(450.0, 200.0),
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
         });
         ctx.begin_pass(input);
         resize_edges(&ctx);
@@ -346,8 +234,7 @@ mod tests {
         resize_edges(&ctx);
         let output = ctx.end_pass();
         assert!(ctx.input(|i| i.pointer.primary_down()));
-        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter()
-            .any(|command| matches!(command, ViewportCommand::BeginResize(_))));
+        assert!(!output.viewport_output[&egui::ViewportId::ROOT].commands.iter().any(|command| matches!(command, ViewportCommand::BeginResize(_))));
         output.drop_without_applying_deltas();
     }
 
@@ -361,19 +248,8 @@ mod tests {
             (pos2(450.0, 1.0), ResizeDirection::North),
             (pos2(1.0, 200.0), ResizeDirection::West),
         ] {
-            assert_eq!(
-                regions
-                    .iter()
-                    .filter(|(_, rect, _)| rect.contains(point))
-                    .map(|(direction, _, _)| *direction)
-                    .collect::<Vec<_>>(),
-                vec![expected]
-            );
+            assert_eq!(regions.iter().filter(|(_, rect, _)| rect.contains(point)).map(|(direction, _, _)| *direction).collect::<Vec<_>>(), vec![expected]);
         }
-        assert!(
-            regions
-                .iter()
-                .all(|(_, rect, _)| !rect.contains(pos2(878.0, 20.0)))
-        );
+        assert!(regions.iter().all(|(_, rect, _)| !rect.contains(pos2(878.0, 20.0))));
     }
 }

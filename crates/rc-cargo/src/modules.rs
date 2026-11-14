@@ -3,8 +3,9 @@
 use std::path::{Path, PathBuf};
 
 const KEYWORDS: &[&str] = &[
-    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
-    "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop",
+    "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
+    "while",
 ];
 
 /// Whether `name` can follow `mod`.
@@ -114,7 +115,10 @@ mod tests {
     #[test]
     fn inner_attributes_and_documentation_stay_first() {
         assert_eq!(added("//! Docs.\n#![allow(unused)]\n\nfn f() {}\n", "c", false), "//! Docs.\n#![allow(unused)]\n\nmod c;\n\nfn f() {}\n");
-        assert_eq!(added("#![cfg_attr(\n    test,\n    allow(unused)\n)]\nfn f() {}\n", "c", false), "#![cfg_attr(\n    test,\n    allow(unused)\n)]\n\nmod c;\n\nfn f() {}\n");
+        assert_eq!(
+            added("#![cfg_attr(\n    test,\n    allow(unused)\n)]\nfn f() {}\n", "c", false),
+            "#![cfg_attr(\n    test,\n    allow(unused)\n)]\n\nmod c;\n\nfn f() {}\n"
+        );
         assert_eq!(added("fn f() {}\n", "c", false), "mod c;\n\nfn f() {}\n");
         assert_eq!(added("", "c", false), "mod c;\n");
     }

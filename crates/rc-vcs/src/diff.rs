@@ -517,7 +517,11 @@ impl Repository {
         match self.cmd().args(["cat-file", "blob"]).arg(rev.object(path)).output().await {
             Ok(out) => Ok(Some(FileContent::new(out.stdout))),
             Err(GitError::NotFound(_)) => Ok(None),
-            Err(GitError::Failed { stderr, .. }) if stderr.contains("Not a valid object name") || stderr.contains("does not exist") || stderr.contains("but not at stage") => Ok(None),
+            Err(GitError::Failed { stderr, .. })
+                if stderr.contains("Not a valid object name") || stderr.contains("does not exist") || stderr.contains("but not at stage") =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(e),
         }
     }
@@ -574,7 +578,10 @@ index 4444444..0000000
         assert!(a.hunks[1].lines[2].no_newline);
         assert_eq!(a.patch().lines().count(), SAMPLE.lines().take_while(|l| !l.starts_with("diff --git a/old")).count());
         let r = &files[1];
-        assert_eq!((r.status, r.old_path.as_deref(), r.new_path.as_deref(), r.similarity), (DiffStatus::Renamed, Some("old name.txt"), Some("new name.txt"), Some(90)));
+        assert_eq!(
+            (r.status, r.old_path.as_deref(), r.new_path.as_deref(), r.similarity),
+            (DiffStatus::Renamed, Some("old name.txt"), Some("new name.txt"), Some(90))
+        );
         assert!(files[2].binary);
         assert_eq!((files[2].status, files[2].path()), (DiffStatus::Added, "img.png"));
         assert_eq!((files[3].status, files[3].path()), (DiffStatus::Deleted, "café.txt"));

@@ -5,11 +5,16 @@
 use crate::docs::Docs;
 use rc_core::{Inbox, Runtime, Waker};
 use rc_kit::i18n::{tr, trf};
-use rc_vcs::{Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision, Stash, StashOptions, Status, StatusOptions, Tag, Worktree, WorktreeCheckout};
+use rc_vcs::{
+    Blame, Branch, Commit, CommitOptions, FileState, LineChangeKind, LineChanges, LogOptions, PatchPreview, PullOptions, PushOptions, Repository, Revision,
+    Stash, StashOptions, Status, StatusOptions, Tag, Worktree, WorktreeCheckout,
+};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+type LoadedPatch = Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>;
 
 enum VcsEvent {
     Repo(Option<Repository>),
@@ -36,7 +41,7 @@ enum VcsEvent {
     /// A created patch to put on the clipboard.
     PatchClipboard(String),
     /// A patch read for applying (generation, file, text and its preview, or why it failed).
-    PatchLoaded(u64, Option<PathBuf>, Result<(Arc<Vec<u8>>, Result<PatchPreview, String>), String>),
+    PatchLoaded(u64, Option<PathBuf>, LoadedPatch),
     /// A new preview of the loaded patch (generation, preview).
     PatchPreview(u64, Result<PatchPreview, String>),
     /// What applying the loaded patch printed (generation, output).
@@ -335,7 +340,9 @@ impl Vcs {
     pub fn open(&mut self, root: &Path, trusted: bool) {
         *self = Vcs::new(self.waker.clone());
         self.trusted = trusted;
-        if !trusted { return; }
+        if !trusted {
+            return;
+        }
         let out = self.inbox.sender();
         let root = root.to_path_buf();
         Runtime::spawn(async move {
@@ -372,11 +379,10 @@ impl Vcs {
             return;
         }
         let s = path.to_string_lossy();
-        if s.contains("/.git/")
-            && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
-                self.heads.clear();
-                self.marks_version.clear();
-            }
+        if s.contains("/.git/") && (s.ends_with("HEAD") || s.contains("/refs/") || s.ends_with("index")) {
+            self.heads.clear();
+            self.marks_version.clear();
+        }
         self.status_dirty = true;
     }
 
@@ -501,7 +507,10 @@ impl Vcs {
     where
         F: std::future::Future<Output = Result<Option<String>, rc_vcs::GitError>> + Send + 'static,
     {
-        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
+        if !self.trusted {
+            self.error = Some(tr("Trust this project before running project tools or code").into());
+            return;
+        }
         self.busy = Some(what);
         self.error = None;
         if report {
@@ -679,7 +688,10 @@ impl Vcs {
         let Some(repo) = self.repo.clone() else { return };
         self.op("resolve", async move {
             let files: Vec<(String, PathBuf)> = paths.iter().map(|p| (p.clone(), repo.abs_path(p))).collect();
-            let marked = Runtime::handle().spawn_blocking(move || files.into_iter().find(|(_, abs)| has_conflict_markers(abs)).map(|(p, _)| p)).await.map_err(std::io::Error::other)?;
+            let marked = Runtime::handle()
+                .spawn_blocking(move || files.into_iter().find(|(_, abs)| has_conflict_markers(abs)).map(|(p, _)| p))
+                .await
+                .map_err(std::io::Error::other)?;
             if let Some(path) = marked {
                 return Err(rc_vcs::GitError::BeforeCommit(trf("{file} still has conflict markers", &[("file", &path)])));
             }
@@ -696,7 +708,9 @@ impl Vcs {
         Runtime::spawn(async move {
             let loaded = match repo.conflict_versions(&rel).await {
                 Err(e) => Err(user_error(&e)),
-                Ok(v) if [&v.base, &v.ours, &v.theirs].iter().any(|c| c.as_ref().is_some_and(|c| c.binary)) => Err(tr("Binary files cannot be merged here; accept one side instead").to_string()),
+                Ok(v) if [&v.base, &v.ours, &v.theirs].iter().any(|c| c.as_ref().is_some_and(|c| c.binary)) => {
+                    Err(tr("Binary files cannot be merged here; accept one side instead").to_string())
+                }
                 Ok(rc_vcs::ConflictVersions { ours: None, .. } | rc_vcs::ConflictVersions { theirs: None, .. }) => {
                     Err(tr("One side deleted the file; accept one side instead").to_string())
                 }
@@ -734,7 +748,10 @@ impl Vcs {
         F: FnOnce(rc_vcs::CancelToken, rc_vcs::ProgressSink) -> Fut,
         Fut: std::future::Future<Output = Result<String, rc_vcs::GitError>> + Send + 'static,
     {
-        if !self.trusted { self.error = Some(tr("Trust this project before running project tools or code").into()); return; }
+        if !self.trusted {
+            self.error = Some(tr("Trust this project before running project tools or code").into());
+            return;
+        }
         let cancel = rc_vcs::CancelToken::new();
         self.op_cancel = Some(cancel.clone());
         self.op_progress = None;
@@ -781,8 +798,7 @@ impl Vcs {
         let message = Some(message.trim().to_string()).filter(|m| !m.is_empty());
         // A rename is one row in Commit but two paths in Git's index.
         if let Some(status) = &self.status {
-            let old: Vec<String> = status.entries.iter().filter(|entry| paths.contains(&entry.path))
-                .filter_map(|entry| entry.orig_path.clone()).collect();
+            let old: Vec<String> = status.entries.iter().filter(|entry| paths.contains(&entry.path)).filter_map(|entry| entry.orig_path.clone()).collect();
             paths.extend(old);
             paths.sort();
             paths.dedup();
@@ -1200,7 +1216,11 @@ impl Vcs {
                                 .iter()
                                 .map(|l| {
                                     let c = &b.commits[l.commit];
-                                    if c.is_uncommitted() { tr("Not committed yet").to_string() } else { format!("{}  {}", format_date(c.author_time), short_author(&c.author)) }
+                                    if c.is_uncommitted() {
+                                        tr("Not committed yet").to_string()
+                                    } else {
+                                        format!("{}  {}", format_date(c.author_time), short_author(&c.author))
+                                    }
                                 })
                                 .collect(),
                         );
@@ -1557,15 +1577,6 @@ pub fn format_date(secs: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn dates() {
-        assert_eq!(super::format_date(0), "1970-01-01");
-        assert_eq!(super::format_date(1_700_000_000), "2023-11-14");
-    }
-}
-
 fn format_failure(error: rc_cargo::FormatError) -> String {
     match error {
         rc_cargo::FormatError::File { path, message } => {
@@ -1582,14 +1593,29 @@ pub fn rustfmt_failure(error: rc_cargo::FormatError) -> String {
     match error {
         rc_cargo::FormatError::Missing => tr("rustfmt was not found. Install it with: rustup component add rustfmt").to_string(),
         rc_cargo::FormatError::CriticalupMissing => tr("This CriticalUp installation has no rustfmt; install the matching Ferrocene package externally").into(),
-        rc_cargo::FormatError::CriticalupChannel => tr("Rustup rustfmt channels are unsupported by CriticalUp; clear the channel to use the selected formatter").into(),
+        rc_cargo::FormatError::CriticalupChannel => {
+            tr("Rustup rustfmt channels are unsupported by CriticalUp; clear the channel to use the selected formatter").into()
+        }
         rc_cargo::FormatError::Arguments => tr("The rustfmt arguments have a quote that is not closed (Settings › Tools).").to_string(),
-        rc_cargo::FormatError::Channel(channel) => trf("The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).", &[("channel", &channel)]),
-        rc_cargo::FormatError::Environment(line) => trf("The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).", &[("line", &line)]),
+        rc_cargo::FormatError::Channel(channel) => {
+            trf("The rustfmt channel \"{channel}\" is not a toolchain name (Settings › Tools).", &[("channel", &channel)])
+        }
+        rc_cargo::FormatError::Environment(line) => {
+            trf("The rustfmt environment takes NAME=value lines, not \"{line}\" (Settings › Tools).", &[("line", &line)])
+        }
         rc_cargo::FormatError::File { path, message } => {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let first = message.lines().next().unwrap_or_default().to_string();
             trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &first)])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn dates() {
+        assert_eq!(super::format_date(0), "1970-01-01");
+        assert_eq!(super::format_date(1_700_000_000), "2023-11-14");
     }
 }

@@ -22,14 +22,9 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(e) => f.write_str(&trf(
-                "Could not save the document: {error}",
-                &[("error", e)],
-            )),
+            Self::Io(e) => f.write_str(&trf("Could not save the document: {error}", &[("error", e)])),
             Self::Cancelled => f.write_str(tr("Saving cancelled; unsaved edits were kept")),
-            Self::Changed => f.write_str(tr(
-                "The disk file changed before saving; unsaved edits were kept",
-            )),
+            Self::Changed => f.write_str(tr("The disk file changed before saving; unsaved edits were kept")),
             Self::TooLarge => f.write_str(tr("Background saving supports documents up to 128 MB")),
             Self::Full => f.write_str(tr("The save queue is full; unsaved edits were kept")),
         }
@@ -89,8 +84,7 @@ impl Saves {
         self.active.is_some() || !self.pending.is_empty()
     }
     pub fn contains(&self, path: &std::path::Path) -> bool {
-        self.pending.iter().any(|t| t.path == path)
-            || self.active.as_ref().is_some_and(|j| j.ticket.path == path)
+        self.pending.iter().any(|t| t.path == path) || self.active.as_ref().is_some_and(|j| j.ticket.path == path)
     }
     pub fn cancel(&mut self) {
         self.pending.clear();
@@ -98,6 +92,7 @@ impl Saves {
             j.cancel.store(true, Ordering::Release);
         }
     }
+    #[cfg(test)]
     pub fn queue(&mut self, doc: &Doc) -> Result<(), Error> {
         self.queue_with_force(doc, false)
     }
@@ -111,10 +106,7 @@ impl Saves {
         let mut ticket = Ticket::capture(doc);
         ticket.force = force;
         if self.active.as_ref().is_some_and(|j| {
-            j.ticket.id == ticket.id
-                && j.ticket.version == ticket.version
-                && j.ticket.epoch == ticket.epoch
-                && !j.cancel.load(Ordering::Acquire)
+            j.ticket.id == ticket.id && j.ticket.version == ticket.version && j.ticket.epoch == ticket.epoch && !j.cancel.load(Ordering::Acquire)
         }) {
             return Ok(());
         }
@@ -130,22 +122,14 @@ impl Saves {
     }
     pub fn poll(&mut self, docs: &mut Docs, waker: Waker) -> Vec<Result<PathBuf, Error>> {
         let mut done = Vec::new();
-        if let Some(result) = self
-            .active
-            .as_ref()
-            .and_then(|j| j.inbox.drain().into_iter().next())
-        {
+        if let Some(result) = self.active.as_ref().and_then(|j| j.inbox.drain().into_iter().next()) {
             let Some(job) = self.active.take() else {
                 return done;
             };
             match result {
                 Ok(written) => {
                     let t = &written.ticket;
-                    if let Some(d) = docs
-                        .list
-                        .iter_mut()
-                        .find(|d| d.editor.id == t.id && d.path == t.path && !d.generated)
-                    {
+                    if let Some(d) = docs.list.iter_mut().find(|d| d.editor.id == t.id && d.path == t.path && !d.generated) {
                         // Epoch mismatch can mean a reload/conflict: never overwrite that state.
                         if d.disk_epoch == t.epoch {
                             let previous = std::mem::replace(&mut d.saved, t.rope.clone());
@@ -154,10 +138,7 @@ impl Saves {
                             d.disk_epoch = d.disk_epoch.saturating_add(1);
                             d.conflict = false;
                             for queued in &mut self.pending {
-                                if queued.id == t.id
-                                    && queued.path == t.path
-                                    && queued.epoch == t.epoch
-                                {
+                                if queued.id == t.id && queued.path == t.path && queued.epoch == t.epoch {
                                     queued.epoch = d.disk_epoch;
                                     queued.modified = d.mtime;
                                 }
@@ -179,12 +160,8 @@ impl Saves {
         }
         if self.active.is_none() {
             while let Some(mut ticket) = self.pending.pop_front() {
-                let Some(d) = docs.list.iter().find(|d| {
-                    d.editor.id == ticket.id
-                        && d.path == ticket.path
-                        && d.disk_epoch == ticket.epoch
-                        && !d.generated
-                }) else {
+                let Some(d) = docs.list.iter().find(|d| d.editor.id == ticket.id && d.path == ticket.path && d.disk_epoch == ticket.epoch && !d.generated)
+                else {
                     done.push(Err(Error::Changed));
                     continue;
                 };
@@ -192,11 +169,7 @@ impl Saves {
                 ticket.modified = d.mtime;
                 let cancel = Arc::new(AtomicBool::new(false));
                 let token = cancel.clone();
-                if let Some(doc) = docs
-                    .list
-                    .iter_mut()
-                    .find(|d| d.editor.id == ticket.id && d.path == ticket.path)
-                {
+                if let Some(doc) = docs.list.iter_mut().find(|d| d.editor.id == ticket.id && d.path == ticket.path) {
                     doc.pending_save.0 = Some(cancel.clone());
                 }
                 let inbox = Inbox::new(waker.clone());
@@ -213,11 +186,7 @@ impl Saves {
                     }
                     out.send(write(work, &token));
                 });
-                self.active = Some(Job {
-                    ticket,
-                    cancel,
-                    inbox,
-                });
+                self.active = Some(Job { ticket, cancel, inbox });
                 break;
             }
         }
@@ -261,16 +230,9 @@ fn write(ticket: Ticket, cancel: &AtomicBool) -> Result<Written, Error> {
     if cancel.load(Ordering::Acquire) {
         return Err(Error::Cancelled);
     }
-    rc_core::paths::write_atomic_cancellable(&ticket.path, &bytes, cancel).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::Interrupted {
-            Error::Cancelled
-        } else {
-            Error::Io(e)
-        }
-    })?;
-    let modified = std::fs::metadata(&ticket.path)
-        .and_then(|m| m.modified())
-        .ok();
+    rc_core::paths::write_atomic_cancellable(&ticket.path, &bytes, cancel)
+        .map_err(|e| if e.kind() == std::io::ErrorKind::Interrupted { Error::Cancelled } else { Error::Io(e) })?;
+    let modified = std::fs::metadata(&ticket.path).and_then(|m| m.modified()).ok();
     Ok(Written { ticket, modified })
 }
 
@@ -319,10 +281,7 @@ impl crate::app::CrabCraftApp {
         }
         if doc.editor.read_only {
             self.disk_save.fail();
-            self.notify(
-                tr("A read-only document has unsaved edits; the action was stopped"),
-                true,
-            );
+            self.notify(tr("A read-only document has unsaved edits; the action was stopped"), true);
             return;
         }
         let edits = crate::docs::style_fixes(&doc.editor, &doc.style);
@@ -331,19 +290,12 @@ impl crate::app::CrabCraftApp {
         }
         if format && self.settings.format_on_save {
             if !self.rustfmt_jobs.is_empty() {
-                if self.disk_save.format_pending.len() >= 256
-                    && !self
-                        .disk_save
-                        .format_pending
-                        .contains(&self.docs.list[index].editor.id)
-                {
+                if self.disk_save.format_pending.len() >= 256 && !self.disk_save.format_pending.contains(&self.docs.list[index].editor.id) {
                     self.disk_save.fail();
                     self.notify(Error::Full.to_string(), true);
                     return;
                 }
-                self.disk_save
-                    .format_pending
-                    .insert(self.docs.list[index].editor.id);
+                self.disk_save.format_pending.insert(self.docs.list[index].editor.id);
                 return;
             }
             if self.rustfmt_document(index, true) {
@@ -351,15 +303,8 @@ impl crate::app::CrabCraftApp {
             }
         }
         self.disk_watch.suspend(&self.docs.list[index].path);
-        let force = self
-            .disk_save
-            .force_paths
-            .remove(&self.docs.list[index].path);
-        if let Err(error) = self
-            .disk_save
-            .saves
-            .queue_with_force(&self.docs.list[index], force)
-        {
+        let force = self.disk_save.force_paths.remove(&self.docs.list[index].path);
+        if let Err(error) = self.disk_save.saves.queue_with_force(&self.docs.list[index], force) {
             self.disk_save.fail();
             self.notify(error.to_string(), true);
         }
@@ -370,21 +315,13 @@ impl crate::app::CrabCraftApp {
         }
         self.save_document_async(index, true);
     }
-    pub(crate) fn defer_save(
-        &mut self,
-        trust: bool,
-        action: impl FnOnce(&mut Self) + 'static,
-    ) -> bool {
+    pub(crate) fn defer_save(&mut self, trust: bool, action: impl FnOnce(&mut Self) + 'static) -> bool {
         if !self.file_edits.busy()
             && !self.disk_save.saves.busy()
             && !self.disk_save.auxiliary.busy()
             && self.rustfmt_jobs.is_empty()
             && self.disk_save.format_pending.is_empty()
-            && !self
-                .docs
-                .list
-                .iter()
-                .any(|d| d.is_modified() && !d.generated)
+            && !self.docs.list.iter().any(|d| d.is_modified() && !d.generated)
         {
             return false;
         }
@@ -393,10 +330,7 @@ impl crate::app::CrabCraftApp {
             return true;
         }
         if trust && !self.disk_trust_valid() {
-            self.notify(
-                tr("Trust this project before running project tools or code"),
-                true,
-            );
+            self.notify(tr("Trust this project before running project tools or code"), true);
             return true;
         }
         let root = self.workspace.as_ref().map(|w| w.ws.root.clone());
@@ -406,15 +340,12 @@ impl crate::app::CrabCraftApp {
         true
     }
     fn disk_trust_valid(&self) -> bool {
-        self.runner.require_trust().is_ok()
-            && self
-                .workspace
-                .as_ref()
-                .is_none_or(|w| self.settings.trusted_projects.contains(&w.ws.root))
+        self.runner.require_trust().is_ok() && self.workspace.as_ref().is_none_or(|w| self.settings.trusted_projects.contains(&w.ws.root))
     }
     pub fn cancel_disk_save(&mut self) {
         self.workspace_open.cancel();
-        self.file_edits.cancel(); self.file_edits.take_cancelled();
+        self.file_edits.cancel();
+        self.file_edits.take_cancelled();
         self.disk_save.cancel();
         self.rustfmt_jobs = Default::default();
     }
@@ -424,22 +355,21 @@ impl crate::app::CrabCraftApp {
             self.disk_save.transition_prepared = true;
         }
     }
+    #[cfg(test)]
     pub fn pending_workspace_target(&self) -> Option<&std::path::Path> {
         self.disk_save.pending_workspace.as_deref()
     }
     pub(crate) fn poll_disk_save(&mut self) {
-        if self.file_edits.take_cancelled(){self.cancel_disk_save();}
+        if self.file_edits.take_cancelled() {
+            self.cancel_disk_save();
+        }
         if self.rustfmt_jobs.is_empty()
             && let Some(id) = self.disk_save.format_pending.pop_first()
             && let Some(i) = self.docs.list.iter().position(|d| d.editor.id == id)
         {
             self.save_document_async(i, true);
         }
-        let auxiliary_result = if self.disk_save.saves.active.is_none() {
-            self.disk_save.auxiliary.poll(self.waker.clone())
-        } else {
-            None
-        };
+        let auxiliary_result = if self.disk_save.saves.active.is_none() { self.disk_save.auxiliary.poll(self.waker.clone()) } else { None };
         if let Some(Err(error)) = auxiliary_result {
             self.disk_save.fail();
             self.disk_save.exit_prepared = false;
@@ -447,13 +377,7 @@ impl crate::app::CrabCraftApp {
         }
         // Session/settings and document writers never overlap, including when a user
         // opens an IDE settings/session JSON file in an editor.
-        let results = if self.disk_save.auxiliary.active.is_none() {
-            self.disk_save
-                .saves
-                .poll(&mut self.docs, self.waker.clone())
-        } else {
-            Vec::new()
-        };
+        let results = if self.disk_save.auxiliary.active.is_none() { self.disk_save.saves.poll(&mut self.docs, self.waker.clone()) } else { Vec::new() };
         for result in results {
             match result {
                 Ok(path) => {
@@ -470,10 +394,7 @@ impl crate::app::CrabCraftApp {
             .disk_save
             .continuation
             .as_ref()
-            .is_some_and(|(root, trust, _)| {
-                *root != self.workspace.as_ref().map(|w| w.ws.root.clone())
-                    || (*trust && !self.disk_trust_valid())
-            })
+            .is_some_and(|(root, trust, _)| *root != self.workspace.as_ref().map(|w| w.ws.root.clone()) || (*trust && !self.disk_trust_valid()))
         {
             self.cancel_disk_save();
         }
@@ -488,19 +409,12 @@ impl crate::app::CrabCraftApp {
             return;
         }
         // Any edits made during the previous write get their own snapshot before execution.
-        if self
-            .docs
-            .list
-            .iter()
-            .any(|d| d.is_modified() && !d.generated)
-        {
+        if self.docs.list.iter().any(|d| d.is_modified() && !d.generated) {
             self.save_all_docs();
             return;
         }
         if let Some((root, trust, action)) = self.disk_save.continuation.take() {
-            if root != self.workspace.as_ref().map(|w| w.ws.root.clone())
-                || (trust && !self.disk_trust_valid())
-            {
+            if root != self.workspace.as_ref().map(|w| w.ws.root.clone()) || (trust && !self.disk_trust_valid()) {
                 self.disk_save.cancel();
                 return;
             }
@@ -547,20 +461,12 @@ pub struct AuxiliarySaves {
     active: Option<AuxiliaryJob>,
 }
 impl AuxiliarySaves {
-    pub fn queue(
-        &mut self,
-        session: Option<(PathBuf, rc_core::session::Session)>,
-        settings: Option<rc_core::settings::Settings>,
-    ) -> Result<(), Error> {
+    pub fn queue(&mut self, session: Option<(PathBuf, rc_core::session::Session)>, settings: Option<rc_core::settings::Settings>) -> Result<(), Error> {
         if session.is_none() && settings.is_none() {
             return Ok(());
         }
         let key = session.as_ref().map(|(path, _)| path.clone());
-        if let Some(old) = self
-            .pending
-            .iter_mut()
-            .find(|p| p.session.as_ref().map(|(path, _)| path) == key.as_ref())
-        {
+        if let Some(old) = self.pending.iter_mut().find(|p| p.session.as_ref().map(|(path, _)| path) == key.as_ref()) {
             old.session = session;
             if settings.is_some() {
                 old.settings = settings;
@@ -583,10 +489,7 @@ impl AuxiliarySaves {
         }
     }
     fn poll(&mut self, waker: Waker) -> Option<Result<(), String>> {
-        let result = self
-            .active
-            .as_ref()
-            .and_then(|j| j.inbox.drain().into_iter().next());
+        let result = self.active.as_ref().and_then(|j| j.inbox.drain().into_iter().next());
         if result.is_some() {
             self.active = None;
         }
@@ -622,11 +525,7 @@ impl AuxiliarySaves {
 }
 
 impl crate::app::CrabCraftApp {
-    pub fn build_project_after_save(
-        &mut self,
-        target: &std::path::Path,
-        action: rc_dotnet::BuildAction,
-    ) {
+    pub fn build_project_after_save(&mut self, target: &std::path::Path, action: rc_dotnet::BuildAction) {
         let path = target.to_path_buf();
         if self.defer_save(true, move |app| app.build_project_after_save(&path, action)) {
             return;
@@ -683,24 +582,16 @@ mod tests {
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
         }
         let mut docs = docs(&path);
-        docs.history = Some(crate::local_history::HistoryService::start(
-            rc_core::history::LocalHistory::new(root.path().join("history")),
-        ));
+        docs.history = Some(crate::local_history::HistoryService::start(rc_core::history::LocalHistory::new(root.path().join("history"))));
         docs.list[0].editor.replace(0, 0, "// snapshot\n");
         let gate = Arc::new(AtomicBool::new(false));
-        let mut queue = Saves {
-            gate: Some(gate.clone()),
-            ..Default::default()
-        };
+        let mut queue = Saves { gate: Some(gate.clone()), ..Default::default() };
         queue.queue(&docs.list[0]).unwrap();
         queue.poll(&mut docs, Waker::noop());
         docs.list[0].editor.replace(0, 0, "// later edit\n");
         gate.store(true, Ordering::Release);
         assert!(drain(&mut queue, &mut docs).iter().all(Result::is_ok));
-        assert_eq!(
-            std::fs::read(&path).unwrap(),
-            b"\xef\xbb\xbf// snapshot\r\nfn main() {}\r\n"
-        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"\xef\xbb\xbf// snapshot\r\nfn main() {}\r\n");
         assert!(docs.list[0].is_modified());
         assert!(docs.list[0].saved.to_string().contains("snapshot"));
         assert!(!docs.list[0].saved.to_string().contains("later edit"));
@@ -711,25 +602,17 @@ mod tests {
         docs.history.as_ref().unwrap().list(&path, inbox.sender());
         let end = Instant::now() + Duration::from_secs(5);
         let revisions = loop {
-            if let Some(crate::local_history::Loaded::List(items)) =
-                inbox.drain().into_iter().next()
-            {
+            if let Some(crate::local_history::Loaded::List(items)) = inbox.drain().into_iter().next() {
                 break items;
             }
             assert!(Instant::now() < end);
             std::thread::sleep(Duration::from_millis(2));
         };
-        assert!(
-            revisions.len() >= 3,
-            "original, first save and later save must enter Local History"
-        );
+        assert!(revisions.len() >= 3, "original, first save and later save must enter Local History");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(
-                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
-                0o640
-            );
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o640);
         }
     }
     #[test]
@@ -740,10 +623,7 @@ mod tests {
         let mut docs = docs(&path);
         docs.list[0].editor.replace(0, 0, "// first\n");
         let gate = Arc::new(AtomicBool::new(false));
-        let mut queue = Saves {
-            gate: Some(gate.clone()),
-            ..Default::default()
-        };
+        let mut queue = Saves { gate: Some(gate.clone()), ..Default::default() };
         queue.queue(&docs.list[0]).unwrap();
         queue.poll(&mut docs, Waker::noop());
         docs.list[0].editor.replace(0, 0, "// second\n");
@@ -761,11 +641,7 @@ mod tests {
         docs.list[0].editor.replace(0, 0, "// third\n");
         queue.queue(&docs.list[0]).unwrap();
         assert!(drain(&mut queue, &mut docs).iter().all(Result::is_ok));
-        assert!(
-            std::fs::read_to_string(&path)
-                .unwrap()
-                .starts_with("// third\n// second\n")
-        );
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("// third\n// second\n"));
         assert!(!docs.list[0].is_modified());
     }
     #[test]
@@ -787,23 +663,14 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "untouched");
         assert!(docs.list[0].is_modified());
         std::fs::remove_file(&path).unwrap();
-        assert!(
-            std::process::Command::new("mkfifo")
-                .arg(&path)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(std::process::Command::new("mkfifo").arg(&path).status().unwrap().success());
         queue.queue(&docs.list[0]).unwrap();
         assert!(drain(&mut queue, &mut docs).iter().any(Result::is_err));
         assert!(docs.list[0].is_modified());
         std::fs::remove_file(&path).unwrap();
         std::fs::write(&path, "external edit\n").unwrap();
         queue.queue(&docs.list[0]).unwrap();
-        assert!(matches!(
-            drain(&mut queue, &mut docs).as_slice(),
-            [Err(Error::Changed)]
-        ));
+        assert!(matches!(drain(&mut queue, &mut docs).as_slice(), [Err(Error::Changed)]));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "external edit\n");
     }
 }
@@ -814,21 +681,17 @@ mod native_tests {
     use std::time::{Duration, Instant};
     fn fixture(root: &std::path::Path) -> PathBuf {
         std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"save_barrier_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
-        std::fs::write(root.join("build.rs"),"fn main() { let text=std::fs::read_to_string(\"src/main.rs\").unwrap(); std::fs::write(\"build-observed.rs\",text).unwrap(); }\n").unwrap();
-        let path = root.join("src/main.rs");
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"save_barrier_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
         std::fs::write(
-            &path,
-            "fn main() { std::fs::write(\"program-observed\",\"old\").unwrap(); }\n",
+            root.join("build.rs"),
+            "fn main() { let text=std::fs::read_to_string(\"src/main.rs\").unwrap(); std::fs::write(\"build-observed.rs\",text).unwrap(); }\n",
         )
         .unwrap();
+        let path = root.join("src/main.rs");
+        std::fs::write(&path, "fn main() { std::fs::write(\"program-observed\",\"old\").unwrap(); }\n").unwrap();
         path
     }
-    fn app(
-        home: &std::path::Path,
-        root: &std::path::Path,
-        path: &std::path::Path,
-    ) -> crate::app::CrabCraftApp {
+    fn app(home: &std::path::Path, root: &std::path::Path, path: &std::path::Path) -> crate::app::CrabCraftApp {
         let mut app = crate::screens::test_app(home, false);
         app.open_workspace(root);
         app.trust_project_tools_for_test();
@@ -856,9 +719,7 @@ mod native_tests {
     }
     #[test]
     fn real_cargo_build_and_run_observe_final_saved_text_before_spawn() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         let path = fixture(root.path());
@@ -870,21 +731,13 @@ mod native_tests {
         assert!(app.runner.build.is_none());
         assert!(app.disk_save.continuation.is_some());
         poll(&mut app, |_| root.path().join("program-observed").exists());
-        assert_eq!(
-            std::fs::read_to_string(root.path().join("program-observed")).unwrap(),
-            "latest edited buffer"
-        );
-        assert_eq!(
-            std::fs::read_to_string(root.path().join("build-observed.rs")).unwrap(),
-            text
-        );
+        assert_eq!(std::fs::read_to_string(root.path().join("program-observed")).unwrap(), "latest edited buffer");
+        assert_eq!(std::fs::read_to_string(root.path().join("build-observed.rs")).unwrap(), text);
         assert!(!app.docs.list[0].is_modified());
     }
     #[test]
     fn failed_save_cancel_trust_revocation_and_provider_switch_never_spawn_or_lose_buffers() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         let path = fixture(root.path());
@@ -893,9 +746,7 @@ mod native_tests {
         std::fs::remove_file(&path).unwrap();
         std::fs::create_dir(&path).unwrap();
         app.run_cargo_command("run --offline --quiet");
-        poll(&mut app, |app| {
-            app.disk_save.failed && !app.disk_save.saves.busy()
-        });
+        poll(&mut app, |app| app.disk_save.failed && !app.disk_save.saves.busy());
         assert!(app.runner.build.is_none());
         assert!(app.docs.list[0].is_modified());
         assert!(!root.path().join("build-observed.rs").exists());
@@ -921,9 +772,7 @@ mod native_tests {
     }
     #[test]
     fn cancelled_close_or_workspace_switch_keeps_buffers_and_successful_close_waits_for_write() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
@@ -945,17 +794,11 @@ mod native_tests {
         assert_eq!(app.docs.list.len(), 1);
         app.close_tab(0);
         poll(&mut app, |app| app.docs.list.is_empty());
-        assert!(
-            std::fs::read_to_string(&path)
-                .unwrap()
-                .starts_with("// keep on cancel")
-        );
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("// keep on cancel"));
     }
     #[test]
     fn rustfmt_on_save_finishes_before_real_cargo_and_keeps_a_separate_undo_step() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         let path = fixture(root.path());
@@ -967,16 +810,10 @@ mod native_tests {
         app.docs.list[0].editor.buffer.seal_undo();
         app.run_cargo_command("run --offline --quiet");
         poll(&mut app, |_| root.path().join("program-observed").exists());
-        assert_eq!(
-            std::fs::read_to_string(root.path().join("program-observed")).unwrap(),
-            "42"
-        );
+        assert_eq!(std::fs::read_to_string(root.path().join("program-observed")).unwrap(), "42");
         let saved = std::fs::read_to_string(&path).unwrap();
         assert!(saved.contains("fn main() {\n"));
-        assert_eq!(
-            saved,
-            std::fs::read_to_string(root.path().join("build-observed.rs")).unwrap()
-        );
+        assert_eq!(saved, std::fs::read_to_string(root.path().join("build-observed.rs")).unwrap());
         assert!(!app.docs.list[0].is_modified());
         app.docs.list[0].editor.undo();
         assert_eq!(app.docs.list[0].editor.buffer.rope().to_string(), text);
@@ -989,11 +826,7 @@ impl crate::app::CrabCraftApp {
         if self.defer_save(true, move |app| app.rerun_tests_after_save(failed)) {
             return;
         }
-        let outputs = if failed {
-            self.runner.rerun_failed()
-        } else {
-            self.runner.rerun_tests()
-        };
+        let outputs = if failed { self.runner.rerun_failed() } else { self.runner.rerun_tests() };
         crate::ui::run_windows::handle_outputs(self, outputs);
     }
 }
@@ -1011,10 +844,7 @@ mod lifecycle_tests {
         let mut docs = Docs::new(rc_syntax::ParserPool::new(Waker::noop().as_fn()));
         docs.open(&path).unwrap();
         docs.list[0].editor.replace(0, 0, "// pending\n");
-        let mut saves = Saves {
-            gate: Some(Arc::new(AtomicBool::new(false))),
-            ..Default::default()
-        };
+        let mut saves = Saves { gate: Some(Arc::new(AtomicBool::new(false))), ..Default::default() };
         saves.queue(&docs.list[0]).unwrap();
         saves.poll(&mut docs, Waker::noop());
         let modified = docs.list[0].mtime;
@@ -1026,14 +856,7 @@ mod lifecycle_tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
-        assert!(
-            docs.list[0]
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("reloaded")
-        );
+        assert!(docs.list[0].editor.buffer.rope().to_string().contains("reloaded"));
         docs.list[0].editor.replace(0, 0, "// close pending\n");
         saves.queue(&docs.list[0]).unwrap();
         saves.poll(&mut docs, Waker::noop());
@@ -1049,17 +872,11 @@ mod lifecycle_tests {
     #[test]
     fn native_cancel_button_keeps_the_real_rust_buffer_and_prevents_deferred_cargo() {
         use egui_kittest::kittest::Queryable;
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
-        std::fs::write(
-            root.path().join("Cargo.toml"),
-            "[package]\nname=\"cancel_save_ui\"\nversion=\"0.1.0\"\n[workspace]\n",
-        )
-        .unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname=\"cancel_save_ui\"\nversion=\"0.1.0\"\n[workspace]\n").unwrap();
         let path = root.path().join("src/main.rs");
         std::fs::write(&path, "fn main() {}\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
@@ -1075,14 +892,7 @@ mod lifecycle_tests {
         h.run_steps(3);
         assert!(h.state().disk_save.continuation.is_none());
         assert!(h.state().docs.list[0].is_modified());
-        assert!(
-            h.state().docs.list[0]
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .starts_with("// retained")
-        );
+        assert!(h.state().docs.list[0].editor.buffer.rope().to_string().starts_with("// retained"));
         assert!(h.state().runner.build.is_none());
         assert_eq!(std::fs::read_to_string(path).unwrap(), "fn main() {}\n");
     }

@@ -32,13 +32,19 @@ impl std::fmt::Display for Error {
             Self::Format(line) => f.write_str(&trf("Invalid LCOV record at line {line}", &[("line", line)])),
             Self::Empty => f.write_str(tr("No covered source files were found inside this project")),
             Self::Cancelled => f.write_str(tr("Coverage cancelled")),
-            Self::Failed(code) => f.write_str(&trf("Coverage command failed ({code}); see the console", &[("code", &code.map_or_else(|| "?".into(), |code| code.to_string()))])),
+            Self::Failed(code) => {
+                f.write_str(&trf("Coverage command failed ({code}); see the console", &[("code", &code.map_or_else(|| "?".into(), |code| code.to_string()))]))
+            }
             Self::Worker(error) => f.write_str(error),
         }
     }
 }
 impl std::error::Error for Error {}
-impl From<std::io::Error> for Error { fn from(error: std::io::Error) -> Self { Self::Io(error) } }
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
 
 #[derive(Debug)]
 pub struct FileCoverage {
@@ -47,7 +53,9 @@ pub struct FileCoverage {
     pub lines: Vec<(usize, u64)>,
 }
 impl FileCoverage {
-    pub fn covered(&self) -> usize { self.lines.iter().filter(|(_, hits)| *hits > 0).count() }
+    pub fn covered(&self) -> usize {
+        self.lines.iter().filter(|(_, hits)| *hits > 0).count()
+    }
 }
 
 #[derive(Debug)]
@@ -64,28 +72,45 @@ impl Suite {
 }
 
 fn read_report(path: &Path, root: &Path, name: String, token: &CancelToken) -> Result<Suite, Error> {
-    if token.is_cancelled() { return Err(Error::Cancelled); }
-    if !std::fs::metadata(path)?.is_file() { return Err(Error::NotRegular); }
+    if token.is_cancelled() {
+        return Err(Error::Cancelled);
+    }
+    if !std::fs::metadata(path)?.is_file() {
+        return Err(Error::NotRegular);
+    }
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
-    { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     // Nonblocking open also protects against a regular file being replaced with a FIFO
     // between metadata and open. Always validate the descriptor we actually obtained.
     let mut file = options.open(path)?;
     let metadata = file.metadata()?;
-    if !metadata.is_file() { return Err(Error::NotRegular); }
-    if metadata.len() > MAX_BYTES as u64 { return Err(Error::Limit); }
+    if !metadata.is_file() {
+        return Err(Error::NotRegular);
+    }
+    if metadata.len() > MAX_BYTES as u64 {
+        return Err(Error::Limit);
+    }
     let mut bytes = Vec::new();
     let mut chunk = [0u8; 64 * 1024];
     loop {
-        if token.is_cancelled() { return Err(Error::Cancelled); }
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         let count = match file.read(&mut chunk) {
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             result => result?,
         };
-        if count == 0 { break; }
-        if bytes.len() + count > MAX_BYTES { return Err(Error::Limit); }
+        if count == 0 {
+            break;
+        }
+        if bytes.len() + count > MAX_BYTES {
+            return Err(Error::Limit);
+        }
         bytes.extend_from_slice(&chunk[..count]);
     }
     let text = std::str::from_utf8(&bytes).map_err(|_| Error::Format(1))?;
@@ -95,50 +120,75 @@ fn read_report(path: &Path, root: &Path, name: String, token: &CancelToken) -> R
 /// LCOV line data only. Paths are canonicalized before retaining them, so imported reports
 /// cannot make the results panel navigate through `..` or a symlink outside the project.
 pub fn parse(text: &str, root: &Path, name: String, token: &CancelToken) -> Result<Suite, Error> {
-    if text.len() > MAX_BYTES { return Err(Error::Limit); }
+    if text.len() > MAX_BYTES {
+        return Err(Error::Limit);
+    }
     let root = root.canonicalize()?;
     let mut files: BTreeMap<PathBuf, BTreeMap<usize, u64>> = BTreeMap::new();
     let mut source: Option<Option<PathBuf>> = None;
     let (mut entries, mut skipped) = (0usize, 0usize);
     for (index, record) in text.lines().enumerate() {
-        if token.is_cancelled() { return Err(Error::Cancelled); }
+        if token.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
         let invalid = || Error::Format(index + 1);
         let record = record.trim_end_matches('\r');
-        if record.is_empty() || record.starts_with('#') { continue; }
+        if record.is_empty() || record.starts_with('#') {
+            continue;
+        }
         if let Some(path) = record.strip_prefix("SF:").or_else(|| record.strip_prefix("KF:")) {
-            if source.is_some() || path.is_empty() { return Err(invalid()); }
+            if source.is_some() || path.is_empty() {
+                return Err(invalid());
+            }
             let path = Path::new(path);
             let resolved = if path.is_absolute() { path.to_path_buf() } else { root.join(path) };
             let resolved = resolved.canonicalize().ok().filter(|path| path.starts_with(&root) && path.is_file());
-            if resolved.is_none() { skipped = skipped.saturating_add(1); }
+            if resolved.is_none() {
+                skipped = skipped.saturating_add(1);
+            }
             source = Some(resolved);
         } else if record == "end_of_record" {
-            if source.take().is_none() { return Err(invalid()); }
+            if source.take().is_none() {
+                return Err(invalid());
+            }
         } else if let Some(data) = record.strip_prefix("DA:") {
             let current = source.as_ref().ok_or_else(invalid)?;
             let mut fields = data.split(',');
             let line = fields.next().and_then(|line| line.parse::<usize>().ok()).filter(|line| *line > 0 && *line <= 10_000_000).ok_or_else(invalid)?;
             let hits = fields.next().and_then(|hits| hits.parse::<u64>().ok()).ok_or_else(invalid)?;
             entries += 1;
-            if entries > MAX_LINES { return Err(Error::Limit); }
+            if entries > MAX_LINES {
+                return Err(Error::Limit);
+            }
             if let Some(path) = current {
                 let lines = files.entry(path.clone()).or_default();
                 let count = lines.entry(line).or_default();
                 *count = count.saturating_add(hits);
-                if files.len() > MAX_FILES { return Err(Error::Limit); }
+                if files.len() > MAX_FILES {
+                    return Err(Error::Limit);
+                }
             }
         } else if record.starts_with("TN:") {
-            if source.is_some() { return Err(invalid()); }
+            if source.is_some() {
+                return Err(invalid());
+            }
         } else if source.is_none() {
             return Err(invalid());
         }
     }
-    if source.is_some() { return Err(Error::Format(text.lines().count().max(1))); }
-    if files.is_empty() { return Err(Error::Empty); }
+    if source.is_some() {
+        return Err(Error::Format(text.lines().count().max(1)));
+    }
+    if files.is_empty() {
+        return Err(Error::Empty);
+    }
     Ok(Suite { name, root, files: files.into_iter().map(|(path, lines)| FileCoverage { path, lines: lines.into_iter().collect() }).collect(), skipped })
 }
 
-enum Event { Line(OutputLine), Done(Result<Suite, Error>) }
+enum Event {
+    Line(OutputLine),
+    Done(Result<Suite, Error>),
+}
 
 pub struct Coverage {
     pub show: bool,
@@ -153,10 +203,26 @@ pub struct Coverage {
 }
 impl Coverage {
     pub fn new(waker: Waker) -> Self {
-        Self { show: false, suites: Vec::new(), selected: 0, selected_file: 0, error: None, console: crate::runner::Console::new(&waker), inbox: Inbox::new(waker.clone()), job: None, waker }
+        Self {
+            show: false,
+            suites: Vec::new(),
+            selected: 0,
+            selected_file: 0,
+            error: None,
+            console: crate::runner::Console::new(&waker),
+            inbox: Inbox::new(waker.clone()),
+            job: None,
+            waker,
+        }
     }
-    pub fn busy(&self) -> bool { self.job.is_some() }
-    pub fn cancel(&self) { if let Some(job) = &self.job { job.cancel(); } }
+    pub fn busy(&self) -> bool {
+        self.job.is_some()
+    }
+    pub fn cancel(&self) {
+        if let Some(job) = &self.job {
+            job.cancel();
+        }
+    }
     fn begin(&mut self) -> (rc_core::inbox::Outbox<Event>, CancelToken) {
         self.error = None;
         self.console = crate::runner::Console::new(&self.waker);
@@ -164,7 +230,9 @@ impl Coverage {
         (self.inbox.sender(), CancelToken::new())
     }
     pub fn start(&mut self, root: PathBuf, manifest: PathBuf, cargo: PathBuf, env: Vec<(String, String)>) {
-        if self.busy() { return; }
+        if self.busy() {
+            return;
+        }
         let (out, cancel) = self.begin();
         let token = cancel.clone();
         let task = Runtime::spawn(async move {
@@ -175,20 +243,26 @@ impl Coverage {
     }
     #[cfg(test)]
     pub fn import(&mut self, path: PathBuf, root: PathBuf) {
-        if self.busy() { return; }
+        if self.busy() {
+            return;
+        }
         let (out, cancel) = self.begin();
         let token = cancel.clone();
         let task = Runtime::spawn(async move {
             let result = tokio::task::spawn_blocking(move || {
                 let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
                 read_report(&path, &root, name, &token)
-            }).await.unwrap_or_else(|error| Err(Error::Worker(error.to_string())));
+            })
+            .await
+            .unwrap_or_else(|error| Err(Error::Worker(error.to_string())));
             out.send(Event::Done(result));
         });
         self.job = Some(OpHandle::new(cancel, task));
     }
     pub fn pick_import(&mut self, root: PathBuf) {
-        if self.busy() { return; }
+        if self.busy() {
+            return;
+        }
         let (out, cancel) = self.begin();
         let token = cancel.clone();
         let task = Runtime::spawn(async move {
@@ -201,7 +275,9 @@ impl Coverage {
                     let path = file.path();
                     let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
                     read_report(path, &root, name, &token)
-                }).await.unwrap_or_else(|error| Err(Error::Worker(error.to_string()))),
+                })
+                .await
+                .unwrap_or_else(|error| Err(Error::Worker(error.to_string()))),
                 _ => Err(Error::Cancelled),
             };
             out.send(Event::Done(result));
@@ -220,10 +296,15 @@ impl Coverage {
                             if self.suites.iter().any(|existing| existing.name == suite.name) {
                                 for number in 2..=MAX_SUITES + 2 {
                                     let candidate = format!("{base} ({number})");
-                                    if self.suites.iter().all(|existing| existing.name != candidate) { suite.name = candidate; break; }
+                                    if self.suites.iter().all(|existing| existing.name != candidate) {
+                                        suite.name = candidate;
+                                        break;
+                                    }
                                 }
                             }
-                            if self.suites.len() == MAX_SUITES { self.suites.remove(0); }
+                            if self.suites.len() == MAX_SUITES {
+                                self.suites.remove(0);
+                            }
                             self.suites.push(suite);
                             self.selected = self.suites.len() - 1;
                             self.selected_file = 0;
@@ -236,21 +317,39 @@ impl Coverage {
     }
 }
 
-async fn run(root: PathBuf, manifest: PathBuf, cargo: PathBuf, env: Vec<(String, String)>, token: CancelToken, out: rc_core::inbox::Outbox<Event>) -> Result<Suite, Error> {
-    let temp = tokio::task::spawn_blocking(|| tempfile::Builder::new().prefix("crabcraft-coverage-").tempdir()).await.map_err(|error| Error::Worker(error.to_string()))??;
+async fn run(
+    root: PathBuf,
+    manifest: PathBuf,
+    cargo: PathBuf,
+    env: Vec<(String, String)>,
+    token: CancelToken,
+    out: rc_core::inbox::Outbox<Event>,
+) -> Result<Suite, Error> {
+    let temp = tokio::task::spawn_blocking(|| tempfile::Builder::new().prefix("crabcraft-coverage-").tempdir())
+        .await
+        .map_err(|error| Error::Worker(error.to_string()))??;
     let report = temp.path().join("coverage.info");
     let mut command = tokio::process::Command::new(cargo);
     command.args(["llvm-cov", "--workspace", "--all-targets", "--lcov", "--manifest-path"]).arg(manifest).arg("--output-path").arg(&report);
     command.current_dir(&root).envs(env).env("CARGO_LLVM_COV_SETUP", "no").env("RUSTUP_AUTO_INSTALL", "0");
     let options = rc_dotnet::process::StreamOpts { partial_lines: true, grace: Duration::from_millis(500), stdin: None };
-    let status = rc_dotnet::process::run_streaming(command, &token, options, &mut |_| {}, &mut |line| { out.send(Event::Line(line)); }).await?;
-    if status.cancelled || token.is_cancelled() { return Err(Error::Cancelled); }
-    if status.code != Some(0) { return Err(Error::Failed(status.code)); }
+    let status = rc_dotnet::process::run_streaming(command, &token, options, &mut |_| {}, &mut |line| {
+        out.send(Event::Line(line));
+    })
+    .await?;
+    if status.cancelled || token.is_cancelled() {
+        return Err(Error::Cancelled);
+    }
+    if status.code != Some(0) {
+        return Err(Error::Failed(status.code));
+    }
     tokio::task::spawn_blocking(move || {
         let result = read_report(&report, &root, tr("Coverage run").to_string(), &token);
         drop(temp);
         result
-    }).await.map_err(|error| Error::Worker(error.to_string()))?
+    })
+    .await
+    .map_err(|error| Error::Worker(error.to_string()))?
 }
 
 pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
@@ -264,21 +363,38 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     match crate::ui::run_windows::header(ui, tr("Coverage"), &actions) {
         Some(0) => app.start_coverage(),
         Some(1) => app.coverage.cancel(),
-        Some(2) => if let Some(root) = app.workspace.as_ref().map(|w| w.ws.root.clone()) { app.coverage.pick_import(root); },
+        Some(2) => {
+            if let Some(root) = app.workspace.as_ref().map(|w| w.ws.root.clone()) {
+                app.coverage.pick_import(root);
+            }
+        }
         Some(usize::MAX) => app.toggle_tool(crate::toolwindow::ToolWindow::Tests),
         _ => {}
     }
     ui.label(tr("Line coverage only. Install cargo-llvm-cov and llvm-tools-preview before running; tools are never installed automatically."));
-    if app.criticalup_provider.selected{ui.label(crate::criticalup_provider::unsupported());}
-    if busy { ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Collecting coverage…")); }); }
-    if let Some(error) = &app.coverage.error { ui.colored_label(rc_kit::pal(ui).error, error); }
+    if app.criticalup_provider.selected {
+        ui.label(crate::criticalup_provider::unsupported());
+    }
+    if busy {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Collecting coverage…"));
+        });
+    }
+    if let Some(error) = &app.coverage.error {
+        ui.colored_label(rc_kit::pal(ui).error, error);
+    }
     let mut remove = false;
     ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("coverage_suite").selected_text(app.coverage.suites.get(app.coverage.selected).map_or(tr("No coverage suites"), |suite| suite.name.as_str())).show_ui(ui, |ui| {
-            for (index, suite) in app.coverage.suites.iter().enumerate() {
-                if ui.selectable_value(&mut app.coverage.selected, index, &suite.name).changed() { app.coverage.selected_file = 0; }
-            }
-        });
+        egui::ComboBox::from_id_salt("coverage_suite")
+            .selected_text(app.coverage.suites.get(app.coverage.selected).map_or(tr("No coverage suites"), |suite| suite.name.as_str()))
+            .show_ui(ui, |ui| {
+                for (index, suite) in app.coverage.suites.iter().enumerate() {
+                    if ui.selectable_value(&mut app.coverage.selected, index, &suite.name).changed() {
+                        app.coverage.selected_file = 0;
+                    }
+                }
+            });
         remove = ui.add_enabled(!app.coverage.suites.is_empty(), egui::Button::new(tr("Remove Suite"))).clicked();
     });
     if remove {
@@ -293,7 +409,9 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
     };
     let (covered, total) = suite.totals();
     ui.label(summary(covered, total));
-    if suite.skipped > 0 { ui.label(trf("Skipped {count} missing or external source records", &[("count", &suite.skipped)])); }
+    if suite.skipped > 0 {
+        ui.label(trf("Skipped {count} missing or external source records", &[("count", &suite.skipped)]));
+    }
     let mut open = None;
     ui.columns(2, |columns| {
         egui::ScrollArea::vertical().id_salt("coverage_files").max_height(220.0).show_rows(&mut columns[0], 24.0, suite.files.len(), |ui, range| {
@@ -302,8 +420,12 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
                 let relative = file.path.strip_prefix(&suite.root).unwrap_or(&file.path);
                 let label = format!("{}  {}", relative.display(), summary(file.covered(), file.lines.len()));
                 let response = ui.selectable_label(app.coverage.selected_file == index, label);
-                if response.clicked() { app.coverage.selected_file = index; }
-                if response.double_clicked() { open = Some((file.path.clone(), file.lines.first().map_or(1, |(line, _)| *line))); }
+                if response.clicked() {
+                    app.coverage.selected_file = index;
+                }
+                if response.double_clicked() {
+                    open = Some((file.path.clone(), file.lines.first().map_or(1, |(line, _)| *line)));
+                }
             }
         });
         if let Some(file) = suite.files.get(app.coverage.selected_file) {
@@ -312,13 +434,19 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
                     let (line, hits) = file.lines[index];
                     let color = if hits == 0 { rc_kit::pal(ui).error } else { rc_kit::pal(ui).text };
                     let label = trf("Line {line}: {hits} hits", &[("line", &line), ("hits", &hits)]);
-                    if ui.link(egui::RichText::new(label).color(color)).clicked() { open = Some((file.path.clone(), line)); }
+                    if ui.link(egui::RichText::new(label).color(color)).clicked() {
+                        open = Some((file.path.clone(), line));
+                    }
                 }
             });
         }
     });
-    if let Some((path, line)) = open { app.open_at(&path, line.saturating_sub(1), 0); }
-    egui::CollapsingHeader::new(tr("Console")).default_open(busy || app.coverage.error.is_some()).show(ui, |ui| { crate::ui::run_windows::console(ui, &app.coverage.console.term); });
+    if let Some((path, line)) = open {
+        app.open_at(&path, line.saturating_sub(1), 0);
+    }
+    egui::CollapsingHeader::new(tr("Console")).default_open(busy || app.coverage.error.is_some()).show(ui, |ui| {
+        crate::ui::run_windows::console(ui, &app.coverage.console.term);
+    });
 }
 
 fn summary(covered: usize, total: usize) -> String {
@@ -334,7 +462,8 @@ mod tests {
     fn source() -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
-        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"coverage_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"coverage_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n")
+            .unwrap();
         std::fs::write(root.path().join("src/lib.rs"), "pub fn answer() -> i32 { 42 }\n").unwrap();
         root
     }
@@ -342,14 +471,23 @@ mod tests {
     #[test]
     fn lcov_merges_lines_and_derives_totals_instead_of_trusting_summaries() {
         let root = source();
-        let text = "TN:unit\nSF:src/lib.rs\nDA:1,0\nDA:2,1,checksum\nLF:999\nLH:999\nend_of_record\nTN:integration\nSF:src/lib.rs\nDA:1,2\nDA:3,0\nend_of_record\n";
+        let text =
+            "TN:unit\nSF:src/lib.rs\nDA:1,0\nDA:2,1,checksum\nLF:999\nLH:999\nend_of_record\nTN:integration\nSF:src/lib.rs\nDA:1,2\nDA:3,0\nend_of_record\n";
         let suite = parse(text, root.path(), "demo".into(), &CancelToken::new()).unwrap();
         assert_eq!(suite.totals(), (2, 3));
         assert_eq!(suite.files[0].lines, [(1, 2), (2, 1), (3, 0)]);
-        for malformed in ["DA:1,0\n", "SF:src/lib.rs\nDA:0,1\nend_of_record\n", "SF:src/lib.rs\nDA:1,-1\nend_of_record\n", "SF:src/lib.rs\nDA:1,2\n", "end_of_record\n", "SF:src/lib.rs\nSF:src/lib.rs\nend_of_record\n"] {
+        for malformed in [
+            "DA:1,0\n",
+            "SF:src/lib.rs\nDA:0,1\nend_of_record\n",
+            "SF:src/lib.rs\nDA:1,-1\nend_of_record\n",
+            "SF:src/lib.rs\nDA:1,2\n",
+            "end_of_record\n",
+            "SF:src/lib.rs\nSF:src/lib.rs\nend_of_record\n",
+        ] {
             assert!(matches!(parse(malformed, root.path(), "bad".into(), &CancelToken::new()), Err(Error::Format(_))));
         }
-        let token = CancelToken::new(); token.cancel();
+        let token = CancelToken::new();
+        token.cancel();
         assert!(matches!(parse(text, root.path(), "cancel".into(), &token), Err(Error::Cancelled)));
     }
 
@@ -362,7 +500,8 @@ mod tests {
         assert_eq!(suite.skipped, 1);
         assert_eq!(suite.files.len(), 1);
         assert!(suite.files[0].path.starts_with(root.path()));
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
             assert!(matches!(parse("SF:escape/src/lib.rs\nDA:1,1\nend_of_record\n", root.path(), "bad".into(), &CancelToken::new()), Err(Error::Empty)));
         }
@@ -381,8 +520,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fifo_import_and_cancellation_finish_without_a_writer() {
-        use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
         use std::io::Write;
+        use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
         let root = source();
         let path = root.path().join("report.info");
         let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
@@ -404,7 +543,8 @@ mod tests {
         }
         assert!(matches!(result, Ok(Err(Error::NotRegular))));
         worker.join().unwrap();
-        let cancelled = CancelToken::new(); cancelled.cancel();
+        let cancelled = CancelToken::new();
+        cancelled.cancel();
         assert!(matches!(read_report(&path, root.path(), "fifo".into(), &cancelled), Err(Error::Cancelled)));
         let mut coverage = Coverage::new(Waker::noop());
         coverage.import(path, root.path().into());
@@ -426,8 +566,10 @@ mod tests {
         let report = root.path().join("report.info");
         std::fs::write(&report, "SF:src/lib.rs\nDA:1,1\nend_of_record\n").unwrap();
         let mut coverage = Coverage::new(Waker::noop());
-        coverage.import(report.clone(), root.path().into()); finish(&mut coverage);
-        coverage.import(report, root.path().into()); finish(&mut coverage);
+        coverage.import(report.clone(), root.path().into());
+        finish(&mut coverage);
+        coverage.import(report, root.path().into());
+        finish(&mut coverage);
         assert_eq!(coverage.suites.len(), 2);
         assert_ne!(coverage.suites[0].name, coverage.suites[1].name);
         assert_eq!(coverage.suites[0].totals(), (1, 1));
@@ -474,7 +616,8 @@ mod tests {
     #[ignore = "Requires cargo-llvm-cov and llvm-tools-preview; runs real instrumented Rust tests"]
     fn real_rust_coverage_includes_missed_lines_and_can_be_stopped() {
         let root = source();
-        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"coverage_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"coverage_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n")
+            .unwrap();
         std::fs::write(root.path().join("src/lib.rs"), "pub fn used() -> i32 {\n    42\n}\npub fn unused() -> i32 {\n    7\n}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn works() { assert_eq!(super::used(), 42); }\n}\n").unwrap();
         let cargo = rc_cargo::Cargo::locate().unwrap();
         let mut coverage = Coverage::new(Waker::noop());
@@ -493,7 +636,8 @@ mod tests {
             assert!(Instant::now() < deadline, "build did not start: {:?}", coverage.console.term.screen_lines());
             std::thread::sleep(Duration::from_millis(10));
         }
-        coverage.cancel(); finish(&mut coverage);
+        coverage.cancel();
+        finish(&mut coverage);
         assert!(coverage.error.is_some());
         assert_eq!(coverage.suites.len(), 1);
         assert!(!root.path().join("build-finished").exists());

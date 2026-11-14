@@ -70,27 +70,14 @@ impl Drop for Job {
     }
 }
 impl Job {
-    pub fn start(
-        root: PathBuf,
-        origin: Target,
-        client: Client,
-        docs: &Docs,
-        waker: Waker,
-    ) -> Result<Self, Error> {
+    pub fn start(root: PathBuf, origin: Target, client: Client, docs: &Docs, waker: Waker) -> Result<Self, Error> {
         let overlays: Vec<_> = docs
             .list
             .iter()
             .filter(|d| !d.generated && !d.scratch && d.editor.lang() == rc_syntax::Lang::Rust)
-            .map(|d| Overlay {
-                id: d.editor.id,
-                version: d.editor.buffer.version(),
-                path: d.path.clone(),
-                text: d.editor.buffer.snapshot(),
-            })
+            .map(|d| Overlay { id: d.editor.id, version: d.editor.buffer.version(), path: d.path.clone(), text: d.editor.buffer.snapshot() })
             .collect();
-        if overlays.len() > FILE_COUNT
-            || overlays.iter().map(|d| d.text.len_bytes()).sum::<usize>() > TOTAL_LIMIT
-        {
+        if overlays.len() > FILE_COUNT || overlays.iter().map(|d| d.text.len_bytes()).sum::<usize>() > TOTAL_LIMIT {
             return Err(Error::Limit);
         }
         let inbox = Inbox::new(waker);
@@ -101,10 +88,7 @@ impl Job {
         std::thread::Builder::new()
             .name("rc-trait-hierarchy".into())
             .spawn(move || {
-                let budget = Budget {
-                    cancelled: token,
-                    deadline: Instant::now() + Duration::from_secs(30),
-                };
+                let budget = Budget { cancelled: token, deadline: Instant::now() + Duration::from_secs(30) };
                 let result = collect(&root, origin, &client, source, &budget);
                 if budget.check().is_ok() {
                     sender.send(result);
@@ -113,25 +97,11 @@ impl Job {
                 }
             })
             .map_err(|_| Error::Io)?;
-        Ok(Self {
-            inbox,
-            cancel,
-            overlays,
-        })
+        Ok(Self { inbox, cancel, overlays })
     }
     pub fn current(&self, docs: &Docs) -> bool {
-        self.overlays.iter().all(|old| {
-            docs.list.iter().any(|d| {
-                d.editor.id == old.id
-                    && d.editor.buffer.version() == old.version
-                    && d.path == old.path
-            })
-        }) && docs
-            .list
-            .iter()
-            .filter(|d| !d.generated && !d.scratch && d.editor.lang() == rc_syntax::Lang::Rust)
-            .count()
-            == self.overlays.len()
+        self.overlays.iter().all(|old| docs.list.iter().any(|d| d.editor.id == old.id && d.editor.buffer.version() == old.version && d.path == old.path))
+            && docs.list.iter().filter(|d| !d.generated && !d.scratch && d.editor.lang() == rc_syntax::Lang::Rust).count() == self.overlays.len()
     }
     pub fn poll(&self) -> Option<Result<ResultTree, Error>> {
         self.inbox.drain().into_iter().next()
@@ -194,13 +164,7 @@ fn read(path: &Path, budget: &Budget) -> Result<String, Error> {
         }
         bytes.extend_from_slice(&chunk[..count]);
     }
-    String::from_utf8(bytes)
-        .map(|text| {
-            text.trim_start_matches('\u{feff}')
-                .replace("\r\n", "\n")
-                .replace('\r', "\n")
-        })
-        .map_err(|_| Error::Syntax)
+    String::from_utf8(bytes).map(|text| text.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n")).map_err(|_| Error::Syntax)
 }
 fn files(root: &Path, budget: &Budget) -> Result<Vec<PathBuf>, Error> {
     let mut directories = vec![root.to_path_buf()];
@@ -220,10 +184,7 @@ fn files(root: &Path, budget: &Budget) -> Result<Vec<PathBuf>, Error> {
                 continue;
             }
             if kind.is_dir() {
-                if !matches!(
-                    entry.file_name().to_str(),
-                    Some("target" | ".git" | ".hg" | "node_modules" | ".idea")
-                ) {
+                if !matches!(entry.file_name().to_str(), Some("target" | ".git" | ".hg" | "node_modules" | ".idea")) {
                     directories.push(entry.path());
                 }
             } else if kind.is_file() && entry.path().extension().is_some_and(|x| x == "rs") {
@@ -260,39 +221,23 @@ fn parse(path: &Path, text: &str, budget: &Budget) -> Result<Vec<Declaration>, E
                 bound_positions(bound, &rope, &mut bounds);
             }
             let mut cursor = node.walk();
-            for child in node
-                .named_children(&mut cursor)
-                .filter(|n| n.kind() == "where_clause")
-            {
+            for child in node.named_children(&mut cursor).filter(|n| n.kind() == "where_clause") {
                 let mut cursor = child.walk();
                 for predicate in child.named_children(&mut cursor) {
-                    if predicate
-                        .child_by_field_name("left")
-                        .and_then(|n| text.get(n.byte_range()))
-                        == Some("Self")
+                    if predicate.child_by_field_name("left").and_then(|n| text.get(n.byte_range())) == Some("Self")
+                        && let Some(bound) = predicate.child_by_field_name("bounds")
                     {
-                        if let Some(bound) = predicate.child_by_field_name("bounds") {
-                            bound_positions(bound, &rope, &mut bounds);
-                        }
+                        bound_positions(bound, &rope, &mut bounds);
                     }
                 }
             }
             result.push(Declaration {
-                key: Key {
-                    path: path.to_path_buf(),
-                    line: position.line,
-                    column: position.character,
-                },
+                key: Key { path: path.to_path_buf(), line: position.line, column: position.character },
                 target: Target {
                     path: path.to_path_buf(),
                     line: position.line as usize,
-                    col: rope.byte_to_char(name.start_byte())
-                        - rope.line_to_char(position.line as usize),
-                    preview: rope
-                        .line(position.line as usize)
-                        .to_string()
-                        .trim_end()
-                        .to_owned(),
+                    col: rope.byte_to_char(name.start_byte()) - rope.line_to_char(position.line as usize),
+                    preview: rope.line(position.line as usize).to_string().trim_end().to_owned(),
                 },
                 name: text.get(name.byte_range()).ok_or(Error::Syntax)?.into(),
                 bounds,
@@ -306,29 +251,25 @@ fn parse(path: &Path, text: &str, budget: &Budget) -> Result<Vec<Declaration>, E
     }
     Ok(result)
 }
-fn bound_positions(
-    node: rc_syntax::tree_sitter::Node<'_>,
-    rope: &rc_text::Rope,
-    positions: &mut Vec<usize>,
-) {
+fn bound_positions(node: rc_syntax::tree_sitter::Node<'_>, rope: &rc_text::Rope, positions: &mut Vec<usize>) {
     // Resolve the path's final identifier, never a generic argument or a lifetime.
     let mut cursor = node.walk();
     for bound in node.named_children(&mut cursor) {
         let mut ty = bound;
-        if ty.kind() == "higher_ranked_trait_bound" {
-            if let Some(inner) = ty.child_by_field_name("type") {
-                ty = inner;
-            }
+        if ty.kind() == "higher_ranked_trait_bound"
+            && let Some(inner) = ty.child_by_field_name("type")
+        {
+            ty = inner;
         }
-        if ty.kind() == "generic_type" {
-            if let Some(inner) = ty.child_by_field_name("type") {
-                ty = inner;
-            }
+        if ty.kind() == "generic_type"
+            && let Some(inner) = ty.child_by_field_name("type")
+        {
+            ty = inner;
         }
-        if ty.kind() == "scoped_type_identifier" {
-            if let Some(inner) = ty.child_by_field_name("name") {
-                ty = inner;
-            }
+        if ty.kind() == "scoped_type_identifier"
+            && let Some(inner) = ty.child_by_field_name("name")
+        {
+            ty = inner;
         }
         if matches!(ty.kind(), "type_identifier" | "identifier") {
             positions.push(rope.byte_to_char(ty.start_byte()));
@@ -351,25 +292,12 @@ fn positions(value: &Value) -> Result<Vec<Key>, Error> {
     }
     let mut keys = Vec::new();
     for entry in entries {
-        let uri = entry
-            .get("targetUri")
-            .or_else(|| entry.get("uri"))
-            .and_then(Value::as_str)
-            .ok_or(Error::Server)?;
-        let range = entry
-            .get("targetSelectionRange")
-            .or_else(|| entry.get("range"))
-            .ok_or(Error::Server)?;
+        let uri = entry.get("targetUri").or_else(|| entry.get("uri")).and_then(Value::as_str).ok_or(Error::Server)?;
+        let range = entry.get("targetSelectionRange").or_else(|| entry.get("range")).ok_or(Error::Server)?;
         let uri = uri.parse().map_err(|_| Error::Server)?;
         let path = uri_to_path(&uri).ok_or(Error::Server)?;
-        let position: rc_lsp::lsp_types::Position =
-            serde_json::from_value(range.get("start").cloned().ok_or(Error::Server)?)
-                .map_err(|_| Error::Server)?;
-        keys.push(Key {
-            path,
-            line: position.line,
-            column: position.character,
-        });
+        let position: rc_lsp::lsp_types::Position = serde_json::from_value(range.get("start").cloned().ok_or(Error::Server)?).map_err(|_| Error::Server)?;
+        keys.push(Key { path, line: position.line, column: position.character });
     }
     keys.sort();
     keys.dedup();
@@ -378,11 +306,7 @@ fn positions(value: &Value) -> Result<Vec<Key>, Error> {
 fn params(path: &Path, text: &rc_text::Rope, position: usize) -> Value {
     json!({"textDocument":{"uri":path_to_uri(path).as_str()},"position":convert::lsp_position(text, position)})
 }
-fn ensure_source(
-    path: &Path,
-    sources: &mut BTreeMap<PathBuf, rc_text::Rope>,
-    budget: &Budget,
-) -> Result<(), Error> {
+fn ensure_source(path: &Path, sources: &mut BTreeMap<PathBuf, rc_text::Rope>, budget: &Budget) -> Result<(), Error> {
     if sources.contains_key(path) {
         return Ok(());
     }
@@ -397,43 +321,23 @@ fn ensure_source(
     sources.insert(path.to_path_buf(), rc_text::Rope::from_str(&text));
     Ok(())
 }
-fn target(
-    key: &Key,
-    sources: &mut BTreeMap<PathBuf, rc_text::Rope>,
-    budget: &Budget,
-) -> Result<Target, Error> {
+fn target(key: &Key, sources: &mut BTreeMap<PathBuf, rc_text::Rope>, budget: &Budget) -> Result<Target, Error> {
     ensure_source(&key.path, sources, budget)?;
     let rope = sources.get(&key.path).ok_or(Error::Io)?;
     if key.line as usize >= rope.len_lines() {
         return Err(Error::Server);
     }
-    let position = rc_lsp::lsp_types::Position {
-        line: key.line,
-        character: key.column,
-    };
+    let position = rc_lsp::lsp_types::Position { line: key.line, character: key.column };
     let character = convert::char_of(rope, position);
     Ok(Target {
         path: key.path.clone(),
         line: key.line as usize,
         col: character - rope.line_to_char(key.line as usize),
-        preview: rope
-            .line(key.line as usize)
-            .to_string()
-            .trim_end()
-            .to_string(),
+        preview: rope.line(key.line as usize).to_string().trim_end().to_string(),
     })
 }
-fn collect(
-    root: &Path,
-    origin: Target,
-    client: &Client,
-    overlays: Vec<Overlay>,
-    budget: &Budget,
-) -> Result<ResultTree, Error> {
-    let mut sources: BTreeMap<PathBuf, rc_text::Rope> = overlays
-        .iter()
-        .map(|d| (d.path.clone(), d.text.clone()))
-        .collect();
+fn collect(root: &Path, origin: Target, client: &Client, overlays: Vec<Overlay>, budget: &Budget) -> Result<ResultTree, Error> {
+    let mut sources: BTreeMap<PathBuf, rc_text::Rope> = overlays.iter().map(|d| (d.path.clone(), d.text.clone())).collect();
     let origin_text = sources.get(&origin.path).ok_or(Error::Io)?;
     if origin.line >= origin_text.len_lines() {
         return Err(Error::Syntax);
@@ -442,25 +346,12 @@ fn collect(
     if origin_pos > origin_text.len_chars() {
         return Err(Error::Syntax);
     }
-    let resolved = positions(&budget.request(
-        client,
-        "textDocument/definition",
-        params(&origin.path, origin_text, origin_pos),
-    )?)?;
-    let implementations = positions(&budget.request(
-        client,
-        "textDocument/implementation",
-        params(&origin.path, origin_text, origin_pos),
-    )?)?;
+    let resolved = positions(&budget.request(client, "textDocument/definition", params(&origin.path, origin_text, origin_pos))?)?;
+    let implementations = positions(&budget.request(client, "textDocument/implementation", params(&origin.path, origin_text, origin_pos))?)?;
     let mut declarations = BTreeMap::new();
     let mut total = 0;
     let mut paths: BTreeSet<PathBuf> = files(root, budget)?.into_iter().collect();
-    paths.extend(
-        overlays
-            .iter()
-            .filter(|d| d.path.starts_with(root))
-            .map(|d| d.path.clone()),
-    );
+    paths.extend(overlays.iter().filter(|d| d.path.starts_with(root)).map(|d| d.path.clone()));
     for path in paths {
         budget.check()?;
         ensure_source(&path, &mut sources, budget)?;
@@ -479,49 +370,28 @@ fn collect(
             return Err(Error::Limit);
         }
     }
-    let root_key = resolved
-        .into_iter()
-        .find(|key| declarations.contains_key(key))
-        .or_else(|| {
-            declarations
-                .keys()
-                .find(|key| {
-                    key.path == origin.path
-                        && key.line as usize == origin.line
-                        && sources.get(&key.path).is_some_and(|rope| {
-                            let char_start = convert::char_of(
-                                rope,
-                                rc_lsp::lsp_types::Position {
-                                    line: key.line,
-                                    character: key.column,
-                                },
-                            );
-                            let len = declarations.get(*key).map_or(0, |d| d.name.chars().count());
-                            origin_pos >= char_start && origin_pos <= char_start + len
-                        })
-                })
-                .cloned()
-        });
+    let root_key = resolved.into_iter().find(|key| declarations.contains_key(key)).or_else(|| {
+        declarations
+            .keys()
+            .find(|key| {
+                key.path == origin.path
+                    && key.line as usize == origin.line
+                    && sources.get(&key.path).is_some_and(|rope| {
+                        let char_start = convert::char_of(rope, rc_lsp::lsp_types::Position { line: key.line, character: key.column });
+                        let len = declarations.get(*key).map_or(0, |d| d.name.chars().count());
+                        origin_pos >= char_start && origin_pos <= char_start + len
+                    })
+            })
+            .cloned()
+    });
     let Some(root_key) = root_key else {
         // Structs/enums retain the implementation list, but resolve preview I/O here as well.
-        let implementations = implementations
-            .iter()
-            .map(|key| target(key, &mut sources, budget))
-            .collect::<Result<Vec<_>, _>>()?;
+        let implementations = implementations.iter().map(|key| target(key, &mut sources, budget)).collect::<Result<Vec<_>, _>>()?;
         let name = origin.preview.clone();
-        let key = Key {
-            path: origin.path.clone(),
-            line: origin.line as u32,
-            column: origin.col as u32,
-        };
+        let key = Key { path: origin.path.clone(), line: origin.line as u32, column: origin.col as u32 };
         validate_closed(&sources, &overlays, budget)?;
         return Ok(ResultTree {
-            root: Declaration {
-                key,
-                target: origin,
-                name,
-                bounds: Vec::new(),
-            },
+            root: Declaration { key, target: origin, name, bounds: Vec::new() },
             supertraits: Vec::new(),
             subtraits: Vec::new(),
             implementations,
@@ -538,19 +408,12 @@ fn collect(
             if count > EDGE_COUNT {
                 return Err(Error::Limit);
             }
-            let definitions = positions(&budget.request(
-                client,
-                "textDocument/definition",
-                params(&key.path, &source, *position),
-            )?)?;
+            let definitions = positions(&budget.request(client, "textDocument/definition", params(&key.path, &source, *position))?)?;
             for destination in definitions {
-                if !declarations.contains_key(&destination) && !external.contains_key(&destination)
-                {
+                if !declarations.contains_key(&destination) && !external.contains_key(&destination) {
                     let location = target(&destination, &mut sources, budget)?;
                     let source = sources.get(&destination.path).ok_or(Error::Io)?;
-                    let found = parse(&destination.path, &source.to_string(), budget)?
-                        .into_iter()
-                        .find(|d| d.key == destination);
+                    let found = parse(&destination.path, &source.to_string(), budget)?.into_iter().find(|d| d.key == destination);
                     if let Some(found) = found {
                         external.insert(destination.clone(), found);
                     } else {
@@ -568,10 +431,7 @@ fn collect(
         destinations.sort();
         destinations.dedup();
         for destination in destinations {
-            reverse
-                .entry(destination.clone())
-                .or_default()
-                .push(from.clone());
+            reverse.entry(destination.clone()).or_default().push(from.clone());
         }
     }
     let mut nodes = 0;
@@ -599,10 +459,7 @@ fn collect(
             path.insert(destination.clone());
             let children = relations(destination, graph, declarations, path, depth + 1, nodes)?;
             path.remove(destination);
-            result.push(Relation {
-                declaration,
-                children,
-            });
+            result.push(Relation { declaration, children });
         }
         result.sort_by(|a, b| a.declaration.name.cmp(&b.declaration.name));
         Ok(result)
@@ -610,29 +467,17 @@ fn collect(
     let mut path = BTreeSet::from([root_key.clone()]);
     let supertraits = relations(&root_key, &edges, &declarations, &mut path, 0, &mut nodes)?;
     let subtraits = relations(&root_key, &reverse, &declarations, &mut path, 0, &mut nodes)?;
-    let implementations = implementations
-        .iter()
-        .map(|key| target(key, &mut sources, budget))
-        .collect::<Result<Vec<_>, _>>()?;
+    let implementations = implementations.iter().map(|key| target(key, &mut sources, budget)).collect::<Result<Vec<_>, _>>()?;
     validate_closed(&sources, &overlays, budget)?;
-    Ok(ResultTree {
-        root: declarations.remove(&root_key).ok_or(Error::Server)?,
-        supertraits,
-        subtraits,
-        implementations,
-    })
+    Ok(ResultTree { root: declarations.remove(&root_key).ok_or(Error::Server)?, supertraits, subtraits, implementations })
 }
 
-fn validate_closed(
-    sources: &BTreeMap<PathBuf, rc_text::Rope>,
-    overlays: &[Overlay],
-    budget: &Budget,
-) -> Result<(), Error> {
+fn validate_closed(sources: &BTreeMap<PathBuf, rc_text::Rope>, overlays: &[Overlay], budget: &Budget) -> Result<(), Error> {
     // Re-read closed sources before publishing: disk changes cannot silently join two graphs.
     let open_paths: BTreeSet<_> = overlays.iter().map(|overlay| &overlay.path).collect();
     for (path, source) in sources {
         budget.check()?;
-        if !open_paths.contains(path) && read(path, budget)? != source.to_string() {
+        if !open_paths.contains(path) && read(path, budget)? != *source {
             return Err(Error::Changed);
         }
     }
@@ -645,29 +490,30 @@ pub fn into_call_tree(result: ResultTree) -> crate::call_tree::CallTree {
     fn group(name: &str, children: Vec<CallNode>) -> CallNode {
         let mut node = CallNode::new(json!({"name":name}), None, 1);
         node.children = Some(children);
-        node.open = node
-            .children
-            .as_ref()
-            .is_some_and(|children| !children.is_empty());
+        node.open = node.children.as_ref().is_some_and(|children| !children.is_empty());
         node
     }
     let mut children = Vec::new();
     let related = !result.supertraits.is_empty() || !result.subtraits.is_empty();
     if !result.supertraits.is_empty() {
-        children.push(group(
-            tr("Supertraits"),
-            result.supertraits.into_iter().map(relation_node).collect(),
-        ));
+        children.push(group(tr("Supertraits"), result.supertraits.into_iter().map(relation_node).collect()));
     }
     if !result.subtraits.is_empty() {
-        children.push(group(
-            tr("Subtraits"),
-            result.subtraits.into_iter().map(relation_node).collect(),
-        ));
+        children.push(group(tr("Subtraits"), result.subtraits.into_iter().map(relation_node).collect()));
     }
-    let implementations: Vec<_> = result.implementations.into_iter().map(|target| {
-        let mut node = CallNode::new(json!({"name":target.preview.split('{').next().unwrap_or("").trim(),"detail":format!("{}:{}",target.path.display(),target.line+1)}), Some(target), 1); node.children = Some(Vec::new()); node
-    }).collect();
+    let implementations: Vec<_> = result
+        .implementations
+        .into_iter()
+        .map(|target| {
+            let mut node = CallNode::new(
+                json!({"name":target.preview.split('{').next().unwrap_or("").trim(),"detail":format!("{}:{}",target.path.display(),target.line+1)}),
+                Some(target),
+                1,
+            );
+            node.children = Some(Vec::new());
+            node
+        })
+        .collect();
     if related {
         if !implementations.is_empty() {
             children.push(group(tr("Implementations"), implementations));
@@ -675,18 +521,10 @@ pub fn into_call_tree(result: ResultTree) -> crate::call_tree::CallTree {
     } else {
         children.extend(implementations);
     }
-    let mut root = CallNode::new(
-        json!({"name":result.root.name,"trait_hierarchy":related}),
-        Some(result.root.target),
-        1,
-    );
+    let mut root = CallNode::new(json!({"name":result.root.name,"trait_hierarchy":related}), Some(result.root.target), 1);
     root.children = Some(children);
     root.open = true;
-    CallTree {
-        callers: false,
-        types: true,
-        root,
-    }
+    CallTree { callers: false, types: true, root }
 }
 fn relation_node(relation: Relation) -> crate::call_tree::CallNode {
     use crate::call_tree::CallNode;
@@ -696,10 +534,7 @@ fn relation_node(relation: Relation) -> crate::call_tree::CallNode {
         1,
     );
     node.children = Some(relation.children.into_iter().map(relation_node).collect());
-    node.open = node
-        .children
-        .as_ref()
-        .is_some_and(|children| !children.is_empty());
+    node.open = node.children.as_ref().is_some_and(|children| !children.is_empty());
     node
 }
 
@@ -707,10 +542,7 @@ fn relation_node(relation: Relation) -> crate::call_tree::CallNode {
 mod tests {
     use super::*;
     fn budget() -> Budget {
-        Budget {
-            cancelled: Arc::new(AtomicBool::new(false)),
-            deadline: Instant::now() + Duration::from_secs(10),
-        }
+        Budget { cancelled: Arc::new(AtomicBool::new(false)), deadline: Instant::now() + Duration::from_secs(10) }
     }
     #[test]
     fn parses_only_supertrait_paths_not_generic_arguments_or_method_bounds() {
@@ -718,28 +550,12 @@ mod tests {
         let result = parse(Path::new("/project/lib.rs"), source, &budget()).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "Child");
-        let words: Vec<_> = result[0]
-            .bounds
-            .iter()
-            .map(|p| {
-                source
-                    .chars()
-                    .skip(*p)
-                    .take_while(|c| c.is_alphanumeric())
-                    .collect::<String>()
-            })
-            .collect();
+        let words: Vec<_> = result[0].bounds.iter().map(|p| source.chars().skip(*p).take_while(|c| c.is_alphanumeric()).collect::<String>()).collect();
         assert_eq!(words, ["Base", "Other", "Third"]);
         let token = budget();
         token.cancelled.store(true, Ordering::Release);
-        assert!(matches!(
-            parse(Path::new("/p.rs"), source, &token),
-            Err(Error::Cancelled)
-        ));
-        assert!(matches!(
-            read(Path::new("/nonexistent"), &token),
-            Err(Error::Cancelled)
-        ));
+        assert!(matches!(parse(Path::new("/p.rs"), source, &token), Err(Error::Cancelled)));
+        assert!(matches!(read(Path::new("/nonexistent"), &token), Err(Error::Cancelled)));
     }
 }
 
@@ -756,19 +572,13 @@ mod special_file_tests {
         let path = fifo.clone();
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            let budget = Budget {
-                cancelled: Arc::new(AtomicBool::new(false)),
-                deadline: Instant::now() + Duration::from_secs(2),
-            };
+            let budget = Budget { cancelled: Arc::new(AtomicBool::new(false)), deadline: Instant::now() + Duration::from_secs(2) };
             sender.send(read(&path, &budget)).unwrap();
         });
         let result = receiver.recv_timeout(Duration::from_millis(500));
         if result.is_err() {
             // Rescue a regressed blocking FIFO open before failing the assertion.
-            let _rescue = std::fs::OpenOptions::new()
-                .write(true)
-                .custom_flags(libc::O_NONBLOCK)
-                .open(&fifo);
+            let _rescue = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(&fifo);
             let _ = receiver.recv_timeout(Duration::from_secs(2));
         }
         worker.join().unwrap();
@@ -777,10 +587,7 @@ mod special_file_tests {
         std::fs::write(&regular, "trait Real {}\n").unwrap();
         let link = dir.path().join("link.rs");
         std::os::unix::fs::symlink(&regular, &link).unwrap();
-        let budget = Budget {
-            cancelled: Arc::new(AtomicBool::new(false)),
-            deadline: Instant::now() + Duration::from_secs(2),
-        };
+        let budget = Budget { cancelled: Arc::new(AtomicBool::new(false)), deadline: Instant::now() + Duration::from_secs(2) };
         assert!(matches!(read(&link, &budget), Err(Error::Limit)));
     }
 }

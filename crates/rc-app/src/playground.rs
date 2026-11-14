@@ -2,7 +2,7 @@
 //! Playground after the user confirms; the link is copied and shown with an Open in Browser
 //! action. The upload runs on a background thread with a timeout.
 
-use rc_cargo::playground::{Channel, PlaygroundError, EDITIONS, GIST_ENDPOINT};
+use rc_cargo::playground::{Channel, EDITIONS, GIST_ENDPOINT, PlaygroundError};
 use rc_core::{Inbox, Waker};
 use rc_kit::i18n::{tr, trf};
 use std::time::Duration;

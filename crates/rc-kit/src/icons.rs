@@ -77,11 +77,7 @@ fn rasterize(key: Key) -> Option<ColorImage> {
     let (sx, sy) = (w as f32 / size.width(), h as f32 / size.height());
     resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(sx, sy), &mut pixmap.as_mut());
     // tiny-skia pixels are premultiplied RGBA, like egui's `Color32`.
-    let mut pixels: Vec<Color32> = pixmap
-        .pixels()
-        .iter()
-        .map(|p| Color32::from_rgba_premultiplied(p.red(), p.green(), p.blue(), p.alpha()))
-        .collect();
+    let mut pixels: Vec<Color32> = pixmap.pixels().iter().map(|p| Color32::from_rgba_premultiplied(p.red(), p.green(), p.blue(), p.alpha())).collect();
     match key.variant {
         Variant::Normal => {}
         Variant::Disabled => {

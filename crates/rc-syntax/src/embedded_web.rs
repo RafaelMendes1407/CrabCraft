@@ -41,22 +41,11 @@ pub fn collect(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<EmbeddedSpan> {
             if bytes > 256 * 1024 || regions > 32 {
                 break;
             }
-            let prefix = rope
-                .byte_slice(parent.start_byte()..start)
-                .chars()
-                .take(4096)
-                .collect::<String>()
-                .to_ascii_lowercase();
-            if prefix.contains("application/json")
-                || prefix.contains("application/ld+json")
-                || prefix.contains("text/template")
-            {
+            let prefix = rope.byte_slice(parent.start_byte()..start).chars().take(4096).collect::<String>().to_ascii_lowercase();
+            if prefix.contains("application/json") || prefix.contains("application/ld+json") || prefix.contains("text/template") {
                 continue;
             }
-            let embedded = if embedded == Lang::JavaScript
-                && (prefix.contains("typescript")
-                    || prefix.contains("lang=\"ts\"")
-                    || prefix.contains("lang='ts'"))
+            let embedded = if embedded == Lang::JavaScript && (prefix.contains("typescript") || prefix.contains("lang=\"ts\"") || prefix.contains("lang='ts'"))
             {
                 Lang::TypeScript
             } else {
@@ -74,11 +63,7 @@ pub fn collect(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<EmbeddedSpan> {
                     if result.len() >= 16384 {
                         return result;
                     }
-                    result.push(EmbeddedSpan {
-                        start: base + span.start,
-                        end: base + span.end,
-                        role: span.hl,
-                    });
+                    result.push(EmbeddedSpan { start: base + span.start, end: base + span.end, role: span.hl });
                 }
             }
             continue;
@@ -102,15 +87,8 @@ pub fn overlay(embedded: &[EmbeddedSpan], rope: &Rope, first: usize, lines: &mut
         }
         let base = rope.line_to_char(line);
         let end = base + rope.line(line).len_chars();
-        for item in embedded
-            .iter()
-            .filter(|span| span.start < end && span.end > base)
-        {
-            spans.push(Span {
-                start: item.start.saturating_sub(base),
-                end: item.end.min(end) - base,
-                hl: item.role,
-            });
+        for item in embedded.iter().filter(|span| span.start < end && span.end > base) {
+            spans.push(Span { start: item.start.saturating_sub(base), end: item.end.min(end) - base, hl: item.role });
         }
         spans.sort_by_key(|span| span.start);
     }
@@ -123,16 +101,12 @@ mod tests {
     fn real_rust_web_assets_embed_css_javascript_on_background_parser_and_discard_stale_layers() {
         let css = include_str!("../../../tests/fixtures/RustWeb/static/app.css");
         let js = include_str!("../../../tests/fixtures/RustWeb/static/app.js");
-        let text = format!(
-            "<main>🦀</main>\n<style>{css}</style>\n<script>{js}</script>\n<script type=\"application/json\">{{\"color\":1}}</script>"
-        );
+        let text = format!("<main>🦀</main>\n<style>{css}</style>\n<script>{js}</script>\n<script type=\"application/json\">{{\"color\":1}}</script>");
         let rope = Rope::from_str(&text);
         let pool = crate::ParserPool::new(std::sync::Arc::new(|| {}));
         let mut syntax = crate::Syntax::new(Lang::Html);
         syntax.request_parse(&pool, 1, rope.clone(), 1);
-        let result = pool
-            .recv_timeout(std::time::Duration::from_secs(3))
-            .unwrap();
+        let result = pool.recv_timeout(std::time::Duration::from_secs(3)).unwrap();
         assert!(!result.embedded.is_empty());
         assert!(syntax.accept(result));
         let lines = syntax.highlight(&rope, 0, rope.len_lines());
@@ -143,32 +117,11 @@ mod tests {
                 roles.push((source.slice(span.start..span.end).to_string(), span.hl));
             }
         }
-        assert!(
-            roles
-                .iter()
-                .any(|(text, role)| text == "color" && *role == Hl::Property),
-            "{roles:?}"
-        );
-        assert!(
-            roles
-                .iter()
-                .any(|(text, role)| text == "const" && *role == Hl::Keyword),
-            "{roles:?}"
-        );
+        assert!(roles.iter().any(|(text, role)| text == "color" && *role == Hl::Property), "{roles:?}");
+        assert!(roles.iter().any(|(text, role)| text == "const" && *role == Hl::Keyword), "{roles:?}");
         syntax.edit(&[], 2);
-        assert!(
-            !syntax
-                .highlight(&rope, 0, rope.len_lines())
-                .iter()
-                .flatten()
-                .any(|span| span.hl == Hl::Keyword)
-        );
+        assert!(!syntax.highlight(&rope, 0, rope.len_lines()).iter().flatten().any(|span| span.hl == Hl::Keyword));
         pool.submit(1, Lang::Html, rope.clone(), 1, None);
-        assert!(
-            !syntax.accept(
-                pool.recv_timeout(std::time::Duration::from_secs(3))
-                    .unwrap()
-            )
-        );
+        assert!(!syntax.accept(pool.recv_timeout(std::time::Duration::from_secs(3)).unwrap()));
     }
 }

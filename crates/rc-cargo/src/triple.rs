@@ -8,7 +8,10 @@ use std::path::Path;
 /// starting with `-` (it would read as an option), and of a sane length. A path to a target JSON
 /// file is refused.
 pub fn valid_triple(triple: &str) -> bool {
-    !triple.is_empty() && triple.len() <= 100 && !triple.starts_with('-') && triple.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+    !triple.is_empty()
+        && triple.len() <= 100
+        && !triple.starts_with('-')
+        && triple.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }
 
 /// A target offered in the status bar list.
@@ -117,7 +120,13 @@ pub fn host_triple(cargo: &Cargo) -> Option<String> {
 pub fn rustup_targets(cargo: &Cargo) -> Vec<(String, bool)> {
     let Some(rustup) = rustup_path(cargo) else { return Vec::new() };
     let run = |args: &[&str]| {
-        let out = std::process::Command::new(&rustup).args(args).current_dir(std::env::temp_dir()).stdin(std::process::Stdio::null()).output().ok().filter(|o| o.status.success())?;
+        let out = std::process::Command::new(&rustup)
+            .args(args)
+            .current_dir(std::env::temp_dir())
+            .stdin(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())?;
         Some(String::from_utf8_lossy(&out.stdout).into_owned())
     };
     if let Some(text) = run(&["target", "list"]) {
@@ -177,7 +186,8 @@ mod tests {
 
     #[test]
     fn the_host_comes_first_and_uninstalled_last() {
-        let rustup = vec![("aarch64-apple-darwin".to_string(), false), ("x86_64-unknown-linux-gnu".to_string(), true), ("wasm32-unknown-unknown".to_string(), true)];
+        let rustup =
+            vec![("aarch64-apple-darwin".to_string(), false), ("x86_64-unknown-linux-gnu".to_string(), true), ("wasm32-unknown-unknown".to_string(), true)];
         let list = triple_choices(Some("x86_64-unknown-linux-gnu"), &rustup, &["thumbv7em-none-eabihf".to_string()]);
         let names: Vec<&str> = list.iter().map(|c| c.triple.as_str()).collect();
         assert_eq!(names, vec!["x86_64-unknown-linux-gnu", "thumbv7em-none-eabihf", "wasm32-unknown-unknown", "aarch64-apple-darwin"]);

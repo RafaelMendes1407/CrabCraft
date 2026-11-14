@@ -103,7 +103,15 @@ impl Repository {
     /// modified or untracked files ([`GitError::WorktreeDirty`]) or is locked
     /// ([`GitError::WorktreeLocked`]); `force` overrides only the first.
     pub async fn remove_worktree(&self, path: &Path, force: bool) -> Result<()> {
-        self.cmd().args(["worktree", "remove"]).args(force.then_some("--force")).arg("--").arg(path).output().await.map(drop).map_err(|e| worktree_error(e, path))
+        self.cmd()
+            .args(["worktree", "remove"])
+            .args(force.then_some("--force"))
+            .arg("--")
+            .arg(path)
+            .output()
+            .await
+            .map(drop)
+            .map_err(|e| worktree_error(e, path))
     }
 
     /// Locks a worktree so that prune, move and remove leave it alone.

@@ -5,10 +5,32 @@ use rc_syntax::{Hl, Span};
 use rc_text::Rope;
 
 pub const CLIENT_TOKEN_TYPES: &[&str] = &[
-    "namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event",
-    "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator",
+    "namespace",
+    "type",
+    "class",
+    "enum",
+    "interface",
+    "struct",
+    "typeParameter",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "event",
+    "function",
+    "method",
+    "macro",
+    "keyword",
+    "modifier",
+    "comment",
+    "string",
+    "number",
+    "regexp",
+    "operator",
+    "decorator",
 ];
-pub const CLIENT_TOKEN_MODIFIERS: &[&str] = &["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"];
+pub const CLIENT_TOKEN_MODIFIERS: &[&str] =
+    &["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"];
 
 /// Colour role of a token type name (`None`: leave the syntax colour).
 pub fn role(token_type: &str) -> Option<Hl> {

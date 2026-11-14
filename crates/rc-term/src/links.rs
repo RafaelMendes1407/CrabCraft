@@ -8,7 +8,11 @@ pub enum Link {
     Url(String),
     /// A path as printed (relative paths are relative to the terminal's directory).
     /// Line and column are 1-based.
-    File { path: String, line: Option<u32>, column: Option<u32> },
+    File {
+        path: String,
+        line: Option<u32>,
+        column: Option<u32>,
+    },
 }
 
 /// Characters that never belong to a link.

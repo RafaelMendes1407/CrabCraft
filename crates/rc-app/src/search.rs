@@ -5,7 +5,7 @@ use rc_core::{Inbox, Waker};
 use rc_editor::Action;
 use rc_kit::i18n::tr;
 use rc_lsp::Pending;
-use rc_search::{FileIndex, FindEvent, FindOptions, FindSummary, Finder, FileMatches, QueryOptions, ScanHandle};
+use rc_search::{FileIndex, FileMatches, FindEvent, FindOptions, FindSummary, Finder, QueryOptions, ScanHandle};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -243,7 +243,11 @@ impl SearchEverywhere {
         if !matches!(self.scope, SeScope::Package { .. }) {
             return true;
         }
-        let rel = path.strip_prefix(root).ok().map(Path::to_path_buf).or_else(|| root.canonicalize().ok().and_then(|r| path.strip_prefix(r).ok().map(Path::to_path_buf)));
+        let rel = path
+            .strip_prefix(root)
+            .ok()
+            .map(Path::to_path_buf)
+            .or_else(|| root.canonicalize().ok().and_then(|r| path.strip_prefix(r).ok().map(Path::to_path_buf)));
         rel.is_some_and(|r| self.in_scope(&rel_string(&r)))
     }
 
@@ -391,7 +395,10 @@ pub fn action_items() -> Vec<(&'static str, Action)> {
         (tr("Share in Playground…"), ShareInPlayground),
         (tr("Generate…"), Generate),
         (tr("Expand Macro Recursively"), ExpandMacro),
-        (if cfg!(unix) { tr("Expand Declarative Macro One Step") } else { tr("Expand Declarative Macro One Step (unsupported on this platform)") }, ExpandMacroStep),
+        (
+            if cfg!(unix) { tr("Expand Declarative Macro One Step") } else { tr("Expand Declarative Macro One Step (unsupported on this platform)") },
+            ExpandMacroStep,
+        ),
         (tr("Test Declarative Macro…"), TestDeclarativeMacro),
         (tr("Refactor This…"), RefactorThis),
         (tr("Move public Rust item…"), MoveItem),
@@ -539,7 +546,9 @@ impl FindInFiles {
     /// Starts (or restarts) the search with the current fields.
     pub fn search(&mut self) {
         // A new query/scope supersedes any replacement still using the old result set.
-        if self.replacements.running() { self.replacements.cancel(); }
+        if self.replacements.running() {
+            self.replacements.cancel();
+        }
         self.results.clear();
         self.summary = None;
         self.error = None;

@@ -10,23 +10,26 @@
 //! - [`memory`]: `readMemory` answers decoded and laid out as a hex dump.
 //! - [`disassembly`]: `disassemble` answers decoded, merged and laid out as rows.
 
-pub mod breakpoints;
 pub mod adapter;
+pub mod breakpoints;
 pub mod client;
 pub mod disassembly;
 pub mod format;
 pub mod gdb;
-pub mod lldb;
-pub mod remote;
 pub mod launch;
+pub mod lldb;
 pub mod memory;
 pub mod protocol;
+pub mod remote;
 pub mod session;
 
+pub use adapter::AdapterCommand;
 pub use breakpoints::{BreakpointSpec, BreakpointState, Breakpoints};
 pub use client::{DapClient, DapError, Incoming, Pending};
-pub use memory::MemoryBlock;
 pub use launch::{DebugOptions, DebugTarget, LaunchConfig};
-pub use adapter::AdapterCommand;
+pub use memory::MemoryBlock;
 pub use protocol::{EvalContext, ExceptionInfo, Scope, StackFrame, Thread, Variable};
-pub use session::{DebugEvent, DebugSession, EvalValue, Failure, GotoError, OutputCategory, SessionState, SetMethod, set_method, StopInfo, StopReason, ParallelStack, ThreadFrames, Watch, WatchValue};
+pub use session::{
+    DebugEvent, DebugSession, EvalValue, Failure, GotoError, OutputCategory, ParallelStack, SessionState, SetMethod, StopInfo, StopReason, ThreadFrames, Watch,
+    WatchValue, set_method,
+};

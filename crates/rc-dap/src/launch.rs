@@ -23,7 +23,7 @@ pub enum DebugTarget {
     Launch(LaunchConfig),
     Attach { pid: u32 },
     Remote(crate::remote::RemoteTarget),
-    Cargo { cargo: rc_cargo::Cargo, target: rc_cargo::RunTarget },
+    Cargo { cargo: rc_cargo::Cargo, target: Box<rc_cargo::RunTarget> },
 }
 
 impl DebugTarget {

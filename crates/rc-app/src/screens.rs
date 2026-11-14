@@ -88,7 +88,12 @@ fn idle_autosave_writes_edited_rust_files_after_the_pause() {
     }
     assert_eq!(std::fs::read_to_string(&main).unwrap(), "//   spaced\n// more\nfn main() {}\n");
     assert!(!root.join("build-ran").exists());
-    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    let output = std::process::Command::new("cargo")
+        .args(["check", "--offline", "--quiet", "--manifest-path"])
+        .arg(root.join("Cargo.toml"))
+        .env("CARGO_TARGET_DIR", home.path().join("target"))
+        .output()
+        .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -114,7 +119,10 @@ fn alt_arrows_move_lines_in_a_rust_file() {
     let mut h = harness(app, egui::vec2(1200.0, 800.0));
     h.run_steps(2);
     let alt = egui::Modifiers { alt: true, ..Default::default() };
-    let key = |h: &mut Harness<'static, CrabCraftApp>, key| { h.event(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: alt }); h.run_steps(2); };
+    let key = |h: &mut Harness<'static, CrabCraftApp>, key| {
+        h.event(egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: alt });
+        h.run_steps(2);
+    };
     let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
     key(&mut h, egui::Key::ArrowDown);
     assert_eq!(text(&h), "fn main() {\n    let b = a + 1;\n    let a = 1;\n    println!(\"{b}\");\n}\n");
@@ -126,7 +134,12 @@ fn alt_arrows_move_lines_in_a_rust_file() {
     h.state_mut().save_all_and_wait();
     assert_eq!(std::fs::read_to_string(&main).unwrap(), before);
     assert!(!root.join("build-ran").exists());
-    let output = std::process::Command::new("cargo").args(["check", "--offline", "--quiet", "--manifest-path"]).arg(root.join("Cargo.toml")).env("CARGO_TARGET_DIR", home.path().join("target")).output().unwrap();
+    let output = std::process::Command::new("cargo")
+        .args(["check", "--offline", "--quiet", "--manifest-path"])
+        .arg(root.join("Cargo.toml"))
+        .env("CARGO_TARGET_DIR", home.path().join("target"))
+        .output()
+        .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -217,10 +230,16 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
     // Outside every Cargo package: rust-analyzer gets it as a file on its own.
     assert!(h.state().docs.active_doc().is_some_and(|d| d.scratch && crate::insight::has_insight(d)));
-    assert_eq!(h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()), Some("fn main() {
+    assert_eq!(
+        h.state().docs.active_doc().map(|d| d.editor.buffer.rope().to_string()),
+        Some(
+            "fn main() {
     
 }
-".into()));
+"
+            .into()
+        )
+    );
     // Filtering by kind creates a Markdown one.
     h.state_mut().pending.push(rc_editor::Action::NewScratchFile);
     h.run_steps(2);
@@ -301,7 +320,9 @@ fn tabs_drag_into_splits_and_floating_windows_and_the_layout_is_restored() {
     let mut app = h.into_state();
     app.close_workspace();
     app.open_workspace_and_wait(&root);
-    let names = |app: &CrabCraftApp, g: &crate::layout::Group| g.tabs.iter().filter_map(|t| app.docs.list.iter().find(|d| d.editor.id == *t)).map(|d| d.name()).collect::<Vec<_>>();
+    let names = |app: &CrabCraftApp, g: &crate::layout::Group| {
+        g.tabs.iter().filter_map(|t| app.docs.list.iter().find(|d| d.editor.id == *t)).map(|d| d.name()).collect::<Vec<_>>()
+    };
     let main: Vec<Vec<String>> = app.layout.main.groups().into_iter().map(|g| names(&app, g)).collect();
     assert_eq!(main, vec![vec!["lib.rs".to_string()], vec!["main.rs".to_string()]]);
     assert_eq!(names(&app, app.layout.windows[0].root.groups()[0]), vec!["util.rs".to_string()]);
@@ -359,7 +380,8 @@ fn screens_git_tags_and_stashes() {
         let app = h.state_mut();
         app.vcs.tab = crate::vcs::GitTab::Tags;
         app.vcs.selected_tag = Some("v0.2.0".into());
-        app.vcs.output = Some(crate::vcs::OpOutput { text: "To /srv/git/shop.git\n*\trefs/tags/v0.2.0:refs/tags/v0.2.0\t[new tag]\nDone".into(), error: false });
+        app.vcs.output =
+            Some(crate::vcs::OpOutput { text: "To /srv/git/shop.git\n*\trefs/tags/v0.2.0:refs/tags/v0.2.0\t[new tag]\nDone".into(), error: false });
     }
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-tags-dark.png")).unwrap();
@@ -384,7 +406,8 @@ fn screens_git_tags_and_stashes() {
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::DropStash { stash });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-drop-stash-dark.png")).unwrap();
-    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false, paths: Vec::new() });
+    h.state_mut().dialog =
+        Some(crate::ui::dialogs::Dialog::StashChanges { message: "Refactor prices".into(), include_untracked: true, keep_index: false, paths: Vec::new() });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-stash-changes-dark.png")).unwrap();
 }
@@ -429,7 +452,13 @@ fn screens_git_worktrees() {
     }
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-worktrees-dark.png")).unwrap();
-    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AddWorktree { path: String::new(), new_branch: true, name: "fix/rounding".into(), existing: String::new(), path_edited: false });
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::AddWorktree {
+        path: String::new(),
+        new_branch: true,
+        name: "fix/rounding".into(),
+        existing: String::new(),
+        path_edited: false,
+    });
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-add-worktree-dark.png")).unwrap();
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RemoveWorktree { path: place.join("shop-feature-login"), force: true });
@@ -478,9 +507,15 @@ fn screens_git_file_history() {
     run_frames(&mut h, "the history", |a| !a.vcs.log_loading && a.vcs.log.len() == 3);
     let newest = h.state().vcs.log[0].hash.clone();
     h.state_mut().vcs.select_commit(&newest);
-    h.state_mut().vcs.signature = Some((newest, rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    h.state_mut().vcs.signature = Some((
+        newest,
+        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "TEST-SIGNATURE".into() },
+    ));
     run_frames(&mut h, "the files", |a| !a.vcs.commit_files.is_empty());
-    h.state_mut().vcs.signature = Some((h.state().vcs.log[0].hash.clone(), rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() }));
+    h.state_mut().vcs.signature = Some((
+        h.state().vcs.log[0].hash.clone(),
+        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "TEST-SIGNATURE".into() },
+    ));
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-file-history-dark.png")).unwrap();
 }
@@ -567,7 +602,9 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
     // with the arrow keys and previewed.
     h.key_press(egui::Key::ArrowDown);
     let loaded = |a: &CrabCraftApp| match &a.dialog {
-        Some(Dialog::LocalHistory(v)) => v.selected == 1 && v.revisions.as_ref().and_then(|r| r.get(1)).is_some_and(|r| v.texts.get(&r.time_ms).is_some_and(|t| t.as_deref() == Ok(ONE))),
+        Some(Dialog::LocalHistory(v)) => {
+            v.selected == 1 && v.revisions.as_ref().and_then(|r| r.get(1)).is_some_and(|r| v.texts.get(&r.time_ms).is_some_and(|t| t.as_deref() == Ok(ONE)))
+        }
         _ => false,
     };
     run_frames(&mut h, "the selected version", loaded);
@@ -739,7 +776,6 @@ fn screens_search_everywhere() {
     }
 }
 
-
 /// A project of `n` files that all match `item_`, with Search Everywhere open on them.
 fn many_files_harness(home: &Path, n: usize, tab: crate::search::SeTab) -> Harness<'static, CrabCraftApp> {
     let root = home.join("ws");
@@ -763,7 +799,13 @@ fn many_files_harness(home: &Path, n: usize, tab: crate::search::SeTab) -> Harne
 fn wheel(h: &mut Harness<'static, CrabCraftApp>, at: egui::Pos2, dy: f32) {
     h.input_mut().events.push(egui::Event::PointerMoved(at));
     h.run_steps(1);
-    h.input_mut().events.push(egui::Event::MouseWheel { source: egui::MouseWheelSource::Unknown, unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, dy), phase: egui::TouchPhase::Move, modifiers: egui::Modifiers::NONE });
+    h.input_mut().events.push(egui::Event::MouseWheel {
+        source: egui::MouseWheelSource::Unknown,
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, dy),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::NONE,
+    });
     h.run_steps(1);
 }
 
@@ -778,7 +820,7 @@ fn search_everywhere_results_grow_and_keep_their_wheel_scroll() {
     // The Files tab lists them all, and the popup grows to most of the window.
     assert!(h.query_by_label("item_000.rs").is_some(), "item_000.rs is not listed");
     assert!(h.query_by_label("item_149.rs").is_some(), "the Files tab stops before 150 files");
-    let popup = h.ctx.memory(|m| m.area_rect(egui::Id::new("search_everywhere"))).unwrap();
+    let popup = h.ctx.memory(|m| m.area_rect(egui::Id::unique("search_everywhere"))).unwrap();
     assert!(popup.height() > 600.0, "the popup does not grow: {popup:?}");
 
     // A wheel scroll stays where it is left: the first row moves up and does not snap back.
@@ -838,15 +880,23 @@ fn find_in_files_suggests_a_rust_file_mask() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("ws");
     std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(root.join("Cargo.toml"), "[package]
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]
 name = \"mask\"
 version = \"0.1.0\"
 edition = \"2021\"
 
 [workspace]
-").unwrap();
-    std::fs::write(root.join("src/main.rs"), "fn main() {}
-").unwrap();
+",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/main.rs"),
+        "fn main() {}
+",
+    )
+    .unwrap();
     let mut app = test_app(&dir.path().join("home"), false);
     app.open_workspace_and_wait(&root.canonicalize().unwrap());
     app.pending.push(rc_editor::Action::FindInFiles);
@@ -887,12 +937,13 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     let size = vec2(900.0, 500.0);
     let mut h = harness(app, size);
     run_frames(&mut h, "the branches", |a| a.vcs.branch_name().as_deref() == Some("trunk") && a.vcs.branches.len() >= 61);
-    let last = h.state().vcs.branches.iter().filter(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).last().map(|b| b.name.clone()).unwrap();
+    let last = h.state().vcs.branches.iter().rfind(|b| b.kind == rc_vcs::BranchKind::Local && !b.is_head).map(|b| b.name.clone()).unwrap();
     h.get_by_label("trunk").click();
     h.run_steps(3);
     h.render().unwrap().save(out.join("branches-popup-top.png")).unwrap();
     // The popup ends inside the window, with New Branch… still there.
-    let popups: Vec<egui::Rect> = h.ctx.memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order == egui::Order::Foreground).filter_map(|l| m.area_rect(l.id)).collect());
+    let popups: Vec<egui::Rect> =
+        h.ctx.memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order == egui::Order::Foreground).filter_map(|l| m.area_rect(l.id)).collect());
     assert!(!popups.is_empty());
     for r in &popups {
         assert!(r.bottom() <= size.y && r.top() >= 0.0, "the popup leaves the window: {r:?}");
@@ -904,7 +955,13 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     let over = h.get_by_label("feature/topic-00").rect().center();
     for _ in 0..40 {
         h.input_mut().events.push(egui::Event::PointerMoved(over));
-        h.input_mut().events.push(egui::Event::MouseWheel { source: egui::MouseWheelSource::Unknown, unit: egui::MouseWheelUnit::Line, delta: vec2(0.0, -3.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+        h.input_mut().events.push(egui::Event::MouseWheel {
+            source: egui::MouseWheelSource::Unknown,
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -3.0),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
         h.run_steps(1);
     }
     h.run_steps(3);
@@ -984,7 +1041,6 @@ fn cut_copy_and_paste_from_the_editor_context_menu() {
     assert_eq!(text(&h), " beta\nalphagamma\n");
 }
 
-
 /// The VS Code keymap drives the app: Ctrl+P finds files, Ctrl+Shift+P actions, and Ctrl+D
 /// adds the next occurrence in the editor.
 #[test]
@@ -1033,7 +1089,10 @@ fn the_project_code_style_applies_on_open_and_save() {
         std::fs::write(p, text).unwrap();
     };
     write("Cargo.toml", "[package]\nname = \"styled\"\nversion = \"0.1.0\"\nedition = \"2021\"\n");
-    write(".editorconfig", "root = true\n[*]\nindent_style = space\nindent_size = 2\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n[*.md]\ntrim_trailing_whitespace = false\n");
+    write(
+        ".editorconfig",
+        "root = true\n[*]\nindent_style = space\nindent_size = 2\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n[*.md]\ntrim_trailing_whitespace = false\n",
+    );
     write("rustfmt.toml", "hard_tabs = true\nmax_width = 90\n");
     // Four-space lines: detection alone would pick four spaces.
     write("notes.txt", "a  \n    b\t\n    c");
@@ -1176,7 +1235,12 @@ fn external_tools_capture() {
     std::fs::create_dir_all(&out).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(dir.path(), true);
-    h.state_mut().settings.external_tools = vec![rc_core::external_tools::ExternalTool { name: "Count lines".into(), program: "wc".into(), args: "-l $FileRelativePath$".into(), working_dir: String::new() }];
+    h.state_mut().settings.external_tools = vec![rc_core::external_tools::ExternalTool {
+        name: "Count lines".into(),
+        program: "wc".into(),
+        args: "-l $FileRelativePath$".into(),
+        working_dir: String::new(),
+    }];
     h.state_mut().open_file_and_wait(&root.join("beta/src/lib.rs"));
     h.state_mut().run_external_tool("Count lines");
     run_frames(&mut h, "the tool", |a| a.runner.runs.first().is_some_and(|r| r.exit.is_some()));
@@ -1224,7 +1288,10 @@ fn before_launch_capture() {
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the workspace", |a| !a.runner.configs.is_empty());
     let name = h.state().runner.configs[0].name.clone();
-    h.state_mut().runner.options.insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Lint SQL".into(), "Old tool".into()], ..Default::default() });
+    h.state_mut()
+        .runner
+        .options
+        .insert(name.clone(), rc_core::session::RunOptions { before_launch: vec!["Lint SQL".into(), "Old tool".into()], ..Default::default() });
     h.state_mut().edit_run_config(Some(name));
     h.run_steps(4);
     h.render().unwrap().save(out.join("before-launch.png")).unwrap();
@@ -1375,9 +1442,7 @@ fn refactor_preview_capture() {
     let file = root.join("beta/src/lib.rs");
     let uri = rc_lsp::path_to_uri(&file);
     let edit = |line, a, b| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: "NEEDLE_NAME".into() };
-    let mut changes = std::collections::HashMap::new();
-    changes.insert(uri, vec![edit(3, 10, 16), edit(0, 7, 11)]);
-    let ws_edit = lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() };
+    let ws_edit = lsp::WorkspaceEdit { changes: Some(std::collections::HashMap::from([(uri, vec![edit(3, 10, 16), edit(0, 7, 11)])])), ..Default::default() };
     let preview = crate::refactor_preview::RefactorPreview::start("Rename 'NEEDLE' to 'NEEDLE_NAME'".into(), &ws_edit, Vec::new(), rc_core::Waker::noop());
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::RefactorPreview(Box::new(preview)));
     run_frames(&mut h, "the listing", |a| matches!(&a.dialog, Some(crate::ui::dialogs::Dialog::RefactorPreview(p)) if !p.loading()));
@@ -1398,14 +1463,24 @@ fn intention_preview_capture() {
         let lib = root.join("alpha/src/lib.rs");
         h.state_mut().open_file_and_wait(&lib);
         h.run_steps(3);
-        let edit = |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
-        let mut changes = std::collections::HashMap::new();
-        changes.insert(rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]);
-        changes.insert(rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]);
-        let action = lsp::CodeAction { title: "Rename and import".into(), kind: Some(lsp::CodeActionKind::QUICKFIX), edit: Some(lsp::WorkspaceEdit { changes: Some(changes), ..Default::default() }), ..Default::default() };
+        let edit =
+            |line, a, b, text: &str| lsp::TextEdit { range: lsp::Range::new(lsp::Position::new(line, a), lsp::Position::new(line, b)), new_text: text.into() };
+        let changes = [
+            (rc_lsp::path_to_uri(&lib), vec![edit(2, 7, 12, "alpha_name"), edit(0, 0, 0, "use std::fmt;\n")]),
+            (rc_lsp::path_to_uri(&root.join("alpha/src/alpha_util.rs")), vec![edit(0, 0, 16, "pub fn util() -> u32 {\n    1\n}")]),
+        ];
+        let action = lsp::CodeAction {
+            title: "Rename and import".into(),
+            kind: Some(lsp::CodeActionKind::QUICKFIX),
+            edit: Some(lsp::WorkspaceEdit { changes: Some(std::collections::HashMap::from(changes)), ..Default::default() }),
+            ..Default::default()
+        };
         let other = lsp::Command { title: "Run a server command".into(), command: "server.command".into(), arguments: None };
         h.state_mut().caret_screen = Some(egui::pos2(260.0, 160.0));
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CodeActions { list: vec![lsp::CodeActionOrCommand::CodeAction(action), lsp::CodeActionOrCommand::Command(other)], selected: 0 });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::CodeActions {
+            list: vec![lsp::CodeActionOrCommand::CodeAction(action), lsp::CodeActionOrCommand::Command(other)],
+            selected: 0,
+        });
         run_frames(&mut h, "the preview", |a| matches!(a.intention_preview.state, crate::intention_preview::State::Ready { .. }));
         h.run_steps(3);
         let suffix = if dark { "dark" } else { "light" };
@@ -1427,7 +1502,11 @@ fn inspection_profiles_capture() {
         settings.inspection_profile.set("unused_variables", Some(Level::WeakWarning));
         settings.inspection_profile.set(crate::inspection_profile::UNKNOWN_KEY, Some(Level::Off));
         settings.inspection_profile.set("clippy::needless_return", Some(Level::Error));
-        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings { draft: Box::new(settings), page: crate::ui::dialogs::SettingsPage::Inspections, browse: Default::default() });
+        h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Settings {
+            draft: Box::new(settings),
+            page: crate::ui::dialogs::SettingsPage::Inspections,
+            browse: Default::default(),
+        });
         h.run_steps(4);
         let suffix = if dark { "dark" } else { "light" };
         h.render().unwrap().save(out.join(format!("inspection-profiles-{suffix}.png"))).unwrap();
@@ -1500,7 +1579,7 @@ fn shortcuts_are_recorded_in_the_settings() {
     h.state().keymap.chord(rc_editor::Action::Commit).expect("Commit has a shortcut");
     // As the Record button of the Commit row does.
     let ctx = h.ctx.clone();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("recording_shortcut"), commit.clone()));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("recording_shortcut"), commit.clone()));
     h.run_steps(1);
     h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::K);
     h.run_steps(3);
@@ -1585,7 +1664,11 @@ fn cargo_tree_capture() {
 fn features_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, PathBuf) {
     let root = home.join("ws");
     std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n").unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n\n[workspace]\n",
+    )
+    .unwrap();
     std::fs::write(root.join("src/lib.rs"), "#[cfg(feature = \"extra\")]\npub fn extra() {}\n").unwrap();
     let root = root.canonicalize().unwrap();
     let mut app = test_app(&home.join("home"), dark);
@@ -1672,7 +1755,9 @@ fn dep_versions_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftA
     app.trust_project_tools_for_test();
     app.open_file_and_wait(&root.join("Cargo.toml"));
     let mut h = harness(app, vec2(1100.0, 520.0));
-    run_frames(&mut h, "the Cargo workspace and the lock", |a| a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty()));
+    run_frames(&mut h, "the Cargo workspace and the lock", |a| {
+        a.runner.cargo_workspace.is_some() && !a.dep_versions.loading() && a.docs.active_doc().is_some_and(|d| !d.editor.end_hints.is_empty())
+    });
     (h, root)
 }
 
@@ -1730,7 +1815,9 @@ fn cargo_toml_completes_crate_names_and_versions() {
     for q in ["t", "to", "tok"] {
         h.state_mut().crate_names.set_answer(q, hits.clone());
     }
-    h.state_mut().dep_versions.set_published("tokio", rc_cargo::versions::parse_index("{\"vers\":\"1.39.0\"}\n{\"vers\":\"1.40.0\"}\n{\"vers\":\"1.41.0\",\"yanked\":true}"));
+    h.state_mut()
+        .dep_versions
+        .set_published("tokio", rc_cargo::versions::parse_index("{\"vers\":\"1.39.0\"}\n{\"vers\":\"1.40.0\"}\n{\"vers\":\"1.41.0\",\"yanked\":true}"));
     let text = |h: &Harness<'static, CrabCraftApp>| h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string();
     // The caret on a new line after `helper = { path = "helper" }`.
     {
@@ -1798,10 +1885,17 @@ fn cargo_toml_warns_about_unknown_and_outdated_crates() {
         out.sort_by_key(|d| d.0);
         out
     };
-    assert_eq!(ours(&h), vec![(11, "1".to_string(), Severity::Info), (12, "no-such-crate".to_string(), Severity::Error), (13, "0.5".to_string(), Severity::Warning)]);
+    assert_eq!(
+        ours(&h),
+        vec![(11, "1".to_string(), Severity::Info), (12, "no-such-crate".to_string(), Severity::Error), (13, "0.5".to_string(), Severity::Warning)]
+    );
     let path = root.join("Cargo.toml");
     let problems = h.state().insight.problems.get(&path).cloned().unwrap_or_default();
-    assert_eq!(problems.iter().map(|d| d.severity).collect::<Vec<_>>(), vec![Severity::Error, Severity::Warning], "the Problems window lists errors and warnings");
+    assert_eq!(
+        problems.iter().map(|d| d.severity).collect::<Vec<_>>(),
+        vec![Severity::Error, Severity::Warning],
+        "the Problems window lists errors and warnings"
+    );
     assert!(problems[0].message.contains("no-such-crate"), "{}", problems[0].message);
 
     // Alt+Enter on the outdated line offers the update.
@@ -1846,15 +1940,26 @@ fn cargo_toml_inspections_flag_mistakes_and_fix_them() {
     }
     let ours = |a: &CrabCraftApp| -> Vec<String> {
         let doc = a.docs.active_doc().unwrap();
-        let mut out: Vec<String> = doc.editor.diagnostics.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).map(|d| d.message.clone()).collect();
+        let mut out: Vec<String> =
+            doc.editor.diagnostics.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).map(|d| d.message.clone()).collect();
         out.sort();
         out
     };
     run_frames(&mut h, "the inspection", |a| !a.manifest_inspections.busy() && ours(a).len() == 2);
     let got = ours(h.state());
-    assert_eq!(got, vec!["Feature `extra` includes `dep:serde`, but `serde` is not an optional dependency".to_string(), "Unknown key `descripton` in `[package]`; did you mean `description`?".to_string()]);
+    assert_eq!(
+        got,
+        vec![
+            "Feature `extra` includes `dep:serde`, but `serde` is not an optional dependency".to_string(),
+            "Unknown key `descripton` in `[package]`; did you mean `description`?".to_string()
+        ]
+    );
     let path = root.join("Cargo.toml");
-    assert_eq!(h.state().insight.problems.get(&path).map_or(0, |l| l.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).count()), 2, "listed in the Problems window");
+    assert_eq!(
+        h.state().insight.problems.get(&path).map_or(0, |l| l.iter().filter(|d| d.code.as_deref() == Some(crate::manifest_inspect::DIAG_CODE)).count()),
+        2,
+        "listed in the Problems window"
+    );
 
     // Alt+Enter on each line offers its fix; Enter makes it.
     for (line_text, title) in [("descripton", "Change to `description`"), ("serde = ", "Make `serde` optional")] {
@@ -1885,7 +1990,7 @@ fn cargo_toml_inspections_flag_mistakes_and_fix_them() {
     assert!(text.contains("\ndescription = \"A demo\"\n"), "{text}");
     assert!(text.contains("serde = { version = \"1\", features = [\"derive\"], optional = true }") || text.contains("optional = true"), "{text}");
     run_frames(&mut h, "the diagnostics to go", |a| ours(a).is_empty());
-    assert_eq!(std::fs::read_to_string(&path).unwrap().contains("descripton"), false, "nothing was saved for the user");
+    assert!(!std::fs::read_to_string(&path).unwrap().contains("descripton"), "nothing was saved for the user");
 }
 
 #[test]
@@ -1945,7 +2050,9 @@ fn cargo_dep_versions_on_crabcraft_capture() {
     let text = std::fs::read_to_string(&file).unwrap();
     let line_of = |key: &str| text.lines().position(|l| l.starts_with(key)).unwrap();
     let (anyhow, semver) = (line_of("anyhow"), line_of("semver"));
-    run_frames(&mut h, "the locked versions", |a| a.docs.active_doc().is_some_and(|d| d.editor.end_hints.contains_key(&anyhow) && d.editor.end_hints.contains_key(&semver)));
+    run_frames(&mut h, "the locked versions", |a| {
+        a.docs.active_doc().is_some_and(|d| d.editor.end_hints.contains_key(&anyhow) && d.editor.end_hints.contains_key(&semver))
+    });
     // Give crates.io a few seconds.
     for _ in 0..100 {
         h.run_steps(1);
@@ -2366,7 +2473,10 @@ fn fake_playground(listener: std::net::TcpListener, reply: &'static str) -> std:
             req.extend_from_slice(&buf[..n]);
             let text = String::from_utf8_lossy(&req);
             if let Some(end) = text.find("\r\n\r\n") {
-                let len = text[..end].lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                let len = text[..end]
+                    .lines()
+                    .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                    .unwrap_or(0);
                 if req.len() >= end + 4 + len {
                     break;
                 }
@@ -2509,7 +2619,7 @@ fn copyright_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>
     let mut app = test_app(&home.join("home"), dark);
     app.open_workspace_and_wait(&root);
     app.trust_project_tools_for_test();
-    app.copyright.open(&root,app.copyright.profile.clone(),app.waker.clone());
+    app.copyright.open(&root, app.copyright.profile.clone(), app.waker.clone());
     let mut h = harness(app, vec2(1280.0, 800.0));
     run_frames(&mut h, "the author from Git", |a| !a.copyright.loading());
     (h, root)
@@ -2540,7 +2650,14 @@ fn copyright_headers_on_new_and_old_files() {
     assert_eq!(rc_core::Session::load(&root).copyright.spdx, "MIT");
 
     // New › Rust File.
-    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile { dir: root.join("src"), name: "net".into(), kind: crate::item_templates::ItemKind::RustFile, attach: false, public: false, error: None });
+    h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::NewFile {
+        dir: root.join("src"),
+        name: "net".into(),
+        kind: crate::item_templates::ItemKind::RustFile,
+        attach: false,
+        public: false,
+        error: None,
+    });
     h.run_steps(2);
     h.get_by_label(tr("Create")).click();
     h.run_steps(3);
@@ -2937,7 +3054,11 @@ fn breakpoint_list_capture() {
     let root = dir.path().join("shop");
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
-    std::fs::write(root.join("src/main.rs"), "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n").unwrap();
+    std::fs::write(
+        root.join("src/main.rs"),
+        "mod price;\n\nfn main() {\n    let a = price::double(2);\n    let b = price::double(a);\n    println!(\"{b}\");\n}\n",
+    )
+    .unwrap();
     std::fs::write(root.join("src/price.rs"), "pub fn double(n: u32) -> u32 {\n    let twice = n * 2;\n    twice\n}\n").unwrap();
     let root = root.canonicalize().unwrap();
     let (main_rs, price_rs) = (root.join("src/main.rs"), root.join("src/price.rs"));
@@ -2979,7 +3100,12 @@ fn auto_attach_capture() {
     h.state_mut().auto_attach_text = "shop-server*, *-worker".into();
     assert!(h.state_mut().start_auto_attach());
     let processes = vec![
-        rc_core::processes::Process { pid: 48211, name: "shop-server".into(), exe: "shop-server".into(), command: "target/debug/shop-server --port 8080".into() },
+        rc_core::processes::Process {
+            pid: 48211,
+            name: "shop-server".into(),
+            exe: "shop-server".into(),
+            command: "target/debug/shop-server --port 8080".into(),
+        },
         rc_core::processes::Process { pid: 48190, name: "mail-worker".into(), exe: "mail-worker".into(), command: "target/debug/mail-worker".into() },
     ];
     h.state_mut().dialog = Some(crate::ui::dialogs::Dialog::Attach { filter: String::new(), processes });
@@ -3247,7 +3373,9 @@ fn screens_merge_tool() {
         git(&["config", k, v]);
     }
     let lib = |price: &str, tax: &str, extra: &str| {
-        format!("/// Prices an order.\npub fn price(n: u32) -> u32 {{\n    {price}\n}}\n\n/// The tax on a price.\npub fn tax(p: u32) -> u32 {{\n    {tax}\n}}\n{extra}\n#[cfg(test)]\nmod tests {{\n    #[test]\n    fn prices() {{\n        assert!(super::price(10) > 0);\n    }}\n}}\n")
+        format!(
+            "/// Prices an order.\npub fn price(n: u32) -> u32 {{\n    {price}\n}}\n\n/// The tax on a price.\npub fn tax(p: u32) -> u32 {{\n    {tax}\n}}\n{extra}\n#[cfg(test)]\nmod tests {{\n    #[test]\n    fn prices() {{\n        assert!(super::price(10) > 0);\n    }}\n}}\n"
+        )
     };
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
     std::fs::write(root.join("src/lib.rs"), lib("n * 2", "p / 5", "")).unwrap();
@@ -3361,10 +3489,16 @@ fn settings_pages_capture() {
     let dir = tempfile::tempdir().unwrap();
     let mut h = playground_harness(home.path(), dir.path(), true);
     let mut sizes = Vec::new();
-    for (page, name) in [(SettingsPage::Keymap, "keymap"), (SettingsPage::Appearance, "appearance"), (SettingsPage::Editor, "editor"), (SettingsPage::Inspections, "inspections"), (SettingsPage::LiveTemplates, "live-templates")] {
+    for (page, name) in [
+        (SettingsPage::Keymap, "keymap"),
+        (SettingsPage::Appearance, "appearance"),
+        (SettingsPage::Editor, "editor"),
+        (SettingsPage::Inspections, "inspections"),
+        (SettingsPage::LiveTemplates, "live-templates"),
+    ] {
         h.state_mut().open_settings(page);
         h.run_steps(4);
-        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("settings"))).unwrap_or(egui::Rect::NOTHING);
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::unique("settings"))).unwrap_or(egui::Rect::NOTHING);
         sizes.push((name, rect.size()));
         h.render().unwrap().save(out.join(format!("settings-page-{name}.png"))).unwrap();
         h.state_mut().dialog = None;
@@ -3374,12 +3508,11 @@ fn settings_pages_capture() {
     assert!(sizes.windows(2).all(|w| (w[0].1 - w[1].1).length() < 1.0), "{sizes:?}");
 }
 
-
 #[test]
 fn portable_preferences_are_previewed_and_applied_in_a_rust_workspace() {
     use crate::ui::dialogs::{Dialog, SettingsPage};
-    use rc_core::settings_transfer::Backup;
     use egui_kittest::kittest::Queryable;
+    use rc_core::settings_transfer::Backup;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let (mut h, root) = two_crates_harness(home.path(), true);
@@ -3399,7 +3532,9 @@ fn portable_preferences_are_previewed_and_applied_in_a_rust_workspace() {
     if let Some(Dialog::Settings { draft, .. }) = &h.state().dialog {
         assert_eq!(draft.editor_font_size, 19.0);
         assert_eq!(draft.trusted_projects, original.trusted_projects);
-    } else { panic!("settings closed before confirmation"); }
+    } else {
+        panic!("settings closed before confirmation");
+    }
     h.get_by_label(rc_kit::i18n::tr("OK")).click();
     h.run_steps(3);
     assert_eq!(h.state().settings.editor_font_size, 19.0);
@@ -3452,17 +3587,29 @@ fn settings_keep_the_same_width_when_switching_pages() {
     let home = tempfile::tempdir().unwrap();
     let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
     let mut widths = Vec::new();
-    for page in [SettingsPage::Appearance, SettingsPage::Editor, SettingsPage::Keymap, SettingsPage::Tools, SettingsPage::ExternalTools, SettingsPage::LiveTemplates, SettingsPage::Copyright, SettingsPage::Scopes, SettingsPage::Inspections, SettingsPage::Backup, SettingsPage::Appearance] {
+    for page in [
+        SettingsPage::Appearance,
+        SettingsPage::Editor,
+        SettingsPage::Keymap,
+        SettingsPage::Tools,
+        SettingsPage::ExternalTools,
+        SettingsPage::LiveTemplates,
+        SettingsPage::Copyright,
+        SettingsPage::Scopes,
+        SettingsPage::Inspections,
+        SettingsPage::Backup,
+        SettingsPage::Appearance,
+    ] {
         h.state_mut().open_settings(page);
         h.run_steps(4);
-        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap().height();
+        let initial_height = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap().height();
         for _ in 0..30 {
             h.run_steps(1);
-            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+            let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
             assert!((rect.height() - initial_height).abs() < 1.0, "settings height must remain stable: {page:?}: {initial_height} -> {}", rect.height());
             assert!(rect.height() <= 760.0, "settings must stay inside the viewport: {page:?}: {rect:?}");
         }
-        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        let rect = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
         widths.push(rect.width());
     }
     assert!(widths.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "settings widths: {widths:?}");
@@ -3518,7 +3665,9 @@ fn central_menu_commands_and_project_templates_work_in_a_rust_project() {
     if let Some(crate::ui::dialogs::Dialog::NewFile { dir, name, .. }) = &mut h.state_mut().dialog {
         assert_eq!(dir, &source);
         *name = "created_from_project_menu".into();
-    } else { panic!("project template did not open the creation dialog"); }
+    } else {
+        panic!("project template did not open the creation dialog");
+    }
     h.run_steps(2);
     h.get_by_label(tr("Create")).click();
     run_frames(&mut h, "the Rust file created from the project menu", |_| source.join("created_from_project_menu.rs").is_file());
@@ -3537,23 +3686,37 @@ fn central_menus_and_docking_capture() {
     let root = home.path().join("project-colours");
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"project-colours\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
-    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"Hello, CrabCraft!\");\n}\n").unwrap(); }
+    for name in ["main.rs", "lib.rs"] {
+        std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"Hello, CrabCraft!\");\n}\n").unwrap();
+    }
     let mut app = test_app(&home.path().join("home"), true);
     app.open_workspace_and_wait(&root);
-    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    for name in ["main.rs", "lib.rs"] {
+        app.open_file_and_wait(&root.join("src").join(name));
+    }
     let mut h = harness(app, vec2(1280.0, 800.0));
-    h.get_by_label(tr("Main Menu")).click(); h.run_steps(2);
-    h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
+    h.get_by_label(tr("Main Menu")).click();
+    h.run_steps(2);
+    h.get_by_label(&format!("{} ⏵", tr("File"))).click();
+    h.run_steps(3);
     h.render().unwrap().save(out.join("central-menu-file.png")).unwrap();
-    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
-    h.get_by_label(tr("New File…")).click(); h.run_steps(3);
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+    h.run_steps(3);
+    h.get_by_label(tr("New File…")).click();
+    h.run_steps(3);
     h.render().unwrap().save(out.join("project-new-menu.png")).unwrap();
-    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+    h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+    h.run_steps(3);
     let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
-    h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
-    h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerMoved(from));
+    h.run_steps(1);
+    h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+    h.run_steps(1);
     let to = egui::pos2(1050.0, 400.0);
-    for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+    for step in 1..=8 {
+        h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0)));
+        h.run_steps(1);
+    }
     h.run_steps(15);
     h.render().unwrap().save(out.join("editor-docking-overlay.png")).unwrap();
     assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
@@ -3567,10 +3730,14 @@ fn editor_docking_guides_create_the_requested_split() {
     let root = home.path().join("dock-demo");
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"dock-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
-    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {}\n").unwrap(); }
+    for name in ["main.rs", "lib.rs"] {
+        std::fs::write(root.join("src").join(name), "fn main() {}\n").unwrap();
+    }
     let mut app = test_app(&home.path().join("home"), true);
     app.open_workspace_and_wait(&root);
-    for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+    for name in ["main.rs", "lib.rs"] {
+        app.open_file_and_wait(&root.join("src").join(name));
+    }
     app.dock.hide_all();
     let mut h = harness(app, vec2(1280.0, 800.0));
     let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 130.0).unwrap().rect().center();
@@ -3583,14 +3750,14 @@ fn editor_docking_guides_create_the_requested_split() {
 
 #[test]
 fn tools_settings_fields_fit_the_fixed_page_width() {
-    use egui_kittest::kittest::Queryable;
     use crate::ui::dialogs::SettingsPage;
+    use egui_kittest::kittest::Queryable;
     let _home = HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     let mut h = harness(test_app(home.path(), true), vec2(1280.0, 800.0));
     h.state_mut().open_settings(SettingsPage::Tools);
     h.run_steps(5);
-    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+    let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
     assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
     let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
     assert!(fields.len() >= 10);
@@ -3626,36 +3793,70 @@ fn completed_interface_theme_and_size_capture() {
     let root = files.path().join("interface-demo");
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"interface-demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
-    for name in ["main.rs", "lib.rs"] { std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"CrabCraft\");\n}\n").unwrap(); }
-    for (dark, size, label) in [(true, vec2(1280.0, 800.0), "dark"), (false, vec2(1280.0, 800.0), "light"), (true, vec2(640.0, 400.0), "compact-dark"), (false, vec2(640.0, 400.0), "compact-light")] {
+    for name in ["main.rs", "lib.rs"] {
+        std::fs::write(root.join("src").join(name), "fn main() {\n    println!(\"CrabCraft\");\n}\n").unwrap();
+    }
+    for (dark, size, label) in [
+        (true, vec2(1280.0, 800.0), "dark"),
+        (false, vec2(1280.0, 800.0), "light"),
+        (true, vec2(640.0, 400.0), "compact-dark"),
+        (false, vec2(640.0, 400.0), "compact-light"),
+    ] {
         let home = tempfile::tempdir().unwrap();
         let mut app = test_app(home.path(), dark);
         app.open_workspace_and_wait(&root);
         app.trust_project_tools_for_test();
-        for name in ["main.rs", "lib.rs"] { app.open_file_and_wait(&root.join("src").join(name)); }
+        for name in ["main.rs", "lib.rs"] {
+            app.open_file_and_wait(&root.join("src").join(name));
+        }
         let mut h = harness(app, size);
         h.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
         run_frames(&mut h, "installed toolchain versions", |app| app.toolchain.is_some());
         h.run_steps(5);
-        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::new("settings"))).unwrap();
+        let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
         assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(modal), "{label}: {modal:?}");
         h.render().unwrap().save(out.join(format!("completed-settings-{label}.png"))).unwrap();
         h.state_mut().dialog = None;
         h.run_steps(3);
-        h.get_by_label(tr("Main Menu")).click(); h.run_steps(3);
-        h.get_by_label(&format!("{} ⏵", tr("File"))).click(); h.run_steps(3);
+        h.get_by_label(tr("Main Menu")).click();
+        h.run_steps(3);
+        h.get_by_label(&format!("{} ⏵", tr("File"))).click();
+        h.run_steps(3);
         h.render().unwrap().save(out.join(format!("completed-menu-{label}.png"))).unwrap();
         if size.x > 1000.0 {
-            h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }); h.run_steps(3);
+            h.input_mut().events.push(egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Default::default(),
+            });
+            h.run_steps(3);
             let from = h.query_all_by_label("lib.rs").find(|node| node.rect().top() < 120.0).unwrap().rect().center();
-            h.input_mut().events.push(egui::Event::PointerMoved(from)); h.run_steps(1);
-            h.input_mut().events.push(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }); h.run_steps(1);
+            h.input_mut().events.push(egui::Event::PointerMoved(from));
+            h.run_steps(1);
+            h.input_mut().events.push(egui::Event::PointerButton {
+                pos: from,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            });
+            h.run_steps(1);
             let to = egui::pos2(size.x - 160.0, size.y * 0.5);
-            for step in 1..=8 { h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0))); h.run_steps(1); }
+            for step in 1..=8 {
+                h.input_mut().events.push(egui::Event::PointerMoved(from + (to - from) * (step as f32 / 8.0)));
+                h.run_steps(1);
+            }
             h.run_steps(15);
             assert!(matches!(h.state().tab_drag.as_ref().and_then(|drag| drag.target), Some(crate::layout::Drop::Split { .. })));
             h.render().unwrap().save(out.join(format!("completed-docking-{label}.png"))).unwrap();
-            h.input_mut().events.push(egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }); h.run_steps(3);
+            h.input_mut().events.push(egui::Event::PointerButton {
+                pos: to,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            });
+            h.run_steps(3);
             assert_eq!(h.state().layout.main.groups().len(), 2);
         }
     }

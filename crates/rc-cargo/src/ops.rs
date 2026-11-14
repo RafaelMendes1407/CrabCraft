@@ -9,7 +9,10 @@ use rc_core::inbox::Outbox;
 use rc_dotnet::process::{StreamOpts, run_streaming, split_command_line};
 use rc_dotnet::run::STOP_GRACE;
 use rc_dotnet::test::TestProgress;
-use rc_dotnet::{BuildAction, BuildEvent, BuildResult, CancelToken, Diagnostic, LaunchPlan, OpHandle, OutputLine, RunEvent, RunHandle, Severity, Stream, TestEvent, TestFilter, TestOutcome, TestRequest, TestRunResult};
+use rc_dotnet::{
+    BuildAction, BuildEvent, BuildResult, CancelToken, Diagnostic, LaunchPlan, OpHandle, OutputLine, RunEvent, RunHandle, Severity, Stream, TestEvent,
+    TestFilter, TestOutcome, TestRequest, TestRunResult,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -76,7 +79,7 @@ impl Collected {
                     && !self.diagnostics.contains(&d)
                 {
                     self.diagnostics.push(d.clone());
-                    on_event(BuildEvent::Diagnostic(d));
+                    on_event(BuildEvent::Diagnostic(Box::new(d)));
                 }
             }
             Some(Message::Artifact { executable }) => self.executables.extend(executable),
@@ -87,12 +90,21 @@ impl Collected {
     fn result(self, code: Option<i32>, cancelled: bool, duration: Duration) -> (BuildResult, Vec<PathBuf>) {
         let errors = self.diagnostics.iter().filter(|d| d.severity == Severity::Error).count();
         let warnings = self.diagnostics.iter().filter(|d| d.severity == Severity::Warning).count();
-        (BuildResult { success: !cancelled && code == Some(0), cancelled, exit_code: code, errors, warnings, diagnostics: self.diagnostics, duration }, self.executables)
+        (
+            BuildResult { success: !cancelled && code == Some(0), cancelled, exit_code: code, errors, warnings, diagnostics: self.diagnostics, duration },
+            self.executables,
+        )
     }
 }
 
 /// Runs one Cargo command to its end.
-async fn invoke(cargo: &Cargo, manifest: &Path, args: &[String], cancel: &CancelToken, on_event: &mut (dyn FnMut(BuildEvent) + Send)) -> anyhow::Result<(BuildResult, Vec<PathBuf>)> {
+async fn invoke(
+    cargo: &Cargo,
+    manifest: &Path,
+    args: &[String],
+    cancel: &CancelToken,
+    on_event: &mut (dyn FnMut(BuildEvent) + Send),
+) -> anyhow::Result<(BuildResult, Vec<PathBuf>)> {
     let started = Instant::now();
     let root = folder(manifest).unwrap_or(Path::new(".")).to_path_buf();
     on_event(BuildEvent::Started { command: format!("cargo {}", args.join(" ")) });
@@ -285,7 +297,12 @@ async fn run_before(tasks: &[BeforeLaunch], cancel: &CancelToken, on_build: &mut
         if outcome.cancelled {
             return Ok(false);
         }
-        anyhow::ensure!(outcome.code == Some(0), "before launch, {} failed with exit code {}", task.name, outcome.code.map_or("?".to_string(), |c| c.to_string()));
+        anyhow::ensure!(
+            outcome.code == Some(0),
+            "before launch, {} failed with exit code {}",
+            task.name,
+            outcome.code.map_or("?".to_string(), |c| c.to_string())
+        );
     }
     Ok(true)
 }
@@ -413,7 +430,13 @@ pub fn start_scratch(cargo: &Cargo, file: PathBuf, out: PathBuf, outbox: Outbox<
     RunHandle::new(OpHandle::new(cancel, task), input, pid)
 }
 
-async fn launch(plan: LaunchPlan, cancel: &CancelToken, input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+async fn launch(
+    plan: LaunchPlan,
+    cancel: &CancelToken,
+    input: mpsc::UnboundedReceiver<Vec<u8>>,
+    pid: &AtomicU32,
+    on_event: &mut (dyn FnMut(RunEvent) + Send),
+) -> anyhow::Result<RunEvent> {
     let mut cmd = tokio::process::Command::new(&plan.program);
     cmd.args(&plan.args).current_dir(&plan.working_dir);
     for (k, v) in &plan.env {
@@ -467,7 +490,14 @@ pub async fn prepare(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, on_buil
     Ok(Some(LaunchPlan { program, args: t.args.clone(), env, working_dir, urls: Vec::new() }))
 }
 
-async fn run(cargo: &Cargo, t: &RunTarget, cancel: &CancelToken, mut input: mpsc::UnboundedReceiver<Vec<u8>>, pid: &AtomicU32, on_event: &mut (dyn FnMut(RunEvent) + Send)) -> anyhow::Result<RunEvent> {
+async fn run(
+    cargo: &Cargo,
+    t: &RunTarget,
+    cancel: &CancelToken,
+    mut input: mpsc::UnboundedReceiver<Vec<u8>>,
+    pid: &AtomicU32,
+    on_event: &mut (dyn FnMut(RunEvent) + Send),
+) -> anyhow::Result<RunEvent> {
     let prepared = prepare(cargo, t, cancel, &mut |e| on_event(RunEvent::Build(e))).await;
     let plan = match prepared {
         Ok(Some(plan)) => plan,
@@ -533,7 +563,20 @@ pub fn test_args(req: &TestRequest) -> Vec<String> {
 /// Arguments after `cargo` for a test run with cargo-nextest. It takes libtest's name filters
 /// after `--`; it has no doctests.
 pub fn nextest_args(req: &TestRequest) -> Vec<String> {
-    let mut a: Vec<String> = ["nextest", "run", "--workspace", "--no-fail-fast", "--color", "never", "--cargo-message-format", "json-diagnostic-rendered-ansi", "--final-status-level", "none"].map(String::from).to_vec();
+    let mut a: Vec<String> = [
+        "nextest",
+        "run",
+        "--workspace",
+        "--no-fail-fast",
+        "--color",
+        "never",
+        "--cargo-message-format",
+        "json-diagnostic-rendered-ansi",
+        "--final-status-level",
+        "none",
+    ]
+    .map(String::from)
+    .to_vec();
     // Ignored tests are listed only without a filter: with one, nextest lists every test the
     // filter leaves out as skipped too.
     if req.filter.is_none() {
@@ -570,7 +613,13 @@ pub fn start_tests(cargo: &Cargo, req: TestRequest, nextest: bool, outbox: Outbo
     OpHandle::new(cancel, task)
 }
 
-async fn tests(cargo: &Cargo, req: &TestRequest, nextest: bool, cancel: &CancelToken, on_event: &mut (dyn FnMut(TestEvent) + Send)) -> anyhow::Result<TestRunResult> {
+async fn tests(
+    cargo: &Cargo,
+    req: &TestRequest,
+    nextest: bool,
+    cancel: &CancelToken,
+    on_event: &mut (dyn FnMut(TestEvent) + Send),
+) -> anyhow::Result<TestRunResult> {
     let started = Instant::now();
     let args = if nextest { nextest_args(req) } else { test_args(req) };
     let root = folder(&req.target).unwrap_or(Path::new(".")).to_path_buf();
@@ -649,7 +698,17 @@ mod tests_args {
     #[test]
     fn options_change_the_build_and_bad_values_are_refused() {
         let options = CargoOptions { channel: "nightly".into(), profile: "release".into(), features: vec!["a".into(), "b".into()], ..Default::default() };
-        let t = RunTarget { before: Vec::new(), manifest: "/w/Cargo.toml".into(), package: "p".into(), bin: "b".into(), args: Vec::new(), env: Vec::new(), working_dir: None, test: None, options };
+        let t = RunTarget {
+            before: Vec::new(),
+            manifest: "/w/Cargo.toml".into(),
+            package: "p".into(),
+            bin: "b".into(),
+            args: Vec::new(),
+            env: Vec::new(),
+            working_dir: None,
+            test: None,
+            options,
+        };
         let args = run_build_args(&t);
         assert_eq!(args[..2], ["+nightly", "build"]);
         assert!(args.ends_with(&["--profile".into(), "release".into(), "--features".into(), "a,b".into()]), "{args:?}");

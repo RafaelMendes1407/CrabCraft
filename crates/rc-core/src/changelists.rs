@@ -20,13 +20,21 @@ impl Default for Changelists {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ChangelistError { InvalidName, AlreadyExists, NotFound, DefaultList }
+pub enum ChangelistError {
+    InvalidName,
+    AlreadyExists,
+    NotFound,
+    DefaultList,
+}
 
 fn valid_name(name: &str) -> bool {
     !name.is_empty() && name.len() <= 400 && name.chars().count() <= 100 && name.trim() == name && !name.chars().any(char::is_control)
 }
 fn valid_path(path: &str) -> bool {
-    !path.is_empty() && path.len() <= 4096 && !path.contains(['\\', '\0']) && !path.starts_with('/')
+    !path.is_empty()
+        && path.len() <= 4096
+        && !path.contains(['\\', '\0'])
+        && !path.starts_with('/')
         && path.split('/').all(|part| !part.is_empty() && part != "." && part != ".." && !part.contains(':'))
 }
 
@@ -34,50 +42,78 @@ impl Changelists {
     /// Session files are untrusted. Unknown lists, invalid paths, oversized names and
     /// messages are discarded before the state is used to select files for Git commands.
     pub fn clean(mut self) -> Self {
-        self.lists = self.lists.into_iter().filter(|(name, message)|
-            (name.is_empty() || valid_name(name)) && message.len() <= 64 * 1024).take(100).collect();
+        self.lists = self.lists.into_iter().filter(|(name, message)| (name.is_empty() || valid_name(name)) && message.len() <= 64 * 1024).take(100).collect();
         self.lists.entry(String::new()).or_default();
-        self.assignments = self.assignments.into_iter().filter(|(path, name)|
-            valid_path(path) && !name.is_empty() && self.lists.contains_key(name)).take(100_000).collect();
-        if !self.lists.contains_key(&self.active) { self.active.clear(); }
+        self.assignments =
+            self.assignments.into_iter().filter(|(path, name)| valid_path(path) && !name.is_empty() && self.lists.contains_key(name)).take(100_000).collect();
+        if !self.lists.contains_key(&self.active) {
+            self.active.clear();
+        }
         self
     }
     pub fn list_of<'a>(&'a self, path: &str) -> &'a str {
         self.assignments.get(path).map(String::as_str).unwrap_or("")
     }
-    pub fn in_active(&self, path: &str) -> bool { self.list_of(path) == self.active }
+    pub fn in_active(&self, path: &str) -> bool {
+        self.list_of(path) == self.active
+    }
     pub fn create(&mut self, name: &str) -> Result<(), ChangelistError> {
-        if !valid_name(name) || self.lists.len() >= 100 { return Err(ChangelistError::InvalidName); }
-        if self.lists.contains_key(name) { return Err(ChangelistError::AlreadyExists); }
+        if !valid_name(name) || self.lists.len() >= 100 {
+            return Err(ChangelistError::InvalidName);
+        }
+        if self.lists.contains_key(name) {
+            return Err(ChangelistError::AlreadyExists);
+        }
         self.lists.insert(name.to_string(), String::new());
         Ok(())
     }
     pub fn select(&mut self, name: &str, message: &mut String) -> Result<(), ChangelistError> {
-        if !self.lists.contains_key(name) { return Err(ChangelistError::NotFound); }
-        if let Some(old) = self.lists.get_mut(&self.active) { *old = std::mem::take(message); }
+        if !self.lists.contains_key(name) {
+            return Err(ChangelistError::NotFound);
+        }
+        if let Some(old) = self.lists.get_mut(&self.active) {
+            *old = std::mem::take(message);
+        }
         *message = self.lists.get(name).cloned().unwrap_or_default();
         self.active = name.to_string();
         Ok(())
     }
     pub fn move_file(&mut self, path: &str, list: &str) -> Result<(), ChangelistError> {
-        if !self.lists.contains_key(list) || !valid_path(path) { return Err(ChangelistError::NotFound); }
-        if list.is_empty() { self.assignments.remove(path); }
-        else { self.assignments.insert(path.to_string(), list.to_string()); }
+        if !self.lists.contains_key(list) || !valid_path(path) {
+            return Err(ChangelistError::NotFound);
+        }
+        if list.is_empty() {
+            self.assignments.remove(path);
+        } else {
+            self.assignments.insert(path.to_string(), list.to_string());
+        }
         Ok(())
     }
     pub fn rename_active(&mut self, name: &str) -> Result<(), ChangelistError> {
-        if self.active.is_empty() { return Err(ChangelistError::DefaultList); }
-        if !valid_name(name) { return Err(ChangelistError::InvalidName); }
-        if self.lists.contains_key(name) { return Err(ChangelistError::AlreadyExists); }
+        if self.active.is_empty() {
+            return Err(ChangelistError::DefaultList);
+        }
+        if !valid_name(name) {
+            return Err(ChangelistError::InvalidName);
+        }
+        if self.lists.contains_key(name) {
+            return Err(ChangelistError::AlreadyExists);
+        }
         let old = self.active.clone();
         let message = self.lists.remove(&old).ok_or(ChangelistError::NotFound)?;
         self.lists.insert(name.to_string(), message);
-        for value in self.assignments.values_mut() { if *value == old { *value = name.to_string(); } }
+        for value in self.assignments.values_mut() {
+            if *value == old {
+                *value = name.to_string();
+            }
+        }
         self.active = name.to_string();
         Ok(())
     }
     pub fn delete_active(&mut self, message: &mut String) -> Result<(), ChangelistError> {
-        if self.active.is_empty() { return Err(ChangelistError::DefaultList); }
+        if self.active.is_empty() {
+            return Err(ChangelistError::DefaultList);
+        }
         let old = self.active.clone();
         self.select("", message)?;
         self.lists.remove(&old);

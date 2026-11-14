@@ -22,24 +22,55 @@ pub struct RustupInstaller {
 }
 impl RustupInstaller {
     pub fn new(waker: Waker) -> Self {
-        Self { destinations: rustup_install::destinations(), stable: true, accepted: false, download: None, prepared: None, run: None, inbox: Inbox::new(waker.clone()), events: Inbox::new(waker.clone()), discovery: Inbox::new(waker), output: String::new(), error: None, rediscover: false, finished: false }
+        Self {
+            destinations: rustup_install::destinations(),
+            stable: true,
+            accepted: false,
+            download: None,
+            prepared: None,
+            run: None,
+            inbox: Inbox::new(waker.clone()),
+            events: Inbox::new(waker.clone()),
+            discovery: Inbox::new(waker),
+            output: String::new(),
+            error: None,
+            rediscover: false,
+            finished: false,
+        }
     }
-    fn busy(&self) -> bool { self.download.is_some() || self.run.is_some() }
+    fn busy(&self) -> bool {
+        self.download.is_some() || self.run.is_some()
+    }
     fn start(&mut self) {
-        if !self.accepted || self.busy() || self.destinations.is_err() { return; }
-        let cancel = CancelToken::new(); self.download = Some(cancel.clone());
-        self.output.clear(); self.error = None; self.finished = false;
+        if !self.accepted || self.busy() || self.destinations.is_err() {
+            return;
+        }
+        let cancel = CancelToken::new();
+        self.download = Some(cancel.clone());
+        self.output.clear();
+        self.error = None;
+        self.finished = false;
         let out = self.inbox.sender();
-        std::thread::spawn(move || { out.send(rustup_install::prepare(&cancel)); });
+        std::thread::spawn(move || {
+            out.send(rustup_install::prepare(&cancel));
+        });
     }
     fn cancel(&self) {
-        if let Some(cancel) = &self.download { cancel.cancel(); }
-        if let Some(run) = &self.run { run.stop(); }
+        if let Some(cancel) = &self.download {
+            cancel.cancel();
+        }
+        if let Some(run) = &self.run {
+            run.stop();
+        }
     }
     pub fn poll(&mut self) {
         for result in self.inbox.drain() {
             let cancelled = self.download.take().is_some_and(|token| token.is_cancelled());
-            if cancelled { self.error = Some(tr("Cancelled").to_string()); self.accepted = false; continue; }
+            if cancelled {
+                self.error = Some(tr("Cancelled").to_string());
+                self.accepted = false;
+                continue;
+            }
             match result {
                 Ok(prepared) => {
                     if let Ok(destinations) = &self.destinations {
@@ -48,7 +79,10 @@ impl RustupInstaller {
                         self.prepared = Some(prepared);
                     }
                 }
-                Err(error) => { self.error = Some(error_text(&error)); self.accepted = false; }
+                Err(error) => {
+                    self.error = Some(error_text(&error));
+                    self.accepted = false;
+                }
             }
         }
         let mut finished = false;
@@ -59,19 +93,38 @@ impl RustupInstaller {
                 RunEvent::Exited { code, cancelled, .. } => {
                     finished = true;
                     self.finished = !cancelled && code == Some(0);
-                    append(&mut self.output, if cancelled { tr("Cancelled") } else if self.finished { tr("rustup installation finished") } else { tr("rustup installation failed; inspect the output") });
+                    append(
+                        &mut self.output,
+                        if cancelled {
+                            tr("Cancelled")
+                        } else if self.finished {
+                            tr("rustup installation finished")
+                        } else {
+                            tr("rustup installation failed; inspect the output")
+                        },
+                    );
                 }
-                RunEvent::Failed(error) => { finished = true; self.error = Some(error); }
+                RunEvent::Failed(error) => {
+                    finished = true;
+                    self.error = Some(error);
+                }
                 _ => {}
             }
         }
         if finished {
-            self.run = None; self.prepared = None; self.accepted = false; self.rediscover = true;
+            self.run = None;
+            self.prepared = None;
+            self.accepted = false;
+            self.rediscover = true;
             let out = self.discovery.sender();
-            std::thread::spawn(move || { out.send(rc_cargo::Cargo::locate()); });
+            std::thread::spawn(move || {
+                out.send(rc_cargo::Cargo::locate());
+            });
         }
     }
-    pub fn take_cargo(&mut self) -> Option<Option<rc_cargo::Cargo>> { self.discovery.drain().into_iter().last() }
+    pub fn take_cargo(&mut self) -> Option<Option<rc_cargo::Cargo>> {
+        self.discovery.drain().into_iter().last()
+    }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let busy = self.busy();
@@ -79,7 +132,9 @@ impl RustupInstaller {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(if self.download.is_some() { tr("Downloading and verifying rustup-init…") } else { tr("Installing rustup…") });
-                if ui.button(tr("Cancel installation")).clicked() { self.cancel(); }
+                if ui.button(tr("Cancel installation")).clicked() {
+                    self.cancel();
+                }
             });
         } else if self.finished {
             ui.label(tr("rustup installation finished. Shell PATH was not changed; restart your shell or configure PATH if needed."));
@@ -107,14 +162,27 @@ impl RustupInstaller {
                 if ui.add_enabled(self.accepted, egui::Button::new(tr("Download and install rustup"))).clicked() { self.start(); }
             });
         });
-        if let Some(error) = &self.error { ui.colored_label(rc_kit::pal(ui).error, error); }
+        if let Some(error) = &self.error {
+            ui.colored_label(rc_kit::pal(ui).error, error);
+        }
         if !self.output.is_empty() {
-            egui::ScrollArea::vertical().id_salt("rustup_install_output").max_height(180.0).show(ui, |ui| { ui.monospace(&self.output); });
+            egui::ScrollArea::vertical().id_salt("rustup_install_output").max_height(180.0).show(ui, |ui| {
+                ui.monospace(&self.output);
+            });
         }
     }
 }
-impl Drop for RustupInstaller { fn drop(&mut self) { self.cancel(); } }
-fn append(output: &mut String, text: &str) { if output.len() < 64 * 1024 { output.extend(text.chars().take(4096)); output.push('\n'); } }
+impl Drop for RustupInstaller {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+fn append(output: &mut String, text: &str) {
+    if output.len() < 64 * 1024 {
+        output.extend(text.chars().take(4096));
+        output.push('\n');
+    }
+}
 fn error_text(error: &InstallError) -> String {
     match error {
         InstallError::Unsupported => tr("Automatic rustup installation is unsupported on this platform.").to_string(),
@@ -135,13 +203,23 @@ mod tests {
     #[test]
     fn installation_requires_the_native_confirmation_and_option_changes_clear_it() {
         let mut installer = RustupInstaller::new(Waker::noop());
-        installer.start(); assert!(installer.download.is_none());
-        let mut h = Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(|ui, installer: &mut RustupInstaller| { installer.poll(); installer.ui(ui); }, installer);
+        installer.start();
+        assert!(installer.download.is_none());
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+            |ui, installer: &mut RustupInstaller| {
+                installer.poll();
+                installer.ui(ui);
+            },
+            installer,
+        );
         h.run_steps(2);
-        h.get_by_label(tr("Install rustup…")).click(); h.run_steps(2);
-        h.get_by_label(tr("I confirm this rustup installation and its displayed changes")).click(); h.run_steps(2);
+        h.get_by_label(tr("Install rustup…")).click();
+        h.run_steps(2);
+        h.get_by_label(tr("I confirm this rustup installation and its displayed changes")).click();
+        h.run_steps(2);
         assert!(h.state().accepted);
-        h.get_by_label(tr("Install minimal stable Rust with rust-src and rust-analyzer")).click(); h.run_steps(2);
+        h.get_by_label(tr("Install minimal stable Rust with rust-src and rust-analyzer")).click();
+        h.run_steps(2);
         assert!(!h.state().accepted);
         assert!(h.state().download.is_none());
     }
@@ -153,15 +231,26 @@ mod tests {
         let mut installer = RustupInstaller::new(Waker::noop());
         installer.destinations = Ok(Destinations { cargo: root.path().join("cargo"), rustup: root.path().join("rustup") });
         installer.stable = false;
-        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 900.0)).build_ui_state(|ui, installer: &mut RustupInstaller| { installer.poll(); installer.ui(ui); }, installer);
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 900.0)).build_ui_state(
+            |ui, installer: &mut RustupInstaller| {
+                installer.poll();
+                installer.ui(ui);
+            },
+            installer,
+        );
         h.run_steps(2);
-        h.get_by_label(tr("Install rustup…")).click(); h.run_steps(2);
-        h.get_by_label(tr("I confirm this rustup installation and its displayed changes")).click(); h.run_steps(2);
-        h.get_by_label(tr("Download and install rustup")).click(); h.run_steps(2);
+        h.get_by_label(tr("Install rustup…")).click();
+        h.run_steps(2);
+        h.get_by_label(tr("I confirm this rustup installation and its displayed changes")).click();
+        h.run_steps(2);
+        h.get_by_label(tr("Download and install rustup")).click();
+        h.run_steps(2);
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(150) && !h.state().rediscover {
             h.run_steps(2);
-            if h.state().error.is_some() { break; }
+            if h.state().error.is_some() {
+                break;
+            }
             std::thread::sleep(Duration::from_millis(30));
         }
         assert!(h.state().finished, "{:?}\n{}", h.state().error, h.state().output);

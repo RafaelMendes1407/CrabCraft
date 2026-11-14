@@ -70,8 +70,7 @@ pub fn read(source: Source, path: &Path, cancel: &AtomicBool) -> Result<Preview,
             return Err(Error::Limit);
         }
     }
-    let text = std::str::from_utf8(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes))
-        .map_err(|_| Error::Format)?;
+    let text = std::str::from_utf8(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).map_err(|_| Error::Format)?;
     parse(source, text, cancel)
 }
 pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview, Error> {
@@ -83,14 +82,7 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
     }
     let mut changes = Map::new();
     let mut ignored = BTreeSet::new();
-    changes.insert(
-        "keymap".into(),
-        json!(if source == Source::VsCode {
-            "VsCode"
-        } else {
-            "RustRover"
-        }),
-    );
+    changes.insert("keymap".into(), json!(if source == Source::VsCode { "VsCode" } else { "RustRover" }));
     match source {
         Source::VsCode => {
             let value: Value = serde_json::from_str(&jsonc(text)?).map_err(|_| Error::Format)?;
@@ -122,12 +114,7 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                     Event::Start(ref element) | Event::Empty(ref element) => {
                         let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
                         if depth == 0 {
-                            if root
-                                || !matches!(
-                                    name.as_str(),
-                                    "application" | "component" | "scheme" | "keymap"
-                                )
-                            {
+                            if root || !matches!(name.as_str(), "application" | "component" | "scheme" | "keymap") {
                                 return Err(Error::Format);
                             }
                             root = true;
@@ -135,13 +122,8 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                         let mut attrs = std::collections::BTreeMap::new();
                         for attr in element.attributes() {
                             let attr = attr.map_err(|_| Error::Format)?;
-                            let key = std::str::from_utf8(attr.key.as_ref())
-                                .map_err(|_| Error::Format)?
-                                .to_string();
-                            let value = attr
-                                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                .map_err(|_| Error::Format)?
-                                .into_owned();
+                            let key = std::str::from_utf8(attr.key.as_ref()).map_err(|_| Error::Format)?.to_string();
+                            let value = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).map_err(|_| Error::Format)?.into_owned();
                             if value.len() > 4096 || attrs.insert(key, value).is_some() {
                                 return Err(Error::Limit);
                             }
@@ -154,27 +136,14 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                             let value = attrs.get("value").map(String::as_str).unwrap_or("");
                             let component = components.last().map(String::as_str).unwrap_or("");
                             match (key.as_str(), component) {
-                                ("FONT_SIZE", "DefaultFont") | ("EDITOR_FONT_SIZE", "") => number(
-                                    "editor_font_size",
-                                    value.parse().map_err(|_| Error::Value)?,
-                                    8.0,
-                                    48.0,
-                                    &mut changes,
-                                )?,
+                                ("FONT_SIZE", "DefaultFont") | ("EDITOR_FONT_SIZE", "") => {
+                                    number("editor_font_size", value.parse().map_err(|_| Error::Value)?, 8.0, 48.0, &mut changes)?
+                                }
                                 ("LINE_SPACING", "DefaultFont") | ("EDITOR_LINE_SPACING", "") => {
-                                    number(
-                                        "editor_line_spacing",
-                                        value.parse().map_err(|_| Error::Value)?,
-                                        1.0,
-                                        2.0,
-                                        &mut changes,
-                                    )?
+                                    number("editor_line_spacing", value.parse().map_err(|_| Error::Value)?, 1.0, 2.0, &mut changes)?
                                 }
                                 ("IS_INDENT_GUIDES_SHOWN", "EditorSettings") => {
-                                    changes.insert(
-                                        "show_indent_guides".into(),
-                                        json!(boolean(value)?),
-                                    );
+                                    changes.insert("show_indent_guides".into(), json!(boolean(value)?));
                                 }
                                 ("RIGHT_MARGIN", "EditorSettings") => {
                                     let n: u64 = value.parse().map_err(|_| Error::Value)?;
@@ -191,15 +160,15 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                                 }
                             }
                         }
-                        if name == "scheme" {
-                            if let Some(parent) = attrs.get("parent_scheme") {
-                                theme(parent, &mut changes, &mut ignored);
-                            }
+                        if name == "scheme"
+                            && let Some(parent) = attrs.get("parent_scheme")
+                        {
+                            theme(parent, &mut changes, &mut ignored);
                         }
-                        if name == "global_color_scheme" {
-                            if let Some(name) = attrs.get("name") {
-                                theme(name, &mut changes, &mut ignored);
-                            }
+                        if name == "global_color_scheme"
+                            && let Some(name) = attrs.get("name")
+                        {
+                            theme(name, &mut changes, &mut ignored);
                         }
                         if matches!(event, Event::Start(_)) {
                             depth += 1;
@@ -232,131 +201,9 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
     if ignored.len() > 256 {
         return Err(Error::Limit);
     }
-    Ok(Preview {
-        changes,
-        ignored: ignored.into_iter().collect(),
-    })
+    Ok(Preview { changes, ignored: ignored.into_iter().collect() })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn jsonc_strings_rust_overrides_and_safe_allowlist_survive_import() {
-        let preview = parse(
-            Source::VsCode,
-            r#"{
-          // Rust preferences override the general ones.
-          "editor.fontSize": 12, "editor.lineHeight": 24,
-          "workbench.colorTheme": "Default Light Modern",
-          "terminal.integrated.defaultProfile.linux":"danger // literal",
-          "rust-analyzer.server.path":"./malicious",
-          "[rust]": {"editor.fontSize":16,"editor.rulers":[100,],},
-        }"#,
-            &AtomicBool::new(false),
-        )
-        .unwrap();
-        let mut old = Settings::default();
-        old.trusted_projects.push("/kept".into());
-        let new = preview.apply(&old).unwrap();
-        assert_eq!(new.editor_font_size, 16.0);
-        assert_eq!(new.editor_line_spacing, 1.5);
-        assert_eq!(new.right_margin, 100);
-        assert_eq!(new.theme, crate::settings::ThemeChoice::Light);
-        assert_eq!(new.keymap, crate::settings::KeymapChoice::VsCode);
-        assert_eq!(new.trusted_projects, old.trusted_projects);
-        assert_eq!(new.rust_analyzer_path, None);
-        assert!(
-            preview
-                .ignored
-                .iter()
-                .any(|key| key == "rust-analyzer.server.path")
-        );
-        assert!(
-            jsonc(r#"{"url":"https://example.test/*literal*/",}"#)
-                .unwrap()
-                .contains("https://example.test/*literal*/")
-        );
-    }
-    #[test]
-    fn rust_editor_xml_imports_only_recognized_preferences() {
-        let text = r#"<application><component name="DefaultFont"><option name="FONT_SIZE" value="18"/><option name="LINE_SPACING" value="1.4"/></component><component name="EditorSettings"><option name="RIGHT_MARGIN" value="110"/><option name="IS_INDENT_GUIDES_SHOWN" value="false"/></component><component name="Unknown"><option name="FONT_SIZE" value="500"/></component></application>"#;
-        let preview = parse(Source::RustRover, text, &AtomicBool::new(false)).unwrap();
-        let settings = preview.apply(&Settings::default()).unwrap();
-        assert_eq!(settings.editor_font_size, 18.0);
-        assert_eq!(settings.right_margin, 110);
-        assert!(!settings.show_indent_guides);
-        assert_eq!(settings.keymap, crate::settings::KeymapChoice::RustRover);
-        assert_eq!(preview.ignored, vec!["FONT_SIZE"]);
-        assert!(matches!(
-            parse(
-                Source::RustRover,
-                r#"<!DOCTYPE application [<!ENTITY x SYSTEM "file:///etc/passwd">]><application/>"#,
-                &AtomicBool::new(false)
-            ),
-            Err(Error::Format)
-        ));
-        assert!(matches!(
-            parse(
-                Source::RustRover,
-                "<application><component></application>",
-                &AtomicBool::new(false)
-            ),
-            Err(Error::Format)
-        ));
-    }
-    #[test]
-    fn invalid_limits_and_cancelled_input_never_produce_an_import() {
-        assert!(matches!(
-            parse(
-                Source::VsCode,
-                r#"{"editor.fontSize":9999}"#,
-                &AtomicBool::new(false)
-            ),
-            Err(Error::Value)
-        ));
-        assert!(matches!(
-            parse(Source::VsCode, "/* unfinished", &AtomicBool::new(false)),
-            Err(Error::Format)
-        ));
-        assert!(matches!(
-            parse(Source::VsCode, "{}", &AtomicBool::new(true)),
-            Err(Error::Cancelled)
-        ));
-        let dir = tempfile::tempdir().unwrap();
-        assert!(matches!(
-            read(Source::VsCode, dir.path(), &AtomicBool::new(false)),
-            Err(Error::Format | Error::Io(_))
-        ));
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn special_files_are_rejected_without_waiting_for_a_writer() {
-        let dir = tempfile::tempdir().unwrap();
-        let fifo = dir.path().join("preferences.json");
-        assert!(
-            std::process::Command::new("mkfifo")
-                .arg(&fifo)
-                .status()
-                .unwrap()
-                .success()
-        );
-        let start = std::time::Instant::now();
-        assert!(matches!(
-            read(Source::VsCode, &fifo, &AtomicBool::new(false)),
-            Err(Error::Format)
-        ));
-        assert!(start.elapsed() < std::time::Duration::from_secs(1));
-    }
-}
-fn number(
-    key: &str,
-    n: f64,
-    min: f64,
-    max: f64,
-    out: &mut Map<String, Value>,
-) -> Result<(), Error> {
+fn number(key: &str, n: f64, min: f64, max: f64, out: &mut Map<String, Value>) -> Result<(), Error> {
     if !n.is_finite() || !(min..=max).contains(&n) {
         return Err(Error::Value);
     }
@@ -372,14 +219,8 @@ fn boolean(value: &str) -> Result<bool, Error> {
 }
 fn theme(name: &str, out: &mut Map<String, Value>, ignored: &mut BTreeSet<String>) {
     let mapped = match name {
-        "Default Dark+" | "Default Dark Modern" | "Dark+ (default dark)" | "Darcula" | "Dark" => {
-            Some("Dark")
-        }
-        "Default Light+"
-        | "Default Light Modern"
-        | "Light+ (default light)"
-        | "Default"
-        | "Light" => Some("Light"),
+        "Default Dark+" | "Default Dark Modern" | "Dark+ (default dark)" | "Darcula" | "Dark" => Some("Dark"),
+        "Default Light+" | "Default Light Modern" | "Light+ (default light)" | "Default" | "Light" => Some("Light"),
         _ => None,
     };
     if let Some(theme) = mapped {
@@ -388,60 +229,25 @@ fn theme(name: &str, out: &mut Map<String, Value>, ignored: &mut BTreeSet<String
         ignored.insert("theme".into());
     }
 }
-fn vscode(
-    key: &str,
-    value: &Value,
-    out: &mut Map<String, Value>,
-    ignored: &mut BTreeSet<String>,
-) -> Result<(), Error> {
+fn vscode(key: &str, value: &Value, out: &mut Map<String, Value>, ignored: &mut BTreeSet<String>) -> Result<(), Error> {
     match key {
-        "editor.fontSize" => number(
-            "editor_font_size",
-            value.as_f64().ok_or(Error::Value)?,
-            8.0,
-            48.0,
-            out,
-        )?,
+        "editor.fontSize" => number("editor_font_size", value.as_f64().ok_or(Error::Value)?, 8.0, 48.0, out)?,
         "editor.lineHeight" => {
             let n = value.as_f64().ok_or(Error::Value)?;
             if n > 0.0 {
-                let size = out
-                    .get("editor_font_size")
-                    .and_then(Value::as_f64)
-                    .unwrap_or(13.0);
-                number(
-                    "editor_line_spacing",
-                    if n <= 8.0 { n } else { n / size },
-                    1.0,
-                    2.0,
-                    out,
-                )?;
+                let size = out.get("editor_font_size").and_then(Value::as_f64).unwrap_or(13.0);
+                number("editor_line_spacing", if n <= 8.0 { n } else { n / size }, 1.0, 2.0, out)?;
             }
         }
-        "window.zoomLevel" => number(
-            "ui_zoom",
-            1.2f64.powf(value.as_f64().ok_or(Error::Value)?),
-            0.5,
-            2.0,
-            out,
-        )?,
+        "window.zoomLevel" => number("ui_zoom", 1.2f64.powf(value.as_f64().ok_or(Error::Value)?), 0.5, 2.0, out)?,
         "editor.formatOnSave" => {
-            out.insert(
-                "format_on_save".into(),
-                json!(value.as_bool().ok_or(Error::Value)?),
-            );
+            out.insert("format_on_save".into(), json!(value.as_bool().ok_or(Error::Value)?));
         }
         "editor.stickyScroll.enabled" => {
-            out.insert(
-                "sticky_lines".into(),
-                json!(value.as_bool().ok_or(Error::Value)?),
-            );
+            out.insert("sticky_lines".into(), json!(value.as_bool().ok_or(Error::Value)?));
         }
         "editor.guides.indentation" => {
-            out.insert(
-                "show_indent_guides".into(),
-                json!(value.as_bool().ok_or(Error::Value)?),
-            );
+            out.insert("show_indent_guides".into(), json!(value.as_bool().ok_or(Error::Value)?));
         }
         "editor.inlayHints.enabled" => {
             out.insert(
@@ -470,10 +276,7 @@ fn vscode(
         "editor.rulers" => {
             let rules = value.as_array().ok_or(Error::Value)?;
             if let Some(first) = rules.first() {
-                let n = first
-                    .as_u64()
-                    .or_else(|| first.get("column").and_then(Value::as_u64))
-                    .ok_or(Error::Value)?;
+                let n = first.as_u64().or_else(|| first.get("column").and_then(Value::as_u64)).ok_or(Error::Value)?;
                 if !(40..=300).contains(&n) {
                     return Err(Error::Value);
                 }
@@ -572,4 +375,72 @@ fn jsonc(text: &str) -> Result<String, Error> {
         i += 1;
     }
     String::from_utf8(bytes).map_err(|_| Error::Format)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn jsonc_strings_rust_overrides_and_safe_allowlist_survive_import() {
+        let preview = parse(
+            Source::VsCode,
+            r#"{
+          // Rust preferences override the general ones.
+          "editor.fontSize": 12, "editor.lineHeight": 24,
+          "workbench.colorTheme": "Default Light Modern",
+          "terminal.integrated.defaultProfile.linux":"danger // literal",
+          "rust-analyzer.server.path":"./malicious",
+          "[rust]": {"editor.fontSize":16,"editor.rulers":[100,],},
+        }"#,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let mut old = Settings::default();
+        old.trusted_projects.push("/kept".into());
+        let new = preview.apply(&old).unwrap();
+        assert_eq!(new.editor_font_size, 16.0);
+        assert_eq!(new.editor_line_spacing, 1.5);
+        assert_eq!(new.right_margin, 100);
+        assert_eq!(new.theme, crate::settings::ThemeChoice::Light);
+        assert_eq!(new.keymap, crate::settings::KeymapChoice::VsCode);
+        assert_eq!(new.trusted_projects, old.trusted_projects);
+        assert_eq!(new.rust_analyzer_path, None);
+        assert!(preview.ignored.iter().any(|key| key == "rust-analyzer.server.path"));
+        assert!(jsonc(r#"{"url":"https://example.test/*literal*/",}"#).unwrap().contains("https://example.test/*literal*/"));
+    }
+    #[test]
+    fn rust_editor_xml_imports_only_recognized_preferences() {
+        let text = r#"<application><component name="DefaultFont"><option name="FONT_SIZE" value="18"/><option name="LINE_SPACING" value="1.4"/></component><component name="EditorSettings"><option name="RIGHT_MARGIN" value="110"/><option name="IS_INDENT_GUIDES_SHOWN" value="false"/></component><component name="Unknown"><option name="FONT_SIZE" value="500"/></component></application>"#;
+        let preview = parse(Source::RustRover, text, &AtomicBool::new(false)).unwrap();
+        let settings = preview.apply(&Settings::default()).unwrap();
+        assert_eq!(settings.editor_font_size, 18.0);
+        assert_eq!(settings.right_margin, 110);
+        assert!(!settings.show_indent_guides);
+        assert_eq!(settings.keymap, crate::settings::KeymapChoice::RustRover);
+        assert_eq!(preview.ignored, vec!["FONT_SIZE"]);
+        assert!(matches!(
+            parse(Source::RustRover, r#"<!DOCTYPE application [<!ENTITY x SYSTEM "file:///etc/passwd">]><application/>"#, &AtomicBool::new(false)),
+            Err(Error::Format)
+        ));
+        assert!(matches!(parse(Source::RustRover, "<application><component></application>", &AtomicBool::new(false)), Err(Error::Format)));
+    }
+    #[test]
+    fn invalid_limits_and_cancelled_input_never_produce_an_import() {
+        assert!(matches!(parse(Source::VsCode, r#"{"editor.fontSize":9999}"#, &AtomicBool::new(false)), Err(Error::Value)));
+        assert!(matches!(parse(Source::VsCode, "/* unfinished", &AtomicBool::new(false)), Err(Error::Format)));
+        assert!(matches!(parse(Source::VsCode, "{}", &AtomicBool::new(true)), Err(Error::Cancelled)));
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(read(Source::VsCode, dir.path(), &AtomicBool::new(false)), Err(Error::Format | Error::Io(_))));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn special_files_are_rejected_without_waiting_for_a_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("preferences.json");
+        assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+        let start = std::time::Instant::now();
+        assert!(matches!(read(Source::VsCode, &fifo, &AtomicBool::new(false)), Err(Error::Format)));
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
 }

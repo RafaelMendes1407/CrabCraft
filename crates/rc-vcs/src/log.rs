@@ -94,7 +94,11 @@ pub struct ChangedFile {
 impl Repository {
     /// One page of history.
     pub async fn log(&self, opts: &LogOptions) -> Result<Vec<Commit>> {
-        let mut cmd = self.cmd().args(["log", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--decorate=full", "--no-color", FORMAT]).arg(format!("--skip={}", opts.skip)).arg(format!("--max-count={}", opts.max_count));
+        let mut cmd = self
+            .cmd()
+            .args(["log", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--decorate=full", "--no-color", FORMAT])
+            .arg(format!("--skip={}", opts.skip))
+            .arg(format!("--max-count={}", opts.max_count));
         cmd = cmd.arg(match opts.order {
             LogOrder::Topo => "--topo-order",
             LogOrder::Date => "--date-order",
@@ -125,7 +129,11 @@ impl Repository {
 
     /// The files a commit changed against its first parent (everything for a root commit).
     pub async fn commit_files(&self, rev: &str) -> Result<Vec<ChangedFile>> {
-        let out = self.cmd().args(["diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", "--find-renames", "--name-status", "-z", "--end-of-options", rev]).output().await?;
+        let out = self
+            .cmd()
+            .args(["diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", "--find-renames", "--name-status", "-z", "--end-of-options", rev])
+            .output()
+            .await?;
         parse_name_status(&out.stdout)
     }
 
@@ -222,7 +230,10 @@ mod tests {
         assert!(log[0].is_merge());
         assert_eq!(log[0].body, "Body line\n\nmore");
         assert_eq!(log[0].head_branch.as_deref(), Some("main"));
-        assert_eq!(log[0].refs, vec![RefLabel::Head, RefLabel::LocalBranch("main".into()), RefLabel::RemoteBranch("origin/main".into()), RefLabel::Tag("v1".into())]);
+        assert_eq!(
+            log[0].refs,
+            vec![RefLabel::Head, RefLabel::LocalBranch("main".into()), RefLabel::RemoteBranch("origin/main".into()), RefLabel::Tag("v1".into())]
+        );
         assert!(log[1].parents.is_empty());
         assert_eq!(log[1].subject, "Root");
     }

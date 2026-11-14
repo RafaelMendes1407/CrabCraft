@@ -17,10 +17,20 @@ struct Job {
 
 /// A finished job.
 pub enum Done {
-    Skipped {index:usize,save:bool},
+    Skipped {
+        index: usize,
+        save: bool,
+    },
     /// The document at `index` is formatted; `save` when it must be written again.
-    Applied { index: usize, save: bool },
-    Failed { name: String, error: String, save: bool },
+    Applied {
+        index: usize,
+        save: bool,
+    },
+    Failed {
+        name: String,
+        error: String,
+        save: bool,
+    },
 }
 
 /// The documents being formatted; dropping a job stops its rustfmt.
@@ -54,7 +64,7 @@ impl Jobs {
             match result {
                 Err(error) => done.push(Done::Failed { name: d.name(), error, save: job.save }),
                 // Typed into meanwhile: the text no longer matches.
-                Ok(_) if d.editor.buffer.version() != job.version => done.push(Done::Skipped {index,save:job.save}),
+                Ok(_) if d.editor.buffer.version() != job.version => done.push(Done::Skipped { index, save: job.save }),
                 Ok(text) => {
                     let old = d.editor.buffer.rope().to_string();
                     let new = text.replace("\r\n", "\n");
@@ -82,7 +92,9 @@ pub fn line_edits(old: &str, new: &str) -> Vec<rc_text::Change> {
 /// Only the blocks of changes that touch `old`'s lines `first..=last` (a block that crosses
 /// the edge is taken whole, so the code stays consistent).
 pub fn line_edits_within(old: &str, new: &str, (first, last): (usize, usize)) -> Vec<rc_text::Change> {
-    line_edits_filtered(old, new, |old_lines| if old_lines.is_empty() { (first..=last + 1).contains(&old_lines.start) } else { old_lines.start <= last && old_lines.end > first })
+    line_edits_filtered(old, new, |old_lines| {
+        if old_lines.is_empty() { (first..=last + 1).contains(&old_lines.start) } else { old_lines.start <= last && old_lines.end > first }
+    })
 }
 
 fn line_edits_filtered(old: &str, new: &str, keep: impl Fn(std::ops::Range<usize>) -> bool) -> Vec<rc_text::Change> {
@@ -95,7 +107,11 @@ fn line_edits_filtered(old: &str, new: &str, keep: impl Fn(std::ops::Range<usize
         at += line.chars().count();
         starts.push(at);
     }
-    rc_vcs::textdiff::diff(&a, &b).into_iter().filter(|c| keep(c.old.clone())).map(|c| rc_text::Change::new(starts[c.old.start], starts[c.old.end], b[c.new].concat())).collect()
+    rc_vcs::textdiff::diff(&a, &b)
+        .into_iter()
+        .filter(|c| keep(c.old.clone()))
+        .map(|c| rc_text::Change::new(starts[c.old.start], starts[c.old.end], b[c.new].concat()))
+        .collect()
 }
 
 #[cfg(test)]

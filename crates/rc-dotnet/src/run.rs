@@ -1,12 +1,12 @@
 //! Shared process launch plan and run events used by Cargo.
 
+use crate::build::BuildEvent;
+use crate::process::{OpHandle, OutputLine};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use crate::build::BuildEvent;
-use crate::process::{OpHandle, OutputLine};
 
 /// The resolved process to start.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,15 +32,21 @@ impl LaunchPlan {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RunEvent {
     /// Events of the build before the launch.
     Build(BuildEvent),
-    Started { pid: u32, plan: LaunchPlan },
+    Started {
+        pid: u32,
+        plan: LaunchPlan,
+    },
     Output(OutputLine),
     /// Last event of a run that started.
-    Exited { code: Option<i32>, cancelled: bool, duration: Duration },
+    Exited {
+        code: Option<i32>,
+        cancelled: bool,
+        duration: Duration,
+    },
     /// Last event when the build failed or the process could not start.
     Failed(String),
 }

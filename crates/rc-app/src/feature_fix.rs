@@ -37,7 +37,9 @@ impl FeatureFix {
     pub fn title(&self) -> String {
         match self {
             FeatureFix::Analysis { feature, .. } => trf("Turn on feature `{feature}` for code analysis", &[("feature", feature)]),
-            FeatureFix::Default { package, feature, .. } => trf("Add `{feature}` to the default features of {package}", &[("feature", feature), ("package", package)]),
+            FeatureFix::Default { package, feature, .. } => {
+                trf("Add `{feature}` to the default features of {package}", &[("feature", feature), ("package", package)])
+            }
             FeatureFix::Dependency { name, feature, .. } => trf("Add feature `{feature}` to the {name} dependency", &[("feature", feature), ("name", name)]),
         }
     }
@@ -63,8 +65,17 @@ impl FeatureFix {
     }
 
     pub fn action(&self) -> lsp::CodeActionOrCommand {
-        let command = lsp::Command { title: self.title(), command: ENABLE_FEATURE_COMMAND.to_string(), arguments: Some(vec![serde_json::to_value(self).unwrap_or_default()]) };
-        lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction { title: command.title.clone(), kind: Some(lsp::CodeActionKind::QUICKFIX), command: Some(command), ..Default::default() })
+        let command = lsp::Command {
+            title: self.title(),
+            command: ENABLE_FEATURE_COMMAND.to_string(),
+            arguments: Some(vec![serde_json::to_value(self).unwrap_or_default()]),
+        };
+        lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+            title: command.title.clone(),
+            kind: Some(lsp::CodeActionKind::QUICKFIX),
+            command: Some(command),
+            ..Default::default()
+        })
     }
 }
 
@@ -83,7 +94,13 @@ impl CrabCraftApp {
         let Some(doc) = self.docs.list.get(i) else { return Vec::new() };
         let Some(known) = self.insight.feature_gates.get(&doc.path) else { return Vec::new() };
         let line = doc.editor.caret_line_col().0;
-        let on_line: Vec<&str> = doc.editor.diagnostics.iter().filter(|d| doc.editor.buffer.line_col(d.start).0 <= line && line <= doc.editor.buffer.line_col(d.end).0).map(|d| d.message.as_str()).collect();
+        let on_line: Vec<&str> = doc
+            .editor
+            .diagnostics
+            .iter()
+            .filter(|d| doc.editor.buffer.line_col(d.start).0 <= line && line <= doc.editor.buffer.line_col(d.end).0)
+            .map(|d| d.message.as_str())
+            .collect();
         let gates: Vec<&FeatureGate> = known.iter().filter(|(m, _)| on_line.contains(&m.as_str())).flat_map(|(_, g)| g).collect();
         if gates.is_empty() {
             return Vec::new();
@@ -106,9 +123,16 @@ impl CrabCraftApp {
                 continue;
             }
             // Another package: a member, a downloaded library or a crate of the registry cache.
-            let name = owner.map(|p| p.name.clone()).or_else(|| self.explorer.libraries.iter().filter(|l| file.starts_with(&l.root)).max_by_key(|l| l.root.components().count()).map(|l| l.name.clone())).or_else(|| feature_fix::registry_crate_of(&file));
+            let name = owner
+                .map(|p| p.name.clone())
+                .or_else(|| {
+                    self.explorer.libraries.iter().filter(|l| file.starts_with(&l.root)).max_by_key(|l| l.root.components().count()).map(|l| l.name.clone())
+                })
+                .or_else(|| feature_fix::registry_crate_of(&file));
             let (Some(name), Some(text)) = (name, text.as_deref()) else { continue };
-            let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| !d.in_workspace && d.name == name && feature_fix::add_dependency_feature(text, d, &gate.feature).is_some());
+            let dep = rc_cargo::dependency_lines(text)
+                .into_iter()
+                .find(|d| !d.in_workspace && d.name == name && feature_fix::add_dependency_feature(text, d, &gate.feature).is_some());
             if let Some(dep) = dep {
                 out.push(FeatureFix::Dependency { manifest: current.manifest.clone(), key: dep.key, name, feature: gate.feature.clone() });
             }
@@ -125,7 +149,13 @@ impl CrabCraftApp {
                     return;
                 }
                 self.set_cargo_feature(&package, &feature, true);
-                self.notify(trf("Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml", &[("feature", &feature), ("package", &package)]), false);
+                self.notify(
+                    trf(
+                        "Feature {feature} of {package} is on for code analysis; turn it off in the gutter of Cargo.toml",
+                        &[("feature", &feature), ("package", &package)],
+                    ),
+                    false,
+                );
             }
             FeatureFix::Default { ref manifest, .. } | FeatureFix::Dependency { ref manifest, .. } => {
                 let manifest = manifest.clone();
@@ -136,7 +166,9 @@ impl CrabCraftApp {
 
     /// Opens `manifest` and makes the edit `edit` finds in its current text, undoably.
     fn edit_manifest(&mut self, manifest: &Path, fix: FeatureFix) {
-        if manifest.file_name().is_none_or(|name|name!="Cargo.toml"){return;}
-        self.request_file_edit(manifest,crate::file_edit::Intent::Feature(fix));
+        if manifest.file_name().is_none_or(|name| name != "Cargo.toml") {
+            return;
+        }
+        self.request_file_edit(manifest, crate::file_edit::Intent::Feature(fix));
     }
 }

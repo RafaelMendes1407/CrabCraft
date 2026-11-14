@@ -54,7 +54,11 @@ impl HttpError {
         match self {
             HttpError::OAuth(error) => error.text(),
             HttpError::Environment(error) => error.text(),
-            HttpError::Unsupported(what) => format!("{}\n{}", tr("This request was not sent: it uses features that are not supported yet."), what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")),
+            HttpError::Unsupported(what) => format!(
+                "{}\n{}",
+                tr("This request was not sent: it uses features that are not supported yet."),
+                what.iter().map(|w| format!("• {w}")).collect::<Vec<_>>().join("\n")
+            ),
             HttpError::Variable(error) => match error {
                 rc_syntax::http::vars::VariableError::Undefined(name) => trf("Undefined HTTP variable: {name}", &[("name", name)]),
                 rc_syntax::http::vars::VariableError::Cycle(name) => trf("Cyclic HTTP variable: {name}", &[("name", name)]),
@@ -165,7 +169,9 @@ pub fn send(req: &Prepared, timeout: Duration, max: usize, cancel: &AtomicBool) 
         let url = reqwest::Url::parse(&req.url).map_err(|_| HttpError::BadUrl(req.url.clone()))?;
         let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
         let mut builder = reqwest::Client::builder().user_agent(USER_AGENT).connect_timeout(timeout).timeout(timeout);
-        if req.oauth { builder = builder.redirect(reqwest::redirect::Policy::none()).no_proxy(); }
+        if req.oauth {
+            builder = builder.redirect(reqwest::redirect::Policy::none()).no_proxy();
+        }
         if loopback {
             builder = builder.no_proxy();
         }
@@ -195,7 +201,16 @@ pub fn send(req: &Prepared, timeout: Duration, max: usize, cancel: &AtomicBool) 
             }
             body.extend_from_slice(&chunk);
         }
-        Ok(HttpResponse { status: status.as_u16(), reason: status.canonical_reason().unwrap_or_default().to_string(), version, headers, body, truncated, to_headers, elapsed: started.elapsed() })
+        Ok(HttpResponse {
+            status: status.as_u16(),
+            reason: status.canonical_reason().unwrap_or_default().to_string(),
+            version,
+            headers,
+            body,
+            truncated,
+            to_headers,
+            elapsed: started.elapsed(),
+        })
     };
     runtime.block_on(async {
         tokio::select! {
@@ -293,7 +308,11 @@ pub fn pretty_json(text: &str) -> Option<String> {
 pub enum BodyView {
     Empty,
     /// At most [`MAX_SHOWN_CHARS`]; `cut` when there was more.
-    Text { text: String, json: bool, cut: bool },
+    Text {
+        text: String,
+        json: bool,
+        cut: bool,
+    },
     /// Not UTF-8: only its size is shown.
     Binary(usize),
 }
@@ -359,7 +378,16 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub fn new(waker: Waker) -> Self {
-        HttpClient { scripts: scripts::State::new(waker.clone()), oauth: oauth::State::new(waker.clone()), environment: environment::State::new(waker.clone()), inbox: Inbox::new(waker), history: Vec::new(), selected: 0, show_headers: false, next_id: 1 }
+        HttpClient {
+            scripts: scripts::State::new(waker.clone()),
+            oauth: oauth::State::new(waker.clone()),
+            environment: environment::State::new(waker.clone()),
+            inbox: Inbox::new(waker),
+            history: Vec::new(),
+            selected: 0,
+            show_headers: false,
+            next_id: 1,
+        }
     }
 
     pub fn running(&self) -> bool {
@@ -375,7 +403,12 @@ impl HttpClient {
     pub fn start_with(&mut self, req: &HttpRequest, file: PathBuf, timeout: Duration, max: usize) {
         let id = self.next_id;
         self.next_id += 1;
-        let notes = req.unsupported.iter().filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_))).map(|u| unsupported_text(&u.kind)).collect();
+        let notes = req
+            .unsupported
+            .iter()
+            .filter(|u| !u.kind.blocks_sending() && !matches!(u.kind, UnsupportedKind::FileVariable(_)))
+            .map(|u| unsupported_text(&u.kind))
+            .collect();
         let outcome = match self.environment.resolve(req).and_then(|request| prepare(&request)).and_then(|prepared| self.oauth.authorize(prepared)) {
             Ok(prepared) => {
                 let cancel = Arc::new(AtomicBool::new(false));
@@ -388,7 +421,18 @@ impl HttpClient {
             }
             Err(e) => Outcome::Failed(e),
         };
-        let exchange = Exchange { id, title: req.title(), method: req.method.clone(), url: req.url.clone(), file, line: req.line, notes, outcome, started: Instant::now(), response_script: req.response_script.clone() };
+        let exchange = Exchange {
+            id,
+            title: req.title(),
+            method: req.method.clone(),
+            url: req.url.clone(),
+            file,
+            line: req.line,
+            notes,
+            outcome,
+            started: Instant::now(),
+            response_script: req.response_script.clone(),
+        };
         self.history.insert(0, exchange);
         // The oldest finished ones go first; running requests are kept until they end.
         while self.history.len() > HISTORY {
@@ -446,6 +490,12 @@ pub fn size_text(n: usize) -> String {
     }
 }
 
+impl Drop for HttpClient {
+    fn drop(&mut self) {
+        self.cancel_all();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,21 +522,29 @@ mod tests {
 
     #[test]
     fn file_variables_expand_in_urls_headers_and_bodies_without_ambient_environment() {
-        let request = one("@host = example.test\n@base = http://{{host}}\n@token = local-token\n###\nPOST {{base}}/items\nAuthorization: Bearer {{ token }}\n\n{\"host\":\"{{host}}\"}\n");
+        let request = one(
+            "@host = example.test\n@base = http://{{host}}\n@token = local-token\n###\nPOST {{base}}/items\nAuthorization: Bearer {{ token }}\n\n{\"host\":\"{{host}}\"}\n",
+        );
         let ready = prepare(&request).unwrap();
         assert_eq!(ready.url, "http://example.test/items");
         assert_eq!(ready.headers, [("Authorization".into(), "Bearer local-token".into())]);
         assert!(ready.body.contains("example.test"));
         assert!(rc_syntax::http::unsupported_in("@host = example.test\nGET http://{{host}}\n").is_empty());
-        assert!(matches!(prepare(&one("@a = {{b}}\n@b = {{a}}\nGET http://{{a}}\n")), Err(HttpError::Variable(rc_syntax::http::vars::VariableError::Cycle(_)))));
+        assert!(matches!(
+            prepare(&one("@a = {{b}}\n@b = {{a}}\nGET http://{{a}}\n")),
+            Err(HttpError::Variable(rc_syntax::http::vars::VariableError::Cycle(_)))
+        ));
         // Unsubstituted bodies keep the existing HTTP client's larger response/request limit.
-        assert!(prepare(&one(&format!("POST http://x/\n\n{}", "x".repeat(2*1024*1024)))).is_ok());
+        assert!(prepare(&one(&format!("POST http://x/\n\n{}", "x".repeat(2 * 1024 * 1024)))).is_ok());
     }
 
     #[test]
     fn json_is_reindented_without_reordering() {
         let pretty = pretty_json(r#"{"z":1,"a":[1,2.50,{"s":"x, \"y\": {z}"}],"e":{},"l":[ ]}"#).unwrap();
-        assert_eq!(pretty, "{\n  \"z\": 1,\n  \"a\": [\n    1,\n    2.50,\n    {\n      \"s\": \"x, \\\"y\\\": {z}\"\n    }\n  ],\n  \"e\": {},\n  \"l\": []\n}");
+        assert_eq!(
+            pretty,
+            "{\n  \"z\": 1,\n  \"a\": [\n    1,\n    2.50,\n    {\n      \"s\": \"x, \\\"y\\\": {z}\"\n    }\n  ],\n  \"e\": {},\n  \"l\": []\n}"
+        );
         assert_eq!(pretty_json("[]").as_deref(), Some("[]"));
         for bad in ["", "plain", "{", "{\"a\":}", "[1,]", "\"str\"", "12"] {
             assert_eq!(pretty_json(bad), None, "{bad}");
@@ -556,7 +614,13 @@ mod tests {
     #[test]
     fn a_request_reaches_a_local_server_and_its_json_answer_is_shown() {
         let body = r#"{"id":7,"name":"Ferris"}"#;
-        let (base, server) = server(format!("HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nX-Trace: abc\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes());
+        let (base, server) = server(
+            format!(
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nX-Trace: abc\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .into_bytes(),
+        );
         let file = format!("### Create\nPOST {base}/users?notify=1\nContent-Type: application/json\nX-Client: test\n\n{{\"name\": \"Ferris\"}}\n");
         let mut client = HttpClient::new(Waker::noop());
         client.start(&one(&file), PathBuf::from("api.http"));
@@ -620,5 +684,3 @@ mod tests {
         assert_eq!(e.notes.len(), 1, "the handler is noted: {:?}", e.notes);
     }
 }
-
-impl Drop for HttpClient { fn drop(&mut self) { self.cancel_all(); } }

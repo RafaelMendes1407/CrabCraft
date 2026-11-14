@@ -215,7 +215,13 @@ fn matches(tokens: &[Token], s: &str, at: usize, years: &mut Vec<(usize, usize)>
                 false
             }
         }),
-        Token::Any => s[at..].char_indices().skip(1).map(|(i, _)| at + i).chain(std::iter::once(s.len())).filter(|e| *e > at).any(|end| matches(rest, s, end, years, failed)),
+        Token::Any => s[at..]
+            .char_indices()
+            .skip(1)
+            .map(|(i, _)| at + i)
+            .chain(std::iter::once(s.len()))
+            .filter(|e| *e > at)
+            .any(|end| matches(rest, s, end, years, failed)),
     };
     if !ok {
         failed.insert(key);
@@ -374,6 +380,7 @@ pub fn current_year() -> i32 {
 }
 
 /// The project's profile, the author git knows for it and the draft Settings edits.
+#[derive(Default)]
 pub struct Copyright {
     pub profile: CopyrightProfile,
     pub root: Option<PathBuf>,
@@ -382,12 +389,6 @@ pub struct Copyright {
     author_load: Option<Inbox<Option<String>>>,
     /// The profile being edited in Settings.
     pub draft: Option<CopyrightProfile>,
-}
-
-impl Default for Copyright {
-    fn default() -> Self {
-        Copyright { profile: CopyrightProfile::default(), root: None, author: None, author_load: None, draft: None }
-    }
 }
 
 impl Copyright {
@@ -524,7 +525,10 @@ mod tests {
         let text = "//! The net module.\nfn f() {}\n";
         let e = header_edit(text, Lang::Rust, &p, &vars(2026)).unwrap();
         assert_eq!(e.change, Change::Added);
-        assert_eq!(apply(text, &e), "// Copyright (c) 2026 Ada Lovelace\n// Part of demo.\n// SPDX-License-Identifier: MIT\n\n//! The net module.\nfn f() {}\n");
+        assert_eq!(
+            apply(text, &e),
+            "// Copyright (c) 2026 Ada Lovelace\n// Part of demo.\n// SPDX-License-Identifier: MIT\n\n//! The net module.\nfn f() {}\n"
+        );
         // An old header, by another author: only its year changes.
         let text = "// Copyright (c) 2020 Grace Hopper\n// Part of demo.\n\nfn f() {}\n";
         let e = header_edit(text, Lang::Rust, &p, &vars(2026)).unwrap();
@@ -550,7 +554,8 @@ mod tests {
 
     #[test]
     fn new_files_start_with_the_header() {
-        let mut c = Copyright { profile: profile("Copyright $year $author", ""), root: Some("/w/demo".into()), author: Some("Ada".into()), ..Default::default() };
+        let mut c =
+            Copyright { profile: profile("Copyright $year $author", ""), root: Some("/w/demo".into()), author: Some("Ada".into()), ..Default::default() };
         let year = current_year();
         assert_eq!(c.new_file_content(Path::new("/w/demo/src/net.rs"), "$0"), format!("// Copyright {year} Ada\n\n$0"));
         assert_eq!(c.new_file_content(Path::new("/w/demo/a.json"), "{\n  $0\n}\n"), "{\n  $0\n}\n");

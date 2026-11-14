@@ -30,22 +30,11 @@ pub struct Config {
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FtpsConfig")
-            .field("host", &self.host)
-            .field("port", &self.port)
-            .field("credentials", &"<redacted>")
-            .finish()
+        f.debug_struct("FtpsConfig").field("host", &self.host).field("port", &self.port).field("credentials", &"<redacted>").finish()
     }
 }
 impl Config {
-    pub fn new(
-        host: String,
-        port: u16,
-        user: String,
-        password: String,
-        ca: Option<PathBuf>,
-        pin: String,
-    ) -> Self {
+    pub fn new(host: String, port: u16, user: String, password: String, ca: Option<PathBuf>, pin: String) -> Self {
         Self {
             host,
             port,
@@ -61,10 +50,7 @@ impl Config {
         if self.host.is_empty()
             || self.host.len() > 253
             || self.host.starts_with('-')
-            || !self
-                .host
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
+            || !self.host.bytes().all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
             || self.port == 0
             || self.user.is_empty()
             || self.user.len() > 512
@@ -79,12 +65,7 @@ impl Config {
             let pin = self.pin.strip_prefix("sha256//").ok_or(Error::Input)?;
             if pin.len() != 44
                 || !pin.ends_with('=')
-                || !pin
-                    .as_bytes()
-                    .get(..43)
-                    .ok_or(Error::Input)?
-                    .iter()
-                    .all(|b| b.is_ascii_alphanumeric() || b"+/".contains(b))
+                || !pin.as_bytes().get(..43).ok_or(Error::Input)?.iter().all(|b| b.is_ascii_alphanumeric() || b"+/".contains(b))
             {
                 return Err(Error::Input);
             }
@@ -96,11 +77,7 @@ struct Reply {
     code: u16,
     text: String,
 }
-async fn wait<T>(
-    cancel: &CancelToken,
-    deadline: Instant,
-    future: impl Future<Output = Result<T, Error>>,
-) -> Result<T, Error> {
+async fn wait<T>(cancel: &CancelToken, deadline: Instant, future: impl Future<Output = Result<T, Error>>) -> Result<T, Error> {
     if cancel.is_cancelled() {
         return Err(Error::Cancelled);
     }
@@ -115,15 +92,11 @@ async fn reply(stream: &mut (impl AsyncBufRead + Unpin)) -> Result<Reply, Error>
     loop {
         let mut bytes = Vec::new();
         stream.take(8193).read_until(b'\n', &mut bytes).await?;
-        if bytes.is_empty() || bytes.len() > 8192 || text.len().saturating_add(bytes.len()) > 65536
-        {
+        if bytes.is_empty() || bytes.len() > 8192 || text.len().saturating_add(bytes.len()) > 65536 {
             return Err(Error::Protocol);
         }
         let line = std::str::from_utf8(&bytes).map_err(|_| Error::Protocol)?;
-        let prefix = line
-            .get(..3)
-            .and_then(|s| s.parse::<u16>().ok())
-            .filter(|n| *n >= 100 && *n <= 599);
+        let prefix = line.get(..3).and_then(|s| s.parse::<u16>().ok()).filter(|n| *n >= 100 && *n <= 599);
         if expected.is_none() {
             let code = prefix.ok_or(Error::Protocol)?;
             if line.as_bytes().get(3) == Some(&b'-') {
@@ -136,10 +109,7 @@ async fn reply(stream: &mut (impl AsyncBufRead + Unpin)) -> Result<Reply, Error>
             }
         } else if prefix == expected && line.as_bytes().get(3) == Some(&b' ') {
             text.push_str(line);
-            return Ok(Reply {
-                code: expected.ok_or(Error::Protocol)?,
-                text,
-            });
+            return Ok(Reply { code: expected.ok_or(Error::Protocol)?, text });
         }
         text.push_str(line);
     }
@@ -162,10 +132,7 @@ fn der<'a>(bytes: &'a [u8], position: &mut usize) -> Result<(u8, &'a [u8], &'a [
         for _ in 0..count {
             let byte = *bytes.get(*position).ok_or(Error::Tls)?;
             *position = position.checked_add(1).ok_or(Error::Tls)?;
-            len = len
-                .checked_mul(256)
-                .and_then(|n| n.checked_add(byte as usize))
-                .ok_or(Error::Tls)?;
+            len = len.checked_mul(256).and_then(|n| n.checked_add(byte as usize)).ok_or(Error::Tls)?;
         }
         len
     };
@@ -231,19 +198,10 @@ fn pinned(config: &Config, stream: &TlsStream<tokio::net::TcpStream>) -> Result<
         return Ok(());
     }
     use sha2::Digest;
-    let cert = stream
-        .get_ref()
-        .1
-        .peer_certificates()
-        .and_then(|certs| certs.first())
-        .ok_or(Error::Tls)?;
+    let cert = stream.get_ref().1.peer_certificates().and_then(|certs| certs.first()).ok_or(Error::Tls)?;
     let digest = sha2::Sha256::digest(spki(cert.as_ref())?);
     let actual = format!("sha256//{}", base64(&digest));
-    if actual == config.pin {
-        Ok(())
-    } else {
-        Err(Error::Tls)
-    }
+    if actual == config.pin { Ok(()) } else { Err(Error::Tls) }
 }
 #[derive(Clone)]
 struct Entry {
@@ -268,46 +226,24 @@ fn listing(bytes: &[u8]) -> Result<Vec<Entry>, Error> {
             return Err(Error::Limit);
         }
         let (facts, name) = line.split_once(' ').ok_or(Error::Protocol)?;
-        if name.is_empty()
-            || name.len() > 4096
-            || name.contains('/')
-            || name.chars().any(char::is_control)
-        {
+        if name.is_empty() || name.len() > 4096 || name.contains('/') || name.chars().any(char::is_control) {
             return Err(Error::Protocol);
         }
         let mut values = std::collections::BTreeMap::new();
         for fact in facts.split(';').filter(|p| !p.is_empty()) {
             let (key, value) = fact.split_once('=').ok_or(Error::Protocol)?;
-            if values
-                .insert(key.to_ascii_lowercase(), value.to_owned())
-                .is_some()
-            {
+            if values.insert(key.to_ascii_lowercase(), value.to_owned()).is_some() {
                 return Err(Error::Protocol);
             }
         }
-        let kind = values
-            .get("type")
-            .ok_or(Error::Protocol)?
-            .to_ascii_lowercase();
+        let kind = values.get("type").ok_or(Error::Protocol)?.to_ascii_lowercase();
         if kind == "cdir" || kind == "pdir" {
             continue;
         }
-        let size = values
-            .get("size")
-            .map(|s| s.parse::<u64>().map_err(|_| Error::Protocol))
-            .transpose()?;
-        let mode = values
-            .get("unix.mode")
-            .map(|s| u32::from_str_radix(s, 8).map_err(|_| Error::Protocol))
-            .transpose()?;
+        let size = values.get("size").map(|s| s.parse::<u64>().map_err(|_| Error::Protocol)).transpose()?;
+        let mode = values.get("unix.mode").map(|s| u32::from_str_radix(s, 8).map_err(|_| Error::Protocol)).transpose()?;
         let stamp = format!("{:?}", values);
-        entries.push(Entry {
-            name: name.to_owned(),
-            kind,
-            size,
-            stamp,
-            mode,
-        });
+        entries.push(Entry { name: name.to_owned(), kind, size, stamp, mode });
     }
     Ok(entries)
 }
@@ -337,9 +273,7 @@ impl Client {
                 if count > 64 {
                     return Err(Error::Limit);
                 }
-                roots
-                    .add(cert.map_err(|_| Error::Tls)?)
-                    .map_err(|_| Error::Tls)?;
+                roots.add(cert.map_err(|_| Error::Tls)?).map_err(|_| Error::Tls)?;
             }
             if count == 0 {
                 return Err(Error::Tls);
@@ -350,19 +284,15 @@ impl Client {
                 let _ = roots.add(cert);
             }
         }
-        let tls = rustls::ClientConfig::builder_with_provider(
-            rustls::crypto::aws_lc_rs::default_provider().into(),
-        )
-        .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
-        .map_err(|_| Error::Tls)?
-        .with_root_certificates(roots)
-        .with_no_client_auth();
+        let tls = rustls::ClientConfig::builder_with_provider(rustls::crypto::aws_lc_rs::default_provider().into())
+            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
+            .map_err(|_| Error::Tls)?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
         let connector = TlsConnector::from(Arc::new(tls));
         let deadline = Instant::now() + Duration::from_secs(120);
         let socket = wait(&cancel, Instant::now() + Duration::from_secs(5), async {
-            tokio::net::TcpStream::connect((config.host.as_str(), config.port))
-                .await
-                .map_err(Error::from)
+            tokio::net::TcpStream::connect((config.host.as_str(), config.port)).await.map_err(Error::from)
         })
         .await?;
         let peer = socket.peer_addr()?.ip();
@@ -384,30 +314,12 @@ impl Client {
             return Err(Error::Protocol);
         }
         let name = ServerName::try_from(config.host.clone()).map_err(|_| Error::Input)?;
-        let tls = wait(&cancel, deadline, async {
-            connector
-                .connect(name, plain.into_inner())
-                .await
-                .map_err(|_| Error::Tls)
-        })
-        .await?;
+        let tls = wait(&cancel, deadline, async { connector.connect(name, plain.into_inner()).await.map_err(|_| Error::Tls) }).await?;
         pinned(config, &tls)?;
-        let mut client = Self {
-            config: config.clone(),
-            control: BufReader::new(tls),
-            connector,
-            peer,
-            cancel,
-            deadline,
-        };
+        let mut client = Self { config: config.clone(), control: BufReader::new(tls), connector, peer, cancel, deadline };
         let user = client.command(&format!("USER {}", config.user)).await?;
         if user.code == 331 {
-            if client
-                .command(&format!("PASS {}", config.password))
-                .await?
-                .code
-                != 230
-            {
+            if client.command(&format!("PASS {}", config.password)).await?.code != 230 {
                 return Err(Error::Authentication);
             }
         } else if user.code != 230 {
@@ -436,13 +348,7 @@ impl Client {
         })
         .await
     }
-    async fn data(
-        &mut self,
-        command: &str,
-        path: &str,
-        upload: Option<&[u8]>,
-        limit: usize,
-    ) -> Result<(Vec<u8>, String), Error> {
+    async fn data(&mut self, command: &str, path: &str, upload: Option<&[u8]>, limit: usize) -> Result<(Vec<u8>, String), Error> {
         if path != "/" {
             deployment::path(path.trim_end_matches('/'))?;
         }
@@ -450,65 +356,29 @@ impl Client {
         if passive.code != 229 {
             return Err(Error::Unsupported);
         }
-        let body = passive
-            .text
-            .split_once('(')
-            .and_then(|(_, s)| s.split_once(')').map(|p| p.0))
-            .ok_or(Error::Protocol)?;
-        let delimiter = body
-            .chars()
-            .next()
-            .filter(|c| c.is_ascii_punctuation())
-            .ok_or(Error::Protocol)?;
+        let body = passive.text.split_once('(').and_then(|(_, s)| s.split_once(')').map(|p| p.0)).ok_or(Error::Protocol)?;
+        let delimiter = body.chars().next().filter(|c| c.is_ascii_punctuation()).ok_or(Error::Protocol)?;
         let fields: Vec<_> = body.split(delimiter).collect();
-        if fields.len() != 5
-            || fields.first() != Some(&"")
-            || fields.get(1) != Some(&"")
-            || fields.get(2) != Some(&"")
-            || fields.get(4) != Some(&"")
-        {
+        if fields.len() != 5 || fields.first() != Some(&"") || fields.get(1) != Some(&"") || fields.get(2) != Some(&"") || fields.get(4) != Some(&"") {
             return Err(Error::Protocol);
         }
-        let port = fields
-            .get(3)
-            .ok_or(Error::Protocol)?
-            .parse::<u16>()
-            .ok()
-            .filter(|p| *p > 0)
-            .ok_or(Error::Protocol)?;
-        let socket = wait(&self.cancel, self.deadline, async {
-            tokio::net::TcpStream::connect((self.peer, port))
-                .await
-                .map_err(Error::from)
-        })
-        .await?;
+        let port = fields.get(3).ok_or(Error::Protocol)?.parse::<u16>().ok().filter(|p| *p > 0).ok_or(Error::Protocol)?;
+        let socket = wait(&self.cancel, self.deadline, async { tokio::net::TcpStream::connect((self.peer, port)).await.map_err(Error::from) }).await?;
         let first = self.command(&format!("{command} {path}")).await?;
         if first.code != 125 && first.code != 150 {
             return Err(Error::Remote(first.code as u32));
         }
         let name = ServerName::try_from(self.config.host.clone()).map_err(|_| Error::Input)?;
-        let mut stream = wait(&self.cancel, self.deadline, async {
-            self.connector
-                .connect(name, socket)
-                .await
-                .map_err(|_| Error::Tls)
-        })
-        .await?;
+        let mut stream = wait(&self.cancel, self.deadline, async { self.connector.connect(name, socket).await.map_err(|_| Error::Tls) }).await?;
         pinned(&self.config, &stream)?;
         let mut bytes = Vec::new();
         if let Some(upload) = upload {
             for chunk in upload.chunks(32768) {
-                wait(&self.cancel, self.deadline, async {
-                    stream.write_all(chunk).await.map_err(Error::from)
-                })
-                .await?;
+                wait(&self.cancel, self.deadline, async { stream.write_all(chunk).await.map_err(Error::from) }).await?;
                 #[cfg(test)]
                 if let Some(rate) = self.config.rate {
                     wait(&self.cancel, self.deadline, async {
-                        tokio::time::sleep(Duration::from_secs_f64(
-                            chunk.len() as f64 / f64::from(rate.max(1)),
-                        ))
-                        .await;
+                        tokio::time::sleep(Duration::from_secs_f64(chunk.len() as f64 / f64::from(rate.max(1)))).await;
                         Ok(())
                     })
                     .await?;
@@ -529,10 +399,7 @@ impl Client {
         } else {
             let mut chunk = [0; 32768];
             loop {
-                let size = wait(&self.cancel, self.deadline, async {
-                    stream.read(&mut chunk).await.map_err(Error::from)
-                })
-                .await?;
+                let size = wait(&self.cancel, self.deadline, async { stream.read(&mut chunk).await.map_err(Error::from) }).await?;
                 if size == 0 {
                     break;
                 }
@@ -563,10 +430,7 @@ impl Client {
             return Err(Error::Protocol);
         }
         let Some(entry) = matching.first() else {
-            if entries
-                .iter()
-                .any(|e| e.name.to_lowercase() == name.to_lowercase())
-            {
+            if entries.iter().any(|e| e.name.to_lowercase() == name.to_lowercase()) {
                 return Err(Error::Unsupported);
             }
             return Ok(RemoteImage::Missing);
@@ -580,29 +444,16 @@ impl Client {
         let (bytes, _) = self.data("RETR", path, None, MAX).await?;
         if bytes.len() as u64 != entry.size.ok_or(Error::Protocol)? {
             #[cfg(test)]
-            eprintln!(
-                "FTPS size changed: read={} listed={:?}",
-                bytes.len(),
-                entry.size
-            );
+            eprintln!("FTPS size changed: read={} listed={:?}", bytes.len(), entry.size);
             return Err(Error::Stale);
         }
         let after = self.list(parent).await?;
-        if after
-            .iter()
-            .find(|e| e.name == name)
-            .is_none_or(|e| e.stamp != entry.stamp)
-        {
+        if after.iter().find(|e| e.name == name).is_none_or(|e| e.stamp != entry.stamp) {
             #[cfg(test)]
             eprintln!("FTPS metadata changed during read");
             return Err(Error::Stale);
         }
-        Ok(RemoteImage::Bytes {
-            hash: deployment::digest(&bytes),
-            bytes: Arc::from(bytes),
-            stamp: entry.stamp.clone(),
-            mode: entry.mode,
-        })
+        Ok(RemoteImage::Bytes { hash: deployment::digest(&bytes), bytes: Arc::from(bytes), stamp: entry.stamp.clone(), mode: entry.mode })
     }
     async fn unique(&mut self, path: &str, bytes: &[u8]) -> Result<String, Error> {
         let (_, response) = self.data("STOU", path, Some(bytes), MAX).await?;
@@ -610,11 +461,7 @@ impl Client {
         for line in response.lines() {
             if let Some((_, name)) = line.split_once("FILE: ") {
                 let name = name.trim().trim_matches('"');
-                let result = if name.starts_with('/') {
-                    name.into()
-                } else {
-                    format!("{parent}/{name}")
-                };
+                let result = if name.starts_with('/') { name.into() } else { format!("{parent}/{name}") };
                 deployment::path(&result)?;
                 if result.rsplit_once('/').map(|p| p.0) != Some(parent) {
                     return Err(Error::Protocol);
@@ -638,12 +485,7 @@ impl Client {
     }
 }
 pub fn image(config: &Config, path: &str, cancel: &CancelToken) -> Result<RemoteImage, Error> {
-    rc_core::Runtime::block_on(async {
-        Client::connect(config, cancel.clone())
-            .await?
-            .image(path)
-            .await
-    })
+    rc_core::Runtime::block_on(async { Client::connect(config, cancel.clone()).await?.image(path).await })
 }
 pub fn apply(config: &Config, preview: &Preview, cancel: &CancelToken) -> Result<Receipt, Error> {
     rc_core::Runtime::block_on(async {
@@ -653,25 +495,12 @@ pub fn apply(config: &Config, preview: &Preview, cancel: &CancelToken) -> Result
         }
         let remote = if preview.create {
             deployment::local_current(preview, cancel)?;
-            client
-                .unique(&preview.remote, &preview.source.bytes)
-                .await?
+            client.unique(&preview.remote, &preview.source.bytes).await?
         } else {
-            let parent = preview
-                .remote
-                .rsplit_once('/')
-                .map(|p| p.0)
-                .ok_or(Error::Input)?;
-            let temporary = client
-                .unique(
-                    &format!("{parent}/.crabcraft-deploy"),
-                    &preview.source.bytes,
-                )
-                .await?;
+            let parent = preview.remote.rsplit_once('/').map(|p| p.0).ok_or(Error::Input)?;
+            let temporary = client.unique(&format!("{parent}/.crabcraft-deploy"), &preview.source.bytes).await?;
             let image = client.image(&temporary).await?;
-            if image.hash() != Some(preview.source.hash.as_str())
-                || image.size() != Some(preview.source.bytes.len())
-            {
+            if image.hash() != Some(preview.source.hash.as_str()) || image.size() != Some(preview.source.bytes.len()) {
                 return Err(Error::Stale);
             }
             deployment::local_current(preview, cancel)?;
@@ -682,9 +511,7 @@ pub fn apply(config: &Config, preview: &Preview, cancel: &CancelToken) -> Result
             preview.remote.clone()
         };
         let image = client.image(&remote).await?;
-        if image.hash() != Some(preview.source.hash.as_str())
-            || image.size() != Some(preview.source.bytes.len())
-        {
+        if image.hash() != Some(preview.source.hash.as_str()) || image.size() != Some(preview.source.bytes.len()) {
             #[cfg(test)]
             eprintln!(
                 "FTPS verification mismatch: actual_size={:?} wanted={} actual_hash={:?} wanted_hash={}",
@@ -695,11 +522,7 @@ pub fn apply(config: &Config, preview: &Preview, cancel: &CancelToken) -> Result
             );
             return Err(Error::Stale);
         }
-        Ok(Receipt {
-            remote,
-            hash: preview.source.hash.clone(),
-            size: preview.source.bytes.len(),
-        })
+        Ok(Receipt { remote, hash: preview.source.hash.clone(), size: preview.source.bytes.len() })
     })
 }
 
@@ -708,25 +531,13 @@ mod tests {
     use super::*;
     #[test]
     fn response_and_der_parsers_bound_untrusted_fields_and_redact_authentication() {
-        let config = Config::new(
-            "localhost".into(),
-            21,
-            "private-user".into(),
-            "private-password".into(),
-            None,
-            String::new(),
-        );
+        let config = Config::new("localhost".into(), 21, "private-user".into(), "private-password".into(), None, String::new());
         let debug = format!("{config:?}");
         assert!(!debug.contains("private-user") && !debug.contains("private-password"));
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
-        for bytes in [
-            &b""[..],
-            &b"\x30\x80"[..],
-            &b"\x30\xff"[..],
-            &b"\x30\x82\xff\xff"[..],
-        ] {
+        for bytes in [&b""[..], &b"\x30\x80"[..], &b"\x30\xff"[..], &b"\x30\x82\xff\xff"[..]] {
             assert!(spki(bytes).is_err());
         }
         rc_core::Runtime::block_on(async {
@@ -742,14 +553,9 @@ mod tests {
     #[test]
     #[ignore = "Requires private verified FTPS fixture; STOU must not clobber concurrent targets and cancellation must close data I/O"]
     fn real_ftps_unique_creation_preserves_competitor_and_cancellation_is_prompt() {
-        let _lock = deployment::tests::FTPS_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = deployment::tests::FTPS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (config, root) = deployment::tests::ftps();
-        let dir = tempfile::Builder::new()
-            .prefix("ftps-race-")
-            .tempdir_in(&root)
-            .unwrap();
+        let dir = tempfile::Builder::new().prefix("ftps-race-").tempdir_in(&root).unwrap();
         let dirname = dir.path().file_name().unwrap().to_str().unwrap();
         let target = format!("/{dirname}/new.bin");
         std::fs::write(dir.path().join("new.bin"), b"concurrent winner").unwrap();
@@ -757,14 +563,8 @@ mod tests {
             let mut client = Client::connect(&config, CancelToken::new()).await.unwrap();
             let actual = client.unique(&target, b"reviewed upload").await.unwrap();
             assert_ne!(actual, target);
-            assert_eq!(
-                std::fs::read(dir.path().join("new.bin")).unwrap(),
-                b"concurrent winner"
-            );
-            assert_eq!(
-                std::fs::read(root.join(actual.trim_start_matches('/'))).unwrap(),
-                b"reviewed upload"
-            );
+            assert_eq!(std::fs::read(dir.path().join("new.bin")).unwrap(), b"concurrent winner");
+            assert_eq!(std::fs::read(root.join(actual.trim_start_matches('/'))).unwrap(), b"reviewed upload");
         });
         let local = tempfile::tempdir().unwrap();
         let source = local.path().join("artifact.bin");
@@ -772,27 +572,13 @@ mod tests {
         let mut slow = config;
         slow.rate = Some(1024);
         let path = format!("/{dirname}/slow.bin");
-        let plan = deployment::preview(
-            deployment::Config::Ftps(slow.clone()),
-            &source,
-            path,
-            true,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = deployment::preview(deployment::Config::Ftps(slow.clone()), &source, path, true, true, CancelToken::new()).unwrap();
         let cancel = CancelToken::new();
         let token = cancel.clone();
-        let handle = std::thread::spawn(move || {
-            deployment::apply(deployment::Config::Ftps(slow), plan, true, token)
-        });
+        let handle = std::thread::spawn(move || deployment::apply(deployment::Config::Ftps(slow), plan, true, token));
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            if std::fs::read_dir(dir.path())
-                .unwrap()
-                .flatten()
-                .any(|e| e.file_name().to_string_lossy().starts_with("slow.bin."))
-            {
+            if std::fs::read_dir(dir.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("slow.bin.")) {
                 break;
             }
             assert!(Instant::now() < deadline);

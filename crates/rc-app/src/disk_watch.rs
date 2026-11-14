@@ -45,23 +45,14 @@ mod tests {
         let mut watch = Watch::default();
         std::fs::write(&path, "fn main() { println!(\"disk\"); }\n").unwrap();
         for _ in 0..1000 {
-            watch
-                .queue(&mut docs, &path)
-                .unwrap_or_else(|_| panic!("queue unexpectedly full"));
+            watch.queue(&mut docs, &path).unwrap_or_else(|_| panic!("queue unexpectedly full"));
         }
         assert_eq!(watch.pending.len(), 1);
         assert!(watch.poll(&mut docs, Waker::noop()).is_empty());
         docs.list[0].editor.replace(0, 0, "// user edit\n");
         assert!(drain(&mut watch, &mut docs).is_empty());
         assert!(docs.list[0].conflict);
-        assert!(
-            docs.list[0]
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("user edit")
-        );
+        assert!(docs.list[0].editor.buffer.rope().to_string().contains("user edit"));
         watch.queue(&mut docs, &path).unwrap_or_else(|_| panic!());
         watch.poll(&mut docs, Waker::noop());
         let old_id = docs.list[0].editor.id;
@@ -70,14 +61,7 @@ mod tests {
         docs.list[0].editor.replace(0, 0, "// reopened\n");
         assert!(drain(&mut watch, &mut docs).is_empty());
         assert_ne!(docs.list[0].editor.id, old_id);
-        assert!(
-            docs.list[0]
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("reopened")
-        );
+        assert!(docs.list[0].editor.buffer.rope().to_string().contains("reopened"));
         assert!(!docs.list[0].conflict);
     }
 
@@ -91,13 +75,7 @@ mod tests {
         let mut docs = Docs::new(rc_syntax::ParserPool::new(Waker::noop().as_fn()));
         docs.open(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
-        assert!(
-            std::process::Command::new("mkfifo")
-                .arg(&path)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(std::process::Command::new("mkfifo").arg(&path).status().unwrap().success());
         let mut watch = Watch::default();
         let start = Instant::now();
         watch.queue(&mut docs, &path).unwrap_or_else(|_| panic!());
@@ -109,18 +87,12 @@ mod tests {
 
     #[test]
     fn native_watcher_reloads_real_rust_with_bom_crlf_without_running_project_code() {
-        let _lock = crate::screens::HOME_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let home = tempfile::tempdir().unwrap();
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
-        std::fs::write(root.path().join("Cargo.toml"),"[package]\nname=\"watcher_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
-        std::fs::write(
-            root.path().join("build.rs"),
-            "fn main() { std::fs::write(\"ran-build\",\"yes\").unwrap(); }\n",
-        )
-        .unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname=\"watcher_fixture\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("build.rs"), "fn main() { std::fs::write(\"ran-build\",\"yes\").unwrap(); }\n").unwrap();
         let path = root.path().join("src/main.rs");
         std::fs::write(&path, "fn main() { println!(\"old\"); }\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);
@@ -135,16 +107,7 @@ mod tests {
         let end = Instant::now() + Duration::from_secs(10);
         loop {
             h.run_steps(1);
-            if h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("external update")
-            {
+            if h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("external update") {
                 break;
             }
             assert!(Instant::now() < end, "watcher failed to reload");
@@ -157,17 +120,8 @@ mod tests {
         assert!(!root.path().join("ran-build").exists());
         h.state_mut().docs.save(0).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
-        h.state_mut()
-            .docs
-            .active_doc_mut()
-            .unwrap()
-            .editor
-            .replace(0, 0, "// unsaved\n");
-        std::fs::write(
-            &path,
-            "fn main() { println!(\"another external update\"); }\n",
-        )
-        .unwrap();
+        h.state_mut().docs.active_doc_mut().unwrap().editor.replace(0, 0, "// unsaved\n");
+        std::fs::write(&path, "fn main() { println!(\"another external update\"); }\n").unwrap();
         loop {
             h.run_steps(1);
             if h.state().docs.active_doc().unwrap().conflict {
@@ -176,37 +130,17 @@ mod tests {
             assert!(Instant::now() < end, "conflict was not reported");
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(
-            h.state()
-                .docs
-                .active_doc()
-                .unwrap()
-                .editor
-                .buffer
-                .rope()
-                .to_string()
-                .contains("// unsaved")
-        );
+        assert!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().contains("// unsaved"));
         // Compile the checked external snapshot explicitly; watcher/import never executed it.
         std::fs::write(&path, &bytes).unwrap();
-        let output = std::process::Command::new("cargo")
-            .args(["run", "--offline", "--quiet"])
-            .current_dir(root.path())
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output = std::process::Command::new("cargo").args(["run", "--offline", "--quiet"]).current_dir(root.path()).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert!(root.path().join("ran-build").exists());
     }
 }
 impl std::fmt::Display for QueueError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(tr(
-            "External file update queue is full; reopen the affected file",
-        ))
+        f.write_str(tr("External file update queue is full; reopen the affected file"))
     }
 }
 struct Loaded {
@@ -232,16 +166,16 @@ pub struct Watch {
 impl Watch {
     /// A pending save owns this path until it reports completion. Old read snapshots must
     /// not be applied after the write, even when the writer replaced the file atomically.
-    pub fn suspend(&mut self,path:&Path) {
+    pub fn suspend(&mut self, path: &Path) {
         self.pending.remove(path);
-        for job in &self.active {if job.ticket.path==path{job.cancel.store(true,Ordering::Release);}}
+        for job in &self.active {
+            if job.ticket.path == path {
+                job.cancel.store(true, Ordering::Release);
+            }
+        }
     }
     pub fn queue(&mut self, docs: &mut Docs, path: &Path) -> Result<(), QueueError> {
-        let Some(doc) = docs
-            .list
-            .iter_mut()
-            .find(|d| d.path == path && !d.generated)
-        else {
+        let Some(doc) = docs.list.iter_mut().find(|d| d.path == path && !d.generated) else {
             return Ok(());
         };
         doc.cancel_pending_save();
@@ -250,8 +184,7 @@ impl Watch {
             doc.conflict = true;
             return Err(QueueError::Full);
         }
-        self.pending
-            .insert(path.to_path_buf(), Ticket::capture(doc));
+        self.pending.insert(path.to_path_buf(), Ticket::capture(doc));
         for active in &self.active {
             if active.ticket.path == path {
                 active.cancel.store(true, Ordering::Release);
@@ -266,15 +199,12 @@ impl Watch {
         for job in &self.active {
             if job.ticket.index(docs).is_none() {
                 job.cancel.store(true, Ordering::Release);
-                if let Some(doc) = docs.list.iter().find(|d| {
-                    d.editor.id == job.ticket.id
-                        && d.path == job.ticket.path
-                        && d.disk_epoch == job.ticket.disk_epoch
-                        && !d.generated
-                }) {
-                    self.pending
-                        .entry(doc.path.clone())
-                        .or_insert_with(|| Ticket::capture(doc));
+                if let Some(doc) = docs
+                    .list
+                    .iter()
+                    .find(|d| d.editor.id == job.ticket.id && d.path == job.ticket.path && d.disk_epoch == job.ticket.disk_epoch && !d.generated)
+                {
+                    self.pending.entry(doc.path.clone()).or_insert_with(|| Ticket::capture(doc));
                 }
             }
         }
@@ -305,20 +235,11 @@ impl Watch {
                     } else if doc.is_modified() {
                         doc.conflict = true;
                         if let Some(history) = &docs.history {
-                            history
-                                .record(&doc.path, rc_text::Rope::from_str(&loaded.snapshot.text));
+                            history.record(&doc.path, rc_text::Rope::from_str(&loaded.snapshot.text));
                         }
                     } else {
-                        docs.reloaded(
-                            index,
-                            &loaded.snapshot.text,
-                            loaded.snapshot.bom,
-                            Some(loaded.snapshot.modified),
-                        );
-                        docs.list[index]
-                            .editor
-                            .buffer
-                            .set_line_ending(loaded.ending);
+                        docs.reloaded(index, &loaded.snapshot.text, loaded.snapshot.bom, Some(loaded.snapshot.modified));
+                        docs.list[index].editor.buffer.set_line_ending(loaded.ending);
                         docs.list[index].editor.buffer.mark_saved();
                         docs.list[index].editor.request_parse(&docs.pool);
                     }
@@ -327,31 +248,17 @@ impl Watch {
                 Err(error) => {
                     docs.list[index].conflict = true;
                     let message = match error {
-                        Error::TooLarge => {
-                            tr("External reload supports files up to 8 MB").to_string()
-                        }
-                        Error::NotRegular => {
-                            tr("Only regular files can be opened in the editor").to_string()
-                        }
+                        Error::TooLarge => tr("External reload supports files up to 8 MB").to_string(),
+                        Error::NotRegular => tr("Only regular files can be opened in the editor").to_string(),
                         other => other.to_string(),
                     };
-                    errors.push(trf(
-                        "Could not reload {file}: {error}",
-                        &[
-                            ("file", &job.ticket.path.display().to_string()),
-                            ("error", &message),
-                        ],
-                    ));
+                    errors.push(trf("Could not reload {file}: {error}", &[("file", &job.ticket.path.display().to_string()), ("error", &message)]));
                 }
             }
         }
         self.pending.retain(|_, ticket| {
-            if let Some(doc) = docs.list.iter().find(|d| {
-                d.editor.id == ticket.id
-                    && d.path == ticket.path
-                    && d.disk_epoch == ticket.disk_epoch
-                    && !d.generated
-            }) {
+            if let Some(doc) = docs.list.iter().find(|d| d.editor.id == ticket.id && d.path == ticket.path && d.disk_epoch == ticket.disk_epoch && !d.generated)
+            {
                 ticket.version = doc.editor.buffer.version();
                 true
             } else {
@@ -359,12 +266,7 @@ impl Watch {
             }
         });
         while self.active.len() < 2 {
-            let Some(path) = self
-                .pending
-                .keys()
-                .find(|p| !self.active.iter().any(|j| j.ticket.path == **p))
-                .cloned()
-            else {
+            let Some(path) = self.pending.keys().find(|p| !self.active.iter().any(|j| j.ticket.path == **p)).cloned() else {
                 break;
             };
             let Some(ticket) = self.pending.remove(&path) else {
@@ -378,36 +280,22 @@ impl Watch {
             let out = inbox.sender();
             let cancel = Arc::new(AtomicBool::new(false));
             let token = cancel.clone();
-            match std::thread::Builder::new()
-                .name("rc-external-file-read".into())
-                .spawn(move || {
-                    let result = disk_revert::read(&path, &token).and_then(|mut snapshot| {
-                        let ending = rc_text::LineEnding::detect(&snapshot.text);
-                        snapshot.text = snapshot.text.replace("\r\n", "\n").replace('\r', "\n");
-                        if token.load(Ordering::Acquire) {
-                            return Err(Error::Cancelled);
-                        }
-                        let equal = rope == snapshot.text;
-                        Ok(Loaded {
-                            snapshot,
-                            ending,
-                            equal,
-                        })
-                    });
-                    out.send(result);
-                }) {
-                Ok(_) => self.active.push(Active {
-                    ticket,
-                    cancel,
-                    inbox,
-                }),
-                Err(error) => errors.push(trf(
-                    "Could not reload {file}: {error}",
-                    &[
-                        ("file", &ticket.path.display().to_string()),
-                        ("error", &error.to_string()),
-                    ],
-                )),
+            match std::thread::Builder::new().name("rc-external-file-read".into()).spawn(move || {
+                let result = disk_revert::read(&path, &token).and_then(|mut snapshot| {
+                    let ending = rc_text::LineEnding::detect(&snapshot.text);
+                    snapshot.text = snapshot.text.replace("\r\n", "\n").replace('\r', "\n");
+                    if token.load(Ordering::Acquire) {
+                        return Err(Error::Cancelled);
+                    }
+                    let equal = rope == snapshot.text;
+                    Ok(Loaded { snapshot, ending, equal })
+                });
+                out.send(result);
+            }) {
+                Ok(_) => self.active.push(Active { ticket, cancel, inbox }),
+                Err(error) => {
+                    errors.push(trf("Could not reload {file}: {error}", &[("file", &ticket.path.display().to_string()), ("error", &error.to_string())]))
+                }
             }
         }
         errors

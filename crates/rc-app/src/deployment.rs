@@ -92,20 +92,12 @@ pub fn digest(bytes: &[u8]) -> String {
 pub fn source(path: &Path, cancel: &CancelToken) -> Result<Source, Error> {
     source_limited(path, cancel, MAX)
 }
-pub(crate) fn source_limited(
-    path: &Path,
-    cancel: &CancelToken,
-    limit: usize,
-) -> Result<Source, Error> {
+pub(crate) fn source_limited(path: &Path, cancel: &CancelToken, limit: usize) -> Result<Source, Error> {
     use std::io::Read;
     if cancel.is_cancelled() {
         return Err(Error::Cancelled);
     }
-    let path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()?.join(path)
-    };
+    let path = if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir()?.join(path) };
     let before_path = std::fs::symlink_metadata(&path)?;
     if !before_path.is_file() || before_path.file_type().is_symlink() {
         return Err(Error::Input);
@@ -142,29 +134,15 @@ pub(crate) fn source_limited(
         hash.update(&chunk[..n]);
         bytes.extend_from_slice(&chunk[..n]);
     }
-    if stamp != Stamp::new(&file.metadata()?)?
-        || stamp != Stamp::new(&std::fs::symlink_metadata(&path)?)?
-        || bytes.len() as u64 != stamp.size
-    {
+    if stamp != Stamp::new(&file.metadata()?)? || stamp != Stamp::new(&std::fs::symlink_metadata(&path)?)? || bytes.len() as u64 != stamp.size {
         return Err(Error::Stale);
     }
-    Ok(Source {
-        path,
-        bytes: Arc::from(bytes),
-        hash: format!("{:x}", hash.finalize()),
-        mode: stamp.mode,
-        stamp,
-    })
+    Ok(Source { path, bytes: Arc::from(bytes), hash: format!("{:x}", hash.finalize()), mode: stamp.mode, stamp })
 }
 #[derive(Clone)]
 pub enum RemoteImage {
     Missing,
-    Bytes {
-        bytes: Arc<[u8]>,
-        hash: String,
-        stamp: String,
-        mode: Option<u32>,
-    },
+    Bytes { bytes: Arc<[u8]>, hash: String, stamp: String, mode: Option<u32> },
 }
 impl RemoteImage {
     pub fn size(&self) -> Option<usize> {
@@ -182,20 +160,9 @@ impl RemoteImage {
     pub fn same(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Missing, Self::Missing) => true,
-            (
-                Self::Bytes {
-                    hash: a,
-                    stamp: sa,
-                    bytes: ba,
-                    ..
-                },
-                Self::Bytes {
-                    hash: b,
-                    stamp: sb,
-                    bytes: bb,
-                    ..
-                },
-            ) => a == b && sa == sb && ba.len() == bb.len(),
+            (Self::Bytes { hash: a, stamp: sa, bytes: ba, .. }, Self::Bytes { hash: b, stamp: sb, bytes: bb, .. }) => {
+                a == b && sa == sb && ba.len() == bb.len()
+            }
             _ => false,
         }
     }
@@ -233,14 +200,7 @@ fn snippet(bytes: &[u8]) -> Option<String> {
     let text = std::str::from_utf8(bytes).ok()?;
     Some(text.chars().take(8192).collect())
 }
-pub fn preview(
-    config: Config,
-    local: &Path,
-    remote: String,
-    create: bool,
-    trusted: bool,
-    cancel: CancelToken,
-) -> Result<Preview, Error> {
+pub fn preview(config: Config, local: &Path, remote: String, create: bool, trusted: bool, cancel: CancelToken) -> Result<Preview, Error> {
     if !trusted {
         return Err(Error::Trust);
     }
@@ -261,15 +221,7 @@ pub fn preview(
         RemoteImage::Missing => None,
         RemoteImage::Bytes { bytes, .. } => snippet(bytes),
     };
-    Ok(Preview {
-        config,
-        source,
-        remote,
-        before,
-        create,
-        source_text,
-        remote_text,
-    })
+    Ok(Preview { config, source, remote, before, create, source_text, remote_text })
 }
 pub(crate) fn local_current(preview: &Preview, cancel: &CancelToken) -> Result<(), Error> {
     let now = source(&preview.source.path, cancel)?;
@@ -278,12 +230,7 @@ pub(crate) fn local_current(preview: &Preview, cancel: &CancelToken) -> Result<(
     }
     Ok(())
 }
-pub fn apply(
-    config: Config,
-    preview: Preview,
-    trusted: bool,
-    cancel: CancelToken,
-) -> Result<Receipt, Error> {
+pub fn apply(config: Config, preview: Preview, trusted: bool, cancel: CancelToken) -> Result<Receipt, Error> {
     if !trusted {
         return Err(Error::Trust);
     }
@@ -300,49 +247,26 @@ pub fn apply(
             if !now.same(&preview.before) {
                 return Err(Error::Stale);
             }
-            let dir = tempfile::Builder::new()
-                .prefix("crabcraft-deploy-")
-                .rand_bytes(16)
-                .tempdir()?;
-            let nonce = dir
-                .path()
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or(Error::Input)?;
-            let parent = preview
-                .remote
-                .rsplit_once('/')
-                .map(|p| p.0)
-                .ok_or(Error::Input)?;
+            let dir = tempfile::Builder::new().prefix("crabcraft-deploy-").rand_bytes(16).tempdir()?;
+            let nonce = dir.path().file_name().and_then(|s| s.to_str()).ok_or(Error::Input)?;
+            let parent = preview.remote.rsplit_once('/').map(|p| p.0).ok_or(Error::Input)?;
             let temporary = format!("{parent}/.{nonce}");
             let mode = match &preview.before {
-                RemoteImage::Bytes {
-                    mode: Some(mode), ..
-                } => *mode,
+                RemoteImage::Bytes { mode: Some(mode), .. } => *mode,
                 _ => preview.source.mode,
             };
-            client
-                .upload(&temporary, &preview.source.bytes, mode)
-                .await?;
+            client.upload(&temporary, &preview.source.bytes, mode).await?;
             let result = async {
                 let image = client.image(&temporary).await?;
-                if image.hash() != Some(preview.source.hash.as_str())
-                    || image.size() != Some(preview.source.bytes.len())
-                {
+                if image.hash() != Some(preview.source.hash.as_str()) || image.size() != Some(preview.source.bytes.len()) {
                     return Err(Error::Stale);
                 }
                 local_current(&preview, &cancel)?;
                 if !client.image(&preview.remote).await?.same(&preview.before) {
                     return Err(Error::Stale);
                 }
-                client
-                    .publish(&temporary, &preview.remote, !preview.create)
-                    .await?;
-                Ok(Receipt {
-                    remote: preview.remote.clone(),
-                    hash: preview.source.hash.clone(),
-                    size: preview.source.bytes.len(),
-                })
+                client.publish(&temporary, &preview.remote, !preview.create).await?;
+                Ok(Receipt { remote: preview.remote.clone(), hash: preview.source.hash.clone(), size: preview.source.bytes.len() })
             }
             .await;
             if result.is_err() {
@@ -358,9 +282,7 @@ pub(crate) mod tests {
     use super::*;
     pub(crate) static FTPS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     pub(crate) fn ftps() -> (deploy_ftps::Config, PathBuf) {
-        let value: serde_json::Value =
-            serde_json::from_slice(&std::fs::read("/tmp/crabcraft-ftps/connection.json").unwrap())
-                .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&std::fs::read("/tmp/crabcraft-ftps/connection.json").unwrap()).unwrap();
         let config = deploy_ftps::Config::new(
             value["host"].as_str().unwrap().into(),
             value["port"].as_u64().unwrap() as u16,
@@ -374,30 +296,14 @@ pub(crate) mod tests {
     #[test]
     fn trust_and_regular_file_guards_precede_any_transport() {
         let config = Config::Sftp(crate::remote_transfer::tests::config());
-        assert!(matches!(
-            preview(
-                config.clone(),
-                Path::new("/missing/source"),
-                "/missing/remote".into(),
-                true,
-                false,
-                CancelToken::new()
-            ),
-            Err(Error::Trust)
-        ));
+        assert!(matches!(preview(config.clone(), Path::new("/missing/source"), "/missing/remote".into(), true, false, CancelToken::new()), Err(Error::Trust)));
         let dir = tempfile::tempdir().unwrap();
-        assert!(matches!(
-            source(dir.path(), &CancelToken::new()),
-            Err(Error::Input)
-        ));
+        assert!(matches!(source(dir.path(), &CancelToken::new()), Err(Error::Input)));
         let source_path = dir.path().join("file.rs");
         std::fs::write(&source_path, "fn main(){}\n").unwrap();
         let cancel = CancelToken::new();
         cancel.cancel();
-        assert!(matches!(
-            source(&source_path, &cancel),
-            Err(Error::Cancelled)
-        ));
+        assert!(matches!(source(&source_path, &cancel), Err(Error::Cancelled)));
         for bad in ["relative", "/tmp/../other", "/tmp/a\nb", "/tmp/a/"] {
             assert!(path(bad).is_err());
         }
@@ -420,33 +326,17 @@ pub(crate) mod tests {
     }
     #[test]
     #[ignore = "Requires the private OpenSSH fixture; exercises raw SFTP v3 binary/new/replace semantics"]
-    fn real_sftp_deployment_freezes_binary_new_targets_refuses_stale_and_preserves_concurrent_destinations()
-     {
-        let _lock = crate::remote_transfer::tests::SSH_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+    fn real_sftp_deployment_freezes_binary_new_targets_refuses_stale_and_preserves_concurrent_destinations() {
+        let _lock = crate::remote_transfer::tests::SSH_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let local = dir.path().join("hello.rs");
         std::fs::write(&local, "fn main(){println!(\"deployed Rust 🦀\");}\n").unwrap();
         let binary = dir.path().join("local-bin");
-        let output = std::process::Command::new("rustc")
-            .arg(&local)
-            .arg("-o")
-            .arg(&binary)
-            .output()
-            .unwrap();
+        let output = std::process::Command::new("rustc").arg(&local).arg("-o").arg(&binary).output().unwrap();
         assert!(output.status.success());
         let destination = dir.path().join("deployed-bin");
         let config = Config::Sftp(crate::remote_transfer::tests::config());
-        let plan = preview(
-            config.clone(),
-            &binary,
-            destination.display().to_string(),
-            true,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(config.clone(), &binary, destination.display().to_string(), true, true, CancelToken::new()).unwrap();
         assert!(!destination.exists());
         let size = plan.source.bytes.len();
         let hash = plan.source.hash.clone();
@@ -454,104 +344,37 @@ pub(crate) mod tests {
         assert_eq!(receipt.hash, hash);
         assert_eq!(receipt.size, size);
         assert_eq!(digest(&std::fs::read(&destination).unwrap()), hash);
-        assert!(
-            std::process::Command::new(&destination)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(std::process::Command::new(&destination).status().unwrap().success());
         std::fs::File::open(&destination)
             .unwrap()
-            .set_times(
-                std::fs::FileTimes::new()
-                    .set_accessed(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1)),
-            )
+            .set_times(std::fs::FileTimes::new().set_accessed(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1)))
             .unwrap();
-        let plan = preview(
-            config.clone(),
-            &local,
-            destination.display().to_string(),
-            false,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(config.clone(), &local, destination.display().to_string(), false, true, CancelToken::new()).unwrap();
         std::fs::write(&local, "fn main(){println!(\"changed\");}\n").unwrap();
-        assert!(matches!(
-            apply(config.clone(), plan, true, CancelToken::new()),
-            Err(Error::Stale)
-        ));
+        assert!(matches!(apply(config.clone(), plan, true, CancelToken::new()), Err(Error::Stale)));
         assert_eq!(digest(&std::fs::read(&destination).unwrap()), hash);
-        let plan = preview(
-            config.clone(),
-            &local,
-            destination.display().to_string(),
-            false,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(config.clone(), &local, destination.display().to_string(), false, true, CancelToken::new()).unwrap();
         std::fs::write(&destination, b"external winner").unwrap();
-        assert!(matches!(
-            apply(config.clone(), plan, true, CancelToken::new()),
-            Err(Error::Stale)
-        ));
+        assert!(matches!(apply(config.clone(), plan, true, CancelToken::new()), Err(Error::Stale)));
         assert_eq!(std::fs::read(&destination).unwrap(), b"external winner");
-        let plan = preview(
-            config.clone(),
-            &local,
-            destination.display().to_string(),
-            false,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(config.clone(), &local, destination.display().to_string(), false, true, CancelToken::new()).unwrap();
         apply(config, plan, true, CancelToken::new()).unwrap();
-        assert_eq!(
-            std::fs::read(&destination).unwrap(),
-            std::fs::read(&local).unwrap()
-        );
+        assert_eq!(std::fs::read(&destination).unwrap(), std::fs::read(&local).unwrap());
         rc_core::Runtime::block_on(async {
-            let mut client = deploy_sftp::Client::connect(
-                &crate::remote_transfer::tests::config(),
-                CancelToken::new(),
-            )
-            .await
-            .unwrap();
+            let mut client = deploy_sftp::Client::connect(&crate::remote_transfer::tests::config(), CancelToken::new()).await.unwrap();
             let temporary = dir.path().join("owned-temp");
-            client
-                .upload(temporary.to_str().unwrap(), b"our upload", 0o644)
-                .await
-                .unwrap();
+            client.upload(temporary.to_str().unwrap(), b"our upload", 0o644).await.unwrap();
             let target = dir.path().join("new-race.bin");
             std::fs::write(&target, b"concurrent winner").unwrap();
-            assert!(
-                client
-                    .publish(temporary.to_str().unwrap(), target.to_str().unwrap(), false)
-                    .await
-                    .is_err()
-            );
+            assert!(client.publish(temporary.to_str().unwrap(), target.to_str().unwrap(), false).await.is_err());
             assert_eq!(std::fs::read(&target).unwrap(), b"concurrent winner");
-            client
-                .remove_temporary(temporary.to_str().unwrap())
-                .await
-                .unwrap();
+            client.remove_temporary(temporary.to_str().unwrap()).await.unwrap();
         });
         let mut bad = crate::remote_transfer::tests::config();
         let hosts = dir.path().join("bad-hosts");
         std::fs::write(&hosts, "").unwrap();
         bad.known_hosts = hosts;
-        assert!(
-            preview(
-                Config::Sftp(bad),
-                &local,
-                dir.path().join("bad.bin").display().to_string(),
-                true,
-                true,
-                CancelToken::new()
-            )
-            .is_err()
-        );
+        assert!(preview(Config::Sftp(bad), &local, dir.path().join("bad.bin").display().to_string(), true, true, CancelToken::new()).is_err());
     }
     #[test]
     #[ignore = "Requires private explicit-FTPS fixture with TLS data/control verification"]
@@ -559,123 +382,37 @@ pub(crate) mod tests {
         let _lock = FTPS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (config, root) = ftps();
         let local = tempfile::tempdir().unwrap();
-        let prefix = tempfile::Builder::new()
-            .prefix("ftps-evidence-")
-            .tempdir_in(&root)
-            .unwrap();
+        let prefix = tempfile::Builder::new().prefix("ftps-evidence-").tempdir_in(&root).unwrap();
         let name = prefix.path().file_name().unwrap().to_str().unwrap();
         let path = format!("/{name}/new.rs");
         let source_path = local.path().join("main.rs");
         std::fs::write(&source_path, "fn main(){println!(\"FTPS Rust 🦀\");}\n").unwrap();
-        let plan = preview(
-            Config::Ftps(config.clone()),
-            &source_path,
-            path.clone(),
-            true,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(Config::Ftps(config.clone()), &source_path, path.clone(), true, true, CancelToken::new()).unwrap();
         assert!(!prefix.path().join("new.rs").exists());
         let receipt = apply(Config::Ftps(config.clone()), plan, true, CancelToken::new()).unwrap();
-        assert_eq!(
-            digest(&std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap()),
-            receipt.hash
-        );
-        let plan = preview(
-            Config::Ftps(config.clone()),
-            &source_path,
-            receipt.remote.clone(),
-            false,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
-        std::fs::write(
-            root.join(receipt.remote.trim_start_matches('/')),
-            b"external",
-        )
-        .unwrap();
-        assert!(matches!(
-            apply(Config::Ftps(config.clone()), plan, true, CancelToken::new()),
-            Err(Error::Stale)
-        ));
-        let plan = preview(
-            Config::Ftps(config.clone()),
-            &source_path,
-            receipt.remote.clone(),
-            false,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        assert_eq!(digest(&std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap()), receipt.hash);
+        let plan = preview(Config::Ftps(config.clone()), &source_path, receipt.remote.clone(), false, true, CancelToken::new()).unwrap();
+        std::fs::write(root.join(receipt.remote.trim_start_matches('/')), b"external").unwrap();
+        assert!(matches!(apply(Config::Ftps(config.clone()), plan, true, CancelToken::new()), Err(Error::Stale)));
+        let plan = preview(Config::Ftps(config.clone()), &source_path, receipt.remote.clone(), false, true, CancelToken::new()).unwrap();
         apply(Config::Ftps(config.clone()), plan, true, CancelToken::new()).unwrap();
-        assert_eq!(
-            std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap(),
-            std::fs::read(&source_path).unwrap()
-        );
+        assert_eq!(std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap(), std::fs::read(&source_path).unwrap());
         let binary = local.path().join("program");
-        let result = std::process::Command::new("rustc")
-            .arg(&source_path)
-            .arg("-o")
-            .arg(&binary)
-            .output()
-            .unwrap();
+        let result = std::process::Command::new("rustc").arg(&source_path).arg("-o").arg(&binary).output().unwrap();
         assert!(result.status.success());
         let binary_path = format!("/{name}/program.bin");
-        let plan = preview(
-            Config::Ftps(config.clone()),
-            &binary,
-            binary_path,
-            true,
-            true,
-            CancelToken::new(),
-        )
-        .unwrap();
+        let plan = preview(Config::Ftps(config.clone()), &binary, binary_path, true, true, CancelToken::new()).unwrap();
         let expected = plan.source.hash.clone();
         let receipt = apply(Config::Ftps(config.clone()), plan, true, CancelToken::new()).unwrap();
-        assert_eq!(
-            digest(&std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap()),
-            expected
-        );
+        assert_eq!(digest(&std::fs::read(root.join(receipt.remote.trim_start_matches('/'))).unwrap()), expected);
         let mut bad = config.clone();
         bad.ca = None;
-        assert!(matches!(
-            preview(
-                Config::Ftps(bad),
-                &source_path,
-                format!("/{name}/untrusted.rs"),
-                true,
-                true,
-                CancelToken::new()
-            ),
-            Err(Error::Tls)
-        ));
+        assert!(matches!(preview(Config::Ftps(bad), &source_path, format!("/{name}/untrusted.rs"), true, true, CancelToken::new()), Err(Error::Tls)));
         let mut bad = config.clone();
         bad.pin = "sha256//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into();
-        assert!(matches!(
-            preview(
-                Config::Ftps(bad),
-                &source_path,
-                format!("/{name}/bad-pin.rs"),
-                true,
-                true,
-                CancelToken::new()
-            ),
-            Err(Error::Tls)
-        ));
+        assert!(matches!(preview(Config::Ftps(bad), &source_path, format!("/{name}/bad-pin.rs"), true, true, CancelToken::new()), Err(Error::Tls)));
         let mut bad = config;
         bad.password = "wrong-fixture-password".into();
-        assert!(matches!(
-            preview(
-                Config::Ftps(bad),
-                &source_path,
-                format!("/{name}/bad-auth.rs"),
-                true,
-                true,
-                CancelToken::new()
-            ),
-            Err(Error::Authentication)
-        ));
+        assert!(matches!(preview(Config::Ftps(bad), &source_path, format!("/{name}/bad-auth.rs"), true, true, CancelToken::new()), Err(Error::Authentication)));
     }
 }

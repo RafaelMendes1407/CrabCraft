@@ -40,7 +40,11 @@ impl FileWatcher {
                     EventKind::Create(_) => FsEvent::Created(path),
                     EventKind::Remove(_) => FsEvent::Removed(path),
                     EventKind::Modify(notify::event::ModifyKind::Name(_)) => {
-                        if path.exists() { FsEvent::Created(path) } else { FsEvent::Removed(path) }
+                        if path.exists() {
+                            FsEvent::Created(path)
+                        } else {
+                            FsEvent::Removed(path)
+                        }
                     }
                     EventKind::Modify(_) => FsEvent::Changed(path),
                     _ => continue,

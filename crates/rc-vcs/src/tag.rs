@@ -142,7 +142,10 @@ mod tests {
         let out = "refs/tags/v2\0tag\0aaa\0ccc\x00200\0Release 2\n\nNotes\n\x1e\nrefs/tags/v1\0commit\0bbb\0\x00100\0Subject of the commit\n\x1e\nbroken\x1e\n";
         let t = parse_tags(out);
         assert_eq!(t.len(), 2);
-        assert_eq!((t[0].name.as_str(), t[0].target.as_str(), t[0].annotated, t[0].message.as_str(), t[0].time), ("v2", "ccc", true, "Release 2\n\nNotes", 200));
+        assert_eq!(
+            (t[0].name.as_str(), t[0].target.as_str(), t[0].annotated, t[0].message.as_str(), t[0].time),
+            ("v2", "ccc", true, "Release 2\n\nNotes", 200)
+        );
         assert_eq!((t[1].name.as_str(), t[1].target.as_str(), t[1].annotated, t[1].message.as_str()), ("v1", "bbb", false, ""));
         assert_eq!(t[1].full_ref(), "refs/tags/v1");
     }

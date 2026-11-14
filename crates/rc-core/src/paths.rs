@@ -52,7 +52,7 @@ pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()>
 /// Cancellation before the atomic replacement preserves the old file. An already committed
 /// replacement is not rolled back. Cancellation is checked between bounded writes.
 pub fn write_atomic_cancellable(path: &std::path::Path, bytes: &[u8], cancel: &std::sync::atomic::AtomicBool) -> std::io::Result<()> {
-    let check = || if cancel.load(std::sync::atomic::Ordering::Acquire) {Err(std::io::Error::from(std::io::ErrorKind::Interrupted))} else {Ok(())};
+    let check = || if cancel.load(std::sync::atomic::Ordering::Acquire) { Err(std::io::Error::from(std::io::ErrorKind::Interrupted)) } else { Ok(()) };
     check()?;
     use std::io::Write;
     let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| std::path::Path::new("."));
@@ -64,9 +64,14 @@ pub fn write_atomic_cancellable(path: &std::path::Path, bytes: &[u8], cancel: &s
         Err(error) => return Err(error),
     };
     let mut temporary = tempfile::Builder::new().prefix(".crabcraft-save-").tempfile_in(parent)?;
-    for chunk in bytes.chunks(64*1024) {check()?; temporary.write_all(chunk)?;}
+    for chunk in bytes.chunks(64 * 1024) {
+        check()?;
+        temporary.write_all(chunk)?;
+    }
     check()?;
-    if let Some(permissions) = permissions { temporary.as_file().set_permissions(permissions)?; }
+    if let Some(permissions) = permissions {
+        temporary.as_file().set_permissions(permissions)?;
+    }
     check()?;
     temporary.persist(path).map_err(|error| error.error)?;
     Ok(())
@@ -91,7 +96,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn preplanted_symlinks_are_not_followed_and_permissions_are_preserved() {
-        use std::os::unix::{fs::{PermissionsExt, symlink}, ffi::OsStrExt};
+        use std::os::unix::{
+            ffi::OsStrExt,
+            fs::{PermissionsExt, symlink},
+        };
         let root = tempfile::tempdir().unwrap();
         let source = root.path().join("main.rs");
         let victim = root.path().join("unrelated.txt");
@@ -102,9 +110,11 @@ mod tests {
         write_atomic(&source, b"new").unwrap();
         assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
         assert_eq!(std::fs::metadata(&source).unwrap().permissions().mode() & 0o777, 0o640);
-        let link = root.path().join("link.rs"); symlink(&victim, &link).unwrap();
+        let link = root.path().join("link.rs");
+        symlink(&victim, &link).unwrap();
         assert!(write_atomic(&link, b"replace").is_err());
-        let fifo = root.path().join("fifo"); let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        let fifo = root.path().join("fifo");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
         assert!(write_atomic(&fifo, b"replace").is_err());
         assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");

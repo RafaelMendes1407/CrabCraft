@@ -144,18 +144,10 @@ fn sort_dedup(files: &mut Vec<FileEntry>) {
 /// folders are skipped.
 pub(crate) fn walk_builder(start: &Path) -> WalkBuilder {
     let mut b = WalkBuilder::new(start);
-    b.hidden(false)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .ignore(true)
-        .parents(true)
-        .require_git(false)
-        .follow_links(true)
-        .filter_entry(|e| {
-            let is_dir = e.file_type().is_some_and(|t| t.is_dir());
-            e.depth() == 0 || !is_hidden(&e.file_name().to_string_lossy(), is_dir)
-        });
+    b.hidden(false).git_ignore(true).git_global(true).git_exclude(true).ignore(true).parents(true).require_git(false).follow_links(true).filter_entry(|e| {
+        let is_dir = e.file_type().is_some_and(|t| t.is_dir());
+        e.depth() == 0 || !is_hidden(&e.file_name().to_string_lossy(), is_dir)
+    });
     b
 }
 
@@ -266,15 +258,7 @@ impl FileIndex {
     pub fn with_excluded(root: &Path, excluded: Vec<String>) -> FileIndex {
         let root = root.to_path_buf();
         let snapshot = Arc::new(IndexSnapshot { root: root.clone(), files: Vec::new() });
-        FileIndex {
-            shared: Arc::new(Shared {
-                root,
-                excluded,
-                snapshot: Mutex::new(snapshot),
-                pending: Mutex::new(None),
-                ready: AtomicBool::new(false),
-            }),
-        }
+        FileIndex { shared: Arc::new(Shared { root, excluded, snapshot: Mutex::new(snapshot), pending: Mutex::new(None), ready: AtomicBool::new(false) }) }
     }
 
     /// Scans `root` on the calling thread (tests, benches, CLI tools).

@@ -72,14 +72,20 @@ pub fn feature_gates(rendered: &str) -> Vec<FeatureGate> {
 /// The crate a file of Cargo's registry cache belongs to:
 /// `…/registry/src/<index>/tokio-1.54.1/src/fs.rs` is `tokio`.
 pub fn registry_crate_of(file: &Path) -> Option<String> {
-    let parts: Vec<String> = file.components().filter_map(|c| match c {
-        Component::Normal(s) => s.to_str().map(str::to_string),
-        _ => None,
-    }).collect();
+    let parts: Vec<String> = file
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => s.to_str().map(str::to_string),
+            _ => None,
+        })
+        .collect();
     let at = parts.windows(2).position(|w| w[0] == "registry" && w[1] == "src")?;
     let dir = parts.get(at + 3)?;
     // The name may hold `-`, and so may the version (`1.0.0-rc.1`): the version is what parses.
-    dir.match_indices('-').map(|(i, _)| (&dir[..i], &dir[i + 1..])).find(|(name, version)| crate::valid_crate_name(name) && semver::Version::parse(version).is_ok()).map(|(name, _)| name.to_string())
+    dir.match_indices('-')
+        .map(|(i, _)| (&dir[..i], &dir[i + 1..]))
+        .find(|(name, version)| crate::valid_crate_name(name) && semver::Version::parse(version).is_ok())
+        .map(|(name, _)| name.to_string())
 }
 
 /// Char offsets of the start of each `\n`-separated line, and the lines' chars.
@@ -407,7 +413,13 @@ mod tests {
     #[test]
     fn gates_come_from_the_rendered_notes() {
         let tokio = feature_gates(IMPORT);
-        assert_eq!(tokio, vec![FeatureGate { feature: "fs".into(), file: "/home/u/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.54.1/src/macros/cfg.rs".into() }]);
+        assert_eq!(
+            tokio,
+            vec![FeatureGate {
+                feature: "fs".into(),
+                file: "/home/u/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.54.1/src/macros/cfg.rs".into()
+            }]
+        );
         assert_eq!(registry_crate_of(&tokio[0].file).as_deref(), Some("tokio"));
         assert_eq!(feature_gates(OWN), vec![FeatureGate { feature: "extra".into(), file: "src/main.rs".into() }]);
         // Other messages, a label without a location or a bad name: nothing.
@@ -430,10 +442,22 @@ mod tests {
     fn a_feature_is_added_to_each_form_of_dependency() {
         let deps = "[dependencies]\n";
         assert_eq!(add(&format!("{deps}tokio = \"1.54\"\n"), "tokio", "fs").unwrap(), format!("{deps}tokio = {{ version = \"1.54\", features = [\"fs\"] }}\n"));
-        assert_eq!(add(&format!("{deps}tokio = {{ version = \"1\", default-features = false }}\n"), "tokio", "fs").unwrap(), format!("{deps}tokio = {{ version = \"1\", default-features = false, features = [\"fs\"] }}\n"));
-        assert_eq!(add(&format!("{deps}tokio = {{ version = \"1\", features = [\"rt\"] }}\n"), "tokio", "fs").unwrap(), format!("{deps}tokio = {{ version = \"1\", features = [\"rt\", \"fs\"] }}\n"));
-        assert_eq!(add(&format!("{deps}tokio = {{ version = \"1\", features = [] }}\n"), "tokio", "fs").unwrap(), format!("{deps}tokio = {{ version = \"1\", features = [\"fs\"] }}\n"));
-        assert_eq!(add(&format!("{deps}tokio = {{ workspace = true }}\n"), "tokio", "fs").unwrap(), format!("{deps}tokio = {{ workspace = true, features = [\"fs\"] }}\n"));
+        assert_eq!(
+            add(&format!("{deps}tokio = {{ version = \"1\", default-features = false }}\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio = {{ version = \"1\", default-features = false, features = [\"fs\"] }}\n")
+        );
+        assert_eq!(
+            add(&format!("{deps}tokio = {{ version = \"1\", features = [\"rt\"] }}\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio = {{ version = \"1\", features = [\"rt\", \"fs\"] }}\n")
+        );
+        assert_eq!(
+            add(&format!("{deps}tokio = {{ version = \"1\", features = [] }}\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio = {{ version = \"1\", features = [\"fs\"] }}\n")
+        );
+        assert_eq!(
+            add(&format!("{deps}tokio = {{ workspace = true }}\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio = {{ workspace = true, features = [\"fs\"] }}\n")
+        );
         // Multi-line arrays keep their trailing comma and comments.
         let multi = format!("{deps}tokio = {{ version = \"1\", features = [\n    \"rt\", # the runtime\n    \"net\",\n] }}\nlog = \"0.4\"\n");
         assert_eq!(add(&multi, "tokio", "fs").unwrap(), multi.replace("\"net\",", "\"net\", \"fs\","));
@@ -443,10 +467,19 @@ mod tests {
         let table = "[dependencies.tokio]\nfeatures = [\"rt\"]\nversion = \"1\"\n";
         assert_eq!(add(table, "tokio", "fs").unwrap(), "[dependencies.tokio]\nfeatures = [\"rt\", \"fs\"]\nversion = \"1\"\n");
         // Dotted keys.
-        assert_eq!(add(&format!("{deps}tokio.workspace = true\nlog = \"0.4\"\n"), "tokio", "fs").unwrap(), format!("{deps}tokio.workspace = true\ntokio.features = [\"fs\"]\nlog = \"0.4\"\n"));
-        assert_eq!(add(&format!("{deps}tokio.version = \"1\"\ntokio.features = [\"rt\"]\n"), "tokio", "fs").unwrap(), format!("{deps}tokio.version = \"1\"\ntokio.features = [\"rt\", \"fs\"]\n"));
+        assert_eq!(
+            add(&format!("{deps}tokio.workspace = true\nlog = \"0.4\"\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio.workspace = true\ntokio.features = [\"fs\"]\nlog = \"0.4\"\n")
+        );
+        assert_eq!(
+            add(&format!("{deps}tokio.version = \"1\"\ntokio.features = [\"rt\"]\n"), "tokio", "fs").unwrap(),
+            format!("{deps}tokio.version = \"1\"\ntokio.features = [\"rt\", \"fs\"]\n")
+        );
         // Renamed: the key is what the manifest says.
-        assert_eq!(add(&format!("{deps}rt = {{ package = \"tokio\", version = \"1\" }}\n"), "rt", "fs").unwrap(), format!("{deps}rt = {{ package = \"tokio\", version = \"1\", features = [\"fs\"] }}\n"));
+        assert_eq!(
+            add(&format!("{deps}rt = {{ package = \"tokio\", version = \"1\" }}\n"), "rt", "fs").unwrap(),
+            format!("{deps}rt = {{ package = \"tokio\", version = \"1\", features = [\"fs\"] }}\n")
+        );
         // Already there: nothing to do.
         assert_eq!(add(&format!("{deps}tokio = {{ version = \"1\", features = [\"fs\"] }}\n"), "tokio", "fs"), None);
     }
@@ -455,12 +488,19 @@ mod tests {
     fn bad_entries_are_left_alone() {
         let text = "[dependencies]\ntokio = { version = \"1\"\n";
         assert!(crate::dependency_lines(text).is_empty());
-        let dep = ManifestDep { line: 1, key: "tokio".into(), name: "tokio".into(), req: Some("1".into()), source: crate::DepSource::CratesIo, in_workspace: false };
+        let dep =
+            ManifestDep { line: 1, key: "tokio".into(), name: "tokio".into(), req: Some("1".into()), source: crate::DepSource::CratesIo, in_workspace: false };
         assert_eq!(add_dependency_feature(text, &dep, "fs"), None);
         assert_eq!(add_dependency_feature("[dependencies]\ntokio = \"1\"\n", &dep, "not valid"), None);
         assert_eq!(add_dependency_feature("", &dep, "fs"), None);
         // Never panics on broken text.
-        for text in ["[dependencies]\ntokio = \"", "[dependencies]\ntokio = {", "[dependencies]\ntokio = { features = [\"a\"", "[dependencies]\ntokio.features = [", "[dependencies.tokio]\nfeatures = [\n"] {
+        for text in [
+            "[dependencies]\ntokio = \"",
+            "[dependencies]\ntokio = {",
+            "[dependencies]\ntokio = { features = [\"a\"",
+            "[dependencies]\ntokio.features = [",
+            "[dependencies.tokio]\nfeatures = [\n",
+        ] {
             let _ = add_dependency_feature(text, &dep, "fs");
         }
     }
@@ -468,7 +508,10 @@ mod tests {
     #[test]
     fn a_feature_is_added_to_default() {
         let apply_default = |text: &str| add_default_feature(text, "extra").map(|e| apply(text, &e));
-        assert_eq!(apply_default("[package]\nname = \"a\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n").unwrap(), "[package]\nname = \"a\"\n\n[features]\ndefault = [\"std\", \"extra\"]\nstd = []\nextra = []\n");
+        assert_eq!(
+            apply_default("[package]\nname = \"a\"\n\n[features]\ndefault = [\"std\"]\nstd = []\nextra = []\n").unwrap(),
+            "[package]\nname = \"a\"\n\n[features]\ndefault = [\"std\", \"extra\"]\nstd = []\nextra = []\n"
+        );
         assert_eq!(apply_default("[features]\nextra = []\n").unwrap(), "[features]\ndefault = [\"extra\"]\nextra = []\n");
         assert_eq!(apply_default("[features]\ndefault = [\"extra\"]\nextra = []\n"), None);
         assert_eq!(apply_default("[package]\nname = \"a\"\n"), None);

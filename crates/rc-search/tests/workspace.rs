@@ -253,7 +253,10 @@ fn find_options_whole_word_case_regex_and_context() {
     assert_eq!(count(QueryOptions { pattern: "Order".into(), case_sensitive: true, ..Default::default() }), 1);
     assert_eq!(count(QueryOptions { pattern: r"\w+ = \d".into(), regex: true, ..Default::default() }), 2);
 
-    let (files, _) = run_find(dir.path(), FindOptions { query: QueryOptions { pattern: "Order o".into(), case_sensitive: true, ..Default::default() }, context_lines: 1, ..Default::default() });
+    let (files, _) = run_find(
+        dir.path(),
+        FindOptions { query: QueryOptions { pattern: "Order o".into(), case_sensitive: true, ..Default::default() }, context_lines: 1, ..Default::default() },
+    );
     let l = &files[0].lines[0];
     assert_eq!(l.before, ["int order = 1;"]);
     assert_eq!(l.after, ["var orders = 2;"]);

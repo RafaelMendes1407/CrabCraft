@@ -55,18 +55,10 @@ impl SettingsBrowse {
             if let Some(parent) = current.as_deref().and_then(|path| path.parent()) {
                 chooser = chooser.set_directory(parent);
             }
-            chooser
-                .pick_file()
-                .await
-                .map(|file| file.path().to_path_buf())
+            chooser.pick_file().await.map(|file| file.path().to_path_buf())
         });
     }
-    fn start_with(
-        &mut self,
-        target: ToolPath,
-        waker: Waker,
-        future: impl Future<Output = Option<PathBuf>> + Send + 'static,
-    ) {
+    fn start_with(&mut self, target: ToolPath, waker: Waker, future: impl Future<Output = Option<PathBuf>> + Send + 'static) {
         self.cancel();
         let (sender, receiver) = mpsc::channel();
         let task = rc_core::Runtime::spawn(async move {
@@ -74,11 +66,7 @@ impl SettingsBrowse {
             let _ = sender.send(result);
             waker.wake();
         });
-        self.pending = Some(Pending {
-            target,
-            receiver,
-            task,
-        });
+        self.pending = Some(Pending { target, receiver, task });
     }
     pub fn poll(&mut self, settings: &mut Settings) {
         let Some(pending) = &self.pending else { return };
@@ -110,11 +98,7 @@ mod tests {
     fn chooser_updates_only_its_target_and_only_its_own_draft() {
         let mut old = SettingsBrowse::default();
         let (send, receive) = tokio::sync::oneshot::channel();
-        old.start_with(
-            ToolPath::Gdb,
-            Waker::noop(),
-            async move { receive.await.ok() },
-        );
+        old.start_with(ToolPath::Gdb, Waker::noop(), async move { receive.await.ok() });
         drop(old);
         let mut new = SettingsBrowse::default();
         let mut settings = Settings::default();
@@ -122,25 +106,16 @@ mod tests {
         let _ = send.send(PathBuf::from("discarded"));
         new.poll(&mut settings);
         assert_eq!(settings.gdb_path, original);
-        new.start_with(ToolPath::Analyzer, Waker::noop(), async {
-            Some(PathBuf::from("chosen-analyzer"))
-        });
+        new.start_with(ToolPath::Analyzer, Waker::noop(), async { Some(PathBuf::from("chosen-analyzer")) });
         finish(&mut new, &mut settings);
-        assert_eq!(
-            settings.rust_analyzer_path,
-            Some(PathBuf::from("chosen-analyzer"))
-        );
+        assert_eq!(settings.rust_analyzer_path, Some(PathBuf::from("chosen-analyzer")));
         assert_eq!(settings.gdb_path, original);
     }
     #[test]
     fn cancelled_chooser_never_overwrites_the_draft() {
         let mut browse = SettingsBrowse::default();
         let (send, receive) = tokio::sync::oneshot::channel();
-        browse.start_with(
-            ToolPath::Gdb,
-            Waker::noop(),
-            async move { receive.await.ok() },
-        );
+        browse.start_with(ToolPath::Gdb, Waker::noop(), async move { receive.await.ok() });
         let mut settings = Settings::default();
         let original = settings.gdb_path.clone();
         browse.cancel();

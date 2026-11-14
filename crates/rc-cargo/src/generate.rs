@@ -1,9 +1,9 @@
 //! Git repository templates through cargo-generate. Hooks require explicit template trust in
 //! the caller; shell commands remain disabled and stdin is closed (no invisible prompts).
 
-use std::path::{Path, PathBuf};
 use rc_dotnet::CancelToken;
 use rc_dotnet::process::{StreamOpts, run_streaming};
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct GenerateProject {
@@ -25,7 +25,9 @@ pub enum GenerateError {
 }
 
 impl GenerateProject {
-    pub fn project_dir(&self) -> PathBuf { self.location.join(&self.name) }
+    pub fn project_dir(&self) -> PathBuf {
+        self.location.join(&self.name)
+    }
 
     pub fn problem(&self) -> Option<&'static str> {
         if !crate::new_project::valid_name(&self.name) {
@@ -40,7 +42,9 @@ impl GenerateProject {
             Some("Enter a valid template branch")
         } else if !self.trusted {
             Some("Trust the template before generating a project")
-        } else { None }
+        } else {
+            None
+        }
     }
 
     fn command(&self, program: &Path) -> tokio::process::Command {
@@ -48,7 +52,9 @@ impl GenerateProject {
         cmd.args(["generate", "--git", &self.repository, "--name", &self.name]);
         cmd.arg("--destination").arg(&self.location);
         cmd.args(["--silent", "--force", "--skip-submodules", "--no-workspace", "--no-fmt", "--vcs", if self.git { "git" } else { "none" }]);
-        if !self.branch.is_empty() { cmd.args(["--branch", &self.branch]); }
+        if !self.branch.is_empty() {
+            cmd.args(["--branch", &self.branch]);
+        }
         cmd.current_dir(&self.location).env("GIT_TERMINAL_PROMPT", "0").env("RUSTUP_AUTO_INSTALL", "0");
         cmd
     }
@@ -56,21 +62,35 @@ impl GenerateProject {
     /// Requires cargo-generate 0.26+; older versions fail with their argument error. A failure
     /// preserves partial output for inspection and never removes an existing destination.
     pub async fn create(&self, program: &Path, cancel: &CancelToken) -> Result<PathBuf, GenerateError> {
-        if let Some(problem) = self.problem() { return Err(GenerateError::Invalid(problem)); }
+        if let Some(problem) = self.problem() {
+            return Err(GenerateError::Invalid(problem));
+        }
         let mut output = String::new();
         let result = run_streaming(self.command(program), cancel, StreamOpts::default(), &mut |_| {}, &mut |line| {
             // Keep errors useful without retaining unbounded output from an untrusted tool.
             let remaining = 64 * 1024_usize - output.len();
             for ch in line.text.chars() {
-                if output.len() + ch.len_utf8() > 64 * 1024 { break; }
+                if output.len() + ch.len_utf8() > 64 * 1024 {
+                    break;
+                }
                 output.push(ch);
             }
-            if remaining > 0 && output.len() < 64 * 1024 { output.push('\n'); }
-        }).await.map_err(GenerateError::Io)?;
-        if result.cancelled { return Err(GenerateError::Cancelled); }
-        if result.code != Some(0) { return Err(GenerateError::Failed { code: result.code, output }); }
+            if remaining > 0 && output.len() < 64 * 1024 {
+                output.push('\n');
+            }
+        })
+        .await
+        .map_err(GenerateError::Io)?;
+        if result.cancelled {
+            return Err(GenerateError::Cancelled);
+        }
+        if result.code != Some(0) {
+            return Err(GenerateError::Failed { code: result.code, output });
+        }
         let dir = self.project_dir();
-        if !dir.join("Cargo.toml").is_file() { return Err(GenerateError::MissingManifest(dir)); }
+        if !dir.join("Cargo.toml").is_file() {
+            return Err(GenerateError::MissingManifest(dir));
+        }
         Ok(dir)
     }
 }
@@ -80,7 +100,14 @@ mod tests {
     use super::*;
 
     fn request(location: &Path) -> GenerateProject {
-        GenerateProject { repository: "https://example.invalid/template".into(), branch: String::new(), name: "sample_project".into(), location: location.to_path_buf(), git: false, trusted: true }
+        GenerateProject {
+            repository: "https://example.invalid/template".into(),
+            branch: String::new(),
+            name: "sample_project".into(),
+            location: location.to_path_buf(),
+            git: false,
+            trusted: true,
+        }
     }
 
     #[test]
@@ -138,7 +165,14 @@ mod tests {
         std::fs::write(template.join("cargo-generate.toml"), "[hooks]\npost = [\"hook.rhai\"]\n").unwrap();
         std::fs::write(template.join("hook.rhai"), "system::command(\"cargo\", [\"--version\"]);\n").unwrap();
         assert!(std::process::Command::new("git").args(["add", "."]).current_dir(&template).status().unwrap().success());
-        assert!(std::process::Command::new("git").args(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Command hook"]).current_dir(&template).status().unwrap().success());
+        assert!(
+            std::process::Command::new("git")
+                .args(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Command hook"])
+                .current_dir(&template)
+                .status()
+                .unwrap()
+                .success()
+        );
         req.name = "blocked_hook".into();
         assert!(matches!(req.create(&tool, &CancelToken::new()).await, Err(GenerateError::Failed { .. })));
         assert!(!req.project_dir().join("build-ran").exists());

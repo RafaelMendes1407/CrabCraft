@@ -166,7 +166,11 @@ fn collect(job: Job, cancel: &AtomicBool) -> Vec<Change> {
     let Some((old, new)) = mention(&job.from, &job.to) else { return out };
     let Some(root) = &job.root else { return out };
     let inbox = Inbox::new(Waker::noop());
-    let options = FindOptions { query: QueryOptions { pattern: old.clone(), case_sensitive: true, ..Default::default() }, max_results: MAX_TEXT_MATCHES, ..Default::default() };
+    let options = FindOptions {
+        query: QueryOptions { pattern: old.clone(), case_sensitive: true, ..Default::default() },
+        max_results: MAX_TEXT_MATCHES,
+        ..Default::default()
+    };
     let Ok(handle) = rc_search::find_in_files(root, options, inbox.sender()) else { return out };
     while !handle.is_finished() {
         if cancel.load(Ordering::Relaxed) {
@@ -202,7 +206,8 @@ fn collect(job: Job, cancel: &AtomicBool) -> Vec<Change> {
             if taken.iter().any(|&(x, y)| a < y.max(x + 1) && x < b) {
                 continue;
             }
-            let edit = lsp::TextEdit { range: lsp::Range { start: convert::lsp_position(&rope, a), end: convert::lsp_position(&rope, b) }, new_text: new.clone() };
+            let edit =
+                lsp::TextEdit { range: lsp::Range { start: convert::lsp_position(&rope, a), end: convert::lsp_position(&rope, b) }, new_text: new.clone() };
             out.push(change(&rope, &path, edit, false));
             found += 1;
         }
@@ -255,7 +260,9 @@ pub(crate) fn change(rope: &Rope, path: &Path, edit: lsp::TextEdit, from_server:
 /// undo step, closed files on disk). Returns the number of files edited; fails only when the
 /// rename itself fails, with nothing changed.
 pub fn apply(app: &mut CrabCraftApp, from: &Path, to: &Path, changes: &[Change]) -> Result<usize, String> {
-    if app.disk_save.saves.busy() {return Err(tr("Another action is waiting for documents to save").to_string());}
+    if app.disk_save.saves.busy() {
+        return Err(tr("Another action is waiting for documents to save").to_string());
+    }
     if to.exists() {
         return Err(tr("A file or folder with this name already exists").to_string());
     }
@@ -326,11 +333,17 @@ mod tests {
     #[test]
     fn a_change_shows_its_line_before_and_after() {
         let rope = Rope::from_str("mod util;\npub use util::helper;\n");
-        let edit = lsp::TextEdit { range: lsp::Range { start: lsp::Position { line: 1, character: 8 }, end: lsp::Position { line: 1, character: 12 } }, new_text: "tools".into() };
+        let edit = lsp::TextEdit {
+            range: lsp::Range { start: lsp::Position { line: 1, character: 8 }, end: lsp::Position { line: 1, character: 12 } },
+            new_text: "tools".into(),
+        };
         let c = change(&rope, Path::new("lib.rs"), edit, true);
         assert_eq!((c.line, c.before.as_str(), c.after.as_str(), c.checked), (1, "pub use util::helper;", "pub use tools::helper;", true));
         // Out of range positions from a server are clamped.
-        let edit = lsp::TextEdit { range: lsp::Range { start: lsp::Position { line: 9, character: 99 }, end: lsp::Position { line: 0, character: 0 } }, new_text: "x".into() };
+        let edit = lsp::TextEdit {
+            range: lsp::Range { start: lsp::Position { line: 9, character: 99 }, end: lsp::Position { line: 0, character: 0 } },
+            new_text: "x".into(),
+        };
         let c = change(&rope, Path::new("lib.rs"), edit, false);
         assert!(!c.checked);
     }

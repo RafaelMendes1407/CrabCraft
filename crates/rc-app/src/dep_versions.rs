@@ -126,7 +126,11 @@ impl DepVersions {
     /// The registry versions of `name` locked in the `Cargo.lock` of `manifest`, newest first.
     pub fn locked_versions(&self, manifest: &Path, name: &str) -> Vec<Version> {
         let info = self.locks.get(manifest).and_then(|e| e.info.as_ref());
-        let mut out: Vec<Version> = info.and_then(|i| i.lock.as_ref()).and_then(|l| l.packages.get(name)).map(|v| v.iter().filter(|l| l.source.is_some()).map(|l| l.version.clone()).collect()).unwrap_or_default();
+        let mut out: Vec<Version> = info
+            .and_then(|i| i.lock.as_ref())
+            .and_then(|l| l.packages.get(name))
+            .map(|v| v.iter().filter(|l| l.source.is_some()).map(|l| l.version.clone()).collect())
+            .unwrap_or_default();
         out.sort_unstable_by(|a, b| b.cmp(a));
         out.dedup();
         out
@@ -135,7 +139,10 @@ impl DepVersions {
     /// The names of the registry packages in the `Cargo.lock` of `manifest`.
     pub fn locked_names(&self, manifest: &Path) -> Vec<String> {
         let info = self.locks.get(manifest).and_then(|e| e.info.as_ref());
-        let mut out: Vec<String> = info.and_then(|i| i.lock.as_ref()).map(|l| l.packages.iter().filter(|(_, v)| v.iter().any(|l| l.source.is_some())).map(|(n, _)| n.clone()).collect()).unwrap_or_default();
+        let mut out: Vec<String> = info
+            .and_then(|i| i.lock.as_ref())
+            .map(|l| l.packages.iter().filter(|(_, v)| v.iter().any(|l| l.source.is_some())).map(|(n, _)| n.clone()).collect())
+            .unwrap_or_default();
         out.sort();
         out
     }
@@ -149,7 +156,14 @@ impl DepVersions {
     /// `Cargo.toml`. `epoch` changes when the Cargo project is read again; `online` allows asking
     /// crates.io. The diagnostics also go to `problems` (the Problems window). Returns how soon
     /// to call again when a look-up waits for the text to rest.
-    pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64, online: bool, profile: &rc_core::inspections::InspectionProfile) -> Option<Duration> {
+    pub fn update(
+        &mut self,
+        docs: &mut Docs,
+        problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>,
+        epoch: u64,
+        online: bool,
+        profile: &rc_core::inspections::InspectionProfile,
+    ) -> Option<Duration> {
         for entry in self.locks.values_mut() {
             if let Some(info) = entry.loading.as_ref().and_then(|i| i.drain().into_iter().last()) {
                 entry.info = Some(Arc::new(info));
@@ -235,15 +249,28 @@ impl DepVersions {
                     let req = dep.req.as_deref().unwrap_or_default();
                     use crate::inspection_profile as ip;
                     let (span, severity, message, id) = match &problem {
-                        DepProblem::Missing => (spans.key, Severity::Error, trf("No crate named `{name}` on crates.io", &[("name", &dep.name)]), ip::UNKNOWN_CRATE),
-                        DepProblem::NoMatch => (spans.req.or(spans.key), Severity::Warning, trf("No version of `{name}` on crates.io matches `{req}`", &[("name", &dep.name), ("req", &req)]), ip::NO_MATCHING_VERSION),
+                        DepProblem::Missing => {
+                            (spans.key, Severity::Error, trf("No crate named `{name}` on crates.io", &[("name", &dep.name)]), ip::UNKNOWN_CRATE)
+                        }
+                        DepProblem::NoMatch => (
+                            spans.req.or(spans.key),
+                            Severity::Warning,
+                            trf("No version of `{name}` on crates.io matches `{req}`", &[("name", &dep.name), ("req", &req)]),
+                            ip::NO_MATCHING_VERSION,
+                        ),
                         DepProblem::Outdated(v) => {
                             fixes.insert(dep.line, v.clone());
-                            (spans.req.or(spans.key), Severity::Info, trf("Newer version {version} is outside `{req}`", &[("version", &v.to_string()), ("req", &req)]), ip::NEWER_VERSION)
+                            (
+                                spans.req.or(spans.key),
+                                Severity::Info,
+                                trf("Newer version {version} is outside `{req}`", &[("version", &v.to_string()), ("req", &req)]),
+                                ip::NEWER_VERSION,
+                            )
                         }
                     };
                     if let Some((start, end)) = span {
-                        diags.push((Diagnostic { start, end, severity, message, code: Some(DIAG_CODE.to_string()), unnecessary: false, deprecated: false }, id));
+                        diags
+                            .push((Diagnostic { start, end, severity, message, code: Some(DIAG_CODE.to_string()), unnecessary: false, deprecated: false }, id));
                     }
                 }
             }
@@ -367,7 +394,11 @@ fn read_lock_info(manifest: &Path) -> LockInfo {
     let mut text = String::new();
     let root = lock_path.with_file_name("Cargo.toml");
     let read = std::fs::File::open(&root).and_then(|f| f.take(MAX_MANIFEST_BYTES).read_to_string(&mut text));
-    let workspace_deps = if read.is_ok() { rc_cargo::dependency_lines(&text).into_iter().filter(|d| d.in_workspace).map(|d| (d.key.clone(), d)).collect() } else { HashMap::new() };
+    let workspace_deps = if read.is_ok() {
+        rc_cargo::dependency_lines(&text).into_iter().filter(|d| d.in_workspace).map(|d| (d.key.clone(), d)).collect()
+    } else {
+        HashMap::new()
+    };
     LockInfo { lock, workspace_deps }
 }
 

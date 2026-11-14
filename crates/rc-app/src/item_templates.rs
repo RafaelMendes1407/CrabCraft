@@ -37,8 +37,12 @@ impl ItemKind {
         }
     }
 
-    pub fn is_folder(self) -> bool { self == Self::Folder }
-    pub fn is_rust(self) -> bool { matches!(self, Self::RustFile | Self::RustModule) }
+    pub fn is_folder(self) -> bool {
+        self == Self::Folder
+    }
+    pub fn is_rust(self) -> bool {
+        matches!(self, Self::RustFile | Self::RustModule)
+    }
 
     pub fn module_name(typed: &str) -> &str {
         let name = typed.trim();

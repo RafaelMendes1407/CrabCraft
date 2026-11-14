@@ -38,11 +38,7 @@ impl Lang {
             "http" | "rest" => Lang::Http,
             _ => {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if name == "Cargo.lock" {
-                    Lang::Toml
-                } else {
-                    Lang::Plain
-                }
+                if name == "Cargo.lock" { Lang::Toml } else { Lang::Plain }
             }
         }
     }
@@ -117,7 +113,10 @@ impl Lang {
             Lang::Html => (&HTML, include_str!("../queries/html.scm")),
             Lang::Css => (&CSS, include_str!("../queries/css.scm")),
             Lang::JavaScript => (&JS, include_str!("../queries/javascript.scm")),
-            Lang::TypeScript | Lang::Tsx => (if self == Lang::Tsx { &TSX } else { &TS }, TS_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/javascript.scm"), include_str!("../queries/typescript.scm"))).as_str()),
+            Lang::TypeScript | Lang::Tsx => (
+                if self == Lang::Tsx { &TSX } else { &TS },
+                TS_SOURCE.get_or_init(|| format!("{}\n{}", include_str!("../queries/javascript.scm"), include_str!("../queries/typescript.scm"))).as_str(),
+            ),
             Lang::Xml => (&XML, include_str!("../queries/xml.scm")),
             Lang::Json => (&JSON, include_str!("../queries/json.scm")),
             Lang::Markdown => (&MD, include_str!("../queries/markdown.scm")),
@@ -134,9 +133,15 @@ mod tests {
 
     #[test]
     fn web_extensions_and_comments_use_their_own_language() {
-        for ext in ["html", "htm"] { assert_eq!(Lang::from_path(Path::new(&format!("index.{ext}"))), Lang::Html); }
-        for ext in ["js", "mjs", "cjs", "jsx"] { assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::JavaScript); }
-        for ext in ["ts", "mts", "cts"] { assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::TypeScript); }
+        for ext in ["html", "htm"] {
+            assert_eq!(Lang::from_path(Path::new(&format!("index.{ext}"))), Lang::Html);
+        }
+        for ext in ["js", "mjs", "cjs", "jsx"] {
+            assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::JavaScript);
+        }
+        for ext in ["ts", "mts", "cts"] {
+            assert_eq!(Lang::from_path(Path::new(&format!("app.{ext}"))), Lang::TypeScript);
+        }
         assert_eq!(Lang::from_path(Path::new("view.TSX")), Lang::Tsx);
         assert_eq!(Lang::Html.block_comment(), Some(("<!--", "-->")));
         assert_eq!(Lang::Html.line_comment(), None);
@@ -144,7 +149,9 @@ mod tests {
         for lang in [Lang::Css, Lang::JavaScript, Lang::TypeScript, Lang::Tsx] {
             assert_eq!(lang.block_comment(), Some(("/*", "*/")));
         }
-        for lang in [Lang::JavaScript, Lang::TypeScript, Lang::Tsx] { assert_eq!(lang.line_comment(), Some("//")); }
+        for lang in [Lang::JavaScript, Lang::TypeScript, Lang::Tsx] {
+            assert_eq!(lang.line_comment(), Some("//"));
+        }
     }
 
     #[test]

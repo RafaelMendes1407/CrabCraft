@@ -1,7 +1,10 @@
 //! Evcxr is hosted by the native terminal. Starting a PTY never blocks the UI.
 use rc_core::{Inbox, Waker};
 use rc_term::{SpawnSpec, TermSession};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 #[derive(Debug)]
 pub enum StartError {
@@ -33,13 +36,18 @@ impl Starting {
         let out = inbox.sender();
         let cancelled = Arc::new(AtomicBool::new(false));
         let token = cancelled.clone();
-        std::thread::Builder::new().name("rc-repl-start".into()).spawn(move || {
-            if token.load(Ordering::Acquire) { return; }
-            let result = TermSession::spawn(&spec, waker).map_err(|error| StartError::Process(error.to_string()));
-            if !token.load(Ordering::Acquire) {
-                out.send(result);
-            }
-        }).map_err(StartError::Thread)?;
+        std::thread::Builder::new()
+            .name("rc-repl-start".into())
+            .spawn(move || {
+                if token.load(Ordering::Acquire) {
+                    return;
+                }
+                let result = TermSession::spawn(&spec, waker).map_err(|error| StartError::Process(error.to_string()));
+                if !token.load(Ordering::Acquire) {
+                    out.send(result);
+                }
+            })
+            .map_err(StartError::Thread)?;
         Ok(Self { inbox, cancelled })
     }
 
@@ -62,7 +70,9 @@ mod tests {
     fn wait(starting: &Starting) -> Result<TermSession, StartError> {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            if let Some(result) = starting.poll() { return result; }
+            if let Some(result) = starting.poll() {
+                return result;
+            }
             assert!(Instant::now() < deadline, "PTY startup timed out");
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -99,12 +109,16 @@ mod tests {
         let program = std::env::var("CRABCRAFT_TEST_EVCXR").unwrap_or_else(|_| "evcxr".into());
         let project = tempfile::tempdir().unwrap();
         std::fs::create_dir(project.path().join("src")).unwrap();
-        std::fs::write(project.path().join("Cargo.toml"), "[package]\nname = \"repl_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n").unwrap();
+        std::fs::write(project.path().join("Cargo.toml"), "[package]\nname = \"repl_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n")
+            .unwrap();
         std::fs::write(project.path().join("src/lib.rs"), "pub fn answer() -> i32 { 42 }\n").unwrap();
-        let mut spec = SpawnSpec::rust_repl(Some(project.path().to_path_buf())).size(120, 40)
+        let mut spec = SpawnSpec::rust_repl(Some(project.path().to_path_buf()))
+            .size(120, 40)
             .env("CARGO_NET_OFFLINE", "true")
             .env("XDG_CONFIG_HOME", project.path().join("config").to_string_lossy());
-        if let rc_term::Program::Command { program: executable, .. } = &mut spec.program { *executable = program; }
+        if let rc_term::Program::Command { program: executable, .. } = &mut spec.program {
+            *executable = program;
+        }
         let starting = Starting::new(spec, Waker::noop()).unwrap();
         let session = wait(&starting).unwrap();
         let timeout = Duration::from_secs(20);

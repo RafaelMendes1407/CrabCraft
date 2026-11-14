@@ -1,22 +1,13 @@
 //! Bounded RFC4180-style UTF-8 CSV. Explicit NULL/hex markers; no SQL or formulas execute.
 use crate::database_core::{Cell, Error, Transfer};
 fn formula(value: &str) -> bool {
-    value
-        .trim_start_matches([' ', '\t', '\r', '\n'])
-        .starts_with(['=', '+', '-', '@'])
+    value.trim_start_matches([' ', '\t', '\r', '\n']).starts_with(['=', '+', '-', '@'])
 }
 fn text(value: &str) -> Result<String, Error> {
-    if value
-        .chars()
-        .any(|ch| ch.is_control() && !matches!(ch, '\n' | '\r' | '\t'))
-    {
+    if value.chars().any(|ch| ch.is_control() && !matches!(ch, '\n' | '\r' | '\t')) {
         return Err(Error::Input);
     }
-    Ok(if value.starts_with('\\') || formula(value) {
-        format!("\\{value}")
-    } else {
-        value.into()
-    })
+    Ok(if value.starts_with('\\') || formula(value) { format!("\\{value}") } else { value.into() })
 }
 fn field(value: &str, out: &mut String) {
     if value.contains([',', '"', '\n', '\r']) {
@@ -49,13 +40,7 @@ pub fn encode(transfer: &Transfer) -> Result<Vec<u8>, Error> {
             }
             let value = match cell {
                 Cell::Null => "\\N".into(),
-                Cell::Blob(value) => format!(
-                    "\\x{}",
-                    value
-                        .iter()
-                        .map(|byte| format!("{byte:02x}"))
-                        .collect::<String>()
-                ),
+                Cell::Blob(value) => format!("\\x{}", value.iter().map(|byte| format!("{byte:02x}")).collect::<String>()),
                 Cell::Text(value) => text(value)?,
                 value => value.display(),
             };
@@ -69,9 +54,7 @@ pub fn encode(transfer: &Transfer) -> Result<Vec<u8>, Error> {
     Ok(out.into_bytes())
 }
 fn unescape(value: &str) -> Option<&str> {
-    value
-        .strip_prefix('\\')
-        .filter(|rest| rest.starts_with('\\') || formula(rest))
+    value.strip_prefix('\\').filter(|rest| rest.starts_with('\\') || formula(rest))
 }
 fn value(field: String) -> Result<Cell, Error> {
     if let Some(text) = unescape(&field) {
@@ -86,13 +69,10 @@ fn value(field: String) -> Result<Cell, Error> {
         }
         let bytes = hex
             .as_bytes()
-            .chunks_exact(2)
-            .map(|pair| {
-                std::str::from_utf8(pair)
-                    .ok()
-                    .and_then(|text| u8::from_str_radix(text, 16).ok())
-                    .ok_or(Error::Input)
-            })
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| std::str::from_utf8(pair).ok().and_then(|text| u8::from_str_radix(text, 16).ok()).ok_or(Error::Input))
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(Cell::Blob(bytes));
     }
@@ -102,10 +82,7 @@ pub fn decode(bytes: &[u8]) -> Result<Transfer, Error> {
     if bytes.len() > 8 * 1024 * 1024 {
         return Err(Error::Limit);
     }
-    let input = std::str::from_utf8(bytes)
-        .map_err(|_| Error::Input)?
-        .strip_prefix('\u{feff}')
-        .unwrap_or(std::str::from_utf8(bytes).map_err(|_| Error::Input)?);
+    let input = std::str::from_utf8(bytes).map_err(|_| Error::Input)?.strip_prefix('\u{feff}').unwrap_or(std::str::from_utf8(bytes).map_err(|_| Error::Input)?);
     if input.contains('\0') {
         return Err(Error::Input);
     }
@@ -174,11 +151,7 @@ pub fn decode(bytes: &[u8]) -> Result<Transfer, Error> {
     if records.is_empty() || records.len() > 5001 {
         return Err(Error::Input);
     }
-    let columns: Vec<String> = records
-        .remove(0)
-        .into_iter()
-        .map(|value| unescape(&value).unwrap_or(&value).to_string())
-        .collect();
+    let columns: Vec<String> = records.remove(0).into_iter().map(|value| unescape(&value).unwrap_or(&value).to_string()).collect();
     if columns.is_empty() || columns.len() > 256 || columns.iter().any(|name| name.len() > 1024) {
         return Err(Error::Input);
     }
@@ -195,11 +168,7 @@ pub fn decode(bytes: &[u8]) -> Result<Transfer, Error> {
         }
         rows.push(row);
     }
-    Ok(Transfer {
-        format: "crabcraft.csv.rows.v1".into(),
-        columns,
-        rows,
-    })
+    Ok(Transfer { format: "crabcraft.csv.rows.v1".into(), columns, rows })
 }
 #[cfg(test)]
 mod tests {
@@ -210,27 +179,14 @@ mod tests {
             format: "ignored".into(),
             columns: vec!["name".into(), "value".into()],
             rows: vec![
-                vec![
-                    Cell::Text("comma, quote\" and newline\n🦀".into()),
-                    Cell::Null,
-                ],
+                vec![Cell::Text("comma, quote\" and newline\n🦀".into()), Cell::Null],
                 vec![Cell::Text(String::new()), Cell::Blob(vec![0, 1, 255])],
-                vec![
-                    Cell::Text("\\N".into()),
-                    Cell::Text("=WEBSERVICE(\"example\")".into()),
-                ],
-                vec![
-                    Cell::Text("\\x00ff".into()),
-                    Cell::Text(" \t+formula".into()),
-                ],
+                vec![Cell::Text("\\N".into()), Cell::Text("=WEBSERVICE(\"example\")".into())],
+                vec![Cell::Text("\\x00ff".into()), Cell::Text(" \t+formula".into())],
             ],
         };
         let bytes = encode(&original).unwrap();
-        assert!(
-            std::str::from_utf8(&bytes)
-                .unwrap()
-                .contains("\\=WEBSERVICE")
-        );
+        assert!(std::str::from_utf8(&bytes).unwrap().contains("\\=WEBSERVICE"));
         let parsed = decode(&bytes).unwrap();
         assert_eq!(parsed.columns, original.columns);
         assert_eq!(parsed.rows, original.rows);

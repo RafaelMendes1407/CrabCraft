@@ -107,11 +107,19 @@ fn read(path: &Path) -> Option<String> {
     // A style file can be replaced after metadata: never block on a special file or
     // read an unbounded replacement while preparing a compiler source snapshot.
     use std::io::Read;
-    let mut options = std::fs::OpenOptions::new(); options.read(true);
-    #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     let file = options.open(path).ok()?;
-    if !file.metadata().ok()?.is_file() { return None; }
-    let mut text = String::new(); file.take(MAX_FILE + 1).read_to_string(&mut text).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut text = String::new();
+    file.take(MAX_FILE + 1).read_to_string(&mut text).ok()?;
     (text.len() as u64 <= MAX_FILE).then_some(text)
 }
 
@@ -225,7 +233,8 @@ fn parse_editorconfig(text: &str, dir: &Path, file: &Path) -> (CodeStyle, bool) 
 /// `/` matches the path from the `.editorconfig`'s folder. `*` stays inside a folder, `**`
 /// crosses them, plus `?`, `[...]` and `{a,b}`.
 fn section_matches(section: &str, relative: &str) -> bool {
-    let pattern = section.strip_prefix('/').map(str::to_string).unwrap_or_else(|| if section.contains('/') { section.to_string() } else { format!("**/{section}") });
+    let pattern =
+        section.strip_prefix('/').map(str::to_string).unwrap_or_else(|| if section.contains('/') { section.to_string() } else { format!("**/{section}") });
     // globset only lets `**` cross folders as a whole path component: `a/**.md` → `a/**/*.md`.
     let mut normalized = String::with_capacity(pattern.len() + 4);
     let mut rest = pattern.as_str();
@@ -260,7 +269,11 @@ mod tests {
     fn editorconfig_sections_apply_in_order() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        write(root, ".editorconfig", "root = true\n\n[*]\nindent_style = space\nindent_size = 4\ninsert_final_newline = true\ntrim_trailing_whitespace = true\n\n[*.{json,yml}]\nindent_size = 2\n\n[Makefile]\nindent_style = tab\n\n[docs/**.md]\ntrim_trailing_whitespace = false\n");
+        write(
+            root,
+            ".editorconfig",
+            "root = true\n\n[*]\nindent_style = space\nindent_size = 4\ninsert_final_newline = true\ntrim_trailing_whitespace = true\n\n[*.{json,yml}]\nindent_size = 2\n\n[Makefile]\nindent_style = tab\n\n[docs/**.md]\ntrim_trailing_whitespace = false\n",
+        );
         let json = for_file(&root.join("a/b/c.json"), Some(root));
         assert_eq!(json.indent(), Some(("  ".to_string(), 2)));
         assert_eq!(json.insert_final_newline, Some(true));
@@ -293,7 +306,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         write(root, ".editorconfig", "[*]\nindent_style = space\nindent_size = 4\ninsert_final_newline = true\n");
-        write(root, "rustfmt.toml", "# shared style\nhard_tabs = true\ntab_spaces = 2 # columns\nmax_width = 80\nnewline_style = \"Windows\"\n[unstable]\nmax_width = 5\n");
+        write(
+            root,
+            "rustfmt.toml",
+            "# shared style\nhard_tabs = true\ntab_spaces = 2 # columns\nmax_width = 80\nnewline_style = \"Windows\"\n[unstable]\nmax_width = 5\n",
+        );
         let rs = for_file(&root.join("src/main.rs"), Some(root));
         assert_eq!(rs.indent(), Some(("\t".to_string(), 2)));
         assert_eq!(rs.max_line_length, Some(80));
@@ -321,7 +338,11 @@ mod tests {
     fn bad_values_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        write(root, ".editorconfig", "[*]\nindent_style = sideways\nindent_size = 400\ntab_width = -1\nmax_line_length = off\ngarbage line\n[[broken\nend_of_line = cr\n");
+        write(
+            root,
+            ".editorconfig",
+            "[*]\nindent_style = sideways\nindent_size = 400\ntab_width = -1\nmax_line_length = off\ngarbage line\n[[broken\nend_of_line = cr\n",
+        );
         let style = for_file(&root.join("a.txt"), Some(root));
         assert_eq!((style.indent_style, style.indent_size, style.tab_width, style.max_line_length, style.end_of_line), (None, None, None, None, None));
         write(root, "rustfmt.toml", &"x".repeat(MAX_FILE as usize + 1));

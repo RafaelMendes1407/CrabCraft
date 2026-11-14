@@ -151,7 +151,10 @@ impl<'a> TerminalView<'a> {
     }
 
     /// Prevent protocol input from interleaving while an explicit request is pending.
-    pub fn input_enabled(mut self, enabled: bool) -> Self { self.input_enabled = enabled; self }
+    pub fn input_enabled(mut self, enabled: bool) -> Self {
+        self.input_enabled = enabled;
+        self
+    }
 
     pub fn show(self, ui: &mut Ui) -> TermOutput {
         let TerminalView { session, config, id, focus, input_enabled } = self;
@@ -172,7 +175,7 @@ impl<'a> TerminalView<'a> {
         let cell_px = ((m.cell_w * m.ppp).round() as u16, (m.row_h * m.ppp).round() as u16);
         session.resize(m.cols as u16, m.rows as u16, cell_px.0, cell_px.1);
 
-        accessibility::focus(ui,&response,input_enabled);
+        accessibility::focus(ui, &response, input_enabled);
         let focused = response.has_focus() && input_enabled;
         if focused {
             ui.memory_mut(|mem| mem.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true }));
@@ -206,7 +209,9 @@ impl<'a> TerminalView<'a> {
             handle_keyboard(ui, session, &mut st, config, &mut vs, mac);
         }
         let hovered_link = if input_enabled { handle_mouse(ui, session, &mut st, config, &m, rect, &response, &mut vs, &mut events, mac) } else { None };
-        if input_enabled { handle_wheel(ui, session, &mut st, &m, &response, &mut vs); }
+        if input_enabled {
+            handle_wheel(ui, session, &mut st, &m, &response, &mut vs);
+        }
 
         // ---------------------------------------------------------------- paint
         let colors = TermColors::for_theme(dark);
@@ -217,7 +222,7 @@ impl<'a> TerminalView<'a> {
         paint_grid(ui, &painter, &st, config, &colors, &m, focused, blink_on, hovered_link.as_ref());
         paint_scrollbar(ui, &mut st, &m, rect, id, &mut vs);
 
-        accessibility::update(ui,&response,session,&st,&m,input_enabled);
+        accessibility::update(ui, &response, session, &st, &m, input_enabled);
         // IME: candidate window at the cursor, preedit text drawn over it.
         let cursor = st.term.grid().cursor.point;
         let cursor_row = cursor.line.0 + st.term.grid().display_offset() as i32;
@@ -278,7 +283,17 @@ fn fonts(ui: &Ui, size: f32) -> [FontId; 3] {
 // =====================================================================================
 
 #[allow(clippy::too_many_arguments)]
-fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermConfig, colors: &TermColors, m: &Metrics, focused: bool, blink_on: bool, link: Option<&(usize, Range<usize>, Link)>) {
+fn paint_grid(
+    ui: &Ui,
+    painter: &egui::Painter,
+    st: &TermState,
+    config: &TermConfig,
+    colors: &TermColors,
+    m: &Metrics,
+    focused: bool,
+    blink_on: bool,
+    link: Option<&(usize, Range<usize>, Link)>,
+) {
     let term = &st.term;
     let grid = term.grid();
     let offset = grid.display_offset();
@@ -419,7 +434,9 @@ fn paint_grid(ui: &Ui, painter: &egui::Painter, st: &TermState, config: &TermCon
             }
             push_run(&mut job, &mut run_text, style);
         }
-        if !job.sections.is_empty() && !job.text.trim().is_empty() || job.sections.iter().any(|s| s.format.underline != Stroke::NONE || s.format.strikethrough != Stroke::NONE) {
+        if !job.sections.is_empty() && !job.text.trim().is_empty()
+            || job.sections.iter().any(|s| s.format.underline != Stroke::NONE || s.format.strikethrough != Stroke::NONE)
+        {
             let galley = ui.fonts_mut(|f| f.layout_job(job));
             texts.push(Shape::galley(pos2(m.x(0), y + m.text_dy), galley, colors.fg));
         }
@@ -781,7 +798,13 @@ fn handle_mouse(
     if vs.selecting
         && let Some(p) = hover.or_else(|| ui.input(|i| i.pointer.interact_pos()))
     {
-        let delta = if p.y < m.origin.y { 1 } else if p.y > m.y(m.rows) { -1 } else { 0 };
+        let delta = if p.y < m.origin.y {
+            1
+        } else if p.y > m.y(m.rows) {
+            -1
+        } else {
+            0
+        };
         if delta != 0 {
             st.term.scroll_display(Scroll::Delta(delta));
             let offset = st.term.grid().display_offset();
@@ -859,4 +882,3 @@ fn context_menu(response: &Response, session: &TermSession) {
         }
     });
 }
-

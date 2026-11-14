@@ -49,9 +49,16 @@ impl std::error::Error for DapError {}
 /// A message from the adapter that is not a response to one of our requests.
 #[derive(Clone, Debug)]
 pub enum Incoming {
-    Event { event: String, body: Value },
+    Event {
+        event: String,
+        body: Value,
+    },
     /// A reverse request (`runInTerminal`, `startDebugging`…): answer it with [`DapClient::reply`].
-    Request { seq: i64, command: String, arguments: Value },
+    Request {
+        seq: i64,
+        command: String,
+        arguments: Value,
+    },
     /// A line the adapter wrote to stderr (its logs).
     Stderr(String),
     /// The adapter process exited (or its stdout closed).
@@ -151,13 +158,16 @@ impl DapClient {
     /// Starts `program` and talks DAP over its stdin/stdout. Must be called inside the tokio
     /// runtime (`rc_core::Runtime::handle().enter()` or from a task). `waker` is called when
     /// a response arrives (events wake through `incoming`).
-    pub fn spawn(program: &Path, args: &[String], cwd: Option<&Path>, env: &[(String, String)], incoming: Outbox<Incoming>, waker: Waker) -> std::io::Result<DapClient> {
+    pub fn spawn(
+        program: &Path,
+        args: &[String],
+        cwd: Option<&Path>,
+        env: &[(String, String)],
+        incoming: Outbox<Incoming>,
+        waker: Waker,
+    ) -> std::io::Result<DapClient> {
         let mut cmd = Command::new(program);
-        cmd.args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
+        cmd.args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd);
         }
@@ -506,7 +516,8 @@ while True:
         .unwrap();
         let inbox: Inbox<Incoming> = Inbox::new(Waker::noop());
         let _guard = Runtime::handle().enter();
-        let client = DapClient::spawn(Path::new("python3"), &["-u".into(), script.display().to_string()], Some(dir.path()), &[], inbox.sender(), Waker::noop()).unwrap();
+        let client =
+            DapClient::spawn(Path::new("python3"), &["-u".into(), script.display().to_string()], Some(dir.path()), &[], inbox.sender(), Waker::noop()).unwrap();
 
         let threads = Runtime::block_on(client.threads().wait()).unwrap();
         assert_eq!(threads.threads, vec![Thread { id: 7, name: "Main".into() }]);

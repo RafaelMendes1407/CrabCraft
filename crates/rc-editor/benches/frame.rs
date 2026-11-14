@@ -16,11 +16,7 @@ fn setup() -> (egui::Context, EditorState) {
 }
 
 fn input(events: Vec<Event>) -> RawInput {
-    RawInput {
-        screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 900.0))),
-        events,
-        ..Default::default()
-    }
+    RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 900.0))), events, ..Default::default() }
 }
 
 /// One frame: run the UI and tessellate what it painted, like eframe does.
@@ -66,9 +62,7 @@ fn benches(c: &mut Criterion) {
     for _ in 0..3 {
         frame(&ctx, &mut state, &config, &keymap, vec![]);
     }
-    c.bench_function("frame while typing in a 20k-line file", |b| {
-        b.iter(|| frame(&ctx, &mut state, &config, &keymap, vec![Event::Text("x".into())]))
-    });
+    c.bench_function("frame while typing in a 20k-line file", |b| b.iter(|| frame(&ctx, &mut state, &config, &keymap, vec![Event::Text("x".into())])));
 
     let (ctx, mut state) = setup();
     for _ in 0..3 {

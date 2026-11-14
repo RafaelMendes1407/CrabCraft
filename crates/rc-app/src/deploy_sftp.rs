@@ -59,21 +59,9 @@ fn attrs(reader: &mut Cursor<'_>) -> Result<Attrs, Error> {
     if flags & !0x8000000f != 0 {
         return Err(Error::Protocol);
     }
-    let size = if flags & 1 != 0 {
-        Some(reader.u64()?)
-    } else {
-        None
-    };
-    let owner = if flags & 2 != 0 {
-        Some((reader.u32()?, reader.u32()?))
-    } else {
-        None
-    };
-    let mode = if flags & 4 != 0 {
-        Some(reader.u32()?)
-    } else {
-        None
-    };
+    let size = if flags & 1 != 0 { Some(reader.u64()?) } else { None };
+    let owner = if flags & 2 != 0 { Some((reader.u32()?, reader.u32()?)) } else { None };
+    let mode = if flags & 4 != 0 { Some(reader.u32()?) } else { None };
     let modified = if flags & 8 != 0 {
         let _accessed = reader.u32()?; // Our own reads may legitimately update access time.
         Some(reader.u32()?)
@@ -90,12 +78,7 @@ fn attrs(reader: &mut Cursor<'_>) -> Result<Attrs, Error> {
             reader.string(65536)?;
         }
     }
-    Ok(Attrs {
-        size,
-        owner,
-        mode,
-        modified,
-    })
+    Ok(Attrs { size, owner, mode, modified })
 }
 pub struct Client {
     child: tokio::process::Child,
@@ -119,23 +102,13 @@ impl Drop for Client {
     }
 }
 impl Client {
-    pub async fn connect(
-        config: &remote_transfer::Config,
-        cancel: CancelToken,
-    ) -> Result<Self, Error> {
+    pub async fn connect(config: &remote_transfer::Config, cancel: CancelToken) -> Result<Self, Error> {
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }
         let credentials = tempfile::tempdir()?;
         let mut args = remote_transfer::args(config, credentials.path()).map_err(Error::from)?;
-        args.extend([
-            "-p".into(),
-            config.port.to_string(),
-            "-T".into(),
-            "-s".into(),
-            format!("{}@{}", config.user, config.host),
-            "sftp".into(),
-        ]);
+        args.extend(["-p".into(), config.port.to_string(), "-T".into(), "-s".into(), format!("{}@{}", config.user, config.host), "sftp".into()]);
         let mut command = tokio::process::Command::new("ssh");
         command
             .args(args)
@@ -230,9 +203,7 @@ impl Client {
         if body.len() > 128 * 1024 {
             return Err(Error::Limit);
         }
-        let len = u32::try_from(body.len())
-            .map_err(|_| Error::Limit)?
-            .to_be_bytes();
+        let len = u32::try_from(body.len()).map_err(|_| Error::Limit)?.to_be_bytes();
         let token = self.cancel.clone();
         let timeout = self.deadline.saturating_duration_since(Instant::now());
         tokio::select! {result=async{self.input.write_all(&len).await?;self.input.write_all(body).await?;self.input.flush().await}=>result.map_err(Error::from),()=token.cancelled()=>Err(Error::Cancelled),()=tokio::time::sleep(timeout)=>Err(Error::Timeout)}
@@ -256,14 +227,7 @@ impl Client {
         if reader.u32()? != self.id {
             return Err(Error::Protocol);
         }
-        Ok((
-            kind,
-            reader
-                .bytes
-                .get(reader.position..)
-                .ok_or(Error::Protocol)?
-                .to_vec(),
-        ))
+        Ok((kind, reader.bytes.get(reader.position..).ok_or(Error::Protocol)?.to_vec()))
     }
     fn status(kind: u8, body: &[u8]) -> Result<u32, Error> {
         if kind != 101 {
@@ -281,11 +245,7 @@ impl Client {
     async fn ok(&mut self, kind: u8, body: Vec<u8>) -> Result<(), Error> {
         let (kind, body) = self.request(kind, body).await?;
         let code = Self::status(kind, &body)?;
-        if code == 0 {
-            Ok(())
-        } else {
-            Err(Error::Remote(code))
-        }
+        if code == 0 { Ok(()) } else { Err(Error::Remote(code)) }
     }
     async fn stat(&mut self, path: &str) -> Result<Option<Attrs>, Error> {
         let mut data = Vec::new();
@@ -346,8 +306,7 @@ impl Client {
         let Some(before) = self.stat(path).await? else {
             return Ok(RemoteImage::Missing);
         };
-        let size =
-            usize::try_from(before.size.ok_or(Error::Protocol)?).map_err(|_| Error::Limit)?;
+        let size = usize::try_from(before.size.ok_or(Error::Protocol)?).map_err(|_| Error::Limit)?;
         let handle = self.open(path, 1, None).await?;
         let mut bytes = Vec::with_capacity(size);
         while bytes.len() < size {
@@ -364,8 +323,7 @@ impl Client {
             }
             let mut reader = Cursor::new(&body);
             let chunk = reader.string(32768)?;
-            if chunk.is_empty() || bytes.len().saturating_add(chunk.len()) > size || !reader.done()
-            {
+            if chunk.is_empty() || bytes.len().saturating_add(chunk.len()) > size || !reader.done() {
                 return Err(Error::Stale);
             }
             bytes.extend(chunk);
@@ -450,8 +408,7 @@ mod tests {
         config.port = listener.local_addr().unwrap().port();
         let cancel = CancelToken::new();
         let token = cancel.clone();
-        let handle =
-            std::thread::spawn(move || rc_core::Runtime::block_on(Client::connect(&config, token)));
+        let handle = std::thread::spawn(move || rc_core::Runtime::block_on(Client::connect(&config, token)));
         let (socket, _) = listener.accept().unwrap();
         let start = Instant::now();
         cancel.cancel();

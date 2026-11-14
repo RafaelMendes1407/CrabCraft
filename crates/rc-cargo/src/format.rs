@@ -31,7 +31,10 @@ pub enum FormatError {
     /// This line of the environment is not `NAME=value`.
     Environment(String),
     /// This file could not be formatted; the message is rustfmt's or the system's.
-    File { path: PathBuf, message: String },
+    File {
+        path: PathBuf,
+        message: String,
+    },
 }
 
 /// How rustfmt runs: its program, the channel and extra arguments, and the environment.
@@ -48,14 +51,17 @@ impl Rustfmt {
     /// mistake is reported before any file is touched.
     pub fn new(cargo: &Cargo, settings: &RustfmtSettings) -> Result<Rustfmt, FormatError> {
         let (args, env) = Self::read(settings)?;
-        if cargo.is_criticalup()&&!settings.channel.trim().is_empty(){return Err(FormatError::CriticalupChannel);}
-        let missing=if cargo.is_criticalup(){FormatError::CriticalupMissing}else{FormatError::Missing};
-        let program = cargo.tool_path("rustfmt").ok_or_else(||missing.clone())?;
+        if cargo.is_criticalup() && !settings.channel.trim().is_empty() {
+            return Err(FormatError::CriticalupChannel);
+        }
+        let missing = if cargo.is_criticalup() { FormatError::CriticalupMissing } else { FormatError::Missing };
+        let program = cargo.tool_path("rustfmt").ok_or_else(|| missing.clone())?;
         if !program.is_file() {
             return Err(missing);
         }
-        let mut merged=cargo.env().to_vec();merged.extend(env.clone());
-        Ok(Rustfmt { cargo:cargo.clone().with_env(merged), args, env })
+        let mut merged = cargo.env().to_vec();
+        merged.extend(env.clone());
+        Ok(Rustfmt { cargo: cargo.clone().with_env(merged), args, env })
     }
 
     /// Whether the settings can be used, without looking for the program.
@@ -91,19 +97,25 @@ impl Rustfmt {
         cmd.args(["--emit", "stdout"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
         // A channel that is not installed must fail, not start a download.
         cmd.env("RUSTUP_AUTO_INSTALL", "0");
-        if !self.cargo.is_criticalup(){cmd.envs(self.env.iter().map(|(k, v)| (k, v)));}
+        if !self.cargo.is_criticalup() {
+            cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
+        }
         if let Some(dir) = path.parent().filter(|d| d.is_dir()) {
             cmd.current_dir(dir);
         }
-        #[cfg(unix)]cmd.process_group(0);
+        #[cfg(unix)]
+        cmd.process_group(0);
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-        let _group=FormatGroup(child.id());
+        let _group = FormatGroup(child.id());
         let mut stdin = child.stdin.take().ok_or("rustfmt has no input")?;
         let input = text.as_bytes().to_vec();
         tokio::spawn(async move {
             let _ = stdin.write_all(&input).await;
         });
-        let out = tokio::time::timeout(TIMEOUT, child.wait_with_output()).await.map_err(|_| format!("rustfmt did not finish in {} s", TIMEOUT.as_secs()))?.map_err(|e| e.to_string())?;
+        let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
+            .await
+            .map_err(|_| format!("rustfmt did not finish in {} s", TIMEOUT.as_secs()))?
+            .map_err(|e| e.to_string())?;
         if !out.status.success() {
             let error = String::from_utf8_lossy(&out.stderr).trim().to_string();
             return Err(if error.is_empty() { format!("rustfmt exited with {}", out.status) } else { error });
@@ -132,19 +144,32 @@ pub struct FormatJob {
 
 impl FormatJob {
     /// Resolve sibling tools and encode the rope away from the UI before spawning rustfmt.
-    pub fn configured(cargo: Result<Cargo,String>, settings: RustfmtSettings, path: PathBuf, edition:String, text:impl FnOnce()->String+Send+'static,failure:fn(FormatError)->String,waker:Waker)->Self {
-        let inbox=Inbox::new(waker);let out=inbox.sender();
-        let task=rc_core::Runtime::spawn(async move {
-            let prepared=tokio::task::spawn_blocking(move|| {
-                let cargo=cargo?;
-                let formatter=Rustfmt::new(&cargo,&settings).map_err(failure)?;
-                Ok::<_,String>((formatter,text()))
-            }).await;
-            let result=match prepared {
-                Ok(Ok((formatter,text)))=>formatter.format(&path,&edition,&text).await,
-                Ok(Err(error))=>Err(error),Err(error)=>Err(error.to_string()),
-            };out.send(result);
-        });Self{task,inbox}
+    pub fn configured(
+        cargo: Result<Cargo, String>,
+        settings: RustfmtSettings,
+        path: PathBuf,
+        edition: String,
+        text: impl FnOnce() -> String + Send + 'static,
+        failure: fn(FormatError) -> String,
+        waker: Waker,
+    ) -> Self {
+        let inbox = Inbox::new(waker);
+        let out = inbox.sender();
+        let task = rc_core::Runtime::spawn(async move {
+            let prepared = tokio::task::spawn_blocking(move || {
+                let cargo = cargo?;
+                let formatter = Rustfmt::new(&cargo, &settings).map_err(failure)?;
+                Ok::<_, String>((formatter, text()))
+            })
+            .await;
+            let result = match prepared {
+                Ok(Ok((formatter, text))) => formatter.format(&path, &edition, &text).await,
+                Ok(Err(error)) => Err(error),
+                Err(error) => Err(error.to_string()),
+            };
+            out.send(result);
+        });
+        Self { task, inbox }
     }
     /// The formatted text or rustfmt's error, once it finished.
     pub fn poll(&self) -> Option<Result<String, String>> {
@@ -253,6 +278,15 @@ fn replace(path: &Path, text: &str) -> std::io::Result<()> {
     written
 }
 
+struct FormatGroup(Option<u32>);
+impl Drop for FormatGroup {
+    fn drop(&mut self) {
+        if let Some(pid) = self.0 {
+            rc_dotnet::kill_tree(pid);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,14 +308,20 @@ mod tests {
     fn arguments_split_like_a_shell_without_escapes() {
         assert_eq!(split_args(""), Some(vec![]));
         assert_eq!(split_args("  --config  tab_spaces=2 "), Some(vec!["--config".to_string(), "tab_spaces=2".to_string()]));
-        assert_eq!(split_args(r#"--config-path "C:\My Files\rustfmt.toml" '' x"#), Some(vec!["--config-path".to_string(), r"C:\My Files\rustfmt.toml".to_string(), String::new(), "x".to_string()]));
+        assert_eq!(
+            split_args(r#"--config-path "C:\My Files\rustfmt.toml" '' x"#),
+            Some(vec!["--config-path".to_string(), r"C:\My Files\rustfmt.toml".to_string(), String::new(), "x".to_string()])
+        );
         assert_eq!(split_args("a\"b c\"d"), Some(vec!["ab cd".to_string()]));
         assert_eq!(split_args("--config 'x"), None);
     }
 
     #[test]
     fn the_environment_is_name_value_lines() {
-        assert_eq!(parse_env("A=1\r\n\n  # note\nB = two words\nC=\nD=x=y"), Ok(vec![("A".into(), "1".into()), ("B".into(), " two words".into()), ("C".into(), String::new()), ("D".into(), "x=y".into())]));
+        assert_eq!(
+            parse_env("A=1\r\n\n  # note\nB = two words\nC=\nD=x=y"),
+            Ok(vec![("A".into(), "1".into()), ("B".into(), " two words".into()), ("C".into(), String::new()), ("D".into(), "x=y".into())])
+        );
         assert_eq!(parse_env("A=1\nnot a pair"), Err("not a pair".into()));
         assert_eq!(parse_env("=1"), Err("=1".into()));
         assert_eq!(parse_env("MY VAR=1"), Err("MY VAR=1".into()));
@@ -353,5 +393,3 @@ mod tests {
         assert_eq!(run(&Cargo::new(dir.path().join("cargo")), &[]), Err(FormatError::Missing));
     }
 }
-
-struct FormatGroup(Option<u32>);impl Drop for FormatGroup{fn drop(&mut self){if let Some(pid)=self.0{rc_dotnet::kill_tree(pid);}}}

@@ -73,10 +73,7 @@ pub fn completion_item(rope: &Rope, item: &lsp::CompletionItem, index: usize, de
     let (insert, replace) = match &item.text_edit {
         Some(lsp::CompletionTextEdit::Edit(e)) => (e.new_text.clone(), Some(range_chars(rope, &e.range))),
         Some(lsp::CompletionTextEdit::InsertAndReplace(e)) => (e.new_text.clone(), Some(range_chars(rope, &e.replace))),
-        None => (
-            item.insert_text.clone().unwrap_or_else(|| item.label.clone()),
-            default_range.map(|r| range_chars(rope, r)),
-        ),
+        None => (item.insert_text.clone().unwrap_or_else(|| item.label.clone()), default_range.map(|r| range_chars(rope, r))),
     };
     let snippet = item.insert_text_format == Some(lsp::InsertTextFormat::SNIPPET);
     let insert = if snippet { insert } else { insert.replace('$', "\\$") };

@@ -1,12 +1,15 @@
 //! Standalone native diff/merge windows. They never open a workspace, restore a session,
 //! start a language server, invoke Git, or run project code.
 
+use rc_core::{Inbox, Waker};
+use rc_kit::i18n::{tr, trf};
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, atomic::{AtomicBool, AtomicI32, Ordering}};
-use rc_core::{Inbox, Waker};
-use rc_kit::i18n::{tr, trf};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicI32, Ordering},
+};
 
 const MAX_BYTES: usize = 4 * 1024 * 1024;
 const MAX_LINES: usize = 100_000;
@@ -23,10 +26,13 @@ pub fn parse(merge: bool, args: impl Iterator<Item = OsString>, cwd: &Path) -> R
     for arg in args {
         if !literal {
             match arg.to_str() {
-                Some("--") => { literal = true; continue; },
+                Some("--") => {
+                    literal = true;
+                    continue;
+                }
                 Some("--help" | "-h") => return Ok(crate::cli::Command::Help),
                 Some(text) if text.starts_with('-') => return Err(crate::cli::CliError::UnknownOption(text.to_string())),
-                _ => {},
+                _ => {}
             }
         }
         let path = PathBuf::from(arg);
@@ -34,7 +40,9 @@ pub fn parse(merge: bool, args: impl Iterator<Item = OsString>, cwd: &Path) -> R
     }
     match paths.as_slice() {
         [left, right] if !merge => Ok(crate::cli::Command::Compare(CompareRequest::Diff { left: left.clone(), right: right.clone() })),
-        [left, right, base, result] if merge => Ok(crate::cli::Command::Compare(CompareRequest::Merge { left: left.clone(), right: right.clone(), base: base.clone(), result: result.clone() })),
+        [left, right, base, result] if merge => {
+            Ok(crate::cli::Command::Compare(CompareRequest::Merge { left: left.clone(), right: right.clone(), base: base.clone(), result: result.clone() }))
+        }
         _ => Err(crate::cli::CliError::ComparisonPaths { merge }),
     }
 }
@@ -61,31 +69,54 @@ impl std::fmt::Display for CompareError {
     }
 }
 
-fn io(path: &Path, error: std::io::Error) -> CompareError { CompareError::Io { path: path.to_path_buf(), error } }
+fn io(path: &Path, error: std::io::Error) -> CompareError {
+    CompareError::Io { path: path.to_path_buf(), error }
+}
 
 fn read(path: &Path, cancel: &AtomicBool) -> Result<Vec<u8>, CompareError> {
-    if cancel.load(Ordering::Relaxed) { return Err(CompareError::Cancelled); }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(CompareError::Cancelled);
+    }
     let metadata = std::fs::metadata(path).map_err(|e| io(path, e))?;
-    if !metadata.is_file() { return Err(CompareError::InvalidText(path.to_path_buf())); }
+    if !metadata.is_file() {
+        return Err(CompareError::InvalidText(path.to_path_buf()));
+    }
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
-    { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
     let mut file = options.open(path).map_err(|e| io(path, e))?;
     let metadata = file.metadata().map_err(|e| io(path, e))?;
-    if !metadata.is_file() { return Err(CompareError::InvalidText(path.to_path_buf())); }
-    if metadata.len() > MAX_BYTES as u64 { return Err(CompareError::TooLarge(path.to_path_buf())); }
+    if !metadata.is_file() {
+        return Err(CompareError::InvalidText(path.to_path_buf()));
+    }
+    if metadata.len() > MAX_BYTES as u64 {
+        return Err(CompareError::TooLarge(path.to_path_buf()));
+    }
     let mut bytes = Vec::new();
     let mut chunk = [0; 64 * 1024];
     loop {
-        if cancel.load(Ordering::Relaxed) { return Err(CompareError::Cancelled); }
+        if cancel.load(Ordering::Relaxed) {
+            return Err(CompareError::Cancelled);
+        }
         let n = file.read(&mut chunk).map_err(|e| io(path, e))?;
-        if n == 0 { break; }
-        if bytes.len() + n > MAX_BYTES { return Err(CompareError::TooLarge(path.to_path_buf())); }
+        if n == 0 {
+            break;
+        }
+        if bytes.len() + n > MAX_BYTES {
+            return Err(CompareError::TooLarge(path.to_path_buf()));
+        }
         bytes.extend_from_slice(&chunk[..n]);
     }
-    if bytes.contains(&0) || std::str::from_utf8(&bytes).is_err() { return Err(CompareError::InvalidText(path.to_path_buf())); }
-    if bytes.iter().filter(|b| **b == b'\n').count() > MAX_LINES { return Err(CompareError::TooLarge(path.to_path_buf())); }
+    if bytes.contains(&0) || std::str::from_utf8(&bytes).is_err() {
+        return Err(CompareError::InvalidText(path.to_path_buf()));
+    }
+    if bytes.iter().filter(|b| **b == b'\n').count() > MAX_LINES {
+        return Err(CompareError::TooLarge(path.to_path_buf()));
+    }
     Ok(bytes)
 }
 
@@ -99,8 +130,8 @@ fn output_snapshot(path: &Path, cancel: &AtomicBool) -> Result<Option<Vec<u8>>, 
 }
 
 enum View {
-    Diff(crate::vcs::DiffView),
-    Merge { tool: crate::merge_tool::MergeTool, previous: Option<Vec<u8>> },
+    Diff(Box<crate::vcs::DiffView>),
+    Merge { tool: Box<crate::merge_tool::MergeTool>, previous: Option<Vec<u8>> },
 }
 
 fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<View, CompareError> {
@@ -110,13 +141,22 @@ fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<Vie
             let (a, b) = (text(left)?, text(right)?);
             let mut vcs = crate::vcs::Vcs::new(Waker::noop());
             vcs.show_diff(format!("{} ↔ {}", left.display(), right.display()), right.clone(), &a, &b, dark);
-            vcs.diff.take().map(View::Diff).ok_or(CompareError::Cancelled)
+            vcs.diff.take().map(|diff| View::Diff(Box::new(diff))).ok_or(CompareError::Cancelled)
         }
         CompareRequest::Merge { left, right, base, result } => {
             let (a, b, common) = (text(left)?, text(right)?, text(base)?);
             let previous = output_snapshot(result, cancel)?;
-            let tool = crate::merge_tool::MergeTool::new(&mut 100, result.display().to_string(), result.clone(), &common, &a, &b, (left.display().to_string(), right.display().to_string()), dark);
-            Ok(View::Merge { tool, previous })
+            let tool = crate::merge_tool::MergeTool::new(
+                &mut 100,
+                result.display().to_string(),
+                result.clone(),
+                &common,
+                &a,
+                &b,
+                (left.display().to_string(), right.display().to_string()),
+                dark,
+            );
+            Ok(View::Merge { tool: Box::new(tool), previous })
         }
     }
 }
@@ -124,7 +164,9 @@ fn load(request: &CompareRequest, dark: bool, cancel: &AtomicBool) -> Result<Vie
 /// Atomically replaces only the explicit output; source files are read-only. A changed
 /// output is refused. A new output uses no-clobber persistence so a racing writer is safe.
 fn save(path: &Path, previous: &Option<Vec<u8>>, text: &str, cancel: &AtomicBool) -> Result<(), CompareError> {
-    if &output_snapshot(path, cancel)? != previous { return Err(CompareError::OutputChanged); }
+    if &output_snapshot(path, cancel)? != previous {
+        return Err(CompareError::OutputChanged);
+    }
     let parent = path.parent().unwrap_or(Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| io(path, e))?;
     if previous.is_some() {
@@ -133,10 +175,17 @@ fn save(path: &Path, previous: &Option<Vec<u8>>, text: &str, cancel: &AtomicBool
     }
     tmp.write_all(text.as_bytes()).map_err(|e| io(path, e))?;
     tmp.as_file().sync_all().map_err(|e| io(path, e))?;
-    if cancel.load(Ordering::Relaxed) { return Err(CompareError::Cancelled); }
-    if &output_snapshot(path, cancel)? != previous { return Err(CompareError::OutputChanged); }
-    if previous.is_some() { tmp.persist(path).map_err(|e| io(path, e.error))?; }
-    else { tmp.persist_noclobber(path).map_err(|e| io(path, e.error))?; }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(CompareError::Cancelled);
+    }
+    if &output_snapshot(path, cancel)? != previous {
+        return Err(CompareError::OutputChanged);
+    }
+    if previous.is_some() {
+        tmp.persist(path).map_err(|e| io(path, e.error))?;
+    } else {
+        tmp.persist_noclobber(path).map_err(|e| io(path, e.error))?;
+    }
     Ok(())
 }
 
@@ -154,11 +203,23 @@ struct CompareApp {
 
 impl CompareApp {
     fn new(request: CompareRequest, dark: bool, waker: Waker, exit: Arc<AtomicI32>) -> Self {
-        let app = CompareApp { view: None, loaded: Inbox::new(waker.clone()), saved: Inbox::new(waker), cancel: Arc::new(AtomicBool::new(false)), exit, error: None, saving: false, config: rc_editor::EditorConfig::default(), keymap: rc_editor::Keymap::new(if cfg!(target_os = "macos") { rc_editor::KeymapKind::RiderMac } else { rc_editor::KeymapKind::Rider }) };
+        let app = CompareApp {
+            view: None,
+            loaded: Inbox::new(waker.clone()),
+            saved: Inbox::new(waker),
+            cancel: Arc::new(AtomicBool::new(false)),
+            exit,
+            error: None,
+            saving: false,
+            config: rc_editor::EditorConfig::default(),
+            keymap: rc_editor::Keymap::new(if cfg!(target_os = "macos") { rc_editor::KeymapKind::RiderMac } else { rc_editor::KeymapKind::Rider }),
+        };
         let (out, cancel) = (app.loaded.sender(), app.cancel.clone());
         std::thread::spawn(move || {
             let result = load(&request, dark, &cancel);
-            if !cancel.load(Ordering::Relaxed) { out.send(result); }
+            if !cancel.load(Ordering::Relaxed) {
+                out.send(result);
+            }
         });
         app
     }
@@ -166,15 +227,28 @@ impl CompareApp {
     fn poll(&mut self, ctx: &egui::Context) {
         for result in self.loaded.drain() {
             match result {
-                Ok(view) => { if matches!(view, View::Diff(_)) { self.exit.store(0, Ordering::Relaxed); } self.view = Some(view); },
+                Ok(view) => {
+                    if matches!(view, View::Diff(_)) {
+                        self.exit.store(0, Ordering::Relaxed);
+                    }
+                    self.view = Some(view);
+                }
                 Err(error) => self.error = Some(error.to_string()),
             }
         }
         for result in self.saved.drain() {
             self.saving = false;
             match result {
-                Ok(()) => { self.exit.store(0, Ordering::Relaxed); ctx.send_viewport_cmd(egui::ViewportCommand::Close); },
-                Err(error) => { self.error = Some(error.to_string()); if let Some(View::Merge { tool, .. }) = &mut self.view { tool.saving = false; } },
+                Ok(()) => {
+                    self.exit.store(0, Ordering::Relaxed);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    if let Some(View::Merge { tool, .. }) = &mut self.view {
+                        tool.saving = false;
+                    }
+                }
             }
         }
     }
@@ -187,16 +261,33 @@ impl CompareApp {
         self.error = None;
         let (path, previous, text) = (tool.abs.clone(), previous.clone(), tool.output());
         let (out, cancel) = (self.saved.sender(), self.cancel.clone());
-        std::thread::spawn(move || { out.send(save(&path, &previous, &text, &cancel)); });
+        std::thread::spawn(move || {
+            out.send(save(&path, &previous, &text, &cancel));
+        });
     }
 
     fn show(&mut self, ui: &mut egui::Ui) {
         self.poll(ui.ctx());
-        if let Some(error) = &self.error { ui.colored_label(rc_kit::pal(ui).error, error); }
+        if let Some(error) = &self.error {
+            ui.colored_label(rc_kit::pal(ui).error, error);
+        }
         match &mut self.view {
-            None => { if self.error.is_none() { ui.spinner(); ui.label(tr("Loading comparison…")); } if ui.button(tr("Close")).clicked() { ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close); } },
+            None => {
+                if self.error.is_none() {
+                    ui.spinner();
+                    ui.label(tr("Loading comparison…"));
+                }
+                if ui.button(tr("Close")).clicked() {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
             Some(View::Diff(diff)) => {
-                ui.horizontal(|ui| { ui.label(&diff.title); if ui.button(tr("Close")).clicked() { ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close); } });
+                ui.horizontal(|ui| {
+                    ui.label(&diff.title);
+                    if ui.button(tr("Close")).clicked() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
                 ui.separator();
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
                 crate::ui::git::diff_editors(diff, &mut child, &self.config, &self.keymap);
@@ -204,8 +295,12 @@ impl CompareApp {
             Some(View::Merge { tool, .. }) => {
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
                 match crate::ui::git::merge_editor(tool, &mut child, &self.config, &self.keymap, tr("Save Result")) {
-                    crate::ui::git::MergeAction::None => {},
-                    crate::ui::git::MergeAction::Close => { if !self.saving { ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close); } },
+                    crate::ui::git::MergeAction::None => {}
+                    crate::ui::git::MergeAction::Close => {
+                        if !self.saving {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    }
                     crate::ui::git::MergeAction::Save => self.save_result(),
                 }
             }
@@ -213,13 +308,21 @@ impl CompareApp {
     }
 }
 
-impl Drop for CompareApp { fn drop(&mut self) { self.cancel.store(true, Ordering::Relaxed); } }
+impl Drop for CompareApp {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+}
 impl eframe::App for CompareApp {
     fn logic(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.poll(ctx);
-        if self.saving && ctx.input(|i| i.viewport().close_requested()) { ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose); }
+        if self.saving && ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
     }
-    fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) { self.show(ui); }
+    fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
+        self.show(ui);
+    }
 }
 
 pub fn run(request: CompareRequest, mut options: eframe::NativeOptions) -> eframe::Result<i32> {
@@ -229,14 +332,22 @@ pub fn run(request: CompareRequest, mut options: eframe::NativeOptions) -> efram
     options.viewport = options.viewport.with_decorations(true).with_titlebar_shown(true).with_title_shown(true).with_fullsize_content_view(false);
     let exit = Arc::new(AtomicI32::new(1));
     let result = exit.clone();
-    eframe::run_native("CrabCraft", options, Box::new(move |cc| {
-        rc_kit::theme::install_fonts(&cc.egui_ctx);
-        let settings = rc_core::Settings::load();
-        let dark = match settings.theme { rc_core::settings::ThemeChoice::Light => false, rc_core::settings::ThemeChoice::Dark => true, _ => cc.egui_ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark) };
-        rc_kit::theme::apply(&cc.egui_ctx, dark);
-        let ctx = cc.egui_ctx.clone();
-        Ok(Box::new(CompareApp::new(request, dark, Waker::new(move || ctx.request_repaint()), exit)))
-    }))?;
+    eframe::run_native(
+        "CrabCraft",
+        options,
+        Box::new(move |cc| {
+            rc_kit::theme::install_fonts(&cc.egui_ctx);
+            let settings = rc_core::Settings::load();
+            let dark = match settings.theme {
+                rc_core::settings::ThemeChoice::Light => false,
+                rc_core::settings::ThemeChoice::Dark => true,
+                _ => cc.egui_ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark),
+            };
+            rc_kit::theme::apply(&cc.egui_ctx, dark);
+            let ctx = cc.egui_ctx.clone();
+            Ok(Box::new(CompareApp::new(request, dark, Waker::new(move || ctx.request_repaint()), exit)))
+        }),
+    )?;
     Ok(result.load(Ordering::Relaxed))
 }
 
@@ -253,7 +364,12 @@ mod tests {
         for (file, value) in [("base.rs", 0), ("left.rs", 1), ("right.rs", 2)] {
             std::fs::write(dir.path().join(file), format!("fn main() {{\n    println!(\"{value}\");\n}}\n")).unwrap();
         }
-        let request = CompareRequest::Merge { left: dir.path().join("left.rs"), right: dir.path().join("right.rs"), base: dir.path().join("base.rs"), result: dir.path().join("src/main.rs") };
+        let request = CompareRequest::Merge {
+            left: dir.path().join("left.rs"),
+            right: dir.path().join("right.rs"),
+            base: dir.path().join("base.rs"),
+            result: dir.path().join("src/main.rs"),
+        };
         (dir, request)
     }
 
@@ -261,13 +377,22 @@ mod tests {
         let exit = Arc::new(AtomicI32::new(1));
         let app = CompareApp::new(request, true, Waker::noop(), exit);
         let mut first = true;
-        let mut h = Harness::builder().with_size(egui::vec2(1500.0, 800.0)).build_ui_state(move |ui, app: &mut CompareApp| {
-            if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); rc_kit::theme::apply(ui.ctx(), true); return; }
-            app.show(ui);
-        }, app);
+        let mut h = Harness::builder().with_size(egui::vec2(1500.0, 800.0)).build_ui_state(
+            move |ui, app: &mut CompareApp| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    rc_kit::theme::apply(ui.ctx(), true);
+                    return;
+                }
+                app.show(ui);
+            },
+            app,
+        );
         for _ in 0..200 {
             h.run_steps(1);
-            if h.state().view.is_some() || h.state().error.is_some() { break; }
+            if h.state().view.is_some() || h.state().error.is_some() {
+                break;
+            }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(h.state().error.is_none(), "{:?}", h.state().error);
@@ -279,7 +404,10 @@ mod tests {
     fn paths_are_literal_and_arity_is_checked() {
         let cwd = Path::new("/work");
         let parse = |args: &[&str]| crate::cli::parse(args.iter().map(OsString::from), cwd);
-        assert_eq!(parse(&["diff", "left.rs:7", "right.rs"]), Ok(crate::cli::Command::Compare(CompareRequest::Diff { left: cwd.join("left.rs:7"), right: cwd.join("right.rs") })));
+        assert_eq!(
+            parse(&["diff", "left.rs:7", "right.rs"]),
+            Ok(crate::cli::Command::Compare(CompareRequest::Diff { left: cwd.join("left.rs:7"), right: cwd.join("right.rs") }))
+        );
         assert!(parse(&["diff", "left.rs"]).is_err());
         assert!(parse(&["merge", "left.rs", "right.rs", "base.rs"]).is_err());
         assert!(parse(&["diff", "left.rs", "right.rs", "extra"]).is_err());
@@ -300,7 +428,9 @@ mod tests {
         h.get_by_label("Save Result").click();
         for _ in 0..200 {
             h.run_steps(1);
-            if !h.state().saving { break; }
+            if !h.state().saving {
+                break;
+            }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(h.state().error.is_none(), "{:?}", h.state().error);
@@ -308,7 +438,15 @@ mod tests {
         assert_eq!(std::fs::read_to_string(dir.path().join("src/main.rs")).unwrap(), std::fs::read_to_string(dir.path().join("right.rs")).unwrap());
         assert!(std::fs::read_to_string(dir.path().join("left.rs")).unwrap().contains("1"));
         // Explicitly compile the resulting Rust file without running the project's build.rs.
-        assert!(std::process::Command::new("rustc").arg(dir.path().join("src/main.rs")).arg("-o").arg(dir.path().join("merged-program")).status().unwrap().success());
+        assert!(
+            std::process::Command::new("rustc")
+                .arg(dir.path().join("src/main.rs"))
+                .arg("-o")
+                .arg(dir.path().join("merged-program"))
+                .status()
+                .unwrap()
+                .success()
+        );
     }
 
     #[test]

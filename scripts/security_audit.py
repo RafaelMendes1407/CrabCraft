@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import hashlib
 import json
 import math
 import os
@@ -89,13 +88,6 @@ def advisory_severity(advisory: dict) -> str:
     if score > 0:
         return "LOW"
     return "INFORMATIONAL"
-
-
-def static_source_files() -> list[Path]:
-    """Select project inputs, excluding generated files under fuzz/target."""
-    return sorted([ROOT / "Cargo.toml", ROOT / "Cargo.lock", *ROOT.glob("crates/**/Cargo.toml"),
-                   *ROOT.glob("crates/**/*.rs"), *ROOT.glob("fuzz/fuzz_targets/*.rs"),
-                   ROOT / "fuzz" / "Cargo.toml", ROOT / "fuzz" / "Cargo.lock"])
 
 
 def dependencies() -> dict:
@@ -182,36 +174,7 @@ def static() -> dict:
     checks = [command_result("cargo-fmt", ["cargo", "fmt", "--all", "--", "--check"]),
               command_result("cargo-clippy", ["cargo", "clippy", "--workspace", "--all-targets",
                                               "--all-features", "--locked", "--", "-D", "warnings"])]
-    baseline = load_json(ROOT / "security" / "static-baseline.json")
-    digest = hashlib.sha256()
-    for source in static_source_files():
-        digest.update(str(source.relative_to(ROOT)).encode() + b"\0" + source.read_bytes() + b"\0")
-    source_digest = digest.hexdigest()
-    baseline_valid = False
-    if isinstance(baseline, dict):
-        try:
-            baseline_valid = (baseline.get("source_sha256") == source_digest
-                              and baseline.get("rustc") == version(["rustc", "--version"])
-                              and dt.date.fromisoformat(baseline["expires_at"]) >= dt.datetime.now(dt.timezone.utc).date())
-        except (KeyError, ValueError):
-            pass
-    clippy_log = (REPORTS / checks[1]["stderr"]).read_text(errors="replace")
-    error_lines = [line for line in clippy_log.splitlines()
-                   if line.startswith(("error:", "error["))]
-    allowed = set(baseline.get("known_lint_messages", [])) if isinstance(baseline, dict) else set()
-    known_errors = (bool(error_lines) and any(line in allowed for line in error_lines)
-                    and all(line in allowed or line.startswith("error: could not compile `rc-")
-                            for line in error_lines))
-    known_failure = (checks[0]["exit_code"] == 1 and checks[1]["exit_code"] == 101
-                     and "Diff in " in (REPORTS / checks[0]["stdout"]).read_text(errors="replace")
-                     and known_errors)
-    if baseline_valid and known_failure:
-        for check in checks:
-            check["status"] = "WARNING"
-            check["detail"] = "Known formatting/lint debt on an unchanged source graph; see static-baseline.json and raw log"
-    return category("static", checks, source_sha256=source_digest,
-                    baseline_applied=baseline_valid and known_failure,
-                    limitations=["The static baseline expires and is invalidated by any Rust source, manifest or lockfile change."])
+    return category("static", checks)
 
 
 def unsafe() -> dict:

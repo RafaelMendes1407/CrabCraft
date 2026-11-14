@@ -173,7 +173,10 @@ mod tests {
         let src = "mod m {\n    /// Docs.\n    pub struct Point {\n        x: i32,\n    }\n}\n";
         let t = target(src, "x: i32").unwrap();
         assert_eq!((t.name.as_str(), t.items.len()), ("Point", 0));
-        assert_eq!(apply(src, &t, &["Debug", "Clone"]), "mod m {\n    /// Docs.\n    #[derive(Debug, Clone)]\n    pub struct Point {\n        x: i32,\n    }\n}\n");
+        assert_eq!(
+            apply(src, &t, &["Debug", "Clone"]),
+            "mod m {\n    /// Docs.\n    #[derive(Debug, Clone)]\n    pub struct Point {\n        x: i32,\n    }\n}\n"
+        );
     }
 
     #[test]

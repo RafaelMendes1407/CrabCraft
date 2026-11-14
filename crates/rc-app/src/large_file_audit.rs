@@ -1,7 +1,10 @@
 //! Real Rust file and headless native editor evidence for the large-file policy.
 use egui_kittest::Harness;
 use rc_editor::{EditorConfig, EditorState, EditorView, Keymap, KeymapKind};
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[test]
 fn native_editor_navigates_edits_and_protects_large_real_rust_files() {
@@ -12,7 +15,9 @@ fn native_editor_navigates_edits_and_protects_large_real_rust_files() {
     for (bytes, read_only) in [(2 * 1024 * 1024, false), (9 * 1024 * 1024, true)] {
         let mut source = String::with_capacity(bytes + 100);
         let line = "// Large Rust source: navigation, UTF-8 café, highlighting and safe read-only fallback.\n";
-        while source.len() < bytes { source.push_str(line); }
+        while source.len() < bytes {
+            source.push_str(line);
+        }
         source.push_str("fn main() { assert_eq!(6 * 7, 42); }\n");
         std::fs::write(&path, &source).unwrap();
         let mut docs = crate::docs::Docs::new(rc_syntax::ParserPool::new(Arc::new(|| {})));
@@ -30,10 +35,16 @@ fn native_editor_navigates_edits_and_protects_large_real_rust_files() {
         let config = EditorConfig::default();
         let keymap = Keymap::new(KeymapKind::VsCode);
         let mut first = true;
-        let mut harness = Harness::builder().with_size(egui::vec2(1100.0, 650.0)).build_ui_state(move |ui, state: &mut EditorState| {
-            if std::mem::take(&mut first) { rc_kit::theme::install_fonts(ui.ctx()); return; }
-            EditorView::new(state, &config, &keymap).focus(true).show(ui);
-        }, state);
+        let mut harness = Harness::builder().with_size(egui::vec2(1100.0, 650.0)).build_ui_state(
+            move |ui, state: &mut EditorState| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                EditorView::new(state, &config, &keymap).focus(true).show(ui);
+            },
+            state,
+        );
         harness.run_steps(3);
         let started = Instant::now();
         let lines = harness.state().buffer.len_lines();
@@ -47,15 +58,17 @@ fn native_editor_navigates_edits_and_protects_large_real_rust_files() {
         harness.event(egui::Event::Text("// edited\n".into()));
         harness.run_steps(1);
         let changed = harness.state().buffer.rope().to_string();
-        if read_only { assert_eq!(changed, source); }
-        else {
+        if read_only {
+            assert_eq!(changed, source);
+        } else {
             assert!(changed.starts_with("// edited\n"));
             harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Z);
             harness.run_steps(1);
             assert_eq!(harness.state().buffer.rope().to_string(), source);
         }
         std::fs::write(&path, changed).unwrap();
-        let built = std::process::Command::new("cargo").args(["check", "--offline", "--manifest-path"]).arg(project.path().join("Cargo.toml")).output().unwrap();
+        let built =
+            std::process::Command::new("cargo").args(["check", "--offline", "--manifest-path"]).arg(project.path().join("Cargo.toml")).output().unwrap();
         assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
     }
     let huge = project.path().join("oversized.rs");

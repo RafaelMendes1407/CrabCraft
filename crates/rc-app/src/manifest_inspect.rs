@@ -54,7 +54,8 @@ impl ManifestInspections {
     /// or the Cargo project changed, and puts the current diagnostics in the editor and in
     /// `problems`, at the levels `profile` gives them.
     pub fn update(&mut self, docs: &mut Docs, problems: &mut BTreeMap<PathBuf, Vec<Diagnostic>>, epoch: u64, profile: &InspectionProfile) {
-        let finished: Vec<(u64, Key, Vec<Issue>)> = self.running.iter().filter_map(|(id, (key, inbox))| inbox.drain().pop().map(|issues| (*id, *key, issues))).collect();
+        let finished: Vec<(u64, Key, Vec<Issue>)> =
+            self.running.iter().filter_map(|(id, (key, inbox))| inbox.drain().pop().map(|issues| (*id, *key, issues))).collect();
         for (id, key, issues) in finished {
             self.running.remove(&id);
             let diags = issues.iter().map(|i| (diagnostic(i), crate::inspection_profile::manifest_id(&i.problem))).collect();
@@ -95,7 +96,11 @@ impl ManifestInspections {
         let Some(done) = self.done.get(&editor.id).filter(|d| d.key.0 == editor.buffer.version()) else { return Vec::new() };
         let rope = editor.buffer.rope();
         let len = rope.len_chars();
-        done.fixes.iter().filter(|f| f.start <= f.end && f.end <= len && rope.char_to_line(f.start) <= line && line <= rope.char_to_line(f.end)).cloned().collect()
+        done.fixes
+            .iter()
+            .filter(|f| f.start <= f.end && f.end <= len && rope.char_to_line(f.start) <= line && line <= rope.char_to_line(f.end))
+            .cloned()
+            .collect()
     }
 }
 
@@ -112,7 +117,15 @@ fn diagnostic(issue: &Issue) -> Diagnostic {
         Level::Error => Severity::Error,
         Level::Warning => Severity::Warning,
     };
-    Diagnostic { start: issue.start, end: issue.end, severity, message: message(&issue.problem), code: Some(DIAG_CODE.to_string()), unnecessary: false, deprecated: false }
+    Diagnostic {
+        start: issue.start,
+        end: issue.end,
+        severity,
+        message: message(&issue.problem),
+        code: Some(DIAG_CODE.to_string()),
+        unnecessary: false,
+        deprecated: false,
+    }
 }
 
 /// What the user reads for `problem`.
@@ -124,15 +137,27 @@ pub fn message(problem: &Problem) -> String {
             (false, None) => trf("Unknown key `{key}` in `[{table}]`; Cargo ignores it", &[("key", key), ("table", table)]),
             (false, Some(s)) => trf("Unknown key `{key}` in `[{table}]`; did you mean `{suggestion}`?", &[("key", key), ("table", table), ("suggestion", s)]),
         },
-        Problem::DuplicateDependency { name, other } => trf("`{name}` is also in `[dependencies]` with the incompatible requirement `{req}`", &[("name", name), ("req", other)]),
-        Problem::NoSource { name } => trf("Dependency `{name}` has no version, path, git or workspace source", &[("name", name)]),
-        Problem::UnknownFeature { feature, value, suggestion: None } => trf("Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency", &[("feature", feature), ("value", value)]),
-        Problem::UnknownFeature { feature, value, suggestion: Some(s) } => {
-            trf("Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency; did you mean `{suggestion}`?", &[("feature", feature), ("value", value), ("suggestion", s)])
+        Problem::DuplicateDependency { name, other } => {
+            trf("`{name}` is also in `[dependencies]` with the incompatible requirement `{req}`", &[("name", name), ("req", other)])
         }
-        Problem::NotADependency { feature, value, dep } => trf("Feature `{feature}` includes `{value}`, but `{dep}` is not a dependency", &[("feature", feature), ("value", value), ("dep", dep)]),
-        Problem::NotOptional { feature, value, dep } => trf("Feature `{feature}` includes `{value}`, but `{dep}` is not an optional dependency", &[("feature", feature), ("value", value), ("dep", dep)]),
-        Problem::NoImplicitFeature { feature, dep } => trf("Feature `{feature}` includes `{dep}`, which has no implicit feature because `dep:{dep}` is used; write `dep:{dep}`", &[("feature", feature), ("dep", dep)]),
+        Problem::NoSource { name } => trf("Dependency `{name}` has no version, path, git or workspace source", &[("name", name)]),
+        Problem::UnknownFeature { feature, value, suggestion: None } => {
+            trf("Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency", &[("feature", feature), ("value", value)])
+        }
+        Problem::UnknownFeature { feature, value, suggestion: Some(s) } => trf(
+            "Feature `{feature}` includes `{value}`, which is neither a feature nor an optional dependency; did you mean `{suggestion}`?",
+            &[("feature", feature), ("value", value), ("suggestion", s)],
+        ),
+        Problem::NotADependency { feature, value, dep } => {
+            trf("Feature `{feature}` includes `{value}`, but `{dep}` is not a dependency", &[("feature", feature), ("value", value), ("dep", dep)])
+        }
+        Problem::NotOptional { feature, value, dep } => {
+            trf("Feature `{feature}` includes `{value}`, but `{dep}` is not an optional dependency", &[("feature", feature), ("value", value), ("dep", dep)])
+        }
+        Problem::NoImplicitFeature { feature, dep } => trf(
+            "Feature `{feature}` includes `{dep}`, which has no implicit feature because `dep:{dep}` is used; write `dep:{dep}`",
+            &[("feature", feature), ("dep", dep)],
+        ),
         Problem::InvalidEdition { value } => trf("Unknown edition `{value}`; expected 2015, 2018, 2021 or 2024", &[("value", value)]),
         Problem::EditionNotString => trf("The edition must be a string, such as `{example}`", &[("example", &"\"2021\"")]),
         Problem::MissingMember { path } => trf("No package at workspace member `{path}`", &[("path", path)]),

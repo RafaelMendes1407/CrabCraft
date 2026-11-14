@@ -47,7 +47,11 @@ enum TabCommand {
     Unsplit(GroupId),
     UnsplitAll(GroupId),
     /// A divider moved: the split at `path` (steps into `a`/`b`) of a window's tree.
-    Ratio { window: Option<u64>, path: Vec<bool>, ratio: f32 },
+    Ratio {
+        window: Option<u64>,
+        path: Vec<bool>,
+        ratio: f32,
+    },
 }
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
@@ -277,9 +281,17 @@ fn drop_zones(app: &mut CrabCraftApp, ui: &Ui, g: &Group, body: Rect, strip: Opt
                     started
                 });
                 let progress = ((now - started) as f32 / 0.18).clamp(0.0, 1.0);
-                if progress < 1.0 { ui.ctx().request_repaint(); }
+                if progress < 1.0 {
+                    ui.ctx().request_repaint();
+                }
                 let inset = (4.0 + (1.0 - progress) * 14.0).min(zone.width().min(zone.height()).max(0.0) * 0.25);
-                overlay.rect(zone.shrink(inset), 6.0, p.accent.gamma_multiply(0.08 + progress * 0.12), egui::Stroke::new(1.5 + progress, p.accent), egui::StrokeKind::Inside);
+                overlay.rect(
+                    zone.shrink(inset),
+                    6.0,
+                    p.accent.gamma_multiply(0.08 + progress * 0.12),
+                    egui::Stroke::new(1.5 + progress, p.accent),
+                    egui::StrokeKind::Inside,
+                );
             }
             drop
         }
@@ -313,19 +325,29 @@ fn docking_tiles(body: Rect, can_split: bool, can_merge: bool) -> impl Iterator<
         (Some(Edge::Top), center - vec2(0.0, dy)),
         (Some(Edge::Bottom), center + vec2(0.0, dy)),
         (None, center),
-    ].into_iter()
-        .filter(move |(edge, _)| scale > 0.0 && if edge.is_some() { can_split } else { can_merge })
-        .map(move |(edge, position)| (edge, Rect::from_center_size(position, vec2(40.0, 32.0) * scale)))
+    ]
+    .into_iter()
+    .filter(move |(edge, _)| scale > 0.0 && if edge.is_some() { can_split } else { can_merge })
+    .map(move |(edge, position)| (edge, Rect::from_center_size(position, vec2(40.0, 32.0) * scale)))
 }
 
 fn docking_edge(body: Rect, pointer: Pos2, can_split: bool, can_merge: bool) -> Option<Edge> {
-    if !body.contains(pointer) { return None; }
-    if let Some((edge, _)) = docking_tiles(body, can_split, can_merge).find(|(_, tile)| tile.contains(pointer)) { return edge; }
-    if !can_split { return None; }
+    if !body.contains(pointer) {
+        return None;
+    }
+    if let Some((edge, _)) = docking_tiles(body, can_split, can_merge).find(|(_, tile)| tile.contains(pointer)) {
+        return edge;
+    }
+    if !can_split {
+        return None;
+    }
     let fx = (pointer.x - body.left()) / body.width().max(1.0);
     let fy = (pointer.y - body.top()) / body.height().max(1.0);
     [(fx, Edge::Left), (1.0 - fx, Edge::Right), (fy, Edge::Top), (1.0 - fy, Edge::Bottom)]
-        .into_iter().filter(|(distance, _)| *distance < 0.25).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, edge)| edge)
+        .into_iter()
+        .filter(|(distance, _)| *distance < 0.25)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, edge)| edge)
 }
 
 /// A docking map is informational: the complete edge region remains the drop target.
@@ -334,7 +356,13 @@ fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, c
     let selected = docking_edge(body, pointer, can_split, can_merge);
     for (edge, tile) in docking_tiles(body, can_split, can_merge) {
         let active = body.contains(pointer) && selected == edge;
-        painter.rect(tile, 5.0, if active { p.selection } else { p.main_bg }, egui::Stroke::new(1.0, if active { p.accent } else { p.muted }), egui::StrokeKind::Inside);
+        painter.rect(
+            tile,
+            5.0,
+            if active { p.selection } else { p.main_bg },
+            egui::Stroke::new(1.0, if active { p.accent } else { p.muted }),
+            egui::StrokeKind::Inside,
+        );
         let glyph = tile.shrink2(tile.size() * vec2(0.2, 0.21875));
         painter.rect_stroke(glyph, 1.0, egui::Stroke::new(1.0, p.text_muted), egui::StrokeKind::Inside);
         let half = match edge {
@@ -344,7 +372,7 @@ fn docking_guides(ui: &Ui, painter: &egui::Painter, body: Rect, pointer: Pos2, c
             Some(Edge::Bottom) => Rect::from_min_max(pos2(glyph.left(), glyph.center().y), glyph.max),
             None => glyph,
         };
-        painter.rect_filled(half.shrink(half.width().min(half.height()).max(0.0).min(2.0) * 0.5), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
+        painter.rect_filled(half.shrink(half.width().min(half.height()).clamp(0.0, 2.0) * 0.5), 0.0, p.accent.gamma_multiply(if active { 0.9 } else { 0.45 }));
     }
 }
 
@@ -357,10 +385,13 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let mut editor_rect = editor_rect;
     if app.disk_revert.as_ref().is_some_and(|job| job.ticket.id == app.docs.list[active].editor.id) {
         let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), 34.0));
-        let mut progress = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let mut progress =
+            ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
         progress.spinner();
         progress.label(tr("Reading disk version…"));
-        if progress.button(tr("Cancel")).clicked() { app.disk_revert = None; }
+        if progress.button(tr("Cancel")).clicked() {
+            app.disk_revert = None;
+        }
         editor_rect.min.y = banner.bottom();
     }
     if app.docs.list[active].conflict {
@@ -369,7 +400,9 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
         icons::image(&mut b, ico::WARNING, 16.0);
         b.label(tr("The file was changed on disk. Keep your version or load the one on disk?"));
-        if b.button(tr("Load from Disk")).clicked() { app.request_disk_revert(active); }
+        if b.button(tr("Load from Disk")).clicked() {
+            app.request_disk_revert(active);
+        }
         if b.button(tr("Keep Mine")).clicked() {
             app.keep_mine_after_save(active);
         }
@@ -379,7 +412,7 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         let height = ((app.missing_crates.report.proposals.len() + app.missing_crates.report.notices.len()) as f32 * 30.0).min(120.0);
         let banner = Rect::from_min_size(editor_rect.min, vec2(editor_rect.width(), height));
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::top_down(egui::Align::LEFT)));
-        egui::ScrollArea::vertical().id_salt(("missing_crates",active)).max_height(height - 8.0).show(&mut child, |ui| crate::missing_crates::banner(app, ui));
+        egui::ScrollArea::vertical().id_salt(("missing_crates", active)).max_height(height - 8.0).show(&mut child, |ui| crate::missing_crates::banner(app, ui));
         editor_rect.min.y = banner.bottom();
     }
     // LightEdit: a file opened without its project; offer to open the whole project.
@@ -391,7 +424,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
         let mut b = ui.new_child(egui::UiBuilder::new().max_rect(banner.shrink2(vec2(12.0, 4.0))).layout(egui::Layout::left_to_right(egui::Align::Center)));
         icons::image(&mut b, ico::INFO, 16.0);
         let name = project.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        b.label(rc_kit::i18n::trf("LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.", &[("name", &name)]));
+        b.label(rc_kit::i18n::trf(
+            "LightEdit: this file belongs to the Cargo project {name}. Code insight, run and build need the project.",
+            &[("name", &name)],
+        ));
         if b.button(tr("Open Project")).clicked() {
             app.open_workspace(&project);
             return false;
@@ -498,7 +534,11 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             let mut cx = crate::manifest_completion::Cx { names: &mut app.crate_names, deps: &mut app.dep_versions, online: app.settings.check_crates_io };
             crate::manifest_completion::accepted(doc, data, &mut cx);
         } else {
-            if let Some(insight)=app.web_languages.insight(doc){insight.completion_accepted(doc,data);}else{app.insight.completion_accepted(doc, data);}
+            if let Some(insight) = app.web_languages.insight(doc) {
+                insight.completion_accepted(doc, data);
+            } else {
+                app.insight.completion_accepted(doc, data);
+            }
         }
     }
     if crate::manifest_completion::is_manifest(doc) {
@@ -513,7 +553,11 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     let server_events: Vec<EditorEvent> = out.events.iter().filter(|e| feature_click.is_none() || !matches!(e, EditorEvent::NavigateAt(_))).cloned().collect();
     if app.debugger.stopped() {
         let insight_events: Vec<_> = server_events.iter().filter(|e| !matches!(e, EditorEvent::HoverAt { .. })).cloned().collect();
-        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&insight_events);}else{app.insight.on_editor_events(doc, &insight_events);}
+        if let Some(insight) = app.web_languages.insight(doc) {
+            insight.on_editor_events(doc, &insight_events);
+        } else {
+            app.insight.on_editor_events(doc, &insight_events);
+        }
         for e in &out.events {
             match e {
                 EditorEvent::HoverAt { pos, screen } => {
@@ -525,9 +569,13 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             }
         }
     } else {
-        if let Some(insight)=app.web_languages.insight(doc){insight.on_editor_events(doc,&server_events);}else{app.insight.on_editor_events(doc, &server_events);}
+        if let Some(insight) = app.web_languages.insight(doc) {
+            insight.on_editor_events(doc, &server_events);
+        } else {
+            app.insight.on_editor_events(doc, &server_events);
+        }
     }
-    app.endpoints.on_editor_events(doc,&out.events);
+    app.endpoints.on_editor_events(doc, &out.events);
     let mut run_test_line = None;
     let mut run_binary_line = None;
     let mut explain = None;
@@ -574,7 +622,10 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::FeatureOn | rc_editor::GutterIcon::FeatureOff } => feature_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::DocsRs } => docs_rs_line = Some(line),
             EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::HttpRequest } => http_line = Some(line),
-            EditorEvent::GutterIconClicked { line, icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed } => run_test_line = Some(line),
+            EditorEvent::GutterIconClicked {
+                line,
+                icon: rc_editor::GutterIcon::RunTest | rc_editor::GutterIcon::TestPassed | rc_editor::GutterIcon::TestFailed,
+            } => run_test_line = Some(line),
             _ => {}
         }
     }
@@ -583,10 +634,15 @@ pub fn editor_pane(app: &mut CrabCraftApp, ui: &mut Ui, active: usize, rect: Rec
     {
         let p = rc_kit::pal(ui);
         egui::Area::new(egui::Id::unique("debug_hover")).order(egui::Order::Tooltip).fixed_pos(*screen + vec2(0.0, 14.0)).show(ui.ctx(), |ui| {
-            egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 5)).show(ui, |ui| {
-                ui.set_max_width(520.0);
-                ui.label(egui::RichText::new(text).monospace().size(12.5).color(p.text));
-            });
+            egui::Frame::new()
+                .fill(p.popup_bg)
+                .stroke(egui::Stroke::new(1.0, p.popup_border))
+                .corner_radius(6.0)
+                .inner_margin(egui::Margin::symmetric(8, 5))
+                .show(ui, |ui| {
+                    ui.set_max_width(520.0);
+                    ui.label(egui::RichText::new(text).monospace().size(12.5).color(p.text));
+                });
         });
     }
     let mut insight_actions = Vec::new();
@@ -689,15 +745,18 @@ fn gutter_menu(app: &mut CrabCraftApp, ui: &Ui) {
     let p = rc_kit::pal(ui);
     let mut chosen = None;
     let area = egui::Area::new(egui::Id::unique("gutter_run_menu")).order(egui::Order::Foreground).fixed_pos(pos).show(&ctx, |ui| {
-        egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-            ui.set_width(150.0);
-            if theme::menu_entry(ui, Some(ico::RUN), tr("Run"), None, false, true).clicked() {
-                chosen = Some(false);
-            }
-            if can_debug && theme::menu_entry(ui, Some(ico::DEBUG), tr("Debug"), None, false, true).clicked() {
-                chosen = Some(true);
-            }
-        });
+        egui::Frame::new().fill(p.popup_bg).stroke(egui::Stroke::new(1.0, p.popup_border)).corner_radius(6.0).inner_margin(egui::Margin::same(4)).show(
+            ui,
+            |ui| {
+                ui.set_width(150.0);
+                if theme::menu_entry(ui, Some(ico::RUN), tr("Run"), None, false, true).clicked() {
+                    chosen = Some(false);
+                }
+                if can_debug && theme::menu_entry(ui, Some(ico::DEBUG), tr("Debug"), None, false, true).clicked() {
+                    chosen = Some(true);
+                }
+            },
+        );
     });
     match chosen {
         Some(debug) => {
@@ -734,7 +793,10 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
                 ui.close();
             }
         };
-        if sql_fragment && theme::menu_item(ui, Some(ico::TW_DEPENDENCIES), tr("Open SQL in database console…"), false).clicked() { open_sql=true; ui.close(); }
+        if sql_fragment && theme::menu_item(ui, Some(ico::TW_DEPENDENCIES), tr("Open SQL in database console…"), false).clicked() {
+            open_sql = true;
+            ui.close();
+        }
         if manifest {
             entry(ui, None, tr("Go to Declaration"), Action::GotoDeclaration);
             entry(ui, Some(ico::TW_FIND), tr("Find Usages of Feature"), Action::FindUsages);
@@ -750,7 +812,9 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
             entry(ui, Some(ico::BULB), tr("Move public Rust item…"), Action::MoveItem);
             ui.separator();
         }
-        for (icon, text, cmd) in [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)] {
+        for (icon, text, cmd) in
+            [(ico::CUT, tr("Cut"), MenuCommand::Cut), (ico::COPY, tr("Copy"), MenuCommand::Copy), (ico::PASTE, tr("Paste"), MenuCommand::Paste)]
+        {
             if theme::menu_item(ui, Some(icon), text, false).clicked() {
                 edit = Some(cmd);
                 ui.close();
@@ -776,7 +840,9 @@ fn editor_context_menu(app: &mut CrabCraftApp, active: usize, resp: &egui::Respo
         }
         None => {}
     }
-    if open_sql { crate::sql_injection::open_console(app, active); }
+    if open_sql {
+        crate::sql_injection::open_console(app, active);
+    }
     app.pending.extend(actions);
 }
 
@@ -861,9 +927,12 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, full: Rect, window:
                 }
             });
         }
-        egui::ScrollArea::horizontal().id_salt(("editor_tabs_scroll", g.id)).scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(&mut child, |ui| {
-            ui.horizontal_centered(|ui| draw_tabs(ui, &mut rects));
-        });
+        egui::ScrollArea::horizontal().id_salt(("editor_tabs_scroll", g.id)).scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(
+            &mut child,
+            |ui| {
+                ui.horizontal_centered(|ui| draw_tabs(ui, &mut rects));
+            },
+        );
     }
     let bottom = if multirow { rects.iter().map(|r| r.bottom()).fold(full.top() + TABS_H - 5.0, f32::max) + 5.0 } else { full.top() + TABS_H };
     // Every tab of the group, for the ones scrolled out of sight.
@@ -877,7 +946,8 @@ fn tab_strip(app: &mut CrabCraftApp, ui: &mut Ui, g: &Group, full: Rect, window:
             for &id in &g.tabs {
                 let Some(i) = app.docs.list.iter().position(|d| d.editor.id == id) else { continue };
                 let d = &app.docs.list[i];
-                if theme::menu_item(ui, Some(icons::for_file(&d.name())), &d.name(), g.active == Some(id)).on_hover_text(d.path.display().to_string()).clicked() {
+                if theme::menu_item(ui, Some(icons::for_file(&d.name())), &d.name(), g.active == Some(id)).on_hover_text(d.path.display().to_string()).clicked()
+                {
                     pick = Some(i);
                     ui.close();
                 }
@@ -1007,13 +1077,17 @@ pub fn window_menu(app: &mut CrabCraftApp, ui: &mut Ui) {
         (tr("Close Other Tabs"), active.map(TabCommand::CloseOthers)),
     ] {
         if theme::menu_entry(ui, None, label, None, false, command.is_some()).clicked() {
-            if let Some(command) = command { commands.push(command); }
+            if let Some(command) = command {
+                commands.push(command);
+            }
             ui.close();
         }
     }
     let group = active.and_then(|index| app.docs.list.get(index)).and_then(|doc| app.layout.group_of(doc.editor.id));
     if theme::menu_entry(ui, None, tr("Unsplit All"), None, false, group.is_some()).clicked() {
-        if let Some(group) = group { commands.push(TabCommand::UnsplitAll(group)); }
+        if let Some(group) = group {
+            commands.push(TabCommand::UnsplitAll(group));
+        }
         ui.close();
     }
     run_tab_commands(app, ui.ctx(), commands);
@@ -1158,7 +1232,13 @@ fn empty_state(app: &mut CrabCraftApp, ui: &mut Ui, rect: Rect) {
         ui.painter().galley(pos2(x, y), label_g.clone(), p.text_muted);
         ui.painter().galley(pos2(x + label_g.size().x + 12.0, y), sc_g, p.accent);
     }
-    ui.painter().text(pos2(rect.center().x, top + 5.0 * row_h + 16.0), Align2::CENTER_TOP, tr("Drop files here to open them"), FontId::proportional(13.0), p.disabled);
+    ui.painter().text(
+        pos2(rect.center().x, top + 5.0 * row_h + 16.0),
+        Align2::CENTER_TOP,
+        tr("Drop files here to open them"),
+        FontId::proportional(13.0),
+        p.disabled,
+    );
     let _ = ui.allocate_rect(rect, Sense::hover());
     // Files dropped on the window open in tabs.
     let dropped: Vec<std::path::PathBuf> = ui.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
@@ -1221,7 +1301,9 @@ mod docking_tests {
             for (index, (edge, tile)) in guides.iter().enumerate() {
                 assert!(body.contains_rect(*tile), "guide must stay inside its editor: {size:?}: {tile:?}");
                 assert_eq!(docking_edge(body, tile.center(), true, true), *edge, "visible guide and hit target must agree: {size:?}");
-                for (_, other) in guides.iter().skip(index + 1) { assert!(!tile.intersects(*other), "guides must not overlap: {size:?}"); }
+                for (_, other) in guides.iter().skip(index + 1) {
+                    assert!(!tile.intersects(*other), "guides must not overlap: {size:?}");
+                }
             }
             assert_eq!(docking_edge(body, body.center(), false, true), None);
             assert_eq!(docking_tiles(body, false, true).count(), 1);
@@ -1234,9 +1316,15 @@ mod docking_tests {
         let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let home = tempfile::tempdir().unwrap();
         let mut app = crate::screens::test_app(home.path(), true);
-        app.tab_drag = Some(TabDrag { doc: 1, viewport: egui::ViewportId::ROOT, screen: Some(pos2(200.0, 200.0)), target: Some(Drop::Group { group: app.layout.focused, index: None }), over_window: true, released: false });
-        let mut input = egui::RawInput::default();
-        input.viewport_id = egui::ViewportId::from_hash_of("destination");
+        app.tab_drag = Some(TabDrag {
+            doc: 1,
+            viewport: egui::ViewportId::ROOT,
+            screen: Some(pos2(200.0, 200.0)),
+            target: Some(Drop::Group { group: app.layout.focused, index: None }),
+            over_window: true,
+            released: false,
+        });
+        let mut input = egui::RawInput { viewport_id: egui::ViewportId::from_hash_of("destination"), ..Default::default() };
         input.viewports.insert(input.viewport_id, Default::default());
         input.events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
         let context = egui::Context::default();

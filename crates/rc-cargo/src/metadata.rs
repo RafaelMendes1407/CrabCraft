@@ -194,7 +194,8 @@ pub fn load_libraries(cargo: &Cargo, manifest: &Path) -> anyhow::Result<Vec<Libr
 /// Every package of the metadata that is not a workspace member, by name.
 pub fn parse_libraries(text: &str) -> anyhow::Result<Vec<Library>> {
     let v: Value = serde_json::from_str(text).context("cargo metadata printed invalid JSON")?;
-    let members: Vec<&str> = v.get("workspace_members").and_then(Value::as_array).context("metadata without members")?.iter().filter_map(Value::as_str).collect();
+    let members: Vec<&str> =
+        v.get("workspace_members").and_then(Value::as_array).context("metadata without members")?.iter().filter_map(Value::as_str).collect();
     let mut libraries = Vec::new();
     for p in v.get("packages").and_then(Value::as_array).context("metadata without packages")? {
         if p.get("id").and_then(Value::as_str).is_some_and(|id| members.contains(&id)) {
@@ -284,7 +285,8 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
     let v: Value = serde_json::from_str(text).context("cargo metadata printed invalid JSON")?;
     let root = path_of(&v, "workspace_root")?;
     let target_dir = path_of(&v, "target_directory")?;
-    let members: Vec<&str> = v.get("workspace_members").and_then(Value::as_array).context("metadata without members")?.iter().filter_map(Value::as_str).collect();
+    let members: Vec<&str> =
+        v.get("workspace_members").and_then(Value::as_array).context("metadata without members")?.iter().filter_map(Value::as_str).collect();
     let mut packages = Vec::new();
     for p in v.get("packages").and_then(Value::as_array).context("metadata without packages")? {
         let id = p.get("id").and_then(Value::as_str).unwrap_or_default();
@@ -295,18 +297,39 @@ pub fn parse_metadata(text: &str) -> anyhow::Result<CargoWorkspace> {
         for t in p.get("targets").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
             let Some(name) = t.get("name").and_then(Value::as_str) else { continue };
             let kinds: Vec<&str> = t.get("kind").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).collect();
-            let required_features = t.get("required-features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect();
+            let required_features = t
+                .get("required-features")
+                .and_then(Value::as_array)
+                .map_or(&[][..], Vec::as_slice)
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
             targets.push(Target { name: name.to_string(), kind: target_kind(&kinds), src: path_of(t, "src_path")?, required_features });
         }
         let features = p
             .get("features")
             .and_then(Value::as_object)
-            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect())).collect())
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(Value::as_str).map(str::to_string).collect()))
+                    .collect()
+            })
             .unwrap_or_default();
-        let cdylib = p.get("targets").and_then(Value::as_array).into_iter().flatten().any(|t| {
-            t.get("crate_types").and_then(Value::as_array).into_iter().flatten().any(|kind| kind.as_str() == Some("cdylib"))
+        let cdylib = p
+            .get("targets")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|t| t.get("crate_types").and_then(Value::as_array).into_iter().flatten().any(|kind| kind.as_str() == Some("cdylib")));
+        packages.push(Package {
+            cdylib,
+            name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+            manifest: path_of(p, "manifest_path")?,
+            edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(),
+            targets,
+            features,
         });
-        packages.push(Package { cdylib, name: p.get("name").and_then(Value::as_str).unwrap_or_default().to_string(), manifest: path_of(p, "manifest_path")?, edition: p.get("edition").and_then(Value::as_str).unwrap_or("2015").to_string(), targets, features });
     }
     Ok(CargoWorkspace { manifest: root.join("Cargo.toml"), root, target_dir, packages })
 }
@@ -359,10 +382,11 @@ mod tests {
 
     #[test]
     fn enabled_features_follow_default() {
-        let features = [("default", vec!["std"]), ("std", vec!["alloc", "dep:libc", "serde/std"]), ("alloc", vec![]), ("extra", vec![]), ("libc", vec!["dep:libc"])]
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.into_iter().map(str::to_string).collect()))
-            .collect();
+        let features =
+            [("default", vec!["std"]), ("std", vec!["alloc", "dep:libc", "serde/std"]), ("alloc", vec![]), ("extra", vec![]), ("libc", vec!["dep:libc"])]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.into_iter().map(str::to_string).collect()))
+                .collect();
         let p = Package { cdylib: false, name: "p".into(), manifest: "Cargo.toml".into(), edition: "2021".into(), targets: Vec::new(), features };
         assert_eq!(p.enabled_features(&[]), vec!["alloc", "default", "std"]);
         assert_eq!(p.enabled_features(&["extra".to_string(), "libc".to_string()]), vec!["alloc", "default", "extra", "libc", "std"]);

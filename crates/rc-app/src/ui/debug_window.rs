@@ -92,7 +92,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         let (console_tab, memory_tab) = (app.debugger.show_console, app.debugger.show_memory && !app.debugger.show_console);
         let disassembly_tab = app.debugger.show_disassembly && !console_tab && !memory_tab;
         let parallel_tab = app.debugger.show_parallel_stacks && !console_tab && !memory_tab && !disassembly_tab;
-        if theme::tab(ui, !console_tab && !memory_tab && !disassembly_tab && !parallel_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked() {
+        if theme::tab(ui, !console_tab && !memory_tab && !disassembly_tab && !parallel_tab, Some(ico::VARIABLES), tr("Threads & Variables"), false).0.clicked()
+        {
             app.debugger.show_console = false;
             app.debugger.show_memory = false;
             app.debugger.show_disassembly = false;
@@ -139,8 +140,11 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         let mut line = ui.new_child(egui::UiBuilder::new().max_rect(input));
         let field = line.add_enabled(
-            stopped&&!app.debugger.privileged,
-            egui::TextEdit::singleline(&mut app.debugger.console_input).desired_width(input.width()).hint_text(tr("Debugger command (Enter to send)")).font(egui::FontId::monospace(12.5)),
+            stopped && !app.debugger.privileged,
+            egui::TextEdit::singleline(&mut app.debugger.console_input)
+                .desired_width(input.width())
+                .hint_text(tr("Debugger command (Enter to send)"))
+                .font(egui::FontId::monospace(12.5)),
         );
         if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             app.debugger.send_console_command();
@@ -258,7 +262,11 @@ fn memory(ui: &mut Ui, dbg: &mut Debugger) {
             ui.add_space(14.0);
             ui.horizontal(|ui| {
                 ui.add_space(12.0);
-                let msg = if stopped { tr("Type an address or an expression, or choose Show in Memory View on a variable.") } else { tr("Memory is shown when the program is paused") };
+                let msg = if stopped {
+                    tr("Type an address or an expression, or choose Show in Memory View on a variable.")
+                } else {
+                    tr("Memory is shown when the program is paused")
+                };
                 ui.label(egui::RichText::new(msg).color(p.muted));
             });
         }
@@ -394,7 +402,13 @@ fn disassembly(ui: &mut Ui, dbg: &mut Debugger) {
                     let Some(i) = list.get(*index) else { continue };
                     if *current {
                         ui.painter().rect_filled(r, 0.0, p.warn.gamma_multiply(0.30));
-                        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.left() + 12.0, r.center().y), vec2(14.0, 14.0)), ico::EXECUTION_POINT, &p, true);
+                        icons::paint(
+                            ui.painter(),
+                            Rect::from_center_size(pos2(r.left() + 12.0, r.center().y), vec2(14.0, 14.0)),
+                            ico::EXECUTION_POINT,
+                            &p,
+                            true,
+                        );
                     }
                     let mut job = egui::text::LayoutJob::default();
                     job.append(&format_address(i.address), 24.0, egui::TextFormat::simple(font.clone(), p.muted));
@@ -425,7 +439,8 @@ fn frames(ui: &mut Ui, dbg: &mut Debugger) {
     };
     // Thread selector.
     let threads = s.threads().to_vec();
-    let mut thread_id = ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::unique("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
+    let mut thread_id =
+        ui.ctx().data(|d| d.get_temp::<i64>(egui::Id::unique("dbg_thread"))).filter(|t| threads.iter().any(|x| x.id == *t)).unwrap_or(stop.thread_id);
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         icons::image(ui, if thread_id == stop.thread_id { ico::THREAD_AT_BREAKPOINT } else { ico::THREADS }, 16.0);
@@ -498,22 +513,31 @@ struct VariablesAsked {
 
 /// The Watches and Variables list.
 fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
-    let privileged=dbg.privileged;
-    if privileged{ui.label(tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));}
+    let privileged = dbg.privileged;
+    if privileged {
+        ui.label(tr("Administrator debugging: expressions, conditional breakpoints and debugger-console commands are unavailable"));
+    }
     let p = rc_kit::pal(ui);
     // "Evaluate or add a watch" field (Enter adds a watch, as the + button).
     let mut add = false;
-    ui.add_enabled_ui(!privileged,|ui| { ui.horizontal(|ui| {
-        ui.add_space(8.0);
-        let te = ui.add(egui::TextEdit::singleline(&mut dbg.new_watch).hint_text(tr("Add a watch (Enter)")).font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 40.0));
-        if te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            add = true;
-            te.request_focus();
-        }
-        if theme::icon_button(ui, ico::ADD, !dbg.new_watch.trim().is_empty(), tr("Add Watch")).clicked() {
-            add = true;
-        }
-    });});
+    ui.add_enabled_ui(!privileged, |ui| {
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            let te = ui.add(
+                egui::TextEdit::singleline(&mut dbg.new_watch)
+                    .hint_text(tr("Add a watch (Enter)"))
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(ui.available_width() - 40.0),
+            );
+            if te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                add = true;
+                te.request_focus();
+            }
+            if theme::icon_button(ui, ico::ADD, !dbg.new_watch.trim().is_empty(), tr("Add Watch")).clicked() {
+                add = true;
+            }
+        });
+    });
     if add && !privileged && !dbg.new_watch.trim().is_empty() {
         let e = std::mem::take(&mut dbg.new_watch);
         if let Some(s) = &mut dbg.session {
@@ -531,7 +555,20 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
             WatchValue::NotEvaluated => (tr("Cannot evaluate while running").into(), None, 0, true, None),
         };
         let expression = (!error).then(|| w.expression.clone());
-        rows.push(Row { depth: 0, key: format!("w:{}", w.expression), name: w.expression.clone(), value, ty, reference, error, watch: Some(w.id), scope: false, memory, expression, parent: 0 });
+        rows.push(Row {
+            depth: 0,
+            key: format!("w:{}", w.expression),
+            name: w.expression.clone(),
+            value,
+            ty,
+            reference,
+            error,
+            watch: Some(w.id),
+            scope: false,
+            memory,
+            expression,
+            parent: 0,
+        });
     }
     if stopped && let Some(frame) = s.selected_frame().map(|f| f.id) {
         match s.scopes(frame) {
@@ -545,7 +582,20 @@ fn variables(ui: &mut Ui, dbg: &mut Debugger) -> VariablesAsked {
                         children(s, &dbg.expanded, sc.variables_reference, &format!("s:{}", sc.name), 0, &mut rows);
                     } else {
                         let key = format!("s:{}", sc.name);
-                        rows.push(Row { depth: 0, key: key.clone(), name: sc.name.clone(), value: String::new(), ty: None, reference: sc.variables_reference, error: false, watch: None, scope: true, memory: None, expression: None, parent: 0 });
+                        rows.push(Row {
+                            depth: 0,
+                            key: key.clone(),
+                            name: sc.name.clone(),
+                            value: String::new(),
+                            ty: None,
+                            reference: sc.variables_reference,
+                            error: false,
+                            watch: None,
+                            scope: true,
+                            memory: None,
+                            expression: None,
+                            parent: 0,
+                        });
                         if dbg.expanded.contains(&key) {
                             children(s, &dbg.expanded, sc.variables_reference, &key, 1, &mut rows);
                         }
@@ -709,7 +759,20 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
     }
     let Some(vars) = s.variables(reference).map(|v| v.to_vec()) else {
         s.request_variables(reference);
-        rows.push(Row { depth, key: format!("{parent}/…"), name: "…".into(), value: String::new(), ty: None, reference: 0, error: false, watch: None, scope: false, memory: None, expression: None, parent: 0 });
+        rows.push(Row {
+            depth,
+            key: format!("{parent}/…"),
+            name: "…".into(),
+            value: String::new(),
+            ty: None,
+            reference: 0,
+            error: false,
+            watch: None,
+            scope: false,
+            memory: None,
+            expression: None,
+            parent: 0,
+        });
         return;
     };
     for v in vars {
@@ -717,11 +780,32 @@ fn children(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<
     }
 }
 
-fn push_var(s: &mut rc_dap::DebugSession, expanded: &std::collections::BTreeSet<String>, v: &Variable, parent_ref: i64, parent: &str, depth: usize, rows: &mut Vec<Row>) {
+fn push_var(
+    s: &mut rc_dap::DebugSession,
+    expanded: &std::collections::BTreeSet<String>,
+    v: &Variable,
+    parent_ref: i64,
+    parent: &str,
+    depth: usize,
+    rows: &mut Vec<Row>,
+) {
     let key = format!("{parent}/{}", v.name);
     // Only a top-level local is known by its name; deeper rows need the adapter's expression.
     let expression = v.evaluate_name.clone().filter(|e| !e.is_empty()).or_else(|| (depth == 0).then(|| v.name.clone()));
-    rows.push(Row { depth, key: key.clone(), name: v.name.clone(), value: v.value.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: v.memory_reference.clone(), expression, parent: parent_ref });
+    rows.push(Row {
+        depth,
+        key: key.clone(),
+        name: v.name.clone(),
+        value: v.value.clone(),
+        ty: v.type_name.clone(),
+        reference: v.variables_reference,
+        error: false,
+        watch: None,
+        scope: false,
+        memory: v.memory_reference.clone(),
+        expression,
+        parent: parent_ref,
+    });
     if v.variables_reference > 0 && expanded.contains(&key) {
         children(s, expanded, v.variables_reference, &key, depth + 1, rows);
     }
@@ -862,7 +946,20 @@ pub fn eval_tree(ui: &mut Ui, dbg: &mut Debugger, expression: &str, v: &EvalValu
     let Some(s) = &mut dbg.session else { return };
     let mut rows = Vec::new();
     let key = format!("e:{expression}");
-    rows.push(Row { depth: 0, key: key.clone(), name: expression.to_string(), value: v.result.clone(), ty: v.type_name.clone(), reference: v.variables_reference, error: false, watch: None, scope: false, memory: None, expression: None, parent: 0 });
+    rows.push(Row {
+        depth: 0,
+        key: key.clone(),
+        name: expression.to_string(),
+        value: v.result.clone(),
+        ty: v.type_name.clone(),
+        reference: v.variables_reference,
+        error: false,
+        watch: None,
+        scope: false,
+        memory: None,
+        expression: None,
+        parent: 0,
+    });
     if v.variables_reference > 0 && dbg.expanded.contains(&key) {
         children(s, &dbg.expanded, v.variables_reference, &key, 1, &mut rows);
     }

@@ -2,8 +2,8 @@
 //! a Rider-style gutter, multi-caret editing, folding, syntax and semantic colours, inlay
 //! hints, diagnostics and the code-insight popups.
 
-pub mod keymap;
 mod accessibility;
+pub mod keymap;
 pub mod layout;
 pub mod lens;
 pub mod popup;

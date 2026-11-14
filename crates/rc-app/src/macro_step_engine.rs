@@ -45,46 +45,23 @@ fn expand(input: Input) -> Result<String, Error> {
     }
     let definition_edition = edition(input.definition_edition)?;
     let call_edition = edition(input.call_edition)?;
-    let definition_anchor = SpanAnchor {
-        file_id: EditionedFileId::new(FileId::from_raw(0), definition_edition),
-        ast_id: ErasedFileAstId::from_raw(0),
-    };
-    let call_anchor = SpanAnchor {
-        file_id: EditionedFileId::new(FileId::from_raw(1), call_edition),
-        ast_id: ErasedFileAstId::from_raw(0),
-    };
+    let definition_anchor = SpanAnchor { file_id: EditionedFileId::new(FileId::from_raw(0), definition_edition), ast_id: ErasedFileAstId::from_raw(0) };
+    let call_anchor = SpanAnchor { file_id: EditionedFileId::new(FileId::from_raw(1), call_edition), ast_id: ErasedFileAstId::from_raw(0) };
     let definition_context = SyntaxContext::root(definition_edition);
     let call_context = SyntaxContext::root(call_edition);
-    let definition = ra_ap_syntax_bridge::parse_to_token_tree(
-        definition_edition,
-        definition_anchor,
-        definition_context,
-        &input.rules,
-    )
-    .ok_or(Error::Invalid)?;
-    let arguments = ra_ap_syntax_bridge::parse_to_token_tree(
-        call_edition,
-        call_anchor,
-        call_context,
-        &input.arguments,
-    )
-    .ok_or(Error::Invalid)?;
+    let definition = ra_ap_syntax_bridge::parse_to_token_tree(definition_edition, definition_anchor, definition_context, &input.rules).ok_or(Error::Invalid)?;
+    let arguments = ra_ap_syntax_bridge::parse_to_token_tree(call_edition, call_anchor, call_context, &input.arguments).ok_or(Error::Invalid)?;
     if definition.token_trees().len() > 8192 || arguments.token_trees().len() > 8192 {
         return Err(Error::Limit);
     }
-    let macro_ =
-        ra_ap_mbe::DeclarativeMacro::parse_macro_rules(&definition, |_| definition_edition);
+    let macro_ = ra_ap_mbe::DeclarativeMacro::parse_macro_rules(&definition, |_| definition_edition);
     if macro_.err().is_some() {
         return Err(Error::Invalid);
     }
     let result = macro_.expand(
         &arguments,
         |_| {},
-        Span {
-            range: TextRange::up_to(TextSize::new(input.arguments.len() as u32)),
-            anchor: call_anchor,
-            ctx: call_context,
-        },
+        Span { range: TextRange::up_to(TextSize::new(input.arguments.len() as u32)), anchor: call_anchor, ctx: call_context },
         definition_edition,
     );
     if result.err.is_some() {
@@ -105,34 +82,22 @@ fn expand(input: Input) -> Result<String, Error> {
 fn memory_budget() -> Result<(), Error> {
     // A malformed/pathological macro may exhaust this child, never the desktop process.
     let bytes: u64 = 2 * 1024 * 1024 * 1024;
-    let mut current = libc::rlimit {
-        rlim_cur: 0,
-        rlim_max: 0,
-    };
+    let mut current = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
     // SAFETY: both syscalls access this valid local structure and only this process's limits.
     if unsafe { libc::getrlimit(libc::RLIMIT_AS, &mut current) } != 0 {
         return Err(Error::Unsupported);
     }
     let ceiling = (bytes as libc::rlim_t).min(current.rlim_max);
-    let limit = libc::rlimit {
-        rlim_cur: ceiling.min(current.rlim_cur),
-        rlim_max: current.rlim_max,
-    };
+    let limit = libc::rlimit { rlim_cur: ceiling.min(current.rlim_cur), rlim_max: current.rlim_max };
     if unsafe { libc::setrlimit(libc::RLIMIT_AS, &limit) } != 0 {
         return Err(Error::Unsupported);
     }
-    let mut cpu = libc::rlimit {
-        rlim_cur: 0,
-        rlim_max: 0,
-    };
+    let mut cpu = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
     if unsafe { libc::getrlimit(libc::RLIMIT_CPU, &mut cpu) } != 0 {
         return Err(Error::Unsupported);
     }
     let ceiling = 10.min(cpu.rlim_max);
-    let limit = libc::rlimit {
-        rlim_cur: ceiling.min(cpu.rlim_cur),
-        rlim_max: cpu.rlim_max,
-    };
+    let limit = libc::rlimit { rlim_cur: ceiling.min(cpu.rlim_cur), rlim_max: cpu.rlim_max };
     if unsafe { libc::setrlimit(libc::RLIMIT_CPU, &limit) } != 0 {
         return Err(Error::Unsupported);
     }
@@ -145,11 +110,7 @@ fn memory_budget() -> Result<(), Error> {
 fn run() -> Result<String, Error> {
     memory_budget()?;
     let mut bytes = Vec::new();
-    std::io::stdin()
-        .lock()
-        .take((INPUT_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| Error::Io)?;
+    std::io::stdin().lock().take((INPUT_BYTES + 1) as u64).read_to_end(&mut bytes).map_err(|_| Error::Io)?;
     if bytes.len() > INPUT_BYTES {
         return Err(Error::Limit);
     }
@@ -162,19 +123,10 @@ pub fn internal() -> Option<i32> {
     if args.next().as_deref() != Some(std::ffi::OsStr::new("--internal-macro-step")) {
         return None;
     }
-    let result = if args.next().is_some() {
-        Err(Error::Invalid)
-    } else {
-        run()
-    };
+    let result = if args.next().is_some() { Err(Error::Invalid) } else { run() };
     let reply = Reply { result };
     Some(
-        match serde_json::to_writer(std::io::stdout().lock(), &reply).and_then(|()| {
-            std::io::stdout()
-                .lock()
-                .write_all(b"\n")
-                .map_err(serde_json::Error::io)
-        }) {
+        match serde_json::to_writer(std::io::stdout().lock(), &reply).and_then(|()| std::io::stdout().lock().write_all(b"\n").map_err(serde_json::Error::io)) {
             Ok(()) => 0,
             Err(_) => 1,
         },
@@ -185,13 +137,7 @@ pub fn internal() -> Option<i32> {
 mod tests {
     use super::*;
     fn layer(rules: &str, arguments: &str) -> String {
-        expand(Input {
-            rules: rules.into(),
-            arguments: arguments.into(),
-            definition_edition: 2024,
-            call_edition: 2024,
-        })
-        .unwrap()
+        expand(Input { rules: rules.into(), arguments: arguments.into(), definition_edition: 2024, call_edition: 2024 }).unwrap()
     }
     #[test]
     fn one_layer_retains_nested_builtin_recursive_metavariable_and_repetition_calls() {
@@ -207,22 +153,9 @@ mod tests {
         let precedence = layer("($e:expr)=>{$e * 2}", "1+2");
         assert!(precedence.starts_with("(1 + 2)"), "{precedence}");
         assert!(matches!(
-            expand(Input {
-                rules: "($x:ident)=>{$x}".into(),
-                arguments: "42".into(),
-                definition_edition: 2024,
-                call_edition: 2024
-            }),
+            expand(Input { rules: "($x:ident)=>{$x}".into(), arguments: "42".into(), definition_edition: 2024, call_edition: 2024 }),
             Err(Error::NoMatch)
         ));
-        assert!(matches!(
-            expand(Input {
-                rules: "bad".into(),
-                arguments: String::new(),
-                definition_edition: 2024,
-                call_edition: 2024
-            }),
-            Err(Error::Invalid)
-        ));
+        assert!(matches!(expand(Input { rules: "bad".into(), arguments: String::new(), definition_edition: 2024, call_edition: 2024 }), Err(Error::Invalid)));
     }
 }

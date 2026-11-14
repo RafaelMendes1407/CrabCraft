@@ -28,10 +28,7 @@ impl Config {
             || self.user.is_empty()
             || self.user.len() > 64
             || self.user.starts_with('-')
-            || !self
-                .user
-                .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
+            || !self.user.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-".contains(&c))
         {
             return Err(Error::Input);
         }
@@ -56,18 +53,9 @@ impl Config {
         {
             return Err(Error::Input);
         }
-        let mut args = vec![
-            "--distribution".into(),
-            self.distribution.clone(),
-            "--user".into(),
-            self.user.clone(),
-            "--exec".into(),
-        ];
+        let mut args = vec!["--distribution".into(), self.distribution.clone(), "--user".into(), self.user.clone(), "--exec".into()];
         args.extend(linux);
-        Ok(Spec {
-            program: self.program()?,
-            args,
-        })
+        Ok(Spec { program: self.program()?, args })
     }
     pub fn script(&self, script: String) -> Result<Spec, Error> {
         self.exec(vec![
@@ -95,10 +83,7 @@ pub fn available() -> bool {
 fn program() -> Result<PathBuf, Error> {
     #[cfg(windows)]
     {
-        let root = std::env::var_os("SystemRoot")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .ok_or(Error::Input)?;
+        let root = std::env::var_os("SystemRoot").map(PathBuf::from).filter(|p| p.is_absolute()).ok_or(Error::Input)?;
         Ok(root.join("System32/wsl.exe"))
     }
     #[cfg(not(windows))]
@@ -106,12 +91,7 @@ fn program() -> Result<PathBuf, Error> {
         Err(Error::Unsupported)
     }
 }
-async fn capture(
-    spec: Spec,
-    input: Vec<u8>,
-    cancel: &CancelToken,
-    limit: usize,
-) -> Result<Vec<u8>, Error> {
+async fn capture(spec: Spec, input: Vec<u8>, cancel: &CancelToken, limit: usize) -> Result<Vec<u8>, Error> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     if cancel.is_cancelled() {
         return Err(Error::Cancelled);
@@ -156,13 +136,13 @@ async fn capture(
         let (out, err, ()) = tokio::try_join!(output, error, write)?;
         let status = child.wait().await?;
         if !status.success() {
-            let text = decode_console(&err)
-                .unwrap_or_else(|_| String::from_utf8_lossy(&err).replace('\0', ""));
+            let text = decode_console(&err).unwrap_or_else(|_| String::from_utf8_lossy(&err).replace('\0', ""));
             return Err(Error::Process(text.chars().take(4096).collect()));
         }
         Ok(out)
     };
-    let result = tokio::select! {result=io=>result,()=cancel.cancelled()=>Err(Error::Cancelled),()=tokio::time::sleep(Duration::from_secs(15))=>Err(Error::Timeout)};
+    let result =
+        tokio::select! {result=io=>result,()=cancel.cancelled()=>Err(Error::Cancelled),()=tokio::time::sleep(Duration::from_secs(15))=>Err(Error::Timeout)};
     if result.is_err() {
         rc_dotnet::process::kill_tree(pid);
         let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
@@ -170,10 +150,7 @@ async fn capture(
     result
 }
 pub fn distributions(cancel: CancelToken) -> Result<Vec<String>, Error> {
-    let spec = Spec {
-        program: program()?,
-        args: vec!["--list".into(), "--quiet".into()],
-    };
+    let spec = Spec { program: program()?, args: vec!["--list".into(), "--quiet".into()] };
     let bytes = Runtime::block_on(capture(spec, Vec::new(), &cancel, 64 * 1024))?;
     decode_distributions(&bytes)
 }
@@ -183,19 +160,13 @@ fn decode_console(bytes: &[u8]) -> Result<String, Error> {
     }
     Ok(if bytes.starts_with(&[0xff, 0xfe]) || bytes.contains(&0) {
         let bytes = bytes.strip_prefix(&[0xff, 0xfe]).unwrap_or(bytes);
-        if bytes.len() % 2 != 0 {
+        if !bytes.len().is_multiple_of(2) {
             return Err(Error::Input);
         }
-        let words: Vec<_> = bytes
-            .chunks_exact(2)
-            .map(|p| u16::from_le_bytes([p[0], p[1]]))
-            .collect();
+        let words: Vec<_> = bytes.as_chunks::<2>().0.iter().map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
         String::from_utf16(&words).map_err(|_| Error::Input)?
     } else {
-        std::str::from_utf8(bytes)
-            .map_err(|_| Error::Input)?
-            .trim_start_matches('\u{feff}')
-            .to_owned()
+        std::str::from_utf8(bytes).map_err(|_| Error::Input)?.trim_start_matches('\u{feff}').to_owned()
     })
 }
 fn decode_distributions(bytes: &[u8]) -> Result<Vec<String>, Error> {
@@ -271,30 +242,22 @@ try:
 except Failure as error:print(json.dumps({'error':str(error)}))
 except (OSError,ValueError,KeyError,TypeError,UnicodeError):print(json.dumps({'error':'input'}))
 "#;
-pub fn file(
-    config: &Config,
+pub fn file(config: &Config, root: &str, path: &str, action: &str, before: Option<&str>, after: Option<&str>, cancel: CancelToken) -> Result<String, Error> {
+    file_with(root, path, action, before, after, cancel, |args| config.exec(args))
+}
+pub(crate) fn file_with(
     root: &str,
     path: &str,
     action: &str,
     before: Option<&str>,
     after: Option<&str>,
     cancel: CancelToken,
+    execute: impl FnOnce(Vec<String>) -> Result<Spec, Error>,
 ) -> Result<String, Error> {
-    file_with(root,path,action,before,after,cancel,|args|config.exec(args))
-}
-pub(crate) fn file_with(
-    root:&str,path:&str,action:&str,before:Option<&str>,after:Option<&str>,cancel:CancelToken,
-    execute:impl FnOnce(Vec<String>)->Result<Spec,Error>,
-)->Result<String,Error>{
-    if !crate::remote_development_transport::absolute(root)
-        || !crate::remote_development_transport::absolute(path)
-        || !path.starts_with(&format!("{root}/"))
-    {
+    if !crate::remote_development_transport::absolute(root) || !crate::remote_development_transport::absolute(path) || !path.starts_with(&format!("{root}/")) {
         return Err(Error::Input);
     }
-    if before.is_some_and(|t| t.len() > 64 * 1024)
-        || after.is_some_and(|t| t.len() > 64 * 1024 || t.contains('\0'))
-    {
+    if before.is_some_and(|t| t.len() > 64 * 1024) || after.is_some_and(|t| t.len() > 64 * 1024 || t.contains('\0')) {
         return Err(Error::Limit);
     }
     let request = json!({"root":root,"path":path,"action":action,"before":before,"after":after});
@@ -322,12 +285,7 @@ pub(crate) fn file_with(
             _ => Error::Input,
         });
     }
-    value
-        .get("text")
-        .and_then(Value::as_str)
-        .filter(|text| text.len() <= 512 * 1024 && !text.contains('\0'))
-        .map(str::to_owned)
-        .ok_or(Error::Input)
+    value.get("text").and_then(Value::as_str).filter(|text| text.len() <= 512 * 1024 && !text.contains('\0')).map(str::to_owned).ok_or(Error::Input)
 }
 
 #[cfg(test)]
@@ -342,23 +300,9 @@ mod tests {
         {
             config.fixture = Some("/tmp/fake-wsl".into());
         }
-        let spec = config
-            .script("printf '%s' '/tmp/source with spaces'".into())
-            .unwrap();
-        assert_eq!(
-            &spec.args[..5],
-            [
-                "--distribution",
-                "Debian Test 🦀 ' $(no-shell)",
-                "--user",
-                "developer",
-                "--exec"
-            ]
-        );
-        assert_eq!(
-            spec.args.last().unwrap(),
-            "printf '%s' '/tmp/source with spaces'"
-        );
+        let spec = config.script("printf '%s' '/tmp/source with spaces'".into()).unwrap();
+        assert_eq!(&spec.args[..5], ["--distribution", "Debian Test 🦀 ' $(no-shell)", "--user", "developer", "--exec"]);
+        assert_eq!(spec.args.last().unwrap(), "printf '%s' '/tmp/source with spaces'");
         assert!(spec.args.iter().any(|a| a == "--noprofile"));
         for bad in ["", "-oProxyCommand=x", "wrong\nname"] {
             assert!(Config::new(bad.into(), "user".into()).validate().is_err());
@@ -367,18 +311,9 @@ mod tests {
             assert!(Config::new("Ubuntu".into(), bad.into()).validate().is_err());
         }
         let text = "Ubuntu-24.04\r\nDebian Test\r\n";
-        let utf16: Vec<u8> = [0xff, 0xfe]
-            .into_iter()
-            .chain(text.encode_utf16().flat_map(u16::to_le_bytes))
-            .collect();
-        assert_eq!(
-            decode_distributions(&utf16).unwrap(),
-            vec!["Debian Test", "Ubuntu-24.04"]
-        );
-        assert_eq!(
-            decode_distributions(text.as_bytes()).unwrap(),
-            vec!["Debian Test", "Ubuntu-24.04"]
-        );
+        let utf16: Vec<u8> = [0xff, 0xfe].into_iter().chain(text.encode_utf16().flat_map(u16::to_le_bytes)).collect();
+        assert_eq!(decode_distributions(&utf16).unwrap(), vec!["Debian Test", "Ubuntu-24.04"]);
+        assert_eq!(decode_distributions(text.as_bytes()).unwrap(), vec!["Debian Test", "Ubuntu-24.04"]);
         assert!(decode_distributions(&[0xff, 0xfe, 0x00, 0xd8]).is_err());
         assert!(decode_distributions(&[b'a'; 65537]).is_err());
     }
@@ -411,87 +346,25 @@ mod tests {
         const AFTER: &str = "\u{feff}fn main(){let answer=42;}\r\n";
         std::fs::write(&source, BEFORE).unwrap();
         assert!(!log.exists());
-        assert_eq!(
-            file(&config, root, path, "read", None, None, CancelToken::new()).unwrap(),
-            BEFORE
-        );
-        assert_eq!(
-            file(
-                &config,
-                root,
-                path,
-                "preview",
-                Some(BEFORE),
-                Some(AFTER),
-                CancelToken::new()
-            )
-            .unwrap(),
-            AFTER
-        );
+        assert_eq!(file(&config, root, path, "read", None, None, CancelToken::new()).unwrap(), BEFORE);
+        assert_eq!(file(&config, root, path, "preview", Some(BEFORE), Some(AFTER), CancelToken::new()).unwrap(), AFTER);
         assert_eq!(std::fs::read_to_string(&source).unwrap(), BEFORE);
-        assert!(matches!(
-            file(
-                &config,
-                root,
-                path,
-                "apply",
-                Some("stale"),
-                Some(AFTER),
-                CancelToken::new()
-            ),
-            Err(Error::Stale)
-        ));
-        assert_eq!(
-            file(
-                &config,
-                root,
-                path,
-                "apply",
-                Some(BEFORE),
-                Some(AFTER),
-                CancelToken::new()
-            )
-            .unwrap(),
-            AFTER
-        );
+        assert!(matches!(file(&config, root, path, "apply", Some("stale"), Some(AFTER), CancelToken::new()), Err(Error::Stale)));
+        assert_eq!(file(&config, root, path, "apply", Some(BEFORE), Some(AFTER), CancelToken::new()).unwrap(), AFTER);
         assert_eq!(std::fs::read_to_string(&source).unwrap(), AFTER);
         std::os::unix::fs::symlink(&source, dir.path().join("alias.rs")).unwrap();
         assert!(matches!(
-            file(
-                &config,
-                dir.path().to_str().unwrap(),
-                dir.path().join("alias.rs").to_str().unwrap(),
-                "read",
-                None,
-                None,
-                CancelToken::new()
-            ),
+            file(&config, dir.path().to_str().unwrap(), dir.path().join("alias.rs").to_str().unwrap(), "read", None, None, CancelToken::new()),
             Err(Error::Input)
         ));
         let before_log = std::fs::read_to_string(&log).unwrap();
         let cancelled = CancelToken::new();
         cancelled.cancel();
-        assert!(matches!(
-            file(&config, root, path, "read", None, None, cancelled),
-            Err(Error::Cancelled)
-        ));
+        assert!(matches!(file(&config, root, path, "read", None, None, cancelled), Err(Error::Cancelled)));
         assert_eq!(std::fs::read_to_string(&log).unwrap(), before_log);
-        let args: Vec<Value> = before_log
-            .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect();
-        assert!(args.iter().all(|args| {
-            args.as_array()
-                .unwrap()
-                .iter()
-                .all(|value| !value.as_str().unwrap().contains(BEFORE))
-        }));
-        assert!(args.iter().all(|args| {
-            args.as_array()
-                .unwrap()
-                .iter()
-                .any(|value| value.as_str() == Some("-I"))
-        }));
+        let args: Vec<Value> = before_log.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert!(args.iter().all(|args| { args.as_array().unwrap().iter().all(|value| !value.as_str().unwrap().contains(BEFORE)) }));
+        assert!(args.iter().all(|args| { args.as_array().unwrap().iter().any(|value| value.as_str() == Some("-I")) }));
         let fifo = root.to_owned() + "/fifo.rs";
         let name = std::ffi::CString::new(fifo.clone()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
@@ -505,23 +378,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (config, log) = fixture(dir.path());
         assert!(!log.exists());
-        let spec = Spec {
-            program: config.program().unwrap(),
-            args: vec!["--list".into(), "--quiet".into()],
-        };
-        let bytes =
-            Runtime::block_on(capture(spec, Vec::new(), &CancelToken::new(), 65536)).unwrap();
-        assert_eq!(
-            decode_distributions(&bytes).unwrap(),
-            vec!["Debian Test", "Ubuntu-24.04"]
-        );
-        let script = "echo $$ > '{}' ; exec sleep 60"
-            .replace("{}", dir.path().join("child.pid").to_str().unwrap());
+        let spec = Spec { program: config.program().unwrap(), args: vec!["--list".into(), "--quiet".into()] };
+        let bytes = Runtime::block_on(capture(spec, Vec::new(), &CancelToken::new(), 65536)).unwrap();
+        assert_eq!(decode_distributions(&bytes).unwrap(), vec!["Debian Test", "Ubuntu-24.04"]);
+        let script = "echo $$ > '{}' ; exec sleep 60".replace("{}", dir.path().join("child.pid").to_str().unwrap());
         let spec = config.script(script).unwrap();
         let cancel = CancelToken::new();
         let token = cancel.clone();
-        let handle =
-            std::thread::spawn(move || Runtime::block_on(capture(spec, Vec::new(), &token, 65536)));
+        let handle = std::thread::spawn(move || Runtime::block_on(capture(spec, Vec::new(), &token, 65536)));
         let deadline = Instant::now() + Duration::from_secs(5);
         while !dir.path().join("child.pid").exists() {
             assert!(Instant::now() < deadline);
@@ -540,20 +404,15 @@ mod tests {
         let mut settings = transport::tests::settings(project.path());
         settings.wsl = Some(config);
         assert!(transport::uri_path(&settings, "file:///C:/project/main.rs").is_none());
-        let session =
-            transport::start(settings.clone(), rc_core::Waker::noop(), CancelToken::new()).unwrap();
+        let session = transport::start(settings.clone(), rc_core::Waker::noop(), CancelToken::new()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(60);
         let mut ready = false;
         while !ready {
             assert!(Instant::now() < deadline);
             for event in session.incoming.drain() {
                 match event {
-                    rc_lsp::Incoming::Request { id, method, params } => {
-                        session.respond(id, &method, &params)
-                    }
-                    rc_lsp::Incoming::Notification { method, params }
-                        if method == "experimental/serverStatus" =>
-                    {
+                    rc_lsp::Incoming::Request { id, method, params } => session.respond(id, &method, &params),
+                    rc_lsp::Incoming::Notification { method, params } if method == "experimental/serverStatus" => {
                         ready = rc_lsp::rust_analyzer::is_quiescent(&params)
                     }
                     rc_lsp::Incoming::Exited(code) => panic!("fixture analyzer exited {code:?}"),
@@ -564,32 +423,10 @@ mod tests {
         }
         let before = transport::read(&settings, "src/lib.rs", CancelToken::new()).unwrap();
         let after = before.replace("42", "41+1");
-        let preview = transport::preview(
-            &settings,
-            "src/lib.rs",
-            before.clone(),
-            after.clone(),
-            CancelToken::new(),
-        )
-        .unwrap();
-        assert_eq!(
-            std::fs::read_to_string(project.path().join("src/lib.rs")).unwrap(),
-            before
-        );
+        let preview = transport::preview(&settings, "src/lib.rs", before.clone(), after.clone(), CancelToken::new()).unwrap();
+        assert_eq!(std::fs::read_to_string(project.path().join("src/lib.rs")).unwrap(), before);
         transport::apply(&settings, preview, CancelToken::new()).unwrap();
-        assert_eq!(
-            transport::read(&settings, "src/lib.rs", CancelToken::new()).unwrap(),
-            after
-        );
-        assert_eq!(
-            transport::cargo(
-                settings,
-                transport::Task::Test,
-                CancelToken::new(),
-                &mut |_, _| {}
-            )
-            .unwrap(),
-            0
-        );
+        assert_eq!(transport::read(&settings, "src/lib.rs", CancelToken::new()).unwrap(), after);
+        assert_eq!(transport::cargo(settings, transport::Task::Test, CancelToken::new(), &mut |_, _| {}).unwrap(), 0);
     }
 }

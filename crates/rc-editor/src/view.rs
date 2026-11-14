@@ -28,7 +28,17 @@ pub struct EditorConfig {
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        EditorConfig { font: EditorFont::default(), auto_pair: true, show_indent_guides: true, right_margin: Some(120), show_inlays: true, caret_blink: true, sticky_lines: 5, live_templates: Vec::new(), scrollbar_lens: true }
+        EditorConfig {
+            font: EditorFont::default(),
+            auto_pair: true,
+            show_indent_guides: true,
+            right_margin: Some(120),
+            show_inlays: true,
+            caret_blink: true,
+            sticky_lines: 5,
+            live_templates: Vec::new(),
+            scrollbar_lens: true,
+        }
     }
 }
 
@@ -99,9 +109,7 @@ impl<'a> EditorView<'a> {
         }
         let focused = response.has_focus();
         if focused {
-            ui.memory_mut(|m| {
-                m.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true })
-            });
+            ui.memory_mut(|m| m.set_focus_lock_filter(id, egui::EventFilter { tab: true, horizontal_arrows: true, vertical_arrows: true, escape: true }));
         }
         if response.gained_focus() {
             out.events.push(EditorEvent::Focused);
@@ -182,12 +190,7 @@ impl<'a> EditorView<'a> {
         if focused {
             if let Some(cursor_rect) = out.caret_rect {
                 ui.output_mut(|o| {
-                    o.ime = Some(egui::output::IMEOutput {
-                        purpose: Default::default(),
-                        rect: text_rect,
-                        cursor_rect,
-                        should_interrupt_composition: false,
-                    })
+                    o.ime = Some(egui::output::IMEOutput { purpose: Default::default(), rect: text_rect, cursor_rect, should_interrupt_composition: false })
                 });
             }
             if config.caret_blink {
@@ -297,7 +300,14 @@ fn scroll_caret_into_view(state: &mut EditorState, m: &Metrics, text_rect: Rect)
 // =====================================================================================
 
 /// Lays out buffer line `line` with its decorations.
-pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, line: usize, spans: &[rc_syntax::Span]) -> LineLayout {
+pub(crate) fn layout_buffer_line(
+    ui: &Ui,
+    state: &mut EditorState,
+    config: &EditorConfig,
+    scheme: &Scheme,
+    line: usize,
+    spans: &[rc_syntax::Span],
+) -> LineLayout {
     let rope = state.buffer.rope();
     let text = state.buffer.line_text(line);
     let line_start = rope.line_to_char(line);
@@ -326,7 +336,11 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
     }
     let mut suffix: Option<(String, Vec<rc_syntax::Span>)> = None;
     if let Some(f) = state.collapsed_at(line) {
-        virtuals.push(Virtual { col: f.start_col.min(text.chars().count()), text: fold_placeholder(f.kind, &text, f.start_col), kind: VirtualKind::FoldPlaceholder });
+        virtuals.push(Virtual {
+            col: f.start_col.min(text.chars().count()),
+            text: fold_placeholder(f.kind, &text, f.start_col),
+            kind: VirtualKind::FoldPlaceholder,
+        });
         let end_text = state.buffer.line_text(f.end_line.min(state.buffer.len_lines() - 1));
         let rest: String = end_text.chars().skip(f.end_col).collect();
         if f.kind == rc_syntax::FoldKind::Block && !rest.trim().is_empty() {
@@ -337,7 +351,8 @@ pub(crate) fn layout_buffer_line(ui: &Ui, state: &mut EditorState, config: &Edit
     let len = text.chars().count();
     let overlaps = |start: usize, end: usize| start < line_end.max(line_start + 1) && end > line_start;
     let clip = |start: usize, end: usize| (start.saturating_sub(line_start), (end - line_start).min(len));
-    let mut dimmed: Vec<(usize, usize)> = state.diagnostics.iter().filter(|d| d.unnecessary && overlaps(d.start, d.end)).map(|d| clip(d.start, d.end)).collect();
+    let mut dimmed: Vec<(usize, usize)> =
+        state.diagnostics.iter().filter(|d| d.unnecessary && overlaps(d.start, d.end)).map(|d| clip(d.start, d.end)).collect();
     dimmed.extend(state.inactive().iter().filter(|r| overlaps(r.start, r.end)).map(|r| clip(r.start, r.end)));
     let input = LineInput {
         text: &text,
@@ -632,7 +647,8 @@ fn sticky_lines(state: &mut EditorState, m: &Metrics, max: usize) -> Vec<usize> 
         return Vec::new();
     }
     let first_row = (state.scroll.y / m.row_h).floor() as usize;
-    let blocks: Vec<(usize, usize)> = state.syntax.folds().iter().filter(|f| f.kind == rc_syntax::FoldKind::Block && f.end_line > f.start_line).map(|f| (f.start_line, f.end_line)).collect();
+    let blocks: Vec<(usize, usize)> =
+        state.syntax.folds().iter().filter(|f| f.kind == rc_syntax::FoldKind::Block && f.end_line > f.start_line).map(|f| (f.start_line, f.end_line)).collect();
     let mut out: Vec<usize> = Vec::new();
     for _ in 0..3 {
         let top = line_of_row(state, first_row + out.len());
@@ -652,7 +668,17 @@ fn sticky_lines(state: &mut EditorState, m: &Metrics, max: usize) -> Vec<usize> 
 
 /// Paints the sticky lines over the top of the editor; returns their area.
 #[allow(clippy::too_many_arguments)]
-fn paint_sticky_lines(ui: &Ui, state: &mut EditorState, config: &EditorConfig, scheme: &Scheme, pal: &rc_kit::Palette, m: &Metrics, rect: Rect, text_rect: Rect, lines: &[usize]) -> Option<Rect> {
+fn paint_sticky_lines(
+    ui: &Ui,
+    state: &mut EditorState,
+    config: &EditorConfig,
+    scheme: &Scheme,
+    pal: &rc_kit::Palette,
+    m: &Metrics,
+    rect: Rect,
+    text_rect: Rect,
+    lines: &[usize],
+) -> Option<Rect> {
     if lines.is_empty() {
         return None;
     }
@@ -689,7 +715,8 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
     let fold_hover = hover_pos.is_some();
     let folds: Vec<rc_syntax::FoldRange> = state.syntax.folds().to_vec();
     let fold_start_lines: std::collections::HashMap<usize, rc_syntax::FoldRange> = folds.iter().map(|f| (f.start_line, *f)).collect();
-    let fold_end_lines: std::collections::HashMap<usize, usize> = folds.iter().filter(|f| !state.is_folded(f.start_line)).map(|f| (f.end_line, f.start_line)).collect();
+    let fold_end_lines: std::collections::HashMap<usize, usize> =
+        folds.iter().filter(|f| !state.is_folded(f.start_line)).map(|f| (f.end_line, f.start_line)).collect();
     // The fold around the hovered or caret line is the one whose markers show (New UI).
     let hover_line = hover_pos.map(|p| {
         let row = ((p.y - text_rect.top() + state.scroll.y) / m.row_h).floor().max(0.0) as usize;
@@ -702,7 +729,11 @@ fn paint_gutter(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &rc_kit:
         let center_y = y + m.row_h / 2.0;
         if let Some(text) = state.annotations.as_ref().and_then(|a| a.get(l)) {
             if let Some(bg) = state.line_backgrounds.get(&l) {
-                painter.rect_filled(Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.left() + (m.num_right - 10.0 - gutter.left()) - 6.0, y + m.row_h)), 0.0, *bg);
+                painter.rect_filled(
+                    Rect::from_min_max(pos2(gutter.left(), y), pos2(gutter.left() + (m.num_right - 10.0 - gutter.left()) - 6.0, y + m.row_h)),
+                    0.0,
+                    *bg,
+                );
             }
             let g = painter.layout_no_wrap(text.clone(), egui::FontId::proportional(11.5), pal.text_muted);
             painter.galley(pos2(gutter.left() + 8.0, (center_y - g.size().y / 2.0).round()), g, pal.text_muted);
@@ -846,11 +877,11 @@ fn paint_scrollbars(
             state.scroll.y = (state.scroll.y + dy / (track.height() - thumb_h) * max_scroll).clamp(0.0, max_scroll);
         } else if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
+            && !jump_to_problem_mark(state, m, text_rect, &marks, p.y)
+            && !thumb.contains(p)
         {
-            if !jump_to_problem_mark(state, m, text_rect, &marks, p.y) && !thumb.contains(p) {
-                let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
-                state.scroll.y = t * max_scroll;
-            }
+            let t = ((p.y - track.top() - thumb_h / 2.0) / (track.height() - thumb_h)).clamp(0.0, 1.0);
+            state.scroll.y = t * max_scroll;
         }
         let active = resp.hovered() || resp.dragged();
         let alpha = if active { 0.5 } else { 0.28 };
@@ -860,7 +891,9 @@ fn paint_scrollbars(
     } else if !marks.is_empty() {
         // A short or fully folded document still has a clickable error stripe.
         let response = ui.interact(track, Id::unique(("editor_vbar", state.id)), Sense::click());
-        if response.clicked() && let Some(pointer) = response.interact_pointer_pos() {
+        if response.clicked()
+            && let Some(pointer) = response.interact_pointer_pos()
+        {
             jump_to_problem_mark(state, m, text_rect, &marks, pointer.y);
         }
         vresp = Some(response);
@@ -900,7 +933,9 @@ fn paint_scrollbars(
 /// reported line prevents overshooting errors near EOF and unfolds a hidden diagnostic.
 fn jump_to_problem_mark(state: &mut EditorState, metrics: &Metrics, text_rect: Rect, marks: &[(f32, usize)], y: f32) -> bool {
     let nearest = marks.iter().min_by(|a, b| (a.0 - y).abs().total_cmp(&(b.0 - y).abs())).filter(|mark| (mark.0 - y).abs() <= 3.0);
-    let Some((_, line)) = nearest else { return false; };
+    let Some((_, line)) = nearest else {
+        return false;
+    };
     state.goto(*line, 0);
     scroll_caret_into_view(state, metrics, text_rect);
     state.scroll_to_caret = false;
@@ -912,7 +947,8 @@ fn jump_to_problem_mark(state: &mut EditorState, metrics: &Metrics, text_rect: R
 // =====================================================================================
 
 fn handle_scroll_wheel(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, response: &egui::Response) {
-    let hovered = ui.rect_contains_pointer(rect) && response.hovered() || ui.ui_contains_pointer() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| rect.contains(p));
+    let hovered = ui.rect_contains_pointer(rect) && response.hovered()
+        || ui.ui_contains_pointer() && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| rect.contains(p));
     if !hovered {
         return;
     }
@@ -1093,7 +1129,8 @@ fn handle_mouse(ui: &Ui, state: &mut EditorState, m: &Metrics, rect: Rect, text_
             let (pos, _) = pos_at(ui, state, &config, m, text_rect, p);
             let rope = state.buffer.rope().clone();
             let line1 = rope.char_to_line(pos);
-            let col1 = commands::visual_col(&rope, pos, state.indent.tab_width).max(((p.x - text_rect.left() - TEXT_PAD + state.scroll.x) / m.char_w).round().max(0.0) as usize);
+            let col1 = commands::visual_col(&rope, pos, state.indent.tab_width)
+                .max(((p.x - text_rect.left() - TEXT_PAD + state.scroll.x) / m.char_w).round().max(0.0) as usize);
             let (a, b) = (line0.min(line1), line0.max(line1));
             let ranges: Vec<Range> = (a..=b)
                 .map(|l| {
@@ -1218,15 +1255,23 @@ fn handle_keyboard(ui: &Ui, state: &mut EditorState, config: &EditorConfig, keym
     for ev in events {
         match ev {
             Event::Key { key, pressed: true, modifiers, repeat, .. } => {
-                if repeat && Keymap::sequence_repeat(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key) { continue; }
-                if !repeat { match keymap.sequence_key(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key, modifiers, true) {
-                    crate::keymap::SequenceKey::Waiting => continue,
-                    crate::keymap::SequenceKey::Action(action) => {
-                        if action.is_editing() { exec(ui, state, config, action, out); } else { out.actions.push(action); }
-                        continue;
+                if repeat && Keymap::sequence_repeat(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key) {
+                    continue;
+                }
+                if !repeat {
+                    match keymap.sequence_key(ui.ctx(), Id::unique(("editor_key_sequence", state.id)), key, modifiers, true) {
+                        crate::keymap::SequenceKey::Waiting => continue,
+                        crate::keymap::SequenceKey::Action(action) => {
+                            if action.is_editing() {
+                                exec(ui, state, config, action, out);
+                            } else {
+                                out.actions.push(action);
+                            }
+                            continue;
+                        }
+                        crate::keymap::SequenceKey::Pass => {}
                     }
-                    crate::keymap::SequenceKey::Pass => {},
-                } }
+                }
                 if crate::popups_view::handle_key(state, key, modifiers, out) {
                     continue;
                 }
@@ -1278,7 +1323,8 @@ fn type_text(state: &mut EditorState, config: &EditorConfig, text: &str, out: &m
         // Rust uses apostrophes for lifetimes and labels as well as character literals.
         // Inserting a second quote before the next character is known corrupts `&'a`.
         // Keep explicit selection wrapping and type-over of an existing closing quote.
-        let literal_apostrophe = state.lang() == rc_syntax::Lang::Rust && ch == '\''
+        let literal_apostrophe = state.lang() == rc_syntax::Lang::Rust
+            && ch == '\''
             && state.selection.ranges().iter().all(|range| range.is_empty())
             && !state.selection.ranges().iter().all(|range| rope.get_char(range.head) == Some('\''));
         let auto_pair = config.auto_pair && !literal_apostrophe;
@@ -1354,11 +1400,7 @@ fn electric_close_brace(rope: &rc_text::Rope, state: &EditorState) -> Option<com
         return None;
     }
     let unit = state.indent.unit.chars().count();
-    let new_indent: String = if state.indent.unit == "\t" {
-        before.chars().skip(1).collect()
-    } else {
-        " ".repeat(before.chars().count().saturating_sub(unit))
-    };
+    let new_indent: String = if state.indent.unit == "\t" { before.chars().skip(1).collect() } else { " ".repeat(before.chars().count().saturating_sub(unit)) };
     let text = format!("{new_indent}}}");
     let cs = rc_text::ChangeSet::single(rc_text::Change::new(ls, pos, text.clone()));
     Some(commands::Edited { changes: cs, selection: Selection::point(ls + text.chars().count()) })
@@ -1405,16 +1447,14 @@ fn paste(state: &mut EditorState, text: &str) {
     let n = text.chars().count();
     state.last_paste = (sel.len() == 1).then(|| {
         let r = sel.primary();
-        let start = if state.line_clipboard.as_deref() == Some(text.as_str()) && r.is_empty() { rope.line_to_char(rope.char_to_line(r.head)) } else { r.start() };
+        let start =
+            if state.line_clipboard.as_deref() == Some(text.as_str()) && r.is_empty() { rope.line_to_char(rope.char_to_line(r.head)) } else { r.start() };
         (start, start + n)
     });
     // A whole line copied without selection goes above the caret's line.
     if state.line_clipboard.as_deref() == Some(text.as_str()) && sel.ranges().iter().all(|r| r.is_empty()) {
-        let changes: Vec<rc_text::Change> = sel
-            .ranges()
-            .iter()
-            .map(|r| rc_text::Change::insert(rope.line_to_char(rope.char_to_line(r.head)), text.clone()))
-            .collect();
+        let changes: Vec<rc_text::Change> =
+            sel.ranges().iter().map(|r| rc_text::Change::insert(rope.line_to_char(rope.char_to_line(r.head)), text.clone())).collect();
         let cs = rc_text::ChangeSet::new(changes);
         let after = sel.transform(|r| Range::point(r.head + n));
         state.apply(commands::Edited { changes: cs, selection: after }, EditKind::Other);
@@ -1541,12 +1581,16 @@ fn exec(ui: &Ui, state: &mut EditorState, config: &EditorConfig, action: Action,
         }
         Indent if !ro && state.snippet.is_some() && state.snippet_step(true) => {}
         // A live template: its abbreviation right before a lone caret.
-        Indent if !ro && sel.len() == 1 && sel.primary().is_empty() && state.lang() == rc_syntax::Lang::Rust && {
-            let caret = sel.primary().head;
-            let line = rope.char_to_line(caret);
-            let before: String = rope.slice(rope.line_to_char(line)..caret).to_string();
-            crate::snippet::template_at(&before, caret, &config.live_templates).map(|(start, body)| (start, body.to_string())).inspect(|(start, body)| state.insert_snippet(*start, caret, body)).is_some()
-        } => {}
+        Indent
+            if !ro && sel.len() == 1 && sel.primary().is_empty() && state.lang() == rc_syntax::Lang::Rust && {
+                let caret = sel.primary().head;
+                let line = rope.char_to_line(caret);
+                let before: String = rope.slice(rope.line_to_char(line)..caret).to_string();
+                crate::snippet::template_at(&before, caret, &config.live_templates)
+                    .map(|(start, body)| (start, body.to_string()))
+                    .inspect(|(start, body)| state.insert_snippet(*start, caret, body))
+                    .is_some()
+            } => {}
         Indent if !ro => {
             let multi_line = sel.ranges().iter().any(|r| rope.char_to_line(r.start()) != rope.char_to_line(r.end()));
             let e = if multi_line { commands::indent_lines(&rope, &sel, &indent, false) } else { commands::insert_tab(&rope, &sel, &indent) };

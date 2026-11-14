@@ -8,14 +8,8 @@ use rc_kit::i18n::{tr, trf};
 use rc_kit::{ico, icons, theme};
 
 /// Colours of the project badge (New UI picks one per project).
-const BADGE_COLORS: [(u32, u32); 6] = [
-    (0x7F5BFF, 0x5A3ACF),
-    (0x3D7EFF, 0x2556C5),
-    (0x00A389, 0x00785F),
-    (0xE5713B, 0xB5521F),
-    (0xD9408F, 0xA82C6A),
-    (0x8E9A1B, 0x6A7410),
-];
+const BADGE_COLORS: [(u32, u32); 6] =
+    [(0x7F5BFF, 0x5A3ACF), (0x3D7EFF, 0x2556C5), (0x00A389, 0x00785F), (0xE5713B, 0xB5521F), (0xD9408F, 0xA82C6A), (0x8E9A1B, 0x6A7410)];
 
 fn rgb(c: u32) -> Color32 {
     Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
@@ -39,7 +33,12 @@ pub fn initials(name: &str) -> String {
 /// A rounded rectangle filled with a vertical gradient (a fan of triangles from its centre).
 fn gradient_rounded_rect(r: Rect, radius: f32, top: Color32, bottom: Color32) -> egui::Mesh {
     let mut pts = Vec::new();
-    let corners = [(r.right() - radius, r.top() + radius, -90.0f32), (r.right() - radius, r.bottom() - radius, 0.0), (r.left() + radius, r.bottom() - radius, 90.0), (r.left() + radius, r.top() + radius, 180.0)];
+    let corners = [
+        (r.right() - radius, r.top() + radius, -90.0f32),
+        (r.right() - radius, r.bottom() - radius, 0.0),
+        (r.left() + radius, r.bottom() - radius, 90.0),
+        (r.left() + radius, r.top() + radius, 180.0),
+    ];
     for (cx, cy, start) in corners {
         for k in 0..=8 {
             let a = (start + k as f32 * 90.0 / 8.0).to_radians();
@@ -97,7 +96,9 @@ fn project_glow(ui: &Ui, name: &str) {
 
 pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
     let rect = ui.max_rect();
-    if let Some(workspace) = &app.workspace { project_glow(ui, &workspace.ws.name()); }
+    if let Some(workspace) = &app.workspace {
+        project_glow(ui, &workspace.ws.name());
+    }
     // The whole bar drags the window (behind the widgets).
     let drag = ui.interact(rect, ui.scope_id().with("title_drag"), Sense::click_and_drag());
     if drag.drag_started() {
@@ -121,17 +122,18 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     // VCS widget: the current branch and the branches popup.
                     if app.vcs.repo.is_some() {
                         let name = app.vcs.branch_name().unwrap_or_else(|| "…".into());
-                        let resp = theme::flat_button(ui, Some(ico::VCS), &name, FontId::proportional(13.0), true, true).on_hover_text(tr("Git branches and actions"));
+                        let resp =
+                            theme::flat_button(ui, Some(ico::VCS), &name, FontId::proportional(13.0), true, true).on_hover_text(tr("Git branches and actions"));
                         egui::Popup::menu(&resp).show(|ui| crate::ui::git::branches_menu(app, ui));
                     }
                 }
             }
             theme::Side::Right => {
                 // Close, maximize and minimize sit right after Settings, one gap apart.
-                if rc_kit::window_chrome::CUSTOM_CAPTION {
-                    if let Some(command) = rc_kit::window_chrome::controls(ui) {
-                        ui.ctx().send_viewport_cmd(command);
-                    }
+                if rc_kit::window_chrome::CUSTOM_CAPTION
+                    && let Some(command) = rc_kit::window_chrome::controls(ui)
+                {
+                    ui.ctx().send_viewport_cmd(command);
                 }
                 ui.add_space(8.0);
                 ui.spacing_mut().item_spacing.x = 2.0;
@@ -148,11 +150,17 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(6.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
-                    if (app.runner.busy() || app.debugger.active()) && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked() {
+                    if (app.runner.busy() || app.debugger.active())
+                        && theme::icon_button_sized(ui, ico::STOP, true, &format!("{}{}", tr("Stop"), shortcut(Action::StopRun)), 30.0).clicked()
+                    {
                         app.pending.push(Action::StopRun);
                     }
                     let wasm_pack = app.runner.selected_config().is_some_and(|c| matches!(c.kind, crate::runner::ConfigKind::WasmPack { .. }));
-                    let debug_tip = if wasm_pack { tr("Debugging wasm-pack configurations is not supported").to_string() } else { format!("{}{}", tr("Debug"), shortcut(Action::Debug)) };
+                    let debug_tip = if wasm_pack {
+                        tr("Debugging wasm-pack configurations is not supported").to_string()
+                    } else {
+                        format!("{}{}", tr("Debug"), shortcut(Action::Debug))
+                    };
                     if theme::icon_button_sized(ui, ico::DEBUG, !wasm_pack, &debug_tip, 30.0).clicked() {
                         app.pending.push(Action::Debug);
                     }
@@ -167,7 +175,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                         Some(c) => (c.icon(), c.name.clone()),
                         None => (ico::CONFIG_APP, tr("No run configurations").to_string()),
                     };
-                    let resp = theme::flat_button(ui, Some(icon), &label, FontId::proportional(13.0), true, true).on_hover_text(tr("Choose what Run and Debug start"));
+                    let resp =
+                        theme::flat_button(ui, Some(icon), &label, FontId::proportional(13.0), true, true).on_hover_text(tr("Choose what Run and Debug start"));
                     egui::Popup::menu(&resp).show(|ui| {
                         ui.set_min_width(240.0);
                         if app.runner.configs.is_empty() {
@@ -232,16 +241,24 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 ui.close();
                             }
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig {
+                            name,
+                            kind: crate::runner::ConfigKind::Cargo { .. } | crate::runner::ConfigKind::WasmPack { .. },
+                        }) = app.runner.selected_config().cloned()
+                        {
                             ui.separator();
                             if theme::menu_item(ui, Some(ico::SETTINGS), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
                                 app.edit_run_config(Some(name));
                                 ui.close();
                             }
                         }
-                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::TestSelection { .. } }) = app.runner.selected_config().cloned() {
+                        if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::TestSelection { .. } }) =
+                            app.runner.selected_config().cloned()
+                        {
                             ui.separator();
-                            if app.runner.is_temporary(&name) && theme::menu_item(ui, Some(ico::SAVE), &trf("Save “{name}” Configuration", &[("name", &name)]), false).clicked() {
+                            if app.runner.is_temporary(&name)
+                                && theme::menu_item(ui, Some(ico::SAVE), &trf("Save “{name}” Configuration", &[("name", &name)]), false).clicked()
+                            {
                                 app.runner.save_temporary(&name);
                                 app.session_dirty = true;
                                 ui.close();
@@ -271,9 +288,19 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                                 app.dialog = Some(crate::ui::dialogs::Dialog::Compound { old: None, name: tr("All Applications").to_string(), members });
                                 ui.close();
                             }
-                            if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Compound { members } }) = app.runner.selected_config().cloned() {
+                            if let Some(crate::runner::RunConfig { name, kind: crate::runner::ConfigKind::Compound { members } }) =
+                                app.runner.selected_config().cloned()
+                            {
                                 if theme::menu_item(ui, Some(ico::EDIT), &trf("Edit “{name}”…", &[("name", &name)]), false).clicked() {
-                                    let all = app.runner.app_names().into_iter().map(|n| { let on = members.contains(&n); (n, on) }).collect();
+                                    let all = app
+                                        .runner
+                                        .app_names()
+                                        .into_iter()
+                                        .map(|n| {
+                                            let on = members.contains(&n);
+                                            (n, on)
+                                        })
+                                        .collect();
                                     app.dialog = Some(crate::ui::dialogs::Dialog::Compound { old: Some(name.clone()), name: name.clone(), members: all });
                                     ui.close();
                                 }
@@ -289,10 +316,20 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                     theme::toolbar_separator(ui);
                     ui.add_space(4.0);
-                    if theme::icon_button_sized(ui, ico::FORWARD, !app.nav_forward.is_empty(), &format!("{}{}", tr("Forward"), shortcut(Action::NavigateForward)), 30.0).clicked() {
+                    if theme::icon_button_sized(
+                        ui,
+                        ico::FORWARD,
+                        !app.nav_forward.is_empty(),
+                        &format!("{}{}", tr("Forward"), shortcut(Action::NavigateForward)),
+                        30.0,
+                    )
+                    .clicked()
+                    {
                         app.navigate(false);
                     }
-                    if theme::icon_button_sized(ui, ico::BACK, !app.nav_back.is_empty(), &format!("{}{}", tr("Back"), shortcut(Action::NavigateBack)), 30.0).clicked() {
+                    if theme::icon_button_sized(ui, ico::BACK, !app.nav_back.is_empty(), &format!("{}{}", tr("Back"), shortcut(Action::NavigateBack)), 30.0)
+                        .clicked()
+                    {
                         app.navigate(true);
                     }
                 }
@@ -324,7 +361,13 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
         rc_kit::branding::paint(ui, sq);
     }
     ui.painter().galley(pos2(sq.right() + 8.0, (r.center().y - galley.size().y / 2.0).round()), galley.clone(), p.text);
-    icons::paint(ui.painter(), Rect::from_center_size(pos2(sq.right() + 8.0 + galley.size().x + 4.0 + 8.0, r.center().y), vec2(16.0, 16.0)), ico::CHEVRON_DOWN, &p, true);
+    icons::paint(
+        ui.painter(),
+        Rect::from_center_size(pos2(sq.right() + 8.0 + galley.size().x + 4.0 + 8.0, r.center().y), vec2(16.0, 16.0)),
+        ico::CHEVRON_DOWN,
+        &p,
+        true,
+    );
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(260.0);
@@ -356,7 +399,8 @@ fn project_widget(app: &mut CrabCraftApp, ui: &mut Ui) {
             app.pending.push(rc_editor::Action::ProjectEnvironment);
             ui.close();
         }
-        let recents: Vec<std::path::PathBuf> = app.settings.recent_workspaces.iter().filter(|r| app.workspace.as_ref().is_none_or(|w| w.ws.key_path() != r.as_path())).cloned().collect();
+        let recents: Vec<std::path::PathBuf> =
+            app.settings.recent_workspaces.iter().filter(|r| app.workspace.as_ref().is_none_or(|w| w.ws.key_path() != r.as_path())).cloned().collect();
         if !recents.is_empty() {
             ui.separator();
             ui.label(egui::RichText::new(tr("Recent Projects")).color(p.muted).size(12.0));

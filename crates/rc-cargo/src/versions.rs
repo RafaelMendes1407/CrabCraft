@@ -184,7 +184,8 @@ pub fn dependency_lines(text: &str) -> Vec<ManifestDep> {
                     None => specs.push((start, key, value, in_ws(t))),
                 }
             }
-        } else if t.len() >= 2 && is_dep_table(&t[..t.len() - 1])
+        } else if t.len() >= 2
+            && is_dep_table(&t[..t.len() - 1])
             && let Some((_, _, old, _)) = specs.last_mut()
         {
             merge(old, toml::Value::Table(parsed));
@@ -492,7 +493,8 @@ log = "0.4"
 serde = ["dep:serde"]
 "#;
         let deps = dependency_lines(text);
-        let got: Vec<(usize, &str, &str, Option<&str>, DepSource)> = deps.iter().map(|d| (d.line, d.key.as_str(), d.name.as_str(), d.req.as_deref(), d.source.clone())).collect();
+        let got: Vec<(usize, &str, &str, Option<&str>, DepSource)> =
+            deps.iter().map(|d| (d.line, d.key.as_str(), d.name.as_str(), d.req.as_deref(), d.source.clone())).collect();
         assert_eq!(
             got,
             vec![

@@ -99,9 +99,7 @@ impl TermColors {
             i if i == NamedColor::Background as usize => self.bg,
             i if i == NamedColor::Cursor as usize => self.cursor,
             i if i == NamedColor::DimForeground as usize => dim(self.fg, self.bg),
-            i if (NamedColor::DimBlack as usize..=NamedColor::DimWhite as usize).contains(&i) => {
-                dim(self.ansi[i - NamedColor::DimBlack as usize], self.bg)
-            }
+            i if (NamedColor::DimBlack as usize..=NamedColor::DimWhite as usize).contains(&i) => dim(self.ansi[i - NamedColor::DimBlack as usize], self.bg),
             _ => self.fg,
         }
     }

@@ -7,15 +7,15 @@ pub mod dialogs;
 pub mod editor_area;
 pub mod explorer;
 pub mod git;
+pub mod header;
 pub mod http_window;
+pub mod main_menu;
 pub mod markdown;
 pub mod new_project;
 pub mod profiler_window;
-pub mod header;
-pub mod main_menu;
-pub mod status;
 pub mod run_windows;
 pub mod search_popup;
+pub mod status;
 pub mod stripes;
 pub mod toolwindows;
 pub mod welcome;
@@ -104,8 +104,18 @@ pub fn frame(app: &mut CrabCraftApp, ui: &mut Ui, editor_actions: Vec<Action>) {
 /// Stripes and open tool windows; returns the editor island's margin.
 fn tool_windows(app: &mut CrabCraftApp, ui: &mut Ui, p: &rc_kit::theme::Palette, bar: egui::Frame) -> Margin {
     let p = *p;
-    egui::Panel::left("stripe_left").exact_size(STRIPE_W).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| stripes::show(app, ui, Side::Left));
-    egui::Panel::right("stripe_right").exact_size(STRIPE_W).resizable(false).show_separator_line(false).frame(bar).show(ui, |ui| stripes::show(app, ui, Side::Right));
+    egui::Panel::left("stripe_left")
+        .exact_size(STRIPE_W)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(bar)
+        .show(ui, |ui| stripes::show(app, ui, Side::Left));
+    egui::Panel::right("stripe_right")
+        .exact_size(STRIPE_W)
+        .resizable(false)
+        .show_separator_line(false)
+        .frame(bar)
+        .show(ui, |ui| stripes::show(app, ui, Side::Right));
 
     let gap = theme::ISLAND_GAP;
     // The bottom tool window spans the whole width between the stripes, under the side ones

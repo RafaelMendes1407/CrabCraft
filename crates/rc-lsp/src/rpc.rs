@@ -38,9 +38,16 @@ pub const CONTENT_MODIFIED: i64 = -32801;
 /// A message from the server that is not a response to one of our requests.
 #[derive(Clone, Debug)]
 pub enum Incoming {
-    Notification { method: String, params: Value },
+    Notification {
+        method: String,
+        params: Value,
+    },
     /// A request from the server: answer it with [`Client::reply`].
-    Request { id: Value, method: String, params: Value },
+    Request {
+        id: Value,
+        method: String,
+        params: Value,
+    },
     /// A line the server wrote to stderr (logs).
     Stderr(String),
     /// The server process exited (or its pipes closed).
@@ -128,15 +135,24 @@ pub fn frame(body: &str) -> String {
 
 impl Client {
     /// Whether two handles still address the same language-server connection.
-    pub fn same_connection(&self, other: &Self) -> bool { Arc::ptr_eq(&self.shared, &other.shared) }
+    pub fn same_connection(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.shared, &other.shared)
+    }
 
     /// Starts `program` and talks LSP over its stdin/stdout. Must be called inside the tokio
     /// runtime (`rc_core::Runtime::handle().enter()` or from a task).
     pub fn spawn(program: &Path, args: &[String], cwd: &Path, env: &[(String, String)], incoming: Outbox<Incoming>) -> std::io::Result<Client> {
-        Self::spawn_with_env_removals(program,args,cwd,env,&[],incoming)
+        Self::spawn_with_env_removals(program, args, cwd, env, &[], incoming)
     }
     /// Starts a transport without inheriting explicitly disallowed host configuration.
-    pub fn spawn_with_env_removals(program:&Path,args:&[String],cwd:&Path,env:&[(String,String)],remove:&[&str],incoming:Outbox<Incoming>)->std::io::Result<Client>{
+    pub fn spawn_with_env_removals(
+        program: &Path,
+        args: &[String],
+        cwd: &Path,
+        env: &[(String, String)],
+        remove: &[&str],
+        incoming: Outbox<Incoming>,
+    ) -> std::io::Result<Client> {
         let mut cmd = Command::new(program);
         cmd.args(args)
             .current_dir(cwd)
@@ -144,7 +160,9 @@ impl Client {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
-        for name in remove {cmd.env_remove(name);}
+        for name in remove {
+            cmd.env_remove(name);
+        }
         for (k, v) in env {
             cmd.env(k, v);
         }
@@ -170,13 +188,17 @@ impl Client {
                 let _ = tx.send(Err(RpcError { code: -1, message: "the language server stopped".into() }));
             }
             let code = exit_child.lock().as_mut().and_then(|c| c.try_wait().ok().flatten()).and_then(|s| s.code());
-            if code.is_none() { Client { shared: reader_shared, child: exit_child }.kill(); }
+            if code.is_none() {
+                Client { shared: reader_shared, child: exit_child }.kill();
+            }
             reader_incoming.send(Incoming::Exited(code));
         });
-        let stderr_client=Client { shared: shared.clone(), child: child.clone() };
+        let stderr_client = Client { shared: shared.clone(), child: child.clone() };
         tokio::spawn(async move {
-            if let Err(error)=stderr_loop(stderr,&incoming,2*1024*1024).await {
-                for (_,tx) in stderr_client.shared.pending.lock().drain() { let _=tx.send(Err(error.clone())); }
+            if let Err(error) = stderr_loop(stderr, &incoming, 2 * 1024 * 1024).await {
+                for (_, tx) in stderr_client.shared.pending.lock().drain() {
+                    let _ = tx.send(Err(error.clone()));
+                }
                 incoming.send(Incoming::Stderr(error.message));
                 stderr_client.kill();
             }
@@ -235,7 +257,9 @@ impl Client {
             #[cfg(unix)]
             if let Some(pid) = c.id() {
                 // SAFETY: spawn created this child's own group; never signal the IDE group.
-                unsafe { libc::killpg(pid as libc::pid_t, libc::SIGKILL); }
+                unsafe {
+                    libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+                }
             }
             #[cfg(windows)]
             {
@@ -243,11 +267,16 @@ impl Client {
                     if let Some(pid) = c.id() {
                         let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| "C:\\Windows".into());
                         let mut command = tokio::process::Command::new(root.join("System32/taskkill.exe"));
-                        command.args(["/PID", &pid.to_string(), "/T", "/F"]).creation_flags(0x0800_0000)
-                            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+                        command
+                            .args(["/PID", &pid.to_string(), "/T", "/F"])
+                            .creation_flags(0x0800_0000)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .kill_on_drop(true);
                         let _ = tokio::time::timeout(std::time::Duration::from_secs(2), command.status()).await;
                     }
-                    let _ = c.start_kill(); let _ = c.wait().await;
+                    let _ = c.start_kill();
+                    let _ = c.wait().await;
                 });
                 return;
             }
@@ -255,7 +284,9 @@ impl Client {
             {
                 let _ = c.start_kill();
                 // Reap a killed child asynchronously instead of leaving it as a zombie.
-                rc_core::Runtime::spawn(async move { let _ = c.wait().await; });
+                rc_core::Runtime::spawn(async move {
+                    let _ = c.wait().await;
+                });
             }
         }
     }
@@ -274,10 +305,31 @@ async fn write_loop(mut stdin: ChildStdin, mut rx: mpsc::UnboundedReceiver<Strin
 }
 
 /// Transport limits are reported to pending requests rather than allocating unbounded log lines.
-pub const STDERR_LIMIT_ERROR:i64=-32097;
-async fn stderr_loop(stderr:impl tokio::io::AsyncRead+Unpin,incoming:&Outbox<Incoming>,budget:usize)->Result<(),RpcError>{
- let mut reader=BufReader::new(stderr);let mut total=0usize;let mut lines=0usize;
- loop {let mut line=String::new();let count=(&mut reader).take(8193).read_line(&mut line).await.map_err(|_|RpcError{code:STDERR_LIMIT_ERROR,message:"language server stderr is invalid or unreadable".into()})?;if count==0{return Ok(());}total=total.saturating_add(count);lines=lines.saturating_add(1);if count>8192||total>budget||lines>8192{return Err(RpcError{code:STDERR_LIMIT_ERROR,message:"language server stderr exceeded its line or session limit".into()});}let text=line.trim_end_matches(['\r','\n']).to_owned();if !incoming.send(Incoming::Stderr(text)){return Ok(());}}
+pub const STDERR_LIMIT_ERROR: i64 = -32097;
+async fn stderr_loop(stderr: impl tokio::io::AsyncRead + Unpin, incoming: &Outbox<Incoming>, budget: usize) -> Result<(), RpcError> {
+    let mut reader = BufReader::new(stderr);
+    let mut total = 0usize;
+    let mut lines = 0usize;
+    loop {
+        let mut line = String::new();
+        let count = (&mut reader)
+            .take(8193)
+            .read_line(&mut line)
+            .await
+            .map_err(|_| RpcError { code: STDERR_LIMIT_ERROR, message: "language server stderr is invalid or unreadable".into() })?;
+        if count == 0 {
+            return Ok(());
+        }
+        total = total.saturating_add(count);
+        lines = lines.saturating_add(1);
+        if count > 8192 || total > budget || lines > 8192 {
+            return Err(RpcError { code: STDERR_LIMIT_ERROR, message: "language server stderr exceeded its line or session limit".into() });
+        }
+        let text = line.trim_end_matches(['\r', '\n']).to_owned();
+        if !incoming.send(Incoming::Stderr(text)) {
+            return Ok(());
+        }
+    }
 }
 
 /// Reads framed messages until the pipe closes.
@@ -293,7 +345,9 @@ async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, inc
                 Ok(_) => {}
             }
             header_bytes += line.len();
-            if line.len() > 8192 || header_bytes > 32 * 1024 { return; }
+            if line.len() > 8192 || header_bytes > 32 * 1024 {
+                return;
+            }
             let line = line.trim_end();
             if line.is_empty() {
                 break;
@@ -303,7 +357,9 @@ async fn read_loop(stdout: tokio::process::ChildStdout, shared: Arc<Shared>, inc
             }
         }
         let Some(len) = len else { return };
-        if len > 32 * 1024 * 1024 { return; }
+        if len > 32 * 1024 * 1024 {
+            return;
+        }
         let mut body = vec![0u8; len];
         if reader.read_exact(&mut body).await.is_err() {
             return;
@@ -388,17 +444,28 @@ while True:
     fn oversized_or_malformed_lsp_frames_fail_pending_requests_without_allocating_the_body() {
         use std::time::{Duration, Instant};
         for header in ["Content-Length: 9999999999999999999\r\n\r\n".to_string(), format!("X: {}\r\n\r\n", "a".repeat(9000))] {
-            let dir = tempfile::tempdir().unwrap(); let script = dir.path().join("bad_frame.py");
+            let dir = tempfile::tempdir().unwrap();
+            let script = dir.path().join("bad_frame.py");
             let header = serde_json::to_string(&header).unwrap();
-            std::fs::write(&script, format!("import sys,time\nsys.stdin.buffer.readline()\nsys.stdout.buffer.write(({header}).encode());sys.stdout.buffer.flush()\ntime.sleep(30)\n")).unwrap();
+            std::fs::write(
+                &script,
+                format!(
+                    "import sys,time\nsys.stdin.buffer.readline()\nsys.stdout.buffer.write(({header}).encode());sys.stdout.buffer.flush()\ntime.sleep(30)\n"
+                ),
+            )
+            .unwrap();
             let inbox = Inbox::new(Waker::noop());
             let _runtime = Runtime::handle().enter();
             let client = Client::spawn(Path::new("python3"), &[script.display().to_string()], dir.path(), &[], inbox.sender()).unwrap();
             let mut request = client.request_raw::<Value>("test", json!({}));
             let end = Instant::now() + Duration::from_secs(3);
             loop {
-                if let Some(reply) = request.poll() { assert!(reply.is_err()); break; }
-                assert!(Instant::now() < end); std::thread::sleep(Duration::from_millis(10));
+                if let Some(reply) = request.poll() {
+                    assert!(reply.is_err());
+                    break;
+                }
+                assert!(Instant::now() < end);
+                std::thread::sleep(Duration::from_millis(10));
             }
             client.kill();
         }
@@ -408,40 +475,85 @@ while True:
     #[test]
     fn killing_a_language_server_stops_its_owned_helper_process_group() {
         use std::time::{Duration, Instant};
-        let dir = tempfile::tempdir().unwrap(); let script = dir.path().join("server.py");
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("server.py");
         let pid_file = dir.path().join("helper.pid");
         let pid_json = serde_json::to_string(&pid_file.to_string_lossy()).unwrap();
-        std::fs::write(&script, format!("import subprocess,time\nchild=subprocess.Popen(['sleep','30'])\nwith open({pid_json},'w') as f: f.write(str(child.pid))\ntime.sleep(30)\n")).unwrap();
-        let _runtime = Runtime::handle().enter(); let inbox = Inbox::new(Waker::noop());
+        std::fs::write(
+            &script,
+            format!(
+                "import subprocess,time\nchild=subprocess.Popen(['sleep','30'])\nwith open({pid_json},'w') as f: f.write(str(child.pid))\ntime.sleep(30)\n"
+            ),
+        )
+        .unwrap();
+        let _runtime = Runtime::handle().enter();
+        let inbox = Inbox::new(Waker::noop());
         let client = Client::spawn(Path::new("python3"), &[script.display().to_string()], dir.path(), &[], inbox.sender()).unwrap();
         let end = Instant::now() + Duration::from_secs(3);
         let pid = loop {
-            if let Some(pid) = std::fs::read_to_string(&pid_file).ok().and_then(|text| text.parse::<u32>().ok()) { break pid; }
-            assert!(Instant::now() < end); std::thread::sleep(Duration::from_millis(10));
+            if let Some(pid) = std::fs::read_to_string(&pid_file).ok().and_then(|text| text.parse::<u32>().ok()) {
+                break pid;
+            }
+            assert!(Instant::now() < end);
+            std::thread::sleep(Duration::from_millis(10));
         };
         client.kill();
         loop {
             let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok();
             let running = stat.as_deref().and_then(|stat| stat.rsplit_once(") ")).is_some_and(|(_, state)| !state.starts_with('Z'));
-            if !running { break; }
+            if !running {
+                break;
+            }
             assert!(Instant::now() < end, "the killed server's helper is still running");
             std::thread::sleep(Duration::from_millis(10));
         }
     }
-
 }
 
 #[cfg(test)]
 mod stderr_budget_tests {
- use super::*;
- #[test]
- fn fragmented_utf8_logs_are_preserved_and_both_budgets_are_enforced(){rc_core::Runtime::block_on(async{
-  let inbox=rc_core::Inbox::new(rc_core::Waker::noop());let(mut writer,reader)=tokio::io::duplex(8);let task=tokio::spawn(async move{for byte in "log 🦀\r\n".as_bytes(){writer.write_all(&[*byte]).await.unwrap();tokio::task::yield_now().await;} });stderr_loop(reader,&inbox.sender(),64).await.unwrap();task.await.unwrap();let lines=inbox.drain();assert!(matches!(&lines[..],[Incoming::Stderr(line)]if line=="log 🦀"));
-  let error=stderr_loop(&b"123456789\n"[..],&inbox.sender(),8).await.unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(inbox.drain().is_empty());let bytes=vec![b'x';8193];let error=stderr_loop(bytes.as_slice(),&inbox.sender(),20000).await.unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(inbox.drain().is_empty());
- });}
- #[cfg(unix)]
- #[test]
- fn oversized_stderr_fails_pending_requests_and_terminates_the_server(){rc_core::Runtime::block_on(async{
-  let inbox=rc_core::Inbox::new(rc_core::Waker::noop());let client=Client::spawn(Path::new("/bin/sh"),&["-c".into(),"sleep 0.1; printf '%8193s' '' >&2; sleep 60".into()],Path::new("/tmp"),&[],inbox.sender()).unwrap();let request=client.request_raw::<Value>("initialize",json!({}));let error=tokio::time::timeout(std::time::Duration::from_secs(5),request.wait()).await.unwrap().unwrap_err();assert_eq!(error.code,STDERR_LIMIT_ERROR);assert!(client.child.lock().is_none());
- });}
+    use super::*;
+    #[test]
+    fn fragmented_utf8_logs_are_preserved_and_both_budgets_are_enforced() {
+        rc_core::Runtime::block_on(async {
+            let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
+            let (mut writer, reader) = tokio::io::duplex(8);
+            let task = tokio::spawn(async move {
+                for byte in "log 🦀\r\n".as_bytes() {
+                    writer.write_all(&[*byte]).await.unwrap();
+                    tokio::task::yield_now().await;
+                }
+            });
+            stderr_loop(reader, &inbox.sender(), 64).await.unwrap();
+            task.await.unwrap();
+            let lines = inbox.drain();
+            assert!(matches!(&lines[..],[Incoming::Stderr(line)]if line=="log 🦀"));
+            let error = stderr_loop(&b"123456789\n"[..], &inbox.sender(), 8).await.unwrap_err();
+            assert_eq!(error.code, STDERR_LIMIT_ERROR);
+            assert!(inbox.drain().is_empty());
+            let bytes = vec![b'x'; 8193];
+            let error = stderr_loop(bytes.as_slice(), &inbox.sender(), 20000).await.unwrap_err();
+            assert_eq!(error.code, STDERR_LIMIT_ERROR);
+            assert!(inbox.drain().is_empty());
+        });
+    }
+    #[cfg(unix)]
+    #[test]
+    fn oversized_stderr_fails_pending_requests_and_terminates_the_server() {
+        rc_core::Runtime::block_on(async {
+            let inbox = rc_core::Inbox::new(rc_core::Waker::noop());
+            let client = Client::spawn(
+                Path::new("/bin/sh"),
+                &["-c".into(), "sleep 0.1; printf '%8193s' '' >&2; sleep 60".into()],
+                Path::new("/tmp"),
+                &[],
+                inbox.sender(),
+            )
+            .unwrap();
+            let request = client.request_raw::<Value>("initialize", json!({}));
+            let error = tokio::time::timeout(std::time::Duration::from_secs(5), request.wait()).await.unwrap().unwrap_err();
+            assert_eq!(error.code, STDERR_LIMIT_ERROR);
+            assert!(client.child.lock().is_none());
+        });
+    }
 }

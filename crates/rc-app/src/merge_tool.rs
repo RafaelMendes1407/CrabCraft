@@ -64,7 +64,24 @@ impl MergeTool {
         let center = make(&model.result_text(), false);
         let center_version = center.buffer.version();
         let current = model.chunks.iter().position(|c| !c.resolved);
-        let mut tool = MergeTool { rel, abs, model, left, center, right, names, current, confirm_save: false, saving: false, error: None, crlf, center_version, dark, reveal: true, states: Vec::new() };
+        let mut tool = MergeTool {
+            rel,
+            abs,
+            model,
+            left,
+            center,
+            right,
+            names,
+            current,
+            confirm_save: false,
+            saving: false,
+            error: None,
+            crlf,
+            center_version,
+            dark,
+            reveal: true,
+            states: Vec::new(),
+        };
         tool.remember();
         tool.paint();
         tool

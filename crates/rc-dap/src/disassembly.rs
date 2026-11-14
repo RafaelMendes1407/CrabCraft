@@ -70,7 +70,7 @@ fn clean(text: &str) -> String {
 /// `894c240c` → `89 4c 24 0c`; anything that is not an even run of hex digits is dropped.
 pub fn format_bytes(hex: &str) -> Option<String> {
     let hex: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
-    if hex.is_empty() || hex.len() % 2 != 0 || hex.len() > 2 * 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) || hex.len() > 2 * 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
     let pairs: Vec<&str> = (0..hex.len()).step_by(2).filter_map(|i| hex.get(i..i + 2)).collect();
@@ -91,7 +91,12 @@ pub fn decode(reply: &DisassembleResponse) -> Result<Vec<Instruction>, Disassemb
             if i.presentation_hint.as_deref() == Some("invalid") {
                 return None;
             }
-            let file = i.location.as_ref().and_then(|s| s.path.as_ref().map(|p| p.to_string_lossy().into_owned()).or_else(|| s.name.clone())).map(|f| clean(&f)).filter(|f| !f.is_empty());
+            let file = i
+                .location
+                .as_ref()
+                .and_then(|s| s.path.as_ref().map(|p| p.to_string_lossy().into_owned()).or_else(|| s.name.clone()))
+                .map(|f| clean(&f))
+                .filter(|f| !f.is_empty());
             Some(Instruction {
                 address,
                 bytes: i.instruction_bytes.as_deref().and_then(format_bytes),
@@ -206,7 +211,17 @@ mod tests {
         let reply = DisassembleResponse { instructions: vec![insn("0x555555568bcf", "mov    %ecx,%eax", Some("89c8"), Some(3)), first] };
         let got = decode(&reply).unwrap();
         assert_eq!(got.len(), 2);
-        assert_eq!(got[0], Instruction { address: 0x5555_5556_8bcb, bytes: Some("89 4c 24 0c".into()), text: "mov    %ecx,0xc(%rsp)".into(), symbol: Some("m::add".into()), file: Some("src/main.rs".into()), line: Some(2) });
+        assert_eq!(
+            got[0],
+            Instruction {
+                address: 0x5555_5556_8bcb,
+                bytes: Some("89 4c 24 0c".into()),
+                text: "mov    %ecx,0xc(%rsp)".into(),
+                symbol: Some("m::add".into()),
+                file: Some("src/main.rs".into()),
+                line: Some(2)
+            }
+        );
         assert_eq!(got[1].address, 0x5555_5556_8bcf);
         assert_eq!(instruction_text(&got[1], true), "=> 0x0000555555568bcf  89 c8                    mov    %ecx,%eax");
     }
@@ -218,7 +233,13 @@ mod tests {
         invalid.presentation_hint = Some("invalid".into());
         let long = "x".repeat(10_000);
         let reply = DisassembleResponse {
-            instructions: vec![insn("garbage", "nop", None, None), insn("0x20", "jmp\n\u{1b}[31mevil", Some("zz"), Some(-4)), insn("0x10", &long, Some("abc"), Some(1 << 40)), insn("0x20", "dup", None, None), invalid],
+            instructions: vec![
+                insn("garbage", "nop", None, None),
+                insn("0x20", "jmp\n\u{1b}[31mevil", Some("zz"), Some(-4)),
+                insn("0x10", &long, Some("abc"), Some(1 << 40)),
+                insn("0x20", "dup", None, None),
+                invalid,
+            ],
         };
         let got = decode(&reply).unwrap();
         assert_eq!(got.iter().map(|i| i.address).collect::<Vec<_>>(), [0x10, 0x20]);

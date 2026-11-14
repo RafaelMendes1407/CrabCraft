@@ -43,6 +43,7 @@ pub enum Action {
         before: String,
         after: String,
     },
+    #[cfg(test)]
     PreviewDeploy {
         remote: String,
         local: PathBuf,
@@ -57,19 +58,12 @@ pub enum Reply {
     Terminal(rc_term::SpawnSpec, tempfile::TempDir),
 }
 fn valid_word(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() < 254
-        && value
-            .bytes()
-            .all(|ch| ch.is_ascii_alphanumeric() || b"._-".contains(&ch))
-        && !value.starts_with('-')
+    !value.is_empty() && value.len() < 254 && value.bytes().all(|ch| ch.is_ascii_alphanumeric() || b"._-".contains(&ch)) && !value.starts_with('-')
 }
 fn remote_path(path: &str) -> Result<String, Error> {
     if !path.starts_with('/')
         || path.len() > 4096
-        || path
-            .chars()
-            .any(|ch| ch.is_control() || "\"\\*?[]{}".contains(ch))
+        || path.chars().any(|ch| ch.is_control() || "\"\\*?[]{}".contains(ch))
         || path.split('/').any(|part| part == "..")
         || path.ends_with('/')
     {
@@ -102,10 +96,7 @@ pub fn bounded_file(path: &Path) -> Result<Vec<u8>, Error> {
     Ok(bytes)
 }
 fn utf8(bytes: Vec<u8>) -> Result<String, Error> {
-    String::from_utf8(bytes)
-        .ok()
-        .filter(|text| !text.contains('\0'))
-        .ok_or(Error::Input)
+    String::from_utf8(bytes).ok().filter(|text| !text.contains('\0')).ok_or(Error::Input)
 }
 pub(crate) fn args(config: &Config, dir: &Path) -> Result<Vec<String>, Error> {
     if !valid_word(&config.host) || !valid_word(&config.user) || config.port == 0 {
@@ -125,12 +116,7 @@ pub(crate) fn args(config: &Config, dir: &Path) -> Result<Vec<String>, Error> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&key, std::fs::Permissions::from_mode(0o600))?;
     }
-    let mut args = vec![
-        "-F".into(),
-        "none".into(),
-        "-i".into(),
-        key.display().to_string(),
-    ];
+    let mut args = vec!["-F".into(), "none".into(), "-i".into(), key.display().to_string()];
     for option in [
         "BatchMode=yes",
         "IdentitiesOnly=yes",
@@ -152,19 +138,10 @@ pub(crate) fn args(config: &Config, dir: &Path) -> Result<Vec<String>, Error> {
     ] {
         args.extend(["-o".into(), option.into()]);
     }
-    args.extend([
-        "-o".into(),
-        format!("UserKnownHostsFile={}", hosts.display()),
-    ]);
+    args.extend(["-o".into(), format!("UserKnownHostsFile={}", hosts.display())]);
     Ok(args)
 }
-async fn batch(
-    config: &Config,
-    dir: &Path,
-    commands: &str,
-    watched: Option<&Path>,
-    cancel: &CancelToken,
-) -> Result<(), Error> {
+async fn batch(config: &Config, dir: &Path, commands: &str, watched: Option<&Path>, cancel: &CancelToken) -> Result<(), Error> {
     let mut arguments = args(config, dir)?;
     let file = dir.join("batch");
     std::fs::write(&file, commands)?;
@@ -180,11 +157,7 @@ async fn batch(
         format!("{}@{}", config.user, config.host),
     ]);
     let mut command = tokio::process::Command::new("sftp");
-    command
-        .args(arguments)
-        .current_dir(dir)
-        .env_remove("SSH_ASKPASS")
-        .env("SSH_ASKPASS_REQUIRE", "never");
+    command.args(arguments).current_dir(dir).env_remove("SSH_ASKPASS").env("SSH_ASKPASS_REQUIRE", "never");
     let child_cancel = CancelToken::new();
     let mut output = String::new();
     let mut overflow = false;
@@ -199,18 +172,13 @@ async fn batch(
                 output.push('\n');
             }
         };
-        let process = run_streaming(
-            command,
-            &child_cancel,
-            StreamOpts::default(),
-            &mut on_start,
-            &mut on_line,
-        );
+        let process = run_streaming(command, &child_cancel, StreamOpts::default(), &mut on_start, &mut on_line);
         tokio::pin!(process);
         let start = std::time::Instant::now();
         let mut stop = None;
         let result = loop {
-            tokio::select! {result=&mut process=>break result?,()=tokio::time::sleep(Duration::from_millis(10))=>{if stop.is_none(){if cancel.is_cancelled(){stop=Some(Error::Cancelled);}else if start.elapsed()>Duration::from_secs(15){stop=Some(Error::Timeout);}else if watched.and_then(|path|std::fs::metadata(path).ok()).is_some_and(|meta|meta.len()>MAX as u64){stop=Some(Error::Limit);}if stop.is_some(){child_cancel.cancel();}}}}
+            tokio::select! {result=&mut process=>break result?,()=tokio::time::sleep(Duration::from_millis(10))=>{if stop.is_none(){if cancel.is_cancelled(){stop=Some(Error::Cancelled);}else if start.elapsed()>Duration::from_secs(15){stop=Some(Error::Timeout);}else if watched.and_then(|path|std::fs::metadata(path).ok()).is_some_and(|meta|meta.len()>MAX as u64){stop=Some(Error::Limit);}
+            if stop.is_some(){child_cancel.cancel();}}}}
         };
         (result, stop)
     };
@@ -228,42 +196,22 @@ async fn batch(
     }
     Ok(())
 }
-async fn read(
-    config: &Config,
-    remote: &str,
-    dir: &Path,
-    cancel: &CancelToken,
-) -> Result<String, Error> {
+async fn read(config: &Config, remote: &str, dir: &Path, cancel: &CancelToken) -> Result<String, Error> {
     let path = remote_path(remote)?;
     let local = dir.join("download");
-    batch(
-        config,
-        dir,
-        &format!("get {path} \"{}\"\n", local.display()),
-        Some(&local),
-        cancel,
-    )
-    .await?;
+    batch(config, dir, &format!("get {path} \"{}\"\n", local.display()), Some(&local), cancel).await?;
     utf8(bounded_file(&local)?)
 }
 pub fn run(config: Config, action: Action, cancel: CancelToken) -> Result<Reply, Error> {
     let dir = tempfile::tempdir()?;
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     runtime.block_on(async {
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }
         match action {
-            Action::Read(remote) => read(&config, &remote, dir.path(), &cancel)
-                .await
-                .map(Reply::Read),
-            Action::PreviewEdit {
-                remote,
-                before,
-                after,
-            } => {
+            Action::Read(remote) => read(&config, &remote, dir.path(), &cancel).await.map(Reply::Read),
+            Action::PreviewEdit { remote, before, after } => {
                 if before.len() > 64 * 1024 || after.len() > 64 * 1024 || after.contains('\0') {
                     return Err(Error::Limit);
                 }
@@ -271,79 +219,44 @@ pub fn run(config: Config, action: Action, cancel: CancelToken) -> Result<Reply,
                 if current != before {
                     return Err(Error::Stale);
                 }
-                Ok(Reply::Preview(Preview {
-                    config,
-                    remote,
-                    before,
-                    after,
-                    local: None,
-                }))
+                Ok(Reply::Preview(Preview { config, remote, before, after, local: None }))
             }
+            #[cfg(test)]
             Action::PreviewDeploy { remote, local } => {
                 let bytes = bounded_file(&local)?;
                 let after = utf8(bytes.clone())?;
                 let before = read(&config, &remote, dir.path(), &cancel).await?;
-                Ok(Reply::Preview(Preview {
-                    config,
-                    remote,
-                    before,
-                    after,
-                    local: Some((local, bytes)),
-                }))
+                Ok(Reply::Preview(Preview { config, remote, before, after, local: Some((local, bytes)) }))
             }
             Action::Apply(preview) => {
-                if preview.config != config
-                    || preview.before.len() > MAX
-                    || preview.after.len() > MAX
-                {
+                if preview.config != config || preview.before.len() > MAX || preview.after.len() > MAX {
                     return Err(Error::Input);
                 }
-                if let Some((path, bytes)) = &preview.local {
-                    if bounded_file(path)? != *bytes {
-                        return Err(Error::Stale);
-                    }
+                if let Some((path, bytes)) = &preview.local
+                    && bounded_file(path)? != *bytes
+                {
+                    return Err(Error::Stale);
                 }
                 let current = read(&config, &preview.remote, dir.path(), &cancel).await?;
                 if current != preview.before {
                     return Err(Error::Stale);
                 }
                 let target = remote_path(&preview.remote)?;
-                let nonce = dir
-                    .path()
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .ok_or(Error::Input)?;
+                let nonce = dir.path().file_name().and_then(|name| name.to_str()).ok_or(Error::Input)?;
                 let temporary = format!("{}.crabcraft-{nonce}", preview.remote);
                 let temporary_quoted = remote_path(&temporary)?;
                 let upload = dir.path().join("upload");
                 std::fs::write(&upload, preview.after.as_bytes())?;
                 // Server-side rename is atomic, but SFTP has no content compare-and-swap. A peer can race
                 // the preflight check. Never present this as a lock or an unconditional stale guarantee.
-                batch(
-                    &config,
-                    dir.path(),
-                    &format!(
-                        "put \"{}\" {temporary_quoted}\nrename {temporary_quoted} {target}\n",
-                        upload.display()
-                    ),
-                    None,
-                    &cancel,
-                )
-                .await?;
+                batch(&config, dir.path(), &format!("put \"{}\" {temporary_quoted}\nrename {temporary_quoted} {target}\n", upload.display()), None, &cancel)
+                    .await?;
                 Ok(Reply::Applied(preview.after))
             }
             Action::Terminal => {
                 let mut arguments = args(&config, dir.path())?;
-                arguments.extend([
-                    "-p".into(),
-                    config.port.to_string(),
-                    "-t".into(),
-                    format!("{}@{}", config.user, config.host),
-                ]);
-                Ok(Reply::Terminal(
-                    rc_term::SpawnSpec::command("ssh", arguments, None),
-                    dir,
-                ))
+                arguments.extend(["-p".into(), config.port.to_string(), "-t".into(), format!("{}@{}", config.user, config.host)]);
+                Ok(Reply::Terminal(rc_term::SpawnSpec::command("ssh", arguments, None), dir))
             }
         }
     })
@@ -363,32 +276,17 @@ pub(crate) mod tests {
         }
     }
     fn request(config: &Config, action: Action) -> Reply {
-        run(config.clone(), action, CancelToken::new())
-            .unwrap_or_else(|error| panic!("SFTP: {error:?}"))
+        run(config.clone(), action, CancelToken::new()).unwrap_or_else(|error| panic!("SFTP: {error:?}"))
     }
     fn preview(config: &Config, remote: &str, before: &str, after: &str) -> Preview {
-        match request(
-            config,
-            Action::PreviewEdit {
-                remote: remote.into(),
-                before: before.into(),
-                after: after.into(),
-            },
-        ) {
+        match request(config, Action::PreviewEdit { remote: remote.into(), before: before.into(), after: after.into() }) {
             Reply::Preview(preview) => preview,
             _ => panic!("preview"),
         }
     }
     #[test]
     fn remote_command_paths_refuse_batch_injection_and_file_reads_refuse_special_files() {
-        for path in [
-            "relative",
-            "/tmp/../secret",
-            "/tmp/a\nb",
-            "/tmp/\";!touch x",
-            "/tmp/a*",
-            "/tmp/a\\x",
-        ] {
+        for path in ["relative", "/tmp/../secret", "/tmp/a\nb", "/tmp/\";!touch x", "/tmp/a*", "/tmp/a\\x"] {
             assert!(remote_path(path).is_err());
         }
         assert_eq!(remote_path("/tmp/a file 🦀").unwrap(), "\"/tmp/a file 🦀\"");
@@ -400,28 +298,18 @@ pub(crate) mod tests {
     #[test]
     #[ignore = "Requires the explicit private SSH fixture on 127.0.0.1:55222"]
     fn real_sftp_rust_file_preview_stale_deploy_hostkey_and_cancel() {
-        let _lock = SSH_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _lock = SSH_TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let config = config();
         let project = tempfile::tempdir().unwrap();
         let root = project.path();
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("Cargo.toml"),
-            "[package]\nname=\"ssh_rust_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n",
-        )
-        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname=\"ssh_rust_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n").unwrap();
         let remote = root.join("src/main.rs");
         let name = remote.display().to_string();
         let first = "fn main(){println!(\"first\");}\n";
         let second = "fn main(){println!(\"edited 🦀\");}\n";
         std::fs::write(&remote, first).unwrap();
-        std::fs::write(
-            root.join("build.rs"),
-            "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}",
-        )
-        .unwrap();
+        std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         match request(&config, Action::Read(name.clone())) {
             Reply::Read(text) => assert_eq!(text, first),
             _ => panic!("read"),
@@ -429,68 +317,33 @@ pub(crate) mod tests {
         let pending = preview(&config, &name, first, second);
         assert_eq!(std::fs::read_to_string(&remote).unwrap(), first);
         std::fs::write(&remote, "external").unwrap();
-        assert!(matches!(
-            run(config.clone(), Action::Apply(pending), CancelToken::new()),
-            Err(Error::Stale)
-        ));
+        assert!(matches!(run(config.clone(), Action::Apply(pending), CancelToken::new()), Err(Error::Stale)));
         std::fs::write(&remote, first).unwrap();
-        request(
-            &config,
-            Action::Apply(preview(&config, &name, first, second)),
-        );
+        request(&config, Action::Apply(preview(&config, &name, first, second)));
         assert_eq!(std::fs::read_to_string(&remote).unwrap(), second);
         assert!(!root.join("build-ran").exists());
         let local = root.join("deploy.rs");
         std::fs::write(&local, "fn main(){println!(\"deployed Rust\");}\n").unwrap();
-        let pending = match request(
-            &config,
-            Action::PreviewDeploy {
-                remote: name.clone(),
-                local: local.clone(),
-            },
-        ) {
+        let pending = match request(&config, Action::PreviewDeploy { remote: name.clone(), local: local.clone() }) {
             Reply::Preview(preview) => preview,
             _ => panic!("preview"),
         };
         std::fs::write(&local, "changed since preview").unwrap();
-        assert!(matches!(
-            run(config.clone(), Action::Apply(pending), CancelToken::new()),
-            Err(Error::Stale)
-        ));
+        assert!(matches!(run(config.clone(), Action::Apply(pending), CancelToken::new()), Err(Error::Stale)));
         std::fs::write(&local, "fn main(){println!(\"deployed Rust\");}\n").unwrap();
-        let pending = match request(
-            &config,
-            Action::PreviewDeploy {
-                remote: name.clone(),
-                local,
-            },
-        ) {
+        let pending = match request(&config, Action::PreviewDeploy { remote: name.clone(), local }) {
             Reply::Preview(preview) => preview,
             _ => panic!("preview"),
         };
         request(&config, Action::Apply(pending));
-        let built = std::process::Command::new("cargo")
-            .args(["run", "--offline", "--quiet"])
-            .current_dir(root)
-            .output()
-            .unwrap();
-        assert!(
-            built.status.success(),
-            "{}",
-            String::from_utf8_lossy(&built.stderr)
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&built.stdout).trim(),
-            "deployed Rust"
-        );
+        let built = std::process::Command::new("cargo").args(["run", "--offline", "--quiet"]).current_dir(root).output().unwrap();
+        assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+        assert_eq!(String::from_utf8_lossy(&built.stdout).trim(), "deployed Rust");
         let bad_hosts = root.join("wrong_hosts");
         std::fs::write(&bad_hosts, "").unwrap();
         let mut unknown = config.clone();
         unknown.known_hosts = bad_hosts;
-        assert!(matches!(
-            run(unknown, Action::Read(name.clone()), CancelToken::new()),
-            Err(Error::Process(_))
-        ));
+        assert!(matches!(run(unknown, Action::Read(name.clone()), CancelToken::new()), Err(Error::Process(_))));
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let mut stalled = config.clone();
         stalled.port = listener.local_addr().unwrap().port();

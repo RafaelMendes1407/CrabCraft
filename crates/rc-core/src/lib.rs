@@ -3,20 +3,20 @@
 
 pub mod changelists;
 pub mod code_style;
+pub mod editor_import;
 pub mod external_tools;
-pub mod live_templates;
-pub mod run_files;
 pub mod history;
-pub mod inspections;
 pub mod inbox;
+pub mod inspections;
+pub mod live_templates;
 pub mod paths;
+pub mod processes;
+pub mod run_files;
 pub mod runtime;
 pub mod scratch;
 pub mod session;
 pub mod settings;
 pub mod settings_transfer;
-pub mod editor_import;
-pub mod processes;
 pub mod watch;
 pub mod workspace;
 

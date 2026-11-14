@@ -1,11 +1,24 @@
 //! Headless execution of one explicitly selected HTTP request. Responses are JSON so remote
 //! terminal escape sequences cannot become terminal commands.
-use crate::{cli::{CliError, Command}, http_client::{self, HttpError}};
+use crate::{
+    cli::{CliError, Command},
+    http_client::{self, HttpError},
+};
 use rc_kit::i18n::tr;
-use std::{ffi::OsString, io::Read, path::{Path, PathBuf}, sync::atomic::AtomicBool};
+use std::{
+    ffi::OsString,
+    io::Read,
+    path::{Path, PathBuf},
+    sync::atomic::AtomicBool,
+};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct HttpCommand { pub file: PathBuf, pub request: Option<usize>, pub environment_file: Option<PathBuf>, pub environment: Option<String> }
+pub struct HttpCommand {
+    pub file: PathBuf,
+    pub request: Option<usize>,
+    pub environment_file: Option<PathBuf>,
+    pub environment: Option<String>,
+}
 
 pub fn parse(args: impl Iterator<Item = OsString>, cwd: &Path) -> Result<Command, CliError> {
     let (mut file, mut request, mut paths_only) = (None, None, false);
@@ -20,7 +33,9 @@ pub fn parse(args: impl Iterator<Item = OsString>, cwd: &Path) -> Result<Command
                 let path = PathBuf::from(args.next().ok_or(CliError::HttpFile)?);
                 environment_file = Some(if path.is_absolute() { path } else { cwd.join(path) });
             }
-            Some("--env") if !paths_only => environment = Some(args.next().and_then(|arg| arg.into_string().ok()).filter(|value| !value.is_empty()).ok_or(CliError::HttpFile)?),
+            Some("--env") if !paths_only => {
+                environment = Some(args.next().and_then(|arg| arg.into_string().ok()).filter(|value| !value.is_empty()).ok_or(CliError::HttpFile)?)
+            }
             Some("--request") if !paths_only => request = Some(crate::cli::number("--request", args.next())?),
             Some(text) if !paths_only && text.starts_with('-') => return Err(CliError::UnknownOption(text.to_string())),
             _ if file.is_none() => {
@@ -30,16 +45,27 @@ pub fn parse(args: impl Iterator<Item = OsString>, cwd: &Path) -> Result<Command
             _ => return Err(CliError::HttpFile),
         }
     }
-    if environment_file.is_some() != environment.is_some() { return Err(CliError::HttpFile); }
+    if environment_file.is_some() != environment.is_some() {
+        return Err(CliError::HttpFile);
+    }
     Ok(Command::Http(HttpCommand { file: file.ok_or(CliError::HttpFile)?, request, environment_file, environment }))
 }
 
 #[derive(Debug)]
-pub enum Error { Io(std::io::Error), Json(serde_json::Error), TooLarge, NotFile, SelectRequest, NoRequest, Http(HttpError) }
+pub enum Error {
+    Io(std::io::Error),
+    Json(serde_json::Error),
+    TooLarge,
+    NotFile,
+    SelectRequest,
+    NoRequest,
+    Http(HttpError),
+}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(e) => e.fmt(f), Self::Json(e) => e.fmt(f),
+            Self::Io(e) => e.fmt(f),
+            Self::Json(e) => e.fmt(f),
             Self::TooLarge => f.write_str(tr("The HTTP request file exceeds 8 MB.")),
             Self::NotFile => f.write_str(tr("The HTTP request path must be a regular file.")),
             Self::SelectRequest => f.write_str(tr("This file contains multiple requests. Select one with --request N.")),
@@ -54,32 +80,51 @@ impl HttpCommand {
     /// response has arrived; Ctrl+C terminates this foreground process.
     pub fn execute(&self) -> Result<(serde_json::Value, i32), Error> {
         let metadata = std::fs::metadata(&self.file).map_err(Error::Io)?;
-        if !metadata.is_file() { return Err(Error::NotFile); }
-        if metadata.len() > http_client::MAX_BODY_BYTES as u64 { return Err(Error::TooLarge); }
+        if !metadata.is_file() {
+            return Err(Error::NotFile);
+        }
+        if metadata.len() > http_client::MAX_BODY_BYTES as u64 {
+            return Err(Error::TooLarge);
+        }
         let mut options = std::fs::OpenOptions::new();
         options.read(true);
         #[cfg(unix)]
-        { use std::os::unix::fs::OpenOptionsExt; options.custom_flags(libc::O_NONBLOCK); }
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NONBLOCK);
+        }
         let file = options.open(&self.file).map_err(Error::Io)?;
-        if !file.metadata().map_err(Error::Io)?.is_file() { return Err(Error::NotFile); }
+        if !file.metadata().map_err(Error::Io)?.is_file() {
+            return Err(Error::NotFile);
+        }
         let mut text = String::new();
         file.take((http_client::MAX_BODY_BYTES + 1) as u64).read_to_string(&mut text).map_err(Error::Io)?;
-        if text.len() > http_client::MAX_BODY_BYTES { return Err(Error::TooLarge); }
+        if text.len() > http_client::MAX_BODY_BYTES {
+            return Err(Error::TooLarge);
+        }
         let requests = rc_syntax::http::parse_requests(&text);
-        if self.request.is_none() && requests.len() > 1 { return Err(Error::SelectRequest); }
+        if self.request.is_none() && requests.len() > 1 {
+            return Err(Error::SelectRequest);
+        }
         let index = self.request.unwrap_or(1).checked_sub(1).ok_or(Error::NoRequest)?;
         let request = requests.get(index).ok_or(Error::NoRequest)?;
         let request = match (&self.environment_file, &self.environment) {
             (None, None) => request.clone(),
             (Some(path), Some(name)) => {
-                let snapshot = http_client::environment::read(path, name, &AtomicBool::new(false)).map_err(|error| Error::Http(HttpError::Environment(error)))?;
+                let snapshot =
+                    http_client::environment::read(path, name, &AtomicBool::new(false)).map_err(|error| Error::Http(HttpError::Environment(error)))?;
                 http_client::environment::merge(request, &snapshot).map_err(Error::Http)?
             }
             _ => return Err(Error::Http(HttpError::Environment(http_client::environment::Error::NotLoaded))),
         };
         let prepared = http_client::prepare(&request).map_err(Error::Http)?;
         let response = http_client::send(&prepared, http_client::TIMEOUT, http_client::MAX_BODY_BYTES, &AtomicBool::new(false)).map_err(Error::Http)?;
-        let warnings: Vec<_> = request.unsupported.iter().filter(|item| !matches!(item.kind, rc_syntax::http::UnsupportedKind::Variable(_) | rc_syntax::http::UnsupportedKind::FileVariable(_))).map(|item| http_client::unsupported_text(&item.kind)).collect();
+        let warnings: Vec<_> = request
+            .unsupported
+            .iter()
+            .filter(|item| !matches!(item.kind, rc_syntax::http::UnsupportedKind::Variable(_) | rc_syntax::http::UnsupportedKind::FileVariable(_)))
+            .map(|item| http_client::unsupported_text(&item.kind))
+            .collect();
         let body = std::str::from_utf8(&response.body).ok();
         let json = serde_json::json!({
             "request": index + 1, "method": prepared.method, "url": prepared.url,
@@ -110,7 +155,10 @@ mod tests {
         assert!(matches!(crate::cli::parse(["http".into()], dir.path()), Err(CliError::HttpFile)));
         assert!(crate::cli::parse(["http".into(), "x".into(), "--request".into(), "0".into()], dir.path()).is_err());
         assert!(crate::cli::parse(["http".into(), "x".into(), "--env-file".into(), "env.json".into()], dir.path()).is_err());
-        assert!(matches!(crate::cli::parse(["http".into(), "x".into(), "--env-file".into(), "env.json".into(), "--env".into(), "local".into()], dir.path()), Ok(Command::Http(HttpCommand { environment: Some(_), .. }))));
+        assert!(matches!(
+            crate::cli::parse(["http".into(), "x".into(), "--env-file".into(), "env.json".into(), "--env".into(), "local".into()], dir.path()),
+            Ok(Command::Http(HttpCommand { environment: Some(_), .. }))
+        ));
         let file = dir.path().join("requests.http");
         std::fs::write(&file, "GET http://127.0.0.1:1/\n###\nGET http://127.0.0.1:1/other\n").unwrap();
         assert!(matches!(HttpCommand { file: file.clone(), request: None, environment_file: None, environment: None }.execute(), Err(Error::SelectRequest)));
@@ -139,7 +187,8 @@ mod tests {
         std::fs::write(project.path().join("src/main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(project.path().join("build.rs"), "compile_error!(\"HTTP CLI must never build this project\");").unwrap();
         let file = project.path().join("requests.http");
-        std::fs::write(&file, format!("@host = {address}\n@base = http://{{{{host}}}}\n###\nGET {{{{base}}}}/unused\n###\nGET {{{{base}}}}/selected\n")).unwrap();
+        std::fs::write(&file, format!("@host = {address}\n@base = http://{{{{host}}}}\n###\nGET {{{{base}}}}/unused\n###\nGET {{{{base}}}}/selected\n"))
+            .unwrap();
         let env = project.path().join("http-client.env.json");
         std::fs::write(&env, serde_json::json!({"local": {"host": address.to_string()}}).to_string()).unwrap();
         std::fs::write(&file, "@base = http://{{host}}\n###\nGET {{base}}/unused\n###\nGET {{base}}/selected\n").unwrap();

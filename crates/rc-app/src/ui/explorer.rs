@@ -1,15 +1,15 @@
 //! Project explorer: folders and files read lazily from disk. Keyboard navigation: ↑/↓ move,
 //! →/← expand/collapse, Enter or double-click opens, F2 renames, ⌫ deletes.
 
-#[path="explorer_io.rs"]
+#[path = "explorer_io.rs"]
 mod explorer_io;
+use egui::{Align2, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use rc_core::workspace::FileNode;
-use std::sync::Arc;
 use rc_kit::i18n::tr;
 use rc_kit::{Ico, ico, icons, theme};
-use egui::{Align2, FontId, Id, Key, Rect, Sense, Ui, pos2, vec2};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub const ROW_H: f32 = 24.0;
 const INDENT: f32 = 18.0;
@@ -39,7 +39,7 @@ pub struct Row {
 #[derive(Default)]
 pub struct ExplorerState {
     /// The project is in a Git repository (its files have a history to show).
-    io:explorer_io::Io,
+    io: explorer_io::Io,
     pub git: bool,
     pub new_item_filter: String,
     pub expanded: HashSet<String>,
@@ -115,16 +115,25 @@ impl ExplorerState {
 
     pub fn invalidate(&mut self, path: &Path) {
         if let Some(parent) = path.parent() {
-            self.dir_cache.remove(parent);self.io.invalidate(parent);
+            self.dir_cache.remove(parent);
+            self.io.invalidate(parent);
         }
-        self.dir_cache.remove(path);self.io.invalidate(path);
+        self.dir_cache.remove(path);
+        self.io.invalidate(path);
     }
 
     fn poll_io(&mut self, root: &Path) {
-        if self.io.root(root) { self.dir_cache.clear(); }
+        if self.io.root(root) {
+            self.dir_cache.clear();
+        }
         for (key, value) in self.io.drain() {
             let entries = self.dir_cache.values().map(|rows| rows.len()).sum::<usize>();
-            let bytes = self.dir_cache.values().flat_map(|rows| rows.iter()).map(|node| node.path.as_os_str().len() + node.name.len() + std::mem::size_of::<FileNode>()).sum::<usize>();
+            let bytes = self
+                .dir_cache
+                .values()
+                .flat_map(|rows| rows.iter())
+                .map(|node| node.path.as_os_str().len() + node.name.len() + std::mem::size_of::<FileNode>())
+                .sum::<usize>();
             let explorer_io::Value::Directory(nodes) = value;
             let added = nodes.iter().map(|node| node.path.as_os_str().len() + node.name.len() + std::mem::size_of::<FileNode>()).sum::<usize>();
             if entries.saturating_add(nodes.len()) > 50_000 || self.dir_cache.len() >= 256 || bytes.saturating_add(added) > 64 * 1024 * 1024 {
@@ -135,7 +144,13 @@ impl ExplorerState {
             self.dir_cache.insert(path, Arc::from(nodes));
         }
     }
-    fn children_of_dir(&mut self,dir:&Path)->Arc<[FileNode]>{if let Some(nodes)=self.dir_cache.get(dir){return nodes.clone();}self.io.request(explorer_io::Key::Directory(dir.into()));Arc::from([])}
+    fn children_of_dir(&mut self, dir: &Path) -> Arc<[FileNode]> {
+        if let Some(nodes) = self.dir_cache.get(dir) {
+            return nodes.clone();
+        }
+        self.io.request(explorer_io::Key::Directory(dir.into()));
+        Arc::from([])
+    }
     /// Expands the parents of `path` and selects it (Locate in explorer / "Always select
     /// opened file").
     pub fn locate(&mut self, path: &Path, root: &Path) {
@@ -143,7 +158,9 @@ impl ExplorerState {
         let mut d = path.parent().map(Path::to_path_buf);
         let mut dirs = Vec::new();
         while let Some(cur) = d {
-            if !cur.starts_with(root) || cur == root { break; }
+            if !cur.starts_with(root) || cur == root {
+                break;
+            }
             dirs.push(format!("dir:{}", cur.display()));
             d = cur.parent().map(Path::to_path_buf);
         }
@@ -180,14 +197,32 @@ impl ExplorerState {
             return;
         }
         let key = "libraries";
-        rows.push(Row { key: key.into(), kind: NodeKind::Libraries, depth: 1, label: tr("External Libraries").into(), secondary: String::new(), icon: ico::PACKAGE, expandable: true });
+        rows.push(Row {
+            key: key.into(),
+            kind: NodeKind::Libraries,
+            depth: 1,
+            label: tr("External Libraries").into(),
+            secondary: String::new(),
+            icon: ico::PACKAGE,
+            expandable: true,
+        });
         if !self.expanded.contains(key) {
             return;
         }
         for library in self.libraries.clone() {
-            if rows.len()>=20_000{break;}
+            if rows.len() >= 20_000 {
+                break;
+            }
             let key = format!("dir:{}", library.root.display());
-            rows.push(Row { key: key.clone(), kind: NodeKind::Library(library.root.clone()), depth: 2, label: library.name, secondary: library.version, icon: ico::PACKAGE, expandable: true });
+            rows.push(Row {
+                key: key.clone(),
+                kind: NodeKind::Library(library.root.clone()),
+                depth: 2,
+                label: library.name,
+                secondary: library.version,
+                icon: ico::PACKAGE,
+                expandable: true,
+            });
             if self.expanded.contains(&key) {
                 self.push_dir(rows, &library.root, 3);
             }
@@ -200,12 +235,17 @@ impl ExplorerState {
     }
 
     fn push_dir(&mut self, rows: &mut Vec<Row>, dir: &Path, depth: usize) {
-        if depth>64||rows.len()>=20_000{self.io.record_error(explorer_io::Key::Directory(dir.into()),explorer_io::Error::Limit);return;}
+        if depth > 64 || rows.len() >= 20_000 {
+            self.io.record_error(explorer_io::Key::Directory(dir.into()), explorer_io::Error::Limit);
+            return;
+        }
         let children = self.children_of_dir(dir);
         // From the cached listing: no file system access while drawing.
         let cargo = has_cargo_toml(&children);
         for c in children.iter() {
-            if rows.len()>=20_000{break;}
+            if rows.len() >= 20_000 {
+                break;
+            }
             self.push_node(rows, c, depth, cargo);
         }
     }
@@ -232,7 +272,16 @@ impl ExplorerState {
     }
 }
 
-fn explorer_error(error:explorer_io::Error)->String{tr(match error{explorer_io::Error::Io(_)=>"Could not read project files",explorer_io::Error::Limit=>"Project tree input or cache limit exceeded",explorer_io::Error::Cancelled=>"Project tree read cancelled",explorer_io::Error::Changed=>"Project tree changed while reading; refresh it",explorer_io::Error::Busy=>"Project tree worker queue is full; refresh to retry"}).into()}
+fn explorer_error(error: explorer_io::Error) -> String {
+    tr(match error {
+        explorer_io::Error::Io(_) => "Could not read project files",
+        explorer_io::Error::Limit => "Project tree input or cache limit exceeded",
+        explorer_io::Error::Cancelled => "Project tree read cancelled",
+        explorer_io::Error::Changed => "Project tree changed while reading; refresh it",
+        explorer_io::Error::Busy => "Project tree worker queue is full; refresh to retry",
+    })
+    .into()
+}
 
 fn has_cargo_toml(children: &[FileNode]) -> bool {
     children.iter().any(|c| !c.is_dir && c.name == "Cargo.toml")
@@ -240,7 +289,15 @@ fn has_cargo_toml(children: &[FileNode]) -> bool {
 
 fn file_row(path: &Path, depth: usize) -> Row {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    Row { key: format!("file:{}", path.display()), kind: NodeKind::File(path.to_path_buf()), depth, icon: icons::for_file(&name), label: name, secondary: String::new(), expandable: false }
+    Row {
+        key: format!("file:{}", path.display()),
+        kind: NodeKind::File(path.to_path_buf()),
+        depth,
+        icon: icons::for_file(&name),
+        label: name,
+        secondary: String::new(),
+        expandable: false,
+    }
 }
 
 /// "net8.0" → ".NET 8.0".
@@ -248,12 +305,12 @@ fn accessibility_ancestor(
     ui: &mut Ui,
     rows: &[Row],
     parents: &[Option<usize>],
-    index: usize,
+    position: (usize, usize),
     tree: Id,
     visible: &std::ops::Range<usize>,
     created: &mut HashSet<usize>,
-    depth: usize,
 ) -> Id {
+    let (index, depth) = position;
     if depth >= 64 {
         return tree;
     }
@@ -261,18 +318,9 @@ fn accessibility_ancestor(
     if visible.contains(&index) || created.contains(&index) {
         return id;
     }
-    let parent = parents[index]
-        .map(|parent| {
-            accessibility_ancestor(ui, rows, parents, parent, tree, visible, created, depth + 1)
-        })
-        .unwrap_or(tree);
+    let parent = parents[index].map(|parent| accessibility_ancestor(ui, rows, parents, (parent, depth + 1), tree, visible, created)).unwrap_or(tree);
     let rect = Rect::from_min_size(ui.max_rect().min, egui::Vec2::ZERO);
-    let ancestor = ui.new_child(
-        egui::UiBuilder::new()
-            .id_salt(("explorer_accessible_ancestor", &rows[index].key))
-            .accessibility_parent(parent)
-            .max_rect(rect),
-    );
+    let ancestor = ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_ancestor", &rows[index].key)).accessibility_parent(parent).max_rect(rect));
     ancestor.interact(rect, id, Sense::hover());
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_role(egui::accesskit::Role::TreeItem);
@@ -327,13 +375,29 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
         _ => root.to_path_buf(),
     };
     let popup = egui::Popup::menu(&add);
-    if !popup.is_open() { state.new_item_filter.clear(); }
+    if !popup.is_open() {
+        state.new_item_filter.clear();
+    }
     popup.show(|ui| new_item_menu(ui, &target, &mut state.new_item_filter, &mut actions));
 
-    let refresh=ui.small_button(tr("Refresh")).clicked();
-    if state.io.busy(){ui.horizontal(|ui|{ui.spinner();ui.label(tr("Loading project files…"));if ui.button(tr("Cancel")).clicked(){state.io.cancel();}});}
-    for(key,error)in state.io.errors.iter().take(3){ui.small(rc_kit::i18n::trf("Explorer read failed for {path}: {error}",&[("path",&key.path().display()),("error",&explorer_error(*error))]));}
-    if refresh{state.io.reset();state.dir_cache.clear();ui.ctx().request_repaint();}
+    let refresh = ui.small_button(tr("Refresh")).clicked();
+    if state.io.busy() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(tr("Loading project files…"));
+            if ui.button(tr("Cancel")).clicked() {
+                state.io.cancel();
+            }
+        });
+    }
+    for (key, error) in state.io.errors.iter().take(3) {
+        ui.small(rc_kit::i18n::trf("Explorer read failed for {path}: {error}", &[("path", &key.path().display()), ("error", &explorer_error(*error))]));
+    }
+    if refresh {
+        state.io.reset();
+        state.dir_cache.clear();
+        ui.ctx().request_repaint();
+    }
     let attached = state.attached.clone();
     let selected_index = state.selected.as_ref().and_then(|k| rows.iter().position(|r| &r.key == k));
     let tree_id = Id::unique("explorer_tree");
@@ -343,125 +407,196 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
     let mut context: Option<(usize, egui::Response)> = None;
     // The tree takes the keyboard focus, so it is a widget of its own (accessibility needs a
     // node for the focused id).
-    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive())
-        .widget_info(|| egui::WidgetInfo::new(egui::Role::GenericContainer));
+    ui.interact(ui.max_rect(), tree_id, Sense::focusable_noninteractive()).widget_info(|| egui::WidgetInfo::new(egui::Role::GenericContainer));
 
-    let accessibility=ui.ctx().accesskit_node_builder(tree_id,|node|{node.set_role(egui::accesskit::Role::Tree);node.set_label(tr("Project files"));node.set_description(tr("Accessible project hierarchy is limited to visible items and 64 ancestor levels"));node.add_action(egui::accesskit::Action::Focus);}).is_some();
-    ui.scope_builder(egui::UiBuilder::new().accessibility_parent(tree_id),|ui| {
-    let mut scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
-        if state.reveal {
-            if let Some(index) = selected_index {
-                let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll"))
-                    .map_or(0.0, |state| state.clamped_offset().y);
+    let accessibility = ui
+        .ctx()
+        .accesskit_node_builder(tree_id, |node| {
+            node.set_role(egui::accesskit::Role::Tree);
+            node.set_label(tr("Project files"));
+            node.set_description(tr("Accessible project hierarchy is limited to visible items and 64 ancestor levels"));
+            node.add_action(egui::accesskit::Action::Focus);
+        })
+        .is_some();
+    ui.scope_builder(egui::UiBuilder::new().accessibility_parent(tree_id), |ui| {
+        let mut scroll = egui::ScrollArea::both().id_salt("explorer_scroll").auto_shrink([false, false]);
+        if state.reveal
+            && let Some(index) = selected_index
+        {
+            let offset = egui::scroll_area::State::load(ui.ctx(), ui.make_persistent_id("explorer_scroll")).map_or(0.0, |state| state.clamped_offset().y);
 
-                let height = ui.available_height().max(ROW_H);
-                let top = index as f32 * ROW_H;
-                if top < offset || top + ROW_H > offset + height {
-                    scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
-                }
+            let height = ui.available_height().max(ROW_H);
+            let top = index as f32 * ROW_H;
+            if top < offset || top + ROW_H > offset + height {
+                scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
             }
         }
         scroll.show_rows(ui, ROW_H, rows.len(), |ui, range| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        let mut accessible_ancestors=HashSet::new();
-        let mut parents=Vec::new();if accessibility {let mut ancestors:Vec<usize>=Vec::new();for(index,row)in rows.iter().take(range.end).enumerate(){while ancestors.last().is_some_and(|ancestor|rows[*ancestor].depth>=row.depth){ancestors.pop();}parents.push(ancestors.last().copied());ancestors.push(index);}}
-        let visible_rows=range.clone();
-        for i in range {
-            let row = &rows[i];
-            let width = ui.available_width().max(200.0);
-            let (rect, _) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::hover());
-            let resp=if accessibility {let parent=parents[i].map(|parent|accessibility_ancestor(ui,&rows,&parents,parent,tree_id,&visible_rows,&mut accessible_ancestors,0)).unwrap_or(tree_id);let row_ui=ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_row",&row.key)).accessibility_parent(parent).max_rect(rect));row_ui.interact(rect,tree_id.with(&row.key),Sense::click())}else{ui.interact(rect,tree_id.with(&row.key),Sense::click())};
-            let accessibility_actions:Vec<_>=ui.input(|input|input.events.iter().filter_map(|event|match event{egui::Event::AccessKitActionRequest(request) if request.target_tree==egui::accesskit::TreeId::ROOT&&request.target_node==resp.id.accesskit_id()=>Some(request.action),_=>None}).collect());
-            let accessibility_click=accessibility_actions.contains(&egui::accesskit::Action::Click);
-            if accessibility_actions.iter().any(|action|matches!(action,egui::accesskit::Action::Focus|egui::accesskit::Action::Click|egui::accesskit::Action::Expand|egui::accesskit::Action::Collapse)){select_row=Some(i);state.reveal=true;ui.memory_mut(|memory|memory.request_focus(tree_id));}
-            if accessibility_click{open_row=Some(i);}
-            if row.expandable {let expanded=state.expanded.contains(&row.key);if accessibility_actions.iter().any(|action|matches!(action,egui::accesskit::Action::Expand) && !expanded ||matches!(action,egui::accesskit::Action::Collapse)&&expanded){toggle_row=Some(i);}}
-
-            let selected = selected_index == Some(i);
-            // File colours: a light tint behind the files of a coloured scope.
-            if let NodeKind::File(path) = &row.kind
-                && let Some(c) = state.scopes.color_of(path)
-            {
-                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, c.gamma_multiply(if p.dark { 0.3 } else { 0.18 }));
-            }
-            if selected {
-                let color = if state.has_focus { p.selection } else { p.selection_inactive };
-                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, color);
-            } else if resp.hovered() {
-                ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
-            }
-            let x0 = rect.left() + 10.0 + row.depth as f32 * INDENT;
-            let cy = rect.center().y;
-            if row.expandable {
-                let chevron = if state.expanded.contains(&row.key) { ico::CHEVRON_DOWN } else { ico::CHEVRON_RIGHT };
-                let cr = Rect::from_center_size(pos2(x0 + 8.0, cy), vec2(16.0, 16.0));
-                icons::paint(ui.painter(), cr, chevron, &p, true);
-                if resp.clicked() && !accessibility_click && ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0) {
-                    toggle_row = Some(i);
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let mut accessible_ancestors = HashSet::new();
+            let mut parents = Vec::new();
+            if accessibility {
+                let mut ancestors: Vec<usize> = Vec::new();
+                for (index, row) in rows.iter().take(range.end).enumerate() {
+                    while ancestors.last().is_some_and(|ancestor| rows[*ancestor].depth >= row.depth) {
+                        ancestors.pop();
+                    }
+                    parents.push(ancestors.last().copied());
+                    ancestors.push(index);
                 }
             }
-            // Excluded folders and files are dimmed; the excluded one itself says so.
-            let exclusion = match &row.kind {
-                NodeKind::Dir(path) | NodeKind::File(path) => state.exclusion(root, path),
-                _ => Exclusion::No,
-            };
-            let ir = Rect::from_center_size(pos2(x0 + 26.0, cy), vec2(16.0, 16.0));
-            icons::paint(ui.painter(), ir, row.icon, &p, exclusion == Exclusion::No);
-            let text_color = if exclusion == Exclusion::No { p.text } else { p.muted };
-            let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), text_color);
-            let lx = x0 + 40.0;
-            ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), text_color);
-            let secondary = if exclusion == Exclusion::Itself { tr("excluded").to_string() } else { row.secondary.clone() };
-            if !secondary.is_empty() {
-                let sec = ui.painter().layout_no_wrap(secondary, FontId::proportional(12.0), p.muted);
-                ui.painter().galley(pos2(lx + label.size().x + 8.0, (cy - sec.size().y / 2.0).round()), sec, p.muted);
-            }
-            if selected && state.reveal {
-                ui.scroll_to_rect(rect, Some(egui::Align::Center));
-                state.reveal = false;
-            }
-            resp.widget_info(|| {
-                let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &row.label);
-                info.selected = Some(selected);
-                info
-            });
-
-            ui.ctx().accesskit_node_builder(resp.id,|node|{node.set_role(egui::accesskit::Role::TreeItem);node.set_label(row.label.as_str());node.set_level(row.depth.saturating_add(1));node.set_selected(selected);node.add_action(egui::accesskit::Action::Focus);node.add_action(egui::accesskit::Action::Click);if row.expandable{let expanded=state.expanded.contains(&row.key);node.set_expanded(expanded);node.add_action(if expanded{egui::accesskit::Action::Collapse}else{egui::accesskit::Action::Expand});}});
-            if selected {ui.ctx().accesskit_node_builder(tree_id,|node|node.set_active_descendant(resp.id.accesskit_id()));}
-
-            if resp.clicked() || resp.secondary_clicked() {
-                select_row = Some(i);
-                ui.memory_mut(|m| m.request_focus(tree_id));
-            }
-            if resp.double_clicked() {
-                open_row = Some(i);
-            } else if resp.clicked()
-                && state.single_click && !accessibility_click
-                && let NodeKind::File(p) = &row.kind
-            {
-                actions.push(ExplorerAction::Preview(p.clone()));
-            }
-            if resp.secondary_clicked() {
-                context = Some((i, resp.clone()));
-            }
-            let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
-            if !in_library {
-                resp.context_menu(|ui| {
-                    let rust=state.dir_cache.get(root).is_some_and(|nodes|has_cargo_toml(nodes));
-                    let git = state.git;
-                    context_menu(ui, &rows[i], root, rust, git, exclusion, &attached, &mut actions);
+            let visible_rows = range.clone();
+            for i in range {
+                let row = &rows[i];
+                let width = ui.available_width().max(200.0);
+                let (rect, _) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::hover());
+                let resp = if accessibility {
+                    let parent = parents[i]
+                        .map(|parent| accessibility_ancestor(ui, &rows, &parents, (parent, 0), tree_id, &visible_rows, &mut accessible_ancestors))
+                        .unwrap_or(tree_id);
+                    let row_ui =
+                        ui.new_child(egui::UiBuilder::new().id_salt(("explorer_accessible_row", &row.key)).accessibility_parent(parent).max_rect(rect));
+                    row_ui.interact(rect, tree_id.with(&row.key), Sense::click())
+                } else {
+                    ui.interact(rect, tree_id.with(&row.key), Sense::click())
+                };
+                let accessibility_actions: Vec<_> = ui.input(|input| {
+                    input
+                        .events
+                        .iter()
+                        .filter_map(|event| match event {
+                            egui::Event::AccessKitActionRequest(request)
+                                if request.target_tree == egui::accesskit::TreeId::ROOT && request.target_node == resp.id.accesskit_id() =>
+                            {
+                                Some(request.action)
+                            }
+                            _ => None,
+                        })
+                        .collect()
                 });
+                let accessibility_click = accessibility_actions.contains(&egui::accesskit::Action::Click);
+                if accessibility_actions.iter().any(|action| {
+                    matches!(
+                        action,
+                        egui::accesskit::Action::Focus | egui::accesskit::Action::Click | egui::accesskit::Action::Expand | egui::accesskit::Action::Collapse
+                    )
+                }) {
+                    select_row = Some(i);
+                    state.reveal = true;
+                    ui.memory_mut(|memory| memory.request_focus(tree_id));
+                }
+                if accessibility_click {
+                    open_row = Some(i);
+                }
+                if row.expandable {
+                    let expanded = state.expanded.contains(&row.key);
+                    if accessibility_actions.iter().any(|action| {
+                        matches!(action, egui::accesskit::Action::Expand) && !expanded || matches!(action, egui::accesskit::Action::Collapse) && expanded
+                    }) {
+                        toggle_row = Some(i);
+                    }
+                }
+
+                let selected = selected_index == Some(i);
+                // File colours: a light tint behind the files of a coloured scope.
+                if let NodeKind::File(path) = &row.kind
+                    && let Some(c) = state.scopes.color_of(path)
+                {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, c.gamma_multiply(if p.dark { 0.3 } else { 0.18 }));
+                }
+                if selected {
+                    let color = if state.has_focus { p.selection } else { p.selection_inactive };
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, color);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(rect.shrink2(vec2(6.0, 0.0)), 4.0, p.row_hover);
+                }
+                let x0 = rect.left() + 10.0 + row.depth as f32 * INDENT;
+                let cy = rect.center().y;
+                if row.expandable {
+                    let chevron = if state.expanded.contains(&row.key) { ico::CHEVRON_DOWN } else { ico::CHEVRON_RIGHT };
+                    let cr = Rect::from_center_size(pos2(x0 + 8.0, cy), vec2(16.0, 16.0));
+                    icons::paint(ui.painter(), cr, chevron, &p, true);
+                    if resp.clicked() && !accessibility_click && ui.input(|i| i.pointer.interact_pos()).is_some_and(|pt| pt.x < x0 + 18.0) {
+                        toggle_row = Some(i);
+                    }
+                }
+                // Excluded folders and files are dimmed; the excluded one itself says so.
+                let exclusion = match &row.kind {
+                    NodeKind::Dir(path) | NodeKind::File(path) => state.exclusion(root, path),
+                    _ => Exclusion::No,
+                };
+                let ir = Rect::from_center_size(pos2(x0 + 26.0, cy), vec2(16.0, 16.0));
+                icons::paint(ui.painter(), ir, row.icon, &p, exclusion == Exclusion::No);
+                let text_color = if exclusion == Exclusion::No { p.text } else { p.muted };
+                let label = ui.painter().layout_no_wrap(row.label.clone(), FontId::proportional(13.0), text_color);
+                let lx = x0 + 40.0;
+                ui.painter().galley(pos2(lx, (cy - label.size().y / 2.0).round()), label.clone(), text_color);
+                let secondary = if exclusion == Exclusion::Itself { tr("excluded").to_string() } else { row.secondary.clone() };
+                if !secondary.is_empty() {
+                    let sec = ui.painter().layout_no_wrap(secondary, FontId::proportional(12.0), p.muted);
+                    ui.painter().galley(pos2(lx + label.size().x + 8.0, (cy - sec.size().y / 2.0).round()), sec, p.muted);
+                }
+                if selected && state.reveal {
+                    ui.scroll_to_rect(rect, Some(egui::Align::Center));
+                    state.reveal = false;
+                }
+                resp.widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(egui::Role::Button, true, &row.label);
+                    info.selected = Some(selected);
+                    info
+                });
+
+                ui.ctx().accesskit_node_builder(resp.id, |node| {
+                    node.set_role(egui::accesskit::Role::TreeItem);
+                    node.set_label(row.label.as_str());
+                    node.set_level(row.depth.saturating_add(1));
+                    node.set_selected(selected);
+                    node.add_action(egui::accesskit::Action::Focus);
+                    node.add_action(egui::accesskit::Action::Click);
+                    if row.expandable {
+                        let expanded = state.expanded.contains(&row.key);
+                        node.set_expanded(expanded);
+                        node.add_action(if expanded { egui::accesskit::Action::Collapse } else { egui::accesskit::Action::Expand });
+                    }
+                });
+                if selected {
+                    ui.ctx().accesskit_node_builder(tree_id, |node| node.set_active_descendant(resp.id.accesskit_id()));
+                }
+
+                if resp.clicked() || resp.secondary_clicked() {
+                    select_row = Some(i);
+                    ui.memory_mut(|m| m.request_focus(tree_id));
+                }
+                if resp.double_clicked() {
+                    open_row = Some(i);
+                } else if resp.clicked()
+                    && state.single_click
+                    && !accessibility_click
+                    && let NodeKind::File(p) = &row.kind
+                {
+                    actions.push(ExplorerAction::Preview(p.clone()));
+                }
+                if resp.secondary_clicked() {
+                    context = Some((i, resp.clone()));
+                }
+                let in_library = row_path(&rows[i]).is_some_and(|p| state.in_library(&p)) || matches!(rows[i].kind, NodeKind::Libraries | NodeKind::Library(_));
+                if !in_library {
+                    resp.context_menu(|ui| {
+                        let _rust = state.dir_cache.get(root).is_some_and(|nodes| has_cargo_toml(nodes));
+                        let git = state.git;
+                        context_menu(ui, &rows[i], root, git, exclusion, &attached, &mut actions);
+                    });
+                }
             }
-        }
-        // Empty space below the rows clears focus to the tree too.
-        let rest = ui.available_rect_before_wrap();
-        if rest.height() > 0.0 {
-            let r = ui.allocate_rect(rest, Sense::click());
-            if r.clicked() {
-                ui.memory_mut(|m| m.request_focus(tree_id));
+            // Empty space below the rows clears focus to the tree too.
+            let rest = ui.available_rect_before_wrap();
+            if rest.height() > 0.0 {
+                let r = ui.allocate_rect(rest, Sense::click());
+                if r.clicked() {
+                    ui.memory_mut(|m| m.request_focus(tree_id));
+                }
             }
-        }
-    });
+        });
     });
     let _ = context;
 
@@ -481,22 +616,24 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
             state.reveal = true;
         }
         if pressed(Key::ArrowRight)
-            && let Some(r) = rows.get(cur) {
-                if r.expandable && !state.expanded.contains(&r.key) {
-                    toggle_row = Some(cur);
-                } else if r.expandable {
-                    select_row = Some((cur + 1).min(rows.len() - 1));
-                }
+            && let Some(r) = rows.get(cur)
+        {
+            if r.expandable && !state.expanded.contains(&r.key) {
+                toggle_row = Some(cur);
+            } else if r.expandable {
+                select_row = Some((cur + 1).min(rows.len() - 1));
             }
+        }
         if pressed(Key::ArrowLeft)
-            && let Some(r) = rows.get(cur) {
-                if r.expandable && state.expanded.contains(&r.key) {
-                    toggle_row = Some(cur);
-                } else if let Some(parent) = (0..cur).rev().find(|&j| rows[j].depth < r.depth) {
-                    select_row = Some(parent);
-                    state.reveal = true;
-                }
+            && let Some(r) = rows.get(cur)
+        {
+            if r.expandable && state.expanded.contains(&r.key) {
+                toggle_row = Some(cur);
+            } else if let Some(parent) = (0..cur).rev().find(|&j| rows[j].depth < r.depth) {
+                select_row = Some(parent);
+                state.reveal = true;
             }
+        }
         if pressed(Key::Enter) {
             open_row = Some(cur);
         }
@@ -545,7 +682,7 @@ fn row_path(r: &Row) -> Option<PathBuf> {
     }
 }
 
-fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
+fn context_menu(ui: &mut Ui, row: &Row, root: &Path, git: bool, exclusion: Exclusion, state_attached: &[PathBuf], actions: &mut Vec<ExplorerAction>) {
     ui.set_min_width(220.0);
     ui.set_max_width(280.0);
     let dir_of = |p: &Path, is_dir: bool| if is_dir { p.to_path_buf() } else { p.parent().unwrap_or(p).to_path_buf() };
@@ -559,9 +696,7 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
             return;
         }
     };
-    let target_dir = match &row.kind {
-        _ => dir_of(&path, is_dir),
-    };
+    let target_dir = dir_of(&path, is_dir);
     if let NodeKind::File(p) = &row.kind
         && theme::menu_item(ui, Some(ico::OPEN), tr("Open"), false).clicked()
     {
@@ -600,18 +735,19 @@ fn context_menu(ui: &mut Ui, row: &Row, root: &Path, rust: bool, git: bool, excl
         actions.push(ExplorerAction::OpenInTerminal(target_dir));
         ui.close();
     }
-    if git {
-        if theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
-            actions.push(ExplorerAction::ShowHistory(path.clone()));
-            ui.close();
-        }
+    if git && theme::menu_item(ui, Some(ico::HISTORY), tr("Show Git History"), false).clicked() {
+        actions.push(ExplorerAction::ShowHistory(path.clone()));
+        ui.close();
     }
     // A Cargo.toml other than the workspace's: its project can be analysed with it.
     if matches!(row.kind, NodeKind::File(_)) && path.file_name().is_some_and(|n| n == "Cargo.toml") && path.parent() != Some(root) {
         ui.separator();
         let attached = state_attached.contains(&path);
         let (label, on) = if attached { (tr("Detach Cargo Project"), false) } else { (tr("Attach Cargo Project"), true) };
-        if theme::menu_item(ui, Some(ico::CARGO_TOML), label, false).on_hover_text(tr("Analyse this Cargo project with the workspace, though it is not a member")).clicked() {
+        if theme::menu_item(ui, Some(ico::CARGO_TOML), label, false)
+            .on_hover_text(tr("Analyse this Cargo project with the workspace, though it is not a member"))
+            .clicked()
+        {
             actions.push(ExplorerAction::SetAttached(path.clone(), on));
             ui.close();
         }
@@ -653,7 +789,9 @@ fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut 
         opened
     });
     let field = ui.add(egui::TextEdit::singleline(filter).hint_text(tr("Search file type")).desired_width(260.0));
-    if pass <= opened.saturating_add(1) { field.request_focus(); }
+    if pass <= opened.saturating_add(1) {
+        field.request_focus();
+    }
     let enter = (field.has_focus() || field.lost_focus()) && ui.input(|input| input.key_pressed(Key::Enter));
     ui.separator();
     let query = filter.trim().to_lowercase();
@@ -664,33 +802,42 @@ fn new_item_menu(ui: &mut Ui, target: &Path, filter: &mut String, actions: &mut 
         for entry in ItemKind::RUST_MENU {
             if let Some(kind) = entry {
                 let title = tr(kind.title());
-                if !title.to_lowercase().contains(&query) { continue; }
+                if !title.to_lowercase().contains(&query) {
+                    continue;
+                }
                 let action = ExplorerAction::NewItem(target.to_path_buf(), *kind);
-                if first.is_none() { first = Some(action.clone()); }
+                if first.is_none() {
+                    first = Some(action.clone());
+                }
                 count += 1;
                 if theme::menu_item(ui, Some(kind.icon()), title, false).clicked() {
                     actions.push(action);
                     ui.close();
                 }
-            } else if query.is_empty() { ui.separator(); }
+            } else if query.is_empty() {
+                ui.separator();
+            }
         }
         if tr("Cargo Crate").to_lowercase().contains(&query) {
             ui.separator();
             let action = ExplorerAction::NewCrate(target.to_path_buf());
-            if first.is_none() { first = Some(action.clone()); }
+            if first.is_none() {
+                first = Some(action.clone());
+            }
             count += 1;
             if theme::menu_item(ui, Some(ico::LIBRARY), tr("Cargo Crate"), false).clicked() {
                 actions.push(action);
                 ui.close();
             }
         }
-        if count == 0 { ui.label(tr("No file type matches the filter")); }
+        if count == 0 {
+            ui.label(tr("No file type matches the filter"));
+        }
     });
     if enter && let Some(action) = first {
         actions.push(action);
         ui.close();
     }
-
 }
 
 #[cfg(test)]
@@ -702,8 +849,17 @@ mod tests {
     /// The context menu of a folder, as it would open for `exclusion`; returns what it asked for.
     fn click_in_menu(exclusion: Exclusion, label: &str, absent: &str) -> Vec<ExplorerAction> {
         let root = Path::new("/ws");
-        let row = Row { key: "dir:/ws/gen".into(), kind: NodeKind::Dir(root.join("gen")), depth: 1, label: "gen".into(), secondary: String::new(), icon: ico::FOLDER, expandable: true };
-        let mut h = Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, root, true, false, exclusion, &[], actions), Vec::new());
+        let row = Row {
+            key: "dir:/ws/gen".into(),
+            kind: NodeKind::Dir(root.join("gen")),
+            depth: 1,
+            label: "gen".into(),
+            secondary: String::new(),
+            icon: ico::FOLDER,
+            expandable: true,
+        };
+        let mut h =
+            Harness::new_ui_state(move |ui, actions: &mut Vec<ExplorerAction>| context_menu(ui, &row, root, false, exclusion, &[], actions), Vec::new());
         h.run();
         assert!(h.query_by_label(absent).is_none(), "{absent} is offered");
         h.get_by_label(label).click();
@@ -747,8 +903,15 @@ mod icon_tests {
         }
         let mut state = ExplorerState::default();
         state.expanded.extend(["sln".to_string(), format!("dir:{}", root.join("docs").display())]);
-        let until=std::time::Instant::now()+std::time::Duration::from_secs(5);
-        let rows=loop{let rows=state.rows(root,"app");if !state.io.busy()&&state.dir_cache.contains_key(root)&&state.dir_cache.contains_key(&root.join("docs")){break rows;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));};
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let rows = loop {
+            let rows = state.rows(root, "app");
+            if !state.io.busy() && state.dir_cache.contains_key(root) && state.dir_cache.contains_key(&root.join("docs")) {
+                break rows;
+            }
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
         let icon = |label: &str, depth: usize| rows.iter().find(|r| r.label == label && r.depth == depth).map(|r| r.icon);
         assert_eq!(icon("src", 1), Some(ico::SOURCE_ROOT));
         assert_eq!(icon("tests", 1), Some(ico::TEST_ROOT));
@@ -760,14 +923,113 @@ mod icon_tests {
     }
 }
 
-#[cfg(test)]mod asynchronous_tests {
-use egui_kittest::Harness;
- use super::*;
- fn fixture()->tempfile::TempDir{let root=tempfile::tempdir().unwrap();std::fs::create_dir(root.path().join("src")).unwrap();std::fs::write(root.path().join("Cargo.toml"),"[package]\nname=\"explorer_async_evidence\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();std::fs::write(root.path().join("src/main.rs"),"fn main(){println!(\"Rust tree\");}\n").unwrap();std::fs::write(root.path().join("build.rs"),"fn main(){std::fs::write(\"executed-marker\",\"bad\").unwrap();}").unwrap();root}
- fn wait(state:&mut ExplorerState,root:&Path){let until=std::time::Instant::now()+std::time::Duration::from_secs(5);loop{state.rows(root,"Rust");if !state.io.busy(){return;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}}
- #[test]fn real_directory_cancel_invalidation_and_workspace_switch_reject_old_replies(){let first=fixture();let second=fixture();let mut state=ExplorerState::default();state.expanded.insert("sln".into());assert_eq!(state.rows(first.path(),"Rust").len(),1);assert!(state.dir_cache.is_empty());assert!(state.io.busy());state.io.cancel();wait(&mut state,first.path());assert!(state.dir_cache.is_empty());assert_eq!(state.io.error(&explorer_io::Key::Directory(first.path().into())),Some(explorer_io::Error::Cancelled));state.io.reset();state.rows(first.path(),"Rust");std::fs::write(first.path().join("fresh.rs"),"pub const N:usize=42;").unwrap();state.invalidate(&first.path().join("fresh.rs"));wait(&mut state,first.path());assert!(state.dir_cache[first.path()].iter().any(|node|node.name=="fresh.rs"));assert_eq!(state.rows(second.path(),"Other").len(),1);assert!(state.dir_cache.is_empty());wait(&mut state,second.path());assert!(!state.dir_cache.contains_key(first.path()));assert!(!first.path().join("executed-marker").exists());assert!(!second.path().join("executed-marker").exists());}
- #[test]fn native_tree_waits_for_real_worker_and_refreshes_without_running_cargo(){use egui_kittest::kittest::Queryable;let root=fixture();let path=root.path().to_path_buf();let mut state=ExplorerState::default();state.expanded.insert("sln".into());let mut first=true;let mut h=Harness::new_ui_state(move|ui,state:&mut ExplorerState|{if std::mem::take(&mut first){rc_kit::theme::install_fonts(ui.ctx());return;}let _=show(ui,state,&path,"Rust",None);},state);let until=std::time::Instant::now()+std::time::Duration::from_secs(5);while !h.state().dir_cache.contains_key(root.path()){h.run_steps(2);assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"src");std::fs::write(root.path().join("after_refresh.rs"),"pub const N:usize=42;").unwrap();h.get_by_label(tr("Refresh")).click();loop{h.run_steps(2);if h.state().dir_cache.get(root.path()).is_some_and(|nodes|nodes.iter().any(|node|node.name=="after_refresh.rs")){break;}assert!(std::time::Instant::now()<until);std::thread::sleep(std::time::Duration::from_millis(5));}h.get_by_role_and_label(egui::accesskit::Role::TreeItem,"after_refresh.rs");assert!(!root.path().join("executed-marker").exists());}
- #[test]fn oversized_real_directory_reports_limit_and_refresh_recovers(){let root=fixture();for index in 0..5001{std::fs::write(root.path().join(format!("file-{index}.rs")),"// Rust\n").unwrap();}let mut state=ExplorerState::default();state.expanded.insert("sln".into());wait(&mut state,root.path());assert!(state.dir_cache.is_empty());assert_eq!(state.io.error(&explorer_io::Key::Directory(root.path().into())),Some(explorer_io::Error::Limit));for index in 0..5001{std::fs::remove_file(root.path().join(format!("file-{index}.rs"))).unwrap();}state.io.reset();wait(&mut state,root.path());assert!(state.dir_cache[root.path()].iter().any(|node|node.name=="Cargo.toml"));assert!(!root.path().join("executed-marker").exists());}
+#[cfg(test)]
+mod asynchronous_tests {
+    use super::*;
+    use egui_kittest::Harness;
+    fn fixture() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname=\"explorer_async_evidence\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n")
+            .unwrap();
+        std::fs::write(root.path().join("src/main.rs"), "fn main(){println!(\"Rust tree\");}\n").unwrap();
+        std::fs::write(root.path().join("build.rs"), "fn main(){std::fs::write(\"executed-marker\",\"bad\").unwrap();}").unwrap();
+        root
+    }
+    fn wait(state: &mut ExplorerState, root: &Path) {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            state.rows(root, "Rust");
+            if !state.io.busy() {
+                return;
+            }
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+    #[test]
+    fn real_directory_cancel_invalidation_and_workspace_switch_reject_old_replies() {
+        let first = fixture();
+        let second = fixture();
+        let mut state = ExplorerState::default();
+        state.expanded.insert("sln".into());
+        assert_eq!(state.rows(first.path(), "Rust").len(), 1);
+        assert!(state.dir_cache.is_empty());
+        assert!(state.io.busy());
+        state.io.cancel();
+        wait(&mut state, first.path());
+        assert!(state.dir_cache.is_empty());
+        assert_eq!(state.io.error(&explorer_io::Key::Directory(first.path().into())), Some(explorer_io::Error::Cancelled));
+        state.io.reset();
+        state.rows(first.path(), "Rust");
+        std::fs::write(first.path().join("fresh.rs"), "pub const N:usize=42;").unwrap();
+        state.invalidate(&first.path().join("fresh.rs"));
+        wait(&mut state, first.path());
+        assert!(state.dir_cache[first.path()].iter().any(|node| node.name == "fresh.rs"));
+        assert_eq!(state.rows(second.path(), "Other").len(), 1);
+        assert!(state.dir_cache.is_empty());
+        wait(&mut state, second.path());
+        assert!(!state.dir_cache.contains_key(first.path()));
+        assert!(!first.path().join("executed-marker").exists());
+        assert!(!second.path().join("executed-marker").exists());
+    }
+    #[test]
+    fn native_tree_waits_for_real_worker_and_refreshes_without_running_cargo() {
+        use egui_kittest::kittest::Queryable;
+        let root = fixture();
+        let path = root.path().to_path_buf();
+        let mut state = ExplorerState::default();
+        state.expanded.insert("sln".into());
+        let mut first = true;
+        let mut h = Harness::new_ui_state(
+            move |ui, state: &mut ExplorerState| {
+                if std::mem::take(&mut first) {
+                    rc_kit::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                let _ = show(ui, state, &path, "Rust", None);
+            },
+            state,
+        );
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !h.state().dir_cache.contains_key(root.path()) {
+            h.run_steps(2);
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        h.get_by_role_and_label(egui::accesskit::Role::TreeItem, "src");
+        std::fs::write(root.path().join("after_refresh.rs"), "pub const N:usize=42;").unwrap();
+        h.get_by_label(tr("Refresh")).click();
+        loop {
+            h.run_steps(2);
+            if h.state().dir_cache.get(root.path()).is_some_and(|nodes| nodes.iter().any(|node| node.name == "after_refresh.rs")) {
+                break;
+            }
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        h.get_by_role_and_label(egui::accesskit::Role::TreeItem, "after_refresh.rs");
+        assert!(!root.path().join("executed-marker").exists());
+    }
+    #[test]
+    fn oversized_real_directory_reports_limit_and_refresh_recovers() {
+        let root = fixture();
+        for index in 0..5001 {
+            std::fs::write(root.path().join(format!("file-{index}.rs")), "// Rust\n").unwrap();
+        }
+        let mut state = ExplorerState::default();
+        state.expanded.insert("sln".into());
+        wait(&mut state, root.path());
+        assert!(state.dir_cache.is_empty());
+        assert_eq!(state.io.error(&explorer_io::Key::Directory(root.path().into())), Some(explorer_io::Error::Limit));
+        for index in 0..5001 {
+            std::fs::remove_file(root.path().join(format!("file-{index}.rs"))).unwrap();
+        }
+        state.io.reset();
+        wait(&mut state, root.path());
+        assert!(state.dir_cache[root.path()].iter().any(|node| node.name == "Cargo.toml"));
+        assert!(!root.path().join("executed-marker").exists());
+    }
 }
 
 #[cfg(test)]
@@ -776,10 +1038,13 @@ mod template_picker_tests {
     use egui_kittest::{Harness, kittest::Queryable};
 
     fn picker() -> Harness<'static, (String, Vec<ExplorerAction>)> {
-        Harness::new_ui_state(|ui, state: &mut (String, Vec<ExplorerAction>)| {
-            let button = ui.button("Add template");
-            egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), &mut state.0, &mut state.1));
-        }, (String::new(), Vec::new()))
+        Harness::new_ui_state(
+            |ui, state: &mut (String, Vec<ExplorerAction>)| {
+                let button = ui.button("Add template");
+                egui::Popup::menu(&button).show(|ui| new_item_menu(ui, Path::new("/project/src"), &mut state.0, &mut state.1));
+            },
+            (String::new(), Vec::new()),
+        )
     }
 
     #[test]

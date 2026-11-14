@@ -88,11 +88,7 @@ pub fn prepare(rope: &Rope, cancel: &AtomicBool) -> Result<Input, Error> {
         nodes.extend(node.named_children(&mut cursor));
     }
     comments.sort_by_key(|r| r.start);
-    let mut input = Input {
-        text: String::new(),
-        segments: Vec::new(),
-        source: rope.clone(),
-    };
+    let mut input = Input { text: String::new(), segments: Vec::new(), source: rope.clone() };
     let mut units = 0;
     let mut fenced = false;
     let mut previous_line = None;
@@ -198,18 +194,10 @@ fn replacement(value: &str) -> bool {
         && !value.contains("*/")
         && !value.contains('`')
         && !value.contains("~~~")
-        && !value.chars().any(|c| {
-            c.is_control()
-                || matches!(c,'\u{2028}'|'\u{2029}'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')
-        })
+        && !value.chars().any(|c| c.is_control() || matches!(c,'\u{2028}'|'\u{2029}'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}'))
 }
 
-pub(crate) fn safe_in_source(
-    source: &Rope,
-    range: &Range<usize>,
-    value: &str,
-    first: bool,
-) -> bool {
+pub(crate) fn safe_in_source(source: &Rope, range: &Range<usize>, value: &str, first: bool) -> bool {
     if range.start > range.end || range.end > source.len_chars() || !replacement(value) {
         return false;
     }
@@ -219,83 +207,45 @@ pub(crate) fn safe_in_source(
     let before = range.start.checked_sub(1).map(|at| source.char(at));
     let after = (range.end < source.len_chars()).then(|| source.char(range.end));
     let original = source.slice(range.clone()).to_string();
-    let context = |text: &str| {
-        before
-            .into_iter()
-            .chain(text.chars())
-            .chain(after)
-            .collect::<String>()
-    };
+    let context = |text: &str| before.into_iter().chain(text.chars()).chain(after).collect::<String>();
     for text in [context(&original), context(value)] {
         if text.contains("/*") || text.contains("*/") {
             return false;
         }
     }
-    if range.start >= 2
-        && source.slice(range.start - 2..range.start) == "//"
-        && value.starts_with(['/', '!'])
-    {
+    if range.start >= 2 && source.slice(range.start - 2..range.start) == "//" && value.starts_with(['/', '!']) {
         return false;
     }
     true
 }
 pub fn decode(input: &Input, reply: &Value) -> Result<Vec<Issue>, Error> {
-    let matches = reply
-        .get("matches")
-        .and_then(Value::as_array)
-        .ok_or(Error::Invalid)?;
+    let matches = reply.get("matches").and_then(Value::as_array).ok_or(Error::Invalid)?;
     if matches.len() > 256 {
         return Err(Error::Limit);
     }
     let mut issues = Vec::new();
     for item in matches {
-        let offset = item
-            .get("offset")
-            .and_then(Value::as_u64)
-            .and_then(|n| usize::try_from(n).ok())
-            .ok_or(Error::Invalid)?;
-        let length = item
-            .get("length")
-            .and_then(Value::as_u64)
-            .and_then(|n| usize::try_from(n).ok())
-            .ok_or(Error::Invalid)?;
+        let offset = item.get("offset").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).ok_or(Error::Invalid)?;
+        let length = item.get("length").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).ok_or(Error::Invalid)?;
         let end = offset.checked_add(length).ok_or(Error::Invalid)?;
-        let segment = input
-            .segments
-            .iter()
-            .find(|s| offset >= s.utf16_start && end <= s.utf16_end)
-            .ok_or(Error::Invalid)?;
-        let start =
-            char_offset(&segment.text, offset - segment.utf16_start).ok_or(Error::Invalid)?;
+        let segment = input.segments.iter().find(|s| offset >= s.utf16_start && end <= s.utf16_end).ok_or(Error::Invalid)?;
+        let start = char_offset(&segment.text, offset - segment.utf16_start).ok_or(Error::Invalid)?;
         let end = char_offset(&segment.text, end - segment.utf16_start).ok_or(Error::Invalid)?;
-        if segment
-            .excluded
-            .iter()
-            .any(|r| start < r.end && end > r.start)
-        {
+        if segment.excluded.iter().any(|r| start < r.end && end > r.start) {
             continue;
         }
         let original = segment.text.chars().skip(start).take(end - start).collect();
-        let message = item
-            .get("message")
-            .and_then(Value::as_str)
-            .ok_or(Error::Invalid)?;
+        let message = item.get("message").and_then(Value::as_str).ok_or(Error::Invalid)?;
         if message.len() > 4096 {
             return Err(Error::Limit);
         }
-        let values = item
-            .get("replacements")
-            .and_then(Value::as_array)
-            .ok_or(Error::Invalid)?;
+        let values = item.get("replacements").and_then(Value::as_array).ok_or(Error::Invalid)?;
         if values.len() > 100 {
             return Err(Error::Limit);
         }
         let mut replacements = Vec::new();
         for value in values.iter().take(8) {
-            let value = value
-                .get("value")
-                .and_then(Value::as_str)
-                .ok_or(Error::Invalid)?;
+            let value = value.get("value").and_then(Value::as_str).ok_or(Error::Invalid)?;
             let range = segment.doc_start + start..segment.doc_start + end;
             if !safe_in_source(&input.source, &range, value, start == 0) {
                 continue;
@@ -305,13 +255,8 @@ pub fn decode(input: &Input, reply: &Value) -> Result<Vec<Issue>, Error> {
         issues.push(Issue {
             range: segment.doc_start + start..segment.doc_start + end,
             original,
-            message: message
-                .chars()
-                .take(512)
-                .map(|c| if c.is_control() { ' ' } else { c })
-                .collect(),
-            spelling: item.pointer("/rule/issueType").and_then(Value::as_str)
-                == Some("misspelling"),
+            message: message.chars().take(512).map(|c| if c.is_control() { ' ' } else { c }).collect(),
+            spelling: item.pointer("/rule/issueType").and_then(Value::as_str) == Some("misspelling"),
             replacements,
             at_start: start == 0,
         });
@@ -322,12 +267,7 @@ pub fn decode(input: &Input, reply: &Value) -> Result<Vec<Issue>, Error> {
 pub async fn check(endpoint: &str, language: &str, input: &Input) -> Result<Vec<Issue>, Error> {
     let mut url = crate::local_ai_client::endpoint(endpoint).map_err(|_| Error::Endpoint)?;
     url.set_path("/v2/check");
-    if language.is_empty()
-        || language.len() > 24
-        || !language
-            .bytes()
-            .all(|b| b.is_ascii_alphabetic() || b == b'-')
-    {
+    if language.is_empty() || language.len() > 24 || !language.bytes().all(|b| b.is_ascii_alphabetic() || b == b'-') {
         return Err(Error::Language);
     }
     let client = reqwest::Client::builder()
@@ -338,15 +278,10 @@ pub async fn check(endpoint: &str, language: &str, input: &Input) -> Result<Vec<
         .build()
         .map_err(|_| Error::Network)?;
     let mut form = reqwest::Url::parse("http://127.0.0.1/").map_err(|_| Error::Invalid)?;
-    form.query_pairs_mut()
-        .append_pair("language", language)
-        .append_pair("text", &input.text);
+    form.query_pairs_mut().append_pair("language", language).append_pair("text", &input.text);
     let mut response = client
         .post(url)
-        .header(
-            reqwest::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        )
+        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(form.query().unwrap_or("").to_owned())
         .send()
         .await
@@ -385,18 +320,10 @@ mod tests {
         let reply = json!({"matches":[{"offset":offset,"length":7,"message":"Spelling","rule":{"issueType":"misspelling"},"replacements":[{"value":"spelling"},{"value":"*/ panic!(); /*"},{"value":"new\ncode"}]}]});
         let issues = decode(&input, &reply).unwrap();
         assert_eq!(issues[0].replacements, vec!["spelling"]);
-        assert_eq!(
-            Rope::from_str(source)
-                .slice(issues[0].range.clone())
-                .to_string(),
-            "speling"
-        );
+        assert_eq!(Rope::from_str(source).slice(issues[0].range.clone()).to_string(), "speling");
         let bad = json!({"matches":[{"offset":1,"length":1,"message":"Bad","replacements":[]}]});
         assert!(matches!(decode(&input, &bad), Err(Error::Invalid)));
-        assert!(matches!(
-            prepare(&Rope::from_str(source), &AtomicBool::new(true)),
-            Err(Error::Cancelled)
-        ));
+        assert!(matches!(prepare(&Rope::from_str(source), &AtomicBool::new(true)), Err(Error::Cancelled)));
     }
 
     #[test]
@@ -410,18 +337,8 @@ mod tests {
         assert!(!safe_in_source(&source, &(2..9), "/doc", true));
         assert!(!safe_in_source(&source, &(2..9), "!doc", true));
         assert!(!safe_in_source(&source, &(2..9), "", true));
-        assert!(matches!(
-            prepare(
-                &Rope::from_str("///     let speling=1;\nfn main(){}\n"),
-                &AtomicBool::new(false)
-            ),
-            Err(Error::NoComments)
-        ));
-        let input = prepare(
-            &Rope::from_str("/// Write `speling` here.\nfn main(){}\n"),
-            &AtomicBool::new(false),
-        )
-        .unwrap();
+        assert!(matches!(prepare(&Rope::from_str("///     let speling=1;\nfn main(){}\n"), &AtomicBool::new(false)), Err(Error::NoComments)));
+        let input = prepare(&Rope::from_str("/// Write `speling` here.\nfn main(){}\n"), &AtomicBool::new(false)).unwrap();
         let offset = input.text.find("speling").unwrap();
         let reply = json!({"matches":[{"offset":offset,"length":7,"message":"Code","replacements":[{"value":"spelling"}]}]});
         assert!(decode(&input, &reply).unwrap().is_empty());
@@ -435,9 +352,7 @@ mod tests {
             net::TcpListener,
         };
         fn request(stream: &mut std::net::TcpStream) {
-            stream
-                .set_read_timeout(Some(Duration::from_secs(3)))
-                .unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
             let mut bytes = Vec::new();
             let mut chunk = [0; 4096];
             loop {
@@ -449,11 +364,7 @@ mod tests {
                     let head = String::from_utf8_lossy(&bytes[..end]);
                     let length = head
                         .lines()
-                        .find_map(|line| {
-                            line.to_lowercase()
-                                .strip_prefix("content-length:")
-                                .and_then(|n| n.trim().parse::<usize>().ok())
-                        })
+                        .find_map(|line| line.to_lowercase().strip_prefix("content-length:").and_then(|n| n.trim().parse::<usize>().ok()))
                         .unwrap_or(0);
                     if bytes.len() >= end + 4 + length {
                         return;
@@ -462,10 +373,7 @@ mod tests {
             }
         }
         for (reply, limit) in [
-            (
-                "HTTP/1.1 302 Found\r\nLocation: http://192.0.2.1/never\r\nContent-Length: 0\r\n\r\n",
-                false,
-            ),
+            ("HTTP/1.1 302 Found\r\nLocation: http://192.0.2.1/never\r\nContent-Length: 0\r\n\r\n", false),
             ("HTTP/1.1 200 OK\r\nContent-Length: 2097152\r\n\r\n", true),
         ] {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -475,11 +383,7 @@ mod tests {
                 request(&mut stream);
                 stream.write_all(reply.as_bytes()).unwrap();
             });
-            let input = prepare(
-                &Rope::from_str("// A comment.\nfn main(){}\n"),
-                &AtomicBool::new(false),
-            )
-            .unwrap();
+            let input = prepare(&Rope::from_str("// A comment.\nfn main(){}\n"), &AtomicBool::new(false)).unwrap();
             let result = rc_core::Runtime::block_on(check(&endpoint, "en-US", &input));
             if limit {
                 assert!(matches!(result, Err(Error::Limit)));
@@ -498,22 +402,11 @@ mod tests {
             let mut byte = [0];
             match stream.read(&mut byte) {
                 Ok(0) => (),
-                Err(error)
-                    if matches!(
-                        error.kind(),
-                        std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::UnexpectedEof
-                    ) =>
-                {
-                    ()
-                }
+                Err(error) if matches!(error.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::UnexpectedEof) => (),
                 other => panic!("request did not close after cancellation: {other:?}"),
             }
         });
-        let input = prepare(
-            &Rope::from_str("// A comment.\nfn main(){}\n"),
-            &AtomicBool::new(false),
-        )
-        .unwrap();
+        let input = prepare(&Rope::from_str("// A comment.\nfn main(){}\n"), &AtomicBool::new(false)).unwrap();
         let task = rc_core::Runtime::spawn(async move { check(&endpoint, "en-US", &input).await });
         rx.recv_timeout(Duration::from_secs(3)).unwrap();
         task.abort();

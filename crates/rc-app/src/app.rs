@@ -1,10 +1,13 @@
 //! The application: workspace, open documents, tool window layout, settings and session, and
 //! the frame loop that ties them together.
 
+type CargoLoadResult = (Result<(rc_cargo::CargoWorkspace, rc_cargo::Cargo), String>, Option<rc_cargo::LoadLog>);
+type AttachedCargoLoadResult = Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>;
+
 use crate::docs::Docs;
 use crate::insight::{Insight, InsightOutput, NavKind, Target};
-use crate::runner::Runner;
 use crate::native_menu::{MenuCommand, NativeMenu};
+use crate::runner::Runner;
 use crate::toolwindow::{Dock, ToolWindow};
 use crate::ui::dialogs::Dialog;
 use crate::ui::explorer::{ExplorerAction, ExplorerState};
@@ -192,14 +195,14 @@ pub struct CrabCraftApp {
     statement_completion: Option<crate::complete_statement::Job>,
     fs_inbox: Inbox<FsEvent>,
     _watcher: Option<FileWatcher>,
-    cargo_load: Option<Inbox<(Result<(rc_cargo::CargoWorkspace,rc_cargo::Cargo), String>, Option<rc_cargo::LoadLog>)>>,
+    cargo_load: Option<Inbox<CargoLoadResult>>,
     /// Every load of the Cargo model, newest last (the Build window's Sync tab).
     pub sync_log: crate::sync_log::SyncLog,
     /// What Settings › Tools shows, read once it is needed.
     pub toolchain: Option<rc_cargo::ToolchainInfo>,
     libraries_load: Option<Inbox<(Vec<rc_cargo::Library>, Option<rc_cargo::LoadLog>)>>,
     /// The attached Cargo projects being read.
-    attached_load: Option<Inbox<Vec<(Result<rc_cargo::CargoWorkspace, String>, rc_cargo::LoadLog)>>>,
+    attached_load: Option<Inbox<AttachedCargoLoadResult>>,
     /// rustfmt running on open documents (Reformat Code, reformatting on save).
     pub rustfmt_jobs: crate::rustfmt::Jobs,
     toolchain_load: Option<Inbox<rc_cargo::ToolchainInfo>>,
@@ -246,14 +249,27 @@ pub struct CrabCraftApp {
 
 /// The edits of a compiler suggestion in characters of the editor, which reads `\r\n` as `\n`.
 pub(crate) fn fix_changes(text: &str, fix: &rc_dotnet::diagnostics::Fix) -> Option<Vec<rc_text::Change>> {
-    if fix.edits.len()>256{return None;}
-    let bom=if text.starts_with('\u{feff}'){3}else{0};
-    let chars=|byte:usize|{let prefix=text.get(bom..byte)?;Some(prefix.chars().count()-prefix.matches("\r\n").count())};
-    let mut previous=0;let mut total=0usize;let mut changes=Vec::new();
-    for(start,end,new)in &fix.edits {
-        if *start<previous || end<start || *end>text.len(){return None;}
-        total=total.checked_add(new.len())?;if total>1024*1024{return None;}
-        changes.push(rc_text::Change::new(chars(*start)?,chars(*end)?,new.replace("\r\n","\n")));previous=*end;
+    if fix.edits.len() > 256 {
+        return None;
+    }
+    let bom = if text.starts_with('\u{feff}') { 3 } else { 0 };
+    let chars = |byte: usize| {
+        let prefix = text.get(bom..byte)?;
+        Some(prefix.chars().count() - prefix.matches("\r\n").count())
+    };
+    let mut previous = 0;
+    let mut total = 0usize;
+    let mut changes = Vec::new();
+    for (start, end, new) in &fix.edits {
+        if *start < previous || end < start || *end > text.len() {
+            return None;
+        }
+        total = total.checked_add(new.len())?;
+        if total > 1024 * 1024 {
+            return None;
+        }
+        changes.push(rc_text::Change::new(chars(*start)?, chars(*end)?, new.replace("\r\n", "\n")));
+        previous = *end;
     }
     Some(changes)
 }
@@ -302,7 +318,7 @@ impl CrabCraftApp {
         // the last project.
         let mut from_system = crate::open_files::take();
         from_system.extend(open);
-        let requests=startup_paths(from_system);
+        let requests = startup_paths(from_system);
         app.open_requests(requests);
         app
     }
@@ -490,69 +506,152 @@ impl CrabCraftApp {
     /// Opens a folder or Cargo manifest, restoring its session.
     pub fn open_workspace(&mut self, path: &Path) {
         self.workspace_open.target(path);
-        if !self.disk_save.saves.busy()&&!self.disk_save.auxiliary.busy(){self.disk_save.failed=false;}
+        if !self.disk_save.saves.busy() && !self.disk_save.auxiliary.busy() {
+            self.disk_save.failed = false;
+        }
         // New navigation supersedes a waiting execution/close continuation, while retaining
         // its actual document writers until acknowledgement.
-        self.disk_save.continuation=None;self.disk_save.pending_workspace=None;
+        self.disk_save.continuation = None;
+        self.disk_save.pending_workspace = None;
         self.prepare_workspace_save();
-        let queued=path.to_path_buf();if self.defer_save(false,move|app|app.open_workspace(&queued)){self.disk_save.pending_workspace=Some(path.to_path_buf());return;}
-        let ids=(0..256).map(|_|self.docs.reserve_id()).collect();
-        self.workspace_open.request(crate::workspace_open::Request{path:path.to_path_buf(),fingerprint:crate::workspace_open::Fingerprint::capture(&self.docs),ids,scratch:rc_core::paths::scratches_dir()});
+        let queued = path.to_path_buf();
+        if self.defer_save(false, move |app| app.open_workspace(&queued)) {
+            self.disk_save.pending_workspace = Some(path.to_path_buf());
+            return;
+        }
+        let ids = (0..256).map(|_| self.docs.reserve_id()).collect();
+        self.workspace_open.request(crate::workspace_open::Request {
+            path: path.to_path_buf(),
+            fingerprint: crate::workspace_open::Fingerprint::capture(&self.docs),
+            ids,
+            scratch: rc_core::paths::scratches_dir(),
+        });
     }
 
-    pub fn queue_workspace_files(&mut self,paths:Vec<PathBuf>){
-        if self.workspace_open.target.is_some()||self.disk_save.pending_workspace.is_some(){if let Err(error)=self.workspace_open.queue_files(paths){self.notify(error.to_string(),true);}}else{self.request_open_files(paths);}
-    }
-
-    pub(crate) fn poll_workspace_open(&mut self){
-        if !self.workspace_open.busy()&&self.disk_save.pending_workspace.is_none(){self.workspace_open.target=None;self.workspace_open.files.clear();}
-        if self.disk_save.failed&&self.workspace_open.target.is_some(){self.workspace_open.cancel();return;}
-        let result=self.workspace_open.ready.take().map(Ok).or_else(||self.workspace_open.poll(self.waker.clone()));
-        let Some(result)=result else{return;};
-        match result {
-            Ok(prepared) if self.file_edits.busy()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||!self.rustfmt_jobs.is_empty()||!self.disk_save.format_pending.is_empty()=>{self.workspace_open.ready=Some(prepared);return;},
-            Ok(prepared) if prepared.fingerprint==crate::workspace_open::Fingerprint::capture(&self.docs)=>{
-                if self.session_dirty&&self.workspace.is_some(){if self.workspace.as_ref().is_some_and(|w|w.ws.root==prepared.ws.root){self.workspace_open.reload_session=true;}self.save_session();}
-                if self.file_edits.busy()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||!self.rustfmt_jobs.is_empty()||!self.disk_save.format_pending.is_empty(){self.workspace_open.ready=Some(prepared);return;}
-                if self.workspace_open.reload_session {self.workspace_open.reload_session=false;if let Some(path)=self.workspace_open.target.clone(){self.open_workspace(&path);}return;}
-                let files=std::mem::take(&mut self.workspace_open.files);
-                let mut positions=std::mem::take(&mut self.workspace_open.positions);
-                let previews=std::mem::take(&mut self.workspace_open.previews);
-                self.install_workspace(prepared);self.workspace_open.target=None;
-                if !files.is_empty(){
-                    self.push_nav();let requests=files.into_iter().map(|path|{let mut request=crate::disk_open::Request::new(&mut self.docs,&path,positions.remove(&path));request.preview=previews.contains(&path);request}).collect();
-                    if let Err(error)=self.disk_open.request_many(requests,self.waker.clone()){self.notify(error.to_string(),true);}
-                }
-            },
-            Ok(_)=>{self.workspace_open.cancel();self.notify(crate::workspace_open::Error::Stale.to_string(),true);},
-            Err(error)=>{self.workspace_open.cancel();self.notify(error.to_string(),true);},
+    pub fn queue_workspace_files(&mut self, paths: Vec<PathBuf>) {
+        if self.workspace_open.target.is_some() || self.disk_save.pending_workspace.is_some() {
+            if let Err(error) = self.workspace_open.queue_files(paths) {
+                self.notify(error.to_string(), true);
+            }
+        } else {
+            self.request_open_files(paths);
         }
     }
 
-    fn install_workspace(&mut self,prepared:crate::workspace_open::Prepared){
-        let crate::workspace_open::Prepared{ws,session,docs,attached,linked,runner,watcher,events,warnings,..}=prepared;
-        for warning in warnings{self.notify(warning,true);}
-        let retained_provider=if self.criticalup_provider.selected&&self.workspace.as_ref().is_some_and(|old|old.ws.root==ws.root){Some(std::mem::replace(&mut self.criticalup_provider,crate::criticalup_provider::Provider::new(self.waker.clone())))}else{None};
+    pub(crate) fn poll_workspace_open(&mut self) {
+        if !self.workspace_open.busy() && self.disk_save.pending_workspace.is_none() {
+            self.workspace_open.target = None;
+            self.workspace_open.files.clear();
+        }
+        if self.disk_save.failed && self.workspace_open.target.is_some() {
+            self.workspace_open.cancel();
+            return;
+        }
+        let result = self.workspace_open.ready.take().map(Ok).or_else(|| self.workspace_open.poll(self.waker.clone()));
+        let Some(result) = result else {
+            return;
+        };
+        match result {
+            Ok(prepared)
+                if self.file_edits.busy()
+                    || self.disk_save.saves.busy()
+                    || self.disk_save.auxiliary.busy()
+                    || !self.rustfmt_jobs.is_empty()
+                    || !self.disk_save.format_pending.is_empty() =>
+            {
+                self.workspace_open.ready = Some(prepared);
+            }
+            Ok(prepared) if prepared.fingerprint == crate::workspace_open::Fingerprint::capture(&self.docs) => {
+                if self.session_dirty && self.workspace.is_some() {
+                    if self.workspace.as_ref().is_some_and(|w| w.ws.root == prepared.ws.root) {
+                        self.workspace_open.reload_session = true;
+                    }
+                    self.save_session();
+                }
+                if self.file_edits.busy()
+                    || self.disk_save.saves.busy()
+                    || self.disk_save.auxiliary.busy()
+                    || !self.rustfmt_jobs.is_empty()
+                    || !self.disk_save.format_pending.is_empty()
+                {
+                    self.workspace_open.ready = Some(prepared);
+                    return;
+                }
+                if self.workspace_open.reload_session {
+                    self.workspace_open.reload_session = false;
+                    if let Some(path) = self.workspace_open.target.clone() {
+                        self.open_workspace(&path);
+                    }
+                    return;
+                }
+                let files = std::mem::take(&mut self.workspace_open.files);
+                let mut positions = std::mem::take(&mut self.workspace_open.positions);
+                let previews = std::mem::take(&mut self.workspace_open.previews);
+                self.install_workspace(prepared);
+                self.workspace_open.target = None;
+                if !files.is_empty() {
+                    self.push_nav();
+                    let requests = files
+                        .into_iter()
+                        .map(|path| {
+                            let mut request = crate::disk_open::Request::new(&mut self.docs, &path, positions.remove(&path));
+                            request.preview = previews.contains(&path);
+                            request
+                        })
+                        .collect();
+                    if let Err(error) = self.disk_open.request_many(requests, self.waker.clone()) {
+                        self.notify(error.to_string(), true);
+                    }
+                }
+            }
+            Ok(_) => {
+                self.workspace_open.cancel();
+                self.notify(crate::workspace_open::Error::Stale.to_string(), true);
+            }
+            Err(error) => {
+                self.workspace_open.cancel();
+                self.notify(error.to_string(), true);
+            }
+        }
+    }
+
+    fn install_workspace(&mut self, prepared: crate::workspace_open::Prepared) {
+        let crate::workspace_open::Prepared { ws, session, docs, attached, linked, runner, watcher, events, warnings, .. } = prepared;
+        for warning in warnings {
+            self.notify(warning, true);
+        }
+        let retained_provider = if self.criticalup_provider.selected && self.workspace.as_ref().is_some_and(|old| old.ws.root == ws.root) {
+            Some(std::mem::replace(&mut self.criticalup_provider, crate::criticalup_provider::Provider::new(self.waker.clone())))
+        } else {
+            None
+        };
         self.close_workspace();
-        if let Some(provider)=retained_provider{self.criticalup_provider=provider;}
+        if let Some(provider) = retained_provider {
+            self.criticalup_provider = provider;
+        }
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
         self.missing_crates = crate::missing_crates::MissingCrates::new(self.waker.clone());
         self.cargo_dependencies = crate::cargo_dependencies::CargoDependencies::new(self.waker.clone());
         self.settings.add_recent(ws.key_path().to_path_buf());
         self.settings.last_workspace = Some(ws.key_path().to_path_buf());
-        if let Err(error)=self.disk_save.auxiliary.queue(None,Some(self.settings.clone())){self.notify(error.to_string(),true);}
-        self._watcher=watcher;self.fs_inbox=events;
+        if let Err(error) = self.disk_save.auxiliary.queue(None, Some(self.settings.clone())) {
+            self.notify(error.to_string(), true);
+        }
+        self._watcher = watcher;
+        self.fs_inbox = events;
         // The user's exclusions come first: the index, the analysis and the explorer follow them.
         self.explorer.excluded = rc_core::workspace::clean_excluded(&session.excluded);
         self.insight.set_exclude(self.explorer.excluded.clone());
         // Attached Cargo projects that still exist (the session is from an earlier run).
-        self.explorer.attached=attached;
+        self.explorer.attached = attached;
         self.insight.set_linked(linked);
         self.files.open(&ws.root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.open(&ws.root, self.settings.trusted_projects.contains(&ws.root));
         self.vcs.changelists = session.changelists.clone().clean();
         self.vcs.message = self.vcs.changelists.lists.get(&self.vcs.changelists.active).cloned().unwrap_or_default();
-        self.runner=runner;self.runner.nextest=self.settings.use_nextest;self.runner.external_tools=self.settings.external_tools.clone();
+        self.runner = runner;
+        self.runner.nextest = self.settings.use_nextest;
+        self.runner.external_tools = self.settings.external_tools.clone();
         self.runner.project_root = Some(ws.root.clone());
         self.runner.trusted_project = self.settings.trusted_projects.iter().find(|root| *root == &ws.root).cloned();
         self.runner.project_env = session.project_env.clone();
@@ -560,9 +659,14 @@ impl CrabCraftApp {
         self.cargo_features = clean_features(&session.cargo_features);
         self.insight.set_features(self.cargo_features.clone());
         self.cargo_target = Some(session.cargo_target.trim().to_string()).filter(|t| rc_cargo::valid_triple(t));
-        if self.settings.trusted_projects.contains(&ws.root){self.copyright.open(&ws.root,session.copyright.clone(),self.waker.clone());}else{self.copyright.profile=session.copyright.clone();}
+        if self.settings.trusted_projects.contains(&ws.root) {
+            self.copyright.open(&ws.root, session.copyright.clone(), self.waker.clone());
+        } else {
+            self.copyright.profile = session.copyright.clone();
+        }
         self.explorer.scopes.open(&ws.root, &session.scopes, &session.file_colors);
-        self.inspections = crate::inspection_profile::Profiles { project: session.inspection_profile.clean(), use_project: session.use_project_profile, ..Default::default() };
+        self.inspections =
+            crate::inspection_profile::Profiles { project: session.inspection_profile.clean(), use_project: session.use_project_profile, ..Default::default() };
         self.refresh_inspection_profile();
         self.insight.set_target(self.cargo_target.clone());
         self.cfg_epoch += 1;
@@ -570,7 +674,11 @@ impl CrabCraftApp {
             if self.settings.trusted_projects.iter().any(|p| p == &ws.root) && !self.criticalup_provider.selected {
                 self.insight.start_rust(&ws.root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
             } else {
-                if !self.criticalup_provider.selected{self.insight.wait_for_trust(&ws.root);}else{self.insight.stop();}
+                if !self.criticalup_provider.selected {
+                    self.insight.wait_for_trust(&ws.root);
+                } else {
+                    self.insight.stop();
+                }
             }
         } else {
             self.insight.stop();
@@ -578,10 +686,12 @@ impl CrabCraftApp {
         self.auto_attach_text = session.auto_attach.chars().take(crate::auto_attach::MAX_PATTERNS * (crate::auto_attach::MAX_PATTERN_CHARS + 2)).collect();
         self.cargo_remembered = session.run_configuration.clone();
         let manifest = ws.cargo_manifest().map(Path::to_path_buf);
-        self.docs.style_root=Some(ws.root.clone());
+        self.docs.style_root = Some(ws.root.clone());
         self.workspace = Some(WorkspaceState { ws });
-        self.restore_session(session,docs);
-        if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}
+        self.restore_session(session, docs);
+        if self.criticalup_provider.selected {
+            self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());
+        }
         // Scratches reopened with the session are analysed too.
         // Linked scratch/attached paths were prepared without UI filesystem calls.
         if let Some(manifest) = manifest {
@@ -589,35 +699,72 @@ impl CrabCraftApp {
         }
     }
 
-    pub(crate) fn cargo_choice(&self)->crate::criticalup_provider::Choice{self.criticalup_provider.choice()}
-    pub(crate) fn change_cargo_provider(&mut self,change:crate::criticalup_provider::Change){
+    pub(crate) fn cargo_choice(&self) -> crate::criticalup_provider::Choice {
+        self.criticalup_provider.choice()
+    }
+    pub(crate) fn change_cargo_provider(&mut self, change: crate::criticalup_provider::Change) {
         self.workspace_open.cancel();
         self.cancel_disk_save();
         self.privileged_run.cancel();
-        if self.privileged_debug.running {self.debugger.stop();}self.privileged_debug.cancel();
-        self.runner.stop_all();self.insight.stop();self.repl_starting=None;self.rustfmt_jobs=Default::default();self.inspection=None;
-        self.cargo_load=None;self.libraries_load=None;self.attached_load=None;self.rustc_cfg_load=None;self.triple_load=None;self.toolchain_load=None;self.explain_load=None;self.explanations.clear();
-        self.runner.cargo_workspace=None;self.runner.configs.clear();self.runner.attached.clear();self.explorer.libraries.clear();self.toolchain=None;self.rustc_cfg=None;
-        if self.criticalup_provider.selected{self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());}else{self.runner.set_cargo_tool(None);}
-        let Some(root)=self.workspace.as_ref().map(|w|w.ws.root.clone())else{return;};
-        if !self.settings.trusted_projects.contains(&root){return;}
-        if matches!(change,crate::criticalup_provider::Change::Default){self.insight.start_rust(&root,self.settings.rust_analyzer_path.clone(),self.settings.use_clippy);}
-        if !matches!(change,crate::criticalup_provider::Change::Blocked){if let Some(manifest)=self.workspace.as_ref().and_then(|w|w.ws.cargo_manifest()).map(Path::to_path_buf){self.load_cargo_workspace(manifest);}}
+        if self.privileged_debug.running {
+            self.debugger.stop();
+        }
+        self.privileged_debug.cancel();
+        self.runner.stop_all();
+        self.insight.stop();
+        self.repl_starting = None;
+        self.rustfmt_jobs = Default::default();
+        self.inspection = None;
+        self.cargo_load = None;
+        self.libraries_load = None;
+        self.attached_load = None;
+        self.rustc_cfg_load = None;
+        self.triple_load = None;
+        self.toolchain_load = None;
+        self.explain_load = None;
+        self.explanations.clear();
+        self.runner.cargo_workspace = None;
+        self.runner.configs.clear();
+        self.runner.attached.clear();
+        self.explorer.libraries.clear();
+        self.toolchain = None;
+        self.rustc_cfg = None;
+        if self.criticalup_provider.selected {
+            self.runner.set_cargo_unavailable(crate::criticalup_provider::unavailable());
+        } else {
+            self.runner.set_cargo_tool(None);
+        }
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else {
+            return;
+        };
+        if !self.settings.trusted_projects.contains(&root) {
+            return;
+        }
+        if matches!(change, crate::criticalup_provider::Change::Default) {
+            self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+        }
+        if !matches!(change, crate::criticalup_provider::Change::Blocked)
+            && let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf)
+        {
+            self.load_cargo_workspace(manifest);
+        }
     }
 
     /// Cargo metadata can execute project-selected tools and wrappers, even with --no-deps.
     /// Defer all project tool invocations until the application trust decision.
     fn load_cargo_workspace(&mut self, manifest: PathBuf) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
             let result = match choice.resolve(env) {
                 Ok(cargo) => {
                     let (result, log) = rc_cargo::load_workspace_logged(&cargo, &manifest);
-                    (result.map(|workspace|(workspace,cargo)).map_err(|e| e.to_string()), Some(log))
+                    (result.map(|workspace| (workspace, cargo)).map_err(|e| e.to_string()), Some(log))
                 }
                 Err(error) => (Err(error), None),
             };
@@ -651,14 +798,14 @@ impl CrabCraftApp {
             self.cfg_epoch += 1;
         }
         let Some(inbox) = &self.cargo_load else { return };
-        for (result, log) in inbox.drain() {
+        if let Some((result, log)) = inbox.drain().into_iter().next() {
             if let Some(log) = log {
                 self.sync_log.push(crate::sync_log::SyncKind::Project, log);
             }
             match result {
-                Ok((workspace,cargo)) => {
+                Ok((workspace, cargo)) => {
                     let root = workspace.root.clone();
-                    self.runner.set_cargo_workspace_with_tool(workspace,Some(cargo), self.cargo_remembered.as_deref());
+                    self.runner.set_cargo_workspace_with_tool(workspace, Some(cargo), self.cargo_remembered.as_deref());
                     self.prune_features();
                     self.cfg_epoch += 1;
                     self.load_rustc_cfg(root.clone());
@@ -669,14 +816,15 @@ impl CrabCraftApp {
                 Err(e) => self.notify(trf("Could not read the Cargo project: {error}", &[("error", &e)]), true),
             }
             self.cargo_load = None;
-            return;
         }
     }
 
     /// Reads the attached Cargo projects in the background (their binaries become run
     /// configurations).
     fn load_attached(&mut self) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let manifests = self.explorer.attached.clone();
         if manifests.is_empty() {
             self.attached_load = None;
@@ -686,13 +834,21 @@ impl CrabCraftApp {
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
-            let Ok(cargo) = choice.resolve(env) else {out.send(Vec::new()); return };
-            out.send(manifests.iter().map(|m| {
-                let (result, log) = rc_cargo::load_workspace_logged(&cargo, m);
-                (result.map_err(|e| e.to_string()), log)
-            }).collect());
+            let Ok(cargo) = choice.resolve(env) else {
+                out.send(Vec::new());
+                return;
+            };
+            out.send(
+                manifests
+                    .iter()
+                    .map(|m| {
+                        let (result, log) = rc_cargo::load_workspace_logged(&cargo, m);
+                        (result.map_err(|e| e.to_string()), log)
+                    })
+                    .collect(),
+            );
         });
         self.attached_load = Some(inbox);
     }
@@ -700,15 +856,20 @@ impl CrabCraftApp {
     /// Reads the dependencies in the background; without an up-to-date `Cargo.lock` only the
     /// standard library is known.
     fn load_libraries(&mut self) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
         let project = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
-            let Ok(cargo) = choice.resolve(env) else {out.send((Vec::new(),None)); return };
+            let Ok(cargo) = choice.resolve(env) else {
+                out.send((Vec::new(), None));
+                return;
+            };
             let (list, log) = rc_cargo::load_libraries_logged(&cargo, &manifest);
             let mut list = list.unwrap_or_default();
             let info = rc_cargo::detect_toolchain(Some(&cargo), None, project.as_deref());
@@ -729,7 +890,9 @@ impl CrabCraftApp {
     }
 
     pub fn commit_changes(&mut self, push: bool) {
-        if self.defer_save(true,move |app|app.commit_changes(push)){return;}
+        if self.defer_save(true, move |app| app.commit_changes(push)) {
+            return;
+        }
         self.save_all_docs();
         let format = self.commit_format();
         self.vcs.commit(push, format);
@@ -763,16 +926,33 @@ impl CrabCraftApp {
     pub fn rustfmt_document(&mut self, i: usize, save: bool) -> bool {
         let doc = &self.docs.list[i];
         let rust = doc.path.extension().is_some_and(|e| e == "rs");
-        let Some(edition) = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path)).filter(|_| rust).map(str::to_string) else { return false };
-        let doc=&self.docs.list[i];
-        let text=doc.editor.buffer.snapshot();
-        let job=rc_cargo::FormatJob::configured(self.runner.cargo_tool(),self.settings.rustfmt.clone(),doc.path.clone(),edition,move||text.to_string(),crate::vcs::rustfmt_failure,self.waker.clone());
+        let Some(edition) = self.runner.cargo_workspace.as_ref().and_then(|w| w.edition_of(&doc.path)).filter(|_| rust).map(str::to_string) else {
+            return false;
+        };
+        let doc = &self.docs.list[i];
+        let text = doc.editor.buffer.snapshot();
+        let job = rc_cargo::FormatJob::configured(
+            self.runner.cargo_tool(),
+            self.settings.rustfmt.clone(),
+            doc.path.clone(),
+            edition,
+            move || text.to_string(),
+            crate::vcs::rustfmt_failure,
+            self.waker.clone(),
+        );
         // Reformat Code with a selection: rustfmt formats the file and only the changes
         // touching the selected lines are kept.
         let sel = doc.editor.selection.primary();
         let lines = (!save && !sel.is_empty()).then(|| {
             let rope = doc.editor.buffer.rope();
-            let last = if sel.end() > sel.start() && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start()) && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end() { rope.char_to_line(sel.end()) - 1 } else { rope.char_to_line(sel.end()) };
+            let last = if sel.end() > sel.start()
+                && rope.char_to_line(sel.end()) > rope.char_to_line(sel.start())
+                && rope.line_to_char(rope.char_to_line(sel.end())) == sel.end()
+            {
+                rope.char_to_line(sel.end()) - 1
+            } else {
+                rope.char_to_line(sel.end())
+            };
             (rope.char_to_line(sel.start()), last)
         });
         self.rustfmt_jobs.push_lines(doc.editor.id, doc.editor.buffer.version(), save, lines, job);
@@ -789,16 +969,18 @@ impl CrabCraftApp {
                 crate::rustfmt::Done::Applied { index, save } => {
                     self.insight.flush(&mut self.docs.list[index]);
                     if save && self.docs.list[index].is_modified() {
-                        self.save_document_async(index,false);
+                        self.save_document_async(index, false);
                     }
                 }
                 // Saving half-written code is common; only an explicit Reformat Code reports.
-                crate::rustfmt::Done::Skipped { index, save:true } => self.save_document_async(index,false),
-                crate::rustfmt::Done::Skipped { .. } => {},
+                crate::rustfmt::Done::Skipped { index, save: true } => self.save_document_async(index, false),
+                crate::rustfmt::Done::Skipped { .. } => {}
                 crate::rustfmt::Done::Failed { name, error, save: true } => {
                     self.disk_save.fail();
-                    if let Some(index)=self.docs.list.iter().position(|d|d.name()==name){self.save_document_async(index,false);}
-                    self.notify(trf("rustfmt failed on {file}: {error}",&[("file",&name),("error",&error)]),true);
+                    if let Some(index) = self.docs.list.iter().position(|d| d.name() == name) {
+                        self.save_document_async(index, false);
+                    }
+                    self.notify(trf("rustfmt failed on {file}: {error}", &[("file", &name), ("error", &error)]), true);
                 }
                 crate::rustfmt::Done::Failed { name, error, save: false } => {
                     let first = error.lines().find(|l| !l.trim().is_empty()).unwrap_or_default().to_string();
@@ -810,7 +992,9 @@ impl CrabCraftApp {
 
     /// Reads the versions of the toolchain in the background, once.
     pub fn load_toolchain(&mut self) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         if let Some(inbox) = &self.toolchain_load {
             if let Some(info) = inbox.drain().into_iter().last() {
                 self.toolchain = Some(info);
@@ -825,7 +1009,7 @@ impl CrabCraftApp {
         let configured = self.settings.rust_analyzer_path.clone();
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
             let analyzer = rc_cargo::locate_rust_analyzer(configured.as_deref());
             out.send(rc_cargo::detect_toolchain(choice.resolve(Vec::new()).ok().as_ref(), analyzer.as_deref(), project.as_deref()));
@@ -835,7 +1019,9 @@ impl CrabCraftApp {
 
     /// `rustup`, if Rust was installed with it.
     pub fn rustup(&self) -> Option<PathBuf> {
-        if self.criticalup_provider.selected{return None;}
+        if self.criticalup_provider.selected {
+            return None;
+        }
         rc_cargo::Cargo::locate().and_then(|c| rc_cargo::rustup_path(&c))
     }
 
@@ -874,7 +1060,9 @@ impl CrabCraftApp {
             self.toolchain = None;
             self.toolchain_load = None;
             self.toolchain_updates = None;
-            if !self.criticalup_provider.selected{self.runner.set_cargo_tool(cargo);}
+            if !self.criticalup_provider.selected {
+                self.runner.set_cargo_tool(cargo);
+            }
             if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest()).map(Path::to_path_buf) {
                 self.load_cargo_workspace(manifest);
             }
@@ -947,7 +1135,9 @@ impl CrabCraftApp {
         match self.feature_state(&package, &name) {
             Some(FeatureState::Off) => self.set_cargo_feature(&package.name, &name, true),
             Some(FeatureState::Chosen) => self.set_cargo_feature(&package.name, &name, false),
-            Some(FeatureState::Implied) => self.notify(trf("The feature {name} is turned on by default or by another enabled feature", &[("name", &name)]), false),
+            Some(FeatureState::Implied) => {
+                self.notify(trf("The feature {name} is turned on by default or by another enabled feature", &[("name", &name)]), false)
+            }
             None => {}
         }
     }
@@ -991,7 +1181,12 @@ impl CrabCraftApp {
         let package = self.package_of_manifest(&doc.path);
         let lines = rc_cargo::feature_lines(&doc.editor.buffer.rope().to_string());
         let icons: Vec<(usize, GutterIcon)> = match &package {
-            Some(p) => lines.into_iter().filter_map(|(line, name)| self.feature_state(p, &name).map(|s| (line, if s == FeatureState::Off { GutterIcon::FeatureOff } else { GutterIcon::FeatureOn }))).collect(),
+            Some(p) => lines
+                .into_iter()
+                .filter_map(|(line, name)| {
+                    self.feature_state(p, &name).map(|s| (line, if s == FeatureState::Off { GutterIcon::FeatureOff } else { GutterIcon::FeatureOn }))
+                })
+                .collect(),
             None => Vec::new(),
         };
         let doc = &mut self.docs.list[i];
@@ -1125,11 +1320,13 @@ impl CrabCraftApp {
     /// Asks rustc for the `cfg` of the chosen target (or the host) in the background; it
     /// compiles nothing.
     fn load_rustc_cfg(&mut self, dir: PathBuf) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let target = self.cargo_target.clone();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
             // Without a choice, what Cargo and rust-analyzer build for: the project's
             // `[build] target`, else the host.
@@ -1142,10 +1339,12 @@ impl CrabCraftApp {
     /// Reads the host triple and the targets to offer (rustup's, the project's `[build] target`)
     /// in the background. Nothing of the project runs.
     fn load_triples(&mut self, root: PathBuf) {
-        if self.runner.require_trust().is_err() { return; }
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || out.send(rc_cargo::load_triple_choices(choice.resolve(Vec::new()).ok().as_ref(), &root)));
         self.triple_load = Some(inbox);
     }
@@ -1203,7 +1402,13 @@ impl CrabCraftApp {
             self.cfg_given.insert(doc.editor.id, epoch);
             let package = self.runner.cargo_workspace.iter().chain(&self.runner.attached).find_map(|w| w.package_of(&doc.path));
             let set = match (package, &self.rustc_cfg) {
-                (Some(p), Some(cfg)) => Some(sets.entry(p.manifest.clone()).or_insert_with(|| std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&p.chosen_features(&self.cargo_features))))).clone()),
+                (Some(p), Some(cfg)) => Some(
+                    sets.entry(p.manifest.clone())
+                        .or_insert_with(|| {
+                            std::sync::Arc::new(rc_syntax::CfgSet::from_rustc(cfg, &p.enabled_features(&p.chosen_features(&self.cargo_features))))
+                        })
+                        .clone(),
+                ),
                 _ => None,
             };
             doc.editor.set_cfg(set);
@@ -1212,12 +1417,14 @@ impl CrabCraftApp {
 
     /// Reads the dependency tree of `package` in the background; `cargo tree` builds nothing.
     pub fn load_dep_tree(&mut self, manifest: PathBuf, package: String) {
-        if self.runner.require_trust().is_err(){return;}
+        if self.runner.require_trust().is_err() {
+            return;
+        }
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let env = self.runner.project_env_pairs();
         let (m, p) = (manifest.clone(), package.clone());
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
             let result = match choice.resolve(env) {
                 Ok(cargo) => {
@@ -1268,7 +1475,13 @@ impl CrabCraftApp {
     /// Runs a target of an attached Cargo project: a binary through its run configuration,
     /// the rest with Cargo and the project's own manifest.
     pub fn run_attached_target(&mut self, ctx: &Context, manifest: &Path, package: &str, target: &rc_cargo::Target) {
-        let c=ctx.clone();let m=manifest.to_path_buf();let p=package.to_string();let t=target.clone();if self.defer_save(true,move|app|app.run_attached_target(&c,&m,&p,&t)){return;}
+        let c = ctx.clone();
+        let m = manifest.to_path_buf();
+        let p = package.to_string();
+        let t = target.clone();
+        if self.defer_save(true, move |app| app.run_attached_target(&c, &m, &p, &t)) {
+            return;
+        }
         let folder = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let name = format!("{} ({folder})", target.name);
         if target.kind == rc_cargo::TargetKind::Bin
@@ -1298,7 +1511,10 @@ impl CrabCraftApp {
     }
 
     fn run_cargo_args(&mut self, args: Vec<String>) {
-        let queued=args.clone();if self.defer_save(true,move |app|app.run_cargo_args(queued)){return;}
+        let queued = args.clone();
+        if self.defer_save(true, move |app| app.run_cargo_args(queued)) {
+            return;
+        }
         self.save_all_docs();
         let outs = self.runner.cargo_command(args);
         crate::ui::run_windows::handle_outputs(self, outs);
@@ -1351,7 +1567,7 @@ impl CrabCraftApp {
             self.settings.trusted_projects.push(root.clone());
             let _ = self.settings.save();
         }
-        self.copyright.open(&root,self.copyright.profile.clone(),self.waker.clone());
+        self.copyright.open(&root, self.copyright.profile.clone(), self.waker.clone());
         self.runner.trusted_project = Some(root.clone());
         if !self.vcs.trusted {
             // The deferred discovery must keep the session's changelists and draft.
@@ -1362,7 +1578,11 @@ impl CrabCraftApp {
             self.vcs.message = message;
         }
         if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
-            if !self.criticalup_provider.selected{self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);}else{self.insight.stop();}
+            if !self.criticalup_provider.selected {
+                self.insight.start_rust(&root, self.settings.rust_analyzer_path.clone(), self.settings.use_clippy);
+            } else {
+                self.insight.stop();
+            }
             self.load_cargo_workspace(manifest);
         }
         self.toolchain = None;
@@ -1374,7 +1594,9 @@ impl CrabCraftApp {
     pub(crate) fn trust_project_tools_for_test(&mut self) {
         self.wait_workspace_open();
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
-        if !self.settings.trusted_projects.contains(&root) { self.settings.trusted_projects.push(root.clone()); }
+        if !self.settings.trusted_projects.contains(&root) {
+            self.settings.trusted_projects.push(root.clone());
+        }
         self.runner.trusted_project = Some(root.clone());
         if !self.vcs.trusted {
             let changelists = self.vcs.changelists.clone();
@@ -1383,20 +1605,28 @@ impl CrabCraftApp {
             self.vcs.changelists = changelists;
             self.vcs.message = message;
         }
-        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) { self.load_cargo_workspace(manifest); }
+        if let Some(manifest) = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf)) {
+            self.load_cargo_workspace(manifest);
+        }
     }
 
     /// Throws away what the IDE derived from the project and builds it again: open files from
     /// disk, the file index, Git status, the Cargo model and rust-analyzer. Tabs, terminals and
     /// running programs stay. `clean` also deletes Cargo's build output.
     pub fn invalidate_caches(&mut self, clean: bool) {
-        if self.defer_save(clean,move|app|app.invalidate_caches(clean)){return;}
+        if self.defer_save(clean, move |app| app.invalidate_caches(clean)) {
+            return;
+        }
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
         let paths: Vec<PathBuf> = self.docs.list.iter().map(|doc| doc.path.clone()).collect();
         for path in paths {
-            if let Err(error) = self.disk_watch.queue(&mut self.docs, &path) { self.notify(error.to_string(), true); }
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &path) {
+                self.notify(error.to_string(), true);
+            }
         }
-        for doc in &mut self.docs.list { doc.editor.request_parse(&self.docs.pool); }
+        for doc in &mut self.docs.list {
+            doc.editor.request_parse(&self.docs.pool);
+        }
         self.files.open(&root, self.waker.clone(), self.explorer.excluded.clone());
         self.vcs.refresh();
         let manifest = self.workspace.as_ref().and_then(|w| w.ws.cargo_manifest().map(Path::to_path_buf));
@@ -1463,16 +1693,22 @@ impl CrabCraftApp {
     /// begins.
     pub fn close_project(&mut self) {
         self.prepare_workspace_save();
-        if self.defer_save(false,|app|app.close_project()){return;}
+        if self.defer_save(false, |app| app.close_project()) {
+            return;
+        }
         self.close_workspace();
         self.settings.last_workspace = None;
-        if let Err(error)=self.disk_save.auxiliary.queue(None,Some(self.settings.clone())){self.notify(error.to_string(),true);}
+        if let Err(error) = self.disk_save.auxiliary.queue(None, Some(self.settings.clone())) {
+            self.notify(error.to_string(), true);
+        }
     }
 
     pub fn close_workspace(&mut self) {
         self.workspace_open.cancel();
         self.prepare_workspace_save();
-        if self.defer_save(false,|app|app.close_workspace()){return;}
+        if self.defer_save(false, |app| app.close_workspace()) {
+            return;
+        }
         self.disk_watch = Default::default();
         self.disk_open = Default::default();
         self.file_edits = Default::default();
@@ -1480,7 +1716,7 @@ impl CrabCraftApp {
         self.statement_completion = None;
         self.stop_all_debug_sessions();
         self.debug_sessions = Default::default();
-        self.disk_save.transition_prepared=false;
+        self.disk_save.transition_prepared = false;
         self.workspace = None;
         self.auto_attach = None;
         self._watcher = None;
@@ -1504,7 +1740,9 @@ impl CrabCraftApp {
         self.shelves = crate::shelves::Shelves::new(self.waker.clone());
         self.database = crate::database::Database::new(self.waker.clone());
         self.remote = crate::remote::Remote::new(self.waker.clone());
-        if let Some(remote) = &mut self.remote_development { remote.disconnect(); }
+        if let Some(remote) = &mut self.remote_development {
+            remote.disconnect();
+        }
         self.http = crate::http_client::HttpClient::new(self.waker.clone());
         self.endpoints = crate::endpoints::Endpoints::new(self.waker.clone());
         self.borrow_errors = crate::borrow_errors::BorrowErrors::new(self.waker.clone());
@@ -1545,7 +1783,7 @@ impl CrabCraftApp {
         self.refresh_inspection_profile();
     }
 
-    fn restore_session(&mut self, s: Session, prepared:Vec<(usize,crate::docs::Doc,bool)>) {
+    fn restore_session(&mut self, s: Session, prepared: Vec<(usize, crate::docs::Doc, bool)>) {
         self.hosting.restore(s.hosting.clone());
         self.issue_tracker.restore(s.issue_tracker.clone());
         // A project without a layout of its own starts with the last one used.
@@ -1556,11 +1794,18 @@ impl CrabCraftApp {
             self.explorer.expanded.insert("sln".into());
         }
         // Editor id of each file of the session, for the layout.
-        let mut ids=vec![None;s.files.len()];
-        for(original,doc,parse)in prepared {
-            let index=self.docs.insert_prepared(doc,false,parse);if let Some(id)=ids.get_mut(original){*id=Some(self.docs.list[index].editor.id);}
+        let mut ids = vec![None; s.files.len()];
+        for (original, doc, parse) in prepared {
+            let index = self.docs.insert_prepared(doc, false, parse);
+            if let Some(id) = ids.get_mut(original) {
+                *id = Some(self.docs.list[index].editor.id);
+            }
         }
-        self.docs.active=s.active.and_then(|original|ids.get(original).copied().flatten()).and_then(|id|self.docs.list.iter().position(|d|d.editor.id==id)).or_else(||(!self.docs.list.is_empty()).then_some(0));
+        self.docs.active = s
+            .active
+            .and_then(|original| ids.get(original).copied().flatten())
+            .and_then(|id| self.docs.list.iter().position(|d| d.editor.id == id))
+            .or_else(|| (!self.docs.list.is_empty()).then_some(0));
         self.layout = crate::layout::Layout::from_session(s.editor_layout.as_ref(), &s.editor_windows, |i| ids.get(i).copied().flatten());
         self.sync_layout();
         for (path, lines) in &s.bookmarks {
@@ -1640,21 +1885,30 @@ impl CrabCraftApp {
     }
 
     pub fn session(&self) -> Session {
-        let persisted:Vec<_>=self.docs.list.iter().filter(|doc|!doc.generated).collect();
-        let files = persisted.iter().map(|d| {
+        let persisted: Vec<_> = self.docs.list.iter().filter(|doc| !doc.generated).collect();
+        let files = persisted
+            .iter()
+            .map(|d| {
                 let (line, col) = d.editor.caret_line_col();
                 let folded = d.editor.syntax.folds().iter().filter(|f| d.editor.is_folded(f.start_line)).map(|f| f.start_line).collect();
                 OpenFile { path: d.path.clone(), line, col, scroll_y: d.editor.scroll_offset().y, folded, pinned: d.pinned }
             })
             .collect();
         let all_breakpoints = self.docs.all_breakpoints();
-        let breakpoints = all_breakpoints.iter().map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect())).collect();
+        let breakpoints = all_breakpoints
+            .iter()
+            .map(|(p, b)| (p.clone(), b.keys().map(|l| (*l, self.debugger.conditions.get(&(p.clone(), *l)).cloned())).collect()))
+            .collect();
         let (editor_layout, editor_windows) = self.layout.to_session(|id| persisted.iter().position(|d| d.editor.id == id));
         Session {
             hosting: Some(self.hosting.config.clone()),
             issue_tracker: Some(self.issue_tracker.config.clone()),
             files,
-            active: self.docs.active.and_then(|index|self.docs.list.get(index)).and_then(|doc|persisted.iter().position(|item|item.editor.id==doc.editor.id)),
+            active: self
+                .docs
+                .active
+                .and_then(|index| self.docs.list.get(index))
+                .and_then(|doc| persisted.iter().position(|item| item.editor.id == doc.editor.id)),
             editor_layout: Some(editor_layout),
             editor_windows,
             tool_windows: self.dock.to_session(),
@@ -1675,7 +1929,11 @@ impl CrabCraftApp {
                 lists
             },
             excluded: self.explorer.excluded.clone(),
-            attached_projects: self.workspace.as_ref().map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect()).unwrap_or_default(),
+            attached_projects: self
+                .workspace
+                .as_ref()
+                .map(|w| self.explorer.attached.iter().filter_map(|p| rc_core::workspace::relative_path(&w.ws.root, p)).collect())
+                .unwrap_or_default(),
             project_env: self.runner.project_env.clone(),
             cargo_features: self.cargo_features.clone(),
             cargo_target: self.cargo_target.clone().unwrap_or_default(),
@@ -1693,18 +1951,30 @@ impl CrabCraftApp {
                 .map(|(p, b)| (p.clone(), b.iter().filter(|(_, k)| **k == rc_editor::BreakpointKind::Disabled).map(|(l, _)| *l).collect::<Vec<_>>()))
                 .filter(|(_, v)| !v.is_empty())
                 .collect(),
-            breakpoint_groups: group_lines(self.debugger.groups.iter().filter(|((p, l), _)| all_breakpoints.get(p).is_some_and(|b| b.contains_key(l))).map(|((p, l), g)| (p.clone(), (*l, g.clone())))),
+            breakpoint_groups: group_lines(
+                self.debugger
+                    .groups
+                    .iter()
+                    .filter(|((p, l), _)| all_breakpoints.get(p).is_some_and(|b| b.contains_key(l)))
+                    .map(|((p, l), g)| (p.clone(), (*l, g.clone()))),
+            ),
         }
     }
 
     pub fn save_session(&mut self) {
         let layout = self.dock.to_session();
         let settings = if self.workspace.is_some() && self.settings.tool_windows != layout {
-            self.settings.tool_windows=layout;Some(self.settings.clone())
-        } else {None};
-        let session=self.workspace.as_ref().map(|w|(w.ws.key_path().to_path_buf(),self.session()));
-        if let Err(error)=self.disk_save.auxiliary.queue(session,settings){self.disk_save.fail();self.notify(error.to_string(),true);}
-        self.session_dirty=false;
+            self.settings.tool_windows = layout;
+            Some(self.settings.clone())
+        } else {
+            None
+        };
+        let session = self.workspace.as_ref().map(|w| (w.ws.key_path().to_path_buf(), self.session()));
+        if let Err(error) = self.disk_save.auxiliary.queue(session, settings) {
+            self.disk_save.fail();
+            self.notify(error.to_string(), true);
+        }
+        self.session_dirty = false;
     }
 
     /// Opens the Local History dialog for document `i`; its versions load in the background.
@@ -1716,13 +1986,21 @@ impl CrabCraftApp {
     }
 
     pub fn request_disk_revert(&mut self, index: usize) {
-        let Some(doc) = self.docs.list.get(index) else { return; };
-        if doc.generated { self.notify(tr("Generated documents cannot be reverted from disk"), false); return; }
+        let Some(doc) = self.docs.list.get(index) else {
+            return;
+        };
+        if doc.generated {
+            self.notify(tr("Generated documents cannot be reverted from disk"), false);
+            return;
+        }
         let ticket = crate::disk_revert::Ticket::capture(doc);
         let dirty = doc.is_modified();
         self.disk_revert = None;
-        if dirty { self.dialog = Some(Dialog::RevertDisk(ticket)); }
-        else { self.start_disk_revert(ticket); }
+        if dirty {
+            self.dialog = Some(Dialog::RevertDisk(ticket));
+        } else {
+            self.start_disk_revert(ticket);
+        }
     }
 
     pub fn start_disk_revert(&mut self, ticket: crate::disk_revert::Ticket) {
@@ -1737,10 +2015,16 @@ impl CrabCraftApp {
     }
 
     fn poll_disk_revert(&mut self) {
-        let Some(result) = self.disk_revert.as_ref().and_then(crate::disk_revert::Job::poll) else { return; };
-        let Some(job) = self.disk_revert.take() else { return; };
+        let Some(result) = self.disk_revert.as_ref().and_then(crate::disk_revert::Job::poll) else {
+            return;
+        };
+        let Some(job) = self.disk_revert.take() else {
+            return;
+        };
         match result.and_then(|snapshot| crate::disk_revert::apply(&mut self.docs, &job.ticket, snapshot)) {
-            Ok(_) => { self.session_dirty = true; }
+            Ok(_) => {
+                self.session_dirty = true;
+            }
             Err(error) => self.notify(error.to_string(), true),
         }
     }
@@ -1748,28 +2032,67 @@ impl CrabCraftApp {
     /// Saves the edited documents once the user stopped typing for the configured delay. It
     /// skips rustfmt so the text never moves under the caret, and retries while other edits run.
     fn autosave_when_idle(&mut self, ctx: &Context) {
-        let input = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Paste(_) | egui::Event::Cut | egui::Event::Ime(_) | egui::Event::PointerButton { .. })));
-        if input { self.last_input = std::time::Instant::now(); self.idle_saved = false; }
-        if !self.settings.autosave_idle || self.idle_saved { return; }
-        let edited: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated && !d.editor.read_only).map(|(i, _)| i).collect();
-        if edited.is_empty() { return; }
+        let input = ctx.input(|i| {
+            i.events.iter().any(|e| {
+                matches!(
+                    e,
+                    egui::Event::Key { .. }
+                        | egui::Event::Text(_)
+                        | egui::Event::Paste(_)
+                        | egui::Event::Cut
+                        | egui::Event::Ime(_)
+                        | egui::Event::PointerButton { .. }
+                )
+            })
+        });
+        if input {
+            self.last_input = std::time::Instant::now();
+            self.idle_saved = false;
+        }
+        if !self.settings.autosave_idle || self.idle_saved {
+            return;
+        }
+        let edited: Vec<usize> =
+            self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated && !d.editor.read_only).map(|(i, _)| i).collect();
+        if edited.is_empty() {
+            return;
+        }
         let delay = std::time::Duration::from_secs(u64::from(self.settings.autosave_delay_secs.clamp(1, 600)));
         let idle = self.last_input.elapsed();
-        if idle < delay { ctx.request_repaint_after(delay - idle); return; }
-        if self.file_edits.busy() || self.disk_save.continuation.is_some() { ctx.request_repaint_after(std::time::Duration::from_millis(500)); return; }
+        if idle < delay {
+            ctx.request_repaint_after(delay - idle);
+            return;
+        }
+        if self.file_edits.busy() || self.disk_save.continuation.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(500));
+            return;
+        }
         self.idle_saved = true;
-        for i in edited { self.save_document_async(i, false); }
+        for i in edited {
+            self.save_document_async(i, false);
+        }
     }
 
     pub fn save_all_docs(&mut self) {
-        if self.disk_save.continuation.is_none() && !self.disk_save.saves.busy() && !self.disk_save.auxiliary.busy() && self.rustfmt_jobs.is_empty() { self.disk_save.failed = false; }
-        if self.file_edits.busy(){if self.disk_save.continuation.is_none(){self.defer_save(false,|app|app.save_all_docs());}return;}
-        let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated).map(|(i,_)| i).collect();
-        for i in modified { self.save_document_async(i, true); }
+        if self.disk_save.continuation.is_none() && !self.disk_save.saves.busy() && !self.disk_save.auxiliary.busy() && self.rustfmt_jobs.is_empty() {
+            self.disk_save.failed = false;
+        }
+        if self.file_edits.busy() {
+            if self.disk_save.continuation.is_none() {
+                self.defer_save(false, |app| app.save_all_docs());
+            }
+            return;
+        }
+        let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified() && !d.generated).map(|(i, _)| i).collect();
+        for i in modified {
+            self.save_document_async(i, true);
+        }
     }
 
     pub(crate) fn poll_disk_watch(&mut self) {
-        for error in self.disk_watch.poll(&mut self.docs, self.waker.clone()) { self.notify(error, true); }
+        for error in self.disk_watch.poll(&mut self.docs, self.waker.clone()) {
+            self.notify(error, true);
+        }
     }
 
     /// Code-insight results that leave the editor: navigation, result lists, dialogs.
@@ -1777,8 +2100,10 @@ impl CrabCraftApp {
         for o in outputs {
             match o {
                 InsightOutput::SaveFormatted => {
-                    let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_,d)|d.is_modified()).map(|(i,_)|i).collect();
-                    for i in modified { self.save_document_async(i,false); }
+                    let modified: Vec<usize> = self.docs.list.iter().enumerate().filter(|(_, d)| d.is_modified()).map(|(i, _)| i).collect();
+                    for i in modified {
+                        self.save_document_async(i, false);
+                    }
                 }
                 InsightOutput::Navigate(t) => self.open_at(&t.path, t.line, t.col),
                 InsightOutput::OpenUrl(url) => crate::ui::run_windows::open_url(&url),
@@ -1824,7 +2149,10 @@ impl CrabCraftApp {
     /// Runs a code-insight action from the editor's keymap on the active document.
     pub fn run_insight_action(&mut self, action: Action, caret_screen: egui::Pos2) {
         let Some(i) = self.docs.active else { return };
-        if let Some(outputs)=self.web_languages.action(&mut self.docs.list[i],action,caret_screen){self.handle_insight(outputs);return;}
+        if let Some(outputs) = self.web_languages.action(&mut self.docs.list[i], action, caret_screen) {
+            self.handle_insight(outputs);
+            return;
+        }
         if action == Action::CompleteStatement {
             self.statement_completion = None;
             match crate::complete_statement::Job::start(&self.docs, self.waker.clone()) {
@@ -1834,10 +2162,12 @@ impl CrabCraftApp {
             return;
         }
         // Rust files of the workspace go to rustfmt with the user's settings, ready server or not.
-        if action == Action::Reformat && self.runner.cargo_workspace.is_some() && self.docs.list[i].path.extension().is_some_and(|e| e == "rs") {
-            if self.rustfmt_document(i, false) {
-                return;
-            }
+        if action == Action::Reformat
+            && self.runner.cargo_workspace.is_some()
+            && self.docs.list[i].path.extension().is_some_and(|e| e == "rs")
+            && self.rustfmt_document(i, false)
+        {
+            return;
         }
         if action == Action::Complete && crate::sql_injection::complete(&mut self.docs.list[i], &self.database.tables) {
             self.insight.cancel_local_completion_requests();
@@ -1881,7 +2211,11 @@ impl CrabCraftApp {
             let mut list = Vec::new();
             if let Some(version) = self.dep_versions.fix_at(doc.editor.id, line) {
                 let version = version.to_string();
-                list.push(quick_fix(trf("Update to {version}", &[("version", &version)]), crate::insight::UPDATE_DEPENDENCY_COMMAND, vec![serde_json::json!(line), serde_json::json!(version)]));
+                list.push(quick_fix(
+                    trf("Update to {version}", &[("version", &version)]),
+                    crate::insight::UPDATE_DEPENDENCY_COMMAND,
+                    vec![serde_json::json!(line), serde_json::json!(version)],
+                ));
             }
             for fix in self.manifest_inspections.fixes_on_line(doc, line) {
                 let args = vec![serde_json::json!(fix.start), serde_json::json!(fix.end), serde_json::json!(fix.old), serde_json::json!(fix.new)];
@@ -2078,80 +2412,159 @@ impl CrabCraftApp {
 
     // ------------------------------------------------------------------ documents
 
-    pub(crate) fn request_open_file(&mut self, path: &Path) { self.request_open(path, None, false); }
-    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) { self.request_open(path, Some(crate::disk_open::Position::LineColumn(line,col)), false); }
-    pub(crate) fn request_open_offset(&mut self,path:&Path,offset:usize) {self.request_open(path,Some(crate::disk_open::Position::Offset(offset)),false);}
-    fn request_open(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool) {self.open_navigation(path,position,preview,true);}
-    fn open_navigation(&mut self,path:&Path,position:Option<crate::disk_open::Position>,preview:bool,record:bool) {
-        if let Some(target)=self.workspace_open.target.clone(){
-            let root=if target.file_name().is_some_and(|name|name=="Cargo.toml")||false{target.parent().unwrap_or(&target)}else{&target};
-            let belongs_old=self.workspace.as_ref().is_some_and(|w|path.starts_with(&w.ws.root));
-            if !belongs_old||!root.is_absolute()||path.starts_with(root){
-                if let Err(error)=self.workspace_open.queue_files(vec![path.to_path_buf()]){self.notify(error.to_string(),true);return;}
-                if let Some(position)=position{self.workspace_open.positions.insert(path.to_path_buf(),position);}
-                if preview{self.workspace_open.previews.insert(path.to_path_buf());}else{self.workspace_open.previews.remove(path);}
+    pub(crate) fn request_open_file(&mut self, path: &Path) {
+        self.request_open(path, None, false);
+    }
+    pub(crate) fn request_open_at(&mut self, path: &Path, line: usize, col: usize) {
+        self.request_open(path, Some(crate::disk_open::Position::LineColumn(line, col)), false);
+    }
+    pub(crate) fn request_open_offset(&mut self, path: &Path, offset: usize) {
+        self.request_open(path, Some(crate::disk_open::Position::Offset(offset)), false);
+    }
+    fn request_open(&mut self, path: &Path, position: Option<crate::disk_open::Position>, preview: bool) {
+        self.open_navigation(path, position, preview, true);
+    }
+    fn open_navigation(&mut self, path: &Path, position: Option<crate::disk_open::Position>, preview: bool, record: bool) {
+        if let Some(target) = self.workspace_open.target.clone() {
+            let root = if target.file_name().is_some_and(|name| name == "Cargo.toml") || false { target.parent().unwrap_or(&target) } else { &target };
+            let belongs_old = self.workspace.as_ref().is_some_and(|w| path.starts_with(&w.ws.root));
+            if !belongs_old || !root.is_absolute() || path.starts_with(root) {
+                if let Err(error) = self.workspace_open.queue_files(vec![path.to_path_buf()]) {
+                    self.notify(error.to_string(), true);
+                    return;
+                }
+                if let Some(position) = position {
+                    self.workspace_open.positions.insert(path.to_path_buf(), position);
+                }
+                if preview {
+                    self.workspace_open.previews.insert(path.to_path_buf());
+                } else {
+                    self.workspace_open.previews.remove(path);
+                }
                 return;
             }
             self.cancel_disk_save();
         }
 
-        if self.file_edits.busy(){self.cancel_disk_save();}
-        if record {self.push_nav();} self.disk_open.cancel();
-        if let Some(index)=self.docs.index_of(path) { self.docs.activate(index); if let Some(position)=position { position.apply(&mut self.docs.list[index].editor); } self.focus_editor=true;self.session_dirty=true;return; }
-        let mut request=crate::disk_open::Request::new(&mut self.docs,path,position); request.preview=preview;
-        if let Err(error)=self.disk_open.request(request,self.waker.clone()){self.notify(error.to_string(),true);}
+        if self.file_edits.busy() {
+            self.cancel_disk_save();
+        }
+        if record {
+            self.push_nav();
+        }
+        self.disk_open.cancel();
+        if let Some(index) = self.docs.index_of(path) {
+            self.docs.activate(index);
+            if let Some(position) = position {
+                position.apply(&mut self.docs.list[index].editor);
+            }
+            self.focus_editor = true;
+            self.session_dirty = true;
+            return;
+        }
+        let mut request = crate::disk_open::Request::new(&mut self.docs, path, position);
+        request.preview = preview;
+        if let Err(error) = self.disk_open.request(request, self.waker.clone()) {
+            self.notify(error.to_string(), true);
+        }
     }
     pub(crate) fn request_open_files(&mut self, paths: Vec<PathBuf>) {
         self.request_open_requests(paths.into_iter().map(crate::cli::OpenRequest::path).collect());
     }
     fn request_open_requests(&mut self, paths: Vec<crate::cli::OpenRequest>) {
-        if paths.is_empty() { return; }
-        if paths.len()>256 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
-        if self.file_edits.busy() { self.cancel_disk_save(); }
+        if paths.is_empty() {
+            return;
+        }
+        if paths.len() > 256 {
+            self.notify(crate::docs::TextReadError::BatchLimit.to_string(), true);
+            return;
+        }
+        if self.file_edits.busy() {
+            self.cancel_disk_save();
+        }
         self.push_nav();
-        let requests=paths.into_iter().map(|request|{
-            let position=request.line.map(|line|crate::disk_open::Position::LineColumn(line.saturating_sub(1),request.column.unwrap_or(1).saturating_sub(1)));
-            crate::disk_open::Request::new(&mut self.docs,&request.path,position)
-        }).collect();
-        if let Err(error)=self.disk_open.request_many(requests,self.waker.clone()) { self.notify(error.to_string(),true); }
+        let requests = paths
+            .into_iter()
+            .map(|request| {
+                let position =
+                    request.line.map(|line| crate::disk_open::Position::LineColumn(line.saturating_sub(1), request.column.unwrap_or(1).saturating_sub(1)));
+                crate::disk_open::Request::new(&mut self.docs, &request.path, position)
+            })
+            .collect();
+        if let Err(error) = self.disk_open.request_many(requests, self.waker.clone()) {
+            self.notify(error.to_string(), true);
+        }
     }
     pub(crate) fn poll_disk_open(&mut self) {
         for result in self.disk_open.poll(self.waker.clone()) {
             match result {
-                Ok(crate::disk_open::Opened{mut doc,position,preview,active,parse}) => {if self.docs.active_doc().map(|doc|doc.editor.id)!=active{self.disk_open.cancel();continue;}doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root|doc.path.starts_with(root));let index=self.docs.insert_prepared(doc,preview,parse);self.disk_open.set_active(self.docs.active_doc().map(|doc|doc.editor.id));if let Some(position)=position {position.apply(&mut self.docs.list[index].editor);}if self.docs.list[index].scratch && self.docs.list[index].editor.lang()==rc_syntax::Lang::Rust{self.update_linked();}self.focus_editor=true;self.session_dirty=true;}
-                Err(error)=>self.notify(error.to_string(),true),
+                Ok(crate::disk_open::Opened { mut doc, position, preview, active, parse }) => {
+                    if self.docs.active_doc().map(|doc| doc.editor.id) != active {
+                        self.disk_open.cancel();
+                        continue;
+                    }
+                    doc.editor.read_only |= self.docs.read_only_roots.iter().any(|root| doc.path.starts_with(root));
+                    let index = self.docs.insert_prepared(doc, preview, parse);
+                    self.disk_open.set_active(self.docs.active_doc().map(|doc| doc.editor.id));
+                    if let Some(position) = position {
+                        position.apply(&mut self.docs.list[index].editor);
+                    }
+                    if self.docs.list[index].scratch && self.docs.list[index].editor.lang() == rc_syntax::Lang::Rust {
+                        self.update_linked();
+                    }
+                    self.focus_editor = true;
+                    self.session_dirty = true;
+                }
+                Err(error) => self.notify(error.to_string(), true),
             }
         }
     }
 
     /// Opens a file in an editor tab, remembering the current place for "Back".
-    pub fn open_file(&mut self, path: &Path) { self.request_open_file(path); }
+    pub fn open_file(&mut self, path: &Path) {
+        self.request_open_file(path);
+    }
 
     #[cfg(test)]
-    pub(crate) fn wait_workspace_open(&mut self){
-        let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
-        while self.workspace_open.busy()||self.file_edits.busy()||self.disk_save.continuation.is_some()||self.disk_save.saves.busy()||self.disk_save.auxiliary.busy()||self.disk_open.busy(){
-            self.poll_file_edits();self.poll_rustfmt();self.poll_disk_save();self.poll_workspace_open();self.poll_disk_open();assert!(std::time::Instant::now()<until,"workspace opening timed out");std::thread::sleep(std::time::Duration::from_millis(2));
+    pub(crate) fn wait_workspace_open(&mut self) {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while self.workspace_open.busy()
+            || self.file_edits.busy()
+            || self.disk_save.continuation.is_some()
+            || self.disk_save.saves.busy()
+            || self.disk_save.auxiliary.busy()
+            || self.disk_open.busy()
+        {
+            self.poll_file_edits();
+            self.poll_rustfmt();
+            self.poll_disk_save();
+            self.poll_workspace_open();
+            self.poll_disk_open();
+            assert!(std::time::Instant::now() < until, "workspace opening timed out");
+            std::thread::sleep(std::time::Duration::from_millis(2));
         }
     }
     #[cfg(test)]
-    pub(crate) fn open_workspace_and_wait(&mut self,path:&Path){self.open_workspace(path);self.wait_workspace_open();}
+    pub(crate) fn open_workspace_and_wait(&mut self, path: &Path) {
+        self.open_workspace(path);
+        self.wait_workspace_open();
+    }
 
     #[cfg(test)]
-    pub(crate) fn open_file_and_wait(&mut self,path:&Path) {
+    pub(crate) fn open_file_and_wait(&mut self, path: &Path) {
         self.wait_workspace_open();
         self.open_file(path);
-        let until=std::time::Instant::now()+std::time::Duration::from_secs(30);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while self.disk_open.busy() {
             self.poll_disk_open();
-            assert!(std::time::Instant::now()<until,"file opening did not finish: {}",path.display());
+            assert!(std::time::Instant::now() < until, "file opening did not finish: {}", path.display());
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
     }
 
     /// Opens `path` and puts the caret at (line, col).
     pub fn open_at(&mut self, path: &Path, line: usize, col: usize) {
-        self.request_open_at(path,line,col);
+        self.request_open_at(path, line, col);
     }
 
     pub fn push_nav(&mut self) {
@@ -2179,21 +2592,22 @@ impl CrabCraftApp {
         if let Some(d) = self.docs.active_doc() {
             to.push((d.path.clone(), d.editor.caret()));
         }
-        self.open_navigation(&path,Some(crate::disk_open::Position::Offset(pos)),false,false);
+        self.open_navigation(&path, Some(crate::disk_open::Position::Offset(pos)), false, false);
     }
 
     /// Closes tab `i`, saving it first (IntelliJ autosaves; nothing is ever lost on close).
     /// Shows a macro expansion in a read-only tab, written to the data folder so it has a path.
     pub fn show_macro_expansion(&mut self, name: &str, text: &str) {
-        self.show_macro_expansion_kind(name,text,true);
+        self.show_macro_expansion_kind(name, text, true);
     }
-    fn show_macro_expansion_kind(&mut self,name:&str,text:&str,recursive:bool) {
-        let safe:String=name.chars().filter(|c|c.is_alphanumeric()||*c=='_').take(64).collect();
-        let safe=if safe.is_empty(){"macro"}else{&safe};
-        let path=rc_core::paths::expansions_dir().join(format!("{safe}{}.rs",if recursive{""}else{"_one_step"}));
-        let header=if recursive {trf("Recursive expansion of {name}!",&[("name",&name)])}else{trf("One-step expansion of {name}!",&[("name",&name)])};
-        self.docs.insert_generated(path,&format!("// {header}\n\n{text}\n"));
-        self.focus_editor=true;
+    fn show_macro_expansion_kind(&mut self, name: &str, text: &str, recursive: bool) {
+        let safe: String = name.chars().filter(|c| c.is_alphanumeric() || *c == '_').take(64).collect();
+        let safe = if safe.is_empty() { "macro" } else { &safe };
+        let path = rc_core::paths::expansions_dir().join(format!("{safe}{}.rs", if recursive { "" } else { "_one_step" }));
+        let header =
+            if recursive { trf("Recursive expansion of {name}!", &[("name", &name)]) } else { trf("One-step expansion of {name}!", &[("name", &name)]) };
+        self.docs.insert_generated(path, &format!("// {header}\n\n{text}\n"));
+        self.focus_editor = true;
     }
 
     /// Shows rustc's explanation of an error code (`E0308`) in a read-only tab. `rustc --explain`
@@ -2213,12 +2627,15 @@ impl CrabCraftApp {
         // The project's toolchain file applies only once the project is trusted: naming a
         // missing toolchain would otherwise make rustup reach the network.
         let dir = self.workspace.as_ref().map(|w| w.ws.root.clone()).filter(|r| self.settings.trusted_projects.contains(r));
-        if self.criticalup_provider.selected&&dir.is_none(){self.notify(tr("Trust this project before running project tools or code"),true);return;}
-        let env = if dir.is_some(){self.runner.project_env_pairs()}else{Vec::new()};
+        if self.criticalup_provider.selected && dir.is_none() {
+            self.notify(tr("Trust this project before running project tools or code"), true);
+            return;
+        }
+        let env = if dir.is_some() { self.runner.project_env_pairs() } else { Vec::new() };
         let inbox = Inbox::new(self.waker.clone());
         let out = inbox.sender();
         let asked = code.clone();
-        let choice=self.cargo_choice();
+        let choice = self.cargo_choice();
         std::thread::spawn(move || {
             let result = match choice.resolve(env) {
                 Ok(cargo) => rc_cargo::Explainer { dir, ..rc_cargo::Explainer::for_cargo(&cargo) }.explain(&asked),
@@ -2265,8 +2682,16 @@ impl CrabCraftApp {
 
     pub fn close_tab(&mut self, i: usize) {
         self.disk_open.cancel();
-        let Some(id)=self.docs.list.get(i).map(|d|d.editor.id) else{return;};
-        if self.defer_save(false,move |app| {if let Some(i)=app.docs.list.iter().position(|d|d.editor.id==id){app.close_tab(i);}}){return;}
+        let Some(id) = self.docs.list.get(i).map(|d| d.editor.id) else {
+            return;
+        };
+        if self.defer_save(false, move |app| {
+            if let Some(i) = app.docs.list.iter().position(|d| d.editor.id == id) {
+                app.close_tab(i);
+            }
+        }) {
+            return;
+        }
         // The tab beside it in the same group takes its place.
         let id = self.docs.list.get(i).map(|d| d.editor.id);
         let next = id.filter(|_| self.docs.active == Some(i)).and_then(|id| self.layout.after_close(id));
@@ -2293,13 +2718,30 @@ impl CrabCraftApp {
 
     /// Runs an IDE action (global shortcuts, menus, toolbar buttons).
     pub fn run_ide_action(&mut self, ctx: &Context, action: Action) {
-        if crate::remote_development::route(self, action) { return; }
-        if matches!(action,Action::Build|Action::Run|Action::RunTests|Action::Debug) {
-            let context=ctx.clone();if self.defer_save(true,move|app|app.run_ide_action(&context,action)){return;}
+        if crate::remote_development::route(self, action) {
+            return;
         }
-        if action==Action::StopRun { self.cancel_disk_save(); }
+        if matches!(action, Action::Build | Action::Run | Action::RunTests | Action::Debug) {
+            let context = ctx.clone();
+            if self.defer_save(true, move |app| app.run_ide_action(&context, action)) {
+                return;
+            }
+        }
+        if action == Action::StopRun {
+            self.cancel_disk_save();
+        }
 
-        if matches!(action, Action::Resume | Action::StepOver | Action::StepInto | Action::StepOut | Action::ForceStepInto | Action::ForceStepOver | Action::RunToCursor | Action::ForceRunToCursor) {
+        if matches!(
+            action,
+            Action::Resume
+                | Action::StepOver
+                | Action::StepInto
+                | Action::StepOut
+                | Action::ForceStepInto
+                | Action::ForceStepOver
+                | Action::RunToCursor
+                | Action::ForceRunToCursor
+        ) {
             // A list/gutter change in this frame must reach DAP before continue/step.
             self.debugger.sync_breakpoints(&self.docs);
         }
@@ -2310,7 +2752,9 @@ impl CrabCraftApp {
         }
         match action {
             Action::RevertFromDisk => {
-                if let Some(index) = self.docs.active { self.request_disk_revert(index); }
+                if let Some(index) = self.docs.active {
+                    self.request_disk_revert(index);
+                }
             }
             Action::SaveAll | Action::Save => {
                 self.save_all_docs();
@@ -2497,7 +2941,11 @@ impl CrabCraftApp {
             Action::ShareInPlayground => self.share_in_playground(),
             Action::SelectIn if self.docs.active_doc().is_some() => {
                 let row = |title: &str, command: &str| {
-                    rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command { title: title.to_string(), command: command.to_string(), arguments: None })
+                    rc_lsp::lsp_types::CodeActionOrCommand::Command(rc_lsp::lsp_types::Command {
+                        title: title.to_string(),
+                        command: command.to_string(),
+                        arguments: None,
+                    })
                 };
                 let reveal = if cfg!(target_os = "macos") { tr("Reveal in Finder") } else { tr("Open in Explorer") };
                 let list = vec![row(tr("Select in Explorer"), crate::insight::SELECT_IN_EXPLORER), row(reveal, crate::insight::REVEAL_FILE)];
@@ -2511,7 +2959,9 @@ impl CrabCraftApp {
             Action::RemoteDevelopment => crate::remote_development::open(self),
             Action::WslWorkspace => crate::remote_development::open_wsl(self),
             Action::MoveItem => crate::move_items::open(self),
-            Action::NewScratchFile => self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) }),
+            Action::NewScratchFile => {
+                self.dialog = Some(Dialog::Scratches { selected: 0, filter: String::new(), files: rc_core::scratch::list(&rc_core::paths::scratches_dir()) })
+            }
             Action::RecentFiles => self.dialog = Some(Dialog::RecentFiles { selected: 1.min(self.docs.recent.len().saturating_sub(1)), filter: String::new() }),
             Action::RecentLocations => {
                 if !self.nav_back.is_empty() {
@@ -2605,7 +3055,7 @@ impl CrabCraftApp {
 
     /// Applies the compiler's suggestion to its file, if that is still the text the compiler read.
     pub fn apply_build_fix(&mut self, file: &Path, fix: &rc_dotnet::diagnostics::Fix) {
-        self.request_file_edit(file,crate::file_edit::Intent::Build(fix.clone()));
+        self.request_file_edit(file, crate::file_edit::Intent::Build(fix.clone()));
     }
 
     /// Opens the declaration of a test from its fully qualified name (Tests window).
@@ -2639,9 +3089,10 @@ impl CrabCraftApp {
     /// else the first `fn name` in a file that fits the module.
     fn goto_rust_test(&mut self, name: &str) {
         let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return };
-        let panicked = self.runner.tests.as_ref().and_then(|t| t.results.get(name)).and_then(|r| {
-            r.iter().flat_map(|x| &x.stack_trace).find_map(|f| Some((f.file.clone().filter(|p| p.is_file() && p.starts_with(&root))?, f.line?)))
-        });
+        let panicked =
+            self.runner.tests.as_ref().and_then(|t| t.results.get(name)).and_then(|r| {
+                r.iter().flat_map(|x| &x.stack_trace).find_map(|f| Some((f.file.clone().filter(|p| p.is_file() && p.starts_with(&root))?, f.line?)))
+            });
         if let Some((file, line)) = panicked {
             self.open_at(&file, line.saturating_sub(1) as usize, 0);
             return;
@@ -2659,7 +3110,8 @@ impl CrabCraftApp {
                     && let Ok(text) = std::fs::read_to_string(&n.path)
                     && let Some(line) = text.lines().position(|l| l.contains(&declared))
                 {
-                    let fits = !last_module.is_empty() && (text.contains(&format!("mod {last_module}")) || n.path.file_stem().is_some_and(|s| s == last_module));
+                    let fits =
+                        !last_module.is_empty() && (text.contains(&format!("mod {last_module}")) || n.path.file_stem().is_some_and(|s| s == last_module));
                     if fits {
                         self.open_at(&n.path, line, 0);
                         return;
@@ -2675,8 +3127,13 @@ impl CrabCraftApp {
 
     /// A new terminal tab in `dir` (the workspace folder by default).
     pub fn open_terminal(&mut self, dir: Option<PathBuf>) {
-        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
-        if self.terminal_starting.is_some() { return; }
+        if let Err(error) = self.runner.require_trust() {
+            self.notify(error.to_string(), true);
+            return;
+        }
+        if self.terminal_starting.is_some() {
+            return;
+        }
         let cwd = dir.or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()));
         match crate::repl::Starting::new(rc_term::SpawnSpec::shell(cwd), self.waker.clone()) {
             Ok(starting) => {
@@ -2688,32 +3145,48 @@ impl CrabCraftApp {
     }
 
     pub fn open_ssh_terminal(&mut self, spec: rc_term::SpawnSpec) {
-        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
-        if self.terminal_starting.is_some() { return; }
+        if let Err(error) = self.runner.require_trust() {
+            self.notify(error.to_string(), true);
+            return;
+        }
+        if self.terminal_starting.is_some() {
+            return;
+        }
         match crate::repl::Starting::new(spec, self.waker.clone()) {
-            Ok(starting) => { self.terminal_starting = Some(starting); self.dock.show(ToolWindow::Terminal); }
+            Ok(starting) => {
+                self.terminal_starting = Some(starting);
+                self.dock.show(ToolWindow::Terminal);
+            }
             Err(error) => self.notify(rc_kit::i18n::trf("Could not start the terminal: {error}", &[("error", &error)]), true),
         }
     }
 
     pub fn split_terminal(&mut self, stacked: bool) {
-        if self.terminal_starting.is_some() { return; }
-        let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else { return; };
+        if self.terminal_starting.is_some() {
+            return;
+        }
+        let Some((id, cwd)) = self.terminals.active().map(|tab| (tab.id(), tab.session.cwd().map(Path::to_path_buf))) else {
+            return;
+        };
         self.terminal_tools.split_after_start = Some((id, stacked));
         self.open_terminal(cwd);
-        if self.terminal_starting.is_none() { self.terminal_tools.split_after_start = None; }
+        if self.terminal_starting.is_none() {
+            self.terminal_tools.split_after_start = None;
+        }
     }
 
     fn poll_terminal_startup(&mut self) {
-        let Some(result) = self.terminal_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        let Some(result) = self.terminal_starting.as_ref().and_then(crate::repl::Starting::poll) else {
+            return;
+        };
         self.terminal_starting = None;
         match result {
             Ok(session) => {
                 let second = self.terminals.push(session);
-                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take() {
-                    if self.terminals.get(first).is_some() {
-                        self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
-                    }
+                if let Some((first, stacked)) = self.terminal_tools.split_after_start.take()
+                    && self.terminals.get(first).is_some()
+                {
+                    self.terminal_tools.split = Some(crate::terminal_tools::Split { first, second, stacked, ratio: 0.5 });
                 }
                 self.dock.show(ToolWindow::Terminal);
                 self.focus_terminal = true;
@@ -2728,13 +3201,14 @@ impl CrabCraftApp {
     /// Evcxr may compile code and load Cargo configuration from the current project.
     pub fn can_open_rust_repl(&self) -> bool {
         self.workspace.as_ref().is_some_and(|w| {
-            matches!(w.ws.kind, rc_core::WorkspaceKind::Cargo(_))
-                && self.settings.trusted_projects.contains(&w.ws.root) && !self.criticalup_provider.selected
+            matches!(w.ws.kind, rc_core::WorkspaceKind::Cargo(_)) && self.settings.trusted_projects.contains(&w.ws.root) && !self.criticalup_provider.selected
         })
     }
 
     pub fn open_rust_repl(&mut self) {
-        if !self.can_open_rust_repl() || self.repl_starting.is_some() { return; }
+        if !self.can_open_rust_repl() || self.repl_starting.is_some() {
+            return;
+        }
         let cwd = self.workspace.as_ref().map(|w| w.ws.root.clone());
         let mut spec = rc_term::SpawnSpec::rust_repl(cwd);
         spec.env.extend(self.runner.project_env_pairs());
@@ -2745,7 +3219,9 @@ impl CrabCraftApp {
     }
 
     fn poll_repl(&mut self) {
-        let Some(result) = self.repl_starting.as_ref().and_then(crate::repl::Starting::poll) else { return; };
+        let Some(result) = self.repl_starting.as_ref().and_then(crate::repl::Starting::poll) else {
+            return;
+        };
         self.repl_starting = None;
         match result {
             Ok(session) => {
@@ -2770,7 +3246,6 @@ impl CrabCraftApp {
                 doc.editor.failure_notes = notes.cloned().unwrap_or_default();
             }
             self.update_rust_markers(i);
-            return;
         }
     }
 
@@ -2836,8 +3311,13 @@ impl CrabCraftApp {
 
     /// Starts the selected configuration under the debugger.
     pub(crate) fn start_debugging(&mut self) {
-        if self.defer_save(true,|app|app.start_debugging()){return;}
-        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        if self.defer_save(true, |app| app.start_debugging()) {
+            return;
+        }
+        if let Err(error) = self.runner.require_trust() {
+            self.notify(error.to_string(), true);
+            return;
+        }
         self.debug_test = None;
         self.save_all_docs();
         match self.runner.selected_config().cloned() {
@@ -2861,26 +3341,34 @@ impl CrabCraftApp {
     }
 
     pub fn start_coverage(&mut self) {
-        if self.defer_save(true,|app|app.start_coverage()){return;}
+        if self.defer_save(true, |app| app.start_coverage()) {
+            return;
+        }
         self.coverage.show = true;
         self.dock.show(ToolWindow::Tests);
-        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else { return; };
+        let Some(root) = self.workspace.as_ref().map(|w| w.ws.root.clone()) else {
+            return;
+        };
         if !self.settings.trusted_projects.contains(&root) {
             self.coverage.error = Some(tr("Trust this Cargo project before measuring coverage").to_string());
             return;
         }
-        let Some(manifest) = self.runner.cargo_workspace.as_ref().filter(|workspace| workspace.root == root).map(|workspace| workspace.manifest.clone()) else { return; };
+        let Some(manifest) = self.runner.cargo_workspace.as_ref().filter(|workspace| workspace.root == root).map(|workspace| workspace.manifest.clone()) else {
+            return;
+        };
         self.save_all_docs();
         match self.runner.cargo_tool() {
             Ok(cargo) if !cargo.is_criticalup() => self.coverage.start(root, manifest, cargo.path().to_path_buf(), self.runner.project_env_pairs()),
-            Ok(_) => self.coverage.error=Some(crate::criticalup_provider::unsupported()),
+            Ok(_) => self.coverage.error = Some(crate::criticalup_provider::unsupported()),
             Err(error) => self.coverage.error = Some(error),
         }
     }
 
     /// Profile (A-01): builds the selected Rust binary and records it with perf.
     pub fn start_profiling(&mut self) {
-        if self.defer_save(true,|app|app.start_profiling()){return;}
+        if self.defer_save(true, |app| app.start_profiling()) {
+            return;
+        }
         self.dock.show(ToolWindow::Profiler);
         let config = self.runner.selected_config().cloned();
         let Some(config) = config.filter(|c| matches!(c.kind, crate::runner::ConfigKind::Cargo { .. })) else {
@@ -2905,7 +3393,12 @@ impl CrabCraftApp {
 
     /// The debugger's Restart: what is being debugged, from the beginning.
     pub fn restart_debugging(&mut self) {
-        if self.privileged_debug.running {self.debugger.stop();self.privileged_debug.cancel();self.notify(tr("Build and review again before requesting another administrator debug session"),false);return;}
+        if self.privileged_debug.running {
+            self.debugger.stop();
+            self.privileged_debug.cancel();
+            self.notify(tr("Build and review again before requesting another administrator debug session"), false);
+            return;
+        }
         self.debugger.stop();
         match self.debug_test.clone() {
             Some((config, target)) => self.debug_rust_test(config, target),
@@ -2914,8 +3407,15 @@ impl CrabCraftApp {
     }
 
     fn debug_rust_test(&mut self, config: crate::runner::RunConfig, target: rc_cargo::RunTarget) {
-        let c=config.clone();let t=target.clone();if self.defer_save(true,move|app|app.debug_rust_test(c,t)){return;}
-        if let Err(error) = self.runner.require_trust() { self.notify(error.to_string(), true); return; }
+        let c = config.clone();
+        let t = target.clone();
+        if self.defer_save(true, move |app| app.debug_rust_test(c, t)) {
+            return;
+        }
+        if let Err(error) = self.runner.require_trust() {
+            self.notify(error.to_string(), true);
+            return;
+        }
         let cargo = match self.runner.cargo_tool() {
             Ok(cargo) => cargo,
             Err(e) => {
@@ -2955,14 +3455,26 @@ impl CrabCraftApp {
         // One thread, so stepping stays in the test being debugged.
         args.extend(["--nocapture".to_string(), "--test-threads=1".to_string()]);
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else { return };
-        let target = rc_cargo::RunTarget { before: Vec::new(), manifest, package: String::new(), bin: name.clone(), args, env: Vec::new(), working_dir: None, test: Some(runnable.cargo_args), options: Default::default() };
+        let target = rc_cargo::RunTarget {
+            before: Vec::new(),
+            manifest,
+            package: String::new(),
+            bin: name.clone(),
+            args,
+            env: Vec::new(),
+            working_dir: None,
+            test: Some(runnable.cargo_args),
+            options: Default::default(),
+        };
         let config = crate::runner::RunConfig { name: name.clone(), kind: crate::runner::ConfigKind::Cargo { package: String::new(), bin: name } };
         self.debug_rust_test(config, target);
     }
 
     /// Click on a test's gutter icon: runs that test (or class) in its project.
     pub fn run_test_at(&mut self, line: usize) {
-        if self.defer_save(true,move|app|app.run_test_at(line)){return;}
+        if self.defer_save(true, move |app| app.run_test_at(line)) {
+            return;
+        }
         let Some(m) = self.test_markers.iter().find(|m| m.line == line).cloned() else { return };
         let Some(project) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
             self.notify(tr("This file is not part of a test project"), false);
@@ -2980,10 +3492,18 @@ impl CrabCraftApp {
 
     pub fn toggle_tool(&mut self, tw: ToolWindow) {
         let was_open = self.dock.is_open(tw);
-        if was_open && tw == ToolWindow::Proofreading { self.proofreader.cancel(); }
-        if was_open && tw == ToolWindow::Database { self.database.cancel(); }
-        if was_open && tw == ToolWindow::Remote { self.remote.cancel(); }
-        if was_open && tw == ToolWindow::Endpoints { self.endpoints.cancel(); }
+        if was_open && tw == ToolWindow::Proofreading {
+            self.proofreader.cancel();
+        }
+        if was_open && tw == ToolWindow::Database {
+            self.database.cancel();
+        }
+        if was_open && tw == ToolWindow::Remote {
+            self.remote.cancel();
+        }
+        if was_open && tw == ToolWindow::Endpoints {
+            self.endpoints.cancel();
+        }
         self.dock.toggle(tw);
         if was_open {
             self.focus_editor = true;
@@ -3019,7 +3539,9 @@ impl CrabCraftApp {
     /// Inspect Code: runs Clippy over the whole Cargo workspace; its findings go to the
     /// Problems window's Inspection tab, grouped by lint.
     pub fn inspect_code(&mut self) {
-        if self.defer_save(true,|app|app.inspect_code()){return;}
+        if self.defer_save(true, |app| app.inspect_code()) {
+            return;
+        }
         let Some(manifest) = self.runner.cargo_workspace.as_ref().map(|w| w.manifest.clone()) else {
             self.notify(tr("Open a Cargo project to inspect its code"), false);
             return;
@@ -3062,7 +3584,10 @@ impl CrabCraftApp {
     /// Runs the external tool called `name` in the Run window. Unsaved files are saved first,
     /// since the tool reads them from disk.
     pub fn run_external_tool(&mut self, name: &str) {
-        let queued=name.to_string();if self.defer_save(true,move|app|app.run_external_tool(&queued)){return;}
+        let queued = name.to_string();
+        if self.defer_save(true, move |app| app.run_external_tool(&queued)) {
+            return;
+        }
         let Some(tool) = self.settings.external_tools.iter().find(|t| t.name == name).cloned() else {
             self.notify(trf("There is no external tool called {name}", &[("name", &name)]), true);
             return;
@@ -3077,22 +3602,35 @@ impl CrabCraftApp {
         }
     }
 
-    /// Opens what the command line or the system asked for, at its line and column (1-based).
-    pub fn open_request(&mut self, request: &crate::cli::OpenRequest) {
-        self.open_requests(vec![request.clone()]);
-    }
     /// Preserve every file and caret in one CLI/system delivery, including a pending workspace.
     pub fn open_requests(&mut self, requests: Vec<crate::cli::OpenRequest>) {
-        if requests.len()>257 { self.notify(crate::docs::TextReadError::BatchLimit.to_string(),true); return; }
-        let (workspaces,files):(Vec<_>,Vec<_>)=requests.into_iter().partition(|request|self.opens_workspace(&request.path)||self.project_of_manifest(&request.path).is_some());
-        if let Some(request)=workspaces.first(){self.open_path(&request.path);}
+        if requests.len() > 257 {
+            self.notify(crate::docs::TextReadError::BatchLimit.to_string(), true);
+            return;
+        }
+        let (workspaces, files): (Vec<_>, Vec<_>) =
+            requests.into_iter().partition(|request| self.opens_workspace(&request.path) || self.project_of_manifest(&request.path).is_some());
+        if let Some(request) = workspaces.first() {
+            self.open_path(&request.path);
+        }
         if self.workspace_open.target.is_some() || self.disk_save.pending_workspace.is_some() {
-            let paths=files.iter().map(|request|request.path.clone()).collect();
+            let paths = files.iter().map(|request| request.path.clone()).collect();
             match self.workspace_open.queue_files(paths) {
-                Ok(())=>for request in files { if let Some(line)=request.line { self.workspace_open.positions.insert(request.path,crate::disk_open::Position::LineColumn(line.saturating_sub(1),request.column.unwrap_or(1).saturating_sub(1))); } },
-                Err(error)=>self.notify(error.to_string(),true),
+                Ok(()) => {
+                    for request in files {
+                        if let Some(line) = request.line {
+                            self.workspace_open.positions.insert(
+                                request.path,
+                                crate::disk_open::Position::LineColumn(line.saturating_sub(1), request.column.unwrap_or(1).saturating_sub(1)),
+                            );
+                        }
+                    }
+                }
+                Err(error) => self.notify(error.to_string(), true),
             }
-        } else { self.request_open_requests(files); }
+        } else {
+            self.request_open_requests(files);
+        }
     }
 
     /// Opens a folder in a CrabCraft window of its own: a new process started as
@@ -3103,7 +3641,13 @@ impl CrabCraftApp {
             return;
         }
         let spawned = std::env::current_exe().and_then(|exe| {
-            std::process::Command::new(exe).arg("--").arg(path).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+            std::process::Command::new(exe)
+                .arg("--")
+                .arg(path)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
         });
         match spawned {
             // Reap it when it exits so it does not linger as a zombie.
@@ -3126,7 +3670,9 @@ impl CrabCraftApp {
 
     pub fn pick_file(&mut self) {
         let mut dialog = rfd::FileDialog::new().set_title(tr("Open File"));
-        if let Some(dir) = self.docs.active_doc().and_then(|d| d.path.parent().map(Path::to_path_buf)).or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone())) {
+        if let Some(dir) =
+            self.docs.active_doc().and_then(|d| d.path.parent().map(Path::to_path_buf)).or_else(|| self.workspace.as_ref().map(|w| w.ws.root.clone()))
+        {
             dialog = dialog.set_directory(dir);
         }
         if let Some(paths) = dialog.pick_files() {
@@ -3199,7 +3745,9 @@ impl CrabCraftApp {
         self.debugger.gdb_path = self.settings.gdb_path.clone();
         self.debugger.lldb_dap_path = self.settings.lldb_dap_path.clone();
         if imports_changed {
-            for doc in &mut self.docs.list { doc.editor.popups.completion = None; }
+            for doc in &mut self.docs.list {
+                doc.editor.popups.completion = None;
+            }
         }
         self.runner.nextest = self.settings.use_nextest;
         self.runner.external_tools = self.settings.external_tools.clone();
@@ -3211,7 +3759,11 @@ impl CrabCraftApp {
         if keymap_changed {
             self.keymap = build_keymap(&self.settings);
             Keymap::cancel_sequence(ctx, egui::Id::unique("app_key_sequence"));
-            if self.native_menu.is_some() && let Some(menu) = NativeMenu::install(ctx, &self.keymap) { self.native_menu = Some(menu); }
+            if self.native_menu.is_some()
+                && let Some(menu) = NativeMenu::install(ctx, &self.keymap)
+            {
+                self.native_menu = Some(menu);
+            }
         }
         if lang_changed {
             i18n::set_lang(self.settings.language.as_deref().map(Lang::from_locale).unwrap_or_else(Lang::system));
@@ -3232,14 +3784,16 @@ impl CrabCraftApp {
         for a in actions {
             match a {
                 ExplorerAction::Open(p) => self.request_open_file(&p),
-                ExplorerAction::Preview(p) => self.request_open(&p,None,true),
+                ExplorerAction::Preview(p) => self.request_open(&p, None, true),
                 ExplorerAction::Collapse => {
                     self.explorer.expanded.retain(|k| k == "sln");
                     self.session_dirty = true;
                 }
                 ExplorerAction::LocateActive => self.locate_active(),
                 ExplorerAction::NewCrate(dir) => self.new_project = Some(crate::ui::new_project::NewProjectDialog::member(&dir, self.waker.clone())),
-                ExplorerAction::NewItem(dir, kind) => self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, attach: true, public: false, error: None }),
+                ExplorerAction::NewItem(dir, kind) => {
+                    self.dialog = Some(Dialog::NewFile { dir, name: String::new(), kind, attach: true, public: false, error: None })
+                }
                 ExplorerAction::Rename(path) => {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     self.dialog = Some(Dialog::Rename { path, name, error: None });
@@ -3307,7 +3861,10 @@ impl CrabCraftApp {
         self.load_attached();
         self.session_dirty = true;
         let name = manifest.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        self.notify(if on { trf("Attached the Cargo project {name}", &[("name", &name)]) } else { trf("Detached the Cargo project {name}", &[("name", &name)]) }, false);
+        self.notify(
+            if on { trf("Attached the Cargo project {name}", &[("name", &name)]) } else { trf("Detached the Cargo project {name}", &[("name", &name)]) },
+            false,
+        );
     }
 
     pub fn locate_active(&mut self) {
@@ -3322,27 +3879,43 @@ impl CrabCraftApp {
 
     fn poll_background(&mut self) {
         let acp_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
-        for change in self.criticalup_provider.poll(acp_trusted){self.change_cargo_provider(change);}
-        if !acp_trusted&&self.privileged_debug.running{self.debugger.stop();}
-        self.privileged_debug.poll(acp_trusted,self.workspace.as_ref().map(|w|w.ws.root.as_path()),&self.docs);
-        if self.privileged_debug.running&&!self.debugger.active(){self.privileged_debug.running=false;}
+        for change in self.criticalup_provider.poll(acp_trusted) {
+            self.change_cargo_provider(change);
+        }
+        if !acp_trusted && self.privileged_debug.running {
+            self.debugger.stop();
+        }
+        self.privileged_debug.poll(acp_trusted, self.workspace.as_ref().map(|w| w.ws.root.as_path()), &self.docs);
+        if self.privileged_debug.running && !self.debugger.active() {
+            self.privileged_debug.running = false;
+        }
         self.privileged_run.poll(acp_trusted);
         self.dev_containers.poll(acp_trusted);
         self.containers.poll(acp_trusted);
         self.plugins.poll(acp_trusted);
         self.proofreader.poll(&self.docs, acp_trusted);
-        if self.acp.poll(acp_trusted) { self.dock.show(ToolWindow::Agents); }
+        if self.acp.poll(acp_trusted) {
+            self.dock.show(ToolWindow::Agents);
+        }
         self.hosting.poll();
         if let Some(result) = self.statement_completion.as_ref().and_then(|job| job.poll(&mut self.docs)) {
             self.statement_completion = None;
-            if let Err(message) = result { self.notify(message, false); }
+            if let Err(message) = result {
+                self.notify(message, false);
+            }
         }
         self.issue_tracker.poll();
-        if self.history_edit.poll() { self.vcs.refresh(); }
-        if self.shelves.poll() { self.vcs.refresh(); }
-        self.endpoints.poll_semantic(&mut self.docs,self.insight.session.as_ref().map(|session|&session.client),acp_trusted,self.cfg_epoch);
+        if self.history_edit.poll() {
+            self.vcs.refresh();
+        }
+        if self.shelves.poll() {
+            self.vcs.refresh();
+        }
+        self.endpoints.poll_semantic(&mut self.docs, self.insight.session.as_ref().map(|session| &session.client), acp_trusted, self.cfg_epoch);
         self.endpoints.poll(&mut self.docs);
-        if self.endpoints.poll_completion(&mut self.docs){self.insight.cancel_local_completion_requests();}
+        if self.endpoints.poll_completion(&mut self.docs) {
+            self.insight.cancel_local_completion_requests();
+        }
         if let Some(mut find) = self.find_in_files.take() {
             find.poll();
             if find.replacements.poll(&mut self.docs) {
@@ -3377,8 +3950,12 @@ impl CrabCraftApp {
             }
         }
         for p in changed {
-            if self.disk_save.saves.contains(&p) { continue; }
-            if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) { self.notify(error.to_string(), true); }
+            if self.disk_save.saves.contains(&p) {
+                continue;
+            }
+            if let Err(error) = self.disk_watch.queue(&mut self.docs, &p) {
+                self.notify(error.to_string(), true);
+            }
         }
         self.poll_file_edits();
         self.poll_disk_save();
@@ -3402,7 +3979,9 @@ impl CrabCraftApp {
         let changes: Vec<(PathBuf, u8)> = events
             .iter()
             // Excluded folders are not the server's business.
-            .filter(|e| root.as_deref().and_then(|r| rc_core::workspace::relative_path(r, e.path())).is_none_or(|rel| !rc_core::workspace::is_excluded(&rel, excluded)))
+            .filter(|e| {
+                root.as_deref().and_then(|r| rc_core::workspace::relative_path(r, e.path())).is_none_or(|rel| !rc_core::workspace::is_excluded(&rel, excluded))
+            })
             .filter(|e| e.path().extension().is_some_and(|x| x == "rs" || x == "toml" || x == "cs" || x == "csproj" || x == "props" || x == "targets"))
             .map(|e| match e {
                 FsEvent::Created(p) => (p.clone(), 1),
@@ -3418,12 +3997,19 @@ impl CrabCraftApp {
     /// IDE shortcuts work whatever has the focus; they are taken out of the input so text
     /// fields don't see them.
     fn global_shortcuts(&mut self, ctx: &Context) {
-        if ctx.input(|input| input.events.iter().any(|event| matches!(event, egui::Event::PointerButton { pressed: true, .. } | egui::Event::WindowFocused(false) | egui::Event::Ime(_)))) {
+        if ctx.input(|input| {
+            input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::PointerButton { pressed: true, .. } | egui::Event::WindowFocused(false) | egui::Event::Ime(_)))
+        }) {
             Keymap::cancel_sequence(ctx, egui::Id::unique("app_key_sequence"));
         }
         // Settings › Keymap is recording a shortcut: the key belongs to it.
         if ctx.data(|d| d.get_temp::<String>(egui::Id::unique("recording_shortcut")).is_some()) {
-            if matches!(&self.dialog, Some(Dialog::Settings { page: crate::ui::dialogs::SettingsPage::Keymap, .. })) { return; }
+            if matches!(&self.dialog, Some(Dialog::Settings { page: crate::ui::dialogs::SettingsPage::Keymap, .. })) {
+                return;
+            }
             crate::ui::dialogs::cancel_shortcut_recording(ctx);
         }
         let now = ctx.input(|i| i.time);
@@ -3440,27 +4026,49 @@ impl CrabCraftApp {
             self.pending.push(Action::RunAnything);
         }
         let keymap = &self.keymap;
-        let editor_focused = self.docs.active_doc().is_some_and(|doc| ctx.memory(|memory| memory.focused()) == Some(rc_editor::EditorView::id_for(doc.editor.id)));
+        let editor_focused =
+            self.docs.active_doc().is_some_and(|doc| ctx.memory(|memory| memory.focused()) == Some(rc_editor::EditorView::id_for(doc.editor.id)));
         let events = ctx.input(|input| input.events.clone());
         let mut consumed = std::collections::BTreeSet::new();
         let mut found = Vec::new();
-        for (index,event) in events.iter().enumerate() {
+        for (index, event) in events.iter().enumerate() {
             if let egui::Event::Key { key, pressed: true, modifiers, repeat, .. } = event {
-                if *repeat && Keymap::sequence_repeat(ctx, egui::Id::unique("app_key_sequence"), *key) { consumed.insert(index); continue; }
+                if *repeat && Keymap::sequence_repeat(ctx, egui::Id::unique("app_key_sequence"), *key) {
+                    consumed.insert(index);
+                    continue;
+                }
                 if !repeat {
                     match keymap.sequence_key(ctx, egui::Id::unique("app_key_sequence"), *key, *modifiers, editor_focused) {
-                        rc_editor::keymap::SequenceKey::Waiting => { consumed.insert(index); continue; }
-                        rc_editor::keymap::SequenceKey::Action(action) => { found.push(action); consumed.insert(index); continue; }
-                        rc_editor::keymap::SequenceKey::Pass => {},
+                        rc_editor::keymap::SequenceKey::Waiting => {
+                            consumed.insert(index);
+                            continue;
+                        }
+                        rc_editor::keymap::SequenceKey::Action(action) => {
+                            found.push(action);
+                            consumed.insert(index);
+                            continue;
+                        }
+                        rc_editor::keymap::SequenceKey::Pass => {}
                     }
                 }
-                if let Some(action) = keymap.lookup(*key,*modifiers).filter(|action| action.is_ide()) {
-                    found.push(action); consumed.insert(index);
+                if let Some(action) = keymap.lookup(*key, *modifiers).filter(|action| action.is_ide()) {
+                    found.push(action);
+                    consumed.insert(index);
                 }
             } else if let egui::Event::Text(text) = event
-                && Keymap::sequence_text(ctx, egui::Id::unique("app_key_sequence"), text) { consumed.insert(index); }
+                && Keymap::sequence_text(ctx, egui::Id::unique("app_key_sequence"), text)
+            {
+                consumed.insert(index);
+            }
         }
-        ctx.input_mut(|input| { let mut index = 0; input.events.retain(|_| { let keep = !consumed.contains(&index); index += 1; keep }); });
+        ctx.input_mut(|input| {
+            let mut index = 0;
+            input.events.retain(|_| {
+                let keep = !consumed.contains(&index);
+                index += 1;
+                keep
+            });
+        });
         self.pending.extend(found);
         // The mouse's back / forward buttons.
         let (back, forward) = ctx.input(|i| (i.pointer.button_pressed(egui::PointerButton::Extra1), i.pointer.button_pressed(egui::PointerButton::Extra2)));
@@ -3476,7 +4084,11 @@ impl CrabCraftApp {
 /// at the last quit (none after Close Project, as in Rider).
 /// The program, arguments and folder of an external tool, with its macros expanded. The
 /// arguments are split first, so a path with spaces stays one argument.
-pub fn external_plan(tool: &rc_core::external_tools::ExternalTool, ctx: &rc_core::external_tools::MacroContext, env: Vec<(String, String)>) -> Result<rc_dotnet::LaunchPlan, String> {
+pub fn external_plan(
+    tool: &rc_core::external_tools::ExternalTool,
+    ctx: &rc_core::external_tools::MacroContext,
+    env: Vec<(String, String)>,
+) -> Result<rc_dotnet::LaunchPlan, String> {
     use rc_core::external_tools::{expand, working_dir};
     let missing = |m: String| trf("{macro} has no value here (open a file or a project)", &[("macro", &m)]);
     let program = expand(tool.program.trim(), ctx).map_err(missing)?;
@@ -3554,8 +4166,11 @@ impl eframe::App for CrabCraftApp {
         }
         self.poll_toolchain_updates();
         self.poll_explanation();
-        let requests=crate::open_files::take();
-        if !requests.is_empty(){self.open_requests(requests);ctx.send_viewport_cmd(egui::ViewportCommand::Focus);}
+        let requests = crate::open_files::take();
+        if !requests.is_empty() {
+            self.open_requests(requests);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         if let Some(menu) = &self.native_menu {
             for cmd in menu.poll() {
                 match cmd {
@@ -3577,18 +4192,27 @@ impl eframe::App for CrabCraftApp {
                 }
             }
         }
-        if ctx.input(|i|i.viewport().close_requested()) && !self.disk_save.exit_ready {
+        if ctx.input(|i| i.viewport().close_requested()) && !self.disk_save.exit_ready {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            if !self.disk_save.exit_prepared {self.save_session();self.disk_save.exit_prepared=true;}
-            let context=ctx.clone();
-            if !self.defer_save(false,move|app|{app.disk_save.exit_ready=true;context.send_viewport_cmd(egui::ViewportCommand::Close);}) {
-                self.disk_save.exit_ready=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            if !self.disk_save.exit_prepared {
+                self.save_session();
+                self.disk_save.exit_prepared = true;
+            }
+            let context = ctx.clone();
+            if !self.defer_save(false, move |app| {
+                app.disk_save.exit_ready = true;
+                context.send_viewport_cmd(egui::ViewportCommand::Close);
+            }) {
+                self.disk_save.exit_ready = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
         if self.disk_save.saves.busy() || self.disk_save.continuation.is_some() {
-            egui::Window::new(tr("Saving documents…")).id(egui::Id::unique("disk_save_progress")).collapsible(false).resizable(false).show(ctx,|ui| {
+            egui::Window::new(tr("Saving documents…")).id(egui::Id::unique("disk_save_progress")).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.label(tr("Edits stay open until saving finishes"));
-                if ui.button(tr("Cancel saving")).clicked(){self.cancel_disk_save();}
+                if ui.button(tr("Cancel saving")).clicked() {
+                    self.cancel_disk_save();
+                }
             });
         }
         self.global_shortcuts(ctx);
@@ -3626,9 +4250,12 @@ impl eframe::App for CrabCraftApp {
                 editor_actions.push(a);
             }
         }
-        let web_trusted=self.workspace.as_ref().is_some_and(|workspace|self.settings.trusted_projects.contains(&workspace.ws.root));
-        let web_outputs=self.web_languages.update(&mut self.docs,self.workspace.as_ref().map(|workspace|workspace.ws.root.as_path()),&self.settings,web_trusted);
-        if self.web_languages.initializing(){ctx.request_repaint_after(std::time::Duration::from_millis(100));}
+        let web_trusted = self.workspace.as_ref().is_some_and(|workspace| self.settings.trusted_projects.contains(&workspace.ws.root));
+        let web_outputs =
+            self.web_languages.update(&mut self.docs, self.workspace.as_ref().map(|workspace| workspace.ws.root.as_path()), &self.settings, web_trusted);
+        if self.web_languages.initializing() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
         self.web_languages.merge_problems(&mut self.insight);
         self.handle_insight(web_outputs);
         let outputs = self.insight.update(&mut self.docs, self.settings.show_inlay_hints);
@@ -3643,7 +4270,9 @@ impl eframe::App for CrabCraftApp {
         self.poll_repl();
         self.poll_disk_open();
         self.disk_open.show(&ctx);
-        if self.workspace_open.show(&ctx)&&self.disk_save.pending_workspace.is_some(){self.cancel_disk_save();}
+        if self.workspace_open.show(&ctx) && self.disk_save.pending_workspace.is_some() {
+            self.cancel_disk_save();
+        }
         self.file_edits.show(&ctx);
         self.poll_disk_revert();
         self.poll_terminal_startup();
@@ -3657,12 +4286,18 @@ impl eframe::App for CrabCraftApp {
         let online = self.settings.check_crates_io;
         let waits = [
             self.dep_versions.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, online, &self.insight.profile),
-            crate::manifest_completion::CrateNames::update(&mut self.docs, &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online }),
+            crate::manifest_completion::CrateNames::update(
+                &mut self.docs,
+                &mut crate::manifest_completion::Cx { names: &mut self.crate_names, deps: &mut self.dep_versions, online },
+            ),
         ];
         if let Some(wait) = waits.into_iter().flatten().min() {
             ctx.request_repaint_after(wait);
         }
-        if self.borrow_errors.poll(&mut self.docs) { self.focus_editor = true; self.session_dirty = true; }
+        if self.borrow_errors.poll(&mut self.docs) {
+            self.focus_editor = true;
+            self.session_dirty = true;
+        }
         self.missing_crates.update(&self.docs, &self.runner, self.cfg_epoch, &ctx);
         self.manifest_inspections.update(&mut self.docs, &mut self.insight.problems, self.cfg_epoch, &self.insight.profile);
         self.poll_feature_search();
@@ -3705,11 +4340,15 @@ impl eframe::App for CrabCraftApp {
 /// settings file are skipped.
 pub fn build_keymap(settings: &Settings) -> Keymap {
     let actions = crate::search::action_items();
-    let sequences: Vec<_> = settings.shortcuts.iter().filter_map(|(id,text)| {
-        let action = actions.iter().map(|(_,a)| *a).find(|a| format!("{a:?}") == *id)?;
-        let (first,second) = rc_editor::keymap::parse_sequence(text)?;
-        Some((action,first,second))
-    }).collect();
+    let sequences: Vec<_> = settings
+        .shortcuts
+        .iter()
+        .filter_map(|(id, text)| {
+            let action = actions.iter().map(|(_, a)| *a).find(|a| format!("{a:?}") == *id)?;
+            let (first, second) = rc_editor::keymap::parse_sequence(text)?;
+            Some((action, first, second))
+        })
+        .collect();
     Keymap::with_overrides(keymap_kind(settings.keymap), &shortcut_overrides(&settings.shortcuts)).with_sequences(&sequences)
 }
 
@@ -3727,7 +4366,9 @@ pub fn shortcut_overrides(map: &std::collections::BTreeMap<String, String>) -> V
         .collect()
 }
 
-pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind { keymap_kind_for(choice, cfg!(target_os = "macos")) }
+pub fn keymap_kind(choice: KeymapChoice) -> KeymapKind {
+    keymap_kind_for(choice, cfg!(target_os = "macos"))
+}
 
 pub(crate) fn keymap_kind_for(choice: KeymapChoice, mac: bool) -> KeymapKind {
     match choice {
@@ -3789,6 +4430,15 @@ fn group_lines<T: Ord>(entries: impl Iterator<Item = (PathBuf, T)>) -> std::coll
     map
 }
 
+/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
+/// `version`: chars `start..end` and the new requirement.
+pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
+    let version = semver::Version::parse(version).ok()?;
+    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
+    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
+    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
+}
+
 #[cfg(test)]
 mod double_tap_tests {
     use super::{double_tap, interrupts_tap};
@@ -3819,13 +4469,4 @@ mod double_tap_tests {
         // Ctrl+click, then Ctrl alone.
         assert!(!run(&[(true, false, 1.0), (true, true, 1.05), (false, false, 1.1), (true, false, 1.2)]).contains(&true));
     }
-}
-
-/// The edit that updates the requirement of the dependency on `line` of a `Cargo.toml` to
-/// `version`: chars `start..end` and the new requirement.
-pub fn dependency_update_edit(text: &str, line: usize, version: &str) -> Option<(usize, usize, String)> {
-    let version = semver::Version::parse(version).ok()?;
-    let dep = rc_cargo::dependency_lines(text).into_iter().find(|d| d.line == line)?;
-    let (start, end) = rc_cargo::versions::dep_spans(text, &dep).req?;
-    Some((start, end, rc_cargo::versions::updated_requirement(dep.req.as_deref().unwrap_or_default(), &version)))
 }

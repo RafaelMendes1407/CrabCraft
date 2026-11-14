@@ -212,12 +212,8 @@ fn run_search(root: &Path, opts: &FindOptions, query: &Query, cancel: &AtomicBoo
         Some(s) => root.join(s),
         None => root.to_path_buf(),
     };
-    let c = Counters {
-        files_searched: AtomicUsize::new(0),
-        files_matched: AtomicUsize::new(0),
-        matches: AtomicUsize::new(0),
-        truncated: AtomicBool::new(false),
-    };
+    let c =
+        Counters { files_searched: AtomicUsize::new(0), files_matched: AtomicUsize::new(0), matches: AtomicUsize::new(0), truncated: AtomicBool::new(false) };
     let matcher = GrepQuery(query);
     walk_builder(&start).threads(walker_threads()).build_parallel().run(|| {
         let mut searcher = SearcherBuilder::new()
@@ -250,8 +246,13 @@ fn run_search(root: &Path, opts: &FindOptions, query: &Query, cancel: &AtomicBoo
             c.files_searched.fetch_add(1, Ordering::Relaxed);
             let mut sink = FileSink { query, lines: Vec::new(), before: Vec::new(), binary: false, max: opts.max_results, counters: c, cancel };
             let _ = searcher.search_path(matcher, e.path(), &mut sink);
-            if !sink.binary && !sink.lines.is_empty() && !cancel.load(Ordering::Relaxed)
-                && std::fs::symlink_metadata(e.path()).ok().is_some_and(|metadata| metadata.is_file() && crate::replace::FileStamp::from_metadata(&metadata) == stamp) {
+            if !sink.binary
+                && !sink.lines.is_empty()
+                && !cancel.load(Ordering::Relaxed)
+                && std::fs::symlink_metadata(e.path())
+                    .ok()
+                    .is_some_and(|metadata| metadata.is_file() && crate::replace::FileStamp::from_metadata(&metadata) == stamp)
+            {
                 c.files_matched.fetch_add(1, Ordering::Relaxed);
                 out.send(FindEvent::File { search: id, file: FileMatches { path: e.path().to_path_buf(), stamp, rel, lines: sink.lines } });
             }

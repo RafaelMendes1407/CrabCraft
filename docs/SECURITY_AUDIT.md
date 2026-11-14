@@ -128,14 +128,12 @@ safe or modify application behavior.
 At introduction, RustSec reported no known vulnerability in the main
 `Cargo.lock`, but it warned about unmaintained transitive `zbus_names`,
 `zvariant` and `zvariant_derive`. `cargo fmt --check` and strict Clippy failed
-on pre-existing formatting/lint debt across 277 Rust files. Both strict
-commands still run and publish their complete failing logs. The dated
-`security/static-baseline.json` downgrades this exact source graph and Rust
-toolchain to `WARNING` so the security workflow can run. Any change to Rust
-source, a Cargo manifest or lockfile invalidates the baseline and restores
-the blocking `FAIL`; expiry does likewise. Reviewers must never refresh the
-hash merely to make CI green. Format the workspace and resolve the lints in
-separate, reviewable changes, then remove the baseline.
+on pre-existing formatting/lint debt across 277 Rust files. Source changes later
+invalidated the exact-source exception, causing the static job and consolidated
+report to fail while builds and tests passed. The workspace is now formatted and
+strict Clippy findings are corrected in separate commits. The baseline file and
+its downgrade logic have been removed: either command failing blocks the audit.
+A regression test verifies that formatting and/or Clippy failures remain FAIL.
 `cargo-deny` 0.20.2 also emits internal `unresolved-workspace-dependency`
 diagnostics for some inherited workspace aliases. The result is WARNING,
 with raw diagnostics retained for review; no policy error is ignored.

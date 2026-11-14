@@ -63,25 +63,56 @@ pub enum Level {
 pub enum Problem {
     /// A key Cargo does not read in `table` (`""`: the top level), with the known key it is
     /// most likely a typo of.
-    UnknownKey { key: String, table: String, suggestion: Option<String> },
+    UnknownKey {
+        key: String,
+        table: String,
+        suggestion: Option<String>,
+    },
     /// A `[dev-dependencies]` entry whose requirement is semver-incompatible with the
     /// `[dependencies]` one (`other`).
-    DuplicateDependency { name: String, other: String },
+    DuplicateDependency {
+        name: String,
+        other: String,
+    },
     /// A dependency with no version, path, git repository or `workspace = true`.
-    NoSource { name: String },
+    NoSource {
+        name: String,
+    },
     /// `value` in feature `feature` is neither a feature nor an optional dependency.
-    UnknownFeature { feature: String, value: String, suggestion: Option<String> },
+    UnknownFeature {
+        feature: String,
+        value: String,
+        suggestion: Option<String>,
+    },
     /// `value` in `feature` names `dep`, which is not a dependency.
-    NotADependency { feature: String, value: String, dep: String },
+    NotADependency {
+        feature: String,
+        value: String,
+        dep: String,
+    },
     /// `value` in `feature` needs `dep` to be optional.
-    NotOptional { feature: String, value: String, dep: String },
+    NotOptional {
+        feature: String,
+        value: String,
+        dep: String,
+    },
     /// `feature` names optional dependency `dep`, whose implicit feature is gone because
     /// `dep:<dep>` is used.
-    NoImplicitFeature { feature: String, dep: String },
-    InvalidEdition { value: String },
+    NoImplicitFeature {
+        feature: String,
+        dep: String,
+    },
+    InvalidEdition {
+        value: String,
+    },
     EditionNotString,
-    MissingMember { path: String },
-    MissingPathDependency { name: String, path: String },
+    MissingMember {
+        path: String,
+    },
+    MissingPathDependency {
+        name: String,
+        path: String,
+    },
 }
 
 /// What a quick fix does, for its title.
@@ -208,8 +239,8 @@ fn distance(a: &str, b: &str) -> usize {
     for (i, row) in d.iter_mut().enumerate() {
         row[0] = i;
     }
-    for j in 0..=b.len() {
-        d[0][j] = j;
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
     }
     for i in 1..=a.len() {
         for j in 1..=b.len() {
@@ -292,7 +323,12 @@ impl Cx<'_> {
         match v.get_ref() {
             DeValue::String(s) if !EDITIONS.contains(&s.as_ref()) => {
                 let new = quoted(self.raw(&v.span()), LATEST_EDITION);
-                self.push(&v.span(), Level::Error, Problem::InvalidEdition { value: s.to_string() }, Some((v.span(), new, FixKind::ChangeTo(LATEST_EDITION.to_string()))));
+                self.push(
+                    &v.span(),
+                    Level::Error,
+                    Problem::InvalidEdition { value: s.to_string() },
+                    Some((v.span(), new, FixKind::ChangeTo(LATEST_EDITION.to_string()))),
+                );
             }
             DeValue::Integer(i) => {
                 let fix = EDITIONS.contains(&i.as_str()).then(|| (v.span(), format!("\"{}\"", i.as_str()), FixKind::ChangeTo(format!("\"{}\"", i.as_str()))));
@@ -305,7 +341,8 @@ impl Cx<'_> {
     /// Key, source and path checks of one dependency.
     fn dependency(&mut self, d: &Decl<'_, '_>, path: &str, in_workspace: bool, dir: Option<&Path>) {
         let Some(t) = d.table() else { return };
-        let known: Vec<&str> = DEPENDENCY_KEYS.iter().map(|k| k.name).chain(DEPENDENCY_EXTRA.iter().copied()).filter(|k| !in_workspace || *k != "workspace").collect();
+        let known: Vec<&str> =
+            DEPENDENCY_KEYS.iter().map(|k| k.name).chain(DEPENDENCY_EXTRA.iter().copied()).filter(|k| !in_workspace || *k != "workspace").collect();
         self.keys(t, &format!("{path}.{}", d.key), &known);
         if !["version", "path", "git", "workspace"].iter().any(|k| get(t, k).is_some()) {
             self.push(&d.key_span, Level::Error, Problem::NoSource { name: d.key.to_string() }, None);
@@ -574,9 +611,15 @@ mod tests {
         let got = run(text, None);
         let pick = |key: &str| got.iter().find(|g| matches!(&g.2, Problem::UnknownKey { key: k, .. } if k == key)).cloned();
         assert_eq!(pick("featurs").map(|g| (g.0, g.1, g.3)), Some((s("featurs"), Level::Warning, Some(s("features")))));
-        assert_eq!(pick("versoin").map(|g| (g.2, g.3)), Some((Problem::UnknownKey { key: s("versoin"), table: s("package"), suggestion: Some(s("version")) }, Some(s("version")))));
+        assert_eq!(
+            pick("versoin").map(|g| (g.2, g.3)),
+            Some((Problem::UnknownKey { key: s("versoin"), table: s("package"), suggestion: Some(s("version")) }, Some(s("version"))))
+        );
         assert_eq!(pick("zzz").map(|g| g.3), Some(None), "nothing close");
-        assert_eq!(pick("featrues").map(|g| g.2), Some(Problem::UnknownKey { key: s("featrues"), table: s("dependencies.serde"), suggestion: Some(s("features")) }));
+        assert_eq!(
+            pick("featrues").map(|g| g.2),
+            Some(Problem::UnknownKey { key: s("featrues"), table: s("dependencies.serde"), suggestion: Some(s("features")) })
+        );
         assert_eq!(pick("optinal").map(|g| (g.0, g.3)), Some((s("\"optinal\""), Some(s("\"optional\"")))), "the quotes stay");
         assert_eq!(pick("dependecies").map(|g| g.3), Some(Some(s("dependencies"))));
         assert_eq!(pick("memebrs").map(|g| g.3), Some(Some(s("members"))));
@@ -682,8 +725,15 @@ mod tests {
     #[test]
     fn bad_input_gives_no_issues() {
         assert_eq!(run("[package\nname = ", None), vec![]);
-        let odd = run("[dependencies]\na = { version = 1 }\nb = 3\nc = []\n[features]\nx = 3\ny = [1, \"dep:\"]\n[workspace]\nmembers = 3\n", Some(Path::new("/nonexistent")));
-        assert_eq!(odd.iter().map(|g| g.2.clone()).collect::<Vec<_>>(), vec![Problem::NotADependency { feature: s("y"), value: s("dep:"), dep: s("") }], "only `dep:` names nothing");
+        let odd = run(
+            "[dependencies]\na = { version = 1 }\nb = 3\nc = []\n[features]\nx = 3\ny = [1, \"dep:\"]\n[workspace]\nmembers = 3\n",
+            Some(Path::new("/nonexistent")),
+        );
+        assert_eq!(
+            odd.iter().map(|g| g.2.clone()).collect::<Vec<_>>(),
+            vec![Problem::NotADependency { feature: s("y"), value: s("dep:"), dep: s("") }],
+            "only `dep:` names nothing"
+        );
         assert_eq!(closest("", ["a"]), Some("a"));
         assert_eq!(distance("ab", "ba"), 1);
     }

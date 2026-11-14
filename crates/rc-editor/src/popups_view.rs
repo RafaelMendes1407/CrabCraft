@@ -141,7 +141,16 @@ pub fn expand_snippet(s: &str) -> (String, Option<usize>) {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn show(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, m: &Metrics, text_rect: Rect, focused: bool, out: &mut EditorOutput) -> Option<usize> {
+pub(crate) fn show(
+    ui: &Ui,
+    state: &mut EditorState,
+    scheme: &Scheme,
+    pal: &Palette,
+    m: &Metrics,
+    text_rect: Rect,
+    focused: bool,
+    out: &mut EditorOutput,
+) -> Option<usize> {
     let mut accepted = None;
     show_context(ui, state, scheme, pal, m, text_rect, focused, out);
     // A completion whose anchor is no longer before the caret is stale.
@@ -298,11 +307,12 @@ fn show_context(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette
 }
 
 fn popup_frame(pal: &Palette) -> egui::Frame {
-    egui::Frame::NONE
-        .fill(pal.popup_bg)
-        .stroke(Stroke::new(1.0, pal.popup_border))
-        .corner_radius(8)
-        .shadow(egui::Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha(if pal.dark { 90 } else { 30 }) })
+    egui::Frame::NONE.fill(pal.popup_bg).stroke(Stroke::new(1.0, pal.popup_border)).corner_radius(8).shadow(egui::Shadow {
+        offset: [0, 4],
+        blur: 16,
+        spread: 0,
+        color: Color32::from_black_alpha(if pal.dark { 90 } else { 30 }),
+    })
 }
 
 fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Palette, at: Pos2) -> Option<usize> {
@@ -347,15 +357,29 @@ fn show_completion(ui: &Ui, state: &mut EditorState, scheme: &Scheme, pal: &Pale
                     let color = if item.deprecated { pal.muted } else { pal.text };
                     if prefix_matches && n > 0 {
                         let split = item.label.char_indices().nth(n).map_or(item.label.len(), |(b, _)| b);
-                        job.append(&item.label[..split], 0.0, egui::TextFormat { font_id: rc_kit::theme::mono_bold(13.0), color: pal.accent, ..Default::default() });
+                        job.append(
+                            &item.label[..split],
+                            0.0,
+                            egui::TextFormat { font_id: rc_kit::theme::mono_bold(13.0), color: pal.accent, ..Default::default() },
+                        );
                         job.append(&item.label[split..], 0.0, egui::TextFormat { font_id: font.clone(), color, ..Default::default() });
                     } else {
-                        job.append(&item.label, 0.0, egui::TextFormat { font_id: font.clone(), color, strikethrough: if item.deprecated { Stroke::new(1.0, color) } else { Stroke::NONE }, ..Default::default() });
+                        job.append(
+                            &item.label,
+                            0.0,
+                            egui::TextFormat {
+                                font_id: font.clone(),
+                                color,
+                                strikethrough: if item.deprecated { Stroke::new(1.0, color) } else { Stroke::NONE },
+                                ..Default::default()
+                            },
+                        );
                     }
                     if !item.detail.is_empty() {
                         job.append(&item.detail, 6.0, egui::TextFormat { font_id: FontId::proportional(12.0), color: pal.muted, ..Default::default() });
                     }
-                    let type_galley = (!item.type_text.is_empty()).then(|| ui.painter().layout_no_wrap(item.type_text.clone(), FontId::proportional(12.0), pal.muted));
+                    let type_galley =
+                        (!item.type_text.is_empty()).then(|| ui.painter().layout_no_wrap(item.type_text.clone(), FontId::proportional(12.0), pal.muted));
                     let type_w = type_galley.as_ref().map_or(0.0, |g| g.size().x + 10.0);
                     job.wrap.max_width = r.width() - 32.0 - type_w;
                     job.wrap.max_rows = 1;
@@ -441,7 +465,10 @@ fn show_hover(ui: &Ui, h: &crate::popup::Hover, scheme: &Scheme, pal: &Palette, 
                 });
                 if let Some(code) = &h.explain {
                     let label = rc_kit::i18n::trf("Explain {code}", &[("code", code)]);
-                    explain = ui.link(egui::RichText::new(label).color(pal.accent)).on_hover_text(rc_kit::i18n::tr("Show rustc's explanation of this error code")).clicked();
+                    explain = ui
+                        .link(egui::RichText::new(label).color(pal.accent))
+                        .on_hover_text(rc_kit::i18n::tr("Show rustc's explanation of this error code"))
+                        .clicked();
                 }
                 if !h.text.trim().is_empty() {
                     ui.add_space(4.0);

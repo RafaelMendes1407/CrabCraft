@@ -54,10 +54,7 @@ pub struct FuzzyPattern {
 impl FuzzyPattern {
     pub fn new(pattern: &str) -> FuzzyPattern {
         let words: Vec<&str> = pattern.split_whitespace().collect();
-        let atoms = words
-            .iter()
-            .map(|w| Atom::new(w, CaseMatching::Ignore, Normalization::Smart, AtomKind::Fuzzy, false))
-            .collect();
+        let atoms = words.iter().map(|w| Atom::new(w, CaseMatching::Ignore, Normalization::Smart, AtomKind::Fuzzy, false)).collect();
         FuzzyPattern { atoms, lower: words.join(" ").to_lowercase() }
     }
 
@@ -140,11 +137,8 @@ pub fn rank<'a>(candidates: impl IntoIterator<Item = &'a str>, pattern: &str, li
     let pattern = FuzzyPattern::new(pattern);
     MATCHER.with(|m| {
         let mut m = m.borrow_mut();
-        let mut out: Vec<(usize, usize, FuzzyMatch)> = candidates
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, c)| m.matches(c, &pattern).map(|fm| (i, c.chars().count(), fm)))
-            .collect();
+        let mut out: Vec<(usize, usize, FuzzyMatch)> =
+            candidates.into_iter().enumerate().filter_map(|(i, c)| m.matches(c, &pattern).map(|fm| (i, c.chars().count(), fm))).collect();
         out.sort_by(|a, b| b.2.score.cmp(&a.2.score).then(a.1.cmp(&b.1)).then(a.0.cmp(&b.0)));
         out.truncate(limit);
         out.into_iter().map(|(i, _, fm)| (i, fm)).collect()
@@ -173,8 +167,7 @@ fn classify(candidate: &str, hay: Utf32Str<'_>, lower: &str, indices: &[u32]) ->
 
 /// True when every run of consecutive matched positions begins at a word start.
 pub(crate) fn is_hump_match(hay: Utf32Str<'_>, indices: &[u32]) -> bool {
-    !indices.is_empty()
-        && indices.iter().enumerate().all(|(k, &i)| (k > 0 && indices[k - 1] + 1 == i) || is_word_start(hay, i))
+    !indices.is_empty() && indices.iter().enumerate().all(|(k, &i)| (k > 0 && indices[k - 1] + 1 == i) || is_word_start(hay, i))
 }
 
 /// Word starts: the first char, separators and what follows them, `Order|Service`,

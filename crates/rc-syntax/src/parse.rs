@@ -58,10 +58,7 @@ impl ParserPool {
     pub fn new(wake: Arc<dyn Fn() + Send + Sync>) -> Self {
         let (jobs, job_rx) = unbounded::<Job>();
         let (result_tx, results) = unbounded();
-        std::thread::Builder::new()
-            .name("crabcraft-parser".into())
-            .spawn(move || run(job_rx, result_tx, wake))
-            .expect("spawn parser thread");
+        std::thread::Builder::new().name("crabcraft-parser".into()).spawn(move || run(job_rx, result_tx, wake)).expect("spawn parser thread");
         ParserPool { jobs, results }
     }
 
@@ -103,7 +100,7 @@ fn run(jobs: Receiver<Job>, results: Sender<ParseResult>, wake: Arc<dyn Fn() + S
             let Some(tree) = parse_with(parser, &job.rope, job.old.as_ref()) else { continue };
             let micros = t0.elapsed().as_micros() as u64;
             let folds = folding_ranges(job.lang, &tree, &job.rope);
-            let embedded=crate::embedded_web::collect(job.lang,&tree,&job.rope);
+            let embedded = crate::embedded_web::collect(job.lang, &tree, &job.rope);
             if results.send(ParseResult { doc: job.doc, version: job.version, tree, folds, embedded, micros }).is_err() {
                 return;
             }

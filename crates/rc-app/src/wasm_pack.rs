@@ -28,7 +28,9 @@ impl std::error::Error for PlanError {}
 pub fn plan(manifest: &Path, options: &RunOptions, mut env: Vec<(String, String)>) -> Result<rc_dotnet::LaunchPlan, PlanError> {
     let dir = manifest.parent().filter(|_| manifest.file_name().is_some_and(|name| name == "Cargo.toml")).ok_or(PlanError::Manifest)?;
     let target = if options.wasm_target.is_empty() { "bundler" } else { options.wasm_target.as_str() };
-    if !TARGETS.contains(&target) { return Err(PlanError::Target); }
+    if !TARGETS.contains(&target) {
+        return Err(PlanError::Target);
+    }
     let mut args: Vec<String> = ["build", ".", "--target", target, "--mode", "no-install", "--no-opt"].into_iter().map(str::to_string).collect();
     args.push(if options.wasm_dev { "--dev" } else { "--release" }.into());
     if !options.wasm_out_dir.trim().is_empty() {
@@ -38,7 +40,9 @@ pub fn plan(manifest: &Path, options: &RunOptions, mut env: Vec<(String, String)
     if features.iter().any(|s| !s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '+' | '.' | '/'))) {
         return Err(PlanError::Features);
     }
-    if !features.is_empty() { args.extend(["--features".into(), features.join(",")]); }
+    if !features.is_empty() {
+        args.extend(["--features".into(), features.join(",")]);
+    }
     env.extend(rc_core::session::parse_env(&options.env).map_err(|_| PlanError::Environment)?);
     env.push(("RUSTUP_AUTO_INSTALL".into(), "0".into()));
     Ok(rc_dotnet::LaunchPlan { program: PathBuf::from("wasm-pack"), args, env, working_dir: dir.to_path_buf(), urls: Vec::new() })
@@ -51,11 +55,21 @@ mod tests {
     #[test]
     fn plan_rejects_untrusted_configuration_values_and_never_installs_tools() {
         let manifest = Path::new("/workspace/demo/Cargo.toml");
-        let options = RunOptions { wasm_target: "web".into(), wasm_dev: true, wasm_out_dir: "web assets".into(), features: "small,fast".into(), env: "MODE=test".into(), ..Default::default() };
+        let options = RunOptions {
+            wasm_target: "web".into(),
+            wasm_dev: true,
+            wasm_out_dir: "web assets".into(),
+            features: "small,fast".into(),
+            env: "MODE=test".into(),
+            ..Default::default()
+        };
         let p = plan(manifest, &options, vec![("MODE".into(), "project".into())]).unwrap();
         assert_eq!(p.working_dir, Path::new("/workspace/demo"));
-        assert_eq!(p.args, ["build", ".", "--target", "web", "--mode", "no-install", "--no-opt", "--dev", "--out-dir", "web assets", "--features", "small,fast"]);
-        assert_eq!(p.env.iter().filter(|(key, _)| key == "MODE").last().unwrap().1, "test");
+        assert_eq!(
+            p.args,
+            ["build", ".", "--target", "web", "--mode", "no-install", "--no-opt", "--dev", "--out-dir", "web assets", "--features", "small,fast"]
+        );
+        assert_eq!(p.env.iter().rfind(|(key, _)| key == "MODE").unwrap().1, "test");
         assert!(p.env.contains(&("RUSTUP_AUTO_INSTALL".into(), "0".into())));
         assert_eq!(plan(manifest, &RunOptions { wasm_target: "--publish".into(), ..Default::default() }, Vec::new()).unwrap_err(), PlanError::Target);
         assert_eq!(plan(manifest, &RunOptions { features: "foo; rm".into(), ..Default::default() }, Vec::new()).unwrap_err(), PlanError::Features);
@@ -87,7 +101,14 @@ mod tests {
         assert!(!package.path().join("build-ran").exists());
         runner.trusted_project = Some(package.path().canonicalize().unwrap());
         // The test caller puts installed test tools on PATH; the shipped command stays exact.
-        let options = RunOptions { wasm_target: "web".into(), wasm_dev: true, wasm_out_dir: "web assets".into(), features: "fast".into(), env: "CARGO_NET_OFFLINE=true".into(), ..Default::default() };
+        let options = RunOptions {
+            wasm_target: "web".into(),
+            wasm_dev: true,
+            wasm_out_dir: "web assets".into(),
+            features: "fast".into(),
+            env: "CARGO_NET_OFFLINE=true".into(),
+            ..Default::default()
+        };
         runner.options.insert(config, options);
         assert!(matches!(runner.run_selected().as_slice(), [RunnerOutput::ShowTool(_)]));
         let deadline = Instant::now() + Duration::from_secs(60);

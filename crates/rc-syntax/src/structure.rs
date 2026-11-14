@@ -27,7 +27,8 @@ pub struct FoldRange {
 }
 
 /// Rust nodes that fold on their own (the body of an item, a match, a macro call...).
-const RUST_BLOCKS: &[&str] = &["block", "declaration_list", "field_declaration_list", "enum_variant_list", "match_block", "token_tree", "use_list", "ordered_field_declaration_list"];
+const RUST_BLOCKS: &[&str] =
+    &["block", "declaration_list", "field_declaration_list", "enum_variant_list", "match_block", "token_tree", "use_list", "ordered_field_declaration_list"];
 
 pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
     let mut out = Vec::new();
@@ -41,7 +42,13 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 if RUST_BLOCKS.contains(&kind) && er > sr {
                     out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: end_col(rope, node) });
                 } else if kind == "block_comment" && er > sr {
-                    out.push(FoldRange { start_line: sr, end_line: er, kind: FoldKind::Comment, start_col: char_col(rope, node), end_col: end_col(rope, node) });
+                    out.push(FoldRange {
+                        start_line: sr,
+                        end_line: er,
+                        kind: FoldKind::Comment,
+                        start_col: char_col(rope, node),
+                        end_col: end_col(rope, node),
+                    });
                 } else if kind == "line_comment" {
                     lines.push((sr, er, char_col(rope, node)));
                 }
@@ -71,7 +78,13 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
                 let end = if node.end_position().column == 0 { er - 1 } else { er };
                 let last = (sr..=end.min(rope.len_lines().saturating_sub(1))).rev().find(|l| rope.line(*l).chars().any(|c| !c.is_whitespace())).unwrap_or(sr);
                 if last > sr {
-                    out.push(FoldRange { start_line: sr, end_line: last, kind: FoldKind::Block, start_col: char_col(rope, node), end_col: line_end(rope, last) });
+                    out.push(FoldRange {
+                        start_line: sr,
+                        end_line: last,
+                        kind: FoldKind::Block,
+                        start_col: char_col(rope, node),
+                        end_col: line_end(rope, last),
+                    });
                 }
             }
         }),
@@ -99,7 +112,22 @@ pub fn folding_ranges(lang: Lang, tree: &Tree, rope: &Rope) -> Vec<FoldRange> {
         Lang::Html | Lang::Css | Lang::JavaScript | Lang::TypeScript | Lang::Tsx => walk(tree.root_node(), &mut |node| {
             let (sr, er) = (node.start_position().row, node.end_position().row);
             let kind = node.kind();
-            if er > sr && matches!(kind, "element" | "script_element" | "style_element" | "block" | "statement_block" | "class_body" | "object" | "array" | "interface_body" | "enum_body" | "comment") {
+            if er > sr
+                && matches!(
+                    kind,
+                    "element"
+                        | "script_element"
+                        | "style_element"
+                        | "block"
+                        | "statement_block"
+                        | "class_body"
+                        | "object"
+                        | "array"
+                        | "interface_body"
+                        | "enum_body"
+                        | "comment"
+                )
+            {
                 let kind = if kind == "comment" { FoldKind::Comment } else { FoldKind::Block };
                 out.push(FoldRange { start_line: sr, end_line: er, kind, start_col: char_col(rope, node), end_col: end_col(rope, node) });
             }
@@ -174,11 +202,8 @@ pub fn matching_bracket(tree: &Tree, rope: &Rope, pos: usize) -> Option<(usize, 
         let mut cursor = parent.walk();
         let siblings: Vec<Node> = parent.children(&mut cursor).collect();
         let idx = siblings.iter().position(|n| n.id() == node.id())?;
-        let other = if kind == *open {
-            siblings[idx + 1..].iter().find(|n| n.kind() == *close)?
-        } else {
-            siblings[..idx].iter().rev().find(|n| n.kind() == *open)?
-        };
+        let other =
+            if kind == *open { siblings[idx + 1..].iter().find(|n| n.kind() == *close)? } else { siblings[..idx].iter().rev().find(|n| n.kind() == *open)? };
         Some((p, rope.byte_to_char(other.start_byte())))
     };
     try_at(pos).or_else(|| pos.checked_sub(1).and_then(try_at))
@@ -215,5 +240,4 @@ mod tests {
         assert!(folds.iter().any(|f| f.start_line == 3 && f.end_line == 7), "{folds:?}");
         assert!(folds.iter().any(|f| f.start_line == 5 && f.end_line == 7), "{folds:?}");
     }
-
 }

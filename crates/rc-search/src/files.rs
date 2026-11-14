@@ -137,9 +137,7 @@ pub fn search_files(snapshot: &IndexSnapshot, query: &FileQuery, boost: &dyn Fn(
         })
     };
     let total = found.len();
-    let order = |a: &FileMatch, b: &FileMatch| {
-        b.score.cmp(&a.score).then(a.entry.rel().len().cmp(&b.entry.rel().len())).then(a.entry.rel().cmp(b.entry.rel()))
-    };
+    let order = |a: &FileMatch, b: &FileMatch| b.score.cmp(&a.score).then(a.entry.rel().len().cmp(&b.entry.rel().len())).then(a.entry.rel().cmp(b.entry.rel()));
     if found.len() > limit && limit > 0 {
         found.select_nth_unstable_by(limit - 1, order);
     }
@@ -227,10 +225,7 @@ pub struct FileSearchWorker {
 impl FileSearchWorker {
     pub fn new(index: FileIndex, out: Outbox<FileSearchResults>) -> FileSearchWorker {
         let (tx, rx) = unbounded();
-        std::thread::Builder::new()
-            .name("rc-search-files".into())
-            .spawn(move || worker_loop(index, rx, out))
-            .expect("spawn file search thread");
+        std::thread::Builder::new().name("rc-search-files".into()).spawn(move || worker_loop(index, rx, out)).expect("spawn file search thread");
         FileSearchWorker { tx: Some(tx), generation: AtomicU64::new(0) }
     }
 

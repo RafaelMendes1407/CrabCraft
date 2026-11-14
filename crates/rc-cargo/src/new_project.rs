@@ -75,7 +75,15 @@ impl NewProject {
             Template::Binary => "--bin",
             Template::Library | Template::ProcMacro | Template::WebAssembly => "--lib",
         };
-        vec!["new".into(), kind.into(), "--vcs".into(), if self.git { "git" } else { "none" }.into(), "--name".into(), self.name.clone(), self.project_dir().to_string_lossy().into_owned()]
+        vec![
+            "new".into(),
+            kind.into(),
+            "--vcs".into(),
+            if self.git { "git" } else { "none" }.into(),
+            "--name".into(),
+            self.name.clone(),
+            self.project_dir().to_string_lossy().into_owned(),
+        ]
     }
 
     /// Creates the project and returns its folder. The folder is removed if Cargo fails half way.

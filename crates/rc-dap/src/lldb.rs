@@ -9,13 +9,14 @@ pub fn locate(configured: Option<&Path>) -> Option<AdapterCommand> {
         path.is_absolute().then(|| path.to_path_buf()).filter(|p| p.is_file())?
     } else {
         let dirs: Vec<_> = std::env::var_os("PATH").iter().flat_map(std::env::split_paths).filter(|p| p.is_absolute()).collect();
-        ["lldb-dap", "lldb-vscode"].iter().flat_map(|name| dirs.iter().map(move |dir| dir.join(exe(name))))
-            .find(|path| path.is_file())?
+        ["lldb-dap", "lldb-vscode"].iter().flat_map(|name| dirs.iter().map(move |dir| dir.join(exe(name)))).find(|path| path.is_file())?
     };
     Some(AdapterCommand::new(program, Origin::Lldb))
 }
 
-fn exe(name: &str) -> PathBuf { if cfg!(windows) { format!("{name}.exe").into() } else { name.into() } }
+fn exe(name: &str) -> PathBuf {
+    if cfg!(windows) { format!("{name}.exe").into() } else { name.into() }
+}
 
 #[cfg(test)]
 mod tests {

@@ -88,7 +88,13 @@ impl InspectionProfile {
 
     /// The profile without invalid ids or unknown levels, within a sane size.
     pub fn clean(&self) -> InspectionProfile {
-        let levels = self.levels.iter().filter(|(id, l)| valid_id(id) && Level::parse(l).is_some()).take(MAX_ENTRIES).map(|(id, l)| (id.clone(), l.trim().to_string())).collect();
+        let levels = self
+            .levels
+            .iter()
+            .filter(|(id, l)| valid_id(id) && Level::parse(l).is_some())
+            .take(MAX_ENTRIES)
+            .map(|(id, l)| (id.clone(), l.trim().to_string()))
+            .collect();
         InspectionProfile { levels }
     }
 }

@@ -105,9 +105,7 @@ fn parse(source: &str) -> serde_json::Result<Vec<Area>> {
         .into_iter()
         .map(|(area, entries)| {
             let entries = match entries {
-                serde_json::Value::Object(m) => {
-                    m.into_iter().filter_map(|(k, v)| Some((k, v.as_str()?.to_string()))).collect()
-                }
+                serde_json::Value::Object(m) => m.into_iter().filter_map(|(k, v)| Some((k, v.as_str()?.to_string()))).collect(),
                 _ => Vec::new(),
             };
             (area, entries)
@@ -226,9 +224,7 @@ mod tests {
                     'n' => out.push('\n'),
                     't' => out.push('\t'),
                     // Line continuation: the newline and the next line's indentation are skipped.
-                    '\n' => {
-                        while chars.next_if(|(_, c)| c.is_whitespace()).is_some() {}
-                    }
+                    '\n' => while chars.next_if(|(_, c)| c.is_whitespace()).is_some() {},
                     other => out.push(other),
                 },
                 c => out.push(c),
@@ -245,8 +241,7 @@ mod tests {
         let mut missing = BTreeSet::new();
         // Every crate of the workspace translates through this module.
         let crates = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
-        let mut dirs: Vec<std::path::PathBuf> =
-            std::fs::read_dir(crates).unwrap().flatten().map(|e| e.path().join("src")).filter(|p| p.is_dir()).collect();
+        let mut dirs: Vec<std::path::PathBuf> = std::fs::read_dir(crates).unwrap().flatten().map(|e| e.path().join("src")).filter(|p| p.is_dir()).collect();
         while let Some(dir) = dirs.pop() {
             for entry in std::fs::read_dir(&dir).unwrap().flatten() {
                 let path = entry.path();
@@ -276,7 +271,9 @@ mod tests {
                         let key = if call == "tr_ctx(" {
                             let Some(rest) = rest.trim_start().strip_prefix(',').map(str::trim_start).and_then(|r| r.strip_prefix('"')) else { continue };
                             let Some((en, _)) = literal(rest) else { continue };
-                            if keys.contains(&format!("{first}|{en}")) { continue }
+                            if keys.contains(&format!("{first}|{en}")) {
+                                continue;
+                            }
                             en
                         } else {
                             first
