@@ -18,7 +18,9 @@ through `scripts/security-audit.sh`, JSON/Markdown reports, per-crate SBOM,
 CI maintenance: repository-wide rustfmt and strict Clippy findings corrected;
 the expired exact-source static baseline and downgrade logic are removed. Static
 analysis now requires both commands to succeed. This changes no feature readiness
-status and does not certify legal compliance or platform parity.
+status and does not certify legal compliance or platform parity. Two exact historical
+Gitleaks fingerprints from the formatting commit document the existing synthetic signature
+fixture; its current value is now TEST-SIGNATURE to avoid repeated false positives.
 
 Dependency audit (2026-11-12): `libsqlite3-sys` 0.39.1,
 `pulldown-cmark` 0.13.6 and `rustix` 1.1.6 fix the RustSec advisories

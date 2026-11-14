@@ -18,6 +18,24 @@
       "owner": "RafaelMendes1407",
       "reviewed_at": "2026-11-12",
       "expires_at": "2027-02-12"
+    },
+    {
+      "id": "GITLEAKS-FORMATTED-TEST-SIGNATURE-512",
+      "tool": "gitleaks",
+      "fingerprint": "d9aeeafc7007530a095c74a6dbb659064a5b0af2:crates/rc-app/src/screens.rs:generic-api-key:512",
+      "reason": "Formatting commit repeats the same synthetic Git signature fixture already reviewed in fd645c2; not an API credential. Current fixture replaced with TEST-SIGNATURE to avoid recurrence.",
+      "owner": "RafaelMendes1407",
+      "reviewed_at": "2026-11-14",
+      "expires_at": "2027-02-12"
+    },
+    {
+      "id": "GITLEAKS-FORMATTED-TEST-SIGNATURE-517",
+      "tool": "gitleaks",
+      "fingerprint": "d9aeeafc7007530a095c74a6dbb659064a5b0af2:crates/rc-app/src/screens.rs:generic-api-key:517",
+      "reason": "Formatting commit repeats the same synthetic Git signature fixture already reviewed in fd645c2; not an API credential. Current fixture replaced with TEST-SIGNATURE to avoid recurrence.",
+      "owner": "RafaelMendes1407",
+      "reviewed_at": "2026-11-14",
+      "expires_at": "2027-02-12"
     }
   ]
 }

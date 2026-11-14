@@ -509,12 +509,12 @@ fn screens_git_file_history() {
     h.state_mut().vcs.select_commit(&newest);
     h.state_mut().vcs.signature = Some((
         newest,
-        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() },
+        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "TEST-SIGNATURE".into() },
     ));
     run_frames(&mut h, "the files", |a| !a.vcs.commit_files.is_empty());
     h.state_mut().vcs.signature = Some((
         h.state().vcs.log[0].hash.clone(),
-        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "5A1E4C0D9B2F7E31".into() },
+        rc_vcs::Signature { status: rc_vcs::SignatureStatus::Good, signer: "Ada Lovelace <ada@example.com>".into(), key: "TEST-SIGNATURE".into() },
     ));
     h.run_steps(4);
     h.render().unwrap().save(out.join("git-file-history-dark.png")).unwrap();
