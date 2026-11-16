@@ -206,7 +206,9 @@ fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
         }
     }
     h.input_mut().dropped_files.push(std::sync::Arc::new(Dropped(file.clone())));
-    h.run_steps(3);
+    h.run_steps(1);
+    // Files are read on a background thread.
+    run_frames(&mut h, "the dropped file", |a| a.docs.active_doc().is_some() || a.notices.iter().any(|n| n.error));
     let app = h.state();
     assert!(app.workspace.is_none());
     assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(file.canonicalize().unwrap()));
@@ -225,6 +227,8 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     h.run_steps(2);
     h.key_press(egui::Key::Enter);
     h.run_steps(2);
+    // The new file is read on a background thread.
+    run_frames(&mut h, "the scratch file", |a| a.docs.active_doc().is_some());
     let first = dir.join("scratch_1.rs").canonicalize().unwrap();
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
