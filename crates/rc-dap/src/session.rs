@@ -56,9 +56,12 @@ fn is_user_code(frame: &StackFrame) -> bool {
 /// Whether a frame is the panic runtime function, by either debugger's name for it.
 fn is_panic_frame(frame: &StackFrame) -> bool {
     frame.name.contains(PANIC_FUNCTION)
-        || frame.name.split(['(', '<']).next().map(str::trim).is_some_and(|n| {
-            n.strip_suffix(PANIC_FUNCTION_BASE).is_some_and(|rest| rest.is_empty() || rest.ends_with("::") || rest.ends_with('!'))
-        })
+        || frame
+            .name
+            .split(['(', '<'])
+            .next()
+            .map(str::trim)
+            .is_some_and(|n| n.strip_suffix(PANIC_FUNCTION_BASE).is_some_and(|rest| rest.is_empty() || rest.ends_with("::") || rest.ends_with('!')))
 }
 
 impl StopReason {
