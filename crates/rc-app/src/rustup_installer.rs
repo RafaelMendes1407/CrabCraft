@@ -196,6 +196,7 @@ fn error_text(error: &InstallError) -> String {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};

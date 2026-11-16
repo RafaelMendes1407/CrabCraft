@@ -238,6 +238,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
     use std::{

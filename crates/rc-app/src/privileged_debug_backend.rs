@@ -1,14 +1,16 @@
 //! Linux privileged GDB: DAP owns stdio; a private Unix socket owns watchdog lifetime.
 use rc_dotnet::CancelToken;
 use serde::{Deserialize, Serialize};
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::time::Duration;
+#[cfg(target_os = "linux")]
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 const MAX_SPEC: usize = 64 * 1024;
+#[cfg(target_os = "linux")]
 const MAX_FRAME: usize = 1024 * 1024;
 #[derive(Clone, Debug)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub enum Error {
     Platform,
     Trust,
@@ -131,6 +133,7 @@ pub fn authorize(spec: &Spec, trusted: bool, approved: bool) -> Result<(), Error
     }
     spec.validate()
 }
+#[cfg(target_os = "linux")]
 fn system_gdb() -> Result<PathBuf, Error> {
     let path = PathBuf::from("/usr/bin/gdb");
     let canonical = path.canonicalize().map_err(|_| Error::Debugger)?;
@@ -150,9 +153,11 @@ fn system_gdb() -> Result<PathBuf, Error> {
     }
     Ok(path)
 }
+#[cfg(target_os = "linux")]
 fn gdb_args() -> Vec<&'static str> {
     vec!["-nx", "-nh", "-quiet", "-i=dap", "-iex", "set auto-load off", "-iex", "set debuginfod enabled off", "-iex", "set startup-with-shell off"]
 }
+#[cfg(target_os = "linux")]
 async fn frame<R: AsyncRead + Unpin>(input: &mut R) -> Result<Option<serde_json::Value>, Error> {
     let mut header = Vec::new();
     let mut byte = [0u8; 1];
@@ -187,6 +192,7 @@ async fn frame<R: AsyncRead + Unpin>(input: &mut R) -> Result<Option<serde_json:
     input.read_exact(&mut bytes).await?;
     serde_json::from_slice(&bytes).map(Some).map_err(|_| Error::Protocol)
 }
+#[cfg(target_os = "linux")]
 async fn send<W: AsyncWrite + Unpin>(output: &mut W, value: &serde_json::Value) -> Result<(), Error> {
     let bytes = serde_json::to_vec(value).map_err(|_| Error::Protocol)?;
     if bytes.len() > MAX_FRAME {
@@ -197,6 +203,7 @@ async fn send<W: AsyncWrite + Unpin>(output: &mut W, value: &serde_json::Value) 
     output.flush().await?;
     Ok(())
 }
+#[cfg(target_os = "linux")]
 fn sanitize(value: &mut serde_json::Value, spec: &Spec, executable: &Path, launched: &mut bool) -> Result<(), Error> {
     if value.get("type").and_then(|v| v.as_str()) != Some("request") {
         return Err(Error::Protocol);
@@ -267,6 +274,7 @@ fn sanitize(value: &mut serde_json::Value, spec: &Spec, executable: &Path, launc
     }
     Ok(())
 }
+#[cfg(target_os = "linux")]
 async fn input_pump<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(mut input: R, mut output: W, spec: Spec, program: PathBuf) -> Result<(), Error> {
     let mut launched = false;
     while let Some(mut value) = frame(&mut input).await? {
@@ -408,6 +416,7 @@ impl Drop for Tree {
         }
     }
 }
+#[cfg(target_os = "linux")]
 async fn output_pump<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(mut input: R, mut output: W) -> Result<(), Error> {
     let mut total = 0usize;
     while let Some(mut value) = frame(&mut input).await? {
@@ -600,6 +609,7 @@ pub fn adapter(spec: &Spec, trusted: bool, approved: bool) -> Result<rc_dap::Ada
 }
 
 #[cfg(test)]
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 mod tests {
     use super::*;
     #[cfg(target_os = "linux")]
@@ -663,6 +673,7 @@ mod tests {
         assert!(flags.contains(&"set startup-with-shell off"));
     }
     #[tokio::test]
+    #[cfg(target_os = "linux")]
     async fn bounded_dap_frames_reject_duplicate_lengths_and_oversize_input() {
         let (mut writer, mut reader) = tokio::io::duplex(1024);
         writer.write_all(b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}").await.unwrap();

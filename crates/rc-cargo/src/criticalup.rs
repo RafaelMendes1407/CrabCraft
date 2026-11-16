@@ -274,8 +274,10 @@ pub async fn activate(program: PathBuf, snapshot: Snapshot, trusted: bool, stop:
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     fn manifest(root: &Path) {
         std::fs::write(root.join("criticalup.toml"),"manifest-version = 1\n[products.ferrocene]\nrelease = \"fixture-1\"\npackages = [\"cargo-${rustc-host}\",\"rustc-${rustc-host}\",\"rustfmt-${rustc-host}\"]\n").unwrap();
     }
