@@ -494,15 +494,27 @@ fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
     assert!(!cur.main && cur.detached);
 }
 
+/// `C:\a\b` as MSYS spells it: `/c/a/b`.
+fn msys_path(path: &std::path::Path) -> String {
+    let text = rc_core::paths::plain(path).to_string_lossy().replace('\\', "/");
+    match text.split_once(":/") {
+        Some((drive, rest)) if drive.len() == 1 => format!("/{}/{rest}", drive.to_ascii_lowercase()),
+        _ => text,
+    }
+}
+
 /// V-14: the Commit window's "Sign with GPG" starts as `commit.gpgsign` says, signs with the
 /// user's key, and the Log shows the signature git verified; a failing signing program is
 /// reported and commits nothing.
 #[test]
 fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
-    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+    let Ok(version) = std::process::Command::new("gpg").arg("--version").output() else {
         eprintln!("skipped: gpg is not installed");
         return;
-    }
+    };
+    // Git for Windows' gpg is an MSYS program: it takes `/c/Users/...` and treats `C:\Users\...`
+    // in GNUPGHOME as relative to the working directory. Its `--version` shows a POSIX home.
+    let msys = String::from_utf8_lossy(&version.stdout).lines().any(|line| line.starts_with("Home: /"));
     let _lock = crate::screens::HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let home = tempfile::tempdir().unwrap();
     // SAFETY: serialized by HOME_LOCK.
@@ -514,14 +526,15 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&gnupg, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
+    let gnupg_home = if msys { msys_path(&gnupg) } else { gnupg.display().to_string() };
     let made = std::process::Command::new("gpg")
-        .env("GNUPGHOME", &gnupg)
+        .env("GNUPGHOME", &gnupg_home)
         .args(["--batch", "--passphrase", "", "--quick-generate-key", "Signer <signer@example.com>", "ed25519", "sign", "never"])
         .output()
         .unwrap();
     assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
     let wrapper = home.path().join("gpg.sh");
-    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{}' exec gpg \"$@\"\n", gnupg.display())).unwrap();
+    std::fs::write(&wrapper, format!("#!/bin/sh\nGNUPGHOME='{gnupg_home}' exec gpg \"$@\"\n")).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

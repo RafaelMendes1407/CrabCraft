@@ -173,6 +173,95 @@ pub fn same_spelling(a: &std::path::Path, b: &std::path::Path) -> bool {
     false
 }
 
+/// `path` with Windows 8.3 short names (`C:\Users\RUNNER~1`) expanded to their long names,
+/// without resolving links, `..` or a verbatim prefix. Only components that exist are
+/// expanded, so a file that is about to be created keeps its spelling. Paths without `~`,
+/// and every path on other systems, are returned unchanged without touching the disk.
+pub fn long_form(path: &std::path::Path) -> PathBuf {
+    #[cfg(windows)]
+    if path.as_os_str().to_string_lossy().contains('~') {
+        // The deepest existing ancestor is expanded; the missing tail is appended unchanged.
+        let mut tail = Vec::new();
+        let mut current = path;
+        loop {
+            if let Some(long) = expand_short_names(current) {
+                let mut result = long;
+                for part in tail.iter().rev() {
+                    result.push(part);
+                }
+                return result;
+            }
+            match (current.parent(), current.file_name()) {
+                (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
+                    tail.push(name.to_os_string());
+                    current = parent;
+                }
+                _ => break,
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
+#[cfg(windows)]
+fn expand_short_names(path: &std::path::Path) -> Option<PathBuf> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    if wide[..wide.len() - 1].contains(&0) {
+        return None;
+    }
+    let mut buffer = vec![0u16; 512];
+    for _ in 0..3 {
+        let capacity = u32::try_from(buffer.len()).ok()?;
+        // SAFETY: `wide` is NUL-terminated and `buffer` holds `capacity` writable `u16`s.
+        let written = unsafe { windows_sys::Win32::Storage::FileSystem::GetLongPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), capacity) };
+        let written = usize::try_from(written).ok()?;
+        if written == 0 {
+            return None;
+        }
+        if written < buffer.len() {
+            return Some(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..written])));
+        }
+        // Too small: `written` is the size needed, including the terminating NUL.
+        buffer = vec![0u16; written.checked_add(1)?];
+    }
+    None
+}
+
+/// Whether `path` names the same location as `canonical` (a result of `canonicalize`) when
+/// spelled out: verbatim prefixes, separators and Windows 8.3 short names do not matter, but
+/// links, `..` and letter case do. Use it to check that a path has no link or traversal.
+pub fn spells_canonical(canonical: &std::path::Path, path: &std::path::Path) -> bool {
+    same_spelling(canonical, path) || same_spelling(canonical, &long_form(path))
+}
+
+#[cfg(test)]
+mod long_form_tests {
+    use std::path::Path;
+    #[test]
+    fn paths_without_short_names_are_unchanged() {
+        assert_eq!(super::long_form(Path::new("a/b.rs")), Path::new("a/b.rs"));
+    }
+    #[test]
+    #[cfg(windows)]
+    fn short_names_expand_and_missing_tails_are_kept() {
+        let root = tempfile::tempdir().unwrap();
+        let long = root.path().canonicalize().unwrap().join("A long directory name");
+        std::fs::create_dir(&long).unwrap();
+        let mut short = vec![0u16; 512];
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let wide: Vec<u16> = long.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let n = unsafe { windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(wide.as_ptr(), short.as_mut_ptr(), 512) } as usize;
+        let short = std::path::PathBuf::from(std::ffi::OsString::from_wide(&short[..n]));
+        if !short.to_string_lossy().contains('~') {
+            return; // 8.3 names are disabled on this volume.
+        }
+        assert!(super::same_spelling(&super::long_form(&short.join("new.rs")), &long.join("new.rs")));
+        assert!(super::spells_canonical(&long, &short));
+        assert!(!super::spells_canonical(&long, &short.join("other")));
+    }
+}
+
 #[cfg(test)]
 mod spelling_tests {
     use std::path::Path;

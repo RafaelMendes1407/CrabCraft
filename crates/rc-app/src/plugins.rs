@@ -148,7 +148,7 @@ fn inspect(path: &Path) -> Result<Package, Error> {
 fn inspect_cancel(path: &Path, stop: Option<&rc_dotnet::CancelToken>) -> Result<Package, Error> {
     check(stop)?;
     let parent = path.parent().ok_or(Error::UnsafePath)?;
-    if !path.is_absolute() || !rc_core::paths::same_spelling(&parent.canonicalize().map_err(|_| Error::Io)?, parent) {
+    if !path.is_absolute() || !rc_core::paths::spells_canonical(&parent.canonicalize().map_err(|_| Error::Io)?, parent) {
         return Err(Error::UnsafePath);
     }
     let manifest: Manifest = serde_json::from_slice(&regular_cancel(path, 64 * 1024, stop)?).map_err(|_| Error::Manifest)?;
@@ -168,7 +168,7 @@ struct Installed {
 fn private_dir(path: &Path) -> Result<(), Error> {
     std::fs::create_dir_all(path).map_err(|_| Error::Io)?;
     if std::fs::symlink_metadata(path).map_err(|_| Error::Io)?.file_type().is_symlink()
-        || !rc_core::paths::same_spelling(&path.canonicalize().map_err(|_| Error::Io)?, path)
+        || !rc_core::paths::spells_canonical(&path.canonicalize().map_err(|_| Error::Io)?, path)
     {
         return Err(Error::UnsafePath);
     }
@@ -230,7 +230,7 @@ fn load(store: &Path, id: &str) -> Result<Installed, Error> {
         return Err(Error::Manifest);
     }
     let dir = store.join(id);
-    if !rc_core::paths::same_spelling(&dir.canonicalize().map_err(|_| Error::Io)?, &dir) {
+    if !rc_core::paths::spells_canonical(&dir.canonicalize().map_err(|_| Error::Io)?, &dir) {
         return Err(Error::UnsafePath);
     }
     let item: Installed = serde_json::from_slice(&regular(&dir.join("installed.json"), 64 * 1024)?).map_err(|_| Error::Manifest)?;
@@ -245,7 +245,7 @@ fn catalog(store: &Path, stop: Option<&rc_dotnet::CancelToken>) -> Result<Vec<In
     if !store.exists() {
         return Ok(Vec::new());
     }
-    if !rc_core::paths::same_spelling(&store.canonicalize().map_err(|_| Error::Io)?, store) {
+    if !rc_core::paths::spells_canonical(&store.canonicalize().map_err(|_| Error::Io)?, store) {
         return Err(Error::UnsafePath);
     }
     let mut result = Vec::new();
