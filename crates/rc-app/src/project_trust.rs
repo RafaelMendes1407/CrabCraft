@@ -131,6 +131,7 @@ fn a_plain_git_folder_stays_restricted_until_the_native_trust_control_is_used() 
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     };
     git(&["init", "-q"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Trust test"]);
     git(&["config", "user.email", "trust@example.test"]);
     std::fs::write(root.join("example.rs"), "fn main() {}\n").unwrap();

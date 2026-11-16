@@ -501,8 +501,8 @@ mod tests {
         harness.get_by_label(tr("Main Menu")).click();
         harness.run_steps(3);
         scroll_down(&mut harness, egui::pos2(100.0, 200.0));
-        let help_label = format!("{} ⏵", tr("Help"));
-        let help = harness.get_by_label(&help_label);
+        let help_label = tr("Help");
+        let help = harness.get_by_label(help_label);
         assert!(help.rect().bottom() < 300.0, "Help must remain reachable: {:?}", help.rect());
         help.click();
         harness.run_steps(3);
@@ -522,9 +522,9 @@ mod tests {
         let mut harness = crate::screens::harness(app, egui::vec2(800.0, 340.0));
         harness.get_by_label(tr("Main Menu")).click();
         harness.run_steps(3);
-        harness.get_by_label(&format!("{} ⏵", tr("File"))).click();
+        harness.get_by_label(tr("File")).click();
         harness.run_steps(3);
-        harness.get_by_label(&format!("{} ⏵", tr("Recent Projects"))).click();
+        harness.get_by_label(tr("Recent Projects")).click();
         harness.run_steps(3);
         let first = harness.query_all_by_label_contains("project-00-").find(|node| node.rect().width() > 100.0 && node.rect().width() < 320.0).unwrap().rect();
         assert!(first.width() < 320.0 && first.left() >= 0.0 && first.right() <= 800.0, "recent item must fit the viewport: {first:?}");

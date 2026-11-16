@@ -307,7 +307,8 @@ mod tests {
     #[test]
     fn relative_paths_become_absolute() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(opens(&["src/main.rs", "/abs/x.rs"], dir.path()), vec![OpenRequest::path(dir.path().join("src/main.rs")), OpenRequest::path("/abs/x.rs")]);
+        let absolute = if cfg!(windows) { "C:/abs/x.rs" } else { "/abs/x.rs" };
+        assert_eq!(opens(&["src/main.rs", absolute], dir.path()), vec![OpenRequest::path(dir.path().join("src/main.rs")), OpenRequest::path(absolute)]);
         assert_eq!(opens(&[], dir.path()), vec![]);
     }
 

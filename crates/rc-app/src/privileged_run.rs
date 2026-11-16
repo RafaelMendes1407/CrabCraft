@@ -645,6 +645,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
     fn fixture(root: &Path) -> PathBuf {
@@ -802,6 +803,7 @@ mod tests {
         assert!(!state.confirm);
     }
     #[test]
+    #[cfg(unix)]
     fn compiled_program_inspection_rejects_scripts_symlinks_traversal_and_unknown_helper_fields() {
         use std::os::unix::fs::{PermissionsExt, symlink};
         let dir = tempfile::tempdir().unwrap();

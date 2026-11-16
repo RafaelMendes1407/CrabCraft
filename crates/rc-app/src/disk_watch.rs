@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn coalesced_external_reads_keep_new_edits_and_closed_document_identity() {
         let root = tempfile::tempdir().unwrap();
-        let path = root.path().join("main.rs");
+        let path = root.path().canonicalize().unwrap().join("main.rs");
         let old = "fn main() { println!(\"old\"); }\n";
         std::fs::write(&path, old).unwrap();
         let mut docs = Docs::new(rc_syntax::ParserPool::new(Waker::noop().as_fn()));

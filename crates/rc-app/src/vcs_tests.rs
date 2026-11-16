@@ -34,6 +34,7 @@ fn git_changes_marks_diff_commit_branch_and_blame() {
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap();
     git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "core.autocrlf", "false"]);
     git(&root, &["config", "user.name", "Test"]);
     git(&root, &["config", "user.email", "test@example.com"]);
     std::fs::write(root.join("Program.cs"), "class A\n{\n    void M() { }\n}\n").unwrap();
@@ -93,6 +94,7 @@ fn repo_with_remote() -> (tempfile::TempDir, tempfile::TempDir, std::path::PathB
     let root = repo.path().canonicalize().unwrap();
     git(remote.path(), &["init", "-q", "--bare", "-b", "main"]);
     git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "core.autocrlf", "false"]);
     for (k, v) in
         [("user.name", "Test"), ("user.email", "test@example.com"), ("tag.gpgsign", "false"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")]
     {
@@ -329,7 +331,7 @@ fn patches_are_created_and_applied_between_repositories_from_the_app() {
     let (_repo, _remote, root) = repo_with_remote();
     let other = tempfile::tempdir().unwrap();
     let b = other.path().canonicalize().unwrap();
-    git(&b, &["clone", "-q", &root.display().to_string(), "."]);
+    git(&b, &["clone", "-q", "-c", "core.autocrlf=false", &rc_core::paths::plain(&root).display().to_string(), "."]);
     for (k, v) in [("user.name", "Other"), ("user.email", "other@example.com"), ("commit.gpgsign", "false"), ("core.hooksPath", "no-hooks")] {
         git(&b, &["config", k, v]);
     }
@@ -527,6 +529,7 @@ fn commits_are_signed_with_gpg_and_the_log_shows_the_signature() {
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap();
     git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "core.autocrlf", "false"]);
     for (k, v) in [
         ("user.name", "Signer"),
         ("user.email", "signer@example.com"),
@@ -602,6 +605,7 @@ fn the_log_is_filtered_and_shows_the_history_of_a_file() {
     let repo = tempfile::tempdir().unwrap();
     let root = repo.path().canonicalize().unwrap();
     git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "core.autocrlf", "false"]);
     for (k, v) in [("user.name", "Ana"), ("user.email", "ana@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
         git(&root, &["config", k, v]);
     }

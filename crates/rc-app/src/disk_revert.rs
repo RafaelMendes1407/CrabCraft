@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn watcher_events_invalidate_pending_results_and_unsafe_inputs_are_rejected() {
         let root = fixture();
-        let path = root.path().join("src/main.rs");
+        let path = root.path().canonicalize().unwrap().join("src").join("main.rs");
         let mut docs = docs(root.path());
         docs.list[0].editor.replace(0, 0, "// unsaved\n");
         let ticket = Ticket::capture(&docs.list[0]);

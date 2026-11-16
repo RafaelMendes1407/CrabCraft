@@ -290,6 +290,7 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
     fn fixture(root: &Path) {
@@ -320,7 +321,7 @@ mod tests {
     #[test]
     fn devcontainer_argv_keeps_commands_literal_and_forbids_remote_daemon_uri() {
         let config = Config { program: "devcontainer".into(), docker: "docker".into(), host: String::new() };
-        let root = PathBuf::from("/tmp/project");
+        let root = PathBuf::from(if cfg!(windows) { "C:/project" } else { "/tmp/project" });
         let plan = Plan::new(config.clone(), root.clone(), Action::Exec { command: "cargo".into(), args: vec!["$(touch host); literal".into()] }).unwrap();
         assert_eq!(plan.args.last().unwrap(), "$(touch host); literal");
         assert_eq!(plan.args[plan.args.len() - 3], "--");
