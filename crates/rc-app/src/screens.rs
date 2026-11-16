@@ -2358,10 +2358,14 @@ fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static,
     h.run_steps(3);
     let doc = h.state_mut().docs.active_doc_mut().unwrap();
     assert!(doc.editor.buffer.len_lines() > 1000, "a long file");
-    let start = doc.editor.buffer.rope().line_to_char(error_line) + 4;
+    // Stay on `error_line` even when that line of the real file is short or empty.
+    let rope = doc.editor.buffer.rope();
+    let line_start = rope.line_to_char(error_line);
+    let line_len = rope.line(error_line).to_string().trim_end_matches(['\r', '\n']).chars().count();
+    let start = line_start + line_len.min(4);
     doc.editor.diagnostics.push(rc_editor::Diagnostic {
         start,
-        end: start + 6,
+        end: line_start + line_len.min(10),
         severity: rc_editor::Severity::Error,
         message: "lens test: mismatched types".into(),
         code: None,
@@ -3774,8 +3778,11 @@ fn tools_settings_fields_fit_the_fixed_page_width() {
     h.run_steps(5);
     let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
     assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
-    let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
-    assert!(fields.len() >= 10);
+    // Seven tool paths, the rustfmt arguments and channel, and the rustfmt environment.
+    let mut fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
+    assert_eq!(fields.len(), 9, "tool path and rustfmt fields: {fields:?}");
+    fields.extend(h.query_all_by_role(egui::accesskit::Role::MultilineTextInput).map(|node| node.rect()));
+    assert_eq!(fields.len(), 10);
     for field in fields {
         assert!(field.left() >= modal.left() && field.right() <= modal.right() - 8.0, "tool field must fit inside the modal: {field:?}, {modal:?}");
     }

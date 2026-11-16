@@ -279,8 +279,16 @@ fn real_rust_error_marks_paint_hover_and_scroll_in_the_native_editor() {
     harness.state_mut().docs.list[0].mtime = None;
     harness.state_mut().docs.on_disk_change(&main);
     harness.state_mut().trust_project();
-    frames(&mut harness, "real Rust E0308 diagnostics", |app| {
-        app.docs.active_doc().unwrap().editor.diagnostics.iter().any(|diagnostic| diagnostic.code.as_deref() == Some("E0308"))
+    // rust-analyzer's own E0308 ("expected u32, found &'static str") can arrive before the
+    // compiler's; wait for cargo check so the line has both reports.
+    frames(&mut harness, "real Rust E0308 diagnostics from the compiler", |app| {
+        app.docs
+            .active_doc()
+            .unwrap()
+            .editor
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("E0308") && diagnostic.message.starts_with("mismatched types"))
     });
     harness.state_mut().dock.hide_all();
     harness.state_mut().docs.active_doc_mut().unwrap().editor.goto(0, 0);

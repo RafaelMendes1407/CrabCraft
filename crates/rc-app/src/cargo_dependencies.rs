@@ -837,7 +837,13 @@ mod tests {
         h.run_steps(2);
         pump(&mut h, |app| app.missing_crates.report.proposals.len() == 1 && app.missing_crates.report.proposals[0].name == "helper-lib");
         assert_eq!(h.state().missing_crates.report.proposals[0].scope, Scope::Dev);
-        h.run_steps(5);
+        // The added dependency reloads the Cargo metadata, which rescans the open file; the
+        // banner comes back once that scan reports again.
+        let start = Instant::now();
+        while h.query_by_label(tr("Review dependency…")).is_none() && start.elapsed() < Duration::from_secs(20) {
+            h.run_steps(2);
+            std::thread::sleep(Duration::from_millis(20));
+        }
         h.get_by_label(tr("Review dependency…")).click();
         h.run_steps(2);
         pump(&mut h, |app| !app.cargo_dependencies.loading);
