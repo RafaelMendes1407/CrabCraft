@@ -432,7 +432,8 @@ fn worktrees_are_added_locked_removed_pruned_and_opened_from_the_git_window() {
     pump(&mut app, "worktrees", |a| a.vcs.worktrees.len() == 1);
     assert_eq!(app.vcs.current_worktree().map(|w| w.main), Some(true));
     let place = tempfile::tempdir().unwrap();
-    let place = place.path().canonicalize().unwrap();
+    // git reports worktree paths without the `\\?\` prefix that canonicalize adds on Windows.
+    let place = rc_core::paths::plain(&place.path().canonicalize().unwrap());
 
     // The default folder sits next to the repository, named after it and the branch.
     let suggested = crate::ui::dialogs::suggested_worktree_path(&root, "feature/login");
