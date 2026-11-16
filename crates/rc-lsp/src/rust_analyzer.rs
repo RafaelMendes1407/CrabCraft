@@ -42,7 +42,10 @@ pub fn config(s: &RaSettings) -> Value {
     let mut value = config_base(s.clippy, &s.exclude);
     if let Some(map) = value.as_object_mut() {
         if !s.linked.is_empty() {
-            map.insert("linkedProjects".into(), json!(s.linked.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()));
+            // Plain paths: the server names files by their `file:///c:/…` URIs, which never
+            // match Windows' verbatim `\\?\C:\…`, and a scratch linked that way is not analysed.
+            let linked: Vec<String> = s.linked.iter().map(|p| rc_core::paths::plain(p).display().to_string()).collect();
+            map.insert("linkedProjects".into(), json!(linked));
         }
         let exclude: Vec<Value> = s.autoimport_exclude.iter().map(|p| json!({ "path": p, "type": "always" })).collect();
         map.insert("completion".into(), json!({ "autoimport": { "enable": true, "exclude": exclude }, "postfix": { "enable": true } }));
