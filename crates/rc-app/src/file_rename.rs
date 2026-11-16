@@ -256,6 +256,18 @@ pub(crate) fn change(rope: &Rope, path: &Path, edit: lsp::TextEdit, from_server:
     Change { path: path.to_path_buf(), line, before, after, edit, from_server, checked: from_server }
 }
 
+/// Whether `to` names another file than `from`. On a file system that ignores letter case
+/// (Windows, macOS) `MyMod.rs` → `my_mod.rs` finds `to` existing already: it is `from` itself.
+pub fn taken(from: &Path, to: &Path) -> bool {
+    if !to.exists() {
+        return false;
+    }
+    match (from.canonicalize(), to.canonicalize()) {
+        (Ok(a), Ok(b)) => a != b || from == to,
+        _ => true,
+    }
+}
+
 /// Renames `from` to `to` on disk, then applies `changes` (open files in their editor as one
 /// undo step, closed files on disk). Returns the number of files edited; fails only when the
 /// rename itself fails, with nothing changed.
@@ -263,7 +275,7 @@ pub fn apply(app: &mut CrabCraftApp, from: &Path, to: &Path, changes: &[Change])
     if app.disk_save.saves.busy() {
         return Err(tr("Another action is waiting for documents to save").to_string());
     }
-    if to.exists() {
+    if taken(from, to) {
         return Err(tr("A file or folder with this name already exists").to_string());
     }
     let was_file = from.is_file();

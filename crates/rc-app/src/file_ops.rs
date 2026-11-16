@@ -86,7 +86,7 @@ pub fn apply(app: &mut CrabCraftApp, edit: &lsp::WorkspaceEdit) -> Result<usize,
             }
             lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(r)) => {
                 let (from, to) = (inside(&root, &r.old_uri)?, inside(&root, &r.new_uri)?);
-                if to.exists() {
+                if crate::file_rename::taken(&from, &to) {
                     if r.options.as_ref().and_then(|o| o.ignore_if_exists) == Some(true) && r.options.as_ref().and_then(|o| o.overwrite) != Some(true) {
                         continue;
                     }

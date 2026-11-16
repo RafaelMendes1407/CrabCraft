@@ -48,8 +48,21 @@ pub fn uri_to_path(uri: &Uri) -> Option<PathBuf> {
     if cfg!(windows) && decoded.len() > 2 && decoded.as_bytes()[2] == b':' {
         let path = PathBuf::from(&decoded[1..]);
         // Open documents are kept by canonical path (`\\?\C:\x` there); a server's `c:/x`
-        // must name the same document.
-        return Some(path.canonicalize().unwrap_or(path));
+        // must name the same document. The file may not exist yet (the target of a rename),
+        // and the file system ignores letter case, so canonicalizing `my_mod.rs` could give
+        // back the `MyMod.rs` it is about to replace: then only the folder is canonicalized.
+        let name = path.file_name().map(|n| n.to_os_string());
+        if let Ok(canonical) = path.canonicalize()
+            && canonical.file_name().map(|n| n.to_os_string()) == name
+        {
+            return Some(canonical);
+        }
+        if let (Some(parent), Some(name)) = (path.parent(), name)
+            && let Ok(parent) = parent.canonicalize()
+        {
+            return Some(parent.join(name));
+        }
+        return Some(path);
     }
     Some(PathBuf::from(decoded))
 }
