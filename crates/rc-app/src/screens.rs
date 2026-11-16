@@ -206,7 +206,9 @@ fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
         }
     }
     h.input_mut().dropped_files.push(std::sync::Arc::new(Dropped(file.clone())));
-    h.run_steps(3);
+    h.run_steps(1);
+    // Files are read on a background thread.
+    run_frames(&mut h, "the dropped file", |a| a.docs.active_doc().is_some() || a.notices.iter().any(|n| n.error));
     let app = h.state();
     assert!(app.workspace.is_none());
     assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(file.canonicalize().unwrap()));
@@ -225,6 +227,8 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     h.run_steps(2);
     h.key_press(egui::Key::Enter);
     h.run_steps(2);
+    // The new file is read on a background thread.
+    run_frames(&mut h, "the scratch file", |a| a.docs.active_doc().is_some());
     let first = dir.join("scratch_1.rs").canonicalize().unwrap();
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
@@ -588,6 +592,8 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
         d.editor.replace(0, len, text);
         h.state_mut().run_ide_action(&ctx, rc_editor::Action::Save);
         h.run_steps(2);
+        // Files are written on a background thread.
+        run_frames(&mut h, "the save", |_| std::fs::read_to_string(&main).is_ok_and(|t| t == text));
     }
     assert_eq!(std::fs::read_to_string(&main).unwrap(), TWO);
 
@@ -2665,6 +2671,8 @@ fn copyright_headers_on_new_and_old_files() {
     h.run_steps(2);
     h.get_by_label(tr("Create")).click();
     h.run_steps(3);
+    // The new file is opened on a background thread.
+    run_frames(&mut h, "the new file", |a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("net.rs")));
     let text = std::fs::read_to_string(root.join("src/net.rs")).unwrap();
     assert_eq!(text, format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n"));
     assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret()), Some(text.chars().count()));

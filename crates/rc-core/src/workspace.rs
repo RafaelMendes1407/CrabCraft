@@ -93,7 +93,10 @@ pub fn clean_excluded(list: &[String]) -> Vec<String> {
 
 /// The root-relative, `/`-separated form of `path` (`None` outside `root` or for the root itself).
 pub fn relative_path(root: &Path, path: &Path) -> Option<String> {
-    let rel = path.strip_prefix(root).ok()?;
+    // On Windows `\\?\C:\a` and `C:\a` are the same folder but different prefixes, and git
+    // reports the plain spelling while the workspace root is canonical.
+    let (root, path) = (crate::paths::plain(root), crate::paths::plain(path));
+    let rel = path.strip_prefix(&root).ok()?;
     let parts: Vec<String> = rel
         .components()
         .map(|c| match c {
