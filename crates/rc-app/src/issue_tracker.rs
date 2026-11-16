@@ -307,12 +307,16 @@ impl Tracker {
                     );
                 });
                 ui.horizontal(|ui| {
-                    ui.label(tr("API base URL"));
-                    changed |= ui.add(egui::TextEdit::singleline(&mut self.config.base_url).char_limit(2048).desired_width(400.0)).changed();
+                    let a11y_label = ui.label(tr("API base URL"));
+                    changed |= ui
+                        .add(egui::TextEdit::singleline(&mut self.config.base_url).char_limit(2048).desired_width(400.0))
+                        .labelled_by(a11y_label.id)
+                        .changed();
                 });
                 ui.horizontal(|ui| {
-                    ui.label(tr("Namespace/project"));
-                    changed |= ui.add(egui::TextEdit::singleline(&mut self.config.project).char_limit(512).desired_width(400.0)).changed();
+                    let a11y_label = ui.label(tr("Namespace/project"));
+                    changed |=
+                        ui.add(egui::TextEdit::singleline(&mut self.config.project).char_limit(512).desired_width(400.0)).labelled_by(a11y_label.id).changed();
                 });
                 if changed {
                     self.token.clear();
@@ -321,8 +325,8 @@ impl Tracker {
                     self.page = 1;
                 }
                 ui.horizontal(|ui| {
-                    ui.label(tr("Token (memory only)"));
-                    ui.add(egui::TextEdit::singleline(&mut self.token).password(true).char_limit(4096));
+                    let a11y_label = ui.label(tr("Token (memory only)"));
+                    ui.add(egui::TextEdit::singleline(&mut self.token).password(true).char_limit(4096)).labelled_by(a11y_label.id);
                 });
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("tracker_state")
@@ -445,6 +449,7 @@ mod tests {
         std::fs::write(root.join(".gitignore"), "/target/\n/Cargo.lock\n/build-ran\n").unwrap();
         for args in [
             vec!["init", "-q", "-b", "main"],
+            vec!["config", "core.autocrlf", "false"],
             vec!["config", "user.name", "Issues"],
             vec!["config", "user.email", "issues@example.test"],
             vec!["add", "."],

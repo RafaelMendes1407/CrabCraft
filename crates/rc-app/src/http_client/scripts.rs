@@ -250,8 +250,8 @@ impl State {
                 "Inline scripts never run on send. Node.js runs with your user permissions and can access files and network; this is not an OS sandbox.",
             ));
             ui.horizontal(|ui| {
-                ui.label(tr("Node.js executable"));
-                if ui.add(egui::TextEdit::singleline(&mut self.program).char_limit(4096)).changed() {
+                let a11y_label = ui.label(tr("Node.js executable"));
+                if ui.add(egui::TextEdit::singleline(&mut self.program).char_limit(4096)).labelled_by(a11y_label.id).changed() {
                     self.cancel();
                     self.approved = false;
                     self.results = None;

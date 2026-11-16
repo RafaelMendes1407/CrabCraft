@@ -421,17 +421,17 @@ impl CargoDependencies {
         ui.add_enabled_ui(!busy, |ui| {
             let width = (ui.available_width() - 180.0).max(120.0);
             egui::Grid::new("dependency_form").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                ui.label(tr("Crate name"));
-                ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(64).desired_width(width));
+                let a11y_label = ui.label(tr("Crate name"));
+                ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(64).desired_width(width)).labelled_by(a11y_label.id);
                 ui.end_row();
-                ui.label(tr("Version requirement"));
-                ui.add(egui::TextEdit::singleline(&mut self.version).hint_text("1.0").char_limit(200).desired_width(width));
+                let a11y_label = ui.label(tr("Version requirement"));
+                ui.add(egui::TextEdit::singleline(&mut self.version).hint_text("1.0").char_limit(200).desired_width(width)).labelled_by(a11y_label.id);
                 ui.end_row();
-                ui.label(tr("Features (comma-separated)"));
-                ui.add(egui::TextEdit::singleline(&mut self.features).char_limit(2048).desired_width(width));
+                let a11y_label = ui.label(tr("Features (comma-separated)"));
+                ui.add(egui::TextEdit::singleline(&mut self.features).char_limit(2048).desired_width(width)).labelled_by(a11y_label.id);
                 ui.end_row();
-                ui.label(tr("Local dependency path (optional)"));
-                ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096).desired_width(width));
+                let a11y_label = ui.label(tr("Local dependency path (optional)"));
+                ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096).desired_width(width)).labelled_by(a11y_label.id);
                 ui.end_row();
                 ui.label(tr("Dependency scope"));
                 egui::ComboBox::from_id_salt("dep_scope").width(width - 6.0).selected_text(self.scope.table()).show_ui(ui, |ui| {

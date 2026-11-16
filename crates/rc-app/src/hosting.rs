@@ -688,14 +688,17 @@ impl Hosting {
                     });
                 });
                 ui.horizontal(|ui| {
-                    ui.label(tr("Service HTTPS origin"));
-                    config_changed |= ui.add(egui::TextEdit::singleline(&mut self.config.base_url).char_limit(2048).desired_width(300.0)).changed();
-                    ui.label(tr("Namespace/project"));
-                    config_changed |= ui.add(egui::TextEdit::singleline(&mut self.config.project).char_limit(512)).changed();
+                    let a11y_label = ui.label(tr("Service HTTPS origin"));
+                    config_changed |= ui
+                        .add(egui::TextEdit::singleline(&mut self.config.base_url).char_limit(2048).desired_width(300.0))
+                        .labelled_by(a11y_label.id)
+                        .changed();
+                    let a11y_label = ui.label(tr("Namespace/project"));
+                    config_changed |= ui.add(egui::TextEdit::singleline(&mut self.config.project).char_limit(512)).labelled_by(a11y_label.id).changed();
                 });
                 ui.horizontal(|ui| {
-                    ui.label(tr("CLI executable"));
-                    if ui.add(egui::TextEdit::singleline(&mut self.executable).char_limit(4096)).changed() {
+                    let a11y_label = ui.label(tr("CLI executable"));
+                    if ui.add(egui::TextEdit::singleline(&mut self.executable).char_limit(4096)).labelled_by(a11y_label.id).changed() {
                         config_changed = true;
                     }
                     if config_changed {
@@ -746,8 +749,8 @@ impl Hosting {
                     if ui.button(tr("List Pull/Merge Requests")).clicked() {
                         self.read(Operation::Requests, trusted);
                     }
-                    ui.label(tr("Request number"));
-                    if ui.add(egui::DragValue::new(&mut self.request_id).range(1..=u64::MAX)).changed() {
+                    let a11y_label = ui.label(tr("Request number"));
+                    if ui.add(egui::DragValue::new(&mut self.request_id).range(1..=u64::MAX)).labelled_by(a11y_label.id).changed() {
                         self.sha_for = None;
                         self.invalidate();
                     }
@@ -762,15 +765,15 @@ impl Hosting {
                     if ui.button(tr("List Actions/CI Runs")).clicked() {
                         self.read(Operation::Runs, trusted);
                     }
-                    ui.label(tr("Run/Pipeline ID"));
-                    if ui.add(egui::DragValue::new(&mut self.run_id).range(1..=u64::MAX)).changed() {
+                    let a11y_label = ui.label(tr("Run/Pipeline ID"));
+                    if ui.add(egui::DragValue::new(&mut self.run_id).range(1..=u64::MAX)).labelled_by(a11y_label.id).changed() {
                         self.invalidate();
                     }
                     if ui.button(tr("List Jobs")).clicked() {
                         self.read(Operation::Jobs(self.run_id), trusted);
                     }
-                    ui.label(tr("Job ID"));
-                    ui.add(egui::DragValue::new(&mut self.job_id).range(1..=u64::MAX));
+                    let a11y_label = ui.label(tr("Job ID"));
+                    ui.add(egui::DragValue::new(&mut self.job_id).range(1..=u64::MAX)).labelled_by(a11y_label.id);
                     if ui.button(tr("Load Job Logs")).clicked() {
                         self.read(Operation::Logs { run: self.run_id, job: self.job_id }, trusted);
                     }
@@ -796,15 +799,15 @@ impl Hosting {
             ui.add_enabled_ui(self.verified && !busy, |ui| {
                 egui::CollapsingHeader::new(tr("Create Pull/Merge Request")).show(ui, |ui| {
                     let mut changed = false;
-                    ui.label(tr("Title"));
-                    changed |= ui.add(egui::TextEdit::singleline(&mut self.title).char_limit(512)).changed();
-                    ui.label(tr("Message / Description"));
-                    changed |= ui.add(egui::TextEdit::multiline(&mut self.body).char_limit(16 * 1024).desired_rows(3)).changed();
+                    let a11y_label = ui.label(tr("Title"));
+                    changed |= ui.add(egui::TextEdit::singleline(&mut self.title).char_limit(512)).labelled_by(a11y_label.id).changed();
+                    let a11y_label = ui.label(tr("Message / Description"));
+                    changed |= ui.add(egui::TextEdit::multiline(&mut self.body).char_limit(16 * 1024).desired_rows(3)).labelled_by(a11y_label.id).changed();
                     ui.horizontal(|ui| {
-                        ui.label(tr("Target branch"));
-                        changed |= ui.add(egui::TextEdit::singleline(&mut self.base).char_limit(255)).changed();
-                        ui.label(tr("Source branch"));
-                        changed |= ui.add(egui::TextEdit::singleline(&mut self.head).char_limit(255)).changed();
+                        let a11y_label = ui.label(tr("Target branch"));
+                        changed |= ui.add(egui::TextEdit::singleline(&mut self.base).char_limit(255)).labelled_by(a11y_label.id).changed();
+                        let a11y_label = ui.label(tr("Source branch"));
+                        changed |= ui.add(egui::TextEdit::singleline(&mut self.head).char_limit(255)).labelled_by(a11y_label.id).changed();
                         changed |= ui.checkbox(&mut self.draft, tr("Draft request")).changed();
                     });
                     if changed {
@@ -867,11 +870,11 @@ impl Hosting {
                         );
                     }
                     let mut changed = false;
-                    ui.label(tr("Title"));
-                    changed |= ui.add(egui::TextEdit::singleline(&mut self.title).char_limit(512)).changed();
+                    let a11y_label = ui.label(tr("Title"));
+                    changed |= ui.add(egui::TextEdit::singleline(&mut self.title).char_limit(512)).labelled_by(a11y_label.id).changed();
                     ui.horizontal(|ui| {
-                        ui.label(tr("File name"));
-                        changed |= ui.add(egui::TextEdit::singleline(&mut self.snippet_name).char_limit(120)).changed();
+                        let a11y_label = ui.label(tr("File name"));
+                        changed |= ui.add(egui::TextEdit::singleline(&mut self.snippet_name).char_limit(120)).labelled_by(a11y_label.id).changed();
                         changed |= ui.checkbox(&mut self.public, tr("Public sharing")).changed();
                         if ui.button(tr("Use Active File Content")).clicked() {
                             action = Some(UiAction::UseFile);
@@ -1150,6 +1153,7 @@ else:print('diff --git a/src/lib.rs b/src/lib.rs\n+pub fn reviewed(){{}}')
             std::fs::write(root.join(".gitignore"), "/target/\n/Cargo.lock\n/build-ran\n").unwrap();
             for args in [
                 vec!["init", "-q", "-b", "main"],
+                vec!["config", "core.autocrlf", "false"],
                 vec!["config", "user.name", "Hosting"],
                 vec!["config", "user.email", "hosting@example.test"],
                 vec!["add", "."],

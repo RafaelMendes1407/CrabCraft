@@ -981,8 +981,8 @@ pub fn show(app: &mut CrabCraftApp, ui: &mut egui::Ui) {
         }
         egui::ScrollArea::vertical().id_salt("reqwest_endpoint_preview").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(tr("Base URL"));
-                ui.add(egui::TextEdit::singleline(&mut state.base).char_limit(4096).desired_width(300.0));
+                let a11y_label = ui.label(tr("Base URL"));
+                ui.add(egui::TextEdit::singleline(&mut state.base).char_limit(4096).desired_width(300.0)).labelled_by(a11y_label.id);
                 egui::ComboBox::from_id_salt("endpoint_method").selected_text(&state.method).show_ui(ui, |ui| {
                     for method in METHODS {
                         ui.selectable_value(&mut state.method, method.to_string(), *method);

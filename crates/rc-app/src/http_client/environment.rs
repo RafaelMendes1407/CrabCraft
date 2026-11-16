@@ -176,13 +176,13 @@ impl State {
             ui.label(tr("Choose a JSON file and environment explicitly. Values stay in this session; file variables take precedence."));
             let changed = ui
                 .horizontal(|ui| {
-                    ui.label(tr("Environment file"));
-                    ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096)).changed()
+                    let a11y_label = ui.label(tr("Environment file"));
+                    ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096)).labelled_by(a11y_label.id).changed()
                 })
                 .inner
                 | ui.horizontal(|ui| {
-                    ui.label(tr("Environment name"));
-                    ui.add(egui::TextEdit::singleline(&mut self.selected).char_limit(128)).changed()
+                    let a11y_label = ui.label(tr("Environment name"));
+                    ui.add(egui::TextEdit::singleline(&mut self.selected).char_limit(128)).labelled_by(a11y_label.id).changed()
                 })
                 .inner;
             if changed {

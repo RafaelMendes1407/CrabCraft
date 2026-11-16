@@ -238,12 +238,16 @@ impl Deployments {
             }
             if preview.source_text.is_some() || preview.remote_text.is_some() {
                 ui.columns(2, |columns| {
-                    columns[0].label(tr("Before"));
+                    let before_label = columns[0].label(tr("Before"));
                     let mut before = preview.remote_text.as_deref().unwrap_or("");
-                    columns[0].add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY));
-                    columns[1].label(tr("After"));
+                    columns[0]
+                        .add(egui::TextEdit::multiline(&mut before).code_editor().desired_rows(3).desired_width(f32::INFINITY))
+                        .labelled_by(before_label.id);
+                    let after_label = columns[1].label(tr("After"));
                     let mut after = preview.source_text.as_deref().unwrap_or("");
-                    columns[1].add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY));
+                    columns[1]
+                        .add(egui::TextEdit::multiline(&mut after).code_editor().desired_rows(3).desired_width(f32::INFINITY))
+                        .labelled_by(after_label.id);
                 });
             } else {
                 ui.small(tr("Binary deployment: compare the size and SHA-256 hashes; no text conversion is applied."));

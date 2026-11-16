@@ -24,14 +24,14 @@ pub fn show(app: &mut CrabCraftApp, ctx: &egui::Context, draft: &mut Dialog) -> 
             "Connect to an existing gdbserver using a local binary with matching debug symbols. Stop detaches; it does not terminate the remote process.",
         ));
         egui::Grid::new("remote-gdb-fields").show(ui, |ui| {
-            ui.label(tr("Host"));
-            ui.add(egui::TextEdit::singleline(&mut draft.host).char_limit(253));
+            let a11y_label = ui.label(tr("Host"));
+            ui.add(egui::TextEdit::singleline(&mut draft.host).char_limit(253)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Port"));
-            ui.add(egui::TextEdit::singleline(&mut draft.port).char_limit(5));
+            let a11y_label = ui.label(tr("Port"));
+            ui.add(egui::TextEdit::singleline(&mut draft.port).char_limit(5)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Local symbol binary"));
-            ui.add(egui::TextEdit::singleline(&mut draft.program).desired_width(350.0).char_limit(8192));
+            let a11y_label = ui.label(tr("Local symbol binary"));
+            ui.add(egui::TextEdit::singleline(&mut draft.program).desired_width(350.0).char_limit(8192)).labelled_by(a11y_label.id);
             ui.end_row();
         });
         if valid.is_none() {

@@ -169,9 +169,10 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) {
             let label = ui.label(tr("Ollama loopback URL"));
             if ui.add(egui::TextEdit::singleline(&mut assistant.endpoint).char_limit(2048)).labelled_by(label.id).changed() { assistant.models.clear(); assistant.model.clear(); assistant.proposal = None; }
             if ui.button(tr("Refresh installed local models")).clicked() { assistant.start(Request::Models, app.waker.clone()); }
+            let label = ui.label(tr("Local model"));
             egui::ComboBox::from_id_salt("local_ai_model").selected_text(if assistant.model.is_empty() { tr("Choose local model") } else { &assistant.model }).show_ui(ui, |ui| {
                 for model in &assistant.models { if ui.selectable_value(&mut assistant.model, model.clone(), model).changed() { assistant.proposal = None; } }
-            });
+            }).response.labelled_by(label.id);
         });
         ui.label(tr("Line suggestions use the current Rust file and require the caret at the end of a line. Next edit sends the current Rust file and your instruction. Tab accepts a visible inline suggestion; Escape rejects it."));
         ui.separator();
