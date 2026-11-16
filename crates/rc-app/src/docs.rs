@@ -201,17 +201,13 @@ impl From<std::io::Error> for TextReadError {
 }
 
 fn same_metadata(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
-    if !after.is_file() || before.len() != after.len() || before.modified().ok() != after.modified().ok() {
-        return false;
-    }
+    let same = after.is_file() && before.len() == after.len() && before.modified().ok() == after.modified().ok();
     #[cfg(unix)]
-    {
+    let same = {
         use std::os::unix::fs::MetadataExt;
-        if before.dev() != after.dev() || before.ino() != after.ino() {
-            return false;
-        }
-    }
-    true
+        same && before.dev() == after.dev() && before.ino() == after.ino()
+    };
+    same
 }
 
 /// Checked document reader for legacy synchronous callers and cancellable workers.
