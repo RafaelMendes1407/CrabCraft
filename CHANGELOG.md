@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.6.0
+
+### Windows
+- **Debugger default:** Windows and macOS now default to LLDB (`lldb-dap`, shipped with LLVM)
+  instead of GDB, which is rarely installed there. Linux keeps GDB. An explicit choice in
+  Settings › Tools is unchanged.
+- **Verbatim paths:** Windows' `\\?\C:\…` canonical paths no longer reach tools that cannot
+  open them. Cloning a repository, source breakpoints and "go to target" requests now get
+  plain paths, and the editor matches debugger frames, CLI paths and `/` versus `\` spellings
+  to the open document.
+- **Local plugins:** installing and loading plugins works on Windows. The symlink/traversal
+  check compared a verbatim canonical path with a plain one and refused every plugin.
+- **Shelves:** saving a shelf no longer fails with "Access denied" (files were still open when
+  the folder was renamed), and shelves saved from Git's `C:/…` root are listed again.
+- **Remote transfer:** a folder chosen as a file is rejected as invalid input instead of
+  failing with an I/O error.
+- **Fonts:** emoji and symbols (for example 🦀 or musical notation) use Segoe UI Emoji and
+  Segoe UI Symbol instead of drawing empty boxes.
+
+### Accessibility
+- Settings (theme, language, keymap, zoom and editor numbers), Find in Files scope, coverage
+  suites, database, deployment, remote files, remote debugging, local AI and the New Project
+  dialog now give their combo boxes, sliders and text fields accessible names.
+
+### Maintenance
+- The workspace compiles without warnings and passes strict Clippy on Windows/MSVC;
+  Unix-only helpers and tests are gated by platform.
+- Inherited .NET, C# and Razor services were removed; egui is 0.37; security audit tooling,
+  supply-chain checks and repository formatting were added (see FEATURES.md).
+
+### Validation and scope
+- On Windows 11 (MSVC): library tests of all crates pass; the `rc-app` suite went from 349 to
+  406 passing tests (22 still fail, 88 ignored). The remaining failures are listed in
+  [FEATURES.md](https://github.com/RafaelMendes1407/CrabCraft/blob/v0.6.0/FEATURES.md) as
+  Windows pending work.
+- Docker: the real Docker CLI 29.10 on Windows reports a missing named-pipe daemon as a typed
+  error without starting a daemon. No Docker daemon or WSL could be installed on the test
+  machine, so container execution and the WSL workspace remain unvalidated on Windows.
+- Opening a project still does not execute its code; project tools require explicit trust.
+
 ## 0.5.0
 
 ### New and improved

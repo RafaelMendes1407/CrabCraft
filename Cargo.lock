@@ -4448,7 +4448,7 @@ dependencies = [
 
 [[package]]
 name = "rc-app"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4501,7 +4501,7 @@ dependencies = [
 
 [[package]]
 name = "rc-cargo"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -4519,7 +4519,7 @@ dependencies = [
 
 [[package]]
 name = "rc-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -4537,7 +4537,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dap"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4554,7 +4554,7 @@ dependencies = [
 
 [[package]]
 name = "rc-dotnet"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -4563,7 +4563,7 @@ dependencies = [
 
 [[package]]
 name = "rc-editor"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "criterion",
  "egui",
@@ -4577,7 +4577,7 @@ dependencies = [
 
 [[package]]
 name = "rc-kit"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "eframe",
  "egui",
@@ -4593,7 +4593,7 @@ dependencies = [
 
 [[package]]
 name = "rc-lsp"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -4611,7 +4611,7 @@ dependencies = [
 
 [[package]]
 name = "rc-search"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -4631,7 +4631,7 @@ dependencies = [
 
 [[package]]
 name = "rc-syntax"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -4651,7 +4651,7 @@ dependencies = [
 
 [[package]]
 name = "rc-term"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -4666,7 +4666,7 @@ dependencies = [
 
 [[package]]
 name = "rc-text"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "proptest",
  "ropey",
@@ -4676,7 +4676,7 @@ dependencies = [
 
 [[package]]
 name = "rc-vcs"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "criterion",
  "libc",
