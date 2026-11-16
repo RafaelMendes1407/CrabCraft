@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -63,8 +63,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libwayland-dev
-          # GDB for the debugger tests, Symbola for emoji/symbol glyphs and Mesa's software
-          # Vulkan driver for tests that render through wgpu.
+          # GDB 14+ for the DAP-based debugger tests (hence Ubuntu 24.04), Symbola for
+          # emoji/symbol glyphs and Mesa's software Vulkan driver for wgpu-rendered tests.
           sudo apt-get install -y gdb fonts-symbola mesa-vulkan-drivers
 
       # LLVM's lldb-dap on the Windows image loads python310.dll.

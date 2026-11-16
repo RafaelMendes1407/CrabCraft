@@ -605,7 +605,9 @@ mod tests {
         h.get_by_label(tr("Run SQL")).click();
         h.run_steps(2);
         assert!(h.state().database.cancel.is_some());
-        h.get_by_label(tr("Cancel")).click();
+        // Other panels may show their own Cancel; use the one on the progress row.
+        let row = h.get_by_label(tr("Database operation in progress…")).rect().center().y;
+        h.get_all_by_label(tr("Cancel")).find(|node| node.rect().y_range().contains(row)).expect("database Cancel button").click();
         h.run_steps(2);
         assert!(h.state().database.cancel.is_none());
         assert!(!root.join("build-ran").exists());
