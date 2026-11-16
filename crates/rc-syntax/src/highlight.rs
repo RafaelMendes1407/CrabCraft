@@ -127,7 +127,7 @@ pub fn highlight_lines(lang: Lang, tree: &Tree, rope: &Rope, first: usize, count
     let mut captures = cursor.captures(query, tree.root_node(), text);
     // (byte len, pattern) decide precedence: smaller nodes, then later patterns win.
     while let Some((m, index)) = captures.next() {
-        let cap = m.captures[*index];
+        let cap = m.captures()[*index];
         let Some(hl) = Hl::from_capture(names[cap.index as usize]) else { continue };
         let node = cap.node;
         let (s, e) = (node.start_byte().max(start_byte), node.end_byte().min(end_byte));

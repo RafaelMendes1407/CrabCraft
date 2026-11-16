@@ -55,7 +55,7 @@ pub struct Shelf {
     checksum: String,
 }
 fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>()
 }
 /// One spelling per repository: on Windows Git reports `C:/x` while the IDE keeps `\\?\C:\x`.
 fn root_name(root: &Path) -> Result<String, Error> {

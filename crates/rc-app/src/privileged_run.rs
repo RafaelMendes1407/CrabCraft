@@ -73,7 +73,7 @@ impl Plan {
     }
 }
 pub(crate) fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>()
 }
 fn check(stop: &rc_dotnet::CancelToken) -> Result<(), Error> {
     if stop.is_cancelled() { Err(Error::Cancelled) } else { Ok(()) }

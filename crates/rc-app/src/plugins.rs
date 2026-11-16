@@ -66,7 +66,7 @@ fn basename(s: &str) -> bool {
     !s.is_empty() && s.len() <= 128 && !matches!(s, "." | "..") && !s.contains(['/', '\\', ':', '\0'])
 }
 fn hash(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>()
 }
 impl Manifest {
     fn validate(&self) -> Result<(), Error> {

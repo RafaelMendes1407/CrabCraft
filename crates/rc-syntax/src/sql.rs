@@ -456,7 +456,7 @@ pub fn injected(tree: &Tree, rope: &Rope, range: Range<usize>) -> Vec<Token> {
         if strings >= 16 {
             break;
         }
-        let node = found.captures[*index].node;
+        let node = found.captures()[*index].node;
         if let Some(injection) = decode(node, &source) {
             strings += 1;
             out.push(Token { range: injection.content.clone(), role: Hl::Plain });

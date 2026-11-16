@@ -87,7 +87,7 @@ pub struct Source {
     stamp: Stamp,
 }
 pub fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>()
 }
 pub fn source(path: &Path, cancel: &CancelToken) -> Result<Source, Error> {
     source_limited(path, cancel, MAX)
@@ -137,7 +137,7 @@ pub(crate) fn source_limited(path: &Path, cancel: &CancelToken, limit: usize) ->
     if stamp != Stamp::new(&file.metadata()?)? || stamp != Stamp::new(&std::fs::symlink_metadata(&path)?)? || bytes.len() as u64 != stamp.size {
         return Err(Error::Stale);
     }
-    Ok(Source { path, bytes: Arc::from(bytes), hash: format!("{:x}", hash.finalize()), mode: stamp.mode, stamp })
+    Ok(Source { path, bytes: Arc::from(bytes), hash: hash.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>(), mode: stamp.mode, stamp })
 }
 #[derive(Clone)]
 pub enum RemoteImage {

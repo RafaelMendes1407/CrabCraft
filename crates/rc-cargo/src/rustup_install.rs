@@ -90,7 +90,7 @@ impl Prepared {
 fn verify(binary: &[u8], checksum: &[u8]) -> Result<(), InstallError> {
     let text = std::str::from_utf8(checksum).map_err(|_| InstallError::Checksum)?;
     let hash = text.split_whitespace().next().filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())).ok_or(InstallError::Checksum)?;
-    let actual = format!("{:x}", Sha256::digest(binary));
+    let actual = Sha256::digest(binary).iter().map(|b| format!("{b:02x}")).collect::<String>();
     if actual.eq_ignore_ascii_case(hash) { Ok(()) } else { Err(InstallError::Checksum) }
 }
 async fn read(http: &reqwest::Client, url: &str, max: usize) -> Result<Vec<u8>, InstallError> {
