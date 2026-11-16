@@ -13,7 +13,7 @@ rc-core.workspace = true
 rc-text.workspace = true
 rc-syntax.workspace = true
 lsp-types = "0.97"
-parking_lot = "0.12"
+parking_lot = "0.13"
 percent-encoding = "2"
 
 [target.'cfg(unix)'.dependencies]
