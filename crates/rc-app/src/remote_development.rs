@@ -969,7 +969,9 @@ mod tests {
         app.open_workspace_and_wait(second.path());
         let mut h = crate::screens::harness(app, egui::vec2(1600., 1100.));
         let deadline = Instant::now() + Duration::from_secs(10);
-        while h.state().workspace.as_ref().is_none_or(|w| w.ws.root != second.path()) {
+        // Workspace roots are canonical (`\\?\C:\…` on Windows).
+        let second_root = second.path().canonicalize().unwrap();
+        while h.state().workspace.as_ref().is_none_or(|w| w.ws.root != second_root) {
             assert!(Instant::now() < deadline);
             h.run_steps(1);
             std::thread::sleep(Duration::from_millis(5));

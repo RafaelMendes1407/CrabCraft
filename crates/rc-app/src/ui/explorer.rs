@@ -49,6 +49,9 @@ pub struct ExplorerState {
     pub libraries: Vec<rc_cargo::Library>,
     /// Scroll the selected row into view on the next frame.
     pub reveal: bool,
+    /// Rows drawn by the last frame; a reveal outside them scrolls even when the stored scroll
+    /// offset says the row is in view.
+    shown: std::ops::Range<usize>,
     pub has_focus: bool,
     /// Open files with a single click (Settings › Editor).
     pub single_click: bool,
@@ -427,7 +430,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
 
             let height = ui.available_height().max(ROW_H);
             let top = index as f32 * ROW_H;
-            if top < offset || top + ROW_H > offset + height {
+            if top < offset || top + ROW_H > offset + height || !state.shown.contains(&index) {
                 scroll = scroll.vertical_scroll_offset((top - (height - ROW_H) / 2.0).max(0.0));
             }
         }
@@ -446,6 +449,7 @@ pub fn show(ui: &mut Ui, state: &mut ExplorerState, root: &Path, root_name: &str
                 }
             }
             let visible_rows = range.clone();
+            state.shown = range.clone();
             for i in range {
                 let row = &rows[i];
                 let width = ui.available_width().max(200.0);
