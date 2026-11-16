@@ -112,7 +112,7 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                 let event = reader.read_event().map_err(|_| Error::Format)?;
                 match event {
                     Event::Start(ref element) | Event::Empty(ref element) => {
-                        let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+                        let name = element.name().as_ref().to_string();
                         if depth == 0 {
                             if root || !matches!(name.as_str(), "application" | "component" | "scheme" | "keymap") {
                                 return Err(Error::Format);
@@ -122,7 +122,7 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                         let mut attrs = std::collections::BTreeMap::new();
                         for attr in element.attributes() {
                             let attr = attr.map_err(|_| Error::Format)?;
-                            let key = std::str::from_utf8(attr.key.as_ref()).map_err(|_| Error::Format)?.to_string();
+                            let key = attr.key.as_ref().to_string();
                             let value = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).map_err(|_| Error::Format)?.into_owned();
                             if value.len() > 4096 || attrs.insert(key, value).is_some() {
                                 return Err(Error::Limit);
@@ -181,12 +181,12 @@ pub fn parse(source: Source, text: &str, cancel: &AtomicBool) -> Result<Preview,
                     }
                     Event::End(element) => {
                         depth = depth.checked_sub(1).ok_or(Error::Format)?;
-                        if element.name().as_ref() == b"component" {
+                        if element.name().as_ref() == "component" {
                             components.pop();
                         }
                     }
                     Event::DocType(_) | Event::GeneralRef(_) => return Err(Error::Format),
-                    Event::Text(text) if !text.iter().all(u8::is_ascii_whitespace) => {
+                    Event::Text(text) if !text.bytes().all(|b| b.is_ascii_whitespace()) => {
                         return Err(Error::Format);
                     }
                     Event::Eof => break,
