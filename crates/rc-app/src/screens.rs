@@ -2312,15 +2312,18 @@ fn the_status_bar_picks_the_analysis_target() {
     h.run_steps(3);
     // rustup lists every target it knows: the list is long enough to have a filter.
     assert!(h.state().triple_choices.len() > 8);
-    h.state_mut().triple_filter = "windows-msvc".into();
+    // A target other than the host: the host's name is also on the status bar button.
+    let (filter, other) =
+        if host == "x86_64-pc-windows-msvc" { ("unknown-linux-gnu", "x86_64-unknown-linux-gnu") } else { ("windows-msvc", "x86_64-pc-windows-msvc") };
+    h.state_mut().triple_filter = filter.into();
     h.run_steps(2);
-    h.get_by_label("x86_64-pc-windows-msvc").click();
+    h.get_by_label(other).click();
     h.run_steps(3);
-    assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
+    assert_eq!(h.state().cargo_target.as_deref(), Some(other));
     assert!(h.state().triple_filter.is_empty());
     h.state_mut().save_session();
     h.state_mut().save_all_and_wait();
-    assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
+    assert_eq!(rc_core::Session::load(&root).cargo_target, other);
     assert!(!root.join("target").exists(), "nothing was built");
 }
 
