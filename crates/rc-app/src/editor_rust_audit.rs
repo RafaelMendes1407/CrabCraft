@@ -347,6 +347,6 @@ fn interface_languages_render_native_settings_for_a_rust_project() {
     h.run_steps(3);
     assert!(h.query_all_by_label_contains("SIL OPEN FONT LICENSE Version 1.1").count() > 0);
     assert!(h.state().insight.session.is_none());
-    assert_eq!(h.state().docs.active_doc().unwrap().path, path);
+    assert_eq!(h.state().docs.active_doc().unwrap().path, path.canonicalize().unwrap());
     compile(&path);
 }

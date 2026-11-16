@@ -309,12 +309,12 @@ mod tests {
         h.state_mut().nav_forward.clear();
         h.state_mut().navigate(true);
         wait(&mut h);
-        assert_eq!(h.state().docs.active_doc().unwrap().path, helper);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, helper.canonicalize().unwrap());
         assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(), offset);
         assert_eq!(h.state().nav_forward.len(), 1);
         h.state_mut().navigate(false);
         wait(&mut h);
-        assert_eq!(h.state().docs.active_doc().unwrap().path, main);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, main.canonicalize().unwrap());
         assert!(h.state().nav_forward.is_empty());
         assert_eq!(h.state().nav_back.len(), 1);
         let preview_path = source.join("preview.rs");
