@@ -1,4 +1,6 @@
-# Builds the application and runs the tests that need no external tools, on Linux and Windows.
+# Builds the application on Linux and Windows, lints Windows-only code (Linux is linted by the
+# security audit), runs every library test and the application's own tests. rc-app has no library
+# target, so its tests only run with --bins.
 name: CI
 
 on:
@@ -29,7 +31,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal
+          rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -37,5 +39,43 @@ jobs:
       - name: Build
         run: cargo build --locked -p rc-app
 
-      - name: Test
-        run: cargo test --locked -p rc-app -p rc-text -p rc-syntax -p rc-core -p rc-cargo --lib
+      - name: Clippy
+        if: runner.os == 'Windows'
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Library tests
+        run: cargo test --locked --workspace --lib --exclude rc-app
+
+  app-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libwayland-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rust-analyzer,rust-src
+          rustup default stable
+
+      - name: Configure Git for test repositories
+        run: |
+          git config --global user.name "CrabCraft CI"
+          git config --global user.email "ci@example.invalid"
+          git config --global core.autocrlf false
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+
+      - name: Application tests
+        run: cargo test --locked -p rc-app --bins -- --test-threads=4
