@@ -724,14 +724,14 @@ impl Debugger {
                 && let Some(frame) = session.selected_frame().map(|f| f.id)
                 && self.inline_frame != Some((session.generation(), frame))
                 && let Some(vars) = frame_variables(session, frame)
-                && let Some(d) = docs.list.iter_mut().find(|d| d.path == *path)
+                && let Some(d) = docs.list.iter_mut().find(|d| rc_core::paths::same_spelling(&d.path, path))
             {
                 d.editor.debug_values = inline_values(&d.editor.buffer, line.saturating_sub(1) as usize, &vars);
                 self.inline_frame = Some((session.generation(), frame));
             }
             let muted = self.muted;
             for d in &mut docs.list {
-                d.editor.execution_line = exec.as_ref().filter(|(p, _)| *p == d.path).map(|(_, l)| l.saturating_sub(1) as usize);
+                d.editor.execution_line = exec.as_ref().filter(|(p, _)| rc_core::paths::same_spelling(p, &d.path)).map(|(_, l)| l.saturating_sub(1) as usize);
                 if exec.is_none() {
                     d.editor.debug_values.clear();
                 }

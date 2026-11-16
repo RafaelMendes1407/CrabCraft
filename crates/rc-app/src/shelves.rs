@@ -57,11 +57,16 @@ pub struct Shelf {
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+/// One spelling per repository: on Windows Git reports `C:/x` while the IDE keeps `\\?\C:\x`.
 fn root_name(root: &Path) -> Result<String, Error> {
-    root.to_str().map(str::to_string).ok_or(Error::Unsupported)
+    let name = rc_core::paths::plain(root).to_str().ok_or(Error::Unsupported)?.to_string();
+    Ok(if cfg!(windows) { name.replace('/', "\\") } else { name })
 }
 fn store(root: &Path, base: &Path) -> PathBuf {
-    base.join(digest(root.as_os_str().as_encoded_bytes()))
+    match root_name(root) {
+        Ok(name) => base.join(digest(name.as_bytes())),
+        Err(_) => base.join(digest(root.as_os_str().as_encoded_bytes())),
+    }
 }
 fn cancelled(cancel: &rc_vcs::CancelToken) -> Result<(), Error> {
     if cancel.is_cancelled() { Err(Error::Cancelled) } else { Ok(()) }
@@ -229,12 +234,12 @@ pub async fn create(repo: &rc_vcs::Repository, base: &Path, name: &str, selected
     if manifest.len() > 128 * 1024 {
         return Err(Error::Invalid);
     }
-    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(temp.path().join("changes.patch"))?;
-    file.write_all(&patch)?;
-    file.sync_all()?;
-    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(temp.path().join("shelf.json"))?;
-    file.write_all(&manifest)?;
-    file.sync_all()?;
+    // Both files are closed before the rename: Windows refuses to rename a folder with open handles.
+    for (name, bytes) in [("changes.patch", &patch[..]), ("shelf.json", &manifest[..])] {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(temp.path().join(name))?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
     #[cfg(unix)]
     {
         std::fs::File::open(temp.path())?.sync_all()?;
@@ -507,6 +512,7 @@ mod tests {
         std::fs::write(root.join("src/[literal].rs"), "original\n").unwrap();
         std::fs::write(root.join("data.bin"), [0u8, 1, 2, 255]).unwrap();
         git(root, &["init", "-q"]);
+        git(root, &["config", "core.autocrlf", "false"]);
         git(root, &["config", "user.name", "Shelves"]);
         git(root, &["config", "user.email", "shelf@example.test"]);
         git(root, &["add", "."]);

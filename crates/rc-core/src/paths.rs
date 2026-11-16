@@ -120,3 +120,71 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
     }
 }
+
+/// `path` without Windows' verbatim prefix (`\\?\C:\x` becomes `C:\x`, `\\?\UNC\h\s` becomes
+/// `\\h\s`), for tools such as Git that cannot open verbatim paths. Other paths, and every
+/// path on other systems, are returned unchanged.
+pub fn plain(path: &std::path::Path) -> PathBuf {
+    #[cfg(windows)]
+    if let Some(text) = path.to_str() {
+        if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{rest}"));
+        }
+        // Only drive paths: `\\?\GLOBALROOT\…` and similar have no plain form.
+        if let Some(rest) = text.strip_prefix(r"\\?\")
+            && rest.as_bytes().get(1) == Some(&b':')
+        {
+            return PathBuf::from(rest);
+        }
+    }
+    path.to_path_buf()
+}
+
+#[cfg(test)]
+mod plain_tests {
+    use std::path::{Path, PathBuf};
+    #[test]
+    #[cfg(windows)]
+    fn verbatim_drive_and_unc_paths_lose_their_prefix() {
+        assert_eq!(super::plain(Path::new(r"\\?\C:\Users\me\a b")), PathBuf::from(r"C:\Users\me\a b"));
+        assert_eq!(super::plain(Path::new(r"\\?\UNC\host\share\x")), PathBuf::from(r"\\host\share\x"));
+        assert_eq!(super::plain(Path::new(r"\\?\GLOBALROOT\Device")), PathBuf::from(r"\\?\GLOBALROOT\Device"));
+        assert_eq!(super::plain(Path::new(r"C:\x")), PathBuf::from(r"C:\x"));
+    }
+    #[test]
+    fn plain_paths_are_unchanged() {
+        assert_eq!(super::plain(Path::new("relative/x.rs")), PathBuf::from("relative/x.rs"));
+    }
+}
+
+/// Whether two paths spell the same location without touching the disk. On Windows a verbatim
+/// prefix and `/` versus `\` separators do not matter (`\\?\C:\a\b` equals `C:\a/b`); elsewhere
+/// this is plain equality. It does not resolve `..`, symlinks or letter case.
+pub fn same_spelling(a: &std::path::Path, b: &std::path::Path) -> bool {
+    if a == b {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let key = |path: &std::path::Path| plain(path).to_string_lossy().replace('/', "\\");
+        key(a) == key(b)
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+#[cfg(test)]
+mod spelling_tests {
+    use std::path::Path;
+    #[test]
+    #[cfg(windows)]
+    fn verbatim_and_separator_variants_match_on_windows() {
+        assert!(super::same_spelling(Path::new(r"\\?\C:\a\src\main.rs"), Path::new(r"C:\a\src/main.rs")));
+        assert!(!super::same_spelling(Path::new(r"C:\a\src\main.rs"), Path::new(r"C:\a\src\lib.rs")));
+    }
+    #[test]
+    fn identical_paths_match_and_different_ones_do_not() {
+        assert!(super::same_spelling(Path::new("a/b.rs"), Path::new("a/b.rs")));
+        assert!(!super::same_spelling(Path::new("a/b.rs"), Path::new("a/c.rs")));
+    }
+}

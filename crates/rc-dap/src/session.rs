@@ -1610,7 +1610,7 @@ impl DebugSession {
             }
         } else if self.capabilities.supports_goto_targets_request {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-            let p = c.request("gotoTargets", json!({ "source": { "name": name, "path": path }, "line": line }));
+            let p = c.request("gotoTargets", json!({ "source": { "name": name, "path": rc_core::paths::plain(path) }, "line": line }));
             self.in_flight.push((p, Purpose::GotoTargets { thread_id }));
         }
     }
