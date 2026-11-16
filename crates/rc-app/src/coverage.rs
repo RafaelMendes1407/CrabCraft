@@ -394,7 +394,9 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ui: &mut egui::Ui) {
                         app.coverage.selected_file = 0;
                     }
                 }
-            });
+            })
+            .response
+            .accessible_name(tr("Coverage"));
         remove = ui.add_enabled(!app.coverage.suites.is_empty(), egui::Button::new(tr("Remove Suite"))).clicked();
     });
     if remove {
@@ -499,7 +501,7 @@ mod tests {
         let suite = parse(&report, root.path(), "scope".into(), &CancelToken::new()).unwrap();
         assert_eq!(suite.skipped, 1);
         assert_eq!(suite.files.len(), 1);
-        assert!(suite.files[0].path.starts_with(root.path()));
+        assert!(suite.files[0].path.starts_with(root.path().canonicalize().unwrap()));
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();

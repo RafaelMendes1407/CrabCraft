@@ -261,11 +261,11 @@ mod tests {
         app.docs.active_doc_mut().unwrap().editor.replace(0, 0, "// unsaved\n");
         let before = app.docs.active_doc().unwrap().editor.buffer.rope().to_string();
         app.request_open_at(&helper, 2, 4);
-        assert_eq!(app.docs.active_doc().unwrap().path, main);
+        assert_eq!(app.docs.active_doc().unwrap().path, main.canonicalize().unwrap());
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 850.0));
         wait(&mut h);
         let doc = h.state().docs.active_doc().unwrap();
-        assert_eq!(doc.path, helper);
+        assert_eq!(doc.path, helper.canonicalize().unwrap());
         assert!(doc.bom);
         assert_eq!(doc.editor.buffer.line_ending(), rc_text::LineEnding::CrLf);
         assert_eq!(doc.editor.caret(), doc.editor.buffer.rope().line_to_char(2) + 4);
@@ -276,7 +276,7 @@ mod tests {
         h.state_mut().request_open_file(&helper);
         h.state_mut().request_open_file(&main);
         wait(&mut h);
-        assert_eq!(h.state().docs.active_doc().unwrap().path, main);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, main.canonicalize().unwrap());
         assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string(), before);
         let other = source.join("cancelled.rs");
         std::fs::write(&other, "pub const CANCELLED: i32 = 0;\n").unwrap();
@@ -366,13 +366,13 @@ mod tests {
         wait(&mut h);
         assert_eq!(h.state().docs.list.len(), 4);
         assert!(h.state().docs.list[0].editor.buffer.rope().to_string().starts_with("// unsaved"));
-        assert_eq!(h.state().docs.active_doc().unwrap().path, paths[3]);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, paths[3].canonicalize().unwrap());
         assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(), 7);
         assert!(!root.path().join("BUILD_RAN").exists());
         h.state_mut().request_open_files(vec![paths[0].clone(), paths[1].clone()]);
         h.state_mut().disk_open.cancel();
         h.run_steps(3);
-        assert_eq!(h.state().docs.active_doc().unwrap().path, paths[3]);
+        assert_eq!(h.state().docs.active_doc().unwrap().path, paths[3].canonicalize().unwrap());
         h.state_mut().request_open_files(vec![paths[0].clone(); 257]);
         assert!(!h.state().disk_open.busy());
         assert_eq!(h.state().docs.list.len(), 4);
@@ -389,8 +389,8 @@ mod tests {
             assert!(Instant::now() < until, "CLI workspace/file batch did not finish");
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(h.state().workspace.as_ref().unwrap().ws.root, root.path());
-        assert_eq!(h.state().docs.active_doc().unwrap().path, loose);
+        assert_eq!(h.state().workspace.as_ref().unwrap().ws.root, root.path().canonicalize().unwrap());
+        assert_eq!(h.state().docs.active_doc().unwrap().path, loose.canonicalize().unwrap());
         assert_eq!(h.state().docs.active_doc().unwrap().editor.caret(), 9);
         assert_eq!(h.state().docs.list[h.state().docs.index_of(&paths[1]).unwrap()].editor.caret(), 4);
         assert!(!root.path().join("BUILD_RAN").exists());
@@ -421,7 +421,7 @@ mod tests {
         assert!(opened.doc.editor.read_only);
         assert!(!opened.parse);
         let mut request = Request::new(&mut docs, &path, None);
-        request.read_only_roots.push(root.path().to_path_buf());
+        request.read_only_roots.push(root.path().canonicalize().unwrap());
         let opened = prepare(&request, &AtomicBool::new(false)).unwrap_or_else(|error| panic!("{error}"));
         assert!(opened.doc.editor.read_only);
         assert!(opened.parse);

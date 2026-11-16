@@ -3,7 +3,8 @@
 Settings → Tools offers an explicit GDB / LLDB selection, plus optional absolute executable
 paths. The selected backend applies to subsequent Rust launch and attach operations; an
 existing session keeps its adapter. A missing configured executable reports an error instead
-of silently switching backend. Paths and the choice remain local machine settings.
+of silently switching backend. Paths and the choice remain local machine settings. The default
+is GDB on Linux and LLDB on Windows and macOS, where GDB is rarely installed.
 
 GDB uses its native DAP interpreter (`gdb` 14 or newer), preferring `rust-gdb` for pretty
 printers when automatically discovered. LLDB uses LLVM's `lldb-dap` or the older

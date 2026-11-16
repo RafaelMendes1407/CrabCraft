@@ -22,6 +22,8 @@ The ignored `real_rootless_engine_builds_and_runs_a_static_rust_project` test re
 
 Our temporary daemon probe uses an ordinary host UID 1000 mapped to namespace UID 0, private mount/PID/network namespaces, a private `/run` bind mount, a temporary Unix socket/data/config and vfs storage. This final probe runs Docker without its `--rootless` flag or RootlessKit integration, entirely inside the ordinary user’s namespaces; it does not run as host root or fabricate a RootlessKit API. It neither uses host root/sudo nor changes global AppArmor/system settings. The daemon became ready and built the image, but its AppArmor limitation prevented container execution. This is recorded rather than bypassed.
 
+On Windows 11 (2026-11-16) the opt-in `real_windows_cli_reports_a_missing_named_pipe_daemon_as_a_typed_error` test ran the real Docker CLI 29.10 (`CRABCRAFT_TEST_DOCKER` set to its absolute path) against a missing `npipe://` endpoint: untrusted execution is refused before any process starts, a TCP endpoint is rejected, and the daemon error returns as a typed failure. Docker Desktop and WSL2 could not be installed on that machine (corrupt Windows component store), so no container ran on Windows.
+
 ## Public references
 
 - [Docker CLI reference](https://docs.docker.com/reference/cli/docker/)

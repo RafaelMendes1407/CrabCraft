@@ -395,7 +395,7 @@ mod tests {
         let mut h = crate::screens::harness(app, egui::vec2(1280.0, 850.0));
         frames(&mut h, |app| !app.file_edits.busy());
         let doc = h.state().docs.active_doc().unwrap();
-        assert_eq!(doc.path, main);
+        assert_eq!(doc.path, main.canonicalize().unwrap());
         assert!(doc.bom && doc.is_modified());
         assert_eq!(doc.editor.buffer.line_ending(), rc_text::LineEnding::CrLf);
         assert!(doc.editor.buffer.rope().to_string().contains(", 42)"));

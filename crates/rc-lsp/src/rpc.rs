@@ -278,7 +278,6 @@ impl Client {
                     let _ = c.start_kill();
                     let _ = c.wait().await;
                 });
-                return;
             }
             #[cfg(not(windows))]
             {

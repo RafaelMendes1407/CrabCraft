@@ -82,8 +82,8 @@ impl Picker {
                     ui.spinner();
                 }
             });
-            ui.label(tr("Choose a process from this terminal; attaching pauses it under the debugger"));
-            ui.add(egui::TextEdit::singleline(&mut self.filter).hint_text(tr("Filter by name or PID")));
+            let a11y_label = ui.label(tr("Choose a process from this terminal; attaching pauses it under the debugger"));
+            ui.add(egui::TextEdit::singleline(&mut self.filter).hint_text(tr("Filter by name or PID"))).labelled_by(a11y_label.id);
             if let Some(error) = &self.error {
                 ui.colored_label(rc_kit::pal(ui).error, error);
             }

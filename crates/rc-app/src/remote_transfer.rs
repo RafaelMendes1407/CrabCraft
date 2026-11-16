@@ -80,6 +80,10 @@ pub fn bounded_file(path: &Path) -> Result<Vec<u8>, Error> {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
+    // Windows cannot open a folder for reading; reject non-regular paths before opening them.
+    if !std::fs::symlink_metadata(path)?.file_type().is_file() {
+        return Err(Error::Input);
+    }
     let file = options.open(path)?;
     let meta = file.metadata()?;
     if !meta.is_file() {

@@ -494,7 +494,7 @@ mod tests {
         app.wait_workspace_open();
         assert_eq!(app.docs.list.len(), 2);
         let doc = app.docs.active_doc().unwrap();
-        assert_eq!(doc.path, source);
+        assert_eq!(doc.path, source.canonicalize().unwrap());
         assert!(doc.bom);
         assert_eq!(doc.editor.buffer.line_ending(), rc_text::LineEnding::CrLf);
         assert!(doc.pinned);
@@ -536,11 +536,11 @@ mod tests {
         app.open_workspace(next.path());
         app.queue_workspace_files(vec![next_file.clone()]);
         pump(&mut app, |a| a.workspace_open.active.is_some());
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path().canonicalize().unwrap());
         app.docs.list[0].editor.replace(0, 0, "// keep newest edit\n");
         gate.store(true, Ordering::Release);
         pump(&mut app, |a| !a.workspace_open.busy());
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path().canonicalize().unwrap());
         assert!(app.docs.list[0].is_modified());
         assert!(app.docs.list[0].editor.buffer.rope().to_string().starts_with("// keep newest edit"));
         app.open_workspace(next.path());
@@ -548,14 +548,14 @@ mod tests {
         app.cancel_disk_save();
         assert!(app.workspace_open.target.is_none());
         assert!(app.workspace_open.files.is_empty());
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path().canonicalize().unwrap());
         app.open_workspace(next.path());
         app.open_workspace(last.path());
         app.open_at(&last_file, 2, 4);
         app.wait_workspace_open();
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, last.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, last.path().canonicalize().unwrap());
         let doc = app.docs.active_doc().unwrap();
-        assert_eq!(doc.path, last_file);
+        assert_eq!(doc.path, last_file.canonicalize().unwrap());
         assert_eq!(doc.editor.caret_line_col(), (2, 4));
         assert!(!last.path().join("project-code-ran").exists());
         assert!(std::fs::read_to_string(&original).unwrap().contains("keep newest edit"));
@@ -650,7 +650,7 @@ mod live_state_tests {
         gate.store(true, Ordering::Release);
         app.wait_workspace_open();
         assert_eq!(app.runner.options.get("manual").unwrap().args, "--latest-option");
-        assert_eq!(app.docs.active_doc().unwrap().path, path);
+        assert_eq!(app.docs.active_doc().unwrap().path, path.canonicalize().unwrap());
         assert!(!root.path().join("code-ran").exists());
     }
 }
@@ -697,7 +697,7 @@ mod edit_barrier_test {
             assert!(Instant::now() < end);
             std::thread::sleep(Duration::from_millis(2));
         }
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path().canonicalize().unwrap());
         assert!(app.file_edits.busy());
         while app.file_edits.busy() {
             app.poll_file_edits();
@@ -705,7 +705,7 @@ mod edit_barrier_test {
             std::thread::sleep(Duration::from_millis(2));
         }
         app.poll_workspace_open();
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, old.path().canonicalize().unwrap());
         assert!(app.docs.active_doc().unwrap().is_modified());
         assert!(app.docs.active_doc().unwrap().editor.buffer.rope().to_string().starts_with("// late compiler edit"));
         assert!(app.workspace_open.target.is_none());

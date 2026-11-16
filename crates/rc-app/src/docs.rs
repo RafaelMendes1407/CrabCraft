@@ -294,7 +294,8 @@ impl Docs {
     }
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
-        self.list.iter().position(|d| d.path == path)
+        // Documents keep canonical paths (verbatim on Windows); callers may spell them differently.
+        self.list.iter().position(|d| d.path == path).or_else(|| self.list.iter().position(|d| rc_core::paths::same_spelling(&d.path, path)))
     }
 
     pub fn active_doc(&self) -> Option<&Doc> {

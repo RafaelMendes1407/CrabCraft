@@ -193,7 +193,7 @@ impl RunTab {
     }
 
     /// Whether the console takes keyboard input itself (a pseudo-terminal).
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn is_terminal(&self) -> bool {
         self.pty.as_ref().is_some_and(|p| p.started)
     }

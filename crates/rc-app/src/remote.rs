@@ -131,24 +131,24 @@ impl Remote {
         let busy = self.cancel.is_some() || self.deployment.pending();
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(tr("Host"));
-                ui.add(egui::TextEdit::singleline(&mut self.host).char_limit(253).desired_width(180.0));
-                ui.label(tr("Port"));
-                ui.add(egui::TextEdit::singleline(&mut self.port).char_limit(5).desired_width(55.0));
-                ui.label(tr("User"));
-                ui.add(egui::TextEdit::singleline(&mut self.user).char_limit(253).desired_width(130.0));
+                let a11y_label = ui.label(tr("Host"));
+                ui.add(egui::TextEdit::singleline(&mut self.host).char_limit(253).desired_width(180.0)).labelled_by(a11y_label.id);
+                let a11y_label = ui.label(tr("Port"));
+                ui.add(egui::TextEdit::singleline(&mut self.port).char_limit(5).desired_width(55.0)).labelled_by(a11y_label.id);
+                let a11y_label = ui.label(tr("User"));
+                ui.add(egui::TextEdit::singleline(&mut self.user).char_limit(253).desired_width(130.0)).labelled_by(a11y_label.id);
             });
             ui.horizontal(|ui| {
-                ui.label(tr("SSH private key"));
-                ui.add(egui::TextEdit::singleline(&mut self.identity).char_limit(8192).desired_width(440.0));
+                let a11y_label = ui.label(tr("SSH private key"));
+                ui.add(egui::TextEdit::singleline(&mut self.identity).char_limit(8192).desired_width(440.0)).labelled_by(a11y_label.id);
             });
             ui.horizontal(|ui| {
-                ui.label(tr("Verified known_hosts file"));
-                ui.add(egui::TextEdit::singleline(&mut self.known_hosts).char_limit(8192).desired_width(440.0));
+                let a11y_label = ui.label(tr("Verified known_hosts file"));
+                ui.add(egui::TextEdit::singleline(&mut self.known_hosts).char_limit(8192).desired_width(440.0)).labelled_by(a11y_label.id);
             });
             ui.horizontal(|ui| {
-                ui.label(tr("Remote absolute path"));
-                ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096).desired_width(440.0));
+                let a11y_label = ui.label(tr("Remote absolute path"));
+                ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(4096).desired_width(440.0)).labelled_by(a11y_label.id);
             });
         });
         ui.horizontal_wrapped(|ui| {
@@ -176,15 +176,21 @@ impl Remote {
         ui.small(tr("The remote text editor supports existing UTF-8 files up to 2 MB. Use Reviewed file deployment for new files and binaries."));
         ui.small(tr("Text previews show up to 16,384 characters. In-pane editing is limited to 64 KB."));
         ui.columns(2, |columns| {
-            columns[0].label(tr("Remote snapshot"));
+            let label_0 = columns[0].label(tr("Remote snapshot"));
             let mut snapshot = self.original.chars().take(16384).collect::<String>();
-            columns[0].add(egui::TextEdit::multiline(&mut snapshot).code_editor().interactive(false).desired_rows(7).desired_width(f32::INFINITY));
-            columns[1].label(tr("Proposed remote text"));
+            columns[0]
+                .add(egui::TextEdit::multiline(&mut snapshot).code_editor().interactive(false).desired_rows(7).desired_width(f32::INFINITY))
+                .labelled_by(label_0.id);
+            let label_1 = columns[1].label(tr("Proposed remote text"));
             if self.edited.len() <= 64 * 1024 {
-                columns[1].add(egui::TextEdit::multiline(&mut self.edited).code_editor().char_limit(16384).desired_rows(7).desired_width(f32::INFINITY));
+                columns[1]
+                    .add(egui::TextEdit::multiline(&mut self.edited).code_editor().char_limit(16384).desired_rows(7).desired_width(f32::INFINITY))
+                    .labelled_by(label_1.id);
             } else {
                 let mut excerpt = self.edited.chars().take(16384).collect::<String>();
-                columns[1].add(egui::TextEdit::multiline(&mut excerpt).code_editor().interactive(false).desired_rows(7).desired_width(f32::INFINITY));
+                columns[1]
+                    .add(egui::TextEdit::multiline(&mut excerpt).code_editor().interactive(false).desired_rows(7).desired_width(f32::INFINITY))
+                    .labelled_by(label_1.id);
             }
         });
         if let Some(preview) = &self.preview {
@@ -192,12 +198,16 @@ impl Remote {
             ui.label(tr("Review upload before confirmation"));
             ui.monospace(format!("{}@{}:{} → {}", preview.config.user, preview.config.host, preview.config.port, preview.remote));
             ui.columns(2, |columns| {
-                columns[0].label(tr("Before"));
+                let label_0 = columns[0].label(tr("Before"));
                 let mut text = preview.before.chars().take(16384).collect::<String>();
-                columns[0].add(egui::TextEdit::multiline(&mut text).code_editor().interactive(false).desired_rows(5).desired_width(f32::INFINITY));
-                columns[1].label(tr("After"));
+                columns[0]
+                    .add(egui::TextEdit::multiline(&mut text).code_editor().interactive(false).desired_rows(5).desired_width(f32::INFINITY))
+                    .labelled_by(label_0.id);
+                let label_1 = columns[1].label(tr("After"));
                 let mut text = preview.after.chars().take(16384).collect::<String>();
-                columns[1].add(egui::TextEdit::multiline(&mut text).code_editor().interactive(false).desired_rows(5).desired_width(f32::INFINITY));
+                columns[1]
+                    .add(egui::TextEdit::multiline(&mut text).code_editor().interactive(false).desired_rows(5).desired_width(f32::INFINITY))
+                    .labelled_by(label_1.id);
             });
             ui.colored_label(rc_kit::pal(ui).warn,tr("Remote content is checked again before upload. SFTP cannot lock out concurrent writers; cancellation may leave a temporary file or an already committed upload."));
             if ui.add_enabled(trusted && !busy, egui::Button::new(tr("Confirm remote overwrite"))).clicked() {

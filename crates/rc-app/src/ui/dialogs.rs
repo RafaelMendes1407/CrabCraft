@@ -531,13 +531,15 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                                             ui.selectable_value(&mut draft.theme, ThemeChoice::Light, "Islands Light");
                                             ui.selectable_value(&mut draft.theme, ThemeChoice::Dark, "Islands Dark");
                                             ui.selectable_value(&mut draft.theme, ThemeChoice::System, tr("Sync with OS"));
-                                        });
+                                        })
+                                        .response
+                                        .accessible_name(tr("Theme"));
                                     ui.end_row();
                                     ui.label(tr("Language"));
                                     let current = draft.language.as_deref().map(Lang::from_locale);
-                                    egui::ComboBox::from_id_salt("lang").selected_text(current.map_or(tr("System language"), |l| l.native_name())).show_ui(
-                                        ui,
-                                        |ui| {
+                                    egui::ComboBox::from_id_salt("lang")
+                                        .selected_text(current.map_or(tr("System language"), |l| l.native_name()))
+                                        .show_ui(ui, |ui| {
                                             if ui.selectable_label(current.is_none(), tr("System language")).clicked() {
                                                 draft.language = None;
                                             }
@@ -546,14 +548,16 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                                                     draft.language = Some(lang_code(l).to_string());
                                                 }
                                             }
-                                        },
-                                    );
+                                        })
+                                        .response
+                                        .accessible_name(tr("Language"));
                                     ui.end_row();
-                                    ui.label(tr("Zoom"));
+                                    let a11y_label = ui.label(tr("Zoom"));
                                     theme::slider(
                                         ui,
                                         egui::Slider::new(&mut draft.ui_zoom, 0.5..=3.0).step_by(0.1).custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
-                                    );
+                                    )
+                                    .labelled_by(a11y_label.id);
                                     ui.end_row();
                                 }
                                 SettingsPage::Editor => {
@@ -568,14 +572,15 @@ fn settings(app: &mut CrabCraftApp, ctx: &Context, draft: &mut Settings, page: &
                                     ui.checkbox(&mut draft.check_crates_io, tr("Show newer versions of dependencies from crates.io"))
                                         .on_hover_text(tr("Only crate names are sent to crates.io."));
                                     ui.end_row();
-                                    ui.label(tr("Font size"));
-                                    ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"));
+                                    let a11y_label = ui.label(tr("Font size"));
+                                    ui.add(egui::DragValue::new(&mut draft.editor_font_size).range(8.0..=32.0).speed(0.5).suffix(" pt"))
+                                        .labelled_by(a11y_label.id);
                                     ui.end_row();
-                                    ui.label(tr("Line height"));
-                                    ui.add(egui::DragValue::new(&mut draft.editor_line_spacing).range(1.0..=2.0).speed(0.05));
+                                    let a11y_label = ui.label(tr("Line height"));
+                                    ui.add(egui::DragValue::new(&mut draft.editor_line_spacing).range(1.0..=2.0).speed(0.05)).labelled_by(a11y_label.id);
                                     ui.end_row();
-                                    ui.label(tr("Hard wrap guide"));
-                                    ui.add(egui::DragValue::new(&mut draft.right_margin).range(0..=400).suffix(tr(" columns")));
+                                    let a11y_label = ui.label(tr("Hard wrap guide"));
+                                    ui.add(egui::DragValue::new(&mut draft.right_margin).range(0..=400).suffix(tr(" columns"))).labelled_by(a11y_label.id);
                                     ui.end_row();
                                     ui.label("");
                                     ui.checkbox(&mut draft.show_inlay_hints, tr("Show inlay hints"));
@@ -915,8 +920,8 @@ fn copyright_page(ui: &mut Ui, app: &mut CrabCraftApp, muted: egui::Color32, err
     );
     ui.add_space(8.0);
     egui::Grid::new("copyright_grid").num_columns(2).spacing(vec2(16.0, 10.0)).show(ui, |ui| {
-        ui.label(tr("Template"));
-        ui.add(egui::TextEdit::multiline(&mut draft.template).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(340.0));
+        let a11y_label = ui.label(tr("Template"));
+        ui.add(egui::TextEdit::multiline(&mut draft.template).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(340.0)).labelled_by(a11y_label.id);
         ui.end_row();
         ui.label(tr("SPDX license"));
         ui.vertical(|ui| {
@@ -1011,11 +1016,16 @@ fn keymap_page(ui: &mut Ui, draft: &mut Settings) {
                 }
             }
         };
-        egui::ComboBox::from_id_salt("keymap").selected_text(name(draft.keymap)).width(200.0).show_ui(ui, |ui| {
-            for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
-                ui.selectable_value(&mut draft.keymap, k, name(k));
-            }
-        });
+        egui::ComboBox::from_id_salt("keymap")
+            .selected_text(name(draft.keymap))
+            .width(200.0)
+            .show_ui(ui, |ui| {
+                for k in [KeymapChoice::Rider, KeymapChoice::RustRover, KeymapChoice::VisualStudio, KeymapChoice::VsCode] {
+                    ui.selectable_value(&mut draft.keymap, k, name(k));
+                }
+            })
+            .response
+            .accessible_name(tr("Keymap"));
     });
     ui.add_space(8.0);
     let keymap = crate::app::build_keymap(draft);
@@ -1665,14 +1675,15 @@ fn wasm_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, manifest: &st
                 }
             });
             ui.end_row();
-            ui.label(tr("Output directory"));
-            ui.add(egui::TextEdit::singleline(&mut options.wasm_out_dir).hint_text("pkg").desired_width(350.0));
+            let a11y_label = ui.label(tr("Output directory"));
+            ui.add(egui::TextEdit::singleline(&mut options.wasm_out_dir).hint_text("pkg").desired_width(350.0)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Features"));
-            ui.add(egui::TextEdit::singleline(&mut options.features).hint_text("serde,logging").desired_width(350.0));
+            let a11y_label = ui.label(tr("Features"));
+            ui.add(egui::TextEdit::singleline(&mut options.features).hint_text("serde,logging").desired_width(350.0)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Environment variables"));
-            ui.add(egui::TextEdit::multiline(&mut options.env).hint_text("CARGO_NET_OFFLINE=true").desired_width(350.0).desired_rows(3));
+            let a11y_label = ui.label(tr("Environment variables"));
+            ui.add(egui::TextEdit::multiline(&mut options.env).hint_text("CARGO_NET_OFFLINE=true").desired_width(350.0).desired_rows(3))
+                .labelled_by(a11y_label.id);
             ui.end_row();
             ui.label("");
             ui.checkbox(&mut options.wasm_dev, tr("Development build (otherwise release)"));
@@ -1697,17 +1708,18 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
         title(ui, &trf("Run Configuration: {name}", &[("name", &name)]));
         let p = rc_kit::pal(ui);
         egui::Grid::new("run_options_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
-            ui.label(tr("Program arguments"));
-            ui.add(egui::TextEdit::singleline(&mut o.args).hint_text("").font(egui::TextStyle::Monospace).desired_width(380.0));
+            let a11y_label = ui.label(tr("Program arguments"));
+            ui.add(egui::TextEdit::singleline(&mut o.args).hint_text("").font(egui::TextStyle::Monospace).desired_width(380.0)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Environment variables"));
+            let a11y_label = ui.label(tr("Environment variables"));
             ui.add(
                 egui::TextEdit::multiline(&mut o.env)
                     .hint_text("RUST_LOG=debug\nAPP_MODE=test")
                     .font(egui::TextStyle::Monospace)
                     .desired_rows(4)
                     .desired_width(380.0),
-            );
+            )
+            .labelled_by(a11y_label.id);
             ui.end_row();
             ui.label(tr("Working directory"));
             ui.horizontal(|ui| {
@@ -1719,14 +1731,15 @@ fn run_options(app: &mut CrabCraftApp, ctx: &Context, name: &str, project: &std:
                 }
             });
             ui.end_row();
-            ui.label(tr("Cargo profile"));
-            ui.add(egui::TextEdit::singleline(&mut o.cargo_profile).hint_text("dev, release").desired_width(380.0));
+            let a11y_label = ui.label(tr("Cargo profile"));
+            ui.add(egui::TextEdit::singleline(&mut o.cargo_profile).hint_text("dev, release").desired_width(380.0)).labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Toolchain"));
-            ui.add(egui::TextEdit::singleline(&mut o.channel).hint_text(tr("The default one (stable, nightly…)")).desired_width(380.0));
+            let a11y_label = ui.label(tr("Toolchain"));
+            ui.add(egui::TextEdit::singleline(&mut o.channel).hint_text(tr("The default one (stable, nightly…)")).desired_width(380.0))
+                .labelled_by(a11y_label.id);
             ui.end_row();
-            ui.label(tr("Features"));
-            ui.add(egui::TextEdit::singleline(&mut o.features).hint_text("serde,logging").desired_width(380.0));
+            let a11y_label = ui.label(tr("Features"));
+            ui.add(egui::TextEdit::singleline(&mut o.features).hint_text("serde,logging").desired_width(380.0)).labelled_by(a11y_label.id);
             ui.end_row();
             ui.label("RUST_BACKTRACE");
             let shown = if o.backtrace.is_empty() { "short" } else { o.backtrace.as_str() }.to_string();
@@ -1807,8 +1820,8 @@ fn compound(app: &mut CrabCraftApp, ctx: &Context, old: Option<&str>, name: &mut
     let valid = !name.trim().is_empty() && !taken && chosen > 0;
     let ((ok, cancel), esc) = modal(ctx, "compound", 420.0, |ui| {
         title(ui, if old.is_some() { tr("Edit Compound Configuration") } else { tr("Add Compound Configuration") });
-        ui.label(tr("Name"));
-        ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+        let a11y_label = ui.label(tr("Name"));
+        ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY)).labelled_by(a11y_label.id);
         ui.add_space(8.0);
         ui.label(tr("Start these applications together:"));
         for (n, on) in members.iter_mut() {
@@ -1833,8 +1846,8 @@ fn config_folder(app: &mut CrabCraftApp, ctx: &Context, config: &str, rename: Op
     let valid = !folder.trim().is_empty() && folder.trim().chars().count() <= crate::runner::MAX_FOLDER_CHARS;
     let ((ok, cancel), esc) = modal(ctx, "config_folder", 380.0, |ui| {
         title(ui, if rename.is_some() { tr("Rename Folder") } else { tr("New Folder") });
-        ui.label(tr("Folder name"));
-        let resp = ui.add(egui::TextEdit::singleline(folder).desired_width(f32::INFINITY));
+        let a11y_label = ui.label(tr("Folder name"));
+        let resp = ui.add(egui::TextEdit::singleline(folder).desired_width(f32::INFINITY)).labelled_by(a11y_label.id);
         if !resp.has_focus() && folder.is_empty() {
             resp.request_focus();
         }
@@ -2037,8 +2050,8 @@ fn breakpoints(app: &mut CrabCraftApp, ctx: &Context, selected: &mut Option<(Pat
         let chosen = selected.clone();
         ui.add_enabled_ui(chosen.is_some(), |ui| {
             ui.horizontal(|ui| {
-                ui.label(tr("Group"));
-                ui.add(egui::TextEdit::singleline(group).hint_text(tr("New or existing group")).desired_width(180.0));
+                let a11y_label = ui.label(tr("Group"));
+                ui.add(egui::TextEdit::singleline(group).hint_text(tr("New or existing group")).desired_width(180.0)).labelled_by(a11y_label.id);
                 egui::ComboBox::from_id_salt("bp_groups").selected_text(tr("Existing groups")).width(140.0).show_ui(ui, |ui| {
                     for g in &groups {
                         if ui.selectable_label(false, g).clicked() {
@@ -2125,25 +2138,29 @@ fn breakpoint_properties(
         title(ui, &trf("Breakpoint at {file}:{line}", &[("file", &name), ("line", &(line + 1))]));
         ui.checkbox(enabled, tr("Enabled"));
         ui.add_space(6.0);
-        ui.label(tr("Condition"));
-        let resp = ui.add(
-            egui::TextEdit::singleline(condition)
-                .hint_text(tr("Stop only when this expression is true"))
-                .font(egui::TextStyle::Monospace)
-                .desired_width(f32::INFINITY),
-        );
+        let a11y_label = ui.label(tr("Condition"));
+        let resp = ui
+            .add(
+                egui::TextEdit::singleline(condition)
+                    .hint_text(tr("Stop only when this expression is true"))
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY),
+            )
+            .labelled_by(a11y_label.id);
         if std::mem::take(focus) {
             resp.request_focus();
         }
         let mut enter = resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
         ui.add_space(6.0);
-        ui.label(tr("Log message"));
-        let resp = ui.add(
-            egui::TextEdit::singleline(log)
-                .hint_text(tr("Print this instead of stopping; {expression} shows a value"))
-                .font(egui::TextStyle::Monospace)
-                .desired_width(f32::INFINITY),
-        );
+        let a11y_label = ui.label(tr("Log message"));
+        let resp = ui
+            .add(
+                egui::TextEdit::singleline(log)
+                    .hint_text(tr("Print this instead of stopping; {expression} shows a value"))
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY),
+            )
+            .labelled_by(a11y_label.id);
         enter |= resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
         ui.add_space(6.0);
         // A logpoint never stops, so the IDE cannot see it being hit.
@@ -3560,8 +3577,8 @@ fn stash_branch(app: &mut CrabCraftApp, ctx: &Context, stash: &rc_vcs::Stash, na
     let ((ok, cancel), esc) = modal(ctx, "stash_branch", 460.0, |ui| {
         title(ui, tr("Create Branch from Stash"));
         ui.label(&stash.message);
-        ui.label(tr("Switches to a new branch at the stash's original commit and restores its changes. The stash is kept."));
-        let response = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY));
+        let a11y_label = ui.label(tr("Switches to a new branch at the stash's original commit and restores its changes. The stash is kept."));
+        let response = ui.add(egui::TextEdit::singleline(name).hint_text(tr("Branch name")).desired_width(f32::INFINITY)).labelled_by(a11y_label.id);
         if name.is_empty() && !ui.memory(|m| m.focused().is_some()) {
             response.request_focus();
         }

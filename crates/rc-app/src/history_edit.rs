@@ -572,8 +572,8 @@ impl HistoryEdit {
                 ui.colored_label(rc_kit::pal(ui).warn, tr("Save project files and wait for formatting before editing history"));
             }
             ui.horizontal(|ui| {
-                ui.label(tr("Recent commits"));
-                if ui.add_enabled(!running, egui::DragValue::new(&mut self.count).range(1..=20)).changed() {
+                let a11y_label = ui.label(tr("Recent commits"));
+                if ui.add_enabled(!running, egui::DragValue::new(&mut self.count).range(1..=20)).labelled_by(a11y_label.id).changed() {
                     self.plan = None;
                     self.confirmed = false;
                 }
@@ -622,8 +622,12 @@ impl HistoryEdit {
                 if let Some(row) = plan.rows.get_mut(self.selected)
                     && row.action == Action::Reword
                 {
-                    ui.label(tr("New commit message"));
-                    if ui.add_enabled(!running, egui::TextEdit::multiline(&mut row.message).char_limit(4096).desired_rows(4)).changed() {
+                    let a11y_label = ui.label(tr("New commit message"));
+                    if ui
+                        .add_enabled(!running, egui::TextEdit::multiline(&mut row.message).char_limit(4096).desired_rows(4))
+                        .labelled_by(a11y_label.id)
+                        .changed()
+                    {
                         self.confirmed = false;
                     }
                 }
@@ -638,8 +642,9 @@ impl HistoryEdit {
                 ui.spinner();
             }
             if !self.output.is_empty() {
-                ui.label(tr("Git output"));
-                ui.add(egui::TextEdit::multiline(&mut self.output).font(egui::TextStyle::Monospace).interactive(false).desired_rows(8));
+                let a11y_label = ui.label(tr("Git output"));
+                ui.add(egui::TextEdit::multiline(&mut self.output).font(egui::TextStyle::Monospace).interactive(false).desired_rows(8))
+                    .labelled_by(a11y_label.id);
             }
         });
     }
@@ -664,6 +669,7 @@ mod tests {
         std::fs::write(root.join(".gitignore"), "/target/\n/Cargo.lock\n").unwrap();
         std::fs::write(root.join("src/lib.rs"), "pub fn base()->u8{1}\n").unwrap();
         git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "core.autocrlf", "false"]);
         git(root, &["config", "user.name", "History"]);
         git(root, &["config", "user.email", "history@example.test"]);
         git(root, &["add", "."]);

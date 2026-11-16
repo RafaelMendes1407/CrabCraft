@@ -227,10 +227,14 @@ impl Database {
         ui.horizontal(|ui| {
             ui.label(tr("Database engine"));
             ui.add_enabled_ui(!busy && !connected, |ui| {
-                egui::ComboBox::from_id_salt("database_engine").selected_text(if self.backend == 0 { "SQLite" } else { "PostgreSQL" }).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.backend, 0, "SQLite");
-                    ui.selectable_value(&mut self.backend, 1, "PostgreSQL");
-                });
+                egui::ComboBox::from_id_salt("database_engine")
+                    .selected_text(if self.backend == 0 { "SQLite" } else { "PostgreSQL" })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.backend, 0, "SQLite");
+                        ui.selectable_value(&mut self.backend, 1, "PostgreSQL");
+                    })
+                    .response
+                    .accessible_name(tr("Database engine"));
                 ui.checkbox(&mut self.write, tr("Enable database writes"));
             });
             if ui.add_enabled(trusted && !busy && !connected, egui::Button::new(tr("Connect"))).clicked() {
@@ -246,21 +250,21 @@ impl Database {
         ui.add_enabled_ui(!busy && !connected, |ui| {
             if self.backend == 0 {
                 ui.horizontal(|ui| {
-                    ui.label(tr("SQLite file"));
-                    ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(8192).desired_width(440.0));
+                    let a11y_label = ui.label(tr("SQLite file"));
+                    ui.add(egui::TextEdit::singleline(&mut self.path).char_limit(8192).desired_width(440.0)).labelled_by(a11y_label.id);
                 });
             } else {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(tr("Host"));
-                    ui.add(egui::TextEdit::singleline(&mut self.pg_host).char_limit(8192).desired_width(220.0));
-                    ui.label(tr("Port"));
-                    ui.add(egui::TextEdit::singleline(&mut self.pg_port).char_limit(5).desired_width(55.0));
-                    ui.label(tr("User"));
-                    ui.add(egui::TextEdit::singleline(&mut self.pg_user).char_limit(1024).desired_width(110.0));
-                    ui.label(tr("Database"));
-                    ui.add(egui::TextEdit::singleline(&mut self.pg_database).char_limit(1024).desired_width(110.0));
-                    ui.label(tr("Password"));
-                    ui.add(egui::TextEdit::singleline(&mut self.pg_password).password(true).char_limit(4096).desired_width(120.0));
+                    let a11y_label = ui.label(tr("Host"));
+                    ui.add(egui::TextEdit::singleline(&mut self.pg_host).char_limit(8192).desired_width(220.0)).labelled_by(a11y_label.id);
+                    let a11y_label = ui.label(tr("Port"));
+                    ui.add(egui::TextEdit::singleline(&mut self.pg_port).char_limit(5).desired_width(55.0)).labelled_by(a11y_label.id);
+                    let a11y_label = ui.label(tr("User"));
+                    ui.add(egui::TextEdit::singleline(&mut self.pg_user).char_limit(1024).desired_width(110.0)).labelled_by(a11y_label.id);
+                    let a11y_label = ui.label(tr("Database"));
+                    ui.add(egui::TextEdit::singleline(&mut self.pg_database).char_limit(1024).desired_width(110.0)).labelled_by(a11y_label.id);
+                    let a11y_label = ui.label(tr("Password"));
+                    ui.add(egui::TextEdit::singleline(&mut self.pg_password).password(true).char_limit(4096).desired_width(120.0)).labelled_by(a11y_label.id);
                 });
                 ui.small(tr("PostgreSQL: Unix socket or loopback only; remote TLS connections are not supported."));
                 ui.small(tr("Database passwords stay in memory and are never saved to project settings."));
@@ -415,8 +419,8 @@ impl Database {
             }
         }
         ui.horizontal(|ui| {
-            ui.label(tr("Transfer file (.json or .csv)"));
-            ui.add(egui::TextEdit::singleline(&mut self.transfer).char_limit(8192).desired_width(300.0));
+            let a11y_label = ui.label(tr("Transfer file (.json or .csv)"));
+            ui.add(egui::TextEdit::singleline(&mut self.transfer).char_limit(8192).desired_width(300.0)).labelled_by(a11y_label.id);
             let path = resolve(root, &self.transfer);
             let enabled = !busy && !self.selected.is_empty() && !self.transfer.trim().is_empty();
             if ui.add_enabled(enabled, egui::Button::new(tr("Export table"))).clicked() {

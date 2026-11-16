@@ -414,7 +414,7 @@ mod tests {
     }
     #[test]
     fn docker_plans_use_typed_argv_without_shell_or_remote_contexts() {
-        let root = PathBuf::from("/tmp/project");
+        let root = PathBuf::from(if cfg!(windows) { "C:/project" } else { "/tmp/project" });
         let config = Config { program: "docker".into(), host: "unix:///tmp/docker.sock".into() };
         assert!(Plan::prepare(config.clone(), root.clone(), Action::Stop("--all".into())).is_err());
         assert!(Plan::prepare(config.clone(), root.clone(), Action::Run { image: "--privileged".into(), args: vec![], network: false }).is_err());
@@ -519,6 +519,28 @@ mod tests {
         h.run_steps(2);
         wait(&mut h);
         assert!(std::fs::read_to_string(root.join("docker-wire")).unwrap().contains("stop"));
+        assert!(!root.join("build-ran").exists());
+    }
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Requires an explicitly provided Docker CLI executable (CRABCRAFT_TEST_DOCKER); never starts or contacts a daemon"]
+    fn real_windows_cli_reports_a_missing_named_pipe_daemon_as_a_typed_error() {
+        let program = std::env::var("CRABCRAFT_TEST_DOCKER").expect("explicit Docker CLI path");
+        assert!(Path::new(&program).is_absolute());
+        let project = tempfile::tempdir().unwrap();
+        let root = project.path().canonicalize().unwrap();
+        rust_project(&root);
+        let pipe = format!("npipe:////./pipe/crabcraft_missing_docker_{}", std::process::id());
+        let config = Config { program: program.clone(), host: pipe.clone() };
+        assert!(Config { host: "tcp://127.0.0.1:2375".into(), ..config.clone() }.validate().is_err());
+        let plan = Plan::prepare(config, root.clone(), Action::Info).unwrap();
+        assert!(plan.preview().contains(&format!("{pipe:?}")));
+        let untrusted = rc_core::Runtime::block_on(execute(plan.clone(), false, false, rc_dotnet::CancelToken::new()));
+        assert_eq!(untrusted, Err(Error::Trust));
+        match rc_core::Runtime::block_on(execute(plan, true, false, rc_dotnet::CancelToken::new())) {
+            Err(Error::Exit(message)) => assert!(message.contains("pipe"), "{message}"),
+            other => panic!("expected a typed daemon error, got {other:?}"),
+        }
         assert!(!root.join("build-ran").exists());
     }
     #[test]

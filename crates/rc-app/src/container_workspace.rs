@@ -85,7 +85,7 @@ pub(crate) mod tests {
     use super::*;
     fn config() -> Config {
         Config {
-            cli: "/usr/bin/docker".into(),
+            cli: if cfg!(windows) { "C:/Program Files/Docker/docker.exe" } else { "/usr/bin/docker" }.into(),
             socket: "unix:///var/run/docker.sock".into(),
             container: "0123456789abcdef".into(),
             user: "1000:1000".into(),

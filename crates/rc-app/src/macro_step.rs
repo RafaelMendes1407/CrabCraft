@@ -633,8 +633,8 @@ mod native_views {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir(root.path().join("src")).unwrap();
         std::fs::write(root.path().join("Cargo.toml"), "[package]\nname=\"memory_macro_views\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[workspace]\n").unwrap();
-        let main = root.path().join("src/main.rs");
-        let lib = root.path().join("src/lib.rs");
+        let main = root.path().canonicalize().unwrap().join("src").join("main.rs");
+        let lib = root.path().canonicalize().unwrap().join("src").join("lib.rs");
         std::fs::write(&main, "fn main() {}\n").unwrap();
         std::fs::write(&lib, "pub struct Item;\n").unwrap();
         let mut app = crate::screens::test_app(home.path(), false);

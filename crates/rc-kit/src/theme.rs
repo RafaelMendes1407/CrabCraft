@@ -349,6 +349,10 @@ const SYSTEM_FONTS: &[&[&str]] = &[
     &["%WINDIR%/Fonts/malgun.ttf"],
     // Thai.
     &["%WINDIR%/Fonts/LeelawUI.ttf", "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf"],
+    // Windows emoji (drawn from its monochrome outlines), e.g. 🦀.
+    &["%WINDIR%/Fonts/seguiemj.ttf"],
+    // Symbols and pictographs Segoe UI Emoji lacks (musical notation, technical symbols…).
+    &["%WINDIR%/Fonts/seguisym.ttf"],
 ];
 
 /// The system fallback fonts found, read once per run.

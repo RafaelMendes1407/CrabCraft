@@ -2304,6 +2304,7 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
 }
 
 #[test]
+#[cfg(target_os = "linux")] // GDB attach and the Yama `prctl` fixture are Linux-only.
 fn the_debugger_attaches_to_a_running_program() {
     use rc_editor::BreakpointKind;
     // Yama allows a debugger that is not the parent only when the program says so.
@@ -2622,6 +2623,7 @@ fn rustfmt_at_commit_covers_the_included_files_or_stops_the_commit() {
         String::from_utf8_lossy(&out.stdout).into_owned()
     };
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Test"]);
     git(&["config", "user.email", "test@example.com"]);
     git(&["add", "."]);
@@ -2696,6 +2698,7 @@ fn rustfmt_settings_apply_to_reformat_save_and_commit() {
         String::from_utf8_lossy(&out.stdout).into_owned()
     };
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Test"]);
     git(&["config", "user.email", "test@example.com"]);
     git(&["add", "."]);
@@ -3991,7 +3994,8 @@ fn a_target_picked_in_the_status_bar_reaches_the_fading_and_rust_analyzer() {
     assert!(app.triple_choices[0].host && app.triple_choices[0].installed && app.triple_choices[0].triple == host);
     assert!(app.triple_choices[1].from_config && app.triple_choices[1].triple == "thumbv7em-none-eabihf");
     let windows = app.triple_choices.iter().find(|c| c.triple == WINDOWS).expect("rustup lists the targets it can install");
-    assert!(!windows.installed);
+    // On a Windows host its own MSVC target is normally installed.
+    assert!(cfg!(windows) || !windows.installed);
 
     // An invalid triple never reaches a process.
     app.set_cargo_target(Some("--print=sysroot".into()));

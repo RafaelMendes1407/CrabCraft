@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn serial_snapshots_preserve_later_edits_encoding_permissions_and_history_baseline() {
         let root = tempfile::tempdir().unwrap();
-        let path = root.path().join("main.rs");
+        let path = root.path().canonicalize().unwrap().join("main.rs");
         std::fs::write(&path, b"\xef\xbb\xbffn main() {}\r\n").unwrap();
         #[cfg(unix)]
         {
@@ -788,7 +788,7 @@ mod native_tests {
         app.open_workspace(other.path());
         assert_eq!(app.pending_workspace_target(), Some(other.path()));
         assert_eq!(app.docs.list.len(), 1);
-        assert_eq!(app.workspace.as_ref().unwrap().ws.root, root.path());
+        assert_eq!(app.workspace.as_ref().unwrap().ws.root, root.path().canonicalize().unwrap());
         app.cancel_disk_save();
         assert!(app.pending_workspace_target().is_none());
         assert_eq!(app.docs.list.len(), 1);

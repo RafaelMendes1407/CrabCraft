@@ -368,8 +368,9 @@ pub(crate) mod args {
 
     pub fn set_breakpoints(path: &Path, breakpoints: &[SourceBreakpoint]) -> Value {
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+        // Debug info names sources without Windows' verbatim prefix; a verbatim path never binds.
         json!({
-            "source": {"name": name, "path": path},
+            "source": {"name": name, "path": rc_core::paths::plain(path)},
             "breakpoints": breakpoints,
             "lines": breakpoints.iter().map(|b| b.line).collect::<Vec<_>>(),
             "sourceModified": false,

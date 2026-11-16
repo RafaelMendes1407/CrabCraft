@@ -14,6 +14,8 @@ fn native_rust_debugger_choice_is_explicit_and_persists_without_running_project_
     let _home = crate::screens::HOME_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let home = tempfile::tempdir().unwrap();
     let (root, mut harness) = workspace(home.path(), true);
+    // The default is platform-specific (LLDB on Windows/macOS); start from GDB everywhere.
+    harness.state_mut().settings.rust_debugger = rc_core::settings::RustDebugger::Gdb;
     harness.state_mut().open_settings(crate::ui::dialogs::SettingsPage::Tools);
     harness.run_steps(2);
     harness.run_steps(10);

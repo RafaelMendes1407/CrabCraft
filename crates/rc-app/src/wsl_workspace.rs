@@ -289,6 +289,7 @@ pub(crate) fn file_with(
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(unused_imports, unused_mut, dead_code))]
 mod tests {
     use super::*;
     use crate::remote_development_transport as transport;

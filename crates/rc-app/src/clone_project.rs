@@ -86,9 +86,11 @@ async fn clone_repository(source: &str, destination: &Path, cancel: &CancelToken
     let templates = tempfile::Builder::new().prefix("crabcraft-clone-hooks-").tempdir().map_err(CloneError::Io)?;
     let mut hooks = std::ffi::OsString::from("core.hooksPath=");
     hooks.push(templates.path());
+    // Git on Windows cannot open verbatim paths, which canonical folders use there.
+    let (parent, target) = (rc_core::paths::plain(parent), rc_core::paths::plain(&destination));
     let mut command = tokio::process::Command::new(git.path());
     command
-        .current_dir(parent)
+        .current_dir(&parent)
         .args([
             "-c",
             "protocol.allow=never",
@@ -107,7 +109,7 @@ async fn clone_repository(source: &str, destination: &Path, cancel: &CancelToken
         .arg(hooks)
         .args(["-c", "submodule.recurse=false", "-c", "color.ui=false", "clone", "--no-recurse-submodules", "--no-local", "--progress", "--"])
         .arg(source)
-        .arg(&destination)
+        .arg(&target)
         .env("LC_ALL", "C")
         .env("LANGUAGE", "C")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -204,10 +206,10 @@ pub fn show(app: &mut crate::app::CrabCraftApp, ctx: &egui::Context) -> bool {
         ui.heading(tr("Clone Git Repository"));
         let busy = state.cancel.is_some();
         ui.add_enabled_ui(!busy, |ui| {
-            ui.label(tr("Repository URL or local path"));
-            ui.add(egui::TextEdit::singleline(&mut state.source).desired_width(f32::INFINITY).char_limit(4096));
-            ui.label(tr("Destination folder (must not exist)"));
-            ui.add(egui::TextEdit::singleline(&mut state.destination).desired_width(f32::INFINITY).char_limit(4096));
+            let a11y_label = ui.label(tr("Repository URL or local path"));
+            ui.add(egui::TextEdit::singleline(&mut state.source).desired_width(f32::INFINITY).char_limit(4096)).labelled_by(a11y_label.id);
+            let a11y_label = ui.label(tr("Destination folder (must not exist)"));
+            ui.add(egui::TextEdit::singleline(&mut state.destination).desired_width(f32::INFINITY).char_limit(4096)).labelled_by(a11y_label.id);
         });
         ui.label(tr("Clones without submodules, hooks or globally configured checkout filters. The project opens without trust; build scripts and procedural macros stay disabled."));
         ui.small(tr("Interactive authentication and custom Git remote helpers are unsupported. Use SSH agent or a repository accessible without an interactive prompt."));
@@ -241,6 +243,7 @@ mod tests {
     fn repository(root: &Path) {
         std::fs::create_dir_all(root.join("src")).unwrap();
         git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "core.autocrlf", "false"]);
         git(root, &["config", "user.name", "Clone Test"]);
         git(root, &["config", "user.email", "clone@example.test"]);
         std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"clone_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();

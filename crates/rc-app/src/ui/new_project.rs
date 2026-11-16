@@ -211,15 +211,15 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
         ru.add_space(12.0);
         egui::Grid::new("new_project_grid").num_columns(2).spacing([12.0, 10.0]).show(&mut ru, |ui| {
             let w = 330.0;
-            ui.label(tr(if d.member { "Crate name" } else { "Project name" }));
-            let te = ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(w));
+            let a11y_label = ui.label(tr(if d.member { "Crate name" } else { "Project name" }));
+            let te = ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(w)).labelled_by(a11y_label.id);
             if std::mem::take(&mut d.focus) {
                 te.request_focus();
             }
             ui.end_row();
-            ui.label(tr("Location"));
+            let a11y_label = ui.label(tr("Location"));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut d.location).desired_width(w - 34.0));
+                ui.add(egui::TextEdit::singleline(&mut d.location).desired_width(w - 34.0)).labelled_by(a11y_label.id);
                 if theme::icon_button(ui, ico::OPEN, true, tr("Choose a folder")).clicked()
                     && let Some(dir) = rfd::FileDialog::new().set_directory(d.location.trim()).pick_folder()
                 {
@@ -228,11 +228,11 @@ pub fn show(app: &mut CrabCraftApp, ctx: &Context, d: &mut NewProjectDialog) -> 
             });
             ui.end_row();
             if d.generated() {
-                ui.label(tr("Template repository"));
-                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.repository).desired_width(w)).changed() { d.trust_template = false; }
+                let a11y_label = ui.label(tr("Template repository"));
+                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.repository).desired_width(w)).labelled_by(a11y_label.id).changed() { d.trust_template = false; }
                 ui.end_row();
-                ui.label(tr("Template branch (optional)"));
-                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.template_branch).desired_width(w)).changed() { d.trust_template = false; }
+                let a11y_label = ui.label(tr("Template branch (optional)"));
+                if ui.add_enabled(!d.busy, egui::TextEdit::singleline(&mut d.template_branch).desired_width(w)).labelled_by(a11y_label.id).changed() { d.trust_template = false; }
                 ui.end_row();
             }
             if !d.member {

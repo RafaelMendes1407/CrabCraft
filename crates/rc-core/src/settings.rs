@@ -14,11 +14,17 @@ pub enum ThemeChoice {
     System,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RustDebugger {
-    #[default]
     Gdb,
     Lldb,
+}
+
+/// GDB on Linux; LLDB (`lldb-dap`, shipped with LLVM) where GDB is rarely installed.
+impl Default for RustDebugger {
+    fn default() -> Self {
+        if cfg!(any(windows, target_os = "macos")) { Self::Lldb } else { Self::Gdb }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

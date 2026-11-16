@@ -351,6 +351,7 @@ fn screens_git_tags_and_stashes() {
     let root = repo.path().canonicalize().unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Ada Lovelace"]);
     git(&["config", "user.email", "ada@example.com"]);
     git(&["config", "tag.gpgsign", "false"]);
@@ -424,6 +425,7 @@ fn screens_git_worktrees() {
     std::fs::create_dir_all(root.join("src")).unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Ada Lovelace"]);
     git(&["config", "user.email", "ada@example.com"]);
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
@@ -481,6 +483,7 @@ fn screens_git_file_history() {
     std::fs::create_dir_all(root.join("src")).unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Ada Lovelace"]);
     git(&["config", "user.email", "ada@example.com"]);
     git(&["config", "commit.gpgsign", "false"]);
@@ -924,6 +927,7 @@ fn the_branches_popup_scrolls_to_every_branch_inside_the_window() {
     let root = root.canonicalize().unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
     git(&["init", "-q", "-b", "trunk"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Ada Lovelace"]);
     git(&["config", "user.email", "ada@example.com"]);
     git(&["add", "."]);
@@ -2613,7 +2617,7 @@ fn copyright_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>
     std::fs::write(root.join("src/lib.rs"), "#![allow(dead_code)]\n\nmod old;\n").unwrap();
     std::fs::write(root.join("src/old.rs"), "// Copyright (c) 2020 Ada Lovelace\n// Part of ws.\n\npub fn old() {}\n").unwrap();
     let root = root.canonicalize().unwrap();
-    for args in [&["init", "-q"][..], &["config", "user.name", "Ada Lovelace"]] {
+    for args in [&["init", "-q"][..], &["config", "core.autocrlf", "false"], &["config", "user.name", "Ada Lovelace"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success());
     }
     let mut app = test_app(&home.join("home"), dark);
@@ -2744,6 +2748,7 @@ fn scopes_harness(home: &Path, dark: bool) -> (Harness<'static, CrabCraftApp>, P
     let root = root.canonicalize().unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "git {args:?}");
     git(&["init", "-q"]);
+    git(&["config", "core.autocrlf", "false"]);
     git(&["config", "user.name", "Ada Lovelace"]);
     git(&["config", "user.email", "ada@example.com"]);
     git(&["add", "."]);
@@ -3316,6 +3321,7 @@ fn screens_git_merge_and_rebase() {
     std::fs::create_dir_all(root.join("src")).unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
         git(&["config", k, v]);
     }
@@ -3369,6 +3375,7 @@ fn screens_merge_tool() {
     std::fs::create_dir_all(root.join("src")).unwrap();
     let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&root).output().unwrap().status.success(), "{args:?}");
     git(&["init", "-q", "-b", "main"]);
+    git(&["config", "core.autocrlf", "false"]);
     for (k, v) in [("user.name", "Ada Lovelace"), ("user.email", "ada@example.com"), ("core.hooksPath", "no-hooks"), ("commit.gpgsign", "false")] {
         git(&["config", k, v]);
     }
@@ -3631,21 +3638,21 @@ fn central_menu_commands_and_project_templates_work_in_a_rust_project() {
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.get_by_label(tr("Main Menu")).click();
     h.run_steps(2);
-    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
+    h.get_by_label(tr("Edit")).click();
     h.run_steps(2);
     h.get_by_label(tr("Duplicate Line or Selection")).click();
     h.run_steps(3);
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 2);
     h.get_by_label(tr("Main Menu")).click();
     h.run_steps(2);
-    h.get_by_label(&format!("{} ⏵", tr("Edit"))).click();
+    h.get_by_label(tr("Edit")).click();
     h.run_steps(2);
     h.get_by_label(tr("Undo")).click();
     h.run_steps(3);
     assert_eq!(h.state().docs.active_doc().unwrap().editor.buffer.rope().to_string().matches("fn main()").count(), 1);
     h.get_by_label(tr("Main Menu")).click();
     h.run_steps(2);
-    h.get_by_label(&format!("{} ⏵", tr("Tools"))).click();
+    h.get_by_label(tr("Tools")).click();
     h.run_steps(2);
     h.query_all_by_label(tr("ACP Agents")).find(|node| node.rect().width() > 100.0).unwrap().click();
     h.run_steps(2);
@@ -3697,7 +3704,7 @@ fn central_menus_and_docking_capture() {
     let mut h = harness(app, vec2(1280.0, 800.0));
     h.get_by_label(tr("Main Menu")).click();
     h.run_steps(2);
-    h.get_by_label(&format!("{} ⏵", tr("File"))).click();
+    h.get_by_label(tr("File")).click();
     h.run_steps(3);
     h.render().unwrap().save(out.join("central-menu-file.png")).unwrap();
     h.input_mut().events.push(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
@@ -3820,7 +3827,7 @@ fn completed_interface_theme_and_size_capture() {
         h.run_steps(3);
         h.get_by_label(tr("Main Menu")).click();
         h.run_steps(3);
-        h.get_by_label(&format!("{} ⏵", tr("File"))).click();
+        h.get_by_label(tr("File")).click();
         h.run_steps(3);
         h.render().unwrap().save(out.join(format!("completed-menu-{label}.png"))).unwrap();
         if size.x > 1000.0 {
