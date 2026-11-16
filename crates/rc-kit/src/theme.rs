@@ -354,11 +354,7 @@ const SYSTEM_FONTS: &[&[&str]] = &[
     // Symbols and pictographs Segoe UI Emoji lacks (musical notation, technical symbols…).
     &["%WINDIR%/Fonts/seguisym.ttf"],
     // Linux emoji and symbols: Symbola has outlines; color bitmap emoji fonts cannot be drawn.
-    &[
-        "/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf",
-        "/usr/share/fonts/gdouros-symbola/Symbola.ttf",
-        "/usr/share/fonts/TTF/Symbola.ttf",
-    ],
+    &["/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf", "/usr/share/fonts/gdouros-symbola/Symbola.ttf", "/usr/share/fonts/TTF/Symbola.ttf"],
 ];
 
 /// The system fallback fonts found, read once per run.
