@@ -63,6 +63,22 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libwayland-dev
+          # GDB for the debugger tests, Symbola for emoji/symbol glyphs and Mesa's software
+          # Vulkan driver for tests that render through wgpu.
+          sudo apt-get install -y gdb fonts-symbola mesa-vulkan-drivers
+
+      # LLVM's lldb-dap on the Windows image loads python310.dll.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: runner.os == 'Windows'
+        with:
+          python-version: '3.10'
+
+      - name: Show the debug adapter
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "/c/Program Files/LLVM/bin" >> "$GITHUB_PATH"
+          "/c/Program Files/LLVM/bin/lldb-dap.exe" --help | head -3 || echo "lldb-dap did not start"
 
       - name: Install Rust
         run: |

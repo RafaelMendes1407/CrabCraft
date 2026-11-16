@@ -410,6 +410,10 @@ mod guarded_tests {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
         }
+        // Windows file times can advance in ~15 ms ticks: date the original back so the rewrite
+        // below is seen as a change even when it lands in the same tick.
+        let past = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        std::fs::File::options().write(true).open(&file).unwrap().set_modified(past).unwrap();
         let stamp = FileStamp::from_metadata(&std::fs::metadata(&file).unwrap());
         let query = Query::new(QueryOptions::text("old")).unwrap();
         let (count, bytes) = replace_in_file_guarded(&file, &stamp, &query, "new", &AtomicBool::new(false), ReplaceLimits::default()).unwrap();
