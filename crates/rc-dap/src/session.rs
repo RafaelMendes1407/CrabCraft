@@ -1297,7 +1297,7 @@ impl DebugSession {
         let parts = parse_log_message(message);
         let index = self.log_evals.len();
         let mut eval = LogPointEval { values: vec![None; parts.len()], outstanding: 0, parts };
-        let context = if self.is_gdb() { EvalContext::Watch } else { EvalContext::Repl };
+        let context = self.expression_context();
         for (i, part) in eval.parts.iter().enumerate() {
             match part {
                 LogPart::Text(t) => eval.values[i] = Some(t.clone()),
@@ -2047,9 +2047,10 @@ impl DebugSession {
         self.generation
     }
 
-    /// GDB runs `repl` text as one of its commands: expressions go as `watch` there.
+    /// GDB runs `repl` text as one of its commands, and LLDB answers it the way its own
+    /// console does (`(u32) $1 = 6`): expressions go as `watch` to both.
     pub fn expression_context(&self) -> EvalContext {
-        if self.is_gdb() { EvalContext::Watch } else { EvalContext::Repl }
+        if matches!(self.adapter.origin, Origin::Gdb | Origin::Lldb) { EvalContext::Watch } else { EvalContext::Repl }
     }
 
     pub fn evaluate(&mut self, expression: &str, context: EvalContext) -> u64 {

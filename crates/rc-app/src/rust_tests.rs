@@ -2268,9 +2268,13 @@ fn the_debugger_pauses_mutes_and_takes_console_commands() {
     app.run_ide_action(&ctx, Action::Debug);
     pump_debugger(&mut app, "the breakpoint");
 
-    // The console reaches GDB itself, and answers.
+    // The console reaches the debugger itself (GDB, or LLDB where it is the default), and answers.
     app.debugger.show_console = true;
-    app.debugger.console_input = "print 40 + 2".to_string();
+    let command = match app.debugger.rust_backend {
+        rc_core::settings::RustDebugger::Gdb => "print 40 + 2",
+        rc_core::settings::RustDebugger::Lldb => "expression -- 40 + 2",
+    };
+    app.debugger.console_input = command.to_string();
     app.debugger.send_console_command();
     let answered = |a: &CrabCraftApp| a.debugger.console.as_ref().is_some_and(|c| c.term.screen_lines().join("\n").contains("= 42"));
     wait(&mut app, "the console's answer", &answered);
