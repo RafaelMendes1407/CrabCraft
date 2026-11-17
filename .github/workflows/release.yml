@@ -3,6 +3,11 @@
 name: Release
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - packaging/**
+      - scripts/copy_notices.py
   push:
     tags: ["v*"]
   workflow_dispatch:

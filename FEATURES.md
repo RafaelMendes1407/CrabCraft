@@ -37,7 +37,9 @@ The completion test waits for each response and bounds retries after a dismissed
 debugger test helpers report terminated/failed sessions, including parked sessions.
 CI checks adapter startup and retains failed application-test output. Release packaging
 reads the application version from Cargo metadata, validates Windows tags, and rejects
-missing/failed DLL inspection and installer setup before uploading packages. Workflow
+missing/failed DLL inspection and installer setup before uploading packages. Pull requests
+that change the release workflow, packaging or notice-copy script build both platforms'
+packages as artifacts; publication remains restricted to tags. Workflow
 syntax (actionlint), formatting and Linux strict Clippy passed locally; all seven
 regressions from the failed run pass with real Rust projects and GDB on Linux.
 The broader local app run had 471 passing, 13 failing and 99 ignored tests (including
