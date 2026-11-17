@@ -28,6 +28,23 @@ accessibility expansion and translated settings rendering. WSL2 and Docker Deskt
 installed on the test machine (Windows component store corruption, error 14098), so P-04 and
 the Docker daemon part of F-09 remain unvalidated on Windows.
 
+CI/CD audit (2026-11-17): run [43974102091](https://github.com/RafaelMendes1407/CrabCraft/actions/runs/43974102091)
+passed both build/library jobs, but app tests failed on Linux (483 passed, 1 failed,
+99 ignored) and Windows (422 passed, 6 failed, 88 ignored). The target-picker test
+now filters by the full triple so the requested row stays visible on Windows;
+standard-library stepping waits for the actual debugger stop instead of 600 ms.
+The completion test waits for each response and bounds retries after a dismissed popup;
+debugger test helpers report terminated/failed sessions, including parked sessions.
+CI checks adapter startup and retains failed application-test output. Release packaging
+reads the application version from Cargo metadata, validates Windows tags, and rejects
+missing/failed DLL inspection and installer setup before uploading packages. Workflow
+syntax (actionlint), formatting and Linux strict Clippy passed locally; all seven
+regressions from the failed run pass with real Rust projects and GDB on Linux.
+The broader local app run had 471 passing, 13 failing and 99 ignored tests (including
+missing Symbola glyphs and temporary-toolchain prerequisites); it is not a green
+full-suite result. Windows LLDB failures still require a runner result; no feature
+readiness status is raised.
+
 Security self-assessment infrastructure: dedicated workflow, local execution
 through `scripts/security-audit.sh`, JSON/Markdown reports, per-crate SBOM,
 `unsafe` inventory, Gitleaks and bounded fuzzing on scheduled/manual runs.

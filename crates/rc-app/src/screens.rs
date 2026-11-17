@@ -2313,9 +2313,9 @@ fn the_status_bar_picks_the_analysis_target() {
     // rustup lists every target it knows: the list is long enough to have a filter.
     assert!(h.state().triple_choices.len() > 8);
     // A target other than the host: the host's name is also on the status bar button.
-    let (filter, other) =
-        if host == "x86_64-pc-windows-msvc" { ("unknown-linux-gnu", "x86_64-unknown-linux-gnu") } else { ("windows-msvc", "x86_64-pc-windows-msvc") };
-    h.state_mut().triple_filter = filter.into();
+    let other = if host == "x86_64-pc-windows-msvc" { "x86_64-unknown-linux-gnu" } else { "x86_64-pc-windows-msvc" };
+    // Keep the exact target visible: the Linux suffix alone fills several scroll pages on Windows.
+    h.state_mut().triple_filter = other.into();
     h.run_steps(2);
     h.get_by_label(other).click();
     h.run_steps(3);

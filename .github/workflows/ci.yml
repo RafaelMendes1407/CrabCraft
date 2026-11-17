@@ -30,6 +30,7 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libwayland-dev
 
       - name: Install Rust
+        shell: bash
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
@@ -73,14 +74,18 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Show the debug adapter
+      - name: Check the debug adapter
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          echo "/c/Program Files/LLVM/bin" >> "$GITHUB_PATH"
-          "/c/Program Files/LLVM/bin/lldb-dap.exe" --help | head -3 || echo "lldb-dap did not start"
+          "$env:ProgramFiles/LLVM/bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & "$env:ProgramFiles/LLVM/bin/lldb-dap.exe" --help
+          if ($LASTEXITCODE -ne 0) { throw "lldb-dap did not start" }
+          & "$env:ProgramFiles/LLVM/bin/lldb.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "lldb did not start" }
 
       - name: Install Rust
+        shell: bash
         run: |
           rustup toolchain install stable --profile minimal --component rust-analyzer,rust-src
           rustup default stable
@@ -94,4 +99,13 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       - name: Application tests
-        run: cargo test --locked -p rc-app --bins -- --test-threads=4
+        shell: bash
+        run: cargo test --locked -p rc-app --bins -- --test-threads=4 2>&1 | tee "$RUNNER_TEMP/app-tests.log"
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-tests-${{ matrix.os }}
+          path: ${{ runner.temp }}/app-tests.log
+          if-no-files-found: warn

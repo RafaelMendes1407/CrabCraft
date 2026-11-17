@@ -1352,13 +1352,7 @@ fn step_into_walks_past_the_standard_library() {
     let step_to = |app: &mut CrabCraftApp, target: usize| {
         for _ in 0..5 {
             app.run_ide_action(&ctx, Action::StepInto);
-            let start = Instant::now();
-            while start.elapsed() < Duration::from_millis(600) {
-                let outs = app.debugger.update(&mut app.docs);
-                app.handle_debug(outs);
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            assert!(app.debugger.stopped(), "the step did not end");
+            pump_debugger(app, "the step past the standard library");
             let now = line(app);
             assert!(now.is_some(), "stepped out of the project into a library");
             if now == Some(target) {
@@ -1446,9 +1440,17 @@ fn complete_at_end(app: &mut CrabCraftApp, text: &str) -> rc_editor::Completion 
     let i = app.docs.active.unwrap();
     app.insight.on_editor_events(&mut app.docs.list[i], &[rc_editor::EditorEvent::Changed]);
     let _ = app.insight.update(&mut app.docs, true);
-    app.insight.complete(&mut app.docs.list[i], None);
-    pump(app, "completion", |a| a.docs.active_doc().and_then(|d| d.editor.popups.completion.as_ref()).is_some_and(|c| !c.loading && !c.items.is_empty()));
-    app.docs.active_doc().unwrap().editor.popups.completion.clone().unwrap()
+    // rust-analyzer may invalidate a request while applying the preceding refactoring.
+    // Wait for each answer, then retry a dismissed popup at the unchanged caret, with a limit.
+    for attempt in 1..=3 {
+        app.insight.complete(&mut app.docs.list[i], None);
+        pump(app, "the completion response", |a| a.docs.active_doc().and_then(|d| d.editor.popups.completion.as_ref()).is_none_or(|c| !c.loading));
+        if let Some(completion) = app.docs.active_doc().and_then(|d| d.editor.popups.completion.clone()).filter(|c| !c.items.is_empty()) {
+            return completion;
+        }
+        assert!(attempt < 3, "no completion after {attempt} responses; status {:?}", app.insight.status);
+    }
+    unreachable!("the last unsuccessful completion attempt fails above")
 }
 
 #[test]
@@ -2062,8 +2064,10 @@ fn pump_debugger(app: &mut CrabCraftApp, what: &str) {
     while start.elapsed() < Duration::from_secs(120) {
         let outs = app.debugger.update(&mut app.docs);
         app.handle_debug(outs);
-        if let Some(rc_dap::SessionState::Failed(f)) = app.debugger.session.as_ref().map(|s| s.state()) {
-            panic!("debugging failed waiting for {what}: {f}");
+        if let Some(state) = app.debugger.session.as_ref().map(|s| s.state())
+            && state.is_ended()
+        {
+            panic!("debugger ended waiting for {what}: {state:?}");
         }
         if app.debugger.stopped() {
             return;
@@ -2111,6 +2115,7 @@ fn locals(app: &mut CrabCraftApp) -> Vec<rc_dap::Variable> {
         let outs = app.debugger.update(&mut app.docs);
         app.handle_debug(outs);
         let s = app.debugger.session.as_mut().unwrap();
+        assert!(!s.state().is_ended(), "debugger ended while waiting for locals: {:?}", s.state());
         if let Some(frame) = s.selected_frame().map(|f| f.id) {
             match s.scopes(frame).and_then(|sc| sc.first()).map(|sc| sc.variables_reference) {
                 Some(r) => match s.variables(r) {
