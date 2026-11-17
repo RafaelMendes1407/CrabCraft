@@ -3,6 +3,11 @@
 name: Release
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - packaging/**
+      - scripts/copy_notices.py
   push:
     tags: ["v*"]
   workflow_dispatch:
@@ -14,6 +19,9 @@ jobs:
   linux:
     # 22.04 (glibc 2.35) so the binary also runs on older distributions.
     runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,7 +44,8 @@ jobs:
 
       - name: Package
         run: |
-          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          version=$(cargo metadata --locked --no-deps --format-version 1 | python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "rc-app"))')
+          test -n "$version"
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
             echo "The tag $GITHUB_REF_NAME does not match version $version" >&2
             exit 1
@@ -70,6 +79,7 @@ jobs:
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal --component llvm-tools
+          if ($LASTEXITCODE -ne 0) { throw "Installing Rust and llvm-tools failed" }
           rustup default stable
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -79,7 +89,13 @@ jobs:
 
       - name: Package the zip
         run: |
-          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          $metadata = cargo metadata --locked --no-deps --format-version 1
+          if ($LASTEXITCODE -ne 0) { throw "Reading Cargo metadata failed" }
+          $version = (($metadata | ConvertFrom-Json).packages | Where-Object name -eq 'rc-app').version
+          if (-not $version) { throw "Cargo metadata has no application version" }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "The tag $env:GITHUB_REF_NAME does not match version $version"
+          }
           "VERSION=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           New-Item -ItemType Directory CrabCraft | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/crabcraft.exe CrabCraft/CrabCraft.exe
@@ -89,22 +105,31 @@ jobs:
           # its capture pipe before the process writes. Redirect to a file instead.
           $versionOutput = Join-Path $env:RUNNER_TEMP 'crabcraft-version.txt'
           $process = Start-Process -FilePath (Resolve-Path ./CrabCraft/CrabCraft.exe) -ArgumentList '--version' -Wait -PassThru -RedirectStandardOutput $versionOutput
-          $reported = (Get-Content -Raw $versionOutput).Trim()
+          $reported = "$(Get-Content -Raw $versionOutput)".Trim()
           if ($process.ExitCode -ne 0 -or $reported -ne "CrabCraft $version") {
             throw "Packaged executable reported an unexpected version: $reported"
           }
-          Compress-Archive -Path CrabCraft -DestinationPath "CrabCraft-$version-windows-x64.zip"
           # The exe must only need system DLLs (the C runtime is linked statically).
-          $objdump = Get-ChildItem "$(rustc --print sysroot)/lib/rustlib" -Recurse -Filter llvm-objdump.exe | Select-Object -First 1
-          $dlls = & $objdump.FullName -p CrabCraft/CrabCraft.exe | Select-String 'DLL Name: (.+)' | ForEach-Object { $_.Matches.Groups[1].Value }
+          $sysroot = rustc --print sysroot
+          if ($LASTEXITCODE -ne 0) { throw "Reading the Rust sysroot failed" }
+          $objdump = Get-ChildItem "$sysroot/lib/rustlib" -Recurse -Filter llvm-objdump.exe | Select-Object -First 1
+          if (-not $objdump) { throw "llvm-objdump is missing" }
+          $imports = & $objdump.FullName -p CrabCraft/CrabCraft.exe
+          if ($LASTEXITCODE -ne 0) { throw "Inspecting executable DLL imports failed" }
+          $dlls = @($imports | Select-String 'DLL Name: (.+)' | ForEach-Object { $_.Matches.Groups[1].Value.Trim() })
+          if (-not ($dlls -match '^KERNEL32\.dll$')) { throw "No system DLL imports were parsed" }
           $dlls -join ', '
           $bad = $dlls | Where-Object { $_ -match '^(vcruntime|msvcp|libgcc|libstdc|libwinpthread)' }
           if ($bad) { throw "Non-system DLLs: $($bad -join ', ')" }
+          Compress-Archive -Path CrabCraft -DestinationPath "CrabCraft-$version-windows-x64.zip"
 
       - name: Build the installer
         run: |
           choco install innosetup --no-progress -y
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$env:VERSION" packaging/windows/crabcraft.iss
+          if ($LASTEXITCODE -notin @(0, 3010)) { throw "Installing Inno Setup failed" }
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) { throw "Inno Setup 6 compiler is missing" }
+          & $compiler "/DVersion=$env:VERSION" packaging/windows/crabcraft.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

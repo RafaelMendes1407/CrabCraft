@@ -64,6 +64,8 @@ pub fn lldb_launch_arguments(config: &LaunchConfig, options: &DebugOptions) -> V
     let mut args = gdb_launch_arguments(config, options);
     args["type"] = json!("lldb");
     args["request"] = json!("launch");
-    args["initCommands"] = json!(["settings set target.disable-aslr false"]);
+    // LLDB only avoids `std::` when stepping in; Rust's library code also lives in `core` and
+    // `alloc` (the GDB skip covers the whole standard library the same way).
+    args["initCommands"] = json!(["settings set target.disable-aslr false", "settings set target.process.thread.step-avoid-regexp ^<?(std|core|alloc)::",]);
     args
 }

@@ -710,7 +710,11 @@ impl Insight {
     /// Shows a file's diagnostics from the server under the inspection profile: in its editor
     /// when it is open, and in the Problems window. The text of a closed file is read when
     /// `read` (a new report), else the text it was read in before is used.
-    fn publish(&mut self, docs: &mut Docs, path: PathBuf, diagnostics: Vec<lsp::Diagnostic>, read: bool) {
+    fn publish(&mut self, docs: &mut Docs, path: PathBuf, mut diagnostics: Vec<lsp::Diagnostic>, read: bool) {
+        // The compiler's own report goes first: where rust-analyzer also reports the same
+        // problem (E0308 "expected u32, found &str" next to rustc's "mismatched types"), the
+        // primary message of rustc is the one shown for the line.
+        diagnostics.sort_by_key(|d| d.source.as_deref() == Some("rust-analyzer"));
         let doc = docs.list.iter_mut().find(|d| d.path == path);
         let converted: Vec<rc_editor::Diagnostic> = match &doc {
             Some(d) => diagnostics.iter().map(|x| convert::diagnostic(d.editor.buffer.rope(), x)).collect(),

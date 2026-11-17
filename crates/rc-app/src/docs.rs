@@ -201,17 +201,13 @@ impl From<std::io::Error> for TextReadError {
 }
 
 fn same_metadata(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
-    if !after.is_file() || before.len() != after.len() || before.modified().ok() != after.modified().ok() {
-        return false;
-    }
+    let same = after.is_file() && before.len() == after.len() && before.modified().ok() == after.modified().ok();
     #[cfg(unix)]
-    {
+    let same = {
         use std::os::unix::fs::MetadataExt;
-        if before.dev() != after.dev() || before.ino() != after.ino() {
-            return false;
-        }
-    }
-    true
+        same && before.dev() == after.dev() && before.ino() == after.ino()
+    };
+    same
 }
 
 /// Checked document reader for legacy synchronous callers and cancellable workers.
@@ -295,7 +291,12 @@ impl Docs {
 
     pub fn index_of(&self, path: &Path) -> Option<usize> {
         // Documents keep canonical paths (verbatim on Windows); callers may spell them differently.
-        self.list.iter().position(|d| d.path == path).or_else(|| self.list.iter().position(|d| rc_core::paths::same_spelling(&d.path, path)))
+        // Windows 8.3 short names (`RUNNER~1`, common in `%TEMP%`) are expanded: canonical paths
+        // always use long names.
+        self.list.iter().position(|d| d.path == path).or_else(|| self.list.iter().position(|d| rc_core::paths::same_spelling(&d.path, path))).or_else(|| {
+            let long = rc_core::paths::long_form(path);
+            if long == path { None } else { self.list.iter().position(|d| rc_core::paths::same_spelling(&d.path, &long)) }
+        })
     }
 
     pub fn active_doc(&self) -> Option<&Doc> {

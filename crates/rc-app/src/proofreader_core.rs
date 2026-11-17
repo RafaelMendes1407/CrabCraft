@@ -213,10 +213,8 @@ pub(crate) fn safe_in_source(source: &Rope, range: &Range<usize>, value: &str, f
             return false;
         }
     }
-    if range.start >= 2 && source.slice(range.start - 2..range.start) == "//" && value.starts_with(['/', '!']) {
-        return false;
-    }
-    true
+    // A `/` or `!` after `//` would turn a plain comment into a doc comment.
+    !(range.start >= 2 && source.slice(range.start - 2..range.start) == "//" && value.starts_with(['/', '!']))
 }
 pub fn decode(input: &Input, reply: &Value) -> Result<Vec<Issue>, Error> {
     let matches = reply.get("matches").and_then(Value::as_array).ok_or(Error::Invalid)?;

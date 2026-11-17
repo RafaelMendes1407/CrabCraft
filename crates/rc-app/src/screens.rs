@@ -206,7 +206,9 @@ fn files_dropped_on_the_welcome_screen_open_in_the_editor() {
         }
     }
     h.input_mut().dropped_files.push(std::sync::Arc::new(Dropped(file.clone())));
-    h.run_steps(3);
+    h.run_steps(1);
+    // Files are read on a background thread.
+    run_frames(&mut h, "the dropped file", |a| a.docs.active_doc().is_some() || a.notices.iter().any(|n| n.error));
     let app = h.state();
     assert!(app.workspace.is_none());
     assert_eq!(app.docs.active_doc().map(|d| d.path.clone()), Some(file.canonicalize().unwrap()));
@@ -225,6 +227,8 @@ fn scratch_files_are_created_outside_the_project_and_reopened_from_the_list() {
     h.run_steps(2);
     h.key_press(egui::Key::Enter);
     h.run_steps(2);
+    // The new file is read on a background thread.
+    run_frames(&mut h, "the scratch file", |a| a.docs.active_doc().is_some());
     let first = dir.join("scratch_1.rs").canonicalize().unwrap();
     assert!(h.state().dialog.is_none());
     assert_eq!(h.state().docs.active_doc().map(|d| d.path.clone()), Some(first.clone()));
@@ -588,6 +592,8 @@ fn local_history_lists_saved_versions_and_reverts_as_an_undoable_edit() {
         d.editor.replace(0, len, text);
         h.state_mut().run_ide_action(&ctx, rc_editor::Action::Save);
         h.run_steps(2);
+        // Files are written on a background thread.
+        run_frames(&mut h, "the save", |_| std::fs::read_to_string(&main).is_ok_and(|t| t == text));
     }
     assert_eq!(std::fs::read_to_string(&main).unwrap(), TWO);
 
@@ -2306,15 +2312,18 @@ fn the_status_bar_picks_the_analysis_target() {
     h.run_steps(3);
     // rustup lists every target it knows: the list is long enough to have a filter.
     assert!(h.state().triple_choices.len() > 8);
-    h.state_mut().triple_filter = "windows-msvc".into();
+    // A target other than the host: the host's name is also on the status bar button.
+    let other = if host == "x86_64-pc-windows-msvc" { "x86_64-unknown-linux-gnu" } else { "x86_64-pc-windows-msvc" };
+    // Keep the exact target visible: the Linux suffix alone fills several scroll pages on Windows.
+    h.state_mut().triple_filter = other.into();
     h.run_steps(2);
-    h.get_by_label("x86_64-pc-windows-msvc").click();
+    h.get_by_label(other).click();
     h.run_steps(3);
-    assert_eq!(h.state().cargo_target.as_deref(), Some("x86_64-pc-windows-msvc"));
+    assert_eq!(h.state().cargo_target.as_deref(), Some(other));
     assert!(h.state().triple_filter.is_empty());
     h.state_mut().save_session();
     h.state_mut().save_all_and_wait();
-    assert_eq!(rc_core::Session::load(&root).cargo_target, "x86_64-pc-windows-msvc");
+    assert_eq!(rc_core::Session::load(&root).cargo_target, other);
     assert!(!root.join("target").exists(), "nothing was built");
 }
 
@@ -2352,10 +2361,14 @@ fn lens_harness(home: &Path, dark: bool, error_line: usize) -> (Harness<'static,
     h.run_steps(3);
     let doc = h.state_mut().docs.active_doc_mut().unwrap();
     assert!(doc.editor.buffer.len_lines() > 1000, "a long file");
-    let start = doc.editor.buffer.rope().line_to_char(error_line) + 4;
+    // Stay on `error_line` even when that line of the real file is short or empty.
+    let rope = doc.editor.buffer.rope();
+    let line_start = rope.line_to_char(error_line);
+    let line_len = rope.line(error_line).to_string().trim_end_matches(['\r', '\n']).chars().count();
+    let start = line_start + line_len.min(4);
     doc.editor.diagnostics.push(rc_editor::Diagnostic {
         start,
-        end: start + 6,
+        end: line_start + line_len.min(10),
         severity: rc_editor::Severity::Error,
         message: "lens test: mismatched types".into(),
         code: None,
@@ -2665,6 +2678,8 @@ fn copyright_headers_on_new_and_old_files() {
     h.run_steps(2);
     h.get_by_label(tr("Create")).click();
     h.run_steps(3);
+    // The new file is opened on a background thread.
+    run_frames(&mut h, "the new file", |a| a.docs.active_doc().is_some_and(|d| d.path.ends_with("net.rs")));
     let text = std::fs::read_to_string(root.join("src/net.rs")).unwrap();
     assert_eq!(text, format!("// Copyright (c) {year} Ada Lovelace\n// Part of ws.\n// SPDX-License-Identifier: MIT\n\n"));
     assert_eq!(h.state().docs.active_doc().map(|d| d.editor.caret()), Some(text.chars().count()));
@@ -3766,8 +3781,11 @@ fn tools_settings_fields_fit_the_fixed_page_width() {
     h.run_steps(5);
     let modal = h.ctx.memory(|memory| memory.area_rect(egui::Id::unique("settings"))).unwrap();
     assert!(modal.width() < 900.0, "tools modal must keep its fixed width: {modal:?}");
-    let fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
-    assert!(fields.len() >= 10);
+    // Seven tool paths, the rustfmt arguments and channel, and the rustfmt environment.
+    let mut fields: Vec<_> = h.query_all_by_role(egui::accesskit::Role::TextInput).map(|node| node.rect()).collect();
+    assert_eq!(fields.len(), 9, "tool path and rustfmt fields: {fields:?}");
+    fields.extend(h.query_all_by_role(egui::accesskit::Role::MultilineTextInput).map(|node| node.rect()));
+    assert_eq!(fields.len(), 10);
     for field in fields {
         assert!(field.left() >= modal.left() && field.right() <= modal.right() - 8.0, "tool field must fit inside the modal: {field:?}, {modal:?}");
     }

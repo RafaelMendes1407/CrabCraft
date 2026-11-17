@@ -542,7 +542,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"native_sqlite_consumer\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\nrusqlite={version=\"0.40.2\",features=[\"bundled\"]}\n").unwrap();
+        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"native_sqlite_consumer\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\nrusqlite={version=\"0.42.0\",features=[\"bundled\"]}\n").unwrap();
         std::fs::write(root.join("src/main.rs"),r#"fn main(){let db=rusqlite::Connection::open(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("records.sqlite")).unwrap();let name:String=db.query_row("SELECT name FROM people WHERE id=1",[],|row|row.get(0)).unwrap();assert_eq!(name,"changed 🦀");let copied:i64=db.query_row("SELECT count(*) FROM copy",[],|row|row.get(0)).unwrap();assert_eq!(copied,1);}"#).unwrap();
         std::fs::write(root.join("build.rs"), "fn main(){std::fs::write(\"build-ran\",\"yes\").unwrap();}").unwrap();
         let dbpath = root.join("records.sqlite");
@@ -605,7 +605,9 @@ mod tests {
         h.get_by_label(tr("Run SQL")).click();
         h.run_steps(2);
         assert!(h.state().database.cancel.is_some());
-        h.get_by_label(tr("Cancel")).click();
+        // Other panels may show their own Cancel; use the one on the progress row.
+        let row = h.get_by_label(tr("Database operation in progress…")).rect().center().y;
+        h.get_all_by_label(tr("Cancel")).find(|node| node.rect().y_range().contains(row)).expect("database Cancel button").click();
         h.run_steps(2);
         assert!(h.state().database.cancel.is_none());
         assert!(!root.join("build-ran").exists());

@@ -67,7 +67,8 @@ opening a project must not install or execute them automatically.
 The official [release workflow](../.github/workflows/release.yml) builds a Linux x86_64
 archive, Windows x64 portable archive and Windows installer. Tag publication uses the matching
 workspace version, the version section in [CHANGELOG.md](../CHANGELOG.md), and SHA-256 checksums.
-Manual workflow runs produce artifacts without publishing a release. The Linux package includes
+Manual workflow runs and pull requests that change packaging produce artifacts without
+publishing a release. The Linux package includes
 its desktop entry, icon and installer; Windows packaging checks runtime DLL dependencies.
 
 `scripts/copy_notices.py` copies project licenses and third-party asset notices into each

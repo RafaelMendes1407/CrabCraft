@@ -4,9 +4,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # rust-analyzer's crates and quick-xml change their APIs often; their own groups let the
+    # remaining updates merge while one of them waits for a port.
     groups:
+      rust-analyzer:
+        patterns: ["ra_ap_*"]
+      quick-xml:
+        patterns: ["quick-xml"]
       rust-dependencies:
         patterns: ["*"]
+        exclude-patterns: ["ra_ap_*", "quick-xml"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

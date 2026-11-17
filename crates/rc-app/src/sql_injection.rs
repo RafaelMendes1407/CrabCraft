@@ -151,7 +151,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let root = project.path().canonicalize().unwrap();
         std::fs::create_dir(root.join("src")).unwrap();
-        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"sql_injection_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\nrusqlite={version=\"0.40.2\",features=[\"bundled\"]}\n").unwrap();
+        std::fs::write(root.join("Cargo.toml"),"[package]\nname=\"sql_injection_evidence\"\nversion=\"0.1.0\"\nedition=\"2021\"\n[dependencies]\nrusqlite={version=\"0.42.0\",features=[\"bundled\"]}\n").unwrap();
         let source = r###"// Unicode 🦀 precedes byte offsets.
 // language=SQL
 const QUERY:&str=r##"SELECT name FROM peo WHERE id=?1"##;

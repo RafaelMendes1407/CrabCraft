@@ -446,8 +446,18 @@ pub(crate) mod tests {
             wsl: None,
             container: None,
             root: root.display().to_string(),
-            cargo: "/home/rafael/.cargo/bin/cargo".into(),
-            analyzer: "/home/rafael/.cargo/bin/rust-analyzer".into(),
+            cargo: cargo_bin("cargo"),
+            analyzer: cargo_bin("rust-analyzer"),
+        }
+    }
+    /// The rustup proxies of the user running the tests, wherever their Cargo home is. Remote
+    /// paths are Linux paths, so other hosts get a fixed one that only has to validate.
+    fn cargo_bin(tool: &str) -> String {
+        if cfg!(unix) {
+            let home = std::env::var("CARGO_HOME").unwrap_or_else(|_| format!("{}/.cargo", std::env::var("HOME").unwrap_or_default()));
+            format!("{home}/bin/{tool}")
+        } else {
+            format!("/home/developer/.cargo/bin/{tool}")
         }
     }
     pub fn fixture() -> tempfile::TempDir {

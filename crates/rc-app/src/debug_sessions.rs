@@ -146,8 +146,16 @@ mod tests {
         while !done(h.state()) {
             h.run_steps(1);
             assert!(Instant::now() < deadline, "session did not settle: {}", h.state().debugger.state_label());
-            if let Some(session) = &h.state().debugger.session {
-                assert!(!matches!(session.state(), rc_dap::SessionState::Failed(_)), "{:?}", session.state());
+            for debugger in std::iter::once(&h.state().debugger).chain(h.state().debug_sessions.parked.iter().map(|parked| &parked.debugger)) {
+                if let Some(session) = &debugger.session {
+                    assert!(
+                        !matches!(session.state(), rc_dap::SessionState::Failed(_)),
+                        "session {}: {:?}\n{}",
+                        debugger.name,
+                        session.state(),
+                        debugger.console.as_ref().map(|console| console.term.screen_lines().join("\n")).unwrap_or_default()
+                    );
+                }
             }
             std::thread::sleep(Duration::from_millis(5));
         }

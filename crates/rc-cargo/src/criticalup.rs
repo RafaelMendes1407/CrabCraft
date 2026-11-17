@@ -142,7 +142,7 @@ pub fn inspect(root: &Path, stop: &CancelToken) -> Result<Snapshot, Error> {
         path,
         release: product.release.clone(),
         packages: product.packages.clone(),
-        digest: format!("{:x}", Sha256::digest(&bytes)),
+        digest: Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect::<String>(),
         _directory: directory,
     })))
 }

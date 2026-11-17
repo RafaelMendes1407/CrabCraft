@@ -674,18 +674,22 @@ impl Hosting {
             ui.label(tr("Uses gh/glab credentials. Nothing runs on project open. CLI processes run outside the project without its environment."));
             ui.add_enabled_ui(!busy, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(tr("Hosting service"));
-                    egui::ComboBox::from_id_salt("hosting_service").selected_text(if gh { "GitHub" } else { "GitLab" }).show_ui(ui, |ui| {
-                        for (provider, title, url, exe) in
-                            [("github", "GitHub", "https://github.com", "gh"), ("gitlab", "GitLab", "https://gitlab.com", "glab")]
-                        {
-                            if ui.selectable_value(&mut self.config.provider, provider.into(), title).changed() {
-                                self.config.base_url = url.into();
-                                self.executable = exe.into();
-                                config_changed = true;
+                    let service = ui.label(tr("Hosting service"));
+                    egui::ComboBox::from_id_salt("hosting_service")
+                        .selected_text(if gh { "GitHub" } else { "GitLab" })
+                        .show_ui(ui, |ui| {
+                            for (provider, title, url, exe) in
+                                [("github", "GitHub", "https://github.com", "gh"), ("gitlab", "GitLab", "https://gitlab.com", "glab")]
+                            {
+                                if ui.selectable_value(&mut self.config.provider, provider.into(), title).changed() {
+                                    self.config.base_url = url.into();
+                                    self.executable = exe.into();
+                                    config_changed = true;
+                                }
                             }
-                        }
-                    });
+                        })
+                        .response
+                        .labelled_by(service.id);
                 });
                 ui.horizontal(|ui| {
                     let a11y_label = ui.label(tr("Service HTTPS origin"));

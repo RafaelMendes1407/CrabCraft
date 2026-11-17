@@ -41,13 +41,27 @@ const GDB_SKIP_ENABLE: &str = "skip enable 1";
 
 /// The function of the Rust runtime every panic passes through.
 const PANIC_FUNCTION: &str = "std::panicking::rust_panic";
+/// Its unqualified name, which LLDB resolves on every target, PDB symbols included.
+const PANIC_FUNCTION_BASE: &str = "rust_panic";
 
 /// A frame in the user's source: on disk, and outside the standard library and dependencies.
 fn is_user_code(frame: &StackFrame) -> bool {
     frame.path().is_some_and(|p| {
-        let text = p.to_string_lossy();
+        // Windows paths use backslashes.
+        let text = p.to_string_lossy().replace('\\', "/");
         p.is_file() && !text.contains("/rustlib/") && !text.contains("/.cargo/registry/") && !text.starts_with("/rustc/")
     })
+}
+
+/// Whether a frame is the panic runtime function, by either debugger's name for it.
+fn is_panic_frame(frame: &StackFrame) -> bool {
+    frame.name.contains(PANIC_FUNCTION)
+        || frame
+            .name
+            .split(['(', '<'])
+            .next()
+            .map(str::trim)
+            .is_some_and(|n| n.strip_suffix(PANIC_FUNCTION_BASE).is_some_and(|rest| rest.is_empty() || rest.ends_with("::") || rest.ends_with('!')))
 }
 
 impl StopReason {
@@ -1180,13 +1194,15 @@ impl DebugSession {
         }
     }
 
-    /// GDB has no exception filter for Rust: panics all pass through this function.
+    /// Neither GDB nor LLDB has an exception filter for Rust: panics all pass through this function.
     fn send_panic_breakpoint(&mut self) {
-        if !self.is_gdb() {
-            return;
-        }
+        let name = match self.adapter.origin {
+            Origin::Gdb => PANIC_FUNCTION,
+            Origin::Lldb => PANIC_FUNCTION_BASE,
+            Origin::Generic => return,
+        };
         let Some(c) = &self.client else { return };
-        let p = c.request("setFunctionBreakpoints", json!({ "breakpoints": [{ "name": PANIC_FUNCTION }] }));
+        let p = c.request("setFunctionBreakpoints", json!({ "breakpoints": [{ "name": name }] }));
         self.hs.config_outstanding += 1;
         self.in_flight.push((p, Purpose::Config));
     }
@@ -1320,7 +1336,7 @@ impl DebugSession {
     fn commit_stop(&mut self, frames: Vec<StackFrame>) {
         let Some(ps) = self.pending_stop.take() else { return };
         let thread_id = ps.thread_id.unwrap_or(0);
-        let panicked = self.is_gdb() && frames.first().is_some_and(|f| f.name.contains(PANIC_FUNCTION));
+        let panicked = matches!(self.adapter.origin, Origin::Gdb | Origin::Lldb) && frames.first().is_some_and(is_panic_frame);
         let top = if panicked { frames.iter().find(|f| is_user_code(f)).or(frames.first()) } else { frames.first() };
         let breakpoints = if !panicked && ps.event.reason == "breakpoint" {
             self.breakpoints.at_stop(&ps.event.hit_breakpoint_ids, top.and_then(|f| f.path()), top.map_or(0, |f| f.line))

@@ -454,7 +454,7 @@ fn log_filters(app: &mut CrabCraftApp, ui: &mut Ui) {
         }
         let all = tr("All branches").to_string();
         let shown = filter.branch.clone().unwrap_or_else(|| all.clone());
-        egui::ComboBox::from_id_salt("log_branch").selected_text(shown).width(150.0).show_ui(ui, |ui| {
+        let branch_picker = egui::ComboBox::from_id_salt("log_branch").selected_text(shown.clone()).width(150.0).show_ui(ui, |ui| {
             if ui.selectable_label(filter.branch.is_none(), &all).clicked() {
                 filter.branch = None;
                 apply = true;
@@ -468,6 +468,8 @@ fn log_filters(app: &mut CrabCraftApp, ui: &mut Ui) {
                 }
             }
         });
+        // Screen readers name the filter by the branch it shows, as the session picker does.
+        branch_picker.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, ui.is_enabled(), &shown));
         if let Some(path) = filter.path.clone() {
             ui.label(egui::RichText::new(trf("History of {path}", &[("path", &path)])).size(12.5).color(p.accent));
             if theme::icon_button(ui, ico::CLOSE, true, tr("Show every file")).clicked() {

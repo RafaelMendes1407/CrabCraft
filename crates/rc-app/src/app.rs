@@ -3519,8 +3519,9 @@ impl CrabCraftApp {
 
     /// Opens a folder or Cargo manifest as the workspace, and any other file in an editor
     /// (without a workspace it is edited on its own, like Rider's LightEdit).
+    /// A `Cargo.toml` inside the open project is a file to edit, not a project to open again.
     fn opens_workspace(&self, path: &Path) -> bool {
-        path.is_dir() || path.file_name().is_some_and(|name| name == "Cargo.toml")
+        path.is_dir() || self.project_of_manifest(path).is_some()
     }
 
     /// The project a `Cargo.toml` opens. Inside the open project it is just a file to edit.
@@ -3608,8 +3609,7 @@ impl CrabCraftApp {
             self.notify(crate::docs::TextReadError::BatchLimit.to_string(), true);
             return;
         }
-        let (workspaces, files): (Vec<_>, Vec<_>) =
-            requests.into_iter().partition(|request| self.opens_workspace(&request.path) || self.project_of_manifest(&request.path).is_some());
+        let (workspaces, files): (Vec<_>, Vec<_>) = requests.into_iter().partition(|request| self.opens_workspace(&request.path));
         if let Some(request) = workspaces.first() {
             self.open_path(&request.path);
         }
@@ -3722,7 +3722,7 @@ impl CrabCraftApp {
     /// Opens the first folder or Cargo manifest among `paths` as the workspace and the other
     /// files in the editor (dropped files, Open…).
     pub fn open_paths(&mut self, paths: Vec<PathBuf>) {
-        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| self.opens_workspace(p) || self.project_of_manifest(p).is_some());
+        let (workspaces, files): (Vec<_>, Vec<_>) = paths.into_iter().partition(|p| self.opens_workspace(p));
         if let Some(ws) = workspaces.first() {
             self.open_path(ws);
         }

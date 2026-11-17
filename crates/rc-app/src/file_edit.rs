@@ -49,7 +49,11 @@ struct Input {
 }
 impl Input {
     fn capture(app: &mut CrabCraftApp, path: &Path, intent: Intent) -> Result<Self, Error> {
-        let existing = match app.docs.index_of(path).and_then(|i| app.docs.list.get(i)) {
+        let open = app.docs.index_of(path).and_then(|i| app.docs.list.get(i));
+        // An open document is matched later by its own (canonical) path, however the caller spelled it.
+        let key = open.map_or(path, |doc| doc.path.as_path()).to_path_buf();
+        let path = key.as_path();
+        let existing = match open {
             Some(doc) => {
                 if doc.generated || doc.editor.read_only {
                     return Err(Error::ReadOnly);
