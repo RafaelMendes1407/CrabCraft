@@ -44,8 +44,10 @@ syntax (actionlint), formatting and Linux strict Clippy passed locally; all seve
 regressions from the failed run pass with real Rust projects and GDB on Linux.
 The broader local app run had 471 passing, 13 failing and 99 ignored tests (including
 missing Symbola glyphs and temporary-toolchain prerequisites); it is not a green
-full-suite result. Windows LLDB failures still require a runner result; no feature
-readiness status is raised.
+full-suite result. Windows app-test CI now uses checksum-verified LLDB 23.1.5 and
+Python 3.11 instead of the image's LLDB 20.1.8: Rust 1.99+ can emit CodeView records
+that require LLDB 23.1 ([upstream evidence](https://github.com/rust-lang/rust/issues/161657)).
+Windows results still require a runner result; no feature readiness status is raised.
 
 Security self-assessment infrastructure: dedicated workflow, local execution
 through `scripts/security-audit.sh`, JSON/Markdown reports, per-crate SBOM,

@@ -68,21 +68,36 @@ jobs:
           # emoji/symbol glyphs and Mesa's software Vulkan driver for wgpu-rendered tests.
           sudo apt-get install -y gdb fonts-symbola mesa-vulkan-drivers
 
-      # LLVM's lldb-dap on the Windows image loads python310.dll.
+      # Rust 1.99+ emits CodeView records that LLDB <23.1 cannot read on MSVC:
+      # https://github.com/rust-lang/rust/issues/161657
+      # LLVM's 23.x Windows release script builds LLDB against Python 3.11.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         if: runner.os == 'Windows'
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: Check the debug adapter
+      - name: Install verified LLDB 23.1.5
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          "$env:ProgramFiles/LLVM/bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-          & "$env:ProgramFiles/LLVM/bin/lldb-dap.exe" --help
+          $installer = Join-Path $env:RUNNER_TEMP 'LLVM-23.1.5-win64.msi'
+          Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-win64.msi' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '288ab326377157a9e02e6fb9724914cc2b55963882d493a405f31dc66e837c12') {
+            throw "LLVM installer checksum mismatch"
+          }
+          # Administrative extraction keeps the runner's installed LLVM unchanged.
+          $root = Join-Path $env:RUNNER_TEMP 'llvm-23.1.5'
+          $process = Start-Process msiexec.exe -ArgumentList "/a `"$installer`" /qn TARGETDIR=`"$root`"" -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 3010)) { throw "Extracting LLVM failed: $($process.ExitCode)" }
+          $adapter = Get-ChildItem $root -Recurse -Filter lldb-dap.exe | Select-Object -First 1
+          if (-not $adapter) { throw "The LLVM package has no lldb-dap" }
+          $bin = Split-Path -Parent $adapter.FullName
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & $adapter.FullName --help
           if ($LASTEXITCODE -ne 0) { throw "lldb-dap did not start" }
-          & "$env:ProgramFiles/LLVM/bin/lldb.exe" --version
-          if ($LASTEXITCODE -ne 0) { throw "lldb did not start" }
+          $version = (& (Join-Path $bin 'lldb.exe') --version) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '23\.1\.5') { throw "Unexpected LLDB version: $version" }
+          $version
 
       - name: Install Rust
         shell: bash
